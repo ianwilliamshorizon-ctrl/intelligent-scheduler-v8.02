@@ -18,6 +18,12 @@ const LoginView: React.FC<LoginViewProps> = ({ users, onLogin, environment }) =>
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
+
+        if (!email) {
+            setError('Email or User ID cannot be empty.');
+            return;
+        }
+
         setIsLoading(true);
         try {
             // For transition convenience, if user enters a simple ID (e.g. 'admin'), pass it through. 
