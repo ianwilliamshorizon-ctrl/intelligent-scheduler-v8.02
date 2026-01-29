@@ -1,0 +1,8 @@
+{
+  "name": "Brookspeed Intelligent Scheduling System v8.02",
+  "description": "An intelligent garage dispatch and scheduling application powered by the Gemini API. Now featuring IndexedDB storage for high-performance data handling.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}

@@ -1,0 +1,200 @@
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" href="">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BROOKSPEED Dispatch v8.02</title>
+    <script>
+      // Suppress the Tailwind CDN production warning
+      const originalWarn = console.warn;
+      console.warn = (...args) => {
+        if (args[0] && typeof args[0] === 'string' && args[0].includes('cdn.tailwindcss.com should not be used in production')) {
+          return;
+        }
+        originalWarn(...args);
+      };
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+      body {
+        font-family: 'Inter', sans-serif;
+      }
+      @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+      .animate-fade-in {
+        animation: fadeIn 0.5s ease-in-out;
+      }
+      @keyframes fadeInUp {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      .animate-fade-in-up {
+        animation: fadeInUp 0.3s ease-out;
+      }
+      
+      /* --- Drag and Drop Styles --- */
+      .is-dragging-source {
+        opacity: 0.5;
+        border: 2px dashed #4f46e5;
+      }
+      
+      .unbillable-block {
+        background-image: repeating-linear-gradient(
+          45deg,
+          rgba(0, 0, 0, 0.15),
+          rgba(0, 0, 0, 0.15) 10px,
+          transparent 10px,
+          transparent 20px
+        );
+      }
+
+      .unallocated-drop-zone.is-over {
+        background-color: #c7d2fe;
+        border: 2px dashed #4f46e5;
+      }
+      
+      .timeline-column-over {
+        background-color: #eef2ff;
+      }
+
+      /* --- Animated Checkmark --- */
+      .animated-checkmark-icon {
+        width: 48px;
+        height: 48px;
+      }
+      .animated-checkmark-circle {
+        stroke: #34D399;
+        stroke-dasharray: 145;
+        stroke-dashoffset: 145;
+        animation: checkmark-draw-circle 0.4s ease-out forwards;
+      }
+      .animated-checkmark-check {
+        stroke: #34D399;
+        stroke-dasharray: 30;
+        stroke-dashoffset: 30;
+        animation: checkmark-draw-check 0.3s ease-out 0.4s forwards;
+      }
+      @keyframes checkmark-draw-circle {
+        to { stroke-dashoffset: 0; }
+      }
+      @keyframes checkmark-draw-check {
+        to { stroke-dashoffset: 0; }
+      }
+
+      /* --- PRINT STYLES --- */
+      /* Default state for print wrapper: Hidden on screen */
+      #print-mount-point-wrapper {
+        display: none;
+      }
+
+      @media print {
+        @page {
+          size: auto;
+          margin: 0;
+        }
+
+        body {
+          margin: 0;
+          padding: 0;
+          background: #fff !important;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+
+        /* Hide the main React application */
+        body > #root {
+          display: none !important;
+        }
+        
+        /* Show the print wrapper and position it absolutely to overlay everything */
+        body > #print-mount-point-wrapper {
+          display: block !important;
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          margin: 0;
+          padding: 0;
+          background-color: white;
+          z-index: 9999;
+        }
+
+        .printable-page, .pdf-page-section {
+          width: 100% !important;
+          height: auto !important;
+          min-height: initial !important;
+          margin: 0 !important;
+          box-sizing: border-box !important;
+          box-shadow: none !important;
+          border: none !important;
+        }
+        
+        .pdf-page-section {
+            page-break-before: always !important;
+            break-before: page !important;
+        }
+        .pdf-page-section:first-of-type {
+            page-break-before: auto !important;
+            break-before: auto !important;
+        }
+        
+        .page-break-inside-avoid {
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+        }
+        .break-inside-avoid {
+            break-inside: avoid !important;
+            page-break-inside: avoid !important;
+        }
+        .page-break-after-avoid {
+             page-break-after: avoid !important;
+             break-after: avoid !important;
+        }
+
+        /* Allow tables to break across pages, but protect rows */
+        table {
+            page-break-inside: auto !important;
+            break-inside: auto !important;
+        }
+        tr {
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+            page-break-after: auto;
+        }
+        thead { display: table-header-group; } 
+        tfoot { display: table-footer-group; }
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.22.0",
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.544.0",
+    "react-dom/client": "https://aistudiocdn.com/react-dom@^19.2.0/client",
+    "jspdf": "https://aistudiocdn.com/jspdf@^2.5.1",
+    "html2canvas": "https://aistudiocdn.com/html2canvas@^1.4.1",
+    "firebase/app": "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js",
+    "firebase/auth": "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js",
+    "firebase/firestore": "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js",
+    "firebase/": "https://esm.sh/firebase@^12.7.0/"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body>
+    <div id="root"></div>
+    <div id="print-mount-point-wrapper"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
