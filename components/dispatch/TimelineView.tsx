@@ -1,4 +1,3 @@
-
 import React, { useMemo } from 'react';
 import { Job, JobSegment, PurchaseOrder } from '../../types';
 import { Clock } from 'lucide-react';
@@ -50,21 +49,47 @@ export const TimelineView: React.FC<TimelineViewProps> = (props) => {
     const { 
         onDragStart, onDragEnd, onTimelineDragEnter, onTimelineDragLeave, onTimelineDragOver, onTimelineDrop,
         onDragOverUnallocated, onDropOnUnallocated, onDragEnterUnallocated, onDragLeaveUnallocated,
-        unallocatedJobs, allocatedSegmentsByLift, unallocatedDateFilter, setUnallocatedDateFilter, showOnSiteOnly,
+        unallocatedJobs = [], allocatedSegmentsByLift, unallocatedDateFilter, setUnallocatedDateFilter, showOnSiteOnly,
         setShowOnSiteOnly, onEditJob, onCheckIn, onOpenPurchaseOrder, onPause, onRestart, onReassign, 
         onUnscheduleSegment, onOpenAssistant
     } = props;
     
-    const { jobs, lifts, engineers, customers, vehicles, purchaseOrders } = useData();
-    const { currentUser, selectedEntityId } = useApp();
+    // FIXED: Added default empty arrays to destructuring to prevent "undefined" errors
+    const { 
+        jobs = [], 
+        lifts = [], 
+        engineers = [], 
+        customers = [], 
+        vehicles = [], 
+        purchaseOrders = [] 
+    } = useData() || {};
+    
+    const { currentUser, selectedEntityId = 'all' } = useApp() || {};
 
-    const entityLifts = useMemo(() => lifts.filter(l => l.entityId === selectedEntityId), [lifts, selectedEntityId]);
-    const vehiclesById = useMemo(() => new Map(vehicles.map(v => [v.id, v])), [vehicles]);
-    const customersById = useMemo(() => new Map(customers.map(c => [c.id, c])), [customers]);
-    const engineersById = useMemo(() => new Map(engineers.map(e => [e.id, e])), [engineers]);
+    // FIXED: Added Array.isArray checks before filtering/mapping
+    const entityLifts = useMemo(() => {
+        const safeLifts = Array.isArray(lifts) ? lifts : [];
+        return safeLifts.filter(l => selectedEntityId === 'all' || l.entityId === selectedEntityId);
+    }, [lifts, selectedEntityId]);
+
+    const vehiclesById = useMemo(() => {
+        const safeVehicles = Array.isArray(vehicles) ? vehicles : [];
+        return new Map(safeVehicles.map(v => [v.id, v]));
+    }, [vehicles]);
+
+    const customersById = useMemo(() => {
+        const safeCustomers = Array.isArray(customers) ? customers : [];
+        return new Map(safeCustomers.map(c => [c.id, c]));
+    }, [customers]);
+
+    const engineersById = useMemo(() => {
+        const safeEngineers = Array.isArray(engineers) ? engineers : [];
+        return new Map(safeEngineers.map(e => [e.id, e]));
+    }, [engineers]);
 
     const totalUnallocatedHours = useMemo(() => {
-        return unallocatedJobs.reduce((sum, job) => sum + job.estimatedHours, 0);
+        const safeUnallocated = Array.isArray(unallocatedJobs) ? unallocatedJobs : [];
+        return safeUnallocated.reduce((sum, job) => sum + (job.estimatedHours || 0), 0);
     }, [unallocatedJobs]);
     
     return (
@@ -136,7 +161,7 @@ export const TimelineView: React.FC<TimelineViewProps> = (props) => {
                 </div>
                 <div className="flex-grow flex">
                     {entityLifts.map(lift => {
-                        const allocatedSegments = allocatedSegmentsByLift.get(lift.id);
+                        const allocatedSegments = allocatedSegmentsByLift?.get(lift.id) || [];
                         return (
                         <div key={lift.id} className="min-w-[140px] flex-1 border-r flex flex-col">
                             <h4 className={`flex items-center justify-center text-center font-bold p-2 border-b sticky top-0 z-10 h-16 ${liftColorClasses[lift.color || 'gray']}`}>{lift.name}</h4>
@@ -148,7 +173,7 @@ export const TimelineView: React.FC<TimelineViewProps> = (props) => {
                                 onDrop={(e) => onTimelineDrop(e, lift.id)}
                             >
                                 {TIME_SEGMENTS.map((_, index) => <div key={index} className="flex-1 border-b border-gray-200"></div>)}
-                                {allocatedSegments?.map(segment => {
+                                {allocatedSegments.map(segment => {
                                     const job = jobs.find(j => j.id === segment.parentJobId);
                                     const vehicle = job ? vehiclesById.get(job.vehicleId) : undefined;
                                     const engineer = segment.engineerId ? engineersById.get(segment.engineerId) : undefined;
@@ -182,3 +207,5 @@ export const TimelineView: React.FC<TimelineViewProps> = (props) => {
         </div>
     );
 };
+
+export default TimelineView;

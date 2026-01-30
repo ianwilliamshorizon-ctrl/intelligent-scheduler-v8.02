@@ -1,165 +1,183 @@
-
 import { initializeApp } from 'firebase/app';
 import { 
     getFirestore, doc, getDoc, setDoc, deleteDoc, collection, 
-    onSnapshot, Firestore, connectFirestoreEmulator, runTransaction,
-    query, orderBy, DocumentData, WithFieldValue
+    onSnapshot, Firestore, runTransaction,
+    query, WithFieldValue, writeBatch, getDocs, orderBy, limit,
+    clearIndexedDbPersistence, terminate
 } from 'firebase/firestore';
-import { getAuth, connectAuthEmulator, Auth } from 'firebase/auth';
-import { firebaseConfig, isDev } from '../config/firebaseConfig';
+import { getAuth, Auth } from 'firebase/auth';
 
-// --- Configuration ---
+// Paths aligned with your methodical structure
+import { firebaseConfig } from '../config/firebaseConfig';
+import * as initialData from '../../data/initialData';
+
+// --- Configuration & Initialization ---
 const isFirebaseConfigured = !!(firebaseConfig.apiKey && firebaseConfig.projectId);
+const isDevelopment = () => window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 
 let db: Firestore;
 let auth: Auth | undefined;
 
 if (isFirebaseConfigured) {
-    const app = initializeApp(firebaseConfig);
-    db = getFirestore(app);
-    auth = getAuth(app);
-    
-    // NOTE: Emulator connection is disabled by default to allow direct Cloud Firestore connection 
-    // without starting a local service. Uncomment if you wish to use 'firebase emulators:start'.
-    /*
-    if (isDev()) {
-        try {
-            connectFirestoreEmulator(db, 'localhost', 8080);
-            connectAuthEmulator(auth, 'http://localhost:9099');
-            console.log("🔥 Connected to Firebase Emulators");
-        } catch (e) {
-            console.warn("Firebase emulator connection failed (might already be connected):", e);
-        }
-    } else {
-        console.log("☁️ Connected to Cloud Firestore");
+    try {
+        const app = initializeApp(firebaseConfig);
+        // TARGETING ISDEVDB
+        db = getFirestore(app, "isdevdb"); 
+        auth = getAuth(app);
+        console.log("✅ Firebase Configured for Database: isdevdb");
+    } catch (error) {
+        console.error("❌ Firebase Init Error:", error);
     }
-    */
-    console.log("☁️ Connected to Cloud Firestore");
 }
 
-export const getStorageType = (): 'memory' | 'firestore' | 'emulator' => {
-    if (!isFirebaseConfigured) return 'memory';
-    return 'firestore';
+// --- Environment Helpers ---
+
+export const getStorageType = () => {
+    if (!isFirebaseConfigured) return 'none';
+    return isDevelopment() ? 'development_firestore' : 'cloud_firestore';
 };
 
-export const getStorageTypeString = () => {
-    if (!isFirebaseConfigured) return 'memory';
-    return 'firestore';
-};
-
-// --- Real-Time Listeners ---
-export const subscribeToCollection = <T>(
-    collectionName: string, 
-    callback: (data: T[]) => void
-): () => void => {
-    if (!db) return () => {};
-
-    const q = query(collection(db, collectionName));
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-        const items = snapshot.docs.map(doc => ({
-            ...doc.data(),
-            id: doc.id
-        })) as unknown as T[];
-        
-        callback(items);
-    }, (error) => {
-        console.error(`Error listening to ${collectionName}:`, error);
-    });
-
-    return unsubscribe;
+export const clearStore = async () => {
+    if (!db) return;
+    try {
+        await terminate(db); 
+        await clearIndexedDbPersistence(db);
+        console.log("📦 Cache cleared. Reloading...");
+        window.location.reload(); 
+    } catch (err) {
+        console.error("Error clearing store:", err);
+    }
 };
 
 // --- CRUD Operations ---
 
-/**
- * Saves a document. Using setDoc with merge:true acts as an Upsert.
- */
-export const saveDocument = async <T extends { id: string }>(
-    collectionName: string, 
-    data:WithFieldValue<T>
-): Promise<void> => {
+export const setItem = async (collectionName: string, data: any) => {
+    if (!db) return;
+    const docId = data.id || crypto.randomUUID();
+    const docRef = doc(collection(db, collectionName), docId);
+    await setDoc(docRef, { ...data, id: docId }, { merge: true });
+};
+
+export const saveDocument = setItem;
+export const updateDocument = setItem;
+
+export const deleteItem = async (collectionName: string, id: string) => {
+    if (!db) return;
+    const docRef = doc(collection(db, collectionName), id);
+    await deleteDoc(docRef);
+};
+
+export const deleteDocument = deleteItem;
+
+// --- Specialized Sequence Logic ---
+
+export const generateSequenceId = async (collectionName: string, prefix: string, startNumber: number = 1000): Promise<string> => {
+    if (!db) return `${prefix}-${startNumber}`;
+    try {
+        const q = query(collection(db, collectionName));
+        const querySnapshot = await getDocs(q);
+        let maxNumber = startNumber;
+        querySnapshot.forEach((doc) => {
+            const id = doc.id;
+            if (id.startsWith(prefix)) {
+                const parts = id.split('-');
+                if (parts.length > 1) {
+                    const numPart = parseInt(parts[1]);
+                    if (!isNaN(numPart) && numPart > maxNumber) maxNumber = numPart;
+                }
+            }
+        });
+        return `${prefix}-${maxNumber + 1}`;
+    } catch (error) {
+        console.error("Error generating ID:", error);
+        return `${prefix}-${Date.now()}`;
+    }
+};
+
+// --- Real-time Sync ---
+
+export const subscribeToCollection = (collectionName: string, setter: (data: any[]) => void) => {
+    if (!db) return () => {};
+    const q = query(collection(db, collectionName));
+    return onSnapshot(q, (snapshot) => {
+        const data = snapshot.docs.map(doc => ({
+            ...doc.data(),
+            id: doc.id,
+        }));
+        console.log(`📥 [isdevdb] Received ${data.length} records for ${collectionName}`);
+        setter(data);
+    }, (error) => {
+        console.error(`❌ Sync error [${collectionName}]:`, error);
+    });
+};
+
+// --- Hydration (The Master Reset) ---
+
+export const hydrateDatabase = async () => {
     if (!db) {
-        console.warn("Firestore not configured, saveDocument ignored.");
+        alert("Firestore is not configured.");
         return;
     }
-    // @ts-ignore
-    if (!data.id) throw new Error("Document ID is required for saveDocument");
+
+    console.log("🚀 Starting database hydration into isdevdb...");
     
-    // @ts-ignore
-    const docRef = doc(db, collectionName, data.id);
+    // 1. Fetch the raw user data
+    const initialUsers = initialData.getInitialUsers();
     
-    // Deep clone to remove potential undefined values which Firestore dislikes
-    const cleanData = JSON.parse(JSON.stringify(data));
-    await setDoc(docRef, cleanData, { merge: true });
-};
+    /** * SPECIAL LOGIC: Extract unique roles from the user data
+     * This creates the 'brooks_roles' collection dynamically.
+     */
+    const uniqueRoles = Array.from(new Set(initialUsers.map((u: any) => u.role)))
+        .filter(Boolean)
+        .map(roleName => ({
+            id: roleName.toString().toLowerCase().replace(/\s+/g, '-'),
+            name: roleName,
+            permissions: [] // Default empty permissions
+        }));
 
-export const deleteDocument = async (collectionName: string, docId: string): Promise<void> => {
-    if (!db) return;
-    await deleteDoc(doc(db, collectionName, docId));
-};
-
-// --- Concurrency Safe ID Generation ---
-
-/**
- * Generates a unique, sequential ID using Firestore Transactions.
- */
-export const generateSequenceId = async (prefix: string, entityShortCode: string): Promise<string> => {
-    if (!db) return `${entityShortCode}${prefix}${Date.now()}`; // Fallback
-
-    const counterRef = doc(db, 'brooks_counters', `${entityShortCode}_${prefix}`);
+    const seedData: Record<string, any[]> = {
+        'brooks_users': initialUsers,
+        'brooks_roles': uniqueRoles, // Injected from the dynamic extraction above
+        'brooks_businessEntities': initialData.getInitialBusinessEntities(),
+        'brooks_customers': initialData.getInitialCustomers(),
+        'brooks_vehicles': initialData.getInitialVehicles(),
+        'brooks_lifts': initialData.getInitialLifts(),
+        'brooks_engineers': initialData.getInitialEngineers(),
+        'brooks_jobs': initialData.getInitialJobs(),
+        'brooks_taxRates': initialData.getInitialTaxRates(),
+        'brooks_suppliers': initialData.getInitialSuppliers(),
+        'brooks_parts': initialData.getInitialParts(),
+        'brooks_servicePackages': initialData.getInitialServicePackages(),
+        'brooks_nominalCodes': initialData.getInitialNominalCodes(),
+        'brooks_nominalCodeRules': initialData.getInitialNominalCodeRules(),
+        'brooks_purchaseOrders': initialData.getInitialPurchaseOrders(),
+        'brooks_saleVehicles': initialData.getInitialSaleVehicles(),
+        'brooks_storageBookings': initialData.getInitialStorageBookings(),
+        'brooks_rentalVehicles': initialData.getInitialRentalVehicles(),
+        'brooks_batteryChargers': initialData.getInitialBatteryChargers(),
+        'brooks_invoices': initialData.getInitialInvoices(),
+        'brooks_estimates': initialData.getInitialEstimates()
+    };
 
     try {
-        const newId = await runTransaction(db, async (transaction) => {
-            const counterDoc = await transaction.get(counterRef);
+        for (const [colName, data] of Object.entries(seedData)) {
+            if (!data || data.length === 0) continue;
             
-            let currentCount = 0;
-            if (counterDoc.exists()) {
-                currentCount = counterDoc.data().count || 0;
-            }
+            console.log(`Seeding ${colName}...`);
+            const batch = writeBatch(db);
+            
+            data.forEach((item) => {
+                const docId = item.id || (item.registration ? item.registration.replace(/\s/g, '').toUpperCase() : crypto.randomUUID());
+                const docRef = doc(collection(db, colName), docId);
+                batch.set(docRef, { ...item, id: docId });
+            });
 
-            const nextCount = currentCount + 1;
-            transaction.set(counterRef, { count: nextCount }, { merge: true });
-            return nextCount;
-        });
-
-        return `${entityShortCode}${prefix}${String(newId).padStart(5, '0')}`;
-    } catch (e) {
-        console.error("Transaction failed: ", e);
-        throw e;
-    }
-};
-
-// --- Legacy Compatibility ---
-export const setItem = async (key: string, value: any) => {
-    if (!db) return;
-    try {
-        if (typeof value !== 'object' || Array.isArray(value)) {
-            await setDoc(doc(db, 'brooks_settings', key), { value });
-        } else {
-             await setDoc(doc(db, 'brooks_settings', key), value);
+            await batch.commit();
         }
-    } catch (e) {
-        console.error("Error setting item:", e);
+        alert("✅ Hydration Complete. Unique roles extracted and live in isdevdb.");
+    } catch (error) {
+        console.error("❌ Hydration error:", error);
     }
 };
 
-export const getItem = async <T>(key: string): Promise<T | null> => {
-    if (!db) return null;
-    try {
-        const snap = await getDoc(doc(db, 'brooks_settings', key));
-        if (snap.exists()) {
-            const data = snap.data();
-            return (data.value !== undefined ? data.value : data) as T;
-        }
-    } catch (e) {
-        console.error("Error getting item:", e);
-    }
-    return null;
-};
-
-export const clearStore = async () => {
-    console.warn("clearStore is not fully implemented for Firestore. Use Firebase Console to clear data.");
-};
-
-export { auth, db };
+export { db, auth };

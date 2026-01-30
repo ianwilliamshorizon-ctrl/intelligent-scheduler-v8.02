@@ -1,4 +1,3 @@
-
 import React, { useMemo } from 'react';
 import { Job } from '../../types';
 import { Gauge } from 'lucide-react';
@@ -25,27 +24,48 @@ export const WeeklyView: React.FC<{
     onEditJob: (jobId: string) => void;
     onOpenAssistant: (jobId: string) => void;
 }> = ({ weekStart, onEditJob, onOpenAssistant }) => {
-    const { jobs, vehicles, customers, businessEntities } = useData();
-    const { selectedEntityId } = useApp();
-    const vehiclesById = useMemo(() => new Map(vehicles.map(v => [v.id, v])), [vehicles]);
-    const customersById = useMemo(() => new Map(customers.map(c => [c.id, c])), [customers]);
+    // FIXED: Added default empty arrays to prevent "reading properties of undefined"
+    const { 
+        jobs = [], 
+        vehicles = [], 
+        customers = [], 
+        businessEntities = [] 
+    } = useData() || {};
+
+    const { selectedEntityId = 'all' } = useApp() || {};
+
+    // FIXED: Wrapped in safe array check
+    const vehiclesById = useMemo(() => {
+        const safeVehicles = Array.isArray(vehicles) ? vehicles : [];
+        return new Map(safeVehicles.map(v => [v.id, v]));
+    }, [vehicles]);
+
+    // FIXED: Wrapped in safe array check
+    const customersById = useMemo(() => {
+        const safeCustomers = Array.isArray(customers) ? customers : [];
+        return new Map(safeCustomers.map(c => [c.id, c]));
+    }, [customers]);
 
     const days = useMemo(() => Array.from({ length: 7 }).map((_, i) => addDays(weekStart, i)), [weekStart]);
 
     const dailyCapacityHours = useMemo(() => {
-        return businessEntities.find(e => e.id === selectedEntityId)?.dailyCapacityHours || 0;
+        const safeEntities = Array.isArray(businessEntities) ? businessEntities : [];
+        return safeEntities.find(e => e.id === selectedEntityId)?.dailyCapacityHours || 0;
     }, [businessEntities, selectedEntityId]);
 
     const allocatedHoursByDay = useMemo(() => {
         const map = new Map<string, number>();
+        const safeJobs = Array.isArray(jobs) ? jobs : [];
+
         days.forEach(day => {
             const dateStr = formatDate(day);
             let totalHours = 0;
-            jobs.forEach(job => {
+            safeJobs.forEach(job => {
                 if (selectedEntityId !== 'all' && job.entityId !== selectedEntityId) return;
-                job.segments.forEach(segment => {
+                // Added safety check for job.segments
+                (job.segments || []).forEach(segment => {
                     if (segment.date === dateStr && segment.status !== 'Unallocated') {
-                        totalHours += segment.duration;
+                        totalHours += (segment.duration || 0);
                     }
                 });
             });
@@ -56,17 +76,20 @@ export const WeeklyView: React.FC<{
 
     const jobsByDay = useMemo(() => {
         const map = new Map<string, Job[]>();
+        const safeJobs = Array.isArray(jobs) ? jobs : [];
+
         days.forEach(day => {
             const dateStr = formatDate(day);
             map.set(dateStr, []);
         });
 
-        jobs.forEach(job => {
+        safeJobs.forEach(job => {
             if (selectedEntityId !== 'all' && job.entityId !== selectedEntityId) return;
-            const uniqueDates = new Set(job.segments.map(s => s.date).filter(Boolean));
+            // Added safety check for job.segments
+            const uniqueDates = new Set((job.segments || []).map(s => s.date).filter(Boolean));
             uniqueDates.forEach(date => {
-                if(date && map.has(date)) {
-                    map.get(date)!.push(job);
+                if(date && map.has(date as string)) {
+                    map.get(date as string)!.push(job);
                 }
             });
         });
@@ -113,7 +136,7 @@ export const WeeklyView: React.FC<{
                                         className="p-2 bg-blue-50 border border-blue-200 rounded-md cursor-pointer hover:bg-blue-100 text-xs animate-fade-in"
                                         title={`${job.description}\nCustomer: ${getCustomerDisplayName(customer)}`}
                                     >
-                                        <p className="font-bold truncate">{vehicle?.registration}</p>
+                                        <p className="font-bold truncate">{vehicle?.registration || 'No Reg'}</p>
                                         <p className="text-gray-700 truncate">{job.description}</p>
                                     </div>
                                 );
@@ -125,3 +148,5 @@ export const WeeklyView: React.FC<{
         </div>
     );
 };
+
+export default WeeklyView;

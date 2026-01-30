@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useData } from '../../../core/state/DataContext';
 import { Vehicle, InspectionDiagram } from '../../../types';
@@ -11,17 +10,20 @@ import VehicleFormModal from '../../VehicleFormModal';
 import { saveDocument } from '../../../core/db';
 
 export const ManagementVehiclesTab = ({ searchTerm, onShowStatus }: { searchTerm: string, onShowStatus: (text: string, type: 'info' | 'success' | 'error') => void }) => {
-    const { vehicles, customers, inspectionDiagrams } = useData();
-    const { selectedIds, updateItem, deleteItem, toggleSelection, toggleSelectAll, bulkDelete } = useManagementTable(vehicles, 'brooks_vehicles');
+    const { vehicles = [], customers = [], inspectionDiagrams = [] } = useData();
+    
+    // Safety: ensure vehicles is an array before passing to the hook
+    const { selectedIds, updateItem, deleteItem, toggleSelection, toggleSelectAll, bulkDelete } = useManagementTable(vehicles || [], 'brooks_vehicles');
 
     const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isUpdating, setIsUpdating] = useState(false);
 
-    const filtered = vehicles.filter(v => 
-        v.registration.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        v.make.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        v.model.toLowerCase().includes(searchTerm.toLowerCase())
+    // Defensive Filtering: Ensure v.registration and other fields exist before calling toLowerCase()
+    const filtered = (vehicles || []).filter(v => 
+        (v.registration || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (v.make || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (v.model || '').toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     const handleImportVehicles = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -53,9 +55,15 @@ export const ManagementVehiclesTab = ({ searchTerm, onShowStatus }: { searchTerm
     };
 
     const autoAssignVehicleDiagrams = async () => {
-        if (!inspectionDiagrams || inspectionDiagrams.length === 0) { onShowStatus("Library is empty. Upload diagrams first.", 'error'); return; }
+        if (!inspectionDiagrams || inspectionDiagrams.length === 0) { 
+            onShowStatus("Library is empty. Upload diagrams first.", 'error'); 
+            return; 
+        }
         const candidates = vehicles.filter(v => !v.images?.some(img => img.isPrimaryDiagram));
-        if (candidates.length === 0) { onShowStatus("All vehicles already have diagrams.", 'success'); return; }
+        if (candidates.length === 0) { 
+            onShowStatus("All vehicles already have diagrams.", 'success'); 
+            return; 
+        }
         
         setIsUpdating(true);
         onShowStatus(`Scanning library for matches...`, 'info');
@@ -92,13 +100,22 @@ export const ManagementVehiclesTab = ({ searchTerm, onShowStatus }: { searchTerm
                              await saveDocument('brooks_vehicles', { ...v, images: newImages });
                              assignedCount++;
                         }
-                    } catch (imgErr) { console.error(`Failed to assign diagram to vehicle ${v.registration}`, imgErr); }
+                    } catch (imgErr) { 
+                        console.error(`Failed to assign diagram to vehicle ${v.registration}`, imgErr); 
+                    }
                 }
             }
             if (assignedCount > 0) {
                 onShowStatus(`Success! Assigned diagrams to ${assignedCount} vehicles.`, 'success');
-            } else { onShowStatus("Scan complete. No suitable matches found.", 'info'); }
-        } catch (e) { console.error("Auto assign error", e); onShowStatus("Error during auto-assignment.", 'error'); } finally { setIsUpdating(false); }
+            } else { 
+                onShowStatus("Scan complete. No suitable matches found.", 'info'); 
+            }
+        } catch (e) { 
+            console.error("Auto assign error", e); 
+            onShowStatus("Error during auto-assignment.", 'error'); 
+        } finally { 
+            setIsUpdating(false); 
+        }
     };
 
     return (
@@ -124,32 +141,46 @@ export const ManagementVehiclesTab = ({ searchTerm, onShowStatus }: { searchTerm
                     </button>
                 </div>
             </div>
-            <div className="overflow-y-auto max-h-[70vh]">
+            <div className="overflow-y-auto max-h-[70vh] border rounded-lg">
                 <table className="w-full text-sm text-left">
-                    <thead className="bg-gray-100 sticky top-0">
+                    <thead className="bg-gray-100 sticky top-0 z-10">
                         <tr>
                             <th className="p-2 w-10 text-center">
-                                <input type="checkbox" checked={selectedIds.size === filtered.length && filtered.length > 0} onChange={() => toggleSelectAll(filtered)} className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+                                <input 
+                                    type="checkbox" 
+                                    checked={filtered.length > 0 && selectedIds.size === filtered.length} 
+                                    onChange={() => toggleSelectAll(filtered)} 
+                                    className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" 
+                                />
                             </th>
-                            <th className="p-2">Registration</th><th className="p-2">Make/Model</th><th className="p-2">Owner</th><th className="p-2">Actions</th>
+                            <th className="p-2">Registration</th>
+                            <th className="p-2">Make/Model</th>
+                            <th className="p-2">Owner</th>
+                            <th className="p-2">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {filtered.map(v => {
-                            const owner = customers.find(c => c.id === v.customerId);
-                            return (
-                                <tr key={v.id} className="border-b hover:bg-gray-50">
-                                    <CheckboxCell id={v.id} selectedIds={selectedIds} onToggle={toggleSelection} />
-                                    <td className="p-2 font-mono font-bold">{v.registration}</td>
-                                    <td className="p-2">{v.make} {v.model}</td>
-                                    <td className="p-2">{owner ? `${owner.forename} ${owner.surname}` : 'Unknown'}</td>
-                                    <td className="p-2">
-                                        <button onClick={() => { setSelectedVehicle(v); setIsModalOpen(true); }} className="text-indigo-600 hover:underline mr-3">Edit</button>
-                                        <button onClick={() => deleteItem(v.id)} className="text-red-600 hover:underline">Delete</button>
-                                    </td>
-                                </tr>
-                            );
-                        })}
+                        {filtered.length === 0 ? (
+                            <tr>
+                                <td colSpan={5} className="p-8 text-center text-gray-400 italic">No vehicles found.</td>
+                            </tr>
+                        ) : (
+                            filtered.map(v => {
+                                const owner = customers?.find(c => c.id === v.customerId);
+                                return (
+                                    <tr key={v.id} className="border-b hover:bg-gray-50 transition-colors">
+                                        <CheckboxCell id={v.id} selectedIds={selectedIds} onToggle={toggleSelection} />
+                                        <td className="p-2 font-mono font-bold text-indigo-900">{v.registration}</td>
+                                        <td className="p-2">{v.make} {v.model}</td>
+                                        <td className="p-2">{owner ? `${owner.forename} ${owner.surname}` : <span className="text-gray-400 text-xs">Unassigned</span>}</td>
+                                        <td className="p-2">
+                                            <button onClick={() => { setSelectedVehicle(v); setIsModalOpen(true); }} className="text-indigo-600 hover:text-indigo-900 font-medium mr-3">Edit</button>
+                                            <button onClick={() => { if(window.confirm('Delete this vehicle?')) deleteItem(v.id) }} className="text-red-600 hover:text-red-900 font-medium">Delete</button>
+                                        </td>
+                                    </tr>
+                                );
+                            })
+                        )}
                     </tbody>
                 </table>
             </div>

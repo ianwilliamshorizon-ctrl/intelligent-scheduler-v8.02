@@ -1,8 +1,7 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../core/state/AppContext';
 import { useData } from '../core/state/DataContext';
-import { Menu, LogOut, Settings, Building2, UserCheck, LayoutDashboard, Calendar, Wrench, Briefcase, FileText, ShoppingCart, Car, Archive, Truck, MessageSquare, Phone, CalendarDays, GitPullRequest } from 'lucide-react';
+import { Menu, LogOut, Settings, Building2, UserCheck, LayoutDashboard, Calendar, Wrench, Briefcase, FileText, ShoppingCart, Car, Archive, Truck, MessageSquare, Phone, CalendarDays, GitPullRequest, Database } from 'lucide-react';
 import * as T from '../types';
 
 const MainLayout: React.FC<{ children: React.ReactNode, onOpenManagement: () => void }> = ({ children, onOpenManagement }) => {
@@ -11,9 +10,15 @@ const MainLayout: React.FC<{ children: React.ReactNode, onOpenManagement: () => 
         currentUser, selectedEntityId, setSelectedEntityId, 
         filteredBusinessEntities, logout
     } = useApp();
-    const { roles } = useData();
+    const { roles, businessEntities } = useData(); // Pulling raw businessEntities as well
 
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+
+    // Debugging entities to console - remove once resolved
+    useEffect(() => {
+        console.log("🛠️ UI Debug: Business Entities found in DataContext:", businessEntities?.length);
+        console.log("🛠️ UI Debug: Filtered Entities for User:", filteredBusinessEntities?.length);
+    }, [businessEntities, filteredBusinessEntities]);
 
     const navItems = [
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -32,15 +37,14 @@ const MainLayout: React.FC<{ children: React.ReactNode, onOpenManagement: () => 
         { id: 'absence', label: 'Absence', icon: CalendarDays },
     ];
 
-    const userRoleDef = roles.find(r => r.name === currentUser.role);
-    // Prefer user-specific overrides, then role defaults, then empty.
-    const allowedViews = currentUser.allowedViews || userRoleDef?.defaultAllowedViews || [];
-
-    // Filter nav items based strictly on allowedViews. 
-    // We do NOT automatically allow everything for 'Admin' role string here; 
-    // the Admin role definition in the database should contain all views by default.
-    // This allows custom 'Admin' roles to be restricted if needed.
+    const userRoleDef = roles.find(r => r.name === currentUser?.role);
+    const allowedViews = currentUser?.allowedViews || userRoleDef?.defaultAllowedViews || [];
     const visibleNavItems = navItems.filter(item => allowedViews.includes(item.id as T.ViewType));
+
+    const canSeeManagement = currentUser?.role === 'Admin' || currentUser?.email?.includes('brookspeed.com');
+
+    // Determine which list to show in dropdown
+    const displayEntities = filteredBusinessEntities.length > 0 ? filteredBusinessEntities : businessEntities;
 
     return (
         <div className="flex h-screen bg-gray-100 font-sans text-gray-900">
@@ -84,7 +88,7 @@ const MainLayout: React.FC<{ children: React.ReactNode, onOpenManagement: () => 
                                 title="Select Business Entity"
                              >
                                 <option value="all">All Entities</option>
-                                {filteredBusinessEntities.map(e => (
+                                {displayEntities.map(e => (
                                     <option key={e.id} value={e.id}>{e.name}</option>
                                 ))}
                              </select>
@@ -95,9 +99,20 @@ const MainLayout: React.FC<{ children: React.ReactNode, onOpenManagement: () => 
                          <div className="flex items-center gap-3">
                             <div className="flex items-center gap-2 text-sm text-gray-700">
                                 <UserCheck size={16} />
-                                <span className="font-medium">{currentUser.name}</span>
-                                <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">{currentUser.role}</span>
+                                <span className="font-medium">{currentUser?.name}</span>
+                                <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">{currentUser?.role}</span>
                             </div>
+                            
+                            {canSeeManagement && (
+                                <button 
+                                    onClick={onOpenManagement} 
+                                    className="p-2 text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-full transition-colors"
+                                    title="Manage System Data"
+                                >
+                                    <Database size={20} />
+                                </button>
+                            )}
+
                             <button 
                                 onClick={logout}
                                 className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors"
@@ -107,7 +122,7 @@ const MainLayout: React.FC<{ children: React.ReactNode, onOpenManagement: () => 
                             </button>
                         </div>
 
-                         {currentUser.role === 'Admin' && (
+                         {canSeeManagement && (
                              <button 
                                 onClick={onOpenManagement} 
                                 className="p-2 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-full transition-colors"

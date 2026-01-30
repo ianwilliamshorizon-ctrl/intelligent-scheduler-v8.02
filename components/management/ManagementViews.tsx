@@ -9,3 +9,6 @@ export * from './tabs/ManagementSuppliersTab';
 export * from './tabs/ManagementPartsTab';
 export * from './tabs/ManagementPackagesTab';
 export * from './tabs/ManagementNominalCodesTab';
+export * from './tabs/ManagementLiftsTab';
+export * from './tabs/ManagementBatteryChargersTab';
+export * from './tabs/ManagementBackupTab';

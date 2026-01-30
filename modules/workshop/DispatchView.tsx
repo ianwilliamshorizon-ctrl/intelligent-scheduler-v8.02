@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { useApp } from '../../core/state/AppContext';
 import { useData } from '../../core/state/DataContext';
@@ -29,11 +28,28 @@ interface DispatchViewProps {
 }
 
 const DispatchView: React.FC<DispatchViewProps> = ({ setDefaultDateForModal, setIsSmartCreateOpen, setSmartCreateMode, setSelectedJobId, setIsEditModalOpen, onOpenPurchaseOrder, onPause, onRestart, onReassignEngineer, onCheckIn, onOpenAssistant, onUnscheduleSegment }) => {
-    const { jobs, setJobs, lifts, engineers, customers, vehicles, purchaseOrders, absenceRequests, businessEntities } = useData();
-    const { currentUser, selectedEntityId, setCheckingInJobId, setIsCheckInOpen } = useApp();
+    // FIXED: Added default empty arrays to all destructured properties from useData
+    const { 
+        jobs = [], 
+        setJobs = () => {}, 
+        lifts = [], 
+        engineers = [], 
+        customers = [], 
+        vehicles = [], 
+        purchaseOrders = [], 
+        absenceRequests = [], 
+        businessEntities = [] 
+    } = useData() || {};
+
+    const { 
+        currentUser = {}, 
+        selectedEntityId = 'all', 
+        setCheckingInJobId = () => {}, 
+        setIsCheckInOpen = () => {} 
+    } = useApp() || {};
     
     const [viewMode, setViewMode] = useState<'timeline' | 'week' | 'calendar'>('timeline');
-    const [currentDate, setCurrentDate] = useState(getRelativeDate(0));
+    const [currentDate, setCurrentDate] = useState(getRelativeDate ? getRelativeDate(0) : new Date().toISOString().split('T')[0]);
     const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
     const [unallocatedDateFilter, setUnallocatedDateFilter] = useState<'all' | 'today' | '7days' | '14days'>('all');
     const [showOnSiteOnly, setShowOnSiteOnly] = useState(false);
@@ -47,11 +63,16 @@ const DispatchView: React.FC<DispatchViewProps> = ({ setDefaultDateForModal, set
     const dropResultRef = useRef<{ type: 'TIMELINE', liftId: string, startSegmentIndex: number } | { type: 'UNALLOCATED' } | null>(null);
     const dragImageRef = useRef<HTMLElement | null>(null);
 
-    const entityEngineers = useMemo(() => engineers.filter(e => e.entityId === selectedEntityId), [engineers, selectedEntityId]);
+    const entityEngineers = useMemo(() => {
+        const safeEngineers = Array.isArray(engineers) ? engineers : [];
+        return safeEngineers.filter(e => e.entityId === selectedEntityId);
+    }, [engineers, selectedEntityId]);
     
     const { unallocatedJobs, allocatedSegmentsByLift } = useMemo(() => {
+        const safeJobs = Array.isArray(jobs) ? jobs : [];
         const today = getRelativeDate(0);
-        const allPotentialUnallocated = jobs.filter(job => (selectedEntityId === 'all' || job.entityId === selectedEntityId) && (job.segments || []).some(s => s.status === 'Unallocated'));
+        
+        const allPotentialUnallocated = safeJobs.filter(job => (selectedEntityId === 'all' || job.entityId === selectedEntityId) && (job.segments || []).some(s => s.status === 'Unallocated'));
         const siteFilteredJobs = showOnSiteOnly ? allPotentialUnallocated.filter(job => job.vehicleStatus === 'On Site') : allPotentialUnallocated;
         const dateFilteredJobs = siteFilteredJobs.filter(job => {
             if (unallocatedDateFilter === 'all') return true;
@@ -63,9 +84,9 @@ const DispatchView: React.FC<DispatchViewProps> = ({ setDefaultDateForModal, set
             if (unallocatedDateFilter === '14days') return jobDate >= today && jobDate <= getRelativeDate(13);
             return false;
         });
-        const finalUnallocated = dateFilteredJobs;
+
         const allocated = new Map<string, (JobSegment & { parentJobId: string })[]>();
-        jobs.forEach(job => {
+        safeJobs.forEach(job => {
             if (selectedEntityId !== 'all' && job.entityId !== selectedEntityId) return;
             (job.segments || []).forEach(segment => {
                 if (segment.date === currentDate && segment.allocatedLift && segment.status !== 'Unallocated') {
@@ -74,11 +95,12 @@ const DispatchView: React.FC<DispatchViewProps> = ({ setDefaultDateForModal, set
                 }
             });
         });
-        return { unallocatedJobs: finalUnallocated, allocatedSegmentsByLift: allocated };
+        return { unallocatedJobs: dateFilteredJobs, allocatedSegmentsByLift: allocated };
     }, [jobs, currentDate, selectedEntityId, unallocatedDateFilter, showOnSiteOnly]);
 
     const handleDragStart = useCallback((e: React.DragEvent, parentJobId: string, segmentId: string) => {
-        const job = jobs.find(j => j.id === parentJobId);
+        const safeJobs = Array.isArray(jobs) ? jobs : [];
+        const job = safeJobs.find(j => j.id === parentJobId);
         const segment = job?.segments.find(s => s.segmentId === segmentId);
         if (segment) {
             const dragData = { parentJobId, segmentId, duration: segment.duration };
@@ -103,7 +125,8 @@ const DispatchView: React.FC<DispatchViewProps> = ({ setDefaultDateForModal, set
     }, [jobs]);
 
     const checkCollisionOnDate = useCallback((date: string, liftId: string, startSegmentIndex: number, durationInSegments: number, draggedSegmentId?: string) => {
-        const segmentsOnLiftAndDate = jobs
+        const safeJobs = Array.isArray(jobs) ? jobs : [];
+        const segmentsOnLiftAndDate = safeJobs
             .flatMap(j => j.segments || [])
             .filter(s => s.date === date && s.allocatedLift === liftId && s.segmentId !== draggedSegmentId);
     
@@ -114,7 +137,7 @@ const DispatchView: React.FC<DispatchViewProps> = ({ setDefaultDateForModal, set
         for (let i = 0; i < durationInSegments; i++) {
             const timeSlotIndex = startSegmentIndex + i;
             const isOccupied = segmentsOnLiftAndDate.some(s => {
-                if (s.scheduledStartSegment === null) return false;
+                if (s.scheduledStartSegment === null || s.scheduledStartSegment === undefined) return false;
                 const sEndIndex = s.scheduledStartSegment + (s.duration * (60 / SEGMENT_DURATION_MINUTES));
                 return timeSlotIndex >= s.scheduledStartSegment && timeSlotIndex < sEndIndex;
             });
@@ -163,9 +186,11 @@ const DispatchView: React.FC<DispatchViewProps> = ({ setDefaultDateForModal, set
                 }
             }
             
-            const job = jobs.find(j => j.id === parentJobId);
+            const safeJobs = Array.isArray(jobs) ? jobs : [];
+            const safeLifts = Array.isArray(lifts) ? lifts : [];
+            const job = safeJobs.find(j => j.id === parentJobId);
             const segment = job?.segments.find(s => s.segmentId === segmentId);
-            const lift = lifts.find(l => l.id === liftId);
+            const lift = safeLifts.find(l => l.id === liftId);
 
             if (job && segment && lift) {
                 setAssignModalData({ job, segment, lift, startSegmentIndex: finalStartIndex, currentEngineerId: segment.engineerId });
@@ -182,15 +207,18 @@ const DispatchView: React.FC<DispatchViewProps> = ({ setDefaultDateForModal, set
         if (dropResultRef.current?.type === 'UNALLOCATED' && draggedItemRef.current) {
             const { parentJobId, segmentId } = draggedItemRef.current;
             
-             setJobs(prev => prev.map(job => {
-                if (job.id === parentJobId) {
-                    const newSegments = job.segments.map(s => 
-                        s.segmentId === segmentId ? { ...s, status: 'Unallocated' as const, allocatedLift: null, scheduledStartSegment: null, engineerId: null } : s
-                    );
-                    return { ...job, segments: newSegments, status: calculateJobStatus(newSegments) };
-                }
-                return job;
-            }));
+             setJobs((prev: Job[]) => {
+                const safePrev = Array.isArray(prev) ? prev : [];
+                return safePrev.map(job => {
+                    if (job.id === parentJobId) {
+                        const newSegments = job.segments.map(s => 
+                            s.segmentId === segmentId ? { ...s, status: 'Unallocated' as const, allocatedLift: null, scheduledStartSegment: null, engineerId: null } : s
+                        );
+                        return { ...job, segments: newSegments, status: calculateJobStatus(newSegments) };
+                    }
+                    return job;
+                });
+            });
         }
         draggedItemRef.current = null;
     }, [setJobs]);
@@ -215,22 +243,25 @@ const DispatchView: React.FC<DispatchViewProps> = ({ setDefaultDateForModal, set
             return;
         }
 
-        setJobs(prev => prev.map(j => {
-            if (j.id === job.id) {
-                const newSegments = j.segments.map(s => 
-                    s.segmentId === segment.segmentId ? { 
-                        ...s, 
-                        status: 'Allocated' as const, 
-                        allocatedLift: lift.id, 
-                        scheduledStartSegment: startSegmentIndex, 
-                        date: currentDate,
-                        engineerId: engineerId
-                    } : s
-                );
-                return { ...j, segments: newSegments, status: calculateJobStatus(newSegments) };
-            }
-            return j;
-        }));
+        setJobs((prev: Job[]) => {
+            const safePrev = Array.isArray(prev) ? prev : [];
+            return safePrev.map(j => {
+                if (j.id === job.id) {
+                    const newSegments = j.segments.map(s => 
+                        s.segmentId === segment.segmentId ? { 
+                            ...s, 
+                            status: 'Allocated' as const, 
+                            allocatedLift: lift.id, 
+                            scheduledStartSegment: startSegmentIndex, 
+                            date: currentDate,
+                            engineerId: engineerId
+                        } : s
+                    );
+                    return { ...j, segments: newSegments, status: calculateJobStatus(newSegments) };
+                }
+                return j;
+            });
+        });
         setAssignModalData(null);
     };
 
@@ -251,7 +282,8 @@ const DispatchView: React.FC<DispatchViewProps> = ({ setDefaultDateForModal, set
 
     const absencesByDate = useMemo(() => {
         const map = new Map<string, number>();
-        absenceRequests.forEach(req => {
+        const safeAbsences = Array.isArray(absenceRequests) ? absenceRequests : [];
+        safeAbsences.forEach(req => {
             if (req.status === 'Approved' || req.status === 'Pending') {
                  let curr = dateStringToDate(req.startDate);
                  const end = dateStringToDate(req.endDate);
@@ -266,7 +298,8 @@ const DispatchView: React.FC<DispatchViewProps> = ({ setDefaultDateForModal, set
     }, [absenceRequests]);
     
     const dailyCapacity = useMemo(() => {
-        return businessEntities.find(e => e.id === selectedEntityId)?.dailyCapacityHours || 40;
+        const safeEntities = Array.isArray(businessEntities) ? businessEntities : [];
+        return safeEntities.find(e => e.id === selectedEntityId)?.dailyCapacityHours || 40;
     }, [businessEntities, selectedEntityId]);
 
     const handlePrevDay = () => {
@@ -280,9 +313,11 @@ const DispatchView: React.FC<DispatchViewProps> = ({ setDefaultDateForModal, set
     };
     
     const handleReassignClick = (jobId: string, segmentId: string) => {
-        const job = jobs.find(j => j.id === jobId);
+        const safeJobs = Array.isArray(jobs) ? jobs : [];
+        const safeLifts = Array.isArray(lifts) ? lifts : [];
+        const job = safeJobs.find(j => j.id === jobId);
         const segment = job?.segments.find(s => s.segmentId === segmentId);
-        const lift = lifts.find(l => l.id === segment?.allocatedLift);
+        const lift = safeLifts.find(l => l.id === segment?.allocatedLift);
 
         if (job && segment && lift && segment.scheduledStartSegment !== null) {
             setReassignModalData({
@@ -318,7 +353,7 @@ const DispatchView: React.FC<DispatchViewProps> = ({ setDefaultDateForModal, set
                                 <button onClick={handlePrevDay} className="p-2 rounded-full hover:bg-gray-100"><ChevronLeft size={20}/></button>
                                 <button onClick={() => setIsDatePickerOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg font-semibold text-gray-700">
                                     <Clock size={18} />
-                                    <span>{formatReadableDate(currentDate)}</span>
+                                    <span>{formatReadableDate ? formatReadableDate(currentDate) : currentDate}</span>
                                 </button>
                                 <button onClick={handleNextDay} className="p-2 rounded-full hover:bg-gray-100"><ChevronRight size={20}/></button>
                              </>
