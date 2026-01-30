@@ -28,6 +28,12 @@ interface AppContextType {
   setBackupSchedule: (schedule: any) => void;
   confirmation: any;
   setConfirmation: (conf: any) => void;
+
+  // Added missing properties for check-in process
+  setCheckingInJobId: (id: string | null) => void;
+  setIsCheckInOpen: (open: boolean) => void;
+  checkingInJobId: string | null; // Added state to interface
+  isCheckInOpen: boolean;         // Added state to interface
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -98,6 +104,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [backupSchedule, setBackupSchedule] = useState({ enabled: true, times: ['12:00', '18:00'] });
   const [confirmation, setConfirmation] = useState({ isOpen: false, title: '', message: '', type: 'success' });
 
+  // RESTORED: Check-in state logic required by DispatchView
+  const [checkingInJobId, setCheckingInJobId] = useState<string | null>(null);
+  const [isCheckInOpen, setIsCheckInOpen] = useState(false);
+
   const login = async (email: string, pass: string) => {
     const mockMatch = MOCK_USERS.find(u => u.email === email || u.id === email);
     if (mockMatch && pass === '123') {
@@ -112,7 +122,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setCurrentUser(null);
   };
 
-  const value = {
+  const value: AppContextType = {
     user,
     currentUser,
     loading,
@@ -133,7 +143,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     backupSchedule,
     setBackupSchedule,
     confirmation,
-    setConfirmation
+    setConfirmation,
+    // Provide the check-in properties to the app
+    checkingInJobId,
+    setCheckingInJobId,
+    isCheckInOpen,
+    setIsCheckInOpen
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

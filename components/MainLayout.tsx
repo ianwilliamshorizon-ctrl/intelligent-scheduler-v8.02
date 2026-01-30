@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useApp } from '../core/state/AppContext';
 import { useData } from '../core/state/DataContext';
-import { Menu, LogOut, Settings, Building2, UserCheck, LayoutDashboard, Calendar, Wrench, Briefcase, FileText, ShoppingCart, Car, Archive, Truck, MessageSquare, Phone, CalendarDays, GitPullRequest, Database } from 'lucide-react';
+import { Menu, LogOut, Settings, Building2, UserCheck, LayoutDashboard, Calendar, Wrench, Briefcase, FileText, ShoppingCart, Car, Archive, Truck, MessageSquare, Phone, CalendarDays, GitPullRequest } from 'lucide-react';
 import * as T from '../types';
 
 const MainLayout: React.FC<{ children: React.ReactNode, onOpenManagement: () => void }> = ({ children, onOpenManagement }) => {
@@ -10,15 +10,9 @@ const MainLayout: React.FC<{ children: React.ReactNode, onOpenManagement: () => 
         currentUser, selectedEntityId, setSelectedEntityId, 
         filteredBusinessEntities, logout
     } = useApp();
-    const { roles, businessEntities } = useData(); // Pulling raw businessEntities as well
+    const { roles, businessEntities } = useData(); 
 
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-
-    // Debugging entities to console - remove once resolved
-    useEffect(() => {
-        console.log("🛠️ UI Debug: Business Entities found in DataContext:", businessEntities?.length);
-        console.log("🛠️ UI Debug: Filtered Entities for User:", filteredBusinessEntities?.length);
-    }, [businessEntities, filteredBusinessEntities]);
 
     const navItems = [
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -43,8 +37,10 @@ const MainLayout: React.FC<{ children: React.ReactNode, onOpenManagement: () => 
 
     const canSeeManagement = currentUser?.role === 'Admin' || currentUser?.email?.includes('brookspeed.com');
 
-    // Determine which list to show in dropdown
-    const displayEntities = filteredBusinessEntities.length > 0 ? filteredBusinessEntities : businessEntities;
+    // Case-insensitive filter to prevent "workshop" vs "Workshop" disconnect
+    const displayEntities = businessEntities.filter(e => 
+        e.type?.toLowerCase() === 'workshop'
+    );
 
     return (
         <div className="flex h-screen bg-gray-100 font-sans text-gray-900">
@@ -87,7 +83,7 @@ const MainLayout: React.FC<{ children: React.ReactNode, onOpenManagement: () => 
                                 className="border-none bg-transparent font-semibold text-gray-700 focus:ring-0 cursor-pointer outline-none hover:text-indigo-700 transition-colors"
                                 title="Select Business Entity"
                              >
-                                <option value="all">All Entities</option>
+                                <option value="all">All Workshop Entities</option>
                                 {displayEntities.map(e => (
                                     <option key={e.id} value={e.id}>{e.name}</option>
                                 ))}
@@ -103,16 +99,6 @@ const MainLayout: React.FC<{ children: React.ReactNode, onOpenManagement: () => 
                                 <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">{currentUser?.role}</span>
                             </div>
                             
-                            {canSeeManagement && (
-                                <button 
-                                    onClick={onOpenManagement} 
-                                    className="p-2 text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-full transition-colors"
-                                    title="Manage System Data"
-                                >
-                                    <Database size={20} />
-                                </button>
-                            )}
-
                             <button 
                                 onClick={logout}
                                 className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors"

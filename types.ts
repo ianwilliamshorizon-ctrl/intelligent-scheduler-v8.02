@@ -1,5 +1,3 @@
-
-
 export type ViewType = 'dashboard' | 'dispatch' | 'workflow' | 'jobs' | 'estimates' | 'invoices' | 'purchaseOrders' | 'sales' | 'storage' | 'rentals' | 'concierge' | 'communications' | 'absence' | 'inquiries';
 
 export type UserRole = 'Admin' | 'Dispatcher' | 'Engineer' | 'Sales' | 'Garage Concierge';
@@ -215,6 +213,11 @@ export interface JobSegment {
     engineerCompletedAt?: string;
     qcCompletedAt?: string;
     qcCompletedByUserId?: string;
+    // Multi-day & Linking Properties
+    isLinked?: boolean;       
+    isContinuation?: boolean; 
+    linkedTo?: string;        
+    name?: string;            
 }
 
 export type ChecklistItemStatus = 'ok' | 'attention' | 'urgent' | 'na';
@@ -259,6 +262,7 @@ export interface Job {
     vehicleId: string;
     customerId: string;
     description: string;
+    jobName?: string; 
     estimatedHours: number;
     scheduledDate: string | null;
     status: JobStatus;
@@ -337,6 +341,7 @@ export interface Lift {
     name: string;
     type: 'General' | 'MOT' | 'Trimming';
     color: string;
+    displayOrder?: number;
 }
 
 export interface RentalVehicle {

@@ -2,11 +2,11 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { subscribeToCollection } from '../../core/db/index';
 
 // --- Interface Definitions ---
-// This section resolves the "Property does not exist on type DataContextType" errors.
 export interface DataContextType {
   customers: any[];
   vehicles: any[];
   jobs: any[];
+  setJobs: React.Dispatch<React.SetStateAction<any[]>>; // Added for dispatch updates
   lifts: any[];
   engineers: any[];
   users: any[];
@@ -25,7 +25,8 @@ export interface DataContextType {
   invoices: any[];
   estimates: any[];
   roles: any[];
-  inspectionDiagrams: any[]; // Resolved the specific error in ManagementVehiclesTab
+  inspectionDiagrams: any[];
+  absenceRequests: any[]; // Added to resolve the DispatchView error
   loading: boolean;
 }
 
@@ -55,6 +56,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [estimates, setEstimates] = useState<any[]>([]);
   const [roles, setRoles] = useState<any[]>([]);
   const [inspectionDiagrams, setInspectionDiagrams] = useState<any[]>([]);
+  const [absenceRequests, setAbsenceRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -84,6 +86,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       subscribeToCollection('brooks_estimates', setEstimates),
       subscribeToCollection('brooks_roles', setRoles),
       subscribeToCollection('brooks_inspectionDiagrams', setInspectionDiagrams),
+      subscribeToCollection('brooks_absenceRequests', setAbsenceRequests),
     ];
 
     setLoading(false);
@@ -99,6 +102,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     customers,
     vehicles,
     jobs,
+    setJobs, // Now properly exposed to the context
     lifts,
     engineers,
     users,
@@ -118,6 +122,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     estimates,
     roles,
     inspectionDiagrams,
+    absenceRequests, // Now properly exposed to the context
     loading
   };
 
@@ -126,7 +131,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
 // --- Exports ---
 
-// Adding this named export to satisfy the SyntaxError in modules requesting DataContextProvider
 export const DataContextProvider = DataProvider;
 
 export const useData = () => {
