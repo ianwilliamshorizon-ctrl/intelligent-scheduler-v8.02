@@ -9,7 +9,7 @@ export const DraggableJobCard: React.FC<{
     vehicle?: Vehicle;
     customer?: Customer;
     purchaseOrders: PurchaseOrder[];
-    onDragStart: (e: React.DragEvent<HTMLDivElement>, parentJobId: string, segmentId: string) => void;
+    onDragStart: (e: React.DragEvent<HTMLDivElement>, parentJobId: string, segmentId: string, from: 'unallocated' | 'timeline') => void;
     onDragEnd: (e: React.DragEvent<HTMLDivElement>) => void;
     onEdit: (jobId: string) => void;
     onCheckIn: (jobId: string) => void;
@@ -65,16 +65,16 @@ export const DraggableJobCard: React.FC<{
     
     return (
         <div
-            draggable={true}
+            draggable={canDrag}
             onDragStart={(e) => {
-                // Required for Firefox and some Chrome versions to initiate drag
+                if (!canDrag) return;
                 e.dataTransfer.setData('text/plain', job.id);
                 e.dataTransfer.effectAllowed = 'move';
-                onDragStart(e, job.id, segmentToDrag.segmentId);
+                onDragStart(e, job.id, segmentToDrag.segmentId, 'unallocated');
             }}
             onDragEnd={onDragEnd}
-            className={`p-2.5 rounded-lg shadow-md border space-y-2 select-none cursor-grab active:cursor-grabbing hover:border-indigo-400 transition-colors draggable-job ${getCardColorClasses()}`}
-            title={`Drag to schedule: ${job.description} (${segmentToDrag.duration}h)`}
+            className={`p-2.5 rounded-lg shadow-md border space-y-2 select-none hover:border-indigo-400 transition-colors draggable-job ${getCardColorClasses()} ${canDrag ? 'cursor-grab active:cursor-grabbing' : 'cursor-not-allowed'}`}
+            title={canDrag ? `Drag to schedule: ${job.description} (${segmentToDrag.duration}h)` : job.description}
         >
             <div className="flex justify-between items-start pointer-events-none">
                 <h4 className="font-bold text-sm text-gray-800 flex-grow flex items-center gap-2">

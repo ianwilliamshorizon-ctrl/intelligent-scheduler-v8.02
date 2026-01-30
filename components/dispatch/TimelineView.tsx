@@ -1,11 +1,10 @@
-
 import React, { useMemo } from 'react';
 import { Job, JobSegment, PurchaseOrder, Lift } from '../../types';
 import { Clock } from 'lucide-react';
 import { useData } from '../../core/state/DataContext';
 import { useApp } from '../../core/state/AppContext';
 import { DraggableJobCard } from './DraggableJobCard';
-import { AllocatedJobCard } from './AllocatedJobCard';
+import AllocatedJobCard from './AllocatedJobCard';
 import { TIME_SEGMENTS } from '../../constants';
 
 const liftColorClasses: Record<string, string> = {
@@ -20,8 +19,8 @@ const liftColorClasses: Record<string, string> = {
 };
 
 interface TimelineViewProps {
-    sortedLifts: Lift[];
-    onDragStart: (e: React.DragEvent, parentJobId: string, segmentId: string) => void;
+    lifts: Lift[];
+    onDragStart: (e: React.DragEvent, parentJobId: string, segmentId: string, from: "unallocated" | "timeline") => void;
     onDragEnd: (e: React.DragEvent) => void;
     onTimelineDragEnter: (e: React.DragEvent<HTMLDivElement>) => void;
     onTimelineDragLeave: (e: React.DragEvent<HTMLDivElement>) => void;
@@ -49,7 +48,7 @@ interface TimelineViewProps {
 
 export const TimelineView: React.FC<TimelineViewProps> = (props) => {
     const { 
-        sortedLifts,
+        lifts,
         onDragStart, onDragEnd, onTimelineDragEnter, onTimelineDragLeave, onTimelineDragOver, onTimelineDrop,
         onDragOverUnallocated, onDropOnUnallocated, onDragEnterUnallocated, onDragLeaveUnallocated,
         unallocatedJobs, allocatedSegmentsByLift, unallocatedDateFilter, setUnallocatedDateFilter, showOnSiteOnly,
@@ -57,14 +56,13 @@ export const TimelineView: React.FC<TimelineViewProps> = (props) => {
         onUnscheduleSegment, onOpenAssistant
     } = props;
     
-    const { jobs, lifts, engineers, customers, vehicles, purchaseOrders } = useData();
+    const { jobs, engineers, customers, vehicles, purchaseOrders } = useData();
     const { currentUser, selectedEntityId } = useApp();
 
-    const entityLifts = useMemo(() => 
-    [...(sortedLifts || [])]
-        .filter(l => selectedEntityId === 'all' || l.entityId === selectedEntityId)
-        .sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0))
-    , [sortedLifts, selectedEntityId]);
+    // Sorting is handled by the entityLifts passed from DispatchView
+    const sortedLifts = useMemo(() => {
+        return [...lifts].sort((a, b) => (a.displayOrder ?? 999) - (b.displayOrder ?? 999));
+    }, [lifts]);
 
     const vehiclesById = useMemo(() => new Map(vehicles.map(v => [v.id, v])), [vehicles]);
     const customersById = useMemo(() => new Map(customers.map(c => [c.id, c])), [customers]);
@@ -76,8 +74,9 @@ export const TimelineView: React.FC<TimelineViewProps> = (props) => {
     
     return (
         <div className="flex-grow flex p-4 gap-4 min-h-0">
+             {/* Unallocated Queue Column */}
              <div
-                className="w-80 flex-shrink-0 flex flex-col bg-gray-100 rounded-lg shadow-inner unallocated-drop-zone min-h-0"
+                className="w-80 flex-shrink-0 flex flex-col bg-gray-100 rounded-lg shadow-inner unallocated-drop-zone min-h-0 transition-colors"
                 onDragOver={onDragOverUnallocated}
                 onDrop={onDropOnUnallocated}
                 onDragEnter={onDragEnterUnallocated}
@@ -86,7 +85,7 @@ export const TimelineView: React.FC<TimelineViewProps> = (props) => {
                  <div className="p-3 border-b">
                     <div className="flex justify-between items-center mb-2">
                         <h3 className="font-bold text-gray-800">Unallocated Jobs</h3>
-                        <span className="flex items-center gap-1.5 text-sm font-semibold text-gray-600 bg-gray-200 px-2 py-1 rounded-full" title="Total hours for filtered unallocated jobs">
+                        <span className="flex items-center gap-1.5 text-sm font-semibold text-gray-600 bg-gray-200 px-2 py-1 rounded-full">
                             <Clock size={14} />
                             {totalUnallocatedHours.toFixed(1)}h
                         </span>
@@ -123,7 +122,7 @@ export const TimelineView: React.FC<TimelineViewProps> = (props) => {
                             vehicle={vehiclesById.get(job.vehicleId)}
                             customer={customersById.get(job.customerId)}
                             purchaseOrders={purchaseOrders}
-                            onDragStart={onDragStart}
+                            onDragStart={(e, pId, sId) => onDragStart(e, pId, sId, "unallocated")}
                             onDragEnd={onDragEnd}
                             onEdit={onEditJob}
                             onCheckIn={onCheckIn}
@@ -134,15 +133,15 @@ export const TimelineView: React.FC<TimelineViewProps> = (props) => {
                     ))}
                 </div>
             </div>
-            <div
-                className="flex-grow flex bg-white rounded-lg shadow-md overflow-x-auto min-w-0"
-            >
+
+            {/* Timeline Lifts Grid */}
+            <div className="flex-grow flex bg-white rounded-lg shadow-md overflow-x-auto min-w-0">
                 <div className="flex-shrink-0 border-r flex flex-col bg-white sticky left-0 z-20">
                     <h4 className="flex items-center justify-center font-bold p-2 border-b sticky top-0 bg-white z-30 text-transparent select-none h-16">&nbsp;</h4>
                     {TIME_SEGMENTS.map(time => <div key={time} className="flex-1 text-xs text-right pr-2 text-gray-500 border-b flex items-center justify-end">{time}</div>)}
                 </div>
                 <div className="flex-grow flex">
-                    {entityLifts.map(lift => {
+                    {sortedLifts.map(lift => {
                         const allocatedSegments = allocatedSegmentsByLift.get(lift.id);
                         return (
                         <div key={lift.id} className="min-w-[140px] flex-1 border-r flex flex-col">
@@ -157,19 +156,16 @@ export const TimelineView: React.FC<TimelineViewProps> = (props) => {
                                 {TIME_SEGMENTS.map((_, index) => <div key={index} className="flex-1 border-b border-gray-200"></div>)}
                                 {allocatedSegments?.map(segment => {
                                     const job = jobs.find(j => j.id === segment.parentJobId);
-                                    const vehicle = job ? vehiclesById.get(job.vehicleId) : undefined;
-                                    const engineer = segment.engineerId ? engineersById.get(segment.engineerId) : undefined;
-                                    const customer = job ? customersById.get(job.customerId) : undefined;
                                     if (!job) return null;
                                     return <AllocatedJobCard 
                                         key={segment.segmentId}
                                         job={job}
                                         segment={segment}
-                                        vehicle={vehicle}
-                                        customer={customer}
-                                        engineer={engineer}
+                                        vehicle={vehiclesById.get(job.vehicleId)}
+                                        customer={customersById.get(job.customerId)}
+                                        engineer={segment.engineerId ? engineersById.get(segment.engineerId) : undefined}
                                         purchaseOrders={purchaseOrders}
-                                        onDragStart={onDragStart}
+                                        onDragStart={(e, pId, sId) => onDragStart(e, pId, sId, "timeline")}
                                         onDragEnd={onDragEnd}
                                         onEdit={onEditJob}
                                         onPause={onPause}

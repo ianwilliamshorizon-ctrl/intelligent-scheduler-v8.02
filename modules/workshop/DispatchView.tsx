@@ -1,10 +1,8 @@
-
-import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useApp } from '../../core/state/AppContext';
 import { useData } from '../../core/state/DataContext';
-import { ChevronLeft, ChevronRight, Clock, PlusCircle } from 'lucide-react';
-import { DraggedSegmentData, Job, JobSegment, Lift, PurchaseOrder } from '../../types';
-import { formatDate, dateStringToDate, getRelativeDate, formatReadableDate, addDays, getStartOfWeek } from '../../core/utils/dateUtils';
+import { Job, JobSegment, Lift, PurchaseOrder } from '../../types';
+import { dateStringToDate, getRelativeDate, addDays, getStartOfWeek, formatDate } from '../../core/utils/dateUtils';
 import { calculateJobStatus } from '../../core/utils/jobUtils';
 import { TIME_SEGMENTS, SEGMENT_DURATION_MINUTES } from '../../constants';
 import DatePickerModal from '../../components/DatePickerModal';
@@ -12,6 +10,12 @@ import { BookingCalendarView } from '../../components/BookingCalendarView';
 import AssignEngineerModal from '../../components/AssignEngineerModal';
 import { TimelineView } from '../../components/dispatch/TimelineView';
 import { WeeklyView } from '../../components/dispatch/WeeklyView';
+
+// New Refactored Hooks & Components
+import { useDispatchFilters } from './hooks/useDispatchFilters';
+import { useDispatchDragDrop } from './hooks/useDispatchDragDrop';
+import { DispatchHeader } from './components/DispatchHeader';
+import { updateDocument } from '../../core/db';
 
 interface DispatchViewProps {
     setDefaultDateForModal: (date: string | null) => void;
@@ -25,218 +29,117 @@ interface DispatchViewProps {
     onReassignEngineer: (jobId: string, segmentId: string, newEngineerId: string) => void;
     onCheckIn: (jobId: string) => void;
     onOpenAssistant: (jobId: string) => void;
-    onUnscheduleSegment: (jobId: string, segmentId: string) => void;
 }
 
-const DispatchView: React.FC<DispatchViewProps> = ({ setDefaultDateForModal, setIsSmartCreateOpen, setSmartCreateMode, setSelectedJobId, setIsEditModalOpen, onOpenPurchaseOrder, onPause, onRestart, onReassignEngineer, onCheckIn, onOpenAssistant, onUnscheduleSegment }) => {
+const DispatchView: React.FC<DispatchViewProps> = ({ 
+    setDefaultDateForModal, 
+    setIsSmartCreateOpen, 
+    setSmartCreateMode, 
+    setSelectedJobId, 
+    setIsEditModalOpen, 
+    onOpenPurchaseOrder, 
+    onPause, 
+    onRestart, 
+    onReassignEngineer, 
+    onCheckIn, 
+    onOpenAssistant,
+}) => {
     const { jobs, setJobs, lifts, engineers, customers, vehicles, purchaseOrders, absenceRequests, businessEntities } = useData();
-    const { currentUser, selectedEntityId, setCheckingInJobId, setIsCheckInOpen } = useApp();
+    const { selectedEntityId } = useApp();
     
+    // -- View State --
     const [viewMode, setViewMode] = useState<'timeline' | 'week' | 'calendar'>('timeline');
     const [currentDate, setCurrentDate] = useState(getRelativeDate(0));
     const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
     const [unallocatedDateFilter, setUnallocatedDateFilter] = useState<'all' | 'today' | '7days' | '14days'>('all');
     const [showOnSiteOnly, setShowOnSiteOnly] = useState(false);
+    
+    // -- Date Navigation State --
     const [currentMonthDate, setCurrentMonthDate] = useState(dateStringToDate(getRelativeDate(0)));
     const [weekStart, setWeekStart] = useState(() => getStartOfWeek(new Date()));
     
+    // -- Modal State --
     const [assignModalData, setAssignModalData] = useState<{ job: Job, segment: JobSegment, lift: Lift, startSegmentIndex: number, currentEngineerId?: string | null } | null>(null);
     const [reassignModalData, setReassignModalData] = useState<{ jobId: string; segmentId: string; liftName: string; startSegmentIndex: number; currentEngineerId?: string | null; } | null>(null);
 
-    const draggedItemRef = useRef<DraggedSegmentData | null>(null);
-    const dropResultRef = useRef<{ type: 'TIMELINE', liftId: string, startSegmentIndex: number } | { type: 'UNALLOCATED' } | null>(null);
-    const dragImageRef = useRef<HTMLElement | null>(null);
-
-    const entityEngineers = useMemo(() => engineers.filter(e => e.entityId === selectedEntityId), [engineers, selectedEntityId]);
+    // -- Derived Data via Hooks --
+    const { 
+        entityEngineers, 
+        entityLifts,
+        unallocatedJobs, 
+        allocatedSegmentsByLift 
+    } = useDispatchFilters({
+        jobs, lifts, engineers, selectedEntityId, currentDate, unallocatedDateFilter, showOnSiteOnly
+    });
     
-    const sortedLifts = useMemo(() => 
-    [...(lifts || [])].sort((a, b) => 
-        a.name.localeCompare(b.name, undefined, { numeric: true })
-    ), [lifts]);
-    
-    const { unallocatedJobs, allocatedSegmentsByLift } = useMemo(() => {
-        const today = getRelativeDate(0);
-        const allPotentialUnallocated = jobs.filter(job => (selectedEntityId === 'all' || job.entityId === selectedEntityId) && (job.segments || []).some(s => s.status === 'Unallocated'));
-        const siteFilteredJobs = showOnSiteOnly ? allPotentialUnallocated.filter(job => job.vehicleStatus === 'On Site') : allPotentialUnallocated;
-        const dateFilteredJobs = siteFilteredJobs.filter(job => {
-            if (unallocatedDateFilter === 'all') return true;
-            const firstUnallocatedSegment = (job.segments || []).find(s => s.status === 'Unallocated');
-            if (!firstUnallocatedSegment?.date) return false;
-            const jobDate = firstUnallocatedSegment.date;
-            if (unallocatedDateFilter === 'today') return jobDate === today;
-            if (unallocatedDateFilter === '7days') return jobDate >= today && jobDate <= getRelativeDate(6);
-            if (unallocatedDateFilter === '14days') return jobDate >= today && jobDate <= getRelativeDate(13);
-            return false;
-        });
-        const finalUnallocated = dateFilteredJobs;
-        const allocated = new Map<string, (JobSegment & { parentJobId: string })[]>();
-        jobs.forEach(job => {
-            if (selectedEntityId !== 'all' && job.entityId !== selectedEntityId) return;
-            (job.segments || []).forEach(segment => {
-                if (segment.date === currentDate && segment.allocatedLift && segment.status !== 'Unallocated') {
-                    if (!allocated.has(segment.allocatedLift)) allocated.set(segment.allocatedLift, []);
-                    allocated.get(segment.allocatedLift)!.push({ ...segment, parentJobId: job.id });
-                }
-            });
-        });
-        return { unallocatedJobs: finalUnallocated, allocatedSegmentsByLift: allocated };
-    }, [jobs, currentDate, selectedEntityId, unallocatedDateFilter, showOnSiteOnly]);
+    const onUnscheduleSegment = async (jobId: string, segmentId: string) => {
+        const job = jobs.find(j => j.id === jobId);
+        if (!job) return;
 
-    const handleDragStart = useCallback((e: React.DragEvent, parentJobId: string, segmentId: string) => {
-        const job = jobs.find(j => j.id === parentJobId);
-        const segment = job?.segments.find(s => s.segmentId === segmentId);
-        if (segment) {
-            const dragData = { parentJobId, segmentId, duration: segment.duration };
-            e.dataTransfer.setData('application/json', JSON.stringify(dragData));
-            draggedItemRef.current = dragData;
+        const newSegments = job.segments.map(s =>
+            s.segmentId === segmentId
+                ? { ...s, status: 'Unallocated' as const, date: getRelativeDate(0), allocatedLift: null, scheduledStartSegment: null, engineerId: null }
+                : s
+        );
+
+        const updatedStatus = calculateJobStatus(newSegments);
+
+        try {
+            await updateDocument('brooks_jobs', { id: jobId, segments: newSegments, status: updatedStatus });
+            console.log('Successfully unscheduled segment and updated job');
+        } catch (error) {
+            console.error("Error unscheduling segment: ", error);
         }
-        e.dataTransfer.effectAllowed = 'move';
-        dropResultRef.current = null;
-        
-        const sourceElement = e.currentTarget as HTMLElement;
-        sourceElement.classList.add('is-dragging-source');
-        
-        if (dragImageRef.current) document.body.removeChild(dragImageRef.current);
-        const clone = sourceElement.cloneNode(true) as HTMLElement;
-        clone.style.position = 'absolute';
-        clone.style.top = '-9999px';
-        clone.style.width = `${sourceElement.offsetWidth}px`;
-        clone.style.transform = 'rotate(2deg)';
-        document.body.appendChild(clone);
-        dragImageRef.current = clone;
-        e.dataTransfer.setDragImage(clone, clone.offsetWidth / 2, clone.offsetHeight / 2);
-    }, [jobs]);
+    };
 
-    const checkCollisionOnDate = useCallback((date: string, liftId: string, startSegmentIndex: number, durationInSegments: number, draggedSegmentId?: string) => {
-        const segmentsOnLiftAndDate = jobs
-            .flatMap(j => j.segments || [])
-            .filter(s => s.date === date && s.allocatedLift === liftId && s.segmentId !== draggedSegmentId);
-    
-        if (startSegmentIndex < 0 || startSegmentIndex + durationInSegments > TIME_SEGMENTS.length) {
-            return true;
-        }
+    const {
+        handleDragStart,
+        handleTimelineDragOver,
+        handleTimelineDrop,
+        handleUnallocatedDrop,
+        handleDragEnd,
+        checkCollisionOnDate,
+        dropResultRef,
+        handleUnallocatedDragOver,
+        handleUnallocatedDragLeave,
+    } = useDispatchDragDrop({
+        jobs, 
+        lifts: entityLifts, 
+        currentDate, 
+        setAssignModalData,
+        onUnscheduleSegment
+    });
 
-        for (let i = 0; i < durationInSegments; i++) {
-            const timeSlotIndex = startSegmentIndex + i;
-            const isOccupied = segmentsOnLiftAndDate.some(s => {
-                if (s.scheduledStartSegment === null) return false;
-                const sEndIndex = s.scheduledStartSegment + (s.duration * (60 / SEGMENT_DURATION_MINUTES));
-                return timeSlotIndex >= s.scheduledStartSegment && timeSlotIndex < sEndIndex;
-            });
-            if (isOccupied) return true;
-        }
-        return false;
-    }, [jobs]);
-
-    const handleTimelineDragOver = useCallback((e: React.DragEvent, liftId: string) => {
-        e.preventDefault();
-        if (!draggedItemRef.current) return;
-        
-        const rect = e.currentTarget.getBoundingClientRect();
-        const offsetY = e.clientY - rect.top;
-        const segmentHeight = rect.height / TIME_SEGMENTS.length;
-        const hoverSegmentIndex = Math.floor(offsetY / segmentHeight);
-        
-        dropResultRef.current = { type: 'TIMELINE', liftId, startSegmentIndex: hoverSegmentIndex };
-        
-        document.querySelectorAll('.timeline-column-over').forEach(el => el.classList.remove('timeline-column-over'));
-        e.currentTarget.classList.add('timeline-column-over');
-    }, []);
-
-    const handleTimelineDrop = useCallback((e: React.DragEvent, liftId: string) => {
-        e.preventDefault();
-        e.currentTarget.classList.remove('timeline-column-over');
-        
-        if (dropResultRef.current?.type === 'TIMELINE' && draggedItemRef.current) {
-            const { startSegmentIndex } = dropResultRef.current;
-            const { parentJobId, segmentId, duration } = draggedItemRef.current;
-            const durationInSegments = duration * (60 / SEGMENT_DURATION_MINUTES);
-
-            let finalStartIndex = startSegmentIndex;
-            if (checkCollisionOnDate(currentDate, liftId, finalStartIndex, durationInSegments, segmentId)) {
-                let found = false;
-                for (let i = 0; i < TIME_SEGMENTS.length - durationInSegments; i++) {
-                    if (!checkCollisionOnDate(currentDate, liftId, i, durationInSegments, segmentId)) {
-                        finalStartIndex = i;
-                        found = true;
-                        break;
-                    }
-                }
-                if (!found) {
-                    alert("No space available on this lift for the entire duration.");
-                    return;
-                }
-            }
-            
-            const job = jobs.find(j => j.id === parentJobId);
-            const segment = job?.segments.find(s => s.segmentId === segmentId);
-            const lift = lifts.find(l => l.id === liftId);
-
-            if (job && segment && lift) {
-                setAssignModalData({ job, segment, lift, startSegmentIndex: finalStartIndex, currentEngineerId: segment.engineerId });
-            }
-        }
-        draggedItemRef.current = null;
-    }, [jobs, lifts, currentDate, checkCollisionOnDate]);
-
-    const handleUnallocatedDrop = useCallback((e: React.DragEvent) => {
-        e.preventDefault();
-        const unallocatedZone = e.currentTarget;
-        unallocatedZone.classList.remove('is-over');
-        
-        if (dropResultRef.current?.type === 'UNALLOCATED' && draggedItemRef.current) {
-            const { parentJobId, segmentId } = draggedItemRef.current;
-            
-             setJobs(prev => prev.map(job => {
-                if (job.id === parentJobId) {
-                    const newSegments = job.segments.map(s => 
-                        s.segmentId === segmentId ? { ...s, status: 'Unallocated' as const, allocatedLift: null, scheduledStartSegment: null, engineerId: null } : s
-                    );
-                    return { ...job, segments: newSegments, status: calculateJobStatus(newSegments) };
-                }
-                return job;
-            }));
-        }
-        draggedItemRef.current = null;
-    }, [setJobs]);
-    
-    const handleDragEnd = useCallback((e: React.DragEvent) => {
-        const sourceElement = e.currentTarget as HTMLElement;
-        sourceElement.classList.remove('is-dragging-source');
-        if (dragImageRef.current && document.body.contains(dragImageRef.current)) {
-            document.body.removeChild(dragImageRef.current);
-        }
-        draggedItemRef.current = null;
-        dropResultRef.current = null;
-    }, []);
-
-    const handleAssignConfirm = (engineerId: string, startSegmentIndex: number) => {
+    const handleAssignConfirm = async (engineerId: string, startSegmentIndex: number) => {
         if (!assignModalData) return;
         const { job, segment, lift } = assignModalData;
 
-        const durationInSegments = segment.duration * (60 / SEGMENT_DURATION_MINUTES);
+        const durationInSegments = segment.duration / SEGMENT_DURATION_MINUTES;
          if (checkCollisionOnDate(currentDate, lift.id, startSegmentIndex, durationInSegments, segment.segmentId)) {
             alert("Slot is no longer available.");
             return;
         }
 
-        setJobs(prev => prev.map(j => {
-            if (j.id === job.id) {
-                const newSegments = j.segments.map(s => 
-                    s.segmentId === segment.segmentId ? { 
-                        ...s, 
-                        status: 'Allocated' as const, 
-                        allocatedLift: lift.id, 
-                        scheduledStartSegment: startSegmentIndex, 
-                        date: currentDate,
-                        engineerId: engineerId
-                    } : s
-                );
-                return { ...j, segments: newSegments, status: calculateJobStatus(newSegments) };
-            }
-            return j;
-        }));
-        setAssignModalData(null);
+        const newSegments = job.segments.map(s => 
+            s.segmentId === segment.segmentId ? { 
+                ...s, 
+                status: 'Allocated' as const, 
+                allocatedLift: lift.id, 
+                scheduledStartSegment: startSegmentIndex, 
+                date: currentDate,
+                engineerId: engineerId
+            } : s
+        );
+
+        const updatedStatus = calculateJobStatus(newSegments);
+
+        try {
+            await updateDocument('brooks_jobs', { id: job.id, segments: newSegments, status: updatedStatus });
+            console.log("Job segment updated successfully in DB");
+            setAssignModalData(null);
+        } catch (error) {
+            console.error("Error updating job segment: ", error);
+        }
     };
 
     const handleMonthChange = (offset: number) => {
@@ -256,7 +159,7 @@ const DispatchView: React.FC<DispatchViewProps> = ({ setDefaultDateForModal, set
 
     const absencesByDate = useMemo(() => {
         const map = new Map<string, number>();
-        absenceRequests.forEach(req => {
+        (absenceRequests || []).forEach(req => {
             if (req.status === 'Approved' || req.status === 'Pending') {
                  let curr = dateStringToDate(req.startDate);
                  const end = dateStringToDate(req.endDate);
@@ -273,21 +176,11 @@ const DispatchView: React.FC<DispatchViewProps> = ({ setDefaultDateForModal, set
     const dailyCapacity = useMemo(() => {
         return businessEntities.find(e => e.id === selectedEntityId)?.dailyCapacityHours || 40;
     }, [businessEntities, selectedEntityId]);
-
-    const handlePrevDay = () => {
-        const d = dateStringToDate(currentDate);
-        setCurrentDate(formatDate(addDays(d, -1)));
-    };
-
-    const handleNextDay = () => {
-         const d = dateStringToDate(currentDate);
-         setCurrentDate(formatDate(addDays(d, 1)));
-    };
     
     const handleReassignClick = (jobId: string, segmentId: string) => {
         const job = jobs.find(j => j.id === jobId);
         const segment = job?.segments.find(s => s.segmentId === segmentId);
-        const lift = lifts.find(l => l.id === segment?.allocatedLift);
+        const lift = entityLifts.find(l => l.id === segment?.allocatedLift);
 
         if (job && segment && lift && segment.scheduledStartSegment !== null) {
             setReassignModalData({
@@ -302,69 +195,41 @@ const DispatchView: React.FC<DispatchViewProps> = ({ setDefaultDateForModal, set
     
     const handleReassignConfirm = (engineerId: string) => {
         if (!reassignModalData) return;
-        
         onReassignEngineer(reassignModalData.jobId, reassignModalData.segmentId, engineerId);
         setReassignModalData(null);
     };
 
     return (
         <div className="w-full h-full flex flex-col">
-            <header className="bg-white border-b p-4 flex justify-between items-center shadow-sm z-30">
-                <div className="flex items-center gap-4">
-                     <div className="flex bg-gray-200 rounded-lg p-1">
-                        <button onClick={() => setViewMode('timeline')} className={`px-4 py-2 rounded-md font-semibold text-sm transition ${viewMode === 'timeline' ? 'bg-white shadow text-indigo-700' : 'text-gray-600 hover:text-gray-800'}`}>Day Timeline</button>
-                        <button onClick={() => setViewMode('week')} className={`px-4 py-2 rounded-md font-semibold text-sm transition ${viewMode === 'week' ? 'bg-white shadow text-indigo-700' : 'text-gray-600 hover:text-gray-800'}`}>Week View</button>
-                        <button onClick={() => setViewMode('calendar')} className={`px-4 py-2 rounded-md font-semibold text-sm transition ${viewMode === 'calendar' ? 'bg-white shadow text-indigo-700' : 'text-gray-600 hover:text-gray-800'}`}>Month Calendar</button>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                        {viewMode === 'timeline' && (
-                             <>
-                                <button onClick={handlePrevDay} className="p-2 rounded-full hover:bg-gray-100"><ChevronLeft size={20}/></button>
-                                <button onClick={() => setIsDatePickerOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg font-semibold text-gray-700">
-                                    <Clock size={18} />
-                                    <span>{formatReadableDate(currentDate)}</span>
-                                </button>
-                                <button onClick={handleNextDay} className="p-2 rounded-full hover:bg-gray-100"><ChevronRight size={20}/></button>
-                             </>
-                        )}
-                         {viewMode === 'week' && (
-                             <>
-                                <button onClick={() => setWeekStart(addDays(weekStart, -7))} className="p-2 rounded-full hover:bg-gray-100"><ChevronLeft size={20}/></button>
-                                <span className="font-semibold px-2">Week of {formatReadableDate(formatDate(weekStart))}</span>
-                                <button onClick={() => setWeekStart(addDays(weekStart, 7))} className="p-2 rounded-full hover:bg-gray-100"><ChevronRight size={20}/></button>
-                             </>
-                        )}
-                         {viewMode === 'calendar' && (
-                             <>
-                                <button onClick={() => handleMonthChange(-1)} className="p-2 rounded-full hover:bg-gray-100"><ChevronLeft size={20}/></button>
-                                <span className="font-semibold px-2">{currentMonthDate.toLocaleString('default', { month: 'long', year: 'numeric', timeZone: 'UTC' })}</span>
-                                <button onClick={() => handleMonthChange(1)} className="p-2 rounded-full hover:bg-gray-100"><ChevronRight size={20}/></button>
-                             </>
-                        )}
-                        <button onClick={handleToday} className="text-sm font-semibold text-indigo-600 hover:bg-indigo-50 px-3 py-1.5 rounded">Today</button>
-                    </div>
-                </div>
-                <div className="flex items-center gap-2">
-                    <button onClick={() => { setIsSmartCreateOpen(true); setSmartCreateMode('job'); setDefaultDateForModal(currentDate); }} className="flex items-center gap-2 py-2 px-4 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition">
-                        <PlusCircle size={20}/> Smart Create Job
-                    </button>
-                </div>
-            </header>
+            <DispatchHeader
+                viewMode={viewMode}
+                setViewMode={setViewMode}
+                currentDate={currentDate}
+                setCurrentDate={setCurrentDate}
+                weekStart={weekStart}
+                setWeekStart={setWeekStart}
+                currentMonthDate={currentMonthDate}
+                handleMonthChange={handleMonthChange}
+                handleToday={handleToday}
+                setIsDatePickerOpen={setIsDatePickerOpen}
+                setIsSmartCreateOpen={setIsSmartCreateOpen}
+                setSmartCreateMode={setSmartCreateMode}
+                setDefaultDateForModal={setDefaultDateForModal}
+            />
             
             {viewMode === 'timeline' && (
                 <TimelineView
-                    sortedLifts={sortedLifts}
+                    lifts={entityLifts} 
                     onDragStart={handleDragStart}
                     onDragEnd={handleDragEnd}
                     onTimelineDragEnter={(e) => { e.preventDefault(); }}
                     onTimelineDragLeave={(e) => { e.currentTarget.classList.remove('timeline-column-over'); }}
                     onTimelineDragOver={handleTimelineDragOver}
                     onTimelineDrop={handleTimelineDrop}
-                    onDragOverUnallocated={(e) => { e.preventDefault(); dropResultRef.current = { type: 'UNALLOCATED' }; e.currentTarget.classList.add('is-over'); }}
+                    onDragOverUnallocated={handleUnallocatedDragOver}
                     onDropOnUnallocated={handleUnallocatedDrop}
-                    onDragEnterUnallocated={(e) => e.currentTarget.classList.add('is-over')}
-                    onDragLeaveUnallocated={(e) => e.currentTarget.classList.remove('is-over')}
+                    onDragEnterUnallocated={handleUnallocatedDragOver}
+                    onDragLeaveUnallocated={handleUnallocatedDragLeave}
                     unallocatedJobs={unallocatedJobs}
                     allocatedSegmentsByLift={allocatedSegmentsByLift}
                     unallocatedDateFilter={unallocatedDateFilter}
@@ -389,7 +254,7 @@ const DispatchView: React.FC<DispatchViewProps> = ({ setDefaultDateForModal, set
                         vehicles={vehicles}
                         customers={customers}
                         onAddJob={(date) => { setDefaultDateForModal(date); setIsSmartCreateOpen(true); setSmartCreateMode('job'); }}
-                        onDragStart={() => {}} // No drag in month view
+                        onDragStart={() => {}} 
                         maxDailyCapacityHours={dailyCapacity}
                         absencesByDate={absencesByDate}
                         onDayClick={(date) => { setCurrentDate(date); setViewMode('timeline'); }}
@@ -428,7 +293,7 @@ const DispatchView: React.FC<DispatchViewProps> = ({ setDefaultDateForModal, set
                     engineers={entityEngineers}
                     jobInfo={{ resourceName: assignModalData.lift.name }}
                     initialStartSegmentIndex={assignModalData.startSegmentIndex}
-                    initialEngineerId={AssignEngineerModal.currentEngineerId}
+                    initialEngineerId={assignModalData.currentEngineerId}
                     timeSegments={TIME_SEGMENTS}
                 />
             )}
