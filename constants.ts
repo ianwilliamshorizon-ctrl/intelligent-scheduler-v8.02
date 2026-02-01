@@ -1,8 +1,8 @@
 
 export const START_HOUR = 8;
 export const START_MINUTE = 30;
-export const END_HOUR = 17;
-export const END_MINUTE = 30;
+export const END_HOUR = 18;
+export const END_MINUTE = 0;
 export const SEGMENT_DURATION_MINUTES = 30;
 export const CAPACITY_THRESHOLD_WARNING = 0.8; // 80%
 

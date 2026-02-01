@@ -1,21 +1,33 @@
-
 import { useState } from 'react';
 import { saveDocument, deleteDocument } from '../../../core/db';
+import { COLLECTION_NAME } from '../../../core/config/firebaseConfig';
 
 export const useManagementTable = <T extends { id: string }>(
     items: T[], 
-    collectionName: string
+    collectionName: string // e.g. "users", "businessEntities"
 ) => {
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
+    // Helper to get the correct path (e.g. "isdevdb_users")
+    // If collectionName already starts with "brooks_" or "isdevdb_", we handle it
+    const getPath = (name: string) => {
+        const cleanName = name.replace('brooks_', '').replace(`${COLLECTION_NAME}_`, '');
+        return `${COLLECTION_NAME}_${cleanName}`;
+    };
+
     const updateItem = async (newItem: T) => {
-        // Persist to DB (Upsert)
-        await saveDocument(collectionName, newItem);
+        const path = getPath(collectionName);
+        console.log(`Saving to ${path} with ID: ${newItem.id}`);
+        
+        // Pass newItem.id as the third argument to saveDocument 
+        // to ensure the DB document ID matches your "User_Simon" format
+        await saveDocument(path, newItem, newItem.id);
     };
 
     const deleteItem = async (id: string) => {
         if(confirm('Are you sure you want to permanently delete this item?')) {
-            await deleteDocument(collectionName, id);
+            const path = getPath(collectionName);
+            await deleteDocument(path, id);
         }
     };
 
@@ -36,8 +48,8 @@ export const useManagementTable = <T extends { id: string }>(
 
     const bulkDelete = async () => {
         if (confirm(`Are you sure you want to permanently delete ${selectedIds.size} items?`)) {
-            // Delete all selected items concurrently
-            const deletePromises = Array.from(selectedIds).map(id => deleteDocument(collectionName, id as string));
+            const path = getPath(collectionName);
+            const deletePromises = Array.from(selectedIds).map(id => deleteDocument(path, id as string));
             await Promise.all(deletePromises);
             setSelectedIds(new Set());
         }

@@ -128,7 +128,7 @@ export const TimelineView: React.FC<TimelineViewProps> = (props) => {
                 </div>
             </div>
             <div
-                className="flex-grow flex bg-white rounded-lg shadow-md overflow-x-auto min-w-0"
+                className="flex-grow flex bg-white rounded-lg shadow-md overflow-auto min-w-0"
             >
                 <div className="flex-shrink-0 border-r flex flex-col bg-white sticky left-0 z-20">
                     <h4 className="flex items-center justify-center font-bold p-2 border-b sticky top-0 bg-white z-30 text-transparent select-none h-16">&nbsp;</h4>

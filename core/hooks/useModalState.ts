@@ -25,6 +25,8 @@ export interface ModalState {
     ownerStatementModal: { isOpen: boolean; saleVehicle: T.SaleVehicle | null };
     internalStatementModal: { isOpen: boolean; saleVehicle: T.SaleVehicle | null };
     salesReportModal: boolean;
+    addSaleVehicleModalOpen: boolean;
+    manageSaleVehicleModal: { isOpen: boolean; saleVehicle: T.SaleVehicle | null };
     prospectModal: { isOpen: boolean; prospect: T.Prospect | null };
     estimateFormModal: { isOpen: boolean; estimate: Partial<T.Estimate> | null };
     estimateViewModal: { isOpen: boolean; estimate: T.Estimate | null };
@@ -58,6 +60,8 @@ export interface ModalSetters {
     setOwnerStatementModal: React.Dispatch<React.SetStateAction<{ isOpen: boolean; saleVehicle: T.SaleVehicle | null }>>;
     setInternalStatementModal: React.Dispatch<React.SetStateAction<{ isOpen: boolean; saleVehicle: T.SaleVehicle | null }>>;
     setSalesReportModal: React.Dispatch<React.SetStateAction<boolean>>;
+    setAddSaleVehicleModalOpen: React.Dispatch<React.SetStateAction<boolean>>;
+    setManageSaleVehicleModal: React.Dispatch<React.SetStateAction<{ isOpen: boolean; saleVehicle: T.SaleVehicle | null }>>;
     setProspectModal: React.Dispatch<React.SetStateAction<{ isOpen: boolean; prospect: T.Prospect | null }>>;
     setEstimateFormModal: React.Dispatch<React.SetStateAction<{ isOpen: boolean; estimate: Partial<T.Estimate> | null }>>;
     setEstimateViewModal: React.Dispatch<React.SetStateAction<{ isOpen: boolean; estimate: T.Estimate | null }>>;
@@ -102,6 +106,8 @@ export const useModalState = (): [ModalState, ModalSetters] => {
     const [ownerStatementModal, setOwnerStatementModal] = useState<{ isOpen: boolean; saleVehicle: T.SaleVehicle | null }>({ isOpen: false, saleVehicle: null });
     const [internalStatementModal, setInternalStatementModal] = useState<{ isOpen: boolean; saleVehicle: T.SaleVehicle | null }>({ isOpen: false, saleVehicle: null });
     const [salesReportModal, setSalesReportModal] = useState(false);
+    const [addSaleVehicleModalOpen, setAddSaleVehicleModalOpen] = useState(false);
+    const [manageSaleVehicleModal, setManageSaleVehicleModal] = useState<{ isOpen: boolean; saleVehicle: T.SaleVehicle | null }>({ isOpen: false, saleVehicle: null });
     const [prospectModal, setProspectModal] = useState<{ isOpen: boolean; prospect: T.Prospect | null }>({ isOpen: false, prospect: null });
 
     // Estimate Modals
@@ -124,6 +130,7 @@ export const useModalState = (): [ModalState, ModalSetters] => {
         invoiceFormModal, viewInvoiceModal, salesInvoiceModal, exportModal,
         rentalBookingModal, rentalConditionModal, rentalAgreementModal, rentalReturnReportModal,
         sorContractModal, ownerStatementModal, internalStatementModal, salesReportModal,
+        addSaleVehicleModalOpen, manageSaleVehicleModal,
         prospectModal, estimateFormModal, estimateViewModal, scheduleJobFromEstimateModal,
         scheduleEmailModal, inquiryModal, isAssistantOpen, assistantContextJobId
     };
@@ -135,6 +142,7 @@ export const useModalState = (): [ModalState, ModalSetters] => {
         setInvoiceFormModal, setViewInvoiceModal, setSalesInvoiceModal, setExportModal,
         setRentalBookingModal, setRentalConditionModal, setRentalAgreementModal, setRentalReturnReportModal,
         setSorContractModal, setOwnerStatementModal, setInternalStatementModal, setSalesReportModal,
+        setAddSaleVehicleModalOpen, setManageSaleVehicleModal,
         setProspectModal, setEstimateFormModal, setEstimateViewModal, setScheduleJobFromEstimateModal,
         setScheduleEmailModal, setInquiryModal, setIsAssistantOpen, setAssistantContextJobId
     };

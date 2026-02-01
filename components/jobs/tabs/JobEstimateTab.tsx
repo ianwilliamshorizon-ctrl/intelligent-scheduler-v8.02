@@ -1,7 +1,7 @@
 
 import React from 'react';
-import { EstimateLineItem, TaxRate, Part, PurchaseOrder, ServicePackage } from '../../../types';
-import { Trash2, PlusCircle } from 'lucide-react';
+import { EstimateLineItem, TaxRate, Part, PurchaseOrder, ServicePackage, Estimate } from '../../../types';
+import { Trash2, PlusCircle, FileText, CheckCircle, AlertTriangle } from 'lucide-react';
 import { formatCurrency } from '../../../utils/formatUtils';
 import SearchableSelect from '../../SearchableSelect';
 
@@ -76,6 +76,7 @@ interface JobEstimateTabProps {
     purchaseOrders: PurchaseOrder[];
     supplierMap: Map<string, string>;
     editableEstimate: any; // Using explicit type locally would be better but keeping simple for refactor
+    supplementaryEstimates: Estimate[];
     estimateBreakdown: { packages: any[], standaloneLabor: any[], standaloneParts: any[] };
     isReadOnly: boolean;
     canViewPricing: boolean;
@@ -89,6 +90,8 @@ interface JobEstimateTabProps {
     onChange: (e: React.ChangeEvent<HTMLSelectElement>) => void;
     onOpenPurchaseOrder: (po: PurchaseOrder) => void;
     onCreateEstimate: () => void;
+    onRaiseSupplementaryEstimate: () => void;
+    onViewEstimate: (estimate: Estimate) => void;
     onAddLineItem: (isLabor: boolean) => void;
     onAddPackage: (packageId: string) => void;
     onLineItemChange: (id: string, field: keyof EstimateLineItem, value: any) => void;
@@ -99,9 +102,9 @@ interface JobEstimateTabProps {
 }
 
 export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
-    partsStatus, purchaseOrderIds, purchaseOrders, supplierMap, editableEstimate,
+    partsStatus, purchaseOrderIds, purchaseOrders, supplierMap, editableEstimate, supplementaryEstimates,
     estimateBreakdown, isReadOnly, canViewPricing, taxRates, filteredParts, activePartSearch, servicePackages,
-    totalNet, vatBreakdown, grandTotal, onChange, onOpenPurchaseOrder, onCreateEstimate,
+    totalNet, vatBreakdown, grandTotal, onChange, onOpenPurchaseOrder, onCreateEstimate, onRaiseSupplementaryEstimate, onViewEstimate,
     onAddLineItem, onAddPackage, onLineItemChange, onRemoveLineItem, onPartSearchChange, onSetActivePartSearch, onSelectPart
 }) => {
     return (
@@ -117,8 +120,37 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
                 </select>
             </div>
             
+            {supplementaryEstimates.length > 0 && (
+                <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-lg">
+                    <h4 className="font-bold text-indigo-900 mb-2 flex items-center gap-2"><FileText size={16}/> Supplementary Estimates</h4>
+                    <div className="space-y-2">
+                        {supplementaryEstimates.map(est => {
+                             const total = (est.lineItems || []).reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
+                             return (
+                                <div key={est.id} className="flex justify-between items-center bg-white p-2 rounded border border-indigo-100 shadow-sm">
+                                    <div className="flex items-center gap-2">
+                                        <span className="font-mono font-semibold">#{est.estimateNumber}</span>
+                                        <span className={`text-[10px] px-2 py-0.5 rounded-full ${est.status === 'Approved' ? 'bg-green-100 text-green-800' : 'bg-gray-200 text-gray-700'}`}>{est.status}</span>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        {canViewPricing && <span className="font-bold text-sm">{formatCurrency(total)}</span>}
+                                        <button onClick={() => onViewEstimate(est)} className="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded hover:bg-indigo-200 font-semibold">View</button>
+                                    </div>
+                                </div>
+                             );
+                        })}
+                    </div>
+                </div>
+            )}
+            
             <div>
-                <h4 className="font-semibold mb-2">Items</h4>
+                <div className="flex justify-between items-end mb-2">
+                    <h4 className="font-semibold">Main Estimate Items</h4>
+                    <button onClick={onRaiseSupplementaryEstimate} className="text-xs flex items-center gap-1 bg-amber-100 text-amber-800 px-2 py-1 rounded font-semibold hover:bg-amber-200 border border-amber-300">
+                         <PlusCircle size={12}/> Raise Supplementary Estimate
+                    </button>
+                </div>
+
                 {!editableEstimate && !isReadOnly && <button onClick={onCreateEstimate} className="text-indigo-600 hover:underline">This job has no estimate. Click here to add items.</button>}
                 
                 {editableEstimate && (

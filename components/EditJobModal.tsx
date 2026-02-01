@@ -2,15 +2,15 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useData } from '../core/state/DataContext';
 import { useApp } from '../core/state/AppContext';
-import { Job, Estimate, EstimateLineItem, Part, PurchaseOrder, RentalBooking, PurchaseOrderLineItem, ChecklistSection, TyreCheckData, VehicleDamagePoint } from '../types';
-import { X, Save, DollarSign, Plus, Trash2, Loader2, CheckCircle } from 'lucide-react';
+import { Job, Vehicle, Customer, Estimate, TaxRate, EstimateLineItem, Part, ServicePackage, RentalBooking, PurchaseOrder, ChecklistSection, TyreCheckData, VehicleDamagePoint } from '../types';
+import { X, Save, Car, CarFront, Wrench, DollarSign, Loader2, CheckCircle, Trash2, Plus } from 'lucide-react';
 import { formatDate, addDays } from '../core/utils/dateUtils';
 import { generateEstimateNumber, generatePurchaseOrderId } from '../core/utils/numberGenerators';
-import { initialChecklistData, initialTyreCheckData } from '../core/data/initialChecklistData';
-import { useDebouncedSave } from '../core/hooks/useDebouncedSave';
 import { JobDetailsTab } from './jobs/tabs/JobDetailsTab';
 import { JobEstimateTab } from './jobs/tabs/JobEstimateTab';
 import { JobInspectionTab } from './jobs/tabs/JobInspectionTab';
+import { useDebouncedSave } from '../core/hooks/useDebouncedSave';
+import { initialChecklistData, initialTyreCheckData } from '../core/data/initialChecklistData';
 
 const EditJobModal: React.FC<{
     isOpen: boolean;
@@ -20,7 +20,9 @@ const EditJobModal: React.FC<{
     rentalBookings: RentalBooking[];
     onOpenRentalBooking: (booking: Partial<RentalBooking> | null) => void;
     onOpenConditionReport: (booking: RentalBooking, mode: 'checkOut' | 'checkIn') => void;
-}> = ({ isOpen, onClose, selectedJobId, onOpenPurchaseOrder, rentalBookings, onOpenRentalBooking, onOpenConditionReport }) => {
+    onRaiseSupplementaryEstimate: (job: Job) => void;
+    onViewEstimate: (estimate: Estimate) => void;
+}> = ({ isOpen, onClose, selectedJobId, onOpenPurchaseOrder, rentalBookings, onOpenRentalBooking, onOpenConditionReport, onRaiseSupplementaryEstimate, onViewEstimate }) => {
     const {
         jobs, setJobs, vehicles, customers, engineers, estimates, setEstimates, purchaseOrders, setPurchaseOrders, suppliers, parts, servicePackages, taxRates, businessEntities
     } = useData();
@@ -52,6 +54,12 @@ const EditJobModal: React.FC<{
 
     const taxRatesMap = useMemo(() => new Map(taxRates.map(t => [t.id, t])), [taxRates]);
     const standardTaxRateId = useMemo(() => taxRates.find(t => t.code === 'T1')?.id, [taxRates]);
+
+    // Calculate Supplementary Estimates (Linked to Job but NOT the main estimate)
+    const supplementaryEstimates = useMemo(() => {
+        if (!job) return [];
+        return estimates.filter(e => e.jobId === job.id && e.id !== job.estimateId);
+    }, [estimates, job]);
 
     useEffect(() => {
         if (job) {
@@ -205,7 +213,7 @@ const EditJobModal: React.FC<{
                     const draftPO = currentJobPOs.find(po => po.supplierId === (supplierId === 'no_supplier' ? null : supplierId) && po.status === 'Draft');
     
                     if (draftPO) {
-                        const newPoLineItems: PurchaseOrderLineItem[] = itemsForSupplier.map(item => ({ id: crypto.randomUUID(), partNumber: item.partNumber, description: item.description, quantity: item.quantity, receivedQuantity: 0, unitPrice: item.unitCost || 0, taxCodeId: item.taxCodeId, }));
+                        const newPoLineItems: any[] = itemsForSupplier.map(item => ({ id: crypto.randomUUID(), partNumber: item.partNumber, description: item.description, quantity: item.quantity, receivedQuantity: 0, unitPrice: item.unitCost || 0, taxCodeId: item.taxCodeId, }));
                         const poToUpdate = updatedPOs.find(p => p.id === draftPO.id) || draftPO;
                         const updatedPO = { ...poToUpdate, lineItems: [...poToUpdate.lineItems, ...newPoLineItems] };
                         const otherUpdatedPOs = updatedPOs.filter(p => p.id !== draftPO.id);
@@ -237,7 +245,6 @@ const EditJobModal: React.FC<{
         
         if (newPOs.length > 0 || updatedPOs.length > 0) {
             const allPOsForJobNow = [...purchaseOrders.filter(po => (jobToSave.purchaseOrderIds || []).includes(po.id) && !updatedPOs.some(upo => upo.id === po.id)), ...updatedPOs, ...newPOs];
-            
             if (allPOsForJobNow.length > 0) {
                 if (allPOsForJobNow.every(p => p.status === 'Received')) jobToSave.partsStatus = 'Fully Received';
                 else if (allPOsForJobNow.some(p => p.status === 'Partially Received' || p.status === 'Received')) jobToSave.partsStatus = 'Partially Received';
@@ -307,6 +314,7 @@ const EditJobModal: React.FC<{
     const handleBookCourtesyCar = () => { if (!editableJob) return; const booking: Partial<RentalBooking> = { jobId: editableJob.id, customerId: editableJob.customerId, bookingType: 'Courtesy Car', startDate: `${editableJob.scheduledDate || formatDate(new Date())}T09:00`, endDate: `${editableJob.scheduledDate || formatDate(new Date())}T17:00` }; onOpenRentalBooking(booking); };
 
     if (!isOpen || !editableJob) return null;
+
     const engineerMap = new Map(engineers.map(e => [e.id, e.name]));
     const supplierMap = new Map(suppliers.map(s => [s.id, s.name]));
 
@@ -320,6 +328,7 @@ const EditJobModal: React.FC<{
                         purchaseOrders={purchaseOrders}
                         supplierMap={supplierMap}
                         editableEstimate={editableEstimate}
+                        supplementaryEstimates={supplementaryEstimates}
                         estimateBreakdown={estimateBreakdown}
                         isReadOnly={isReadOnly}
                         canViewPricing={canViewPricing}
@@ -333,6 +342,8 @@ const EditJobModal: React.FC<{
                         onChange={handleChange}
                         onOpenPurchaseOrder={onOpenPurchaseOrder}
                         onCreateEstimate={handleCreateEstimateIfNeeded}
+                        onRaiseSupplementaryEstimate={() => onRaiseSupplementaryEstimate(editableJob)}
+                        onViewEstimate={onViewEstimate}
                         onAddLineItem={addLineItem}
                         onAddPackage={addPackage}
                         onLineItemChange={handleLineItemChange}

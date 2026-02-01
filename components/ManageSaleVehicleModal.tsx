@@ -9,8 +9,10 @@ import { generateInvoiceId } from '../core/utils/numberGenerators';
 const Section = ({ title, children, defaultOpen = false, icon: Icon }: { title: string, children?: React.ReactNode, defaultOpen?: boolean, icon: React.ElementType }) => {
     const [isOpen, setIsOpen] = useState(defaultOpen);
     return (
-        <div className="border rounded-lg bg-white mb-4"><h3 onClick={() => setIsOpen(!isOpen)} className="text-md font-bold p-3 flex justify-between items-center cursor-pointer bg-gray-50 rounded-t-lg">
-            <span className="flex items-center gap-2">{Icon && <Icon size={16}/>} {title}</span>{isOpen ? <ChevronUp size={20}/> : <ChevronDown size={20}/>}</h3>
+        <div className="border rounded-lg bg-white mb-4">
+            <h3 onClick={() => setIsOpen(!isOpen)} className="text-md font-bold p-3 flex justify-between items-center cursor-pointer bg-gray-50 rounded-t-lg">
+                <span className="flex items-center gap-2">{Icon && <Icon size={16}/>} {title}</span>{isOpen ? <ChevronUp size={20}/> : <ChevronDown size={20}/>}
+            </h3>
             {isOpen && <div className="p-3">{children}</div>}
         </div>
     );
@@ -29,16 +31,12 @@ const FinancialsDisplay = ({ summary, saleType }: { summary: any, saleType: 'Sal
             <div className="space-y-4 text-sm">
                 <FinancialRow label="Sale Price" value={summary.finalSalePrice} />
                 <FinancialRow label="Upsell Revenue" value={summary.upsellRevenue} />
-                <FinancialRow label="Total Revenue" value={summary.finalSalePrice + summary.upsellRevenue} isSubTotal />
-                
+                <FinancialRow label="Total Revenue" value={(summary.finalSalePrice || 0) + (summary.upsellRevenue || 0)} isSubTotal />
                 <div className="h-2"></div>
-
                 <FinancialRow label="Vehicle Cost" value={summary.totalVehicleCost} isNegative />
                 <FinancialRow label="Non-recoverable Costs" value={summary.totalNonRecoverableCosts} isNegative />
                 <FinancialRow label="Upsell Costs" value={summary.upsellCosts} isNegative />
-                
                 <div className="h-2"></div>
-
                 <FinancialRow label="Gross Profit" value={summary.grossProfit} isSubTotal />
                 <FinancialRow label="VAT on Margin (approx)" value={summary.vatOnMargin} isNegative />
                 <FinancialRow label="Overheads" value={summary.totalOverheads} isNegative />
@@ -47,7 +45,6 @@ const FinancialsDisplay = ({ summary, saleType }: { summary: any, saleType: 'Sal
         );
     }
 
-    // Sale or Return
     return (
          <div className="space-y-4 text-sm">
             <div>
@@ -55,23 +52,18 @@ const FinancialsDisplay = ({ summary, saleType }: { summary: any, saleType: 'Sal
                 <div className="space-y-1">
                     <FinancialRow label="Sale Price" value={summary.finalSalePrice} />
                     <FinancialRow label="Upsell Revenue" value={summary.upsellRevenue} />
-                    <FinancialRow label="Total Revenue" value={summary.finalSalePrice + summary.upsellRevenue} isSubTotal />
-                    
+                    <FinancialRow label="Total Revenue" value={(summary.finalSalePrice || 0) + (summary.upsellRevenue || 0)} isSubTotal />
                     <div className="h-2"></div>
-
                     <FinancialRow label="Final Payment to Owner" value={summary.returnToCustomer} isNegative />
                     <FinancialRow label="Non-recoverable Costs" value={summary.totalNonRecoverableCosts} isNegative />
                     <FinancialRow label="Upsell Costs" value={summary.upsellCosts} isNegative />
-
                     <div className="h-2"></div>
-                    
                     <FinancialRow label="Gross Profit" value={summary.grossProfit} isSubTotal />
                     <FinancialRow label="VAT on Margin (approx)" value={summary.vatOnMargin} isNegative />
                     <FinancialRow label="Overheads" value={summary.totalOverheads} isNegative />
                     <FinancialRow label="Est. Net Profit" value={summary.netSalesProfit} isTotal />
                 </div>
             </div>
-
             <div className="pt-3 border-t">
                 <h4 className="font-bold text-gray-800 mb-1">Owner Payout Calculation</h4>
                  <div className="space-y-1">
@@ -84,10 +76,10 @@ const FinancialsDisplay = ({ summary, saleType }: { summary: any, saleType: 'Sal
     );
 };
 
-const ItemList = ({ items, onRemove, icon: Icon, costKey = 'cost', saleKey }: { items: any[], onRemove: (id: string) => void, icon: React.ElementType, costKey?: string, saleKey?: string }) => (
+const ItemList = ({ items = [], onRemove, icon: Icon, costKey = 'cost', saleKey }: { items: any[], onRemove: (id: string) => void, icon: React.ElementType, costKey?: string, saleKey?: string }) => (
     <div className="space-y-2 text-sm max-h-40 overflow-y-auto pr-2">
-        {items.length === 0 && <p className="text-xs text-gray-500 text-center p-2">No items added.</p>}
-        {items.map(item => (
+        {(!items || items.length === 0) && <p className="text-xs text-gray-500 text-center p-2">No items added.</p>}
+        {(items || []).map(item => (
             <div key={item.id} className="flex justify-between items-center p-2 bg-gray-50 rounded">
                 <div className="flex items-center gap-2"><Icon size={14} className="text-gray-500"/>
                     <div>
@@ -109,17 +101,18 @@ interface ManageSaleVehicleModalProps {
     onClose: () => void;
     onSave: (saleVehicle: SaleVehicle) => void;
     onSaleFinalized: (saleVehicle: SaleVehicle, invoice: Invoice) => void;
-    onViewStatement: (saleVehicle: SaleVehicle) => void;
-    onViewSORContract: (saleVehicle: SaleVehicle) => void;
-    onViewInternalStatement: (saleVehicle: SaleVehicle) => void;
+    onOpenOwnerStatement: (saleVehicle: SaleVehicle) => void;
+    onOpenSorContract: (saleVehicle: SaleVehicle) => void;
+    onOpenInternalStatement: (saleVehicle: SaleVehicle) => void;
     onViewInvoice: (saleVehicle: SaleVehicle) => void;
+    onRaiseInvoice: (invoice: Invoice) => void;
     saleVehicle: SaleVehicle;
     allJobs: Job[];
     allEstimates: Estimate[];
-    allCustomers: Customer[];
-    allVehicles: Vehicle[];
+    customers: Customer[];
+    vehicles: Vehicle[];
     allServicePackages: ServicePackage[];
-    allSaleOverheadPackages: SaleOverheadPackage[];
+    saleOverheadPackages: SaleOverheadPackage[]; // Fix: Renamed from allSaleOverheadPackages to match AppModals.tsx
     allInvoices: Invoice[];
     allBatteryChargers: BatteryCharger[];
     taxRates: TaxRate[];
@@ -128,35 +121,36 @@ interface ManageSaleVehicleModalProps {
     onUpdateProspect: (prospect: Prospect) => void;
 }
 
-const ManageSaleVehicleModal: React.FC<ManageSaleVehicleModalProps> = ({ isOpen, onClose, onSave, onSaleFinalized, onViewStatement, onViewSORContract, onViewInternalStatement, onViewInvoice, saleVehicle, allJobs, allEstimates, allCustomers, allVehicles, allServicePackages, allSaleOverheadPackages, allInvoices, allBatteryChargers, taxRates, businessEntities, prospects, onUpdateProspect }) => {
-    const [formData, setFormData] = useState<SaleVehicle>(saleVehicle);
-    const [currentVersionId, setCurrentVersionId] = useState('');
-    const [initialVersionCount, setInitialVersionCount] = useState(0);
-    
-    // State for adding new items
+const ManageSaleVehicleModal: React.FC<ManageSaleVehicleModalProps> = ({ isOpen, onClose, onSave, onSaleFinalized, onOpenOwnerStatement, onOpenSorContract, onOpenInternalStatement, onViewInvoice, onRaiseInvoice, saleVehicle, allJobs, allEstimates, customers, vehicles, allServicePackages, saleOverheadPackages, allInvoices, allBatteryChargers, taxRates, businessEntities, prospects, onUpdateProspect }) => {
+    const [formData, setFormData] = useState<SaleVehicle>(() => ({
+        ...saleVehicle,
+        versions: saleVehicle?.versions || [],
+        prepCosts: saleVehicle?.prepCosts || [],
+        upsells: saleVehicle?.upsells || [],
+        overheads: saleVehicle?.overheads || [],
+        nonRecoverableCosts: saleVehicle?.nonRecoverableCosts || [],
+        chargingHistory: saleVehicle?.chargingHistory || []
+    }));
+
+    const [currentVersionId, setCurrentVersionId] = useState(saleVehicle?.activeVersionId || '');
     const [newUpsell, setNewUpsell] = useState({ description: '', costPrice: '', salePrice: '' });
     const [isAddingUpsell, setIsAddingUpsell] = useState(false);
-    
     const [isAddingOneOffPrepCost, setIsAddingOneOffPrepCost] = useState(false);
     const [newOneOffCost, setNewOneOffCost] = useState({ description: '', cost: '' });
-    
     const [addOverheadType, setAddOverheadType] = useState<'Package' | 'OneOff' | null>(null);
     const [newOverhead, setNewOverhead] = useState({ description: '', cost: '' });
-    
     const [isAddingNonRecoverable, setIsAddingNonRecoverable] = useState(false);
     const [newNonRecoverable, setNewNonRecoverable] = useState({ description: '', cost: '' });
-
-    // State for finalizing sale
     const [isMarkingSold, setIsMarkingSold] = useState(false);
     const [soldData, setSoldData] = useState({ finalSalePrice: '', buyerCustomerId: '' });
-
-    // NEW state for charging
     const [isCharging, setIsCharging] = useState(false);
     const [selectedChargerId, setSelectedChargerId] = useState('');
 
     useEffect(() => {
+        if (!isOpen || !saleVehicle) return;
+
         let initialFormData = { ...saleVehicle };
-        // Backward compatibility for data created before versioning
+        
         if (!initialFormData.versions || initialFormData.versions.length === 0) {
             const legacyVersion: SaleVersion = {
                 versionId: crypto.randomUUID(),
@@ -166,74 +160,69 @@ const ManageSaleVehicleModal: React.FC<ManageSaleVehicleModalProps> = ({ isOpen,
             };
             initialFormData.versions = [legacyVersion];
             initialFormData.activeVersionId = legacyVersion.versionId;
-            delete (initialFormData as any).listPrice;
-            delete (initialFormData as any).sorReturnPrice;
         }
 
+        initialFormData.prepCosts = initialFormData.prepCosts || [];
+        initialFormData.upsells = initialFormData.upsells || [];
+        initialFormData.overheads = initialFormData.overheads || [];
+        initialFormData.nonRecoverableCosts = initialFormData.nonRecoverableCosts || [];
+        initialFormData.chargingHistory = initialFormData.chargingHistory || [];
+
         setFormData(initialFormData);
-        setCurrentVersionId(initialFormData.activeVersionId);
-        setInitialVersionCount(initialFormData.versions.length);
+        setCurrentVersionId(initialFormData.activeVersionId || '');
+        
+        const activeVersion = initialFormData.versions.find(v => v.versionId === initialFormData.activeVersionId);
+        setSoldData({ finalSalePrice: String(activeVersion?.listPrice || ''), buyerCustomerId: initialFormData.buyerCustomerId || '' });
 
         setIsAddingUpsell(false);
         setIsAddingOneOffPrepCost(false);
         setAddOverheadType(null);
         setIsAddingNonRecoverable(false);
-        setNewNonRecoverable({ description: '', cost: '' });
         setIsMarkingSold(false);
-        
-        const activeVersion = initialFormData.versions.find(v => v.versionId === initialFormData.activeVersionId);
-        setSoldData({ finalSalePrice: String(activeVersion?.listPrice || ''), buyerCustomerId: '' });
-
         setIsCharging(false);
-        setSelectedChargerId('');
     }, [saleVehicle, isOpen]);
 
     const sortedVersions = useMemo(() => {
-        return [...(formData.versions || [])].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-    }, [formData.versions]);
-
-    const currentVersionIndex = useMemo(() => {
-        if (!currentVersionId || !sortedVersions.length) return 0;
-        const index = sortedVersions.findIndex(v => v.versionId === currentVersionId);
-        return index > -1 ? index : sortedVersions.length - 1;
-    }, [sortedVersions, currentVersionId]);
+        return [...(formData?.versions || [])].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    }, [formData?.versions]);
 
     const currentVersion = useMemo(() => {
-        return sortedVersions[currentVersionIndex];
-    }, [sortedVersions, currentVersionIndex]);
+        if (!formData?.versions || formData.versions.length === 0) return null;
+        return formData.versions.find(v => v.versionId === currentVersionId) || sortedVersions[sortedVersions.length - 1];
+    }, [formData?.versions, currentVersionId, sortedVersions]);
     
-    const vehicle = useMemo(() => allVehicles.find(v => v.id === formData.vehicleId), [formData.vehicleId, allVehicles]);
+    const vehicle = useMemo(() => vehicles.find(v => v.id === formData.vehicleId), [formData.vehicleId, vehicles]);
     
     const availableInvoices = useMemo(() => {
-        const vehicleJobs = allJobs.filter(j => j.vehicleId === saleVehicle.vehicleId);
+        if (!allJobs || !allInvoices) return [];
+        const vehicleJobs = allJobs.filter(j => j.vehicleId === formData.vehicleId);
         const vehicleJobIds = new Set(vehicleJobs.map(j => j.id));
         const vehicleInvoices = allInvoices.filter(inv => inv.jobId && vehicleJobIds.has(inv.jobId));
-        const linkedInvoiceIds = new Set(formData.prepCosts.filter(pc => pc.type === 'Invoice').map(pc => pc.sourceId));
+        const linkedInvoiceIds = new Set((formData.prepCosts || []).filter(pc => pc.type === 'Invoice').map(pc => pc.sourceId));
         return vehicleInvoices.filter(inv => !linkedInvoiceIds.has(inv.id));
-    }, [allJobs, allInvoices, saleVehicle.vehicleId, formData.prepCosts]);
+    }, [allJobs, allInvoices, formData.vehicleId, formData.prepCosts]);
 
     const financialSummary = useMemo(() => {
         if (!currentVersion) return {};
         
-        const prepCosts = formData.prepCosts.reduce((sum, cost) => sum + cost.cost, 0);
-        const upsellCosts = formData.upsells.reduce((sum, upsell) => sum + upsell.costPrice, 0);
-        const upsellRevenue = formData.upsells.reduce((sum, upsell) => sum + upsell.salePrice, 0);
-        const totalOverheads = formData.overheads.reduce((sum, overhead) => sum + overhead.cost, 0);
-        const totalNonRecoverableCosts = (formData.nonRecoverableCosts || []).reduce((sum, cost) => sum + cost.cost, 0);
+        const prepCosts = (formData.prepCosts || []).reduce((sum, cost) => sum + (cost.cost || 0), 0);
+        const upsellCosts = (formData.upsells || []).reduce((sum, upsell) => sum + (upsell.costPrice || 0), 0);
+        const upsellRevenue = (formData.upsells || []).reduce((sum, upsell) => sum + (upsell.salePrice || 0), 0);
+        const totalOverheads = (formData.overheads || []).reduce((sum, overhead) => sum + (overhead.cost || 0), 0);
+        const totalNonRecoverableCosts = (formData.nonRecoverableCosts || []).reduce((sum, cost) => sum + (cost.cost || 0), 0);
         const finalSalePrice = formData.status === 'Sold' ? (formData.finalSalePrice || currentVersion.listPrice) : currentVersion.listPrice;
         
         let grossProfit = 0;
         let returnToCustomer = 0;
-        let baseReturn = 0; // For SoR
-        let totalVehicleCost = 0; // For Stock
+        let baseReturn = 0; 
+        let totalVehicleCost = 0; 
         const purchasePrice = formData.purchasePrice || 0;
 
         if (formData.saleType === 'Sale or Return') {
             baseReturn = currentVersion.sorReturnPrice || 0;
             returnToCustomer = baseReturn - prepCosts;
-            // Gross Profit = Total Revenue - (Final Return To Owner + Upsell Costs + Non-recoverable costs)
             grossProfit = (finalSalePrice + upsellRevenue) - (returnToCustomer + upsellCosts + totalNonRecoverableCosts);
-        } else { // Stock
+        } else { 
             totalVehicleCost = purchasePrice + prepCosts;
             const totalDealCost = totalVehicleCost + upsellCosts + totalNonRecoverableCosts;
             grossProfit = (finalSalePrice + upsellRevenue) - totalDealCost;
@@ -250,17 +239,9 @@ const ManageSaleVehicleModal: React.FC<ManageSaleVehicleModalProps> = ({ isOpen,
         onClose();
     };
 
-    const handleMarkAsSold = () => {
-        setIsMarkingSold(true);
-    };
-
     const confirmSold = () => {
         const finalPrice = parseFloat(soldData.finalSalePrice) || 0;
-        
-        // Generate Invoice
         const entity = businessEntities.find(e => e.id === formData.entityId);
-        
-        // Find T0 Tax Rate (Margin Scheme - No VAT on invoice)
         const t0TaxRate = taxRates.find(t => t.code === 'T0') || taxRates[0];
         const t1TaxRate = taxRates.find(t => t.code === 'T1') || taxRates[0];
 
@@ -271,7 +252,7 @@ const ManageSaleVehicleModal: React.FC<ManageSaleVehicleModalProps> = ({ isOpen,
             saleVehicleId: formData.id,
             vehicleId: formData.vehicleId,
             issueDate: new Date().toISOString().split('T')[0],
-            dueDate: new Date().toISOString().split('T')[0], // Immediate for sales usually
+            dueDate: new Date().toISOString().split('T')[0],
             status: 'Draft',
             lineItems: [
                 {
@@ -280,15 +261,15 @@ const ManageSaleVehicleModal: React.FC<ManageSaleVehicleModalProps> = ({ isOpen,
                     quantity: 1,
                     unitPrice: finalPrice,
                     isLabor: false,
-                    taxCodeId: t0TaxRate.id
+                    taxCodeId: t0TaxRate?.id
                 },
-                ...formData.upsells.map(u => ({
+                ...(formData.upsells || []).map(u => ({
                     id: crypto.randomUUID(),
                     description: u.description,
                     quantity: 1,
                     unitPrice: u.salePrice,
                     isLabor: false,
-                    taxCodeId: t1TaxRate.id // Upsells are usually vatable
+                    taxCodeId: t1TaxRate?.id
                 }))
             ]
         };
@@ -302,7 +283,6 @@ const ManageSaleVehicleModal: React.FC<ManageSaleVehicleModalProps> = ({ isOpen,
             invoiceId: newInvoice.id
         };
 
-        // Link prospect if applicable
         const prospect = prospects.find(p => p.linkedSaleVehicleId === formData.id);
         if (prospect) {
             onUpdateProspect({
@@ -313,6 +293,7 @@ const ManageSaleVehicleModal: React.FC<ManageSaleVehicleModalProps> = ({ isOpen,
         }
 
         onSaleFinalized(updatedVehicle, newInvoice);
+        onRaiseInvoice(newInvoice); 
         onClose();
     };
 
@@ -321,52 +302,52 @@ const ManageSaleVehicleModal: React.FC<ManageSaleVehicleModalProps> = ({ isOpen,
         if (!invoice) return;
         const totalCost = invoice.lineItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
         const newCost: SalePrepCost = { id: crypto.randomUUID(), type: 'Invoice', sourceId: invoice.id, description: `Invoice #${invoice.id}`, cost: totalCost };
-        setFormData(prev => ({ ...prev, prepCosts: [...prev.prepCosts, newCost] }));
+        setFormData(prev => ({ ...prev, prepCosts: [...(prev.prepCosts || []), newCost] }));
     };
 
     const handleAddOneOffPrepCost = () => {
         if (!newOneOffCost.description || !newOneOffCost.cost) return;
         const newCost: SalePrepCost = { id: crypto.randomUUID(), type: 'OneOff', description: newOneOffCost.description, cost: parseFloat(newOneOffCost.cost) };
-        setFormData(prev => ({ ...prev, prepCosts: [...prev.prepCosts, newCost] }));
+        setFormData(prev => ({ ...prev, prepCosts: [...(prev.prepCosts || []), newCost] }));
         setNewOneOffCost({ description: '', cost: '' });
         setIsAddingOneOffPrepCost(false);
     };
 
     const handleRemovePrepCost = (id: string) => {
-        setFormData(prev => ({ ...prev, prepCosts: prev.prepCosts.filter(c => c.id !== id) }));
+        setFormData(prev => ({ ...prev, prepCosts: (prev.prepCosts || []).filter(c => c.id !== id) }));
     };
 
     const handleAddUpsell = () => {
         if (!newUpsell.description || !newUpsell.costPrice || !newUpsell.salePrice) return;
         const upsell: SaleUpsell = { id: crypto.randomUUID(), description: newUpsell.description, costPrice: parseFloat(newUpsell.costPrice), salePrice: parseFloat(newUpsell.salePrice) };
-        setFormData(prev => ({ ...prev, upsells: [...prev.upsells, upsell] }));
+        setFormData(prev => ({ ...prev, upsells: [...(prev.upsells || []), upsell] }));
         setNewUpsell({ description: '', costPrice: '', salePrice: '' });
         setIsAddingUpsell(false);
     };
 
     const handleRemoveUpsell = (id: string) => {
-        setFormData(prev => ({ ...prev, upsells: prev.upsells.filter(u => u.id !== id) }));
+        setFormData(prev => ({ ...prev, upsells: (prev.upsells || []).filter(u => u.id !== id) }));
     };
 
     const handleAddOverhead = () => {
         if (!newOverhead.description || !newOverhead.cost) return;
         const overhead: SaleOverhead = { id: crypto.randomUUID(), description: newOverhead.description, cost: parseFloat(newOverhead.cost) };
-        setFormData(prev => ({ ...prev, overheads: [...prev.overheads, overhead] }));
+        setFormData(prev => ({ ...prev, overheads: [...(prev.overheads || []), overhead] }));
         setNewOverhead({ description: '', cost: '' });
         setAddOverheadType(null);
     };
 
     const handleAddOverheadPackage = (packageId: string) => {
-        const pkg = allSaleOverheadPackages.find(p => p.id === packageId);
+        const pkg = saleOverheadPackages.find(p => p.id === packageId);
         if (pkg) {
             const overhead: SaleOverhead = { id: crypto.randomUUID(), description: pkg.name, cost: pkg.cost, sourcePackageId: pkg.id };
-            setFormData(prev => ({ ...prev, overheads: [...prev.overheads, overhead] }));
+            setFormData(prev => ({ ...prev, overheads: [...(prev.overheads || []), overhead] }));
         }
         setAddOverheadType(null);
     };
 
     const handleRemoveOverhead = (id: string) => {
-        setFormData(prev => ({ ...prev, overheads: prev.overheads.filter(o => o.id !== id) }));
+        setFormData(prev => ({ ...prev, overheads: (prev.overheads || []).filter(o => o.id !== id) }));
     };
 
     const handleAddNonRecoverable = () => {
@@ -382,7 +363,7 @@ const ManageSaleVehicleModal: React.FC<ManageSaleVehicleModalProps> = ({ isOpen,
     };
 
     const entityChargers = useMemo(() => {
-        return allBatteryChargers.filter(c => c.entityId === formData.entityId);
+        return (allBatteryChargers || []).filter(c => c.entityId === formData.entityId);
     }, [allBatteryChargers, formData.entityId]);
 
     const activeChargingEvent = useMemo(() => {
@@ -405,10 +386,11 @@ const ManageSaleVehicleModal: React.FC<ManageSaleVehicleModalProps> = ({ isOpen,
     };
 
     const handleStopCharging = () => {
+        if (!activeChargingEvent) return;
         setFormData(prev => ({
             ...prev,
             chargingHistory: (prev.chargingHistory || []).map(event => 
-                event.id === activeChargingEvent!.id ? { ...event, endDate: new Date().toISOString() } : event
+                event.id === activeChargingEvent.id ? { ...event, endDate: new Date().toISOString() } : event
             )
         }));
     };
@@ -425,12 +407,13 @@ const ManageSaleVehicleModal: React.FC<ManageSaleVehicleModalProps> = ({ isOpen,
                     </div>
                     <button onClick={onClose}><X size={24} className="text-gray-500 hover:text-gray-800" /></button>
                 </header>
+                
                 <main className="flex-grow overflow-y-auto p-6 grid grid-cols-1 lg:grid-cols-3 gap-6 bg-gray-50">
                     <div className="lg:col-span-2 space-y-4">
                         <Section title="Preparation Costs (Recoverable)" icon={Wrench} defaultOpen>
-                            <ItemList items={formData.prepCosts} onRemove={handleRemovePrepCost} icon={Wrench}/>
+                            <ItemList items={formData.prepCosts || []} onRemove={handleRemovePrepCost} icon={Wrench}/>
                             <div className="flex gap-2 mt-3 pt-2 border-t">
-                                <SearchableSelect options={availableInvoices.map(inv => ({id: inv.id, label: `Inv #${inv.id} - ${formatCurrency(inv.lineItems.reduce((s,i)=>s+i.unitPrice*i.quantity,0))}`}))} value={null} onChange={(val) => {if(val) handleAddInvoicePrepCost(val)}} placeholder="Link Invoice..." />
+                                <SearchableSelect options={availableInvoices.map(inv => ({id: inv.id, label: `Inv #${inv.id} - ${formatCurrency(inv.lineItems.reduce((s,i)=>s+(i.unitPrice*i.quantity),0))}`}))} value={null} onChange={(val) => {if(val) handleAddInvoicePrepCost(val)}} placeholder="Link Invoice..." />
                                 <button onClick={() => setIsAddingOneOffPrepCost(true)} className="flex items-center text-sm font-semibold text-indigo-600 bg-indigo-50 px-2 rounded hover:bg-indigo-100 flex-shrink-0"><PlusCircle size={14} className="mr-1"/> Add One-Off</button>
                             </div>
                             {isAddingOneOffPrepCost && (
@@ -457,13 +440,13 @@ const ManageSaleVehicleModal: React.FC<ManageSaleVehicleModalProps> = ({ isOpen,
                         </Section>
 
                         <Section title="Overheads" icon={Briefcase} defaultOpen>
-                            <ItemList items={formData.overheads} onRemove={handleRemoveOverhead} icon={Briefcase}/>
+                            <ItemList items={formData.overheads || []} onRemove={handleRemoveOverhead} icon={Briefcase}/>
                             <div className="flex gap-2 mt-2 pt-2 border-t">
                                 <button onClick={() => setAddOverheadType('Package')} className="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded hover:bg-indigo-200">Add Package</button>
                                 <button onClick={() => setAddOverheadType('OneOff')} className="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded hover:bg-indigo-200">Add Custom</button>
                             </div>
                             {addOverheadType === 'Package' && (
-                                <div className="mt-2"><SearchableSelect options={allSaleOverheadPackages.map(p => ({id: p.id, label: `${p.name} (${formatCurrency(p.cost)})`}))} value={null} onChange={(val) => {if(val) handleAddOverheadPackage(val)}} placeholder="Select package..." /></div>
+                                <div className="mt-2"><SearchableSelect options={saleOverheadPackages.map(p => ({id: p.id, label: `${p.name} (${formatCurrency(p.cost)})`}))} value={null} onChange={(val) => {if(val) handleAddOverheadPackage(val)}} placeholder="Select package..." /></div>
                             )}
                             {addOverheadType === 'OneOff' && (
                                 <div className="flex gap-2 mt-2 items-center bg-gray-100 p-2 rounded">
@@ -476,7 +459,7 @@ const ManageSaleVehicleModal: React.FC<ManageSaleVehicleModalProps> = ({ isOpen,
                         </Section>
 
                         <Section title="Upsells & Add-ons" icon={TrendingUp} defaultOpen>
-                            <ItemList items={formData.upsells} onRemove={handleRemoveUpsell} icon={Tag} costKey="costPrice" saleKey="salePrice"/>
+                            <ItemList items={formData.upsells || []} onRemove={handleRemoveUpsell} icon={Tag} costKey="costPrice" saleKey="salePrice"/>
                             <div className="mt-2 pt-2 border-t"><button onClick={() => setIsAddingUpsell(true)} className="text-sm font-semibold text-indigo-600 flex items-center gap-1"><PlusCircle size={14}/> Add Upsell</button></div>
                             {isAddingUpsell && (
                                 <div className="flex gap-2 mt-2 items-center bg-gray-100 p-2 rounded">
@@ -504,7 +487,7 @@ const ManageSaleVehicleModal: React.FC<ManageSaleVehicleModalProps> = ({ isOpen,
                                         )}
                                     </div>
                                 ))}
-                                {(formData.chargingHistory || []).length === 0 && <p className="text-xs text-gray-500 text-center">No charging history.</p>}
+                                {(!formData.chargingHistory || formData.chargingHistory.length === 0) && <p className="text-xs text-gray-500 text-center">No charging history.</p>}
                             </div>
                             <div className="pt-2 border-t">
                                 {!activeChargingEvent && !isCharging && (
@@ -512,9 +495,12 @@ const ManageSaleVehicleModal: React.FC<ManageSaleVehicleModalProps> = ({ isOpen,
                                 )}
                                 {isCharging && (
                                     <div className="flex gap-2 items-center">
-                                        <select value={selectedChargerId} onChange={e => setSelectedChargerId(e.target.value)} className="w-full p-1.5 border rounded text-sm"><option value="">-- Select Charger --</option>{entityChargers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+                                        <select value={selectedChargerId} onChange={e => setSelectedChargerId(e.target.value)} className="w-full p-1.5 border rounded text-sm">
+                                            <option value="">-- Select Charger --</option>
+                                            {entityChargers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                        </select>
                                         <button onClick={handleStartCharging} className="px-3 py-1.5 bg-green-500 text-white rounded text-sm">Start</button>
-                                        <button onClick={() => setIsCharging(false)} className="text-red-500"><X size={18}/></button>
+                                        <button onClick={() => setIsCharging(false)} className="px-3 py-1.5 bg-gray-200 rounded text-sm">Cancel</button>
                                     </div>
                                 )}
                             </div>
@@ -522,63 +508,73 @@ const ManageSaleVehicleModal: React.FC<ManageSaleVehicleModalProps> = ({ isOpen,
                     </div>
 
                     <div className="space-y-4">
-                        <Section title="Key Info & Financials" icon={DollarSign} defaultOpen>
-                            <div className="mb-4 p-2 bg-blue-50 rounded border border-blue-100">
-                                <label className="block text-xs font-bold text-gray-500 uppercase">Key Number</label>
-                                <div className="flex items-center gap-2">
-                                    <KeyRound size={16} className="text-indigo-500"/>
-                                    <input 
-                                        type="number" 
-                                        value={formData.keyNumber || ''} 
-                                        onChange={e => setFormData({...formData, keyNumber: e.target.value ? parseInt(e.target.value) : undefined})} 
-                                        className="bg-transparent font-bold text-lg w-full focus:outline-none"
-                                        placeholder="No Key"
-                                    />
-                                </div>
-                            </div>
+                        <div className="bg-white p-4 rounded-lg border shadow-sm sticky top-0">
+                            <h3 className="font-bold text-gray-800 mb-3 flex items-center gap-2"><DollarSign size={18}/> Financial Summary</h3>
                             <FinancialsDisplay summary={financialSummary} saleType={formData.saleType} />
-                        </Section>
+                            
+                            <div className="mt-6 pt-4 border-t space-y-2">
+                                {formData.status !== 'Sold' ? (
+                                    <>
+                                        <button onClick={handleSave} className="w-full bg-indigo-600 text-white py-2 rounded-lg font-bold flex items-center justify-center gap-2 hover:bg-indigo-700">
+                                            <Save size={18}/> Save Changes
+                                        </button>
+                                        <button onClick={() => setIsMarkingSold(true)} className="w-full bg-green-600 text-white py-2 rounded-lg font-bold flex items-center justify-center gap-2 hover:bg-green-700">
+                                            <CheckCircle size={18}/> Finalize Sale
+                                        </button>
+                                    </>
+                                ) : (
+                                    <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                                        <p className="text-green-800 font-bold flex items-center gap-2"><CheckCircle size={18}/> Sold on {formData.soldDate ? formatDate(new Date(formData.soldDate)) : 'Unknown Date'}</p>
+                                        <button onClick={() => onViewInvoice(formData)} className="w-full mt-2 text-indigo-600 text-sm font-semibold flex items-center justify-center gap-1"><FileText size={14}/> View Sale Invoice</button>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
 
-                        <Section title="Documents & Actions" icon={FileText} defaultOpen>
+                        <div className="bg-white p-4 rounded-lg border shadow-sm">
+                            <h3 className="font-bold text-gray-800 mb-3 flex items-center gap-2"><FileText size={18}/> Documents</h3>
                             <div className="space-y-2">
-                                <button onClick={() => onViewSORContract(saleVehicle)} className="w-full text-left p-2 bg-gray-100 rounded hover:bg-gray-200 text-sm font-semibold text-gray-700">View Sale or Return Agreement</button>
-                                <button onClick={() => onViewStatement(saleVehicle)} className="w-full text-left p-2 bg-gray-100 rounded hover:bg-gray-200 text-sm font-semibold text-gray-700">Print Owner Statement</button>
-                                <button onClick={() => onViewInternalStatement(saleVehicle)} className="w-full text-left p-2 bg-gray-100 rounded hover:bg-gray-200 text-sm font-semibold text-gray-700">Print Internal Statement</button>
-                                {formData.invoiceId && <button onClick={() => onViewInvoice(saleVehicle)} className="w-full text-left p-2 bg-green-100 rounded hover:bg-green-200 text-sm font-semibold text-green-800 border border-green-300">View Sales Invoice</button>}
+                                {formData.saleType === 'Sale or Return' && (
+                                    <>
+                                        <button onClick={() => onOpenSorContract(formData)} className="w-full text-left p-2 text-sm hover:bg-gray-50 rounded border flex items-center gap-2"><FileText size={16} className="text-gray-400"/> SOR Contract</button>
+                                        <button onClick={() => onOpenOwnerStatement(formData)} className="w-full text-left p-2 text-sm hover:bg-gray-50 rounded border flex items-center gap-2"><FileText size={16} className="text-gray-400"/> Owner Statement</button>
+                                    </>
+                                )}
+                                <button onClick={() => onOpenInternalStatement(formData)} className="w-full text-left p-2 text-sm hover:bg-gray-50 rounded border flex items-center gap-2"><FileText size={16} className="text-gray-400"/> Internal Deal Sheet</button>
                             </div>
-                        </Section>
-
-                        {isMarkingSold ? (
-                            <div className="p-4 bg-green-50 border border-green-200 rounded-lg animate-fade-in">
-                                <h4 className="font-bold text-green-800 mb-2">Finalize Sale</h4>
-                                <div className="space-y-2">
-                                    <div>
-                                        <label className="block text-xs font-semibold text-gray-600 mb-1">Final Sale Price</label>
-                                        <input type="number" value={soldData.finalSalePrice} onChange={e => setSoldData({...soldData, finalSalePrice: e.target.value})} className="w-full p-2 border rounded"/>
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-semibold text-gray-600 mb-1">Buyer</label>
-                                        <SearchableSelect options={allCustomers.map(c => ({id: c.id, label: `${c.forename} ${c.surname}`}))} value={soldData.buyerCustomerId || null} onChange={val => setSoldData({...soldData, buyerCustomerId: val || ''})} placeholder="Select Buyer..."/>
-                                    </div>
-                                    <div className="flex gap-2 pt-2">
-                                        <button onClick={confirmSold} className="flex-1 bg-green-600 text-white font-bold py-2 rounded hover:bg-green-700">Confirm Sold</button>
-                                        <button onClick={() => setIsMarkingSold(false)} className="px-3 bg-gray-200 text-gray-700 rounded hover:bg-gray-300">Cancel</button>
-                                    </div>
-                                </div>
-                            </div>
-                        ) : (
-                            formData.status !== 'Sold' && (
-                                <button onClick={handleMarkAsSold} className="w-full py-3 bg-green-600 text-white font-bold rounded-lg shadow hover:bg-green-700 transition">
-                                    Mark Vehicle as Sold
-                                </button>
-                            )
-                        )}
+                        </div>
                     </div>
                 </main>
-                <footer className="flex-shrink-0 flex justify-end gap-2 p-4 border-t bg-gray-50">
-                    <button onClick={onClose} className="py-2 px-4 bg-gray-200 rounded-lg font-semibold hover:bg-gray-300">Close</button>
-                    <button onClick={handleSave} className="flex items-center gap-2 py-2 px-4 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700"><Save size={16}/> Save Changes</button>
-                </footer>
+
+                {isMarkingSold && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 z-[70] flex justify-center items-center p-4">
+                        <div className="bg-white rounded-lg p-6 max-w-md w-full shadow-2xl">
+                            <h3 className="text-lg font-bold mb-4">Finalize Sale</h3>
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Final Sale Price</label>
+                                    <input type="number" value={soldData.finalSalePrice} onChange={e => setSoldData({...soldData, finalSalePrice: e.target.value})} className="w-full p-2 border rounded" placeholder="0.00"/>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Buyer (Customer)</label>
+                                    <SearchableSelect 
+                                        options={customers.map(c => ({
+                                            id: c.id, 
+                                            label: `${(c as any).firstName || ''} ${(c as any).lastName || ''}`.trim() || (c as any).email || 'Unknown Customer'
+                                        }))} 
+                                        value={soldData.buyerCustomerId} 
+                                        onChange={(val) => setSoldData({...soldData, buyerCustomerId: val || ''})} 
+                                        placeholder="Select buyer..." 
+                                    />
+                                </div>
+                                <div className="flex gap-3 pt-2">
+                                    <button onClick={confirmSold} disabled={!soldData.buyerCustomerId || !soldData.finalSalePrice} className="flex-grow bg-green-600 text-white py-2 rounded font-bold disabled:opacity-50">Confirm Sold</button>
+                                    <button onClick={() => setIsMarkingSold(false)} className="flex-grow bg-gray-200 text-gray-800 py-2 rounded font-bold">Cancel</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );

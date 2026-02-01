@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useApp } from '../../../core/state/AppContext';
 import { useData } from '../../../core/state/DataContext';
@@ -25,11 +24,19 @@ export const ManagementStaffTab = () => {
             </div>
              <div className="overflow-y-auto max-h-[70vh]">
                 <table className="w-full text-sm text-left">
-                    <thead className="bg-gray-100 sticky top-0"><tr><th className="p-2">Name</th><th className="p-2">Role</th><th className="p-2">Actions</th></tr></thead>
+                    <thead className="bg-gray-100 sticky top-0">
+                        <tr>
+                            <th className="p-2">Name</th>
+                            <th className="p-2">Email (Login ID)</th>
+                            <th className="p-2">Role</th>
+                            <th className="p-2">Actions</th>
+                        </tr>
+                    </thead>
                     <tbody>
                         {users.map(u => (
                             <tr key={u.id} className="border-b hover:bg-gray-50">
                                 <td className="p-2 font-medium">{u.name}</td>
+                                <td className="p-2 text-gray-600">{u.email}</td>
                                 <td className="p-2">{u.role}</td>
                                 <td className="p-2">
                                     <button onClick={() => { setSelectedUser(u); setIsModalOpen(true); }} className="text-indigo-600 hover:underline mr-2">Edit</button>

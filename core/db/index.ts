@@ -80,17 +80,32 @@ export const subscribeToCollection = <T>(
     });
 };
 
+/**
+ * Saves a document to Firestore.
+ * Supports custom IDs (e.g., "User_Simon") via the third parameter or the data.id property.
+ */
 export const saveDocument = async <T extends { id: string }>(
     collectionName: string, 
-    data: WithFieldValue<T>
+    data: WithFieldValue<T>,
+    customId?: string
 ): Promise<void> => {
     if (!db) return;
-    const docId = (data as any).id;
+
+    // Prioritize customId override, then fallback to data.id
+    const docId = customId || (data as any).id;
+
     if (!docId || typeof docId !== 'string') {
         throw new Error("A valid string Document ID is required for saveDocument");
     }
+
     const docRef = doc(db, collectionName, docId);
-    const cleanData = JSON.parse(JSON.stringify(data));
+    
+    // Ensure the ID is inside the data object for consistency
+    const dataWithId = { ...data, id: docId };
+    
+    // Clean data for Firestore
+    const cleanData = JSON.parse(JSON.stringify(dataWithId));
+
     await setDoc(docRef, cleanData, { merge: true });
 };
 

@@ -1,11 +1,10 @@
+
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import * as T from './types';
 import { useData } from './core/state/DataContext';
 import { useApp } from './core/state/AppContext';
 import { createBackup, downloadBackup } from './core/utils/backupUtils';
-import { setItem, saveDocument } from './core/db';
-import * as initialData from './core/data/initialData';
-import { COLLECTION_NAME } from './core/config/firebaseConfig';
+import { setItem } from './core/db';
 import { getCustomerDisplayName } from './core/utils/customerUtils';
 import { formatDate } from './core/utils/dateUtils';
 import { useWorkshopActions } from './core/hooks/useWorkshopActions';
@@ -31,7 +30,7 @@ import CommunicationsView from './components/CommunicationsView';
 import AbsenceView from './components/AbsenceView';
 import InquiriesView from './components/InquiriesView';
 
-// Modals
+// Modals managed here (others moved to AppModals)
 import ManagementModal from './components/ManagementModal';
 import LoginView from './components/LoginView';
 
@@ -45,6 +44,7 @@ const App = () => {
     } = useApp();
 
     const data = useData();
+    // Destructure everything needed for backup
     const { 
         jobs, vehicles, customers, estimates, invoices, purchaseOrders, 
         purchases, parts, servicePackages, suppliers, engineers, lifts,
@@ -56,83 +56,15 @@ const App = () => {
         setStorageBookings, setProspects, setInquiries, setAbsenceRequests, setParts
     } = data;
 
-    // --- FULL ECOSYSTEM REPAIR LOGIC ---
-    const [repairing, setRepairing] = useState(false);
-    const [repairStatus, setRepairStatus] = useState('');
-
-    const runFullDatabaseRepair = async () => {
-        if (!window.confirm("This will push all available local data to 'isdevdb'. Continue?")) return;
-        setRepairing(true);
-        setRepairStatus('Starting Full Ecosystem Sync...');
-        
-        try {
-            const seed = async (name: string, getterName: string) => {
-                const getter = (initialData as any)[getterName];
-                if (typeof getter !== 'function') {
-                    console.log(`Skipping ${name}: Getter ${getterName} not found.`);
-                    return;
-                }
-
-                const items = getter();
-                if (!items || items.length === 0) {
-                    console.log(`Skipping ${name}: No data returned from ${getterName}.`);
-                    return;
-                }
-
-                // MATCHING COLLECTION NAMES TO DATA_CONTEXT KEYS
-                const path = `${COLLECTION_NAME}_${name}`;
-                setRepairStatus(`Syncing ${path} (${items.length} items)...`);
-                for (const item of items) { 
-                    await saveDocument(path, item); 
-                }
-            };
-
-            // 1. Infrastructure (Ensuring names match DataContext usePersistentState keys)
-            await seed('businessEntities', 'getInitialBusinessEntities');
-            await seed('lifts', 'getInitialLifts'); 
-            await seed('roles', 'getInitialRoles');
-            await seed('users', 'getInitialUsers');
-            await seed('engineers', 'getInitialEngineers'); 
-
-            // 2. Catalogs
-            await seed('parts', 'getInitialParts');
-            await seed('servicePackages', 'getInitialServicePackages');
-            await seed('suppliers', 'getInitialSuppliers');
-            await seed('taxRates', 'getInitialTaxRates');
-            await seed('nominalCodes', 'getInitialNominalCodes');
-
-            // 3. Asset Data
-            await seed('customers', 'getInitialCustomers');
-            await seed('vehicles', 'getInitialVehicles');
-            
-            // 4. Operations
-            await seed('jobs', 'getInitialJobs');
-            await seed('estimates', 'getInitialEstimates');
-            await seed('invoices', 'getInitialInvoices');
-            await seed('purchaseOrders', 'getInitialPurchaseOrders');
-
-            // 5. Specialized
-            await seed('rentalVehicles', 'getInitialRentalVehicles');
-            await seed('storageLocations', 'getInitialStorageLocations');
-            await seed('prospects', 'getInitialProspects');
-            await seed('inquiries', 'getInitialInquiries');
-
-            setRepairStatus('✅ Sync Complete!');
-            alert("✅ Seeding finished! Please reload and check the Management Modal.");
-            window.location.reload();
-        } catch (e: any) {
-            console.error("Seed failed:", e);
-            setRepairStatus(`❌ Error: ${e.message}`);
-        } finally {
-            setRepairing(false);
-        }
-    };
-
+    // --- Modal State Management ---
     const [modalsState, setters] = useModalState();
     const [isManagementOpen, setIsManagementOpen] = useState(false);
     const [managementInitialView, setManagementInitialView] = useState<{ tab: string; id: string } | null>(null);
     
+    // Business Logic Hooks
     const workshopActions = useWorkshopActions();
+
+    // --- Automated Backup Logic ---
     const lastBackupTimeRef = useRef<string | null>(null);
 
     const getFullStateData = useCallback(() => {
@@ -163,6 +95,7 @@ const App = () => {
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
         try {
             await setItem(`backup_auto_${timestamp}`, backupData);
+            console.log(`Auto-backup successful: backup_auto_${timestamp}`);
             setConfirmation({
                 isOpen: true,
                 title: 'Automated Backup',
@@ -190,6 +123,7 @@ const App = () => {
         return () => clearInterval(interval);
     }, [backupSchedule, handleAutoBackup]);
 
+    // --- Authentication Guard ---
     if (!isAuthenticated) {
         return <LoginView users={users} onLogin={login} environment={appEnvironment} />;
     }
@@ -247,6 +181,7 @@ const App = () => {
         setJobs(prev => prev.map(j => j.id === jobId ? { ...j, vehicleStatus: 'Awaiting Collection' } : j));
     };
 
+    // Actions passed to views/components
     const commonProps = {
         onStartWork: (jobId: string, segmentId: string) => workshopActions.handleUpdateSegmentStatus(jobId, segmentId, 'In Progress'),
         onPause: (id: string, segId: string) => workshopActions.handleUpdateSegmentStatus(id, segId, 'Paused'),
@@ -267,7 +202,7 @@ const App = () => {
             case 'estimates': return <EstimatesView onOpenEstimateModal={(est) => setters.setEstimateFormModal({isOpen: true, estimate: est})} onViewEstimate={(est) => setters.setEstimateViewModal({isOpen: true, estimate: est})} onSmartCreateClick={() => { setters.setSmartCreateMode('estimate'); setters.setIsSmartCreateOpen(true); }} />;
             case 'invoices': return <InvoicesView onViewInvoice={(inv) => setters.setViewInvoiceModal({isOpen: true, invoice: inv})} onEditInvoice={(inv) => setters.setInvoiceFormModal({isOpen: true, invoice: inv})} onOpenExportModal={(type, items) => setters.setExportModal({isOpen: true, type, items})} onCreateAdhocInvoice={() => setters.setInvoiceFormModal({isOpen: true, invoice: { createdByUserId: currentUser.id } as any})} />;
             case 'purchaseOrders': return <PurchaseOrdersView onOpenPurchaseOrderModal={(po) => setters.setPoModal({isOpen: true, po})} onViewPurchaseOrder={(po) => setters.setViewPoModal({isOpen: true, po})} onDeletePurchaseOrder={(id) => handleDeleteItem(setPurchaseOrders, id)} onExport={() => {}} onOpenBatchAddModal={() => setters.setBatchPoModalOpen(true)} />;
-            case 'sales': return <SalesView entity={businessEntities.find(e => e.id === selectedEntityId)!} onManageSaleVehicle={(sv) => setters.setSorContractModal({isOpen: false, saleVehicle: null})} onAddSaleVehicle={() => {}} onGenerateReport={() => setters.setSalesReportModal(true)} onAddProspect={() => setters.setProspectModal({isOpen: true, prospect: null})} onEditProspect={(p) => setters.setProspectModal({isOpen: true, prospect: p})} onViewCustomer={() => {}} />;
+            case 'sales': return <SalesView entity={businessEntities.find(e => e.id === selectedEntityId)!} onManageSaleVehicle={(sv) => setters.setManageSaleVehicleModal({isOpen: true, saleVehicle: sv})} onAddSaleVehicle={() => setters.setAddSaleVehicleModalOpen(true)} onGenerateReport={() => setters.setSalesReportModal(true)} onAddProspect={() => setters.setProspectModal({isOpen: true, prospect: null})} onEditProspect={(p) => setters.setProspectModal({isOpen: true, prospect: p})} onViewCustomer={() => {}} />;
             case 'storage': return <StorageView entity={businessEntities.find(e => e.id === selectedEntityId)!} onSaveBooking={(b) => handleSaveItem(setStorageBookings, b)} onBookOutVehicle={() => {}} onViewInvoice={(id) => { const inv = invoices.find(i => i.id === id); if(inv) setters.setViewInvoiceModal({isOpen: true, invoice: inv}); }} onAddCustomerAndVehicle={(c, v) => { handleSaveItem(data.setCustomers, c); handleSaveItem(data.setVehicles, v); }} onSaveInvoice={(inv) => handleSaveItem(setInvoices, inv)} setConfirmation={setConfirmation} setViewedInvoice={(inv) => setters.setViewInvoiceModal({isOpen: true, invoice: inv})} />;
             case 'rentals': return <RentalsView entity={businessEntities.find(e => e.id === selectedEntityId)!} onOpenRentalBooking={(b) => setters.setRentalBookingModal({isOpen: true, booking: b})} />;
             case 'concierge': return <ConciergeView onCheckIn={(id) => { const job = jobs.find(j => j.id === id); if(job) setters.setCheckInJob(job); }} onOpenPurchaseOrder={(po) => setters.setViewPoModal({isOpen: true, po})} onGenerateInvoice={handleGenerateInvoice} onCollect={(id) => { const job = jobs.find(j => j.id === id); if(job) setters.setCheckOutJob(job); }} {...commonProps} />;
@@ -278,6 +213,7 @@ const App = () => {
         }
     };
 
+    // Actions passed to AppModals to handle saves
     const modalActions = {
         handleSaveItem,
         setCustomers: data.setCustomers,
@@ -293,18 +229,25 @@ const App = () => {
 
     return (
         <MainLayout onOpenManagement={() => setIsManagementOpen(true)}>
-            {appEnvironment === 'Development' && (
-                <div style={{ background: '#fef2f2', border: '2px dashed #dc2626', padding: '10px', margin: '10px', borderRadius: '8px', textAlign: 'center' }}>
-                    <div style={{ color: '#991b1b', fontWeight: 'bold', marginBottom: '5px' }}>🚨 FULL ECOSYSTEM REPAIR (isdevdb)</div>
-                    <button onClick={runFullDatabaseRepair} disabled={repairing} style={{ background: '#dc2626', color: 'white', border: 'none', padding: '8px 20px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
-                        {repairing ? 'Pushing Data...' : 'RE-SEED ALL COLLECTIONS'}
-                    </button>
-                    {repairStatus && <div style={{ fontSize: '11px', marginTop: '5px', color: '#7f1d1d' }}>{repairStatus}</div>}
-                </div>
-            )}
             {renderView()}
-            <AppModals modals={modalsState} setters={setters} actions={modalActions} />
-            <ManagementModal isOpen={isManagementOpen} onClose={() => setIsManagementOpen(false)} initialView={managementInitialView} selectedEntityId={selectedEntityId} onViewJob={(id) => { setters.setSelectedJobId(id); setters.setIsEditJobModalOpen(true); }} onViewEstimate={(est) => setters.setEstimateViewModal({isOpen: true, estimate: est})} backupSchedule={backupSchedule} setBackupSchedule={setBackupSchedule} onManualBackup={handleManualBackup} />
+
+            <AppModals 
+                modals={modalsState} 
+                setters={setters} 
+                actions={modalActions} 
+            />
+
+            <ManagementModal 
+                isOpen={isManagementOpen} 
+                onClose={() => setIsManagementOpen(false)} 
+                initialView={managementInitialView}
+                selectedEntityId={selectedEntityId}
+                onViewJob={(id) => { setters.setSelectedJobId(id); setters.setIsEditJobModalOpen(true); }}
+                onViewEstimate={(est) => setters.setEstimateViewModal({isOpen: true, estimate: est})}
+                backupSchedule={backupSchedule}
+                setBackupSchedule={setBackupSchedule}
+                onManualBackup={handleManualBackup}
+            />
         </MainLayout>
     );
 };

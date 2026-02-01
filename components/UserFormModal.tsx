@@ -1,73 +1,142 @@
-
 import React, { useState, useEffect } from 'react';
-import { User, Role, UserRole } from '../types';
-import FormModal from './FormModal';
+import { X } from 'lucide-react';
+import * as T from '../types';
 
 interface UserFormModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSave: (user: User) => void;
-    user: User | null;
-    roles: Role[];
+    onSave: (user: T.User) => void;
+    user: T.User | null;
+    roles: T.Role[];
 }
 
 const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, user, roles }) => {
-    const [formData, setFormData] = useState<Partial<User>>({});
+    // We use Partial<T.User> but only initialize properties that exist in the type
+    const [formData, setFormData] = useState<Partial<T.User>>({
+        name: '',
+        email: '',
+        password: '',
+        role: undefined
+    });
 
     useEffect(() => {
-        if (isOpen) {
-            setFormData(user || {
+        if (user) {
+            setFormData(user);
+        } else {
+            setFormData({
                 name: '',
-                password: '1234',
-                role: (roles[0]?.name as UserRole) || 'Dispatcher',
-                holidayEntitlement: 25
+                email: '',
+                password: '',
+                role: roles.length > 0 ? (roles[0].name as T.UserRole) : undefined
             });
         }
-    }, [isOpen, user, roles]);
+    }, [user, isOpen, roles]);
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-        const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        
+        // Custom ID logic: User_FirstName
+        const firstName = formData.name?.split(' ')[0] || 'User';
+        
+        // Construct the final object
+        const finalUser = {
+            ...formData,
+            // Ensure ID is set for database naming
+            id: formData.id || `User_${firstName}`,
+        } as T.User;
+
+        onSave(finalUser);
     };
 
-    const handleSave = () => {
-        if (!formData.name || !formData.role) return;
-        onSave({
-            ...formData, // Preserve other fields like allowedViews if they exist
-            id: formData.id || `user_${Date.now()}`,
-            name: formData.name!,
-            password: formData.password || '1234',
-            role: formData.role!,
-            holidayEntitlement: Number(formData.holidayEntitlement) || 0,
-            holidayApproverId: formData.holidayApproverId || 'user_admin',
-            engineerId: formData.role === 'Engineer' ? (formData.engineerId || `eng_${Date.now()}`) : undefined
-        } as User);
-    };
+    if (!isOpen) return null;
 
     return (
-        <FormModal isOpen={isOpen} onClose={onClose} onSave={handleSave} title={user ? "Edit User" : "Add User"}>
-            <div className="space-y-4">
-                <div>
-                    <label className="block text-sm font-medium text-gray-700">Name</label>
-                    <input name="name" value={formData.name || ''} onChange={handleChange} className="w-full p-2 border rounded" required />
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-[60] flex items-center justify-center p-4">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-md overflow-hidden">
+                <div className="flex justify-between items-center p-4 border-b bg-gray-50">
+                    <h3 className="font-bold text-gray-800">
+                        {user ? 'Edit Staff Member' : 'Add New Staff Member'}
+                    </h3>
+                    <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
+                        <X size={20} />
+                    </button>
                 </div>
-                <div>
-                    <label className="block text-sm font-medium text-gray-700">Password</label>
-                    <input name="password" type="text" value={formData.password || ''} onChange={handleChange} className="w-full p-2 border rounded" placeholder="Set password" />
-                    <p className="text-xs text-gray-500 mt-1">Default is 1234</p>
-                </div>
-                <div>
-                    <label className="block text-sm font-medium text-gray-700">Role</label>
-                    <select name="role" value={formData.role || ''} onChange={handleChange} className="w-full p-2 border rounded bg-white">
-                        {roles.map(r => <option key={r.id} value={r.name}>{r.name}</option>)}
-                    </select>
-                </div>
-                <div>
-                    <label className="block text-sm font-medium text-gray-700">Holiday Entitlement (Days)</label>
-                    <input name="holidayEntitlement" type="number" value={formData.holidayEntitlement || ''} onChange={handleChange} className="w-full p-2 border rounded" />
-                </div>
+
+                <form onSubmit={handleSubmit} className="p-4 space-y-4">
+                    {/* FULL NAME */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+                        <input
+                            type="text"
+                            required
+                            className="w-full border rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                            value={formData.name || ''}
+                            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                            placeholder="e.g. Simon Brook"
+                        />
+                    </div>
+
+                    {/* EMAIL (The Login ID) */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+                        <input
+                            type="email"
+                            required
+                            className="w-full border rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                            value={formData.email || ''}
+                            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                            placeholder="simon@brookspeed.com"
+                        />
+                    </div>
+
+                    {/* PASSWORD */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                        <input
+                            type="password"
+                            required={!user}
+                            className="w-full border rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                            value={formData.password || ''}
+                            onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                            placeholder={user ? "Leave blank to keep current" : "Enter password"}
+                        />
+                    </div>
+
+                    {/* ROLE */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">System Role</label>
+                        <select
+                            className="w-full border rounded-md px-3 py-2 text-sm bg-white"
+                            value={formData.role || ''}
+                            onChange={(e) => setFormData({ ...formData, role: e.target.value as T.UserRole })}
+                            required
+                        >
+                            <option value="" disabled>Select a role</option>
+                            {roles.map(r => (
+                                <option key={r.id} value={r.name}>{r.name}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div className="pt-4 flex gap-3">
+                        <button 
+                            type="button" 
+                            onClick={onClose} 
+                            className="flex-1 px-4 py-2 border rounded-md text-gray-700 hover:bg-gray-50 text-sm font-medium"
+                        >
+                            Cancel
+                        </button>
+                        <button 
+                            type="submit" 
+                            className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 text-sm font-medium shadow-sm"
+                        >
+                            {user ? 'Update Staff' : 'Create Staff'}
+                        </button>
+                    </div>
+                </form>
             </div>
-        </FormModal>
+        </div>
     );
 };
+
 export default UserFormModal;
