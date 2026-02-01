@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useApp } from '../core/state/AppContext';
 import { useData } from '../core/state/DataContext';
@@ -10,7 +11,7 @@ const MainLayout: React.FC<{ children: React.ReactNode, onOpenManagement: () => 
         currentUser, selectedEntityId, setSelectedEntityId, 
         filteredBusinessEntities, logout
     } = useApp();
-    const { roles, businessEntities } = useData(); 
+    const { roles } = useData();
 
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
@@ -31,16 +32,15 @@ const MainLayout: React.FC<{ children: React.ReactNode, onOpenManagement: () => 
         { id: 'absence', label: 'Absence', icon: CalendarDays },
     ];
 
-    const userRoleDef = roles.find(r => r.name === currentUser?.role);
-    const allowedViews = currentUser?.allowedViews || userRoleDef?.defaultAllowedViews || [];
+    const userRoleDef = roles.find(r => r.name === currentUser.role);
+    // Prefer user-specific overrides, then role defaults, then empty.
+    const allowedViews = currentUser.allowedViews || userRoleDef?.defaultAllowedViews || [];
+
+    // Filter nav items based strictly on allowedViews. 
+    // We do NOT automatically allow everything for 'Admin' role string here; 
+    // the Admin role definition in the database should contain all views by default.
+    // This allows custom 'Admin' roles to be restricted if needed.
     const visibleNavItems = navItems.filter(item => allowedViews.includes(item.id as T.ViewType));
-
-    const canSeeManagement = currentUser?.role === 'Admin' || currentUser?.email?.includes('brookspeed.com');
-
-    // Case-insensitive filter to prevent "workshop" vs "Workshop" disconnect
-    const displayEntities = businessEntities.filter(e => 
-        e.type?.toLowerCase() === 'workshop'
-    );
 
     return (
         <div className="flex h-screen bg-gray-100 font-sans text-gray-900">
@@ -83,8 +83,8 @@ const MainLayout: React.FC<{ children: React.ReactNode, onOpenManagement: () => 
                                 className="border-none bg-transparent font-semibold text-gray-700 focus:ring-0 cursor-pointer outline-none hover:text-indigo-700 transition-colors"
                                 title="Select Business Entity"
                              >
-                                <option value="all">All Workshop Entities</option>
-                                {displayEntities.map(e => (
+                                <option value="all">All Entities</option>
+                                {filteredBusinessEntities.map(e => (
                                     <option key={e.id} value={e.id}>{e.name}</option>
                                 ))}
                              </select>
@@ -95,10 +95,9 @@ const MainLayout: React.FC<{ children: React.ReactNode, onOpenManagement: () => 
                          <div className="flex items-center gap-3">
                             <div className="flex items-center gap-2 text-sm text-gray-700">
                                 <UserCheck size={16} />
-                                <span className="font-medium">{currentUser?.name}</span>
-                                <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">{currentUser?.role}</span>
+                                <span className="font-medium">{currentUser.name}</span>
+                                <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">{currentUser.role}</span>
                             </div>
-                            
                             <button 
                                 onClick={logout}
                                 className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors"
@@ -108,7 +107,7 @@ const MainLayout: React.FC<{ children: React.ReactNode, onOpenManagement: () => 
                             </button>
                         </div>
 
-                         {canSeeManagement && (
+                         {currentUser.role === 'Admin' && (
                              <button 
                                 onClick={onOpenManagement} 
                                 className="p-2 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-full transition-colors"

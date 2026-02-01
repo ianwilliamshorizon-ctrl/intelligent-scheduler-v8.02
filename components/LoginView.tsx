@@ -1,18 +1,15 @@
+
 import React, { useState } from 'react';
 import { User, AppEnvironment } from '../types';
 import { LogIn, ShieldCheck, ChevronRight, Lock, Mail, Loader2 } from 'lucide-react';
 
 interface LoginViewProps {
-    users?: User[]; // Optional to prevent 'undefined' crash
+    users: User[];
     onLogin: (userId: string, password: string) => Promise<boolean>;
-    environment?: AppEnvironment;
+    environment: AppEnvironment;
 }
 
-const LoginView: React.FC<LoginViewProps> = ({ 
-    users = [], // Default to empty array
-    onLogin, 
-    environment = 'Development' 
-}) => {
+const LoginView: React.FC<LoginViewProps> = ({ users, onLogin, environment }) => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
@@ -21,31 +18,27 @@ const LoginView: React.FC<LoginViewProps> = ({
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
-
-        if (!email) {
-            setError('Email or User ID cannot be empty.');
-            return;
-        }
-
         setIsLoading(true);
         try {
-            // We call the bridge function which handles the Firebase logic
-            const success = await onLogin(email.trim(), password);
+            // For transition convenience, if user enters a simple ID (e.g. 'admin'), pass it through. 
+            // In strict mode, this should be email only.
+            const success = await onLogin(email, password);
             if (!success) {
                 setError('Invalid credentials. Please try again.');
             }
-        } catch (err: any) {
-            // Safeguard against objects in JSX
-            setError(typeof err === 'string' ? err : (err.message || 'Login failed'));
+        } catch (err) {
+            setError('An error occurred during login.');
         } finally {
             setIsLoading(false);
         }
     };
 
+    // Helper to auto-fill for demo purposes (optional, can be removed for production)
     const handleQuickFill = (userId: string) => {
         const user = users.find(u => u.id === userId);
         if (user) {
             setEmail(user.email || user.id); 
+            // We use '1234' as the fallback password for legacy users
             setPassword(user.password || '1234'); 
         }
     };
@@ -130,7 +123,7 @@ const LoginView: React.FC<LoginViewProps> = ({
                         </button>
                     </form>
                     
-                    {/* The .length check is now safe because users defaults to [] */}
+                    {/* Dev/Demo Helper - Remove in strict production if desired */}
                     {users.length > 0 && (
                         <div className="mt-6">
                             <p className="text-xs text-gray-400 text-center mb-2">Quick Login (Dev Mode)</p>
@@ -138,7 +131,6 @@ const LoginView: React.FC<LoginViewProps> = ({
                                 {users.slice(0, 3).map(u => (
                                     <button 
                                         key={u.id} 
-                                        type="button"
                                         onClick={() => handleQuickFill(u.id)}
                                         className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 px-2 py-1 rounded transition"
                                     >

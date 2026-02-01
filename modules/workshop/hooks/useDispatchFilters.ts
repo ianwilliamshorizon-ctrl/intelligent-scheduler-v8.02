@@ -24,12 +24,7 @@ export const useDispatchFilters = ({
 }: UseDispatchFiltersProps) => {
 
     const entityEngineers = useMemo(() => engineers.filter(e => e.entityId === selectedEntityId), [engineers, selectedEntityId]);
-    
-    const entityLifts = useMemo(() =>
-        lifts
-            .filter(l => l.entityId === selectedEntityId)
-            .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })),
-    [lifts, selectedEntityId]);
+    const entityLifts = useMemo(() => lifts.filter(l => l.entityId === selectedEntityId), [lifts, selectedEntityId]);
 
     const { unallocatedJobs, allocatedSegmentsByLift } = useMemo(() => {
         const today = getRelativeDate(0);

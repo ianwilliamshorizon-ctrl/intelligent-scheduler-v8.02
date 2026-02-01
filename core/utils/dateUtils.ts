@@ -1,4 +1,3 @@
-
 import { Job, JobSegment } from '../../types';
 
 /** Formats a Date object to YYYY-MM-DD string using UTC values to avoid timezone issues */
@@ -80,6 +79,32 @@ export const getNextWorkingDay = (dateString: string): string => {
         date.setUTCDate(date.getUTCDate() + 1); // Move to Monday
     }
     return formatDate(date);
+};
+
+/** 
+ * Gets the next valid working date, skipping Sundays and specified Bank Holidays.
+ * Used for multi-day job splitting.
+ */
+export const getNextValidWorkingDate = (startDateStr: string, bankHolidays: string[]): string => {
+    let date = dateStringToDate(startDateStr);
+    
+    // Always move at least one day forward
+    date.setUTCDate(date.getUTCDate() + 1);
+    
+    // Check constraints loop
+    while (true) {
+        const dateStr = formatDate(date);
+        const dayOfWeek = date.getUTCDay(); // 0 is Sunday
+        const isHoliday = bankHolidays.includes(dateStr);
+        
+        // If it's not Sunday and not a holiday, it's valid. (Allow Saturdays for garages)
+        if (dayOfWeek !== 0 && !isHoliday) {
+            return dateStr;
+        }
+        
+        // Otherwise, move to next day and check again
+        date.setUTCDate(date.getUTCDate() + 1);
+    }
 };
 
 

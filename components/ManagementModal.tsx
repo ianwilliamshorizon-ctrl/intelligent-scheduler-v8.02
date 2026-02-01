@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useData } from '../core/state/DataContext';
 import { useApp } from '../core/state/AppContext';
@@ -35,28 +36,17 @@ interface ManagementModalProps {
     onManualBackup: () => void;
 }
 
-export const ManagementModal: React.FC<ManagementModalProps> = ({ 
-    isOpen, 
-    onClose, 
-    initialView, 
-    backupSchedule, 
-    setBackupSchedule, 
-    onManualBackup 
-}) => {
-    // FIX: Using 'as any' here to bypass the Type mismatch while the DataContext interface propagates
-    const dataContext = useData() as any;
-    const appContext = useApp() || {}; 
-    
+const ManagementModal: React.FC<ManagementModalProps> = ({ isOpen, onClose, initialView, backupSchedule, setBackupSchedule, onManualBackup }) => {
+    const dataContext = useData();
+    const { users } = useApp();
+
     const [activeTab, setActiveTab] = useState(initialView?.tab || 'customers');
     const [searchTerm, setSearchTerm] = useState('');
+    
+    // Global Status Message
     const [statusMessage, setStatusMessage] = useState<{ type: 'info' | 'success' | 'error', text: string } | null>(null);
     const [isSaving, setIsSaving] = useState(false);
-
-    if (!isOpen) return null;
-
-    // Loading Safety Check: If DataContext is still fetching, show a loader
-    const isDataLoading = dataContext.loading;
-
+    
     const showStatus = (text: string, type: 'info' | 'success' | 'error' = 'info') => {
         setStatusMessage({ type, text });
         if (type !== 'info') {
@@ -64,38 +54,49 @@ export const ManagementModal: React.FC<ManagementModalProps> = ({
         }
     };
 
+    if (!isOpen) return null;
+    
     const handleForceSave = async () => {
         setIsSaving(true);
         showStatus('Forcing save of all data to storage...', 'info');
         try {
-            const collections = [
-                { key: 'brooks_jobs', data: dataContext.jobs || [] },
-                { key: 'brooks_vehicles', data: dataContext.vehicles || [] },
-                { key: 'brooks_customers', data: dataContext.customers || [] },
-                { key: 'brooks_estimates', data: dataContext.estimates || [] },
-                { key: 'brooks_invoices', data: dataContext.invoices || [] },
-                { key: 'brooks_purchaseOrders', data: dataContext.purchaseOrders || [] },
-                { key: 'brooks_parts', data: dataContext.parts || [] },
-                { key: 'brooks_servicePackages', data: dataContext.servicePackages || [] },
-                { key: 'brooks_suppliers', data: dataContext.suppliers || [] },
-                { key: 'brooks_engineers', data: dataContext.engineers || [] },
-                { key: 'brooks_lifts', data: dataContext.lifts || [] },
-                { key: 'brooks_nominalCodes', data: dataContext.nominalCodes || [] },
-                { key: 'brooks_nominalCodeRules', data: dataContext.nominalCodeRules || [] },
-                { key: 'brooks_businessEntities', data: dataContext.businessEntities || [] },
-                { key: 'brooks_inspectionDiagrams', data: dataContext.inspectionDiagrams || [] },
-                // FIX: Pulling users from dataContext as we now sync this collection to isdevdb
-                { key: 'brooks_users', data: dataContext.users || [] },
-            ];
-
-            await Promise.all(
-                collections.map(c => setItem(c.key, c.data))
-            );
-            
+            await Promise.all([
+                setItem('brooks_jobs', dataContext.jobs),
+                setItem('brooks_vehicles', dataContext.vehicles),
+                setItem('brooks_customers', dataContext.customers),
+                setItem('brooks_estimates', dataContext.estimates),
+                setItem('brooks_invoices', dataContext.invoices),
+                setItem('brooks_purchaseOrders', dataContext.purchaseOrders),
+                setItem('brooks_purchases', dataContext.purchases),
+                setItem('brooks_parts', dataContext.parts),
+                setItem('brooks_servicePackages', dataContext.servicePackages),
+                setItem('brooks_suppliers', dataContext.suppliers),
+                setItem('brooks_engineers', dataContext.engineers),
+                setItem('brooks_lifts', dataContext.lifts),
+                setItem('brooks_rentalVehicles', dataContext.rentalVehicles),
+                setItem('brooks_rentalBookings', dataContext.rentalBookings),
+                setItem('brooks_saleVehicles', dataContext.saleVehicles),
+                setItem('brooks_saleOverheadPackages', dataContext.saleOverheadPackages),
+                setItem('brooks_prospects', dataContext.prospects),
+                setItem('brooks_storageBookings', dataContext.storageBookings),
+                setItem('brooks_storageLocations', dataContext.storageLocations),
+                setItem('brooks_batteryChargers', dataContext.batteryChargers),
+                setItem('brooks_nominalCodes', dataContext.nominalCodes),
+                setItem('brooks_nominalCodeRules', dataContext.nominalCodeRules),
+                setItem('brooks_absenceRequests', dataContext.absenceRequests),
+                setItem('brooks_inquiries', dataContext.inquiries),
+                setItem('brooks_reminders', dataContext.reminders),
+                setItem('brooks_auditLog', dataContext.auditLog),
+                setItem('brooks_businessEntities', dataContext.businessEntities),
+                setItem('brooks_taxRates', dataContext.taxRates),
+                setItem('brooks_roles', dataContext.roles),
+                setItem('brooks_inspectionDiagrams', dataContext.inspectionDiagrams),
+                setItem('brooks_users', users),
+            ]);
             showStatus('All data successfully forced to storage.', 'success');
         } catch (e) {
             console.error(e);
-            showStatus('Failed to save data. Check console.', 'error');
+            showStatus('Failed to save some data. Check console for details.', 'error');
         } finally {
             setIsSaving(false);
         }
@@ -132,55 +133,42 @@ export const ManagementModal: React.FC<ManagementModalProps> = ({
     ];
 
     return (
-        <div className="fixed inset-0 bg-gray-900 bg-opacity-75 z-[60] flex justify-center items-center p-4 backdrop-blur-sm">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-7xl h-[90vh] flex flex-col overflow-hidden relative">
-                
-                {/* GLOBAL LOADING OVERLAY */}
-                {isDataLoading && (
-                    <div className="absolute inset-0 bg-white/80 z-[70] flex flex-col items-center justify-center">
-                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mb-4"></div>
-                        <p className="text-gray-600 font-medium tracking-wide uppercase text-xs">Synchronizing with Cloud Firestore...</p>
-                    </div>
-                )}
-
-                <header className="flex-shrink-0 flex justify-between items-center p-4 border-b bg-gray-50">
+        <div className="fixed inset-0 bg-gray-900 bg-opacity-75 z-[60] flex justify-center items-center p-4">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-7xl h-[90vh] flex flex-col">
+                <header className="flex-shrink-0 flex justify-between items-center p-4 border-b bg-gray-50 rounded-t-xl">
                     <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2"><Settings className="text-gray-600"/> Data Management</h2>
-                    <div className="flex items-center gap-2">
-                        <div className="relative mr-4">
+                        <div className="flex items-center gap-2">
+                            <div className="relative mr-4">
                             <input 
                                 type="text" 
                                 placeholder="Search active tab..." 
                                 value={searchTerm} 
                                 onChange={e => setSearchTerm(e.target.value)} 
-                                className="pl-8 pr-4 py-1.5 border rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none w-64"
+                                className="pl-8 pr-4 py-1 border rounded-lg text-sm"
                             />
-                            <div className="absolute left-2 top-2.5 text-gray-400"><Settings size={14}/></div>
-                        </div>
-                        <button 
+                            <div className="absolute left-2 top-1.5 text-gray-400"><Settings size={14}/></div>
+                            </div>
+                            <button 
                             onClick={handleForceSave} 
-                            disabled={isSaving || isDataLoading}
-                            className="flex items-center gap-2 px-3 py-1.5 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 text-sm font-semibold disabled:opacity-50 transition-colors"
+                            disabled={isSaving}
+                            className="mr-2 flex items-center gap-2 px-3 py-1.5 bg-indigo-100 text-indigo-700 rounded-md hover:bg-indigo-200 text-sm font-semibold disabled:opacity-50"
                         >
                             <Save size={16} className={isSaving ? "animate-spin" : ""} />
                             {isSaving ? 'Saving...' : 'Force Save'}
                         </button>
-                        <button onClick={onClose} className="p-1 hover:bg-gray-200 rounded-full transition-colors">
-                            <X size={24} className="text-gray-500" />
-                        </button>
+                        <button onClick={onClose}><X size={24} className="text-gray-500 hover:text-gray-800" /></button>
                     </div>
                 </header>
                 
-                <div className="px-4 pt-4 bg-white">
-                    {statusMessage && renderStatusBanner()}
-                </div>
+                {statusMessage && renderStatusBanner()}
 
                 <div className="flex flex-grow overflow-hidden">
-                    <nav className="w-64 bg-gray-50 border-r overflow-y-auto flex-shrink-0 p-3 space-y-1">
+                    <nav className="w-64 bg-gray-100 border-r overflow-y-auto flex-shrink-0 p-2 space-y-1">
                         {tabs.map(tab => (
                             <button
                                 key={tab.id}
                                 onClick={() => { setActiveTab(tab.id); setSearchTerm(''); }}
-                                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all text-sm font-medium ${activeTab === tab.id ? 'bg-white text-indigo-700 shadow-md border border-indigo-100 translate-x-1' : 'text-gray-600 hover:bg-gray-200'}`}
+                                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors text-sm font-medium ${activeTab === tab.id ? 'bg-white text-indigo-700 shadow-sm border border-indigo-100' : 'text-gray-600 hover:bg-gray-200'}`}
                             >
                                 <tab.icon size={18} />
                                 {tab.label}
@@ -189,8 +177,7 @@ export const ManagementModal: React.FC<ManagementModalProps> = ({
                     </nav>
                     
                     <main className="flex-grow p-6 overflow-y-auto bg-white">
-                        {/* Only render the tab if data is not loading to prevent child crashes */}
-                        {!isDataLoading && tabs.find(t => t.id === activeTab)?.render()}
+                        {tabs.find(t => t.id === activeTab)?.render()}
                     </main>
                 </div>
             </div>

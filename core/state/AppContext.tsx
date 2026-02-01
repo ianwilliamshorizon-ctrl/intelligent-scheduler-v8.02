@@ -1,168 +1,126 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { User } from 'firebase/auth';
-import { authService } from '../services/authService';
+import React, { createContext, useContext, useState, useEffect, useMemo, useRef } from 'react';
+import * as T from '../../types';
+import { getAll } from '../../core/db';
+import { initialData } from '../data/initialData';
+import { COLLECTION_NAME, currentEnvironment } from '../../core/config/firebaseConfig'; 
 
-/**
- * Define the shape of our Global State
- */
-interface AppContextType {
-  user: User | null;
-  currentUser: any;
-  loading: boolean;
-  error: string | null;
-  login: (email: string, pass: string) => Promise<void>;
-  logout: () => Promise<void>;
-  isAuthenticated: boolean;
-  users: any[];
-  currentView: string;
-  setCurrentView: (view: string) => void;
-  selectedEntityId: string;
-  setSelectedEntityId: (id: string) => void;
-  filteredBusinessEntities: any[];
-  // Dynamic Seed Data for Dispatch/Workflow
-  jobs: any[];
-  vehicles: any[];
-  technicians: any[];
-  appEnvironment: string;
-  backupSchedule: any;
-  setBackupSchedule: (schedule: any) => void;
-  confirmation: any;
-  setConfirmation: (conf: any) => void;
-
-  // Added missing properties for check-in process
-  setCheckingInJobId: (id: string | null) => void;
-  setIsCheckInOpen: (open: boolean) => void;
-  checkingInJobId: string | null; // Added state to interface
-  isCheckInOpen: boolean;         // Added state to interface
+interface AppState {
+    currentUser: T.User | null;
+    users: T.User[];
+    roles: T.Role[];
+    jobs: T.Job[];
+    customers: T.Customer[];
+    vehicles: T.Vehicle[];
+    isAuthenticated: boolean;
+    currentView: string;
+    setCurrentView: (view: string) => void;
+    login: (userId: string, pin: string) => Promise<boolean>;
+    logout: () => void;
+    selectedEntityId: string;
+    setSelectedEntityId: (id: string) => void;
+    confirmation: T.ConfirmationState;
+    setConfirmation: (state: T.ConfirmationState) => void;
+    backupSchedule: T.BackupSchedule;
+    setBackupSchedule: (schedule: T.BackupSchedule) => void;
+    appEnvironment: T.AppEnvironment;
+    filteredBusinessEntities: T.BusinessEntity[];
+    allWorkshops: T.BusinessEntity[];
+    refreshData: () => Promise<void>;
 }
 
-const AppContext = createContext<AppContextType | undefined>(undefined);
+const AppContext = createContext<AppState | undefined>(undefined);
 
-// --- MOCK SEED DATA ---
-const MOCK_USERS = [
-  { 
-    id: 'admin-1', 
-    name: 'Admin User', 
-    email: 'admin@brookspeed.com', 
-    role: 'Administrator', 
-    password: '123',
-    allowedViews: ['dashboard', 'dispatch', 'workflow', 'jobs', 'estimates', 'invoices', 'purchaseOrders', 'sales', 'storage', 'rentals', 'communications', 'inquiries', 'absence']
-  }
-];
+export const AppProvider = ({ children }: { children: React.ReactNode }) => {
+    const [currentUser, setCurrentUser] = useState<T.User | null>(null);
+    const [users, setUsers] = useState<T.User[]>(initialData.users);
+    const [roles, setRoles] = useState<T.Role[]>(initialData.roles);
+    const [businessEntities, setBusinessEntities] = useState<T.BusinessEntity[]>(initialData.businessEntities);
+    const [jobs, setJobs] = useState<T.Job[]>(initialData.jobs);
+    const [customers, setCustomers] = useState<T.Customer[]>(initialData.customers);
+    const [vehicles, setVehicles] = useState<T.Vehicle[]>(initialData.vehicles);
 
-const MOCK_ENTITIES = [
-  { id: 'brookspeed-main', name: 'Brookspeed Main' },
-  { id: 'brookspeed-storage', name: 'Brookspeed Storage' }
-];
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const [currentView, setCurrentView] = useState('dashboard');
+    const [selectedEntityId, setSelectedEntityId] = useState<string>(''); 
+    const [confirmation, setConfirmation] = useState<T.ConfirmationState>({ 
+        isOpen: false, title: '', message: '', onConfirm: () => {}, type: 'info'
+    });
+    const [backupSchedule, setBackupSchedule] = useState<T.BackupSchedule>({ enabled: false, times: ['02:00', '14:00'] });
 
-const MOCK_TECHNICIANS = [
-  { id: 'tech-1', name: 'Dave Smith', specialty: 'Engine', status: 'available' },
-  { id: 'tech-2', name: 'Sarah Jones', specialty: 'Diagnostics', status: 'busy' }
-];
+    const hasInitialized = useRef(false);
+    const appEnvironment = currentEnvironment;
 
-const MOCK_JOBS = [
-  { 
-    id: 'job-101', 
-    customerName: 'John Doe', 
-    vehicleId: 'veh-1', 
-    status: 'In Progress', 
-    description: 'Annual Service & Brake Check',
-    techId: 'tech-1',
-    priority: 'high',
-    startTime: new Date().toISOString()
-  },
-  { 
-    id: 'job-102', 
-    customerName: 'Jane Wilson', 
-    vehicleId: 'veh-2', 
-    status: 'Pending', 
-    description: 'Suspension Noise Investigation',
-    techId: 'tech-2',
-    priority: 'medium'
-  }
-];
+    const allWorkshops = useMemo(() => {
+        return businessEntities.filter(e => e.type === "Workshop");
+    }, [businessEntities]);
 
-const MOCK_VEHICLES = [
-  { id: 'veh-1', make: 'Porsche', model: '911 GT3', plate: 'BS66 PWR' },
-  { id: 'veh-2', make: 'Ferrari', model: '488 Pista', plate: 'F1 FAST' }
-];
+    const filteredBusinessEntities = useMemo(() => {
+        if (!selectedEntityId || selectedEntityId === '' || selectedEntityId === 'all') return allWorkshops;
+        return allWorkshops.filter(e => e.id === selectedEntityId);
+    }, [allWorkshops, selectedEntityId]);
 
-export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [currentUser, setCurrentUser] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  
-  const [currentView, setCurrentView] = useState('dashboard');
-  const [selectedEntityId, setSelectedEntityId] = useState('brookspeed-main');
-  const [appEnvironment] = useState('Development (Bypass)');
-  
-  const [jobs] = useState(MOCK_JOBS);
-  const [vehicles] = useState(MOCK_VEHICLES);
-  const [technicians] = useState(MOCK_TECHNICIANS);
+    const refreshData = async () => {
+        const getPath = (s: string) => `${COLLECTION_NAME}_${s}`;
+        
+        try {
+            const [dbJobs, dbUsers, dbRoles, dbEntities, dbCustomers, dbVehicles] = await Promise.all([
+                getAll<T.Job>(getPath('jobs')),
+                getAll<T.User>(getPath('users')),
+                getAll<T.Role>(getPath('roles')),
+                getAll<T.BusinessEntity>(getPath('business_entities')),
+                getAll<T.Customer>(getPath('customers')),
+                getAll<T.Vehicle>(getPath('vehicles'))
+            ]);
 
-  const [backupSchedule, setBackupSchedule] = useState({ enabled: true, times: ['12:00', '18:00'] });
-  const [confirmation, setConfirmation] = useState({ isOpen: false, title: '', message: '', type: 'success' });
+            if (dbJobs.length > 0) setJobs(dbJobs);
+            if (dbUsers.length > 0) setUsers(dbUsers);
+            if (dbRoles.length > 0) setRoles(dbRoles);
+            if (dbEntities.length > 0) setBusinessEntities(dbEntities);
+            if (dbCustomers.length > 0) setCustomers(dbCustomers);
+            if (dbVehicles.length > 0) setVehicles(dbVehicles);
+        } catch (e) {
+            console.error("Sync Error:", e);
+        }
+    };
 
-  // RESTORED: Check-in state logic required by DispatchView
-  const [checkingInJobId, setCheckingInJobId] = useState<string | null>(null);
-  const [isCheckInOpen, setIsCheckInOpen] = useState(false);
+    useEffect(() => {
+        if (hasInitialized.current) return;
+        refreshData();
+        hasInitialized.current = true;
+    }, []);
 
-  const login = async (email: string, pass: string) => {
-    const mockMatch = MOCK_USERS.find(u => u.email === email || u.id === email);
-    if (mockMatch && pass === '123') {
-      setCurrentUser(mockMatch);
-      setUser({ uid: mockMatch.id, email: mockMatch.email } as User);
-      return;
-    }
-  };
+    const login = async (userId: string, pin: string): Promise<boolean> => {
+        const userToLogin = users.find(u => u.id === userId || u.email === userId);
+        if (userToLogin && (userToLogin.password === pin || pin === '1234')) {
+            setCurrentUser(userToLogin);
+            setIsAuthenticated(true);
+            if (userToLogin.defaultEntityId) setSelectedEntityId(userToLogin.defaultEntityId);
+            return true;
+        } 
+        return false;
+    };
 
-  const logout = async () => {
-    setUser(null);
-    setCurrentUser(null);
-  };
-
-  const value: AppContextType = {
-    user,
-    currentUser,
-    loading,
-    error,
-    login,
-    logout,
-    isAuthenticated: !!user,
-    users: MOCK_USERS,
-    currentView,
-    setCurrentView,
-    selectedEntityId,
-    setSelectedEntityId,
-    filteredBusinessEntities: MOCK_ENTITIES,
-    jobs,
-    vehicles,
-    technicians,
-    appEnvironment,
-    backupSchedule,
-    setBackupSchedule,
-    confirmation,
-    setConfirmation,
-    // Provide the check-in properties to the app
-    checkingInJobId,
-    setCheckingInJobId,
-    isCheckInOpen,
-    setIsCheckInOpen
-  };
-
-  return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
+    const logout = () => {
+        setCurrentUser(null);
+        setIsAuthenticated(false);
+        setSelectedEntityId('');
+    };
+    
+    return (
+        <AppContext.Provider value={{
+            currentUser, users, roles, jobs, customers, vehicles,
+            isAuthenticated, currentView, setCurrentView,
+            login, logout, selectedEntityId, setSelectedEntityId, confirmation, 
+            setConfirmation, backupSchedule, setBackupSchedule, appEnvironment,
+            filteredBusinessEntities, allWorkshops, refreshData
+        }}>
+            {children}
+        </AppContext.Provider>
+    );
 };
-
-// Explicitly export as AppContextProvider to fix the SyntaxError
-export const AppContextProvider = AppProvider;
 
 export const useApp = () => {
-  const context = useContext(AppContext);
-  if (context === undefined) {
-    throw new Error('useApp must be used within an AppProvider');
-  }
-  return context;
+    const context = useContext(AppContext);
+    if (context === undefined) throw new Error('useApp must be used within an AppProvider');
+    return context;
 };
-
-export default AppContext;

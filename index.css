@@ -48,3 +48,25 @@
   display: flex;
   flex-direction: column;
 }
+/* The actual items you can grab */
+[draggable="true"], .draggable-job-card {
+  cursor: grab !important;
+  user-select: none;
+  -webkit-user-drag: element;
+}
+
+[draggable="true"]:active {
+  cursor: grabbing !important;
+}
+
+/* The slots on the timeline grid */
+.timeline-slot {
+  cursor: cell;
+  transition: background-color 0.2s;
+}
+
+/* Visual cue when hovering over a valid slot */
+.timeline-slot.drag-over {
+  background-color: rgba(59, 130, 246, 0.1) !important; /* Blue tint */
+  box-shadow: inset 0 0 0 2px #3b82f6;
+}

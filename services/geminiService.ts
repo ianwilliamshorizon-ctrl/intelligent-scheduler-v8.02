@@ -1,10 +1,20 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { ServicePackage, EstimateLineItem, Part } from '../../types';
+import { ServicePackage, EstimateLineItem, Part } from '../types';
 
-const apiKey = import.meta.env.VITE_API_KEY;
+// Helper to safely access environment variables without crashing if 'process' is undefined
+const getEnvVar = (key: string): string | undefined => {
+    try {
+        // @ts-ignore
+        return (typeof process !== 'undefined' && process.env) ? process.env[key] : undefined;
+    } catch (e) {
+        return undefined;
+    }
+};
+
+const apiKey = getEnvVar('API_KEY');
 
 if (!apiKey) {
-    console.warn("VITE_API_KEY environment variable not set. Gemini features will not work.");
+    console.warn("API_KEY environment variable not set. Gemini features will not work.");
 }
 
 const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;

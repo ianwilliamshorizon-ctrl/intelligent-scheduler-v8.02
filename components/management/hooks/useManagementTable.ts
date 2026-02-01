@@ -37,7 +37,7 @@ export const useManagementTable = <T extends { id: string }>(
     const bulkDelete = async () => {
         if (confirm(`Are you sure you want to permanently delete ${selectedIds.size} items?`)) {
             // Delete all selected items concurrently
-            const deletePromises = Array.from(selectedIds).map(id => deleteDocument(collectionName, id));
+            const deletePromises = Array.from(selectedIds).map(id => deleteDocument(collectionName, id as string));
             await Promise.all(deletePromises);
             setSelectedIds(new Set());
         }

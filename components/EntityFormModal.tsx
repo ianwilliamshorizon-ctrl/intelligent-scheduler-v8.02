@@ -1,7 +1,9 @@
+
 import React, { useState, useEffect } from 'react';
-import { BusinessEntity } from '../types';
+import { BusinessEntity, WorkingHoursConfig } from '../types';
 import FormModal from './FormModal';
 import { saveImage, getImage } from '../utils/imageStore';
+import { Clock } from 'lucide-react';
 
 const EntityFormInput = ({ label, ...props }: any) => (
     <div>
@@ -50,11 +52,28 @@ interface EntityFormModalProps {
 const EntityFormModal: React.FC<EntityFormModalProps> = ({ isOpen, onClose, onSave, entity, isDebugMode }) => {
     const [formData, setFormData] = useState<Partial<BusinessEntity> & { tempLogoUrl?: string }>({});
 
+    // Default working hours if not present
+    const defaultWorkingHours: WorkingHoursConfig = {
+        startHour: 8.5,
+        endHour: 17.5,
+        isOpenSaturday: true,
+        saturdayStartHour: 8.5,
+        saturdayEndHour: 12.5,
+        isOpenSunday: false,
+        region: 'england-and-wales'
+    };
+
     useEffect(() => {
         if (isDebugMode && entity) {
             console.log("DEBUG: EntityFormModal received entity data:", JSON.stringify(entity, null, 2));
         }
-        const initialData = entity || {};
+        const initialData: Partial<BusinessEntity> = entity ? { ...entity } : {};
+        
+        // Ensure workingHours object exists
+        if (!initialData.workingHours && initialData.type === 'Workshop') {
+            initialData.workingHours = { ...defaultWorkingHours };
+        }
+
         setFormData({ ...initialData, tempLogoUrl: undefined });
         if (entity?.logoImageId) {
             getImage(entity.logoImageId).then(url => {
@@ -68,6 +87,16 @@ const EntityFormModal: React.FC<EntityFormModalProps> = ({ isOpen, onClose, onSa
         const inputType = e.target.getAttribute('type');
         const numValue = (inputType === 'number') ? parseFloat(value) || undefined : value;
         setFormData(prev => ({ ...prev, [name]: numValue }));
+    };
+
+    const handleWorkingHoursChange = (field: keyof WorkingHoursConfig, value: any) => {
+        setFormData(prev => ({
+            ...prev,
+            workingHours: {
+                ...(prev.workingHours || defaultWorkingHours),
+                [field]: value
+            }
+        }));
     };
 
     const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -124,11 +153,51 @@ const EntityFormModal: React.FC<EntityFormModalProps> = ({ isOpen, onClose, onSa
 
                 {formData.type === 'Workshop' && (
                     <>
-                        <h3 className="text-lg font-semibold text-gray-800 border-b pb-2 my-4">Workshop Settings</h3>
+                        <h3 className="text-lg font-semibold text-gray-800 border-b pb-2 my-4 flex items-center gap-2"><Clock size={18}/> Workshop Configuration</h3>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <EntityFormInput label="Labor Rate (£)" name="laborRate" type="number" step="0.01" value={formData.laborRate || ''} onChange={handleChange} />
                             <EntityFormInput label="Labor Cost Rate (£)" name="laborCostRate" type="number" step="0.01" value={formData.laborCostRate || ''} onChange={handleChange} />
                             <EntityFormInput label="Daily Capacity (hours)" name="dailyCapacityHours" type="number" step="0.5" value={formData.dailyCapacityHours || ''} onChange={handleChange} />
+                        </div>
+                        
+                        <div className="mt-4 p-4 bg-gray-50 rounded-lg border">
+                            <h4 className="font-semibold text-sm text-gray-700 mb-3">Working Hours & Holidays</h4>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div>
+                                    <label className="block text-xs font-medium text-gray-600 mb-1">Weekday Start (Decimal)</label>
+                                    <input type="number" step="0.5" value={formData.workingHours?.startHour || 8.5} onChange={(e) => handleWorkingHoursChange('startHour', parseFloat(e.target.value))} className="w-full p-2 border rounded bg-white text-sm" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-gray-600 mb-1">Weekday End (Decimal)</label>
+                                    <input type="number" step="0.5" value={formData.workingHours?.endHour || 17.5} onChange={(e) => handleWorkingHoursChange('endHour', parseFloat(e.target.value))} className="w-full p-2 border rounded bg-white text-sm" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-gray-600 mb-1">Bank Holiday Region</label>
+                                    <select value={formData.workingHours?.region || 'england-and-wales'} onChange={(e) => handleWorkingHoursChange('region', e.target.value)} className="w-full p-2 border rounded bg-white text-sm">
+                                        <option value="england-and-wales">England & Wales</option>
+                                        <option value="scotland">Scotland</option>
+                                        <option value="northern-ireland">Northern Ireland</option>
+                                    </select>
+                                </div>
+                                <div className="md:col-span-3 grid grid-cols-3 gap-4 mt-2">
+                                     <div className="flex items-center">
+                                        <input type="checkbox" id="isOpenSaturday" checked={formData.workingHours?.isOpenSaturday || false} onChange={(e) => handleWorkingHoursChange('isOpenSaturday', e.target.checked)} className="h-4 w-4 text-indigo-600 rounded" />
+                                        <label htmlFor="isOpenSaturday" className="ml-2 text-sm text-gray-700">Open Saturday</label>
+                                    </div>
+                                    {formData.workingHours?.isOpenSaturday && (
+                                        <>
+                                            <div>
+                                                <label className="block text-xs font-medium text-gray-600 mb-1">Sat Start</label>
+                                                <input type="number" step="0.5" value={formData.workingHours?.saturdayStartHour || 8.5} onChange={(e) => handleWorkingHoursChange('saturdayStartHour', parseFloat(e.target.value))} className="w-full p-1.5 border rounded bg-white text-xs" />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-medium text-gray-600 mb-1">Sat End</label>
+                                                <input type="number" step="0.5" value={formData.workingHours?.saturdayEndHour || 12.5} onChange={(e) => handleWorkingHoursChange('saturdayEndHour', parseFloat(e.target.value))} className="w-full p-1.5 border rounded bg-white text-xs" />
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
                         </div>
 
                         <h3 className="text-lg font-semibold text-gray-800 border-b pb-2 my-4">Reminder Templates</h3>

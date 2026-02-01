@@ -1,56 +1,49 @@
 import { 
+    getAuth, 
+    onAuthStateChanged, 
     signInWithEmailAndPassword, 
-    signOut, 
-    onAuthStateChanged,
+    createUserWithEmailAndPassword, 
+    signOut,
+    updateProfile,
     User
-  } from "firebase/auth";
-  import { auth } from "../config/firebaseConfig";
-  
-  const authServiceInstance = {
-    /**
-     * Logs in a user. Uses the 'auth' instance which is now 
-     * pulling from either _DEV or _PROD keys.
-     */
-    login: async (email: string, password: string): Promise<User> => {
-      const cleanEmail = (email || "").trim();
-      
-      if (import.meta.env.DEV) {
-        console.log(`🔑 Login Attempt: [${cleanEmail}]`);
-      }
-  
-      if (!cleanEmail || !cleanEmail.includes('@')) {
-        throw new Error("Please enter a valid email address.");
-      }
-  
-      try {
-        const userCredential = await signInWithEmailAndPassword(auth, cleanEmail, password);
-        return userCredential.user;
-      } catch (error: any) {
-        console.error("Firebase Auth Error:", error.code, error.message);
-        throw error;
-      }
-    },
-  
-    logout: async (): Promise<void> => {
-      try {
-        await signOut(auth);
-      } catch (error) {
-        console.error("Logout Error:", error);
-        throw error;
-      }
-    },
-  
-    subscribeToAuthChanges: (callback: (user: User | null) => void) => {
-      return onAuthStateChanged(auth, callback);
-    },
-  
-    getCurrentUser: (): User | null => {
-      return auth.currentUser;
+} from "firebase/auth";
+import { isDev } from "../config/firebaseConfig";
+
+const auth = getAuth();
+
+// This is a mock user for local development
+const devUser = {
+    uid: 'dev-user-uid',
+    email: 'dev@brooks-speed.com',
+    displayName: 'Dev User',
+};
+
+export const onAuthChange = (callback: (user: User | null) => void) => {
+    if (isDev) {
+        // In development, we'll just return the mock user immediately.
+        // This simulates a logged-in state without needing real credentials.
+        console.log("Running in dev mode, simulating user login.");
+        callback(devUser as User);
+        return () => {}; // Return an empty unsubscribe function
     }
-  };
-  
-  // Exporting both to prevent "Export not found" errors in legacy components
-  export const authService = authServiceInstance;
-  export const AuthService = authServiceInstance;
-  
-  export default authServiceInstance;
+
+    // In production, we use the real Firebase auth state
+    const unsubscribe = onAuthStateChanged(auth, callback);
+    return unsubscribe;
+};
+
+export const login = (email, password) => {
+    return signInWithEmailAndPassword(auth, email, password);
+};
+
+export const signup = (email, password) => {
+    return createUserWithEmailAndPassword(auth, email, password);
+};
+
+export const logout = () => {
+    return signOut(auth);
+};
+
+export const updateUserProfile = (user, profile) => {
+    return updateProfile(user, profile);
+};

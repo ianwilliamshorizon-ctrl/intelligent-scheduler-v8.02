@@ -1,142 +1,310 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import * as T from './types';
 import { useData } from './core/state/DataContext';
 import { useApp } from './core/state/AppContext';
+import { createBackup, downloadBackup } from './core/utils/backupUtils';
+import { setItem, saveDocument } from './core/db';
+import * as initialData from './core/data/initialData';
+import { COLLECTION_NAME } from './core/config/firebaseConfig';
+import { getCustomerDisplayName } from './core/utils/customerUtils';
+import { formatDate } from './core/utils/dateUtils';
 import { useWorkshopActions } from './core/hooks/useWorkshopActions';
 import { useModalState } from './core/hooks/useModalState';
-import { Building2 } from 'lucide-react';
 
+// Layout
 import MainLayout from './components/MainLayout';
 import AppModals from './components/AppModals';
-import ManagementModal from './components/ManagementModal';
-import LoginView from './components/LoginView';
 
+// Views
 import DashboardView from './components/DashboardView';
 import DispatchView from './modules/workshop/DispatchView';
 import WorkflowView from './components/WorkflowView';
 import JobsView from './modules/workshop/JobsView';
-import EstimatesView from './components/EstimatesView';
-import InvoicesView from './components/InvoicesView';
-import PurchaseOrdersView from './components/PurchaseOrdersView';
+import EstimatesView from './modules/workshop/EstimatesView';
+import InvoicesView from './modules/workshop/InvoicesView';
+import PurchaseOrdersView from './modules/workshop/PurchaseOrdersView';
 import SalesView from './components/SalesView';
 import StorageView from './components/StorageView';
 import RentalsView from './components/RentalsView';
+import ConciergeView from './components/ConciergeView';
 import CommunicationsView from './components/CommunicationsView';
 import AbsenceView from './components/AbsenceView';
 import InquiriesView from './components/InquiriesView';
-import ConciergeView from './components/ConciergeView';
+
+// Modals
+import ManagementModal from './components/ManagementModal';
+import LoginView from './components/LoginView';
 
 const App = () => {
-    const context = useApp();
-    const data = useData() as any; 
-
-    if (!context || !data) return null;
-
     const { 
-        currentView, currentUser, selectedEntityId, 
-        isAuthenticated, login, users = [], appEnvironment 
-    } = context;
+        currentView, currentUser, 
+        selectedEntityId, 
+        confirmation, setConfirmation,
+        users, isAuthenticated, login,
+        backupSchedule, setBackupSchedule, appEnvironment
+    } = useApp();
 
+    const data = useData();
     const { 
-        businessEntities = [], jobs = [], vehicles = [], customers = [],
-        invoices = [], estimates = [], purchaseOrders = [], suppliers = [],
-        taxRates = [], absenceRequests = []
+        jobs, vehicles, customers, estimates, invoices, purchaseOrders, 
+        purchases, parts, servicePackages, suppliers, engineers, lifts,
+        rentalVehicles, rentalBookings, saleVehicles, saleOverheadPackages,
+        prospects, storageBookings, storageLocations, batteryChargers,
+        nominalCodes, nominalCodeRules, absenceRequests, inquiries, 
+        reminders, auditLog, businessEntities, taxRates, roles, inspectionDiagrams,
+        setJobs, setEstimates, setInvoices, setPurchaseOrders, setRentalBookings,
+        setStorageBookings, setProspects, setInquiries, setAbsenceRequests, setParts
     } = data;
+
+    // --- FULL ECOSYSTEM REPAIR LOGIC ---
+    const [repairing, setRepairing] = useState(false);
+    const [repairStatus, setRepairStatus] = useState('');
+
+    const runFullDatabaseRepair = async () => {
+        if (!window.confirm("This will push all available local data to 'isdevdb'. Continue?")) return;
+        setRepairing(true);
+        setRepairStatus('Starting Full Ecosystem Sync...');
+        
+        try {
+            const seed = async (name: string, getterName: string) => {
+                const getter = (initialData as any)[getterName];
+                if (typeof getter !== 'function') {
+                    console.log(`Skipping ${name}: Getter ${getterName} not found.`);
+                    return;
+                }
+
+                const items = getter();
+                if (!items || items.length === 0) {
+                    console.log(`Skipping ${name}: No data returned from ${getterName}.`);
+                    return;
+                }
+
+                // MATCHING COLLECTION NAMES TO DATA_CONTEXT KEYS
+                const path = `${COLLECTION_NAME}_${name}`;
+                setRepairStatus(`Syncing ${path} (${items.length} items)...`);
+                for (const item of items) { 
+                    await saveDocument(path, item); 
+                }
+            };
+
+            // 1. Infrastructure (Ensuring names match DataContext usePersistentState keys)
+            await seed('businessEntities', 'getInitialBusinessEntities');
+            await seed('lifts', 'getInitialLifts'); 
+            await seed('roles', 'getInitialRoles');
+            await seed('users', 'getInitialUsers');
+            await seed('engineers', 'getInitialEngineers'); 
+
+            // 2. Catalogs
+            await seed('parts', 'getInitialParts');
+            await seed('servicePackages', 'getInitialServicePackages');
+            await seed('suppliers', 'getInitialSuppliers');
+            await seed('taxRates', 'getInitialTaxRates');
+            await seed('nominalCodes', 'getInitialNominalCodes');
+
+            // 3. Asset Data
+            await seed('customers', 'getInitialCustomers');
+            await seed('vehicles', 'getInitialVehicles');
+            
+            // 4. Operations
+            await seed('jobs', 'getInitialJobs');
+            await seed('estimates', 'getInitialEstimates');
+            await seed('invoices', 'getInitialInvoices');
+            await seed('purchaseOrders', 'getInitialPurchaseOrders');
+
+            // 5. Specialized
+            await seed('rentalVehicles', 'getInitialRentalVehicles');
+            await seed('storageLocations', 'getInitialStorageLocations');
+            await seed('prospects', 'getInitialProspects');
+            await seed('inquiries', 'getInitialInquiries');
+
+            setRepairStatus('✅ Sync Complete!');
+            alert("✅ Seeding finished! Please reload and check the Management Modal.");
+            window.location.reload();
+        } catch (e: any) {
+            console.error("Seed failed:", e);
+            setRepairStatus(`❌ Error: ${e.message}`);
+        } finally {
+            setRepairing(false);
+        }
+    };
 
     const [modalsState, setters] = useModalState();
     const [isManagementOpen, setIsManagementOpen] = useState(false);
+    const [managementInitialView, setManagementInitialView] = useState<{ tab: string; id: string } | null>(null);
+    
     const workshopActions = useWorkshopActions();
+    const lastBackupTimeRef = useRef<string | null>(null);
 
-    const currentEntity = businessEntities.find((e: any) => e.id === selectedEntityId);
-    const isWorkshopView = currentEntity?.name.toLowerCase().includes('porsche') || 
-                           currentEntity?.name.toLowerCase().includes('audi') || 
-                           currentEntity?.name.toLowerCase().includes('trimming');
+    const getFullStateData = useCallback(() => {
+        return {
+            jobs, vehicles, customers, estimates, invoices, purchaseOrders, 
+            purchases, parts, servicePackages, suppliers, engineers, lifts,
+            rentalVehicles, rentalBookings, saleVehicles, saleOverheadPackages,
+            prospects, storageBookings, storageLocations, batteryChargers,
+            nominalCodes, nominalCodeRules, absenceRequests, inquiries, 
+            reminders, auditLog, businessEntities, taxRates, roles, inspectionDiagrams, users
+        };
+    }, [
+        jobs, vehicles, customers, estimates, invoices, purchaseOrders, 
+        purchases, parts, servicePackages, suppliers, engineers, lifts,
+        rentalVehicles, rentalBookings, saleVehicles, saleOverheadPackages,
+        prospects, storageBookings, storageLocations, batteryChargers,
+        nominalCodes, nominalCodeRules, absenceRequests, inquiries, 
+        reminders, auditLog, businessEntities, taxRates, roles, inspectionDiagrams, users
+    ]);
+
+    const handleManualBackup = useCallback(() => {
+        const backupData = createBackup(getFullStateData());
+        downloadBackup(backupData);
+    }, [getFullStateData]);
+
+    const handleAutoBackup = useCallback(async () => {
+        const backupData = createBackup(getFullStateData());
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        try {
+            await setItem(`backup_auto_${timestamp}`, backupData);
+            setConfirmation({
+                isOpen: true,
+                title: 'Automated Backup',
+                message: 'A scheduled system backup has been successfully saved to the cloud database.',
+                type: 'success'
+            });
+        } catch (e) {
+            console.error("Auto-backup failed", e);
+        }
+    }, [getFullStateData, setConfirmation]);
+
+    useEffect(() => {
+        if (!backupSchedule.enabled) return;
+        const checkBackupTime = () => {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+            if (backupSchedule.times.includes(timeString)) {
+                if (lastBackupTimeRef.current !== timeString) {
+                    handleAutoBackup();
+                    lastBackupTimeRef.current = timeString;
+                }
+            }
+        };
+        const interval = setInterval(checkBackupTime, 15000);
+        return () => clearInterval(interval);
+    }, [backupSchedule, handleAutoBackup]);
 
     if (!isAuthenticated) {
-        return (
-            <LoginView 
-                users={users} 
-                onLogin={async (u, p) => {
-                    try {
-                        await login(u, p);
-                        return true; // Explicitly returning boolean to satisfy LoginViewProps
-                    } catch (e) {
-                        console.error("Login failed", e);
-                        return false;
-                    }
-                }} 
-                environment={appEnvironment as any} 
-            />
-        );
+        return <LoginView users={users} onLogin={login} environment={appEnvironment} />;
     }
 
+    const handleSaveItem = workshopActions.handleSaveItem;
+    const handleDeleteItem = <Type extends { id: string }>(setter: React.Dispatch<React.SetStateAction<Type[]>>, id: string) => {
+        if(confirm('Are you sure you want to delete this item?')) {
+            setter(prev => prev.filter(i => i.id !== id));
+        }
+    };
+
+    const handleCustomerApproveEstimate = (estimate: T.Estimate, selectedOptionalItemIds: string[], dateRange: any, notes: string) => {
+        if (estimate.jobId) { workshopActions.handleApproveEstimate(estimate, selectedOptionalItemIds, notes); return; }
+        const customer = customers.find(c => c.id === estimate.customerId);
+        const selectedOptionsList = (estimate.lineItems || []).filter(item => item.isOptional && selectedOptionalItemIds.includes(item.id)).map(item => `- ${item.description} (${(item.unitPrice * item.quantity).toFixed(2)})`).join('\n');
+        const inquiryMessage = `ONLINE APPROVAL: Estimate #${estimate.estimateNumber}\n\n` + `Preferred Dates: ${dateRange?.start ? formatDate(new Date(dateRange.start)) : 'N/A'} to ${dateRange?.end ? formatDate(new Date(dateRange.end)) : 'N/A'}\n` + `Customer Notes: ${notes || 'None'}\n\n` + (selectedOptionsList ? `Selected Optional Extras:\n${selectedOptionsList}` : `No optional extras selected.`);
+        const existingInquiry = inquiries.find(i => i.linkedEstimateId === estimate.id);
+        if (existingInquiry) {
+            const updatedInquiry = { ...existingInquiry, status: 'Approved' as const, message: existingInquiry.message + '\n\n' + inquiryMessage, actionNotes: (existingInquiry.actionNotes || '') + '\n[System]: Customer Approved Online. Action Required.' };
+            handleSaveItem(setInquiries, updatedInquiry);
+        } else {
+            const newInquiry: T.Inquiry = { id: crypto.randomUUID(), entityId: estimate.entityId, createdAt: new Date().toISOString(), fromName: getCustomerDisplayName(customer), fromContact: customer?.email || customer?.mobile || "Client Portal", message: inquiryMessage, takenByUserId: 'system', status: 'Approved', linkedCustomerId: estimate.customerId, linkedVehicleId: estimate.vehicleId, linkedEstimateId: estimate.id, actionNotes: 'Auto-generated from Customer Estimate Approval. Please review dates and convert to Job.' };
+            handleSaveItem(setInquiries, newInquiry);
+        }
+        const updatedEstimate: T.Estimate = { ...estimate, status: 'Approved' };
+        handleSaveItem(setEstimates, updatedEstimate);
+        setConfirmation({ isOpen: true, title: 'Request Received', message: 'Thank you. We have received your approval and preferred dates. A member of our team will review the schedule and confirm your booking shortly.', type: 'success' });
+    };
+
+    const handleCustomerDeclineEstimate = (estimate: T.Estimate) => {
+        const updatedEstimate: T.Estimate = { ...estimate, status: 'Declined' };
+        handleSaveItem(setEstimates, updatedEstimate);
+        workshopActions.updateLinkedInquiryStatus(estimate.id, 'Rejected');
+        setConfirmation({ isOpen: true, title: 'Estimate Declined', message: 'You have declined this estimate. We have been notified.', type: 'warning' });
+    };
+
+    const handleGenerateInvoice = (jobId: string) => {
+        const job = jobs.find(j => j.id === jobId);
+        if (!job) return;
+        let lineItems: T.EstimateLineItem[] = [];
+        if (job.estimateId) {
+            const estimate = estimates.find(e => e.id === job.estimateId);
+            if (estimate && estimate.lineItems) {
+                lineItems = estimate.lineItems.map(item => ({ ...item, id: crypto.randomUUID() }));
+            }
+        }
+        const newInvoice: Partial<T.Invoice> = {
+            entityId: job.entityId, customerId: job.customerId, vehicleId: job.vehicleId, jobId: job.id,
+            issueDate: formatDate(new Date()), dueDate: formatDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)), status: 'Draft', lineItems: lineItems, createdByUserId: currentUser.id
+        };
+        setters.setInvoiceFormModal({ isOpen: true, invoice: newInvoice as T.Invoice });
+    };
+
+    const handleMarkJobAsAwaitingCollection = (jobId: string) => {
+        setJobs(prev => prev.map(j => j.id === jobId ? { ...j, vehicleStatus: 'Awaiting Collection' } : j));
+    };
+
     const commonProps = {
-        onStartWork: (id: string, sId: string) => workshopActions.handleUpdateSegmentStatus(id, sId, 'In Progress'),
-        onPause: (id: string, sId: string) => workshopActions.handleUpdateSegmentStatus(id, sId, 'Paused'),
-        onRestartWork: (id: string, sId: string) => workshopActions.handleUpdateSegmentStatus(id, sId, 'In Progress'),
-        onRestart: (id: string, sId: string) => workshopActions.handleUpdateSegmentStatus(id, sId, 'In Progress'),
-        onEngineerComplete: (job: T.Job, sId: string) => workshopActions.handleUpdateSegmentStatus(job.id, sId, 'Engineer Complete'),
+        onStartWork: (jobId: string, segmentId: string) => workshopActions.handleUpdateSegmentStatus(jobId, segmentId, 'In Progress'),
+        onPause: (id: string, segId: string) => workshopActions.handleUpdateSegmentStatus(id, segId, 'Paused'),
+        onRestartWork: (jobId: string, segmentId: string) => workshopActions.handleUpdateSegmentStatus(jobId, segmentId, 'In Progress'),
+        onRestart: (jobId: string, segmentId: string) => workshopActions.handleUpdateSegmentStatus(jobId, segmentId, 'In Progress'),
+        onEngineerComplete: (job: T.Job, segmentId: string) => workshopActions.handleUpdateSegmentStatus(job.id, segmentId, 'Engineer Complete', { engineerCompletedAt: new Date().toISOString() }),
         onQcApprove: workshopActions.handleQcApprove,
         onOpenAssistant: (id: string) => { setters.setAssistantContextJobId(id); setters.setIsAssistantOpen(true); },
         onEditJob: (id: string) => { setters.setSelectedJobId(id); setters.setIsEditJobModalOpen(true); },
     };
 
     const renderView = () => {
-        if (!isWorkshopView && currentView === 'dashboard') {
-            return (
-                <div className="flex flex-col items-center justify-center h-full text-slate-400 bg-white">
-                    <Building2 size={64} className="mb-4 opacity-10" />
-                    <p className="text-lg font-medium text-slate-500">Non-Workshop Entity Selected</p>
-                    <p className="text-sm italic">Please select a mechanical workshop to view the dashboard.</p>
-                </div>
-            );
-        }
-
         switch (currentView) {
-            case 'dashboard': return <DashboardView {...commonProps} onCheckIn={() => {}} onOpenInquiry={() => {}} />;
-            case 'dispatch': return <DispatchView {...commonProps} setDefaultDateForModal={setters.setSmartCreateDefaultDate} setIsSmartCreateOpen={setters.setIsSmartCreateOpen} setSmartCreateMode={setters.setSmartCreateMode} setSelectedJobId={setters.setSelectedJobId} setIsEditModalOpen={setters.setIsEditJobModalOpen} onOpenPurchaseOrder={(po) => setters.setViewPoModal({isOpen: true, po})} onReassignEngineer={workshopActions.handleReassignEngineer} onCheckIn={() => {}} onUnscheduleSegment={workshopActions.handleUnscheduleSegment} />;
-            case 'workflow': return <WorkflowView jobs={jobs} vehicles={vehicles} customers={customers} engineers={data.engineers} currentUser={currentUser} onGenerateInvoice={() => {}} onOpenPurchaseOrder={(po) => setters.setViewPoModal({isOpen: true, po})} {...commonProps} />;
+            case 'dashboard': return <DashboardView {...commonProps} onCheckIn={(id) => { const job = jobs.find(j => j.id === id); if(job) setters.setCheckInJob(job); }} onOpenInquiry={(inq) => setters.setInquiryModal({isOpen: true, inquiry: inq})} />;
+            case 'dispatch': return <DispatchView setDefaultDateForModal={setters.setSmartCreateDefaultDate} setIsSmartCreateOpen={setters.setIsSmartCreateOpen} setSmartCreateMode={setters.setSmartCreateMode} setSelectedJobId={setters.setSelectedJobId} setIsEditModalOpen={setters.setIsEditJobModalOpen} onOpenPurchaseOrder={(po) => setters.setViewPoModal({isOpen: true, po})} onReassignEngineer={workshopActions.handleReassignEngineer} onCheckIn={(id) => { const job = jobs.find(j => j.id === id); if(job) setters.setCheckInJob(job); }} onUnscheduleSegment={workshopActions.handleUnscheduleSegment} {...commonProps} />;
+            case 'workflow': return <WorkflowView jobs={jobs} vehicles={vehicles} customers={customers} engineers={engineers} currentUser={currentUser} onGenerateInvoice={handleGenerateInvoice} onOpenPurchaseOrder={(po) => setters.setViewPoModal({isOpen: true, po})} {...commonProps} />;
             case 'jobs': return <JobsView onEditJob={(id) => { setters.setSelectedJobId(id); setters.setIsEditJobModalOpen(true); }} onSmartCreateClick={() => { setters.setSmartCreateMode('job'); setters.setIsSmartCreateOpen(true); }} />;
             case 'estimates': return <EstimatesView onOpenEstimateModal={(est) => setters.setEstimateFormModal({isOpen: true, estimate: est})} onViewEstimate={(est) => setters.setEstimateViewModal({isOpen: true, estimate: est})} onSmartCreateClick={() => { setters.setSmartCreateMode('estimate'); setters.setIsSmartCreateOpen(true); }} />;
-            case 'invoices': return <InvoicesView invoices={invoices} customers={customers} vehicles={vehicles} taxRates={taxRates} onViewInvoice={(inv) => setters.setViewInvoiceModal({isOpen: true, invoice: inv})} onEditInvoice={(inv) => setters.setInvoiceFormModal({isOpen: true, invoice: inv})} onOpenExportModal={() => {}} onCreateAdhocInvoice={() => setters.setInvoiceFormModal({isOpen: true, invoice: { createdByUserId: currentUser?.id || 'system' } as any})} />;
-            case 'purchaseOrders': return <PurchaseOrdersView purchaseOrders={purchaseOrders} suppliers={suppliers} onOpenPurchaseOrderModal={(po) => setters.setPoModal({isOpen: true, po})} onViewPurchaseOrder={(po) => setters.setViewPoModal({isOpen: true, po})} onDeletePurchaseOrder={(id) => {}} onExport={() => {}} onOpenBatchAddModal={() => setters.setBatchPoModalOpen(true)} />;
-            case 'sales': return <SalesView entity={currentEntity!} onManageSaleVehicle={() => {}} onAddSaleVehicle={() => {}} onGenerateReport={() => {}} onAddProspect={() => {}} onEditProspect={() => {}} onViewCustomer={() => {}} />;
-            case 'storage': return <StorageView entity={currentEntity!} onSaveBooking={() => {}} onBookOutVehicle={() => {}} onViewInvoice={() => {}} onAddCustomerAndVehicle={() => {}} onSaveInvoice={() => {}} setConfirmation={() => {}} setViewedInvoice={() => {}} />;
-            case 'rentals': return <RentalsView entity={currentEntity!} onOpenRentalBooking={() => {}} />;
-            case 'concierge': return <ConciergeView onCheckIn={() => {}} onOpenPurchaseOrder={() => {}} onGenerateInvoice={() => {}} onCollect={() => {}} {...commonProps} />;
-            case 'absence': return <AbsenceView currentUser={currentUser} users={users} absenceRequests={absenceRequests} setAbsenceRequests={() => {}} />;
-            case 'inquiries': return <InquiriesView onOpenInquiryModal={(inq) => setters.setInquiryModal({isOpen: true, inquiry: inq})} onConvert={() => {}} onViewEstimate={(est) => setters.setEstimateViewModal({isOpen: true, estimate: est})} onScheduleEstimate={() => {}} onOpenPurchaseOrder={() => {}} onEditEstimate={() => {}} />;
+            case 'invoices': return <InvoicesView onViewInvoice={(inv) => setters.setViewInvoiceModal({isOpen: true, invoice: inv})} onEditInvoice={(inv) => setters.setInvoiceFormModal({isOpen: true, invoice: inv})} onOpenExportModal={(type, items) => setters.setExportModal({isOpen: true, type, items})} onCreateAdhocInvoice={() => setters.setInvoiceFormModal({isOpen: true, invoice: { createdByUserId: currentUser.id } as any})} />;
+            case 'purchaseOrders': return <PurchaseOrdersView onOpenPurchaseOrderModal={(po) => setters.setPoModal({isOpen: true, po})} onViewPurchaseOrder={(po) => setters.setViewPoModal({isOpen: true, po})} onDeletePurchaseOrder={(id) => handleDeleteItem(setPurchaseOrders, id)} onExport={() => {}} onOpenBatchAddModal={() => setters.setBatchPoModalOpen(true)} />;
+            case 'sales': return <SalesView entity={businessEntities.find(e => e.id === selectedEntityId)!} onManageSaleVehicle={(sv) => setters.setSorContractModal({isOpen: false, saleVehicle: null})} onAddSaleVehicle={() => {}} onGenerateReport={() => setters.setSalesReportModal(true)} onAddProspect={() => setters.setProspectModal({isOpen: true, prospect: null})} onEditProspect={(p) => setters.setProspectModal({isOpen: true, prospect: p})} onViewCustomer={() => {}} />;
+            case 'storage': return <StorageView entity={businessEntities.find(e => e.id === selectedEntityId)!} onSaveBooking={(b) => handleSaveItem(setStorageBookings, b)} onBookOutVehicle={() => {}} onViewInvoice={(id) => { const inv = invoices.find(i => i.id === id); if(inv) setters.setViewInvoiceModal({isOpen: true, invoice: inv}); }} onAddCustomerAndVehicle={(c, v) => { handleSaveItem(data.setCustomers, c); handleSaveItem(data.setVehicles, v); }} onSaveInvoice={(inv) => handleSaveItem(setInvoices, inv)} setConfirmation={setConfirmation} setViewedInvoice={(inv) => setters.setViewInvoiceModal({isOpen: true, invoice: inv})} />;
+            case 'rentals': return <RentalsView entity={businessEntities.find(e => e.id === selectedEntityId)!} onOpenRentalBooking={(b) => setters.setRentalBookingModal({isOpen: true, booking: b})} />;
+            case 'concierge': return <ConciergeView onCheckIn={(id) => { const job = jobs.find(j => j.id === id); if(job) setters.setCheckInJob(job); }} onOpenPurchaseOrder={(po) => setters.setViewPoModal({isOpen: true, po})} onGenerateInvoice={handleGenerateInvoice} onCollect={(id) => { const job = jobs.find(j => j.id === id); if(job) setters.setCheckOutJob(job); }} {...commonProps} />;
+            case 'communications': return <CommunicationsView />;
+            case 'absence': return <AbsenceView currentUser={currentUser} users={users} absenceRequests={absenceRequests} setAbsenceRequests={setAbsenceRequests} />;
+            case 'inquiries': return <InquiriesView onOpenInquiryModal={(inq) => setters.setInquiryModal({isOpen: true, inquiry: inq})} onConvert={() => {}} onViewEstimate={(est) => setters.setEstimateViewModal({isOpen: true, estimate: est})} onScheduleEstimate={(est, inquiryId) => setters.setScheduleJobFromEstimateModal({isOpen: true, estimate: est, inquiryId})} onOpenPurchaseOrder={(po) => setters.setViewPoModal({isOpen: true, po})} onEditEstimate={(est) => setters.setEstimateFormModal({isOpen: true, estimate: est})} />;
             default: return <DashboardView {...commonProps} onCheckIn={() => {}} onOpenInquiry={() => {}} />;
         }
     };
 
+    const modalActions = {
+        handleSaveItem,
+        setCustomers: data.setCustomers,
+        setVehicles: data.setVehicles,
+        handleSavePurchaseOrder: workshopActions.handleSavePurchaseOrder,
+        handleSaveEstimate: workshopActions.handleSaveEstimate,
+        handleApproveEstimate: workshopActions.handleApproveEstimate,
+        handleCustomerApproveEstimate,
+        handleCustomerDeclineEstimate,
+        updateLinkedInquiryStatus: workshopActions.updateLinkedInquiryStatus,
+        handleMarkJobAsAwaitingCollection
+    };
+
     return (
-        <MainLayout {...({ onOpenManagement: () => setIsManagementOpen(true) } as any)}>
+        <MainLayout onOpenManagement={() => setIsManagementOpen(true)}>
+            {appEnvironment === 'Development' && (
+                <div style={{ background: '#fef2f2', border: '2px dashed #dc2626', padding: '10px', margin: '10px', borderRadius: '8px', textAlign: 'center' }}>
+                    <div style={{ color: '#991b1b', fontWeight: 'bold', marginBottom: '5px' }}>🚨 FULL ECOSYSTEM REPAIR (isdevdb)</div>
+                    <button onClick={runFullDatabaseRepair} disabled={repairing} style={{ background: '#dc2626', color: 'white', border: 'none', padding: '8px 20px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
+                        {repairing ? 'Pushing Data...' : 'RE-SEED ALL COLLECTIONS'}
+                    </button>
+                    {repairStatus && <div style={{ fontSize: '11px', marginTop: '5px', color: '#7f1d1d' }}>{repairStatus}</div>}
+                </div>
+            )}
             {renderView()}
-            <AppModals 
-                modals={modalsState} 
-                setters={setters} 
-                actions={{
-                    handleSaveItem: workshopActions.handleSaveItem,
-                    setCustomers: data.setCustomers,
-                    setVehicles: data.setVehicles,
-                    handleSavePurchaseOrder: workshopActions.handleSavePurchaseOrder,
-                    handleSaveEstimate: workshopActions.handleSaveEstimate,
-                    handleApproveEstimate: workshopActions.handleApproveEstimate,
-                    updateLinkedInquiryStatus: workshopActions.updateLinkedInquiryStatus
-                }} 
-            />
-            <ManagementModal 
-                isOpen={isManagementOpen} 
-                onClose={() => setIsManagementOpen(false)} 
-                initialView={null}
-                selectedEntityId={selectedEntityId}
-                onViewJob={(id) => { setters.setSelectedJobId(id); setters.setIsEditJobModalOpen(true); }}
-                onViewEstimate={(est: any) => setters.setEstimateViewModal({isOpen: true, estimate: est})}
-                backupSchedule={context.backupSchedule}
-                setBackupSchedule={context.setBackupSchedule}
-                onManualBackup={() => {}}
-            />
+            <AppModals modals={modalsState} setters={setters} actions={modalActions} />
+            <ManagementModal isOpen={isManagementOpen} onClose={() => setIsManagementOpen(false)} initialView={managementInitialView} selectedEntityId={selectedEntityId} onViewJob={(id) => { setters.setSelectedJobId(id); setters.setIsEditJobModalOpen(true); }} onViewEstimate={(est) => setters.setEstimateViewModal({isOpen: true, estimate: est})} backupSchedule={backupSchedule} setBackupSchedule={setBackupSchedule} onManualBackup={handleManualBackup} />
         </MainLayout>
     );
 };

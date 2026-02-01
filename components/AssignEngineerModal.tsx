@@ -19,9 +19,12 @@ const AssignEngineerModal: React.FC<AssignEngineerModalProps> = ({ isOpen, engin
 
     useEffect(() => {
         if (isOpen) {
+            // If there's an initial engineer, use that.
             if (initialEngineerId && engineers.some(e => e.id === initialEngineerId)) {
                 setSelectedEngineerId(initialEngineerId);
-            } else if (engineers.length > 0) {
+            } 
+            // Otherwise, default to the first in the list.
+            else if (engineers.length > 0) {
                 setSelectedEngineerId(engineers[0].id);
             }
             setSelectedStartSegmentIndex(initialStartSegmentIndex);
@@ -36,12 +39,7 @@ const AssignEngineerModal: React.FC<AssignEngineerModalProps> = ({ isOpen, engin
             alert("Please select an engineer.");
             return;
         }
-        
-        // Timeout ensures the submit event cycle completes and releases 
-        // the browser's UI thread before the heavy parent state update runs.
-        setTimeout(() => {
-            onAssign(selectedEngineerId, selectedStartSegmentIndex);
-        }, 0);
+        onAssign(selectedEngineerId, selectedStartSegmentIndex);
     };
 
     return (

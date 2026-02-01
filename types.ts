@@ -1,3 +1,4 @@
+
 export type ViewType = 'dashboard' | 'dispatch' | 'workflow' | 'jobs' | 'estimates' | 'invoices' | 'purchaseOrders' | 'sales' | 'storage' | 'rentals' | 'concierge' | 'communications' | 'absence' | 'inquiries';
 
 export type UserRole = 'Admin' | 'Dispatcher' | 'Engineer' | 'Sales' | 'Garage Concierge';
@@ -10,6 +11,7 @@ export interface User {
     email?: string;
     password?: string;
     role: UserRole;
+    defaultEntityId?: string;
     holidayEntitlement: number;
     holidayApproverId?: string;
     engineerId?: string;
@@ -23,6 +25,16 @@ export interface Role {
     defaultAllowedViews: ViewType[];
 }
 
+export interface WorkingHoursConfig {
+    startHour: number; // e.g., 8 for 08:00
+    endHour: number;   // e.g., 17 for 17:00
+    isOpenSaturday: boolean;
+    saturdayStartHour?: number;
+    saturdayEndHour?: number;
+    isOpenSunday: boolean;
+    region: 'england-and-wales' | 'scotland' | 'northern-ireland';
+}
+
 export interface BusinessEntity {
     id: string;
     name: string;
@@ -32,6 +44,7 @@ export interface BusinessEntity {
     laborRate?: number;
     laborCostRate?: number;
     dailyCapacityHours?: number;
+    workingHours?: WorkingHoursConfig; // NEW: Dynamic working hours
     addressLine1?: string;
     addressLine2?: string;
     city?: string;
@@ -213,11 +226,6 @@ export interface JobSegment {
     engineerCompletedAt?: string;
     qcCompletedAt?: string;
     qcCompletedByUserId?: string;
-    // Multi-day & Linking Properties
-    isLinked?: boolean;       
-    isContinuation?: boolean; 
-    linkedTo?: string;        
-    name?: string;            
 }
 
 export type ChecklistItemStatus = 'ok' | 'attention' | 'urgent' | 'na';
@@ -262,7 +270,6 @@ export interface Job {
     vehicleId: string;
     customerId: string;
     description: string;
-    jobName?: string; 
     estimatedHours: number;
     scheduledDate: string | null;
     status: JobStatus;
@@ -341,7 +348,6 @@ export interface Lift {
     name: string;
     type: 'General' | 'MOT' | 'Trimming';
     color: string;
-    displayOrder?: number;
 }
 
 export interface RentalVehicle {
@@ -626,4 +632,24 @@ export interface EngineerChangeEvent {
 }
 
 export interface UnbillableTimeEvent {
+}
+// Find line 640 or the ConfirmationState interface
+export interface ConfirmationState {
+    isOpen: boolean;
+    title: string;
+    message: React.ReactNode; 
+    onConfirm?: () => void;    // <--- Added '?' to make it optional
+    onCancel?: () => void;
+    type?: "warning" | "success" | "danger" | "info";
+}
+
+export interface AppState {
+    user: User | null;
+    currentView: string;
+    selectedEntityId: string;
+    businessEntities: BusinessEntity[];
+    filteredBusinessEntities: BusinessEntity[]; // <--- Ensure this is exactly here
+    confirmation: ConfirmationState;
+    setConfirmation: (state: ConfirmationState) => void;
+    // ... include any other properties your AppContext uses
 }

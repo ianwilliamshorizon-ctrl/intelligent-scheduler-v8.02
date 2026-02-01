@@ -16,6 +16,7 @@
         originalWarn(...args);
       };
     </script>
+    <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -60,7 +61,19 @@
       }
       
       .timeline-column-over {
-        background-color: #eef2ff;
+        background-color: #eef2ff !important;
+        box-shadow: inset 0 0 0 2px #4f46e5;
+      }
+
+      /* CRITICAL FIX: Only disable pointer events on the ITEMS blocking the drop zone (the timeline grid). 
+         Do NOT disable pointer events on the source draggable item or generic text, otherwise the drag won't start. */
+      body.dragging-active .allocated-job-container,
+      body.dragging-active .grid-line {
+        pointer-events: none !important;
+      }
+      
+      body.dragging-active {
+        cursor: grabbing !important;
       }
 
       /* --- Animated Checkmark --- */
@@ -181,10 +194,13 @@
     "lucide-react": "https://aistudiocdn.com/lucide-react@^0.544.0",
     "react-dom/client": "https://aistudiocdn.com/react-dom@^19.2.0/client",
     "jspdf": "https://aistudiocdn.com/jspdf@^2.5.1",
+    "html2canvas": "https://aistudiocdn.com/html2canvas@^1.4.1",
     "firebase/app": "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js",
     "firebase/auth": "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js",
     "firebase/firestore": "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js",
-    "firebase/": "https://esm.sh/firebase@^12.7.0/"
+    "firebase/": "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js",
+    "vite": "https://esm.sh/vite@^5.1.4",
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^4.2.1"
   }
 }
 </script>

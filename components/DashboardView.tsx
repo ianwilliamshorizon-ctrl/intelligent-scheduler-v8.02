@@ -3,6 +3,7 @@ import * as T from '../types';
 import { useApp } from '../core/state/AppContext';
 import { useData } from '../core/state/DataContext';
 import { getRelativeDate, formatReadableDate } from '../core/utils/dateUtils';
+import { getCustomerDisplayName } from '../core/utils/customerUtils';
 import { Job, Inquiry } from '../types';
 import {
     LayoutGrid, BarChart, Users, FileText, Briefcase, Car, CalendarCheck, CheckCircle, Clock,
@@ -52,35 +53,30 @@ const AdminDispatcherDashboard: React.FC<{
     onOpenInquiry: (inquiry: Inquiry) => void;
     onOpenAssistant: (jobId: string) => void;
 }> = ({ onEditJob, onOpenInquiry, onOpenAssistant }) => {
-    // Safety: Fallback to empty arrays if context is missing
-    const data = useData() || {};
-    const { jobs = [], inquiries = [], vehicles = [], customers = [], roles = [] } = data;
-    
-    const app = useApp() || {};
-    const { selectedEntityId = 'all', setCurrentView, currentUser = {} } = app;
-    
-    const today = getRelativeDate ? getRelativeDate(0) : new Date().toISOString().split('T')[0];
+    const { jobs, inquiries, vehicles, customers, roles } = useData();
+    const { selectedEntityId, setCurrentView, currentUser } = useApp();
+    const today = getRelativeDate(0);
 
     const stats = useMemo(() => {
-        const entityJobs = jobs.filter((j: any) => selectedEntityId === 'all' || j.entityId === selectedEntityId);
-        const jobsToday = entityJobs.flatMap((j: any) => j.segments || []).filter((s: any) => s.date === today && s.allocatedLift).length;
-        const vehiclesOnSite = entityJobs.filter((j: any) => j.vehicleStatus === 'On Site').length;
-        const pendingQC = entityJobs.filter((j: any) => j.status === 'Pending QC').length;
-        const unallocatedJobs = entityJobs.filter((j: any) => (j.segments || []).some((s: any) => s.status === 'Unallocated')).length;
+        const entityJobs = jobs.filter(j => j.entityId === selectedEntityId);
+        const jobsToday = entityJobs.flatMap(j => j.segments || []).filter(s => s.date === today && s.allocatedLift).length;
+        const vehiclesOnSite = entityJobs.filter(j => j.vehicleStatus === 'On Site').length;
+        const pendingQC = entityJobs.filter(j => j.status === 'Pending QC').length;
+        const unallocatedJobs = entityJobs.filter(j => (j.segments || []).some(s => s.status === 'Unallocated')).length;
         return { jobsToday, vehiclesOnSite, pendingQC, unallocatedJobs };
     }, [jobs, selectedEntityId, today]);
 
     const openInquiries = useMemo(() => {
-        return inquiries.filter((i: any) => i.status === 'Open' && (selectedEntityId === 'all' || i.entityId === selectedEntityId))
-            .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        return inquiries.filter(i => i.status === 'Open' && (selectedEntityId === 'all' || i.entityId === selectedEntityId))
+            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
             .slice(0, 5);
     }, [inquiries, selectedEntityId]);
 
     const unallocatedJobList = useMemo(() => {
-        return jobs.filter((j: any) => (selectedEntityId === 'all' || j.entityId === selectedEntityId) && (j.segments || []).some((s: any) => s.status === 'Unallocated')).slice(0, 5);
+        return jobs.filter(j => (selectedEntityId === 'all' || j.entityId === selectedEntityId) && (j.segments || []).some(s => s.status === 'Unallocated')).slice(0, 5);
     }, [jobs, selectedEntityId]);
     
-    const userRoleDef = roles.find((r: any) => r.name === currentUser.role);
+    const userRoleDef = roles.find(r => r.name === currentUser.role);
     const effectiveAllowedViews = currentUser.allowedViews || userRoleDef?.defaultAllowedViews || [];
 
     const quickActions: { id: T.ViewType, label: string, icon: React.ElementType }[] = [
@@ -90,7 +86,7 @@ const AdminDispatcherDashboard: React.FC<{
     ];
 
     const allowedActions = quickActions.filter(action => 
-        currentUser.role === 'Admin' || currentUser.role === 'Administrator' || effectiveAllowedViews.includes(action.id)
+        currentUser.role === 'Admin' || effectiveAllowedViews.includes(action.id)
     );
 
     return (
@@ -114,7 +110,7 @@ const AdminDispatcherDashboard: React.FC<{
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6" style={{ minHeight: '400px' }}>
                 <Widget title="Open Inquiries" icon={MessageSquare}>
                     <div className="space-y-3">
-                        {openInquiries.length > 0 ? openInquiries.map((inq: any) => (
+                        {openInquiries.length > 0 ? openInquiries.map(inq => (
                              <div key={inq.id} className="p-3 bg-red-50 rounded-lg border border-red-200 cursor-pointer hover:bg-red-100" onClick={() => onOpenInquiry(inq)}>
                                  <div className="flex justify-between items-start">
                                      <div>
@@ -129,12 +125,12 @@ const AdminDispatcherDashboard: React.FC<{
                 </Widget>
                 <Widget title="Unallocated Job Queue" icon={Clock}>
                     <div className="space-y-3">
-                        {unallocatedJobList.length > 0 ? unallocatedJobList.map((job: any) => {
-                             const vehicle = vehicles.find((v: any) => v.id === job.vehicleId);
+                        {unallocatedJobList.length > 0 ? unallocatedJobList.map(job => {
+                             const vehicle = vehicles.find(v => v.id === job.vehicleId);
                              return (
                                 <div key={job.id} className="p-2 bg-gray-50 rounded-lg border cursor-pointer hover:bg-gray-100" onClick={() => onEditJob(job.id)}>
-                                    <p className="font-semibold text-sm">{vehicle?.registration || 'No Reg'} - {job.description}</p>
-                                    <p className="text-xs text-gray-600">{job.estimatedHours || 0} hours</p>
+                                    <p className="font-semibold text-sm">{vehicle?.registration} - {job.description}</p>
+                                    <p className="text-xs text-gray-600">{job.estimatedHours} hours</p>
                                 </div>
                              )
                         }) : <p className="text-sm text-gray-500 text-center py-8">No unallocated jobs.</p>}
@@ -154,18 +150,18 @@ const EngineerDashboard: React.FC<{
     onRestartWork: (jobId: string, segmentId: string) => void;
 }> = (props) => {
     const { onStartWork, onPause, onEngineerComplete, onEditJob, onOpenAssistant, onRestartWork } = props;
-    const { currentUser = {}, setCurrentView } = useApp() || {};
-    const { jobs = [], vehicles = [], lifts = [] } = useData() || {};
-    const today = getRelativeDate ? getRelativeDate(0) : new Date().toISOString().split('T')[0];
+    const { currentUser, setCurrentView } = useApp();
+    const { jobs, vehicles, lifts } = useData();
+    const today = getRelativeDate(0);
 
     const myJobsToday = useMemo(() => {
-        if (!currentUser?.engineerId) return [];
-        return jobs.flatMap((job: any) => 
-            (job.segments || []).map((seg: any) => ({ job, seg }))
-        ).filter(({ job, seg }: any) => 
+        if (!currentUser.engineerId) return [];
+        return jobs.flatMap(job => 
+            (job.segments || []).map(seg => ({ job, seg }))
+        ).filter(({ job, seg }) => 
             seg.engineerId === currentUser.engineerId && seg.date === today && seg.allocatedLift
-        ).sort((a: any, b: any) => (a.seg.scheduledStartSegment || 99) - (b.seg.scheduledStartSegment || 99));
-    }, [jobs, currentUser?.engineerId, today]);
+        ).sort((a,b) => (a.seg.scheduledStartSegment || 99) - (b.seg.scheduledStartSegment || 99));
+    }, [jobs, currentUser.engineerId, today]);
     
     return (
         <div className="space-y-6">
@@ -174,15 +170,15 @@ const EngineerDashboard: React.FC<{
             </div>
             <Widget title="My Jobs for Today" icon={CalendarCheck}>
                 <div className="space-y-4">
-                    {myJobsToday.length > 0 ? myJobsToday.map(({ job, seg }: any) => {
-                        const vehicle = vehicles.find((v: any) => v.id === job.vehicleId);
-                        const lift = lifts.find((l: any) => l.id === seg.allocatedLift);
+                    {myJobsToday.length > 0 ? myJobsToday.map(({ job, seg }) => {
+                        const vehicle = vehicles.find(v => v.id === job.vehicleId);
+                        const lift = lifts.find(l => l.id === seg.allocatedLift);
                         return (
                             <div key={seg.segmentId} className="p-3 bg-gray-50 rounded-lg border">
                                 <div className="flex justify-between items-start">
                                     <div>
-                                        <p className="font-bold">{vehicle?.registration || 'No Reg'} - {job.description}</p>
-                                        <p className="text-sm text-gray-600">On {lift?.name || 'Unassigned Lift'}</p>
+                                        <p className="font-bold">{vehicle?.registration} - {job.description}</p>
+                                        <p className="text-sm text-gray-600">On {lift?.name}</p>
                                     </div>
                                     <span className={`text-xs font-semibold px-2 py-1 rounded-full ${seg.status === 'In Progress' || seg.status === 'Paused' ? 'bg-yellow-100 text-yellow-800' : 'bg-blue-100 text-blue-800'}`}>{seg.status}</span>
                                 </div>
@@ -209,15 +205,15 @@ const ConciergeDashboard: React.FC<{
     onCheckIn: (jobId: string) => void;
     onEditJob: (jobId: string) => void;
 }> = ({ onCheckIn, onEditJob }) => {
-    const { jobs = [], vehicles = [] } = useData() || {};
-    const { selectedEntityId = 'all', setCurrentView } = useApp() || {};
-    const today = getRelativeDate ? getRelativeDate(0) : new Date().toISOString().split('T')[0];
+    const { jobs, vehicles } = useData();
+    const { selectedEntityId, setCurrentView } = useApp();
+    const today = getRelativeDate(0);
 
     const arrivalsToday = useMemo(() => {
-        return jobs.filter((j: any) => 
-            (selectedEntityId === 'all' || j.entityId === selectedEntityId) && 
+        return jobs.filter(j => 
+            j.entityId === selectedEntityId && 
             j.vehicleStatus === 'Awaiting Arrival' && 
-            (j.segments || []).some((s: any) => s.date === today)
+            (j.segments || []).some(s => s.date === today)
         );
     }, [jobs, selectedEntityId, today]);
 
@@ -228,12 +224,12 @@ const ConciergeDashboard: React.FC<{
             </div>
             <Widget title="Today's Arrivals" icon={LogIn}>
                 <div className="space-y-3">
-                    {arrivalsToday.length > 0 ? arrivalsToday.map((job: any) => {
-                        const vehicle = vehicles.find((v: any) => v.id === job.vehicleId);
+                    {arrivalsToday.length > 0 ? arrivalsToday.map(job => {
+                        const vehicle = vehicles.find(v => v.id === job.vehicleId);
                         return (
                             <div key={job.id} className="p-3 bg-gray-50 rounded-lg border flex justify-between items-center">
                                 <div>
-                                    <p className="font-bold">{vehicle?.registration || 'No Reg'} - {job.description}</p>
+                                    <p className="font-bold">{vehicle?.registration} - {job.description}</p>
                                     <p className="text-sm text-gray-600">{job.id}</p>
                                 </div>
                                 <div className="flex gap-2">
@@ -262,15 +258,9 @@ interface DashboardViewProps {
 }
 
 const DashboardView: React.FC<DashboardViewProps> = (props) => {
-    const app = useApp();
-    const data = useData();
-    
-    // Total initialization safety
-    if (!app || !data) return <div className="p-10 text-center">Loading Application State...</div>;
-
-    const { currentUser = {} } = app;
-    const { roles = [] } = data;
-    const today = getRelativeDate ? getRelativeDate(0) : new Date().toISOString().split('T')[0];
+    const { currentUser } = useApp();
+    const { roles } = useData();
+    const today = getRelativeDate(0);
 
     const getGreeting = () => {
         const hour = new Date().getHours();
@@ -281,9 +271,8 @@ const DashboardView: React.FC<DashboardViewProps> = (props) => {
 
     const renderDashboardByRole = () => {
         // Determine the base role type for the current user
-        const userRole = roles.find((r: any) => r.name === currentUser.role);
-        // Default to 'Dispatcher' if no role or match found
-        const baseRole = userRole ? userRole.baseRole : (currentUser.role === 'Administrator' ? 'Admin' : 'Dispatcher'); 
+        const userRole = roles.find(r => r.name === currentUser.role);
+        const baseRole = userRole ? userRole.baseRole : 'Dispatcher'; // Default fallback
 
         switch (baseRole) {
             case 'Admin':
@@ -296,16 +285,15 @@ const DashboardView: React.FC<DashboardViewProps> = (props) => {
             case 'Garage Concierge':
                 return <ConciergeDashboard onCheckIn={props.onCheckIn} onEditJob={props.onEditJob} />;
             default:
-                // If it's still a blank result, at least show the Admin dash so the screen isn't empty
-                return <AdminDispatcherDashboard onEditJob={props.onEditJob} onOpenInquiry={props.onOpenInquiry as any} onOpenAssistant={props.onOpenAssistant}/>;
+                return <p>No dashboard configured for your role.</p>;
         }
     };
 
     return (
         <div className="w-full h-full overflow-y-auto p-6 bg-gray-50">
             <header className="mb-6">
-                <h1 className="text-3xl font-bold text-gray-800">{getGreeting()}, {currentUser.name || 'User'}!</h1>
-                <p className="text-gray-500">{formatReadableDate ? formatReadableDate(today) : today}</p>
+                <h1 className="text-3xl font-bold text-gray-800">{getGreeting()}, {currentUser.name}!</h1>
+                <p className="text-gray-500">{formatReadableDate(today)}</p>
             </header>
             {renderDashboardByRole()}
         </div>

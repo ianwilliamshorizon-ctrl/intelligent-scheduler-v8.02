@@ -1,4 +1,3 @@
-
 import { Job, JobSegment } from '../../types';
 
 /**

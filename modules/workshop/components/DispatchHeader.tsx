@@ -1,6 +1,7 @@
+
 import React from 'react';
-import { ChevronLeft, ChevronRight, Clock, Plus } from 'lucide-react';
-import { formatDate, addDays, dateStringToDate, formatReadableDate } from '/home/user/brookspeed-v802/utils/dateUtils.ts'
+import { ChevronLeft, ChevronRight, Clock, PlusCircle } from 'lucide-react';
+import { formatReadableDate, formatDate, addDays } from '../../../core/utils/dateUtils';
 
 interface DispatchHeaderProps {
     viewMode: 'timeline' | 'week' | 'calendar';
@@ -8,12 +9,12 @@ interface DispatchHeaderProps {
     currentDate: string;
     setCurrentDate: (date: string) => void;
     weekStart: Date;
-    setWeekStart: (date: Date) => void;
+    setWeekStart: React.Dispatch<React.SetStateAction<Date>>;
     currentMonthDate: Date;
     handleMonthChange: (offset: number) => void;
     handleToday: () => void;
-    setIsDatePickerOpen: (open: boolean) => void;
-    setIsSmartCreateOpen: (open: boolean) => void;
+    setIsDatePickerOpen: (isOpen: boolean) => void;
+    setIsSmartCreateOpen: (isOpen: boolean) => void;
     setSmartCreateMode: (mode: 'job' | 'estimate') => void;
     setDefaultDateForModal: (date: string | null) => void;
 }
@@ -33,125 +34,49 @@ export const DispatchHeader: React.FC<DispatchHeaderProps> = ({
     setSmartCreateMode,
     setDefaultDateForModal
 }) => {
-
-    const handlePrevDay = () => {
-        const d = dateStringToDate(currentDate);
-        setCurrentDate(formatDate(addDays(d, -1)));
-    };
-
-    const handleNextDay = () => {
-        const d = dateStringToDate(currentDate);
-        setCurrentDate(formatDate(addDays(d, 1)));
-    };
-
-    const handlePrevWeek = () => setWeekStart(addDays(weekStart, -7));
-    const handleNextWeek = () => setWeekStart(addDays(weekStart, 7));
+    const handlePrevDay = () => setCurrentDate(formatDate(addDays(new Date(currentDate), -1)));
+    const handleNextDay = () => setCurrentDate(formatDate(addDays(new Date(currentDate), 1)));
 
     return (
-        <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between shadow-sm">
-            <div className="flex items-center space-x-6">
-                <div className="flex bg-gray-100 p-1 rounded-lg border border-gray-200">
-                    <button
-                        type="button"
-                        onClick={() => setViewMode('timeline')}
-                        className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
-                            viewMode === 'timeline' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500 hover:text-gray-700'
-                        }`}
-                    >
-                        Day
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => setViewMode('week')}
-                        className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
-                            viewMode === 'week' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500 hover:text-gray-700'
-                        }`}
-                    >
-                        Week
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => setViewMode('calendar')}
-                        className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
-                            viewMode === 'calendar' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500 hover:text-gray-700'
-                        }`}
-                    >
-                        Month
-                    </button>
+        <header className="bg-white border-b p-4 flex justify-between items-center shadow-sm z-30">
+            <div className="flex items-center gap-4">
+                 <div className="flex bg-gray-200 rounded-lg p-1">
+                    <button onClick={() => setViewMode('timeline')} className={`px-4 py-2 rounded-md font-semibold text-sm transition ${viewMode === 'timeline' ? 'bg-white shadow text-indigo-700' : 'text-gray-600 hover:text-gray-800'}`}>Day Timeline</button>
+                    <button onClick={() => setViewMode('week')} className={`px-4 py-2 rounded-md font-semibold text-sm transition ${viewMode === 'week' ? 'bg-white shadow text-indigo-700' : 'text-gray-600 hover:text-gray-800'}`}>Week View</button>
+                    <button onClick={() => setViewMode('calendar')} className={`px-4 py-2 rounded-md font-semibold text-sm transition ${viewMode === 'calendar' ? 'bg-white shadow text-indigo-700' : 'text-gray-600 hover:text-gray-800'}`}>Month Calendar</button>
                 </div>
 
-                <div className="flex items-center space-x-3">
+                <div className="flex items-center gap-2">
                     {viewMode === 'timeline' && (
-                        <div className="flex items-center space-x-2">
-                            <button type="button" onClick={handlePrevDay} className="p-1.5 hover:bg-gray-100 rounded-full border border-gray-200 transition-colors">
-                                <ChevronLeft size={18} className="text-gray-600" />
+                         <>
+                            <button onClick={handlePrevDay} className="p-2 rounded-full hover:bg-gray-100"><ChevronLeft size={20}/></button>
+                            <button onClick={() => setIsDatePickerOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg font-semibold text-gray-700">
+                                <Clock size={18} />
+                                <span>{formatReadableDate(currentDate)}</span>
                             </button>
-                            <button 
-                                type="button"
-                                onClick={() => setIsDatePickerOpen(true)}
-                                className="flex items-center space-x-2 px-4 py-1.5 hover:bg-gray-50 rounded-md border border-gray-200 transition-colors group"
-                            >
-                                <Clock size={16} className="text-blue-500 group-hover:scale-110 transition-transform" />
-                                <span className="font-semibold text-gray-800 tracking-tight">
-                                    {formatReadableDate(currentDate)}
-                                </span>
-                            </button>
-                            <button type="button" onClick={handleNextDay} className="p-1.5 hover:bg-gray-100 rounded-full border border-gray-200 transition-colors">
-                                <ChevronRight size={18} className="text-gray-600" />
-                            </button>
-                        </div>
+                            <button onClick={handleNextDay} className="p-2 rounded-full hover:bg-gray-100"><ChevronRight size={20}/></button>
+                         </>
                     )}
-
-                    {viewMode === 'week' && (
-                        <div className="flex items-center space-x-2">
-                            <button type="button" onClick={handlePrevWeek} className="p-1.5 hover:bg-gray-100 rounded-full border border-gray-200">
-                                <ChevronLeft size={18} className="text-gray-600" />
-                            </button>
-                            <span className="font-semibold text-gray-800 min-w-[180px] text-center">
-                                w/c {formatReadableDate(formatDate(weekStart))}
-                            </span>
-                            <button type="button" onClick={handleNextWeek} className="p-1.5 hover:bg-gray-100 rounded-full border border-gray-200">
-                                <ChevronRight size={18} className="text-gray-600" />
-                            </button>
-                        </div>
+                     {viewMode === 'week' && (
+                         <>
+                            <button onClick={() => setWeekStart(addDays(weekStart, -7))} className="p-2 rounded-full hover:bg-gray-100"><ChevronLeft size={20}/></button>
+                            <span className="font-semibold px-2">Week of {formatReadableDate(formatDate(weekStart))}</span>
+                            <button onClick={() => setWeekStart(addDays(weekStart, 7))} className="p-2 rounded-full hover:bg-gray-100"><ChevronRight size={20}/></button>
+                         </>
                     )}
-
-                    {viewMode === 'calendar' && (
-                        <div className="flex items-center space-x-2">
-                            <button type="button" onClick={() => handleMonthChange(-1)} className="p-1.5 hover:bg-gray-100 rounded-full border border-gray-200">
-                                <ChevronLeft size={18} className="text-gray-600" />
-                            </button>
-                            <span className="font-semibold text-gray-800 min-w-[140px] text-center capitalize">
-                                {currentMonthDate.toLocaleString('default', { month: 'long', year: 'numeric' })}
-                            </span>
-                            <button type="button" onClick={() => handleMonthChange(1)} className="p-1.5 hover:bg-gray-100 rounded-full border border-gray-200">
-                                <ChevronRight size={18} className="text-gray-600" />
-                            </button>
-                        </div>
+                     {viewMode === 'calendar' && (
+                         <>
+                            <button onClick={() => handleMonthChange(-1)} className="p-2 rounded-full hover:bg-gray-100"><ChevronLeft size={20}/></button>
+                            <span className="font-semibold px-2">{currentMonthDate.toLocaleString('default', { month: 'long', year: 'numeric', timeZone: 'UTC' })}</span>
+                            <button onClick={() => handleMonthChange(1)} className="p-2 rounded-full hover:bg-gray-100"><ChevronRight size={20}/></button>
+                         </>
                     )}
-                    
-                    <button 
-                        type="button"
-                        onClick={handleToday}
-                        className="text-xs font-bold uppercase tracking-wider text-blue-600 hover:text-blue-700 px-3 py-1.5 bg-blue-50 rounded-md border border-blue-100 transition-colors"
-                    >
-                        Today
-                    </button>
+                    <button onClick={handleToday} className="text-sm font-semibold text-indigo-600 hover:bg-indigo-50 px-3 py-1.5 rounded">Today</button>
                 </div>
             </div>
-
-            <div className="flex items-center space-x-3">
-                <button
-                    type="button"
-                    onClick={() => {
-                        setDefaultDateForModal(currentDate);
-                        setSmartCreateMode('job');
-                        setIsSmartCreateOpen(true);
-                    }}
-                    className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg font-bold shadow-md hover:shadow-lg transition-all active:scale-95"
-                >
-                    <Plus size={20} strokeWidth={3} />
-                    <span>New Booking</span>
+            <div className="flex items-center gap-2">
+                <button onClick={() => { setIsSmartCreateOpen(true); setSmartCreateMode('job'); setDefaultDateForModal(currentDate); }} className="flex items-center gap-2 py-2 px-4 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition">
+                    <PlusCircle size={20}/> Smart Create Job
                 </button>
             </div>
         </header>

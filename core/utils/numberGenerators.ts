@@ -1,4 +1,3 @@
-
 import { Estimate, Invoice, RentalBooking, Job, PurchaseOrder, Purchase } from '../../types';
 
 /**

@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+
+import React, { useState, useMemo, useEffect } from 'react';
 import { useApp } from '../../core/state/AppContext';
 import { useData } from '../../core/state/DataContext';
 import { Job, JobSegment, Lift, PurchaseOrder } from '../../types';
@@ -10,12 +11,12 @@ import { BookingCalendarView } from '../../components/BookingCalendarView';
 import AssignEngineerModal from '../../components/AssignEngineerModal';
 import { TimelineView } from '../../components/dispatch/TimelineView';
 import { WeeklyView } from '../../components/dispatch/WeeklyView';
+import { fetchBankHolidays } from '../../services/bankHolidayService';
 
 // New Refactored Hooks & Components
 import { useDispatchFilters } from './hooks/useDispatchFilters';
 import { useDispatchDragDrop } from './hooks/useDispatchDragDrop';
 import { DispatchHeader } from './components/DispatchHeader';
-import { updateDocument } from '../../core/db';
 
 interface DispatchViewProps {
     setDefaultDateForModal: (date: string | null) => void;
@@ -29,21 +30,10 @@ interface DispatchViewProps {
     onReassignEngineer: (jobId: string, segmentId: string, newEngineerId: string) => void;
     onCheckIn: (jobId: string) => void;
     onOpenAssistant: (jobId: string) => void;
+    onUnscheduleSegment: (jobId: string, segmentId: string) => void;
 }
 
-const DispatchView: React.FC<DispatchViewProps> = ({ 
-    setDefaultDateForModal, 
-    setIsSmartCreateOpen, 
-    setSmartCreateMode, 
-    setSelectedJobId, 
-    setIsEditModalOpen, 
-    onOpenPurchaseOrder, 
-    onPause, 
-    onRestart, 
-    onReassignEngineer, 
-    onCheckIn, 
-    onOpenAssistant,
-}) => {
+const DispatchView: React.FC<DispatchViewProps> = ({ setDefaultDateForModal, setIsSmartCreateOpen, setSmartCreateMode, setSelectedJobId, setIsEditModalOpen, onOpenPurchaseOrder, onPause, onRestart, onReassignEngineer, onCheckIn, onOpenAssistant, onUnscheduleSegment }) => {
     const { jobs, setJobs, lifts, engineers, customers, vehicles, purchaseOrders, absenceRequests, businessEntities } = useData();
     const { selectedEntityId } = useApp();
     
@@ -62,84 +52,43 @@ const DispatchView: React.FC<DispatchViewProps> = ({
     const [assignModalData, setAssignModalData] = useState<{ job: Job, segment: JobSegment, lift: Lift, startSegmentIndex: number, currentEngineerId?: string | null } | null>(null);
     const [reassignModalData, setReassignModalData] = useState<{ jobId: string; segmentId: string; liftName: string; startSegmentIndex: number; currentEngineerId?: string | null; } | null>(null);
 
+    // -- Bank Holidays State --
+    const [bankHolidays, setBankHolidays] = useState<Map<string, string[]>>(new Map());
+
+    useEffect(() => {
+        fetchBankHolidays().then(setBankHolidays);
+    }, []);
+
     // -- Derived Data via Hooks --
     const { 
         entityEngineers, 
-        entityLifts,
         unallocatedJobs, 
         allocatedSegmentsByLift 
     } = useDispatchFilters({
         jobs, lifts, engineers, selectedEntityId, currentDate, unallocatedDateFilter, showOnSiteOnly
     });
-    
-    const onUnscheduleSegment = async (jobId: string, segmentId: string) => {
-        const job = jobs.find(j => j.id === jobId);
-        if (!job) return;
 
-        const newSegments = job.segments.map(s =>
-            s.segmentId === segmentId
-                ? { ...s, status: 'Unallocated' as const, date: getRelativeDate(0), allocatedLift: null, scheduledStartSegment: null, engineerId: null }
-                : s
-        );
-
-        const updatedStatus = calculateJobStatus(newSegments);
-
-        try {
-            await updateDocument('brooks_jobs', { id: jobId, segments: newSegments, status: updatedStatus });
-            console.log('Successfully unscheduled segment and updated job');
-        } catch (error) {
-            console.error("Error unscheduling segment: ", error);
-        }
-    };
-
+    // -- Drag & Drop Logic via Hook --
     const {
         handleDragStart,
         handleTimelineDragOver,
         handleTimelineDrop,
         handleUnallocatedDrop,
         handleDragEnd,
-        checkCollisionOnDate,
-        dropResultRef,
-        handleUnallocatedDragOver,
-        handleUnallocatedDragLeave,
+        confirmJobSchedule,
+        dropResultRef
     } = useDispatchDragDrop({
-        jobs, 
-        lifts: entityLifts, 
-        currentDate, 
-        setAssignModalData,
-        onUnscheduleSegment
+        jobs, lifts, businessEntities, currentDate, setJobs, setAssignModalData, bankHolidays
     });
 
-    const handleAssignConfirm = async (engineerId: string, startSegmentIndex: number) => {
+    const handleAssignConfirm = (engineerId: string, startSegmentIndex: number) => {
         if (!assignModalData) return;
         const { job, segment, lift } = assignModalData;
 
-        const durationInSegments = segment.duration / SEGMENT_DURATION_MINUTES;
-         if (checkCollisionOnDate(currentDate, lift.id, startSegmentIndex, durationInSegments, segment.segmentId)) {
-            alert("Slot is no longer available.");
-            return;
-        }
-
-        const newSegments = job.segments.map(s => 
-            s.segmentId === segment.segmentId ? { 
-                ...s, 
-                status: 'Allocated' as const, 
-                allocatedLift: lift.id, 
-                scheduledStartSegment: startSegmentIndex, 
-                date: currentDate,
-                engineerId: engineerId
-            } : s
-        );
-
-        const updatedStatus = calculateJobStatus(newSegments);
-
-        try {
-            await updateDocument('brooks_jobs', { id: job.id, segments: newSegments, status: updatedStatus });
-            console.log("Job segment updated successfully in DB");
-            setAssignModalData(null);
-        } catch (error) {
-            console.error("Error updating job segment: ", error);
-        }
+        // Use the centralized logic to flow segments (handling holidays/weekends)
+        confirmJobSchedule(job.id, segment.segmentId, lift.id, engineerId, startSegmentIndex);
+        
+        setAssignModalData(null);
     };
 
     const handleMonthChange = (offset: number) => {
@@ -159,7 +108,7 @@ const DispatchView: React.FC<DispatchViewProps> = ({
 
     const absencesByDate = useMemo(() => {
         const map = new Map<string, number>();
-        (absenceRequests || []).forEach(req => {
+        absenceRequests.forEach(req => {
             if (req.status === 'Approved' || req.status === 'Pending') {
                  let curr = dateStringToDate(req.startDate);
                  const end = dateStringToDate(req.endDate);
@@ -180,7 +129,7 @@ const DispatchView: React.FC<DispatchViewProps> = ({
     const handleReassignClick = (jobId: string, segmentId: string) => {
         const job = jobs.find(j => j.id === jobId);
         const segment = job?.segments.find(s => s.segmentId === segmentId);
-        const lift = entityLifts.find(l => l.id === segment?.allocatedLift);
+        const lift = lifts.find(l => l.id === segment?.allocatedLift);
 
         if (job && segment && lift && segment.scheduledStartSegment !== null) {
             setReassignModalData({
@@ -195,6 +144,7 @@ const DispatchView: React.FC<DispatchViewProps> = ({
     
     const handleReassignConfirm = (engineerId: string) => {
         if (!reassignModalData) return;
+        
         onReassignEngineer(reassignModalData.jobId, reassignModalData.segmentId, engineerId);
         setReassignModalData(null);
     };
@@ -219,17 +169,16 @@ const DispatchView: React.FC<DispatchViewProps> = ({
             
             {viewMode === 'timeline' && (
                 <TimelineView
-                    lifts={entityLifts} 
                     onDragStart={handleDragStart}
                     onDragEnd={handleDragEnd}
                     onTimelineDragEnter={(e) => { e.preventDefault(); }}
                     onTimelineDragLeave={(e) => { e.currentTarget.classList.remove('timeline-column-over'); }}
                     onTimelineDragOver={handleTimelineDragOver}
                     onTimelineDrop={handleTimelineDrop}
-                    onDragOverUnallocated={handleUnallocatedDragOver}
+                    onDragOverUnallocated={(e) => { e.preventDefault(); dropResultRef.current = { type: 'UNALLOCATED' }; e.currentTarget.classList.add('is-over'); }}
                     onDropOnUnallocated={handleUnallocatedDrop}
-                    onDragEnterUnallocated={handleUnallocatedDragOver}
-                    onDragLeaveUnallocated={handleUnallocatedDragLeave}
+                    onDragEnterUnallocated={(e) => e.currentTarget.classList.add('is-over')}
+                    onDragLeaveUnallocated={(e) => e.currentTarget.classList.remove('is-over')}
                     unallocatedJobs={unallocatedJobs}
                     allocatedSegmentsByLift={allocatedSegmentsByLift}
                     unallocatedDateFilter={unallocatedDateFilter}
@@ -254,7 +203,7 @@ const DispatchView: React.FC<DispatchViewProps> = ({
                         vehicles={vehicles}
                         customers={customers}
                         onAddJob={(date) => { setDefaultDateForModal(date); setIsSmartCreateOpen(true); setSmartCreateMode('job'); }}
-                        onDragStart={() => {}} 
+                        onDragStart={() => {}} // No drag in month view
                         maxDailyCapacityHours={dailyCapacity}
                         absencesByDate={absencesByDate}
                         onDayClick={(date) => { setCurrentDate(date); setViewMode('timeline'); }}
