@@ -9,13 +9,21 @@ interface AddSaleVehicleModalProps {
     isOpen: boolean;
     onClose: () => void;
     onSave: (saleVehicle: SaleVehicle) => void;
-    selectedEntityId: string; // Updated to match AppModals.tsx
+    entityId: string; // Change 'selectedEntityId' to 'entityId'
     vehicles: Vehicle[];
     customers: Customer[];
     onAddCustomerAndVehicle: (customer: Customer, vehicle: Vehicle) => void;
 }
 
-const AddSaleVehicleModal: React.FC<AddSaleVehicleModalProps> = ({ isOpen, onClose, onSave, selectedEntityId, vehicles, customers, onAddCustomerAndVehicle }) => {
+const AddSaleVehicleModal: React.FC<AddSaleVehicleModalProps> = ({ 
+    isOpen, 
+    onClose, 
+    onSave, 
+    entityId, // Change this
+    vehicles, 
+    customers, 
+    onAddCustomerAndVehicle 
+}) => {
     const [step, setStep] = useState<'lookup' | 'details'>('lookup');
     const [registration, setRegistration] = useState('');
     const [vehicle, setVehicle] = useState<Vehicle | null>(null);
@@ -84,7 +92,7 @@ const AddSaleVehicleModal: React.FC<AddSaleVehicleModalProps> = ({ isOpen, onClo
         const versionId = crypto.randomUUID();
         const newSaleVehicle: SaleVehicle = {
             id: crypto.randomUUID(),
-            entityId: selectedEntityId, // Updated to use selectedEntityId
+            entityId: entityId, // Update this to match the new variable name
             vehicleId: vehicle.id,
             status: 'For Sale',
             saleType,

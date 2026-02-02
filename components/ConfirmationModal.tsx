@@ -4,13 +4,14 @@ import AnimatedCheckmark from './AnimatedCheckmark';
 
 interface ConfirmationModalProps {
     isOpen: boolean;
+    onClose: () => void;
+    onConfirm: () => void;
     title: string;
     message: React.ReactNode;
-    onClose: () => void;
-    onConfirm?: () => void;
+    // Update this line below:
+    type?: 'success' | 'warning' | 'danger' | 'info'; 
     confirmText?: string;
     cancelText?: string;
-    type?: 'success' | 'warning';
 }
 
 const ConfirmationModal: React.FC<ConfirmationModalProps> = ({ isOpen, title, message, onClose, onConfirm, confirmText = 'Confirm', cancelText = 'Cancel', type = 'success' }) => {

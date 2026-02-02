@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { Job, Vehicle, Customer, RentalBooking } from '../../../types';
-import { Car, CarFront, Wrench, ChevronUp, ChevronDown } from 'lucide-react';
+import { Car, CarFront, Wrench, ChevronUp, ChevronDown, User, ExternalLink } from 'lucide-react';
 
 const Section = ({ title, icon: Icon, children, defaultOpen = true }: { title: string, icon: React.ElementType, children?: React.ReactNode, defaultOpen?: boolean }) => {
     const [isOpen, setIsOpen] = useState(defaultOpen);
@@ -27,18 +27,59 @@ interface JobDetailsTabProps {
     onOpenRentalBooking: (booking: RentalBooking) => void;
     onOpenConditionReport: (booking: RentalBooking, mode: 'checkOut' | 'checkIn') => void;
     onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => void;
+    onViewCustomer?: (customerId: string) => void;
+    onViewVehicle?: (vehicleId: string) => void;
 }
 
 export const JobDetailsTab: React.FC<JobDetailsTabProps> = ({ 
     editableJob, vehicle, customer, isReadOnly, linkedBooking, rentalVehicleRegistration,
-    onBookCourtesyCar, onOpenRentalBooking, onOpenConditionReport, onChange 
+    onBookCourtesyCar, onOpenRentalBooking, onOpenConditionReport, onChange, onViewCustomer, onViewVehicle 
 }) => {
     return (
         <div className="space-y-4">
             <Section title="Customer & Vehicle" icon={Car}>
-                <div className="text-sm space-y-2">
-                    <p><strong>Customer:</strong> {customer ? `${customer.forename} ${customer.surname}` : 'Unknown Customer'}</p>
-                    <p><strong>Vehicle:</strong> {vehicle ? `${vehicle.make} ${vehicle.model} (${vehicle.registration})` : 'Unknown Vehicle'}</p>
+                <div className="text-sm space-y-3">
+                    <div>
+                        <div className="flex items-center justify-between mb-1">
+                            <span className="font-semibold text-gray-600">Customer:</span>
+                            {customer && onViewCustomer && (
+                                <button 
+                                    onClick={() => onViewCustomer(customer.id)}
+                                    className="text-indigo-600 hover:text-indigo-800 text-xs flex items-center gap-1 font-semibold"
+                                >
+                                    <ExternalLink size={12}/> View 360° Profile
+                                </button>
+                            )}
+                        </div>
+                        {customer ? (
+                            <div className="p-2 bg-gray-50 rounded border border-gray-100 font-medium">
+                                {customer.forename} {customer.surname}
+                            </div>
+                        ) : (
+                            <p className="text-gray-500 italic">Unknown Customer</p>
+                        )}
+                    </div>
+
+                    <div>
+                        <div className="flex items-center justify-between mb-1">
+                            <span className="font-semibold text-gray-600">Vehicle:</span>
+                            {vehicle && onViewVehicle && (
+                                <button 
+                                    onClick={() => onViewVehicle(vehicle.id)}
+                                    className="text-indigo-600 hover:text-indigo-800 text-xs flex items-center gap-1 font-semibold"
+                                >
+                                    <ExternalLink size={12}/> View History
+                                </button>
+                            )}
+                        </div>
+                        {vehicle ? (
+                             <div className="p-2 bg-gray-50 rounded border border-gray-100 font-medium">
+                                {vehicle.make} {vehicle.model} <span className="font-mono bg-gray-200 px-1 rounded text-xs ml-1">{vehicle.registration}</span>
+                            </div>
+                        ) : (
+                            <p className="text-gray-500 italic">Unknown Vehicle</p>
+                        )}
+                    </div>
                 </div>
             </Section>
             <Section title="Courtesy Car / Rental" icon={CarFront}>

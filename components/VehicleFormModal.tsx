@@ -3,14 +3,14 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Vehicle, Customer, Job, Estimate, Invoice } from '../types';
 import FormModal from './FormModal';
 import { lookupVehicleByVRM } from '../services/vehicleLookupService';
-import { Loader2, Search, Briefcase, FileText, Edit2, History, Receipt, CalendarPlus, Eye } from 'lucide-react';
+import { Loader2, Search, Briefcase, FileText, History, Receipt, CalendarPlus, Eye, ArrowRightLeft, ShieldCheck, AlertCircle } from 'lucide-react';
 import SearchableSelect from './SearchableSelect';
 import { useAuditLogger } from '../core/hooks/useAuditLogger';
 import VehicleImageManager from './VehicleImageManager';
 import { useApp } from '../core/state/AppContext';
 import * as T from '../types';
 import { formatCurrency } from '../utils/formatUtils';
-import { formatDate, addDays, dateStringToDate } from '../core/utils/dateUtils';
+import { formatDate, dateStringToDate } from '../core/utils/dateUtils';
 
 const Section = ({ title, icon: Icon, children, defaultOpen = true }: { title: string, icon: React.ElementType, children?: React.ReactNode, defaultOpen?: boolean }) => {
     const [isOpen, setIsOpen] = useState(defaultOpen);
@@ -44,7 +44,7 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({ isOpen, onClose, on
     const [lookupError, setLookupError] = useState('');
     const { logEvent } = useAuditLogger();
     const { currentUser } = useApp();
-    const [isEditingReg, setIsEditingReg] = useState(false);
+    const [isTransferMode, setIsTransferMode] = useState(false);
 
     useEffect(() => {
         const initialData = vehicle || {
@@ -55,7 +55,8 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({ isOpen, onClose, on
             transmissionType: 'Manual',
         };
         setFormData(initialData);
-        setIsEditingReg(!vehicle?.id);
+        // If it's a new vehicle (no ID), allow editing immediately. If existing, lock it until "Transfer" is clicked.
+        setIsTransferMode(!vehicle?.id);
     }, [vehicle, isOpen]);
 
     // Calculate totals helpers
@@ -178,9 +179,9 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({ isOpen, onClose, on
                                     name="registration" 
                                     value={formData.registration || ''} 
                                     onChange={handleChange} 
-                                    className="w-full p-2 border rounded disabled:bg-gray-200 pr-10" 
+                                    className={`w-full p-2 border rounded pr-10 font-bold uppercase tracking-wider ${isTransferMode ? 'bg-white border-indigo-500 ring-1 ring-indigo-500' : 'bg-gray-100 text-gray-600'}`}
                                     required 
-                                    disabled={!isEditingReg}
+                                    disabled={!isTransferMode}
                                 />
                                 <button
                                     type="button"
@@ -192,13 +193,13 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({ isOpen, onClose, on
                                     {isLookingUp ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
                                 </button>
                             </div>
-                            {!isEditingReg && (
+                            {!isTransferMode && vehicle?.id && (
                                 <button
                                     type="button"
-                                    onClick={() => setIsEditingReg(true)}
-                                    className="text-xs text-yellow-700 underline mt-1"
+                                    onClick={() => setIsTransferMode(true)}
+                                    className="text-xs text-indigo-600 font-semibold hover:text-indigo-800 mt-1 flex items-center gap-1"
                                 >
-                                    Manually Edit Reg
+                                    <ArrowRightLeft size={12}/> Plate Transfer
                                 </button>
                             )}
                         </div>
@@ -213,6 +214,26 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({ isOpen, onClose, on
 
                         {lookupError && <p className="text-sm text-red-600 md:col-span-3 -mt-2">{lookupError}</p>}
                         
+                        {isTransferMode && vehicle?.registration && (
+                            <div className="md:col-span-3 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-start gap-2">
+                                <AlertCircle size={16} className="text-blue-600 mt-0.5 flex-shrink-0" />
+                                <div className="text-xs text-blue-800">
+                                    <p className="font-bold mb-1">Plate Transfer Mode</p>
+                                    <p>Changing the registration will automatically archive <strong>{vehicle.registration}</strong> to the vehicle's history.</p>
+                                    <p className="mt-1">All service history, jobs, and invoices will remain linked to this vehicle record via the VIN.</p>
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="relative md:col-span-3">
+                             <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
+                                VIN / Chassis Number 
+                                <span className="text-xs text-gray-500 font-normal ml-1">(Permanent Link)</span>
+                                <ShieldCheck size={14} className="text-green-600"/>
+                             </label>
+                            <input name="vin" value={formData.vin || ''} onChange={handleChange} className="w-full p-2 border rounded bg-gray-50 font-mono text-sm" placeholder="Enter full VIN..." />
+                        </div>
+                        
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Colour</label>
                             <input name="colour" value={formData.colour || ''} onChange={handleChange} className="w-full p-2 border rounded" />
@@ -225,11 +246,7 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({ isOpen, onClose, on
                             <label className="block text-sm font-medium text-gray-700 mb-1">Fuel Type</label>
                             <input name="fuelType" value={formData.fuelType || ''} onChange={handleChange} className="w-full p-2 border rounded" />
                         </div>
-
-                        <div className="relative">
-                            <label className="block text-sm font-medium text-gray-700 mb-1">VIN</label>
-                            <input name="vin" value={formData.vin || ''} onChange={handleChange} className="w-full p-2 border rounded" />
-                        </div>
+                        
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Engine No.</label>
                             <input name="engineNumber" value={formData.engineNumber || ''} onChange={handleChange} className="w-full p-2 border rounded" />
@@ -287,6 +304,10 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({ isOpen, onClose, on
                     {vehicle?.id && jobs && estimates && invoices && (
                         <Section title="Vehicle History" icon={Briefcase}>
                             <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2">
+                                <div className="p-2 bg-gray-100 rounded text-xs text-gray-600 mb-2 flex items-center gap-2">
+                                    <ShieldCheck size={12} className="text-green-600"/>
+                                    <span>History linked to VIN: <span className="font-mono font-bold text-gray-800">{formData.vin || 'N/A'}</span></span>
+                                </div>
                                 {vehicleJobs.length === 0 && vehicleEstimates.length === 0 && vehicleInvoices.length === 0 && (
                                     <p className="text-sm text-gray-500">No history found for this vehicle.</p>
                                 )}
@@ -380,8 +401,8 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({ isOpen, onClose, on
                                 {[...vehicle.previousRegistrations].sort((a, b) => new Date(b.changedAt).getTime() - new Date(a.changedAt).getTime()).map((reg, index) => (
                                     <div key={index} className="p-2 border rounded-lg bg-gray-50/70 text-xs">
                                         <div className="flex justify-between items-center">
-                                            <p className="font-mono font-semibold">{reg.registration}</p>
-                                            <p className="text-gray-500">{new Date(reg.changedAt).toLocaleDateString()}</p>
+                                            <p className="font-mono font-semibold text-gray-700">{reg.registration}</p>
+                                            <p className="text-gray-500 italic">Ended: {new Date(reg.changedAt).toLocaleDateString()}</p>
                                         </div>
                                     </div>
                                 ))}

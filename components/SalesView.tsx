@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState } from 'react';
 import { useData } from '../core/state/DataContext';
 import { BusinessEntity, SaleVehicle, Vehicle, Customer, Prospect } from '../types';
@@ -97,13 +98,17 @@ const SalesView: React.FC<SalesViewProps> = ({ entity, onManageSaleVehicle, onAd
                      <div className="flex items-center gap-2">
                         <User size={14} className="text-gray-500" />
                         <span className="font-semibold w-24">Owner:</span>
-                        <span>{owner?.forename} {owner?.surname}</span>
+                        <button onClick={(e) => { e.stopPropagation(); if(owner) onViewCustomer(owner.id); }} className="hover:underline text-indigo-600">
+                             {owner?.forename} {owner?.surname}
+                        </button>
                     </div>
                     {isSold && buyer && (
                          <div className="flex items-center gap-2">
                             <User size={14} className="text-gray-500" />
                             <span className="font-semibold w-24">Buyer:</span>
-                            <span>{buyer?.forename} {buyer?.surname}</span>
+                            <button onClick={(e) => { e.stopPropagation(); onViewCustomer(buyer.id); }} className="hover:underline text-indigo-600">
+                                {buyer?.forename} {buyer?.surname}
+                            </button>
                         </div>
                     )}
                      {isSold && (
@@ -126,13 +131,8 @@ const SalesView: React.FC<SalesViewProps> = ({ entity, onManageSaleVehicle, onAd
                             <span>{saleVehicle.keyNumber}</span>
                         </div>
                     ) : <div />}
-                    <button 
-                        onClick={(e) => { 
-                            e.stopPropagation(); 
-                            onManageSaleVehicle(saleVehicle); 
-                        }}
-                        className="flex items-center justify-center gap-1.5 py-2 px-4 bg-indigo-100 text-indigo-800 font-semibold rounded-lg hover:bg-indigo-200">
-                        <Edit size={16}/> Manage Sale
+                    <button className="flex items-center justify-center gap-1.5 py-2 px-4 bg-indigo-100 text-indigo-800 font-semibold rounded-lg hover:bg-indigo-200">
+                        <MoreHorizontal size={16}/> Manage Sale
                     </button>
                 </div>
             </div>

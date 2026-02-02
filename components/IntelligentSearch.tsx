@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Loader2, User, Car, X } from 'lucide-react';
+import { Search, Loader2, User, Car, X, ShieldCheck } from 'lucide-react';
 import { Customer, Vehicle } from '../types';
-import { parseSearchQuery } from '../services/geminiService';
+import { parseSearchQuery } from '../core/services/geminiService';
 import { useData } from '../core/state/DataContext';
 
 interface IntelligentSearchProps {
@@ -30,9 +30,11 @@ const IntelligentSearch: React.FC<IntelligentSearchProps> = ({ onResultClick }) 
         try {
             const { searchTerm, searchType } = await parseSearchQuery(query);
             let searchResults: (Customer | Vehicle)[] = [];
+            const lowerTerm = searchTerm.toLowerCase();
+            const lowerQuery = query.toLowerCase();
             
+            // Customer Search
             if (searchType === 'customer' || searchType === 'unknown') {
-                const lowerTerm = searchTerm.toLowerCase();
                 searchResults.push(...customers.filter(c =>
                     `${c.forename} ${c.surname}`.toLowerCase().includes(lowerTerm) ||
                     (c.companyName && c.companyName.toLowerCase().includes(lowerTerm)) ||
@@ -42,13 +44,29 @@ const IntelligentSearch: React.FC<IntelligentSearchProps> = ({ onResultClick }) 
                 ));
             }
             
+            // Vehicle Search (Reg + VIN + Make/Model)
             if (searchType === 'vehicle' || searchType === 'unknown') {
-                const lowerTerm = searchTerm.toLowerCase().replace(/\s/g, '');
+                const termNoSpace = lowerTerm.replace(/\s/g, '');
+                
                 searchResults.push(...vehicles.filter(v =>
-                    v.registration.toLowerCase().replace(/\s/g, '').includes(lowerTerm) ||
-                    v.make.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                    v.model.toLowerCase().includes(searchTerm.toLowerCase())
+                    // Registration Match
+                    v.registration.toLowerCase().replace(/\s/g, '').includes(termNoSpace) ||
+                    // VIN Match (Robust)
+                    (v.vin && v.vin.toLowerCase().includes(lowerTerm)) ||
+                    // Make/Model Match
+                    v.make.toLowerCase().includes(lowerTerm) ||
+                    v.model.toLowerCase().includes(lowerTerm) ||
+                    // Previous Registration Match
+                    (v.previousRegistrations && v.previousRegistrations.some(pr => pr.registration.toLowerCase().replace(/\s/g, '').includes(termNoSpace)))
                 ));
+            }
+
+            // Fallback: If AI fails or returns limited results, do a broad string match on the raw query
+            if (searchResults.length === 0) {
+                 searchResults.push(...vehicles.filter(v => 
+                     v.vin?.toLowerCase().includes(lowerQuery) || 
+                     v.registration.toLowerCase().includes(lowerQuery)
+                 ));
             }
 
             // Remove duplicates
@@ -104,7 +122,7 @@ const IntelligentSearch: React.FC<IntelligentSearchProps> = ({ onResultClick }) 
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     onFocus={() => query && results.length > 0 && setIsDropdownOpen(true)}
-                    placeholder="Intelligent Search (Name, Reg, Phone...)"
+                    placeholder="Search (Name, Reg, VIN, Phone...)"
                     className="w-full pl-9 p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
                 />
                 {isLoading && <Loader2 className="absolute right-10 top-1/2 -translate-y-1/2 text-gray-400 animate-spin" size={16}/>}
@@ -120,12 +138,19 @@ const IntelligentSearch: React.FC<IntelligentSearchProps> = ({ onResultClick }) 
                     {results.length > 0 ? (
                         <ul className="max-h-80 overflow-y-auto">
                             {results.map(item => (
-                                <li key={item.id} onClick={() => handleResultClick(item)} className="p-3 flex items-center gap-3 cursor-pointer hover:bg-indigo-50">
+                                <li key={item.id} onClick={() => handleResultClick(item)} className="p-3 flex items-center gap-3 cursor-pointer hover:bg-indigo-50 border-b last:border-0">
                                     {'registration' in item ? (
                                         <>
                                             <Car size={18} className="text-indigo-600"/>
-                                            <div>
-                                                <p className="font-semibold">{(item as Vehicle).registration}</p>
+                                            <div className="flex-grow">
+                                                <div className="flex justify-between">
+                                                    <p className="font-semibold">{(item as Vehicle).registration}</p>
+                                                    {(item as Vehicle).vin && (item as Vehicle).vin?.toLowerCase().includes(query.toLowerCase()) && (
+                                                        <span className="text-[10px] bg-green-100 text-green-800 px-1 rounded flex items-center gap-1">
+                                                            <ShieldCheck size={10}/> Match by VIN
+                                                        </span>
+                                                    )}
+                                                </div>
                                                 <p className="text-xs text-gray-500">{(item as Vehicle).make} {(item as Vehicle).model}</p>
                                             </div>
                                         </>

@@ -22,7 +22,9 @@ const EditJobModal: React.FC<{
     onOpenConditionReport: (booking: RentalBooking, mode: 'checkOut' | 'checkIn') => void;
     onRaiseSupplementaryEstimate: (job: Job) => void;
     onViewEstimate: (estimate: Estimate) => void;
-}> = ({ isOpen, onClose, selectedJobId, onOpenPurchaseOrder, rentalBookings, onOpenRentalBooking, onOpenConditionReport, onRaiseSupplementaryEstimate, onViewEstimate }) => {
+    onViewCustomer: (customerId: string) => void;
+    onViewVehicle: (vehicleId: string) => void;
+}> = ({ isOpen, onClose, selectedJobId, onOpenPurchaseOrder, rentalBookings, onOpenRentalBooking, onOpenConditionReport, onRaiseSupplementaryEstimate, onViewEstimate, onViewCustomer, onViewVehicle }) => {
     const {
         jobs, setJobs, vehicles, customers, engineers, estimates, setEstimates, purchaseOrders, setPurchaseOrders, suppliers, parts, servicePackages, taxRates, businessEntities
     } = useData();
@@ -434,6 +436,8 @@ const EditJobModal: React.FC<{
                             onOpenRentalBooking={onOpenRentalBooking}
                             onOpenConditionReport={onOpenConditionReport}
                             onChange={handleChange}
+                            onViewCustomer={onViewCustomer}
+                            onViewVehicle={onViewVehicle}
                         />
                          <div className="border rounded-lg bg-white shadow-sm p-4">
                             <h3 className="text-md font-bold mb-2 flex items-center gap-2"><DollarSign size={16}/> Billing</h3>

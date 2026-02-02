@@ -638,9 +638,11 @@ export interface ConfirmationState {
     isOpen: boolean;
     title: string;
     message: React.ReactNode; 
-    onConfirm?: () => void;    // <--- Added '?' to make it optional
+    onConfirm?: () => void;
     onCancel?: () => void;
     type?: "warning" | "success" | "danger" | "info";
+    confirmText?: string; // Add this
+    cancelText?: string;  // Add this
 }
 
 export interface AppState {
