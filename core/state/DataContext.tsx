@@ -1,18 +1,19 @@
-import React, { createContext, useContext, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import * as T from '../../types';
 import { usePersistentState } from './usePersistentState';
 import {
-    getInitialJobs, getInitialVehicles, getInitialCustomers, getInitialEngineers,
-    getInitialEstimates, getInitialInvoices, getInitialPurchaseOrders,
-    getInitialSuppliers, getInitialParts, getInitialServicePackages, getInitialTaxRates,
+    getInitialEngineers, getInitialSuppliers, getInitialServicePackages, getInitialTaxRates,
     getInitialBusinessEntities, getInitialLifts, getInitialSaleVehicles,
     getInitialSaleOverheadPackages, getInitialStorageBookings, getInitialRentalVehicles,
     getInitialRentalBookings, getInitialStorageLocations, getInitialBatteryChargers,
     getInitialNominalCodes, getInitialNominalCodeRules, getInitialPurchases,
     getInitialAbsenceRequests, getInitialUsers, getInitialProspects, getInitialInquiries,
-    getInitialReminders, getInitialAuditLog, getInitialRoles, getInitialInspectionDiagrams
+    getInitialReminders, getInitialAuditLog, getInitialRoles, getInitialInspectionDiagrams,
+    getInitialParts, getInitialJobs, getInitialCustomers, getInitialVehicles,
+    getInitialEstimates, getInitialInvoices
 } from '../data/initialData';
 import { saveImage } from '../../utils/imageStore';
+import { getWhere, getByIds } from '../db/index'; 
 
 interface DataContextType {
     jobs: T.Job[]; setJobs: React.Dispatch<React.SetStateAction<T.Job[]>>;
@@ -45,20 +46,26 @@ interface DataContextType {
     taxRates: T.TaxRate[]; setTaxRates: React.Dispatch<React.SetStateAction<T.TaxRate[]>>;
     roles: T.Role[]; setRoles: React.Dispatch<React.SetStateAction<T.Role[]>>;
     inspectionDiagrams: T.InspectionDiagram[]; setInspectionDiagrams: React.Dispatch<React.SetStateAction<T.InspectionDiagram[]>>;
+    isLoading: boolean;
+    refreshActiveData: () => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
 export const DataContextProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    // --- Initialize Persistent State ---
-    const [jobs, setJobs] = usePersistentState<T.Job[]>('brooks_jobs', getInitialJobs);
-    const [vehicles, setVehicles] = usePersistentState<T.Vehicle[]>('brooks_vehicles', getInitialVehicles);
-    const [customers, setCustomers] = usePersistentState<T.Customer[]>('brooks_customers', getInitialCustomers);
+    const [isLoading, setIsLoading] = useState(true);
+
+    // Dynamic Hot Data Path
+    const [jobs, setJobs] = useState<T.Job[]>([]);
+    const [vehicles, setVehicles] = useState<T.Vehicle[]>([]);
+    const [customers, setCustomers] = useState<T.Customer[]>([]);
+    const [parts, setParts] = useState<T.Part[]>([]); 
+    const [purchaseOrders, setPurchaseOrders] = useState<T.PurchaseOrder[]>([]);
+
+    // Persistent Collections
     const [estimates, setEstimates] = usePersistentState<T.Estimate[]>('brooks_estimates', getInitialEstimates);
     const [invoices, setInvoices] = usePersistentState<T.Invoice[]>('brooks_invoices', getInitialInvoices);
-    const [purchaseOrders, setPurchaseOrders] = usePersistentState<T.PurchaseOrder[]>('brooks_purchaseOrders', getInitialPurchaseOrders);
     const [purchases, setPurchases] = usePersistentState<T.Purchase[]>('brooks_purchases', getInitialPurchases);
-    const [parts, setParts] = usePersistentState<T.Part[]>('brooks_parts', getInitialParts);
     const [servicePackages, setServicePackages] = usePersistentState<T.ServicePackage[]>('brooks_servicePackages', getInitialServicePackages);
     const [suppliers, setSuppliers] = usePersistentState<T.Supplier[]>('brooks_suppliers', getInitialSuppliers);
     const [engineers, setEngineers] = usePersistentState<T.Engineer[]>('brooks_engineers', getInitialEngineers);
@@ -82,9 +89,59 @@ export const DataContextProvider: React.FC<{ children: React.ReactNode }> = ({ c
     const [roles, setRoles] = usePersistentState<T.Role[]>('brooks_roles', getInitialRoles);
     const [inspectionDiagrams, setInspectionDiagrams] = usePersistentState<T.InspectionDiagram[]>('brooks_inspectionDiagrams', getInitialInspectionDiagrams);
 
-    // Migration Logic for Images (One-time run to move data URLs from JSON to IndexedDB)
+    const refreshActiveData = async () => {
+        setIsLoading(true);
+        try {
+            console.log("⚡ Booting Hot Data Path...");
+            
+            // Explicitly included 'Unallocated' and 'Inquiry'
+            const activeStatuses = [
+                'Unallocated', 
+                'Inquiry', 
+                'Draft', 
+                'Estimate', 
+                'Authorized', 
+                'In Progress', 
+                'Pending Parts', 
+                'Scheduled'
+            ];
+            
+            // 1. Fetch the jobs
+            const activeJobs = await getWhere<T.Job>('brooks_jobs', 'status', 'in', activeStatuses);
+            
+            // 2. Map dependencies
+            const customerIds = [...new Set(activeJobs.map(j => j.customerId).filter(Boolean))];
+            const vehicleIds = [...new Set(activeJobs.map(j => j.vehicleId).filter(Boolean))];
+
+            // 3. Parallel fetch of required context data
+            const [activeCustomers, activeVehicles, activePOs] = await Promise.all([
+                getByIds<T.Customer>('brooks_customers', customerIds),
+                getByIds<T.Vehicle>('brooks_vehicles', vehicleIds),
+                getWhere<T.PurchaseOrder>('brooks_purchaseOrders', 'status', 'in', ['Draft', 'Ordered', 'Partially Received', 'Received'])
+            ]);
+
+            setJobs(activeJobs);
+            setCustomers(activeCustomers);
+            setVehicles(activeVehicles);
+            setPurchaseOrders(activePOs);
+            setParts([]); 
+
+            console.log(`✅ Ready: ${activeJobs.length} Jobs loaded (including Unallocated).`);
+        } catch (error) {
+            console.error("Data Boot Error:", error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        refreshActiveData();
+    }, []);
+
+    // Migration logic for local image storage
     useEffect(() => {
         const migrate = async () => {
+            if (vehicles.length === 0) return;
             let vChanged = false;
             const updatedVehicles = JSON.parse(JSON.stringify(vehicles));
             for (const vehicle of updatedVehicles) {
@@ -101,11 +158,8 @@ export const DataContextProvider: React.FC<{ children: React.ReactNode }> = ({ c
             if (vChanged) setVehicles(updatedVehicles);
         };
         migrate();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [vehicles.length]);
 
-    // --- SORTED LIFTS ---
-    // We sort the lifts here so all consumers see them in 1, 2, 3... 7 order.
     const sortedLifts = useMemo(() => {
         return [...lifts].sort((a, b) => 
             a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
@@ -113,46 +167,26 @@ export const DataContextProvider: React.FC<{ children: React.ReactNode }> = ({ c
     }, [lifts]);
 
     const value = useMemo(() => ({
-        jobs, setJobs,
-        vehicles, setVehicles,
-        customers, setCustomers,
-        estimates, setEstimates,
-        invoices, setInvoices,
-        purchaseOrders, setPurchaseOrders,
-        purchases, setPurchases,
-        parts, setParts,
-        servicePackages, setServicePackages,
-        suppliers, setSuppliers,
-        engineers, setEngineers,
-        lifts: sortedLifts, // Use the sorted version
-        setLifts,
-        rentalVehicles, setRentalVehicles,
-        rentalBookings, setRentalBookings,
-        saleVehicles, setSaleVehicles,
-        saleOverheadPackages, setSaleOverheadPackages,
-        prospects, setProspects,
-        storageBookings, setStorageBookings,
-        storageLocations, setStorageLocations,
-        batteryChargers, setBatteryChargers,
-        nominalCodes, setNominalCodes,
-        nominalCodeRules, setNominalCodeRules,
-        absenceRequests, setAbsenceRequests,
-        inquiries, setInquiries,
-        reminders, setReminders,
-        auditLog, setAuditLog,
-        businessEntities, setBusinessEntities,
-        taxRates, setTaxRates,
-        roles, setRoles,
-        inspectionDiagrams, setInspectionDiagrams
-    }), [jobs, vehicles, customers, estimates, invoices, purchaseOrders, purchases, parts, servicePackages, suppliers, engineers, sortedLifts, rentalVehicles, rentalBookings, saleVehicles, saleOverheadPackages, prospects, storageBookings, storageLocations, batteryChargers, nominalCodes, nominalCodeRules, absenceRequests, inquiries, reminders, auditLog, businessEntities, taxRates, roles, inspectionDiagrams]);
+        jobs, setJobs, vehicles, setVehicles, customers, setCustomers,
+        estimates, setEstimates, invoices, setInvoices, purchaseOrders, setPurchaseOrders,
+        purchases, setPurchases, parts, setParts, servicePackages, setServicePackages,
+        suppliers, setSuppliers, engineers, setEngineers, lifts: sortedLifts, setLifts,
+        rentalVehicles, setRentalVehicles, rentalBookings, setRentalBookings,
+        saleVehicles, setSaleVehicles, saleOverheadPackages, setSaleOverheadPackages,
+        prospects, setProspects, storageBookings, setStorageBookings,
+        storageLocations, setStorageLocations, batteryChargers, setBatteryChargers,
+        nominalCodes, setNominalCodes, nominalCodeRules, setNominalCodeRules,
+        absenceRequests, setAbsenceRequests, inquiries, setInquiries,
+        reminders, setReminders, auditLog, setAuditLog, businessEntities, setBusinessEntities,
+        taxRates, setTaxRates, roles, setRoles, inspectionDiagrams, setInspectionDiagrams,
+        isLoading, refreshActiveData
+    }), [jobs, vehicles, customers, estimates, invoices, purchaseOrders, purchases, parts, servicePackages, suppliers, engineers, sortedLifts, rentalVehicles, rentalBookings, saleVehicles, saleOverheadPackages, prospects, storageBookings, storageLocations, batteryChargers, nominalCodes, nominalCodeRules, absenceRequests, inquiries, reminders, auditLog, businessEntities, taxRates, roles, inspectionDiagrams, isLoading]);
 
     return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
 };
 
 export const useData = (): DataContextType => {
     const context = useContext(DataContext);
-    if (!context) {
-        throw new Error('useData must be used within a DataContextProvider');
-    }
+    if (!context) throw new Error('useData must be used within a DataContextProvider');
     return context;
 };

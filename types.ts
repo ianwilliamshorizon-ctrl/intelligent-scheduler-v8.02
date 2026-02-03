@@ -1,4 +1,4 @@
-
+import React from 'react';
 export type ViewType = 'dashboard' | 'dispatch' | 'workflow' | 'jobs' | 'estimates' | 'invoices' | 'purchaseOrders' | 'sales' | 'storage' | 'rentals' | 'concierge' | 'communications' | 'absence' | 'inquiries';
 
 export type UserRole = 'Admin' | 'Dispatcher' | 'Engineer' | 'Sales' | 'Garage Concierge';

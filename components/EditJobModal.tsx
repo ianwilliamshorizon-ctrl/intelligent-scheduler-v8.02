@@ -1,9 +1,8 @@
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useData } from '../core/state/DataContext';
 import { useApp } from '../core/state/AppContext';
 import { Job, Vehicle, Customer, Estimate, TaxRate, EstimateLineItem, Part, ServicePackage, RentalBooking, PurchaseOrder, ChecklistSection, TyreCheckData, VehicleDamagePoint } from '../types';
-import { X, Save, Car, CarFront, Wrench, DollarSign, Loader2, CheckCircle, Trash2, Plus } from 'lucide-react';
+import { X, Save, Car, CarFront, Wrench, DollarSign, Loader2, CheckCircle, Trash2, Plus, Search, User, CreditCard } from 'lucide-react';
 import { formatDate, addDays } from '../core/utils/dateUtils';
 import { generateEstimateNumber, generatePurchaseOrderId } from '../core/utils/numberGenerators';
 import { JobDetailsTab } from './jobs/tabs/JobDetailsTab';
@@ -11,6 +10,7 @@ import { JobEstimateTab } from './jobs/tabs/JobEstimateTab';
 import { JobInspectionTab } from './jobs/tabs/JobInspectionTab';
 import { useDebouncedSave } from '../core/hooks/useDebouncedSave';
 import { initialChecklistData, initialTyreCheckData } from '../core/data/initialChecklistData';
+import { getWhere } from '../core/db'; // Direct DB access for high-speed queries
 
 const EditJobModal: React.FC<{
     isOpen: boolean;
@@ -26,7 +26,7 @@ const EditJobModal: React.FC<{
     onViewVehicle: (vehicleId: string) => void;
 }> = ({ isOpen, onClose, selectedJobId, onOpenPurchaseOrder, rentalBookings, onOpenRentalBooking, onOpenConditionReport, onRaiseSupplementaryEstimate, onViewEstimate, onViewCustomer, onViewVehicle }) => {
     const {
-        jobs, setJobs, vehicles, customers, engineers, estimates, setEstimates, purchaseOrders, setPurchaseOrders, suppliers, parts, servicePackages, taxRates, businessEntities
+        jobs, setJobs, vehicles, customers, engineers, estimates, setEstimates, purchaseOrders, setPurchaseOrders, suppliers, servicePackages, taxRates, businessEntities
     } = useData();
     const { currentUser } = useApp();
 
@@ -36,8 +36,22 @@ const EditJobModal: React.FC<{
     const [editableEstimate, setEditableEstimate] = useState<Estimate | null>(null);
     const [newObservation, setNewObservation] = useState('');
     const [activeTab, setActiveTab] = useState<'estimate' | 'inspection' | 'notes' | 'segments'>('estimate');
+    
+    // Performance Optimized Search State
     const [partSearchTerm, setPartSearchTerm] = useState('');
+    const [filteredParts, setFilteredParts] = useState<Part[]>([]);
     const [activePartSearch, setActivePartSearch] = useState<string | null>(null);
+
+    // New: Customer & Vehicle Search State
+    const [customerSearchTerm, setCustomerSearchTerm] = useState('');
+    const [filteredCustomers, setFilteredCustomers] = useState<Customer[]>([]);
+    const [isSearchingCustomers, setIsSearchingCustomers] = useState(false);
+
+    const [vehicleSearchTerm, setVehicleSearchTerm] = useState('');
+    const [filteredVehicles, setFilteredVehicles] = useState<Vehicle[]>([]);
+    const [isSearchingVehicles, setIsSearchingVehicles] = useState(false);
+
+    const [isSearchingParts, setIsSearchingParts] = useState(false);
 
     // Auto-Sync Hook
     const { isSaving, lastSaved } = useDebouncedSave('brooks_jobs', editableJob, 1000);
@@ -57,11 +71,72 @@ const EditJobModal: React.FC<{
     const taxRatesMap = useMemo(() => new Map(taxRates.map(t => [t.id, t])), [taxRates]);
     const standardTaxRateId = useMemo(() => taxRates.find(t => t.code === 'T1')?.id, [taxRates]);
 
-    // Calculate Supplementary Estimates (Linked to Job but NOT the main estimate)
     const supplementaryEstimates = useMemo(() => {
         if (!job) return [];
         return estimates.filter(e => e.jobId === job.id && e.id !== job.estimateId);
     }, [estimates, job]);
+
+    // ASYNC SEARCH FOR CUSTOMERS
+    useEffect(() => {
+        if (!customerSearchTerm || customerSearchTerm.length < 2) {
+            setFilteredCustomers([]);
+            return;
+        }
+        setIsSearchingCustomers(true);
+        const timer = setTimeout(async () => {
+            try {
+                const results = await getWhere<Customer>('brooks_customers', 'surname', '>=', customerSearchTerm);
+                setFilteredCustomers(results.filter(c => 
+                    c.surname.toLowerCase().includes(customerSearchTerm.toLowerCase()) || 
+                    c.forename.toLowerCase().includes(customerSearchTerm.toLowerCase()) ||
+                    c.phone?.includes(customerSearchTerm)
+                ).slice(0, 10));
+            } catch (err) { console.error(err); } 
+            finally { setIsSearchingCustomers(false); }
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [customerSearchTerm]);
+
+    // ASYNC SEARCH FOR VEHICLES
+    useEffect(() => {
+        if (!vehicleSearchTerm || vehicleSearchTerm.length < 2) {
+            setFilteredVehicles([]);
+            return;
+        }
+        setIsSearchingVehicles(true);
+        const timer = setTimeout(async () => {
+            try {
+                const results = await getWhere<Vehicle>('brooks_vehicles', 'registration', '>=', vehicleSearchTerm.toUpperCase());
+                setFilteredVehicles(results.filter(v => 
+                    v.registration.toUpperCase().includes(vehicleSearchTerm.toUpperCase()) || 
+                    v.model.toLowerCase().includes(vehicleSearchTerm.toLowerCase())
+                ).slice(0, 10));
+            } catch (err) { console.error(err); } 
+            finally { setIsSearchingVehicles(false); }
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [vehicleSearchTerm]);
+
+    // ASYNC SEARCH FOR PARTS
+    useEffect(() => {
+        if (!partSearchTerm || partSearchTerm.length < 2 || !activePartSearch) {
+            setFilteredParts([]);
+            return;
+        }
+        setIsSearchingParts(true);
+        const timer = setTimeout(async () => {
+            try {
+                const searchUpper = partSearchTerm.toUpperCase();
+                const matches = await getWhere<Part>('brooks_parts', 'partNumber', '>=', searchUpper);
+                setFilteredParts(matches.filter(p => 
+                    p.partNumber.toUpperCase().includes(searchUpper) || 
+                    p.description.toLowerCase().includes(partSearchTerm.toLowerCase())
+                ).slice(0, 15));
+            } catch (err) { console.error(err); } 
+            finally { setIsSearchingParts(false); }
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [partSearchTerm, activePartSearch]);
 
     useEffect(() => {
         if (job) {
@@ -96,6 +171,18 @@ const EditJobModal: React.FC<{
         const { name, value } = e.target;
         setEditableJob(prev => prev ? { ...prev, [name]: value } : null);
     };
+
+    const handleSelectCustomer = (c: Customer) => {
+        setEditableJob(prev => prev ? { ...prev, customerId: c.id } : null);
+        setCustomerSearchTerm('');
+        setFilteredCustomers([]);
+    };
+
+    const handleSelectVehicle = (v: Vehicle) => {
+        setEditableJob(prev => prev ? { ...prev, vehicleId: v.id } : null);
+        setVehicleSearchTerm('');
+        setFilteredVehicles([]);
+    };
     
     const handleAddObservation = () => {
         if (!newObservation.trim()) return;
@@ -113,7 +200,7 @@ const EditJobModal: React.FC<{
             const entityShortCode = entity?.shortCode || 'UNK';
             
             const newEstimate: Estimate = {
-                id: `est_${Date.now()}_temp`, // temp id
+                id: `est_${Date.now()}_temp`,
                 estimateNumber: generateEstimateNumber(estimates, entityShortCode),
                 entityId: editableJob.entityId,
                 customerId: editableJob.customerId,
@@ -132,7 +219,15 @@ const EditJobModal: React.FC<{
         return editableEstimate;
     }, [editableEstimate, editableJob, businessEntities, estimates, currentUser.id]);
 
-    const handleLineItemChange = useCallback((id: string, field: keyof EstimateLineItem, value: any) => { setEditableEstimate(prev => prev ? ({ ...prev, lineItems: (prev.lineItems || []).map(item => item.id === id ? { ...item, [field]: ['quantity', 'unitPrice', 'unitCost'].includes(field as string) ? parseFloat(value) || 0 : value } : item) }) : null); }, []);
+    const handleLineItemChange = useCallback((id: string, field: keyof EstimateLineItem, value: any) => { 
+        setEditableEstimate(prev => prev ? ({ 
+            ...prev, 
+            lineItems: (prev.lineItems || []).map(item => item.id === id ? { 
+                ...item, 
+                [field]: ['quantity', 'unitPrice', 'unitCost'].includes(field as string) ? parseFloat(value) || 0 : value 
+            } : item) 
+        }) : null); 
+    }, []);
 
     const entityLaborRate = useMemo(() => businessEntities.find(e => e.id === editableJob?.entityId)?.laborRate, [businessEntities, editableJob?.entityId]);
     const entityLaborCostRate = useMemo(() => businessEntities.find(e => e.id === editableJob?.entityId)?.laborCostRate, [businessEntities, editableJob?.entityId]);
@@ -140,7 +235,15 @@ const EditJobModal: React.FC<{
     const addLineItem = (isLabor: boolean) => {
         const currentEstimate = handleCreateEstimateIfNeeded();
         if (!currentEstimate) return;
-        const newItem: EstimateLineItem = { id: crypto.randomUUID(), description: '', quantity: 1, unitPrice: isLabor ? (entityLaborRate || 0) : 0, unitCost: isLabor ? (entityLaborCostRate || 0) : 0, isLabor, taxCodeId: standardTaxRateId };
+        const newItem: EstimateLineItem = { 
+            id: crypto.randomUUID(), 
+            description: '', 
+            quantity: 1, 
+            unitPrice: isLabor ? (entityLaborRate || 0) : 0, 
+            unitCost: isLabor ? (entityLaborCostRate || 0) : 0, 
+            isLabor, 
+            taxCodeId: standardTaxRateId 
+        };
         setEditableEstimate(prev => prev ? ({ ...prev, lineItems: [...(prev.lineItems || []), newItem] }) : null);
     };
 
@@ -152,14 +255,30 @@ const EditJobModal: React.FC<{
     
         const newItems: EstimateLineItem[] = [];
         const totalCost = (pkg.costItems || []).reduce((sum, item) => sum + ((item.unitCost || 0) * item.quantity), 0);
+        
         const mainPackageItem: EstimateLineItem = {
-            id: crypto.randomUUID(), description: pkg.name, quantity: 1, unitPrice: pkg.totalPrice, unitCost: totalCost, isLabor: false, 
-            taxCodeId: standardTaxRateId, servicePackageId: pkg.id, servicePackageName: pkg.name, isPackageComponent: false,
+            id: crypto.randomUUID(), 
+            description: pkg.name, 
+            quantity: 1, 
+            unitPrice: pkg.totalPrice, 
+            unitCost: totalCost, 
+            isLabor: false, 
+            taxCodeId: standardTaxRateId, 
+            servicePackageId: pkg.id, 
+            servicePackageName: pkg.name, 
+            isPackageComponent: false,
         };
         newItems.push(mainPackageItem);
     
         if (pkg.costItems) {
-            pkg.costItems.forEach(costItem => newItems.push({ ...costItem, id: crypto.randomUUID(), unitPrice: 0, servicePackageId: pkg.id, servicePackageName: pkg.name, isPackageComponent: true }));
+            pkg.costItems.forEach(costItem => newItems.push({ 
+                ...costItem, 
+                id: crypto.randomUUID(), 
+                unitPrice: 0, 
+                servicePackageId: pkg.id, 
+                servicePackageName: pkg.name, 
+                isPackageComponent: true 
+            }));
         }
         setEditableEstimate(prev => prev ? ({ ...prev, lineItems: [...(prev.lineItems || []), ...newItems] }) : null);
     };
@@ -175,14 +294,21 @@ const EditJobModal: React.FC<{
         });
     }, []);
 
-    const filteredParts = useMemo(() => {
-        if (!partSearchTerm) return [];
-        const lowerSearch = partSearchTerm.toLowerCase();
-        return parts.filter(p => p.partNumber.toLowerCase().includes(lowerSearch) || p.description.toLowerCase().includes(lowerSearch)).slice(0, 10);
-    }, [partSearchTerm, parts]);
-
     const handleSelectPart = (lineItemId: string, part: Part) => {
-        setEditableEstimate(prev => prev ? ({ ...prev, lineItems: (prev.lineItems || []).map(item => item.id === lineItemId ? { ...item, partNumber: part.partNumber, description: part.description, unitPrice: part.salePrice, unitCost: part.costPrice, partId: part.id, taxCodeId: part.taxCodeId || item.taxCodeId, fromStock: part.stockQuantity > 0 } : item) }) : null);
+        setEditableEstimate(prev => prev ? ({ 
+            ...prev, 
+            lineItems: (prev.lineItems || []).map(item => item.id === lineItemId ? { 
+                ...item, 
+                partNumber: part.partNumber, 
+                description: part.description, 
+                unitPrice: part.salePrice, 
+                unitCost: part.costPrice, 
+                partId: part.id, 
+                taxCodeId: part.taxCodeId || item.taxCodeId, 
+                fromStock: part.stockQuantity > 0,
+                supplierId: part.defaultSupplierId 
+            } : item) 
+        }) : null);
         setActivePartSearch(null);
         setPartSearchTerm('');
     };
@@ -198,13 +324,18 @@ const EditJobModal: React.FC<{
         if (editableEstimate) {
             const originalEstimate = estimates.find(e => e.id === editableEstimate.id);
             const originalLineItemIds = new Set((originalEstimate?.lineItems || []).map(item => item.id));
-            const newPartItems = (editableEstimate.lineItems || []).filter(item => !item.isLabor && item.partId && !originalLineItemIds.has(item.id));
+            
+            const newPartItems = (editableEstimate.lineItems || []).filter(item => 
+                !item.isLabor && 
+                item.partId && 
+                !originalLineItemIds.has(item.id) && 
+                !item.fromStock
+            );
     
             if (newPartItems.length > 0) {
                 const currentJobPOs = purchaseOrders.filter(po => (jobToSave.purchaseOrderIds || []).includes(po.id));
                 const partsBySupplier = newPartItems.reduce((acc, item) => {
-                    const part = parts.find(p => p.id === item.partId);
-                    const supplierId = part?.defaultSupplierId || 'no_supplier';
+                    const supplierId = (item as any).supplierId || 'no_supplier';
                     if (!acc[supplierId]) acc[supplierId] = [];
                     acc[supplierId].push(item);
                     return acc;
@@ -215,18 +346,42 @@ const EditJobModal: React.FC<{
                     const draftPO = currentJobPOs.find(po => po.supplierId === (supplierId === 'no_supplier' ? null : supplierId) && po.status === 'Draft');
     
                     if (draftPO) {
-                        const newPoLineItems: any[] = itemsForSupplier.map(item => ({ id: crypto.randomUUID(), partNumber: item.partNumber, description: item.description, quantity: item.quantity, receivedQuantity: 0, unitPrice: item.unitCost || 0, taxCodeId: item.taxCodeId, }));
+                        const newPoLineItems: any[] = itemsForSupplier.map(item => ({ 
+                            id: crypto.randomUUID(), 
+                            partNumber: item.partNumber, 
+                            description: item.description, 
+                            quantity: item.quantity, 
+                            receivedQuantity: 0, 
+                            unitPrice: item.unitCost || 0, 
+                            taxCodeId: item.taxCodeId, 
+                        }));
                         const poToUpdate = updatedPOs.find(p => p.id === draftPO.id) || draftPO;
                         const updatedPO = { ...poToUpdate, lineItems: [...poToUpdate.lineItems, ...newPoLineItems] };
-                        const otherUpdatedPOs = updatedPOs.filter(p => p.id !== draftPO.id);
-                        updatedPOs = [...otherUpdatedPOs, updatedPO];
+                        updatedPOs = [...updatedPOs.filter(p => p.id !== draftPO.id), updatedPO];
                     } else {
                         const entity = businessEntities.find(e => e.id === jobToSave.entityId);
-                        const vehicle = vehicles.find(v => v.id === jobToSave.vehicleId);
+                        const vh = vehicles.find(v => v.id === jobToSave.vehicleId);
                         const newPOId = generatePurchaseOrderId([...purchaseOrders, ...newPOs], entity?.shortCode || 'UNK');
                         newPurchaseOrderIds.push(newPOId);
                         
-                        const newPO: PurchaseOrder = { id: newPOId, entityId: jobToSave.entityId, supplierId: supplierId === 'no_supplier' ? null : supplierId, vehicleRegistrationRef: vehicle?.registration || 'N/A', orderDate: formatDate(new Date()), status: 'Draft', jobId: jobToSave.id, lineItems: itemsForSupplier.map(item => ({ id: crypto.randomUUID(), partNumber: item.partNumber, description: item.description, quantity: item.quantity, receivedQuantity: 0, unitPrice: item.unitCost || 0, taxCodeId: item.taxCodeId, })) };
+                        const newPO: PurchaseOrder = { 
+                            id: newPOId, 
+                            entityId: jobToSave.entityId, 
+                            supplierId: supplierId === 'no_supplier' ? null : supplierId, 
+                            vehicleRegistrationRef: vh?.registration || 'N/A', 
+                            orderDate: formatDate(new Date()), 
+                            status: 'Draft', 
+                            jobId: jobToSave.id, 
+                            lineItems: itemsForSupplier.map(item => ({ 
+                                id: crypto.randomUUID(), 
+                                partNumber: item.partNumber, 
+                                description: item.description, 
+                                quantity: item.quantity, 
+                                receivedQuantity: 0, 
+                                unitPrice: item.unitCost || 0, 
+                                taxCodeId: item.taxCodeId, 
+                            })) 
+                        };
                         newPOs.push(newPO);
                     }
                 }
@@ -245,14 +400,12 @@ const EditJobModal: React.FC<{
     
         if (newPurchaseOrderIds.length > 0) jobToSave.purchaseOrderIds = [...(jobToSave.purchaseOrderIds || []), ...newPurchaseOrderIds];
         
-        if (newPOs.length > 0 || updatedPOs.length > 0) {
-            const allPOsForJobNow = [...purchaseOrders.filter(po => (jobToSave.purchaseOrderIds || []).includes(po.id) && !updatedPOs.some(upo => upo.id === po.id)), ...updatedPOs, ...newPOs];
-            if (allPOsForJobNow.length > 0) {
-                if (allPOsForJobNow.every(p => p.status === 'Received')) jobToSave.partsStatus = 'Fully Received';
-                else if (allPOsForJobNow.some(p => p.status === 'Partially Received' || p.status === 'Received')) jobToSave.partsStatus = 'Partially Received';
-                else if (allPOsForJobNow.some(p => p.status === 'Ordered')) jobToSave.partsStatus = 'Ordered';
-                else if (allPOsForJobNow.some(p => p.status === 'Draft')) jobToSave.partsStatus = 'Awaiting Order';
-            }
+        const allPOsForJobNow = [...purchaseOrders.filter(po => (jobToSave.purchaseOrderIds || []).includes(po.id) && !updatedPOs.some(upo => upo.id === po.id)), ...updatedPOs, ...newPOs];
+        if (allPOsForJobNow.length > 0) {
+            if (allPOsForJobNow.every(p => p.status === 'Received')) jobToSave.partsStatus = 'Fully Received';
+            else if (allPOsForJobNow.some(p => p.status === 'Partially Received' || p.status === 'Received')) jobToSave.partsStatus = 'Partially Received';
+            else if (allPOsForJobNow.some(p => p.status === 'Ordered')) jobToSave.partsStatus = 'Ordered';
+            else if (allPOsForJobNow.some(p => p.status === 'Draft')) jobToSave.partsStatus = 'Awaiting Order';
         }
     
         if (newPOs.length > 0 || updatedPOs.length > 0) {
@@ -313,7 +466,18 @@ const EditJobModal: React.FC<{
     }, [editableEstimate, taxRatesMap, standardTaxRateId]);
 
     const linkedBooking = useMemo(() => rentalBookings.find(b => b.jobId === job?.id), [rentalBookings, job]);
-    const handleBookCourtesyCar = () => { if (!editableJob) return; const booking: Partial<RentalBooking> = { jobId: editableJob.id, customerId: editableJob.customerId, bookingType: 'Courtesy Car', startDate: `${editableJob.scheduledDate || formatDate(new Date())}T09:00`, endDate: `${editableJob.scheduledDate || formatDate(new Date())}T17:00` }; onOpenRentalBooking(booking); };
+    
+    const handleBookCourtesyCar = () => { 
+        if (!editableJob) return; 
+        const booking: Partial<RentalBooking> = { 
+            jobId: editableJob.id, 
+            customerId: editableJob.customerId, 
+            bookingType: 'Courtesy Car', 
+            startDate: `${editableJob.scheduledDate || formatDate(new Date())}T09:00`, 
+            endDate: `${editableJob.scheduledDate || formatDate(new Date())}T17:00` 
+        }; 
+        onOpenRentalBooking(booking); 
+    };
 
     if (!isOpen || !editableJob) return null;
 
@@ -410,14 +574,14 @@ const EditJobModal: React.FC<{
                             <h2 className="text-xl font-bold text-indigo-700">Edit Job #{job.id}</h2>
                             <p className="text-sm text-gray-600">{job.description}</p>
                         </div>
-                        {isSaving && (
+                        {(isSaving || isSearchingParts || isSearchingCustomers || isSearchingVehicles) && (
                             <span className="flex items-center gap-1 text-xs text-indigo-600 font-semibold bg-indigo-50 px-2 py-1 rounded-full">
-                                <Loader2 size={12} className="animate-spin"/> Saving...
+                                <Loader2 size={12} className="animate-spin"/> Syncing...
                             </span>
                         )}
                         {!isSaving && lastSaved && (
                             <span className="flex items-center gap-1 text-xs text-green-600 font-semibold bg-green-50 px-2 py-1 rounded-full animate-fade-in">
-                                <CheckCircle size={12} /> Cloud Synced
+                                <CheckCircle size={12} /> Local DB Synced
                             </span>
                         )}
                     </div>
@@ -425,6 +589,54 @@ const EditJobModal: React.FC<{
                 </header>
                 <main className="flex-grow overflow-y-auto p-6 grid grid-cols-1 lg:grid-cols-6 gap-6 bg-gray-50">
                     <div className="lg:col-span-2 space-y-4">
+                        
+                        {/* High-Speed Customer Search Bar */}
+                        <div className="relative border rounded-lg bg-white shadow-sm p-4">
+                             <h3 className="text-sm font-bold mb-2 flex items-center gap-2 text-gray-700"><User size={16}/> Reassign Customer</h3>
+                             <div className="relative">
+                                <Search className="absolute left-3 top-2.5 text-gray-400" size={16} />
+                                <input 
+                                    className="w-full pl-9 p-2 border rounded-md text-sm" 
+                                    placeholder="Search by name or phone..." 
+                                    value={customerSearchTerm}
+                                    onChange={e => setCustomerSearchTerm(e.target.value)}
+                                />
+                             </div>
+                             {filteredCustomers.length > 0 && (
+                                <div className="absolute left-0 right-0 top-full mt-1 bg-white border rounded-lg shadow-xl z-50 max-h-48 overflow-y-auto">
+                                    {filteredCustomers.map(c => (
+                                        <button key={c.id} onClick={() => handleSelectCustomer(c)} className="w-full text-left p-3 hover:bg-indigo-50 border-b flex flex-col">
+                                            <span className="font-bold text-sm">{c.forename} {c.surname}</span>
+                                            <span className="text-xs text-gray-500">{c.phone}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                             )}
+                        </div>
+
+                        <div className="relative border rounded-lg bg-white shadow-sm p-4">
+                             <h3 className="text-sm font-bold mb-2 flex items-center gap-2 text-gray-700"><Car size={16}/> Reassign Vehicle</h3>
+                             <div className="relative">
+                                <Search className="absolute left-3 top-2.5 text-gray-400" size={16} />
+                                <input 
+                                    className="w-full pl-9 p-2 border rounded-md text-sm" 
+                                    placeholder="Search Registration..." 
+                                    value={vehicleSearchTerm}
+                                    onChange={e => setVehicleSearchTerm(e.target.value)}
+                                />
+                             </div>
+                             {filteredVehicles.length > 0 && (
+                                <div className="absolute left-0 right-0 top-full mt-1 bg-white border rounded-lg shadow-xl z-50 max-h-48 overflow-y-auto">
+                                    {filteredVehicles.map(v => (
+                                        <button key={v.id} onClick={() => handleSelectVehicle(v)} className="w-full text-left p-3 hover:bg-indigo-50 border-b flex flex-col">
+                                            <span className="font-bold text-sm">{v.registration}</span>
+                                            <span className="text-xs text-gray-500">{v.model}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                             )}
+                        </div>
+
                         <JobDetailsTab 
                             editableJob={editableJob}
                             vehicle={vehicle}
@@ -432,37 +644,29 @@ const EditJobModal: React.FC<{
                             isReadOnly={isReadOnly}
                             linkedBooking={linkedBooking}
                             rentalVehicleRegistration={linkedBooking ? vehicles.find(v => v.id === linkedBooking.rentalVehicleId)?.registration : undefined}
-                            onBookCourtesyCar={handleBookCourtesyCar}
+                            onBookCourtesy Car={handleBookCourtesyCar}
                             onOpenRentalBooking={onOpenRentalBooking}
                             onOpenConditionReport={onOpenConditionReport}
                             onChange={handleChange}
                             onViewCustomer={onViewCustomer}
                             onViewVehicle={onViewVehicle}
                         />
-                         <div className="border rounded-lg bg-white shadow-sm p-4">
-                            <h3 className="text-md font-bold mb-2 flex items-center gap-2"><DollarSign size={16}/> Billing</h3>
-                            <div className="text-sm space-y-2">
-                                <p><strong>Estimate:</strong> {editableEstimate ? `#${editableEstimate.estimateNumber}` : 'N/A'}</p>
-                                <p><strong>Invoice:</strong> {job.invoiceId ? `#${job.invoiceId}` : 'Not Invoiced'}</p>
-                            </div>
-                        </div>
                     </div>
                     <div className="lg:col-span-4">
                         <div className="flex gap-1 p-1 bg-gray-200 rounded-lg mb-4">
                             <button onClick={() => setActiveTab('estimate')} className={`w-full py-2 rounded-md font-semibold text-sm transition ${activeTab === 'estimate' ? 'bg-white shadow' : 'text-gray-600'}`}>Estimate & Parts</button>
                             <button onClick={() => setActiveTab('inspection')} className={`w-full py-2 rounded-md font-semibold text-sm transition ${activeTab === 'inspection' ? 'bg-white shadow' : 'text-gray-600'}`}>Inspection</button>
-                            <button onClick={() => setActiveTab('notes')} className={`w-full py-2 rounded-md font-semibold text-sm transition ${activeTab === 'notes' ? 'bg-white shadow' : 'text-gray-600'}`}>Technician Notes</button>
+                            <button onClick={() => setActiveTab('notes')} className={`w-full py-2 rounded-md font-semibold text-sm transition ${activeTab === 'notes' ? 'bg-white shadow' : 'text-gray-600'}`}>Notes</button>
                             <button onClick={() => setActiveTab('segments')} className={`w-full py-2 rounded-md font-semibold text-sm transition ${activeTab === 'segments' ? 'bg-white shadow' : 'text-gray-600'}`}>Segments</button>
                         </div>
                         <div className="p-4 bg-white border rounded-lg min-h-[300px]">
-                            {isReadOnly && <div className="p-3 bg-yellow-100 text-yellow-800 rounded-lg text-sm mb-4">This job has been invoiced and is now read-only.</div>}
                             {renderTabs()}
                         </div>
                     </div>
                 </main>
                 <footer className="flex-shrink-0 flex justify-end gap-2 p-4 border-t bg-gray-50">
                     <button type="button" onClick={onClose} className="py-2 px-4 bg-gray-200 rounded-lg font-semibold">Cancel</button>
-                    <button type="button" onClick={handleSave} className="flex items-center gap-2 py-2 px-4 bg-indigo-600 text-white font-semibold rounded-lg disabled:opacity-50" disabled={isReadOnly}><Save size={14}/> Save</button>
+                    <button type="button" onClick={handleSave} className="flex items-center gap-2 py-2 px-4 bg-indigo-600 text-white font-semibold rounded-lg disabled:opacity-50" disabled={isReadOnly}><Save size={14}/> Save Changes</button>
                 </footer>
             </div>
         </div>

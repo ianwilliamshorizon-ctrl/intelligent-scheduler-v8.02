@@ -2,7 +2,8 @@ import { initializeApp, getApps, getApp } from 'firebase/app';
 import { 
     getFirestore, doc, getDoc, setDoc, deleteDoc, collection, 
     onSnapshot, Firestore, runTransaction,
-    query, WithFieldValue, getDocs
+    query, WithFieldValue, getDocs,
+ where, orderBy, limit
 } from 'firebase/firestore';
 import { getAuth, Auth } from 'firebase/auth';
 import { firebaseConfig, currentEnvironment } from '../config/firebaseConfig';
@@ -161,5 +162,72 @@ export const generateSequenceId = async (prefix: string, entityShortCode: string
     } catch (e) {
         console.error("Transaction failed: ", e);
         return `${entityShortCode}${prefix}${Date.now().toString().slice(-5)}`;
+    }
+};
+// --- NEW PERFORMANCE HELPER FUNCTIONS ---
+
+/**
+ * Targeted Querying: Fetches records matching a specific condition.
+ * Used to fetch only 'Active' jobs/estimates.
+ */
+export const getWhere = async <T>(collectionName: string, field: string, operator: any, value: any): Promise<T[]> => {
+    if (!db) return [];
+    try {
+        const q = query(collection(db, collectionName), where(field, operator, value));
+        const querySnapshot = await getDocs(q);
+        return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as T[];
+    } catch (e) {
+        console.error(`Error in getWhere for ${collectionName}:`, e);
+        return [];
+    }
+};
+
+/**
+ * Batch Fetch by IDs: Grabs specific documents (e.g., the 30 customers linked to 30 active jobs).
+ * Firestore limits 'in' queries to 30 items per batch.
+ */
+export const getByIds = async <T>(collectionName: string, ids: string[]): Promise<T[]> => {
+    if (!db || ids.length === 0) return [];
+    try {
+        const results: T[] = [];
+        // Process in chunks of 30 because Firestore 'in' has a limit
+        for (let i = 0; i < ids.length; i += 30) {
+            const batchIds = ids.slice(i, i + 30);
+            const q = query(collection(db, collectionName), where('id', 'in', batchIds));
+            const snapshot = await getDocs(q);
+            results.push(...snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as T)));
+        }
+        return results;
+    } catch (e) {
+        console.error(`Error in getByIds for ${collectionName}:`, e);
+        return [];
+    }
+};
+
+/**
+ * Global Search: For "Cold Data" lookup (Parts/Customers).
+ * Limits results to keep the app fast.
+ */
+export const searchDocuments = async <T>(
+    collectionName: string, 
+    searchField: string, 
+    searchTerm: string, 
+    maxResults = 10
+): Promise<T[]> => {
+    if (!db || !searchTerm) return [];
+    try {
+        const term = searchTerm.toLowerCase().trim();
+        const q = query(
+            collection(db, collectionName),
+            orderBy(searchField),
+            where(searchField, '>=', term),
+            where(searchField, '<=', term + '\uf8ff'),
+            limit(maxResults)
+        );
+        const querySnapshot = await getDocs(q);
+        return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as T));
+    } catch (e) {
+        console.error(`Error searching ${collectionName}:`, e);
+        return [];
     }
 };

@@ -1,7 +1,6 @@
-
 import React, { useState } from 'react';
 import { User, AppEnvironment } from '../types';
-import { LogIn, ShieldCheck, ChevronRight, Lock, Mail, Loader2 } from 'lucide-react';
+import { LogIn, ShieldCheck, ChevronRight, Lock, Mail, Loader2, AlertTriangle } from 'lucide-react';
 
 interface LoginViewProps {
     users: User[];
@@ -20,8 +19,6 @@ const LoginView: React.FC<LoginViewProps> = ({ users, onLogin, environment }) =>
         setError('');
         setIsLoading(true);
         try {
-            // For transition convenience, if user enters a simple ID (e.g. 'admin'), pass it through. 
-            // In strict mode, this should be email only.
             const success = await onLogin(email, password);
             if (!success) {
                 setError('Invalid credentials. Please try again.');
@@ -33,19 +30,20 @@ const LoginView: React.FC<LoginViewProps> = ({ users, onLogin, environment }) =>
         }
     };
 
-    // Helper to auto-fill for demo purposes (optional, can be removed for production)
-    const handleQuickFill = (userId: string) => {
-        const user = users.find(u => u.id === userId);
-        if (user) {
-            setEmail(user.email || user.id); 
-            // We use '1234' as the fallback password for legacy users
-            setPassword(user.password || '1234'); 
-        }
-    };
-
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 to-slate-800 p-4">
+        <div className={`min-h-screen flex items-center justify-center p-4 transition-colors duration-500 ${
+            environment === 'Production' 
+                ? 'bg-gradient-to-br from-slate-900 to-slate-800' 
+                : 'bg-gradient-to-br from-slate-800 to-indigo-900'
+        }`}>
             <div className="max-w-md w-full bg-white rounded-2xl shadow-2xl overflow-hidden animate-fade-in-up">
+                {/* Environment Banner for non-prod */}
+                {environment !== 'Production' && (
+                    <div className="bg-orange-500 text-white text-[10px] font-bold uppercase tracking-widest py-1 text-center flex items-center justify-center gap-1">
+                        <AlertTriangle size={10} /> {environment} Mode - Non-Secure Credentials Permitted <AlertTriangle size={10} />
+                    </div>
+                )}
+
                 <div className="bg-indigo-600 p-10 text-center relative overflow-hidden">
                     <div className="absolute top-0 left-0 w-full h-full bg-white/10 opacity-20 transform -skew-y-6 origin-top-left scale-150"></div>
                     <div className="relative z-10">
@@ -65,7 +63,7 @@ const LoginView: React.FC<LoginViewProps> = ({ users, onLogin, environment }) =>
 
                     <form onSubmit={handleSubmit} className="space-y-5">
                         {error && (
-                            <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm font-semibold border border-red-100 animate-fade-in">
+                            <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm font-semibold border border-red-100 animate-shake">
                                 {error}
                             </div>
                         )}
@@ -80,6 +78,7 @@ const LoginView: React.FC<LoginViewProps> = ({ users, onLogin, environment }) =>
                                 <input
                                     type="text"
                                     id="email"
+                                    autoComplete="username"
                                     value={email}
                                     onChange={(e) => setEmail(e.target.value)}
                                     className="block w-full pl-10 pr-4 py-3 text-gray-700 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent rounded-xl bg-gray-50 transition-all hover:bg-white"
@@ -101,6 +100,7 @@ const LoginView: React.FC<LoginViewProps> = ({ users, onLogin, environment }) =>
                                 <input
                                     type="password"
                                     id="password"
+                                    autoComplete="current-password"
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
                                     className="block w-full pl-10 pr-4 py-3 text-gray-700 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent rounded-xl bg-gray-50 transition-all hover:bg-white"
@@ -122,24 +122,6 @@ const LoginView: React.FC<LoginViewProps> = ({ users, onLogin, environment }) =>
                             {!isLoading && <ChevronRight className="h-5 w-5 opacity-70 group-hover:translate-x-1 transition-transform" />}
                         </button>
                     </form>
-                    
-                    {/* Dev/Demo Helper - Remove in strict production if desired */}
-                    {users.length > 0 && (
-                        <div className="mt-6">
-                            <p className="text-xs text-gray-400 text-center mb-2">Quick Login (Dev Mode)</p>
-                            <div className="flex flex-wrap justify-center gap-2">
-                                {users.slice(0, 3).map(u => (
-                                    <button 
-                                        key={u.id} 
-                                        onClick={() => handleQuickFill(u.id)}
-                                        className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 px-2 py-1 rounded transition"
-                                    >
-                                        {u.name}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                    )}
                     
                     <div className="mt-8 pt-6 border-t border-gray-100 text-center">
                         <p className="text-xs text-gray-400 font-medium mb-2">

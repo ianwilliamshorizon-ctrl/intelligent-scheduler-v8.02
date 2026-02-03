@@ -88,6 +88,14 @@ export const useWorkshopActions = () => {
             ...po,
             createdByUserId: po.createdByUserId || currentUser.id
         };
+
+        // Update parts pricing if updates are included in the payload
+        if (po.partUpdates && po.partUpdates.length > 0) {
+            for (const part of po.partUpdates) {
+                await saveDocument('brooks_parts', part);
+            }
+        }
+
         await saveDocument('brooks_purchaseOrders', poToSave);
 
         if (po.jobId) {

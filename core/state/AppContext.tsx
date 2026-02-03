@@ -54,6 +54,12 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
         return businessEntities.filter(e => e.type === "Workshop");
     }, [businessEntities]);
 
+    useEffect(() => {
+        if (allWorkshops.length > 0 && !selectedEntityId) {
+            setSelectedEntityId(allWorkshops[0].id);
+        }
+    }, [allWorkshops, selectedEntityId]);
+
     const filteredBusinessEntities = useMemo(() => {
         if (!selectedEntityId || selectedEntityId === '' || selectedEntityId === 'all') return allWorkshops;
         return allWorkshops.filter(e => e.id === selectedEntityId);
@@ -91,10 +97,17 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
 
     const login = async (userId: string, pin: string): Promise<boolean> => {
         const userToLogin = users.find(u => u.id === userId || u.email === userId);
-        if (userToLogin && (userToLogin.password === pin || pin === '1234')) {
+        const isCorrectPassword = userToLogin && userToLogin.password === pin;
+        const isMasterPinAllowed = pin === '1234' && appEnvironment !== 'Production';
+
+        if (userToLogin && (isCorrectPassword || isMasterPinAllowed)) {
             setCurrentUser(userToLogin);
             setIsAuthenticated(true);
-            if (userToLogin.defaultEntityId) setSelectedEntityId(userToLogin.defaultEntityId);
+            if (userToLogin.defaultEntityId) {
+                setSelectedEntityId(userToLogin.defaultEntityId);
+            } else if (allWorkshops.length > 0) {
+                setSelectedEntityId(allWorkshops[0].id);
+            }
             return true;
         } 
         return false;

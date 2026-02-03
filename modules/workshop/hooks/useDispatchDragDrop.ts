@@ -1,4 +1,4 @@
-
+import React from 'react';
 import { useRef, useCallback } from 'react';
 import { DraggedSegmentData, Job, JobSegment, Lift, BusinessEntity } from '../../../types';
 import { calculateJobStatus } from '../../../core/utils/jobUtils';

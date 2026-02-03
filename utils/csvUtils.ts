@@ -25,6 +25,15 @@ export const headerMapping: { [key: string]: string } = {
     'reg.': 'registration', 'reg no.': 'registration', 'registration no': 'registration', 'registration no.': 'registration',
     'number plate': 'registration', 'license plate': 'registration', 'licence plate': 'registration',
     'vehicle id': 'registration',
+
+    // Parts
+    'part number': 'partNumber', 'part no': 'partNumber', 'part_number': 'partNumber', 'part no.': 'partNumber', 'partnumber': 'partNumber',
+    'part description': 'description', 'description': 'description',
+    'price': 'salePrice', 'sale price': 'salePrice', 'sale_price': 'salePrice',
+    'cost': 'costPrice', 'cost price': 'costPrice', 'cost_price': 'costPrice',
+    'stock': 'stockQuantity', 'quantity': 'stockQuantity', 'stock quantity': 'stockQuantity', 'stock_quantity': 'stockQuantity',
+    'supplier': 'defaultSupplierId', 'supplier id': 'defaultSupplierId',
+    'tax code': 'taxCodeId',
     
     // Vehicle Linking Fields (for matching to customers)
     'customer id': 'customerId', 'customer_id': 'customerId', 'customerid': 'customerId',
@@ -39,7 +48,7 @@ export const headerMapping: { [key: string]: string } = {
     
     // Jobs
     'job id': 'id', 'job_id': 'id', 'jobid': 'id',
-    'description': 'description', 'job description': 'description', 'work required': 'description',
+    'job description': 'description', 'work required': 'description',
     'estimated hours': 'estimatedHours', 'hours': 'estimatedHours', 'est hours': 'estimatedHours',
     'scheduled date': 'scheduledDate', 'date': 'scheduledDate',
     'created at': 'createdAt', 'created_at': 'createdAt',
@@ -157,7 +166,7 @@ export const parseCsv = (file: File): Promise<any[]> => {
                     else if (value === 'false') value = false;
                     // Keep specific fields as strings even if they look like numbers, but preserve IDs/Phones
                     // Added customerId to preserved string fields
-                    else if (value !== '' && !isNaN(Number(value)) && !['phone', 'mobile', 'postcode', 'zip', 'vin', 'registration', 'id', 'jobid', 'customerid'].some(k => mappedHeader.toLowerCase().includes(k))) {
+                    else if (value !== '' && !isNaN(Number(value)) && !['phone', 'mobile', 'postcode', 'zip', 'vin', 'registration', 'id', 'jobid', 'customerid', 'partNumber'].some(k => mappedHeader.toLowerCase().includes(k))) {
                          value = Number(value);
                     }
                     

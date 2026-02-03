@@ -9,7 +9,7 @@ const MainLayout: React.FC<{ children: React.ReactNode, onOpenManagement: () => 
     const { 
         currentView, setCurrentView, 
         currentUser, selectedEntityId, setSelectedEntityId, 
-        filteredBusinessEntities, logout
+        allWorkshops, logout
     } = useApp();
     const { roles } = useData();
 
@@ -33,18 +33,11 @@ const MainLayout: React.FC<{ children: React.ReactNode, onOpenManagement: () => 
     ];
 
     const userRoleDef = roles.find(r => r.name === currentUser.role);
-    // Prefer user-specific overrides, then role defaults, then empty.
     const allowedViews = currentUser.allowedViews || userRoleDef?.defaultAllowedViews || [];
-
-    // Filter nav items based strictly on allowedViews. 
-    // We do NOT automatically allow everything for 'Admin' role string here; 
-    // the Admin role definition in the database should contain all views by default.
-    // This allows custom 'Admin' roles to be restricted if needed.
     const visibleNavItems = navItems.filter(item => allowedViews.includes(item.id as T.ViewType));
 
     return (
         <div className="flex h-screen bg-gray-100 font-sans text-gray-900">
-            {/* Sidebar */}
             <aside className={`${isSidebarOpen ? 'w-64' : 'w-20'} bg-slate-900 text-white transition-all duration-300 flex flex-col flex-shrink-0 z-20`}>
                 <div className="p-4 flex items-center justify-between">
                     {isSidebarOpen && <span className="font-bold text-xl tracking-tight">BROOKSPEED</span>}
@@ -70,9 +63,7 @@ const MainLayout: React.FC<{ children: React.ReactNode, onOpenManagement: () => 
                 </nav>
             </aside>
 
-            {/* Main Content */}
             <div className="flex-grow flex flex-col h-full overflow-hidden">
-                {/* Global Top Bar */}
                 <header className="bg-white border-b border-gray-200 h-16 flex items-center justify-between px-6 flex-shrink-0 z-10 shadow-sm">
                      <div className="flex items-center gap-4">
                         <div className="flex items-center gap-2">
@@ -83,8 +74,7 @@ const MainLayout: React.FC<{ children: React.ReactNode, onOpenManagement: () => 
                                 className="border-none bg-transparent font-semibold text-gray-700 focus:ring-0 cursor-pointer outline-none hover:text-indigo-700 transition-colors"
                                 title="Select Business Entity"
                              >
-                                <option value="all">All Entities</option>
-                                {filteredBusinessEntities.map(e => (
+                                {allWorkshops.map(e => (
                                     <option key={e.id} value={e.id}>{e.name}</option>
                                 ))}
                              </select>
