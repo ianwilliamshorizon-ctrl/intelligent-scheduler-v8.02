@@ -55,19 +55,14 @@ export const DataContextProvider: React.FC<{ children: React.ReactNode }> = ({ c
     const [isLoading, setIsLoading] = useState(true);
     const isRefreshingRef = useRef(false);
 
-    /**
-     * LOCKING MECHANISM
-     * Tracks Job IDs currently being updated via UI.
-     * Prevents DB sync from reverting local UI changes.
-     */
+    // Shield for Production Latency
     const pendingLocks = useRef<Map<string, number>>(new Map());
 
-    // --- PERSISTENT DATA ---
+    // --- DATA STATES ---
     const [customers, setCustomers] = usePersistentState<T.Customer[]>('brooks_customers', getInitialCustomers);
     const [vehicles, setVehicles] = usePersistentState<T.Vehicle[]>('brooks_vehicles', getInitialVehicles);
     const [parts, setParts] = usePersistentState<T.Part[]>('brooks_parts', getInitialParts);
 
-    // --- HOT PATH DATA ---
     const [jobs, setJobsRaw] = useState<T.Job[]>([]);
     const [purchases, setPurchases] = useState<T.Purchase[]>([]);
     const [purchaseOrders, setPurchaseOrders] = useState<T.PurchaseOrder[]>([]);
@@ -97,8 +92,7 @@ export const DataContextProvider: React.FC<{ children: React.ReactNode }> = ({ c
     const [inspectionDiagrams, setInspectionDiagrams] = useState<T.InspectionDiagram[]>([]);
 
     /**
-     * ENHANCED SETTER
-     * Locks IDs to ensure UI authority.
+     * PRODUCTION-READY SETTER
      */
     const setJobs: React.Dispatch<React.SetStateAction<T.Job[]>> = (action) => {
         setJobsRaw(prev => {
@@ -107,7 +101,8 @@ export const DataContextProvider: React.FC<{ children: React.ReactNode }> = ({ c
             next.forEach(job => {
                 const prevJob = prev.find(p => p.id === job.id);
                 if (!prevJob || JSON.stringify(prevJob) !== JSON.stringify(job)) {
-                    pendingLocks.current.set(job.id, now + 3000); // 3s lock
+                    // 5 second lock for production network lag
+                    pendingLocks.current.set(job.id, now + 5000);
                 }
             });
             return next;
@@ -120,7 +115,7 @@ export const DataContextProvider: React.FC<{ children: React.ReactNode }> = ({ c
         if (!isBackground) setIsLoading(true);
         
         try {
-            const results = await Promise.all([
+            const allResults = await Promise.all([
                 getAll<T.Job>('brooks_jobs'),
                 getAll<T.Purchase>('brooks_purchases'),
                 getAll<T.PurchaseOrder>('brooks_purchaseOrders'),
@@ -140,41 +135,54 @@ export const DataContextProvider: React.FC<{ children: React.ReactNode }> = ({ c
                 getAll<T.Reminder>('brooks_reminders')
             ]);
 
-            const [allJobs] = results;
+            const [allJobs] = allResults;
 
-            // Merge Logic: Honor Locks
+            // --- PROTECTIVE MERGE WITH DEBUG LOGGING ---
             setJobsRaw(currentLocal => {
                 const now = Date.now();
                 return allJobs.map(dbJob => {
                     const lockExpiry = pendingLocks.current.get(dbJob.id);
-                    if (lockExpiry && now < lockExpiry) {
-                        return currentLocal.find(l => l.id === dbJob.id) || dbJob;
+                    const localJob = currentLocal.find(l => l.id === dbJob.id);
+
+                    if (lockExpiry && now < lockExpiry && localJob) {
+                        // DETECT REVERSION ATTEMPTS
+                        if (dbJob.status !== localJob.status) {
+                            console.warn(`[DATA SHIELD] Blocked DB attempt to revert Job #${dbJob.id} from "${localJob.status}" back to "${dbJob.status}".`);
+                        }
+                        
+                        // MERGE: Keep DB updates for non-grid fields, but force Grid Position
+                        return {
+                            ...dbJob,
+                            status: localJob.status,
+                            position: localJob.position,
+                            segments: localJob.segments
+                        };
                     }
-                    if (lockExpiry) pendingLocks.current.delete(dbJob.id);
+                    
+                    if (lockExpiry && now >= lockExpiry) pendingLocks.current.delete(dbJob.id);
                     return dbJob;
                 });
             });
 
-            // Set others...
-            setPurchases(results[1]);
-            setPurchaseOrders(results[2]);
-            setSuppliers(results[3]);
-            setEngineers(results[4]);
-            setLifts(results[5]);
-            setEstimates(results[6]);
-            setInvoices(results[7]);
-            setServicePackages(results[8]);
-            setProspects(results[9]);
-            setTaxRates(results[10]);
-            setRoles(results[11]);
-            setBusinessEntities(results[12]);
-            setNominalCodes(results[13]);
-            setAbsenceRequests(results[14]);
-            setInquiries(results[15]);
-            setReminders(results[16]);
+            setPurchases(allResults[1]);
+            setPurchaseOrders(allResults[2]);
+            setSuppliers(allResults[3]);
+            setEngineers(allResults[4]);
+            setLifts(allResults[5]);
+            setEstimates(allResults[6]);
+            setInvoices(allResults[7]);
+            setServicePackages(allResults[8]);
+            setProspects(allResults[9]);
+            setTaxRates(allResults[10]);
+            setRoles(allResults[11]);
+            setBusinessEntities(allResults[12]);
+            setNominalCodes(allResults[13]);
+            setAbsenceRequests(allResults[14]);
+            setInquiries(allResults[15]);
+            setReminders(allResults[16]);
 
         } catch (error) {
-            console.error("Refresh Error:", error);
+            console.error("Data Refresh Error:", error);
         } finally {
             if (!isBackground) setIsLoading(false);
             isRefreshingRef.current = false;
@@ -183,11 +191,10 @@ export const DataContextProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
     useEffect(() => {
         refreshActiveData();
-        const poll = setInterval(() => refreshActiveData(true), 5000);
-        return () => clearInterval(poll);
+        const interval = setInterval(() => refreshActiveData(true), 5000);
+        return () => clearInterval(interval);
     }, []);
 
-    // Deterministic Sorting for Jobs
     const sortedJobs = useMemo(() => {
         return [...jobs].sort((a, b) => {
             const posA = a.position ?? 9999;
