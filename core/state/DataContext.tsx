@@ -12,8 +12,7 @@ import {
     getInitialParts, getInitialJobs, getInitialCustomers, getInitialVehicles,
     getInitialEstimates, getInitialInvoices
 } from '../data/initialData';
-import { saveImage } from '../../utils/imageStore';
-import { getWhere, getByIds, getAll } from '../db/index'; 
+import { getAll } from '../db/index'; 
 
 interface DataContextType {
     jobs: T.Job[]; setJobs: React.Dispatch<React.SetStateAction<T.Job[]>>;
@@ -56,13 +55,20 @@ export const DataContextProvider: React.FC<{ children: React.ReactNode }> = ({ c
     const [isLoading, setIsLoading] = useState(true);
     const isRefreshingRef = useRef(false);
 
-    // --- HEAVY PERSISTENT DATA (Stay as Persistent) ---
+    /**
+     * LOCKING MECHANISM
+     * Tracks Job IDs currently being updated via UI.
+     * Prevents DB sync from reverting local UI changes.
+     */
+    const pendingLocks = useRef<Map<string, number>>(new Map());
+
+    // --- PERSISTENT DATA ---
     const [customers, setCustomers] = usePersistentState<T.Customer[]>('brooks_customers', getInitialCustomers);
     const [vehicles, setVehicles] = usePersistentState<T.Vehicle[]>('brooks_vehicles', getInitialVehicles);
     const [parts, setParts] = usePersistentState<T.Part[]>('brooks_parts', getInitialParts);
 
-    // --- HOT PATH / MANAGED DATA (Switched to standard useState for instant sync) ---
-    const [jobs, setJobs] = useState<T.Job[]>([]);
+    // --- HOT PATH DATA ---
+    const [jobs, setJobsRaw] = useState<T.Job[]>([]);
     const [purchases, setPurchases] = useState<T.Purchase[]>([]);
     const [purchaseOrders, setPurchaseOrders] = useState<T.PurchaseOrder[]>([]);
     const [suppliers, setSuppliers] = useState<T.Supplier[]>([]);
@@ -90,19 +96,31 @@ export const DataContextProvider: React.FC<{ children: React.ReactNode }> = ({ c
     const [roles, setRoles] = useState<T.Role[]>([]);
     const [inspectionDiagrams, setInspectionDiagrams] = useState<T.InspectionDiagram[]>([]);
 
+    /**
+     * ENHANCED SETTER
+     * Locks IDs to ensure UI authority.
+     */
+    const setJobs: React.Dispatch<React.SetStateAction<T.Job[]>> = (action) => {
+        setJobsRaw(prev => {
+            const next = typeof action === 'function' ? action(prev) : action;
+            const now = Date.now();
+            next.forEach(job => {
+                const prevJob = prev.find(p => p.id === job.id);
+                if (!prevJob || JSON.stringify(prevJob) !== JSON.stringify(job)) {
+                    pendingLocks.current.set(job.id, now + 3000); // 3s lock
+                }
+            });
+            return next;
+        });
+    };
+
     const refreshActiveData = async (isBackground: boolean = false) => {
         if (isRefreshingRef.current) return;
         isRefreshingRef.current = true;
         if (!isBackground) setIsLoading(true);
         
         try {
-            // Fetch everything small and managed in parallel
-            const [
-                allJobs, allPurchases, allPOs, allSuppliers, allEngineers, 
-                allLifts, allEstimates, allInvoices, allPackages,
-                allProspects, allTaxRates, allRoles, allBusinessEntities,
-                allNominal, allAbsence, allInquiries, allReminders
-            ] = await Promise.all([
+            const results = await Promise.all([
                 getAll<T.Job>('brooks_jobs'),
                 getAll<T.Purchase>('brooks_purchases'),
                 getAll<T.PurchaseOrder>('brooks_purchaseOrders'),
@@ -122,26 +140,41 @@ export const DataContextProvider: React.FC<{ children: React.ReactNode }> = ({ c
                 getAll<T.Reminder>('brooks_reminders')
             ]);
 
-            setJobs(allJobs);
-            setPurchases(allPurchases);
-            setPurchaseOrders(allPOs);
-            setSuppliers(allSuppliers);
-            setEngineers(allEngineers);
-            setLifts(allLifts);
-            setEstimates(allEstimates);
-            setInvoices(allInvoices);
-            setServicePackages(allPackages);
-            setProspects(allProspects);
-            setTaxRates(allTaxRates);
-            setRoles(allRoles);
-            setBusinessEntities(allBusinessEntities);
-            setNominalCodes(allNominal);
-            setAbsenceRequests(allAbsence);
-            setInquiries(allInquiries);
-            setReminders(allReminders);
+            const [allJobs] = results;
+
+            // Merge Logic: Honor Locks
+            setJobsRaw(currentLocal => {
+                const now = Date.now();
+                return allJobs.map(dbJob => {
+                    const lockExpiry = pendingLocks.current.get(dbJob.id);
+                    if (lockExpiry && now < lockExpiry) {
+                        return currentLocal.find(l => l.id === dbJob.id) || dbJob;
+                    }
+                    if (lockExpiry) pendingLocks.current.delete(dbJob.id);
+                    return dbJob;
+                });
+            });
+
+            // Set others...
+            setPurchases(results[1]);
+            setPurchaseOrders(results[2]);
+            setSuppliers(results[3]);
+            setEngineers(results[4]);
+            setLifts(results[5]);
+            setEstimates(results[6]);
+            setInvoices(results[7]);
+            setServicePackages(results[8]);
+            setProspects(results[9]);
+            setTaxRates(results[10]);
+            setRoles(results[11]);
+            setBusinessEntities(results[12]);
+            setNominalCodes(results[13]);
+            setAbsenceRequests(results[14]);
+            setInquiries(results[15]);
+            setReminders(results[16]);
 
         } catch (error) {
-            console.error("Data Refresh Error:", error);
+            console.error("Refresh Error:", error);
         } finally {
             if (!isBackground) setIsLoading(false);
             isRefreshingRef.current = false;
@@ -150,15 +183,19 @@ export const DataContextProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
     useEffect(() => {
         refreshActiveData();
+        const poll = setInterval(() => refreshActiveData(true), 5000);
+        return () => clearInterval(poll);
     }, []);
 
-    // 5-second poll to keep the "Hot Path" fresh
-    useEffect(() => {
-        const pollInterval = setInterval(() => {
-            refreshActiveData(true);
-        }, 5000); 
-        return () => clearInterval(pollInterval);
-    }, []);
+    // Deterministic Sorting for Jobs
+    const sortedJobs = useMemo(() => {
+        return [...jobs].sort((a, b) => {
+            const posA = a.position ?? 9999;
+            const posB = b.position ?? 9999;
+            if (posA !== posB) return posA - posB;
+            return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+        });
+    }, [jobs]);
 
     const sortedLifts = useMemo(() => {
         return [...lifts].sort((a, b) => 
@@ -167,7 +204,7 @@ export const DataContextProvider: React.FC<{ children: React.ReactNode }> = ({ c
     }, [lifts]);
 
     const value = useMemo(() => ({
-        jobs, setJobs, vehicles, setVehicles, customers, setCustomers,
+        jobs: sortedJobs, setJobs, vehicles, setVehicles, customers, setCustomers,
         estimates, setEstimates, invoices, setInvoices, purchaseOrders, setPurchaseOrders,
         purchases, setPurchases, parts, setParts, servicePackages, setServicePackages,
         suppliers, setSuppliers, engineers, setEngineers, lifts: sortedLifts, setLifts,
@@ -181,7 +218,7 @@ export const DataContextProvider: React.FC<{ children: React.ReactNode }> = ({ c
         taxRates, setTaxRates, roles, setRoles, inspectionDiagrams, setInspectionDiagrams,
         isLoading, refreshActiveData
     }), [
-        jobs, vehicles, customers, estimates, invoices, purchaseOrders, purchases, 
+        sortedJobs, vehicles, customers, estimates, invoices, purchaseOrders, purchases, 
         parts, servicePackages, suppliers, engineers, sortedLifts, rentalVehicles, 
         rentalBookings, saleVehicles, saleOverheadPackages, prospects, storageBookings, 
         storageLocations, batteryChargers, nominalCodes, nominalCodeRules, 

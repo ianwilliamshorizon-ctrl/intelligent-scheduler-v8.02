@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Job, Vehicle, Customer, PurchaseOrder, User, VehicleStatus } from '../../types';
 import { Package as PackageIcon, PackageCheck, CheckCircle, ArrowRightCircle, Clock, Wrench, Edit, Wand2, LogIn } from 'lucide-react';
@@ -65,9 +64,16 @@ export const DraggableJobCard: React.FC<{
     return (
         <div
             draggable={canDrag}
-            onDragStart={(e) => canDrag && onDragStart(e, job.id, segmentToDrag.segmentId)}
+            data-job-id={job.id} // Added for sequence tracking in the DOM
+            onDragStart={(e) => {
+                if (canDrag) {
+                    // Set dataTransfer for browser native DND fallback
+                    e.dataTransfer.setData('jobId', job.id);
+                    onDragStart(e, job.id, segmentToDrag.segmentId);
+                }
+            }}
             onDragEnd={onDragEnd}
-            className={`p-2.5 rounded-lg shadow-md border space-y-2 ${canDrag ? 'cursor-grab' : 'cursor-default'} draggable-job ${getCardColorClasses()}`}
+            className={`p-2.5 rounded-lg shadow-md border space-y-2 ${canDrag ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'} draggable-job transition-all duration-200 ${getCardColorClasses()}`}
             title={canDrag ? `Drag to schedule: ${job.description} (${segmentToDrag.duration}h)`: 'View job details'}
         >
             <div className="flex justify-between items-start">
@@ -88,6 +94,7 @@ export const DraggableJobCard: React.FC<{
                     {associatedPOs.map(po => (
                         <button
                             key={po.id}
+                            type="button"
                             onClick={(e) => { e.stopPropagation(); onOpenPurchaseOrder(po); }}
                             className={`flex items-center gap-1 px-1.5 py-0.5 rounded border text-[10px] transition-colors ${getPoStatusColor(po.status, 'bg')} ${getPoStatusColor(po.status, 'text')} border-current opacity-90 hover:opacity-100`}
                             title={`View PO #${po.id} (${po.status})`}
@@ -106,9 +113,9 @@ export const DraggableJobCard: React.FC<{
                     </span>
                 </div>
                 <div className="flex items-center gap-1">
-                    <button onClick={(e) => { e.stopPropagation(); onOpenAssistant(job.id); }} className="p-1.5 bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200" title="Technical Assistant"><Wand2 size={14} /></button>
-                    {job.vehicleStatus === 'Awaiting Arrival' && <button onClick={() => onCheckIn(job.id)} className="p-1.5 bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200" title="Check Vehicle In"><LogIn size={14} /></button>}
-                    <button onClick={() => onEdit(job.id)} className="p-1.5 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200" title="Edit Job"><Edit size={14} /></button>
+                    <button type="button" onClick={(e) => { e.stopPropagation(); onOpenAssistant(job.id); }} className="p-1.5 bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200" title="Technical Assistant"><Wand2 size={14} /></button>
+                    {job.vehicleStatus === 'Awaiting Arrival' && <button type="button" onClick={() => onCheckIn(job.id)} className="p-1.5 bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200" title="Check Vehicle In"><LogIn size={14} /></button>}
+                    <button type="button" onClick={() => onEdit(job.id)} className="p-1.5 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200" title="Edit Job"><Edit size={14} /></button>
                 </div>
             </div>
         </div>
