@@ -12,17 +12,22 @@ import {
     getInitialParts, getInitialJobs, getInitialCustomers, getInitialVehicles,
     getInitialEstimates, getInitialInvoices
 } from '../data/initialData';
-import { getAll } from '../db/index'; 
+import { getAll, getById } from '../db/index'; 
 
 interface DataContextType {
+    // Workflow Data (Live on Grid)
     jobs: T.Job[]; setJobs: React.Dispatch<React.SetStateAction<T.Job[]>>;
+    
+    // Large Volume Data (Now handled on-demand to keep UI flying)
     vehicles: T.Vehicle[]; setVehicles: React.Dispatch<React.SetStateAction<T.Vehicle[]>>;
     customers: T.Customer[]; setCustomers: React.Dispatch<React.SetStateAction<T.Customer[]>>;
+    parts: T.Part[]; setParts: React.Dispatch<React.SetStateAction<T.Part[]>>;
+    
+    // Support Data
     estimates: T.Estimate[]; setEstimates: React.Dispatch<React.SetStateAction<T.Estimate[]>>;
     invoices: T.Invoice[]; setInvoices: React.Dispatch<React.SetStateAction<T.Invoice[]>>;
     purchaseOrders: T.PurchaseOrder[]; setPurchaseOrders: React.Dispatch<React.SetStateAction<T.PurchaseOrder[]>>;
     purchases: T.Purchase[]; setPurchases: React.Dispatch<React.SetStateAction<T.Purchase[]>>;
-    parts: T.Part[]; setParts: React.Dispatch<React.SetStateAction<T.Part[]>>;
     servicePackages: T.ServicePackage[]; setServicePackages: React.Dispatch<React.SetStateAction<T.ServicePackage[]>>;
     suppliers: T.Supplier[]; setSuppliers: React.Dispatch<React.SetStateAction<T.Supplier[]>>;
     engineers: T.Engineer[]; setEngineers: React.Dispatch<React.SetStateAction<T.Engineer[]>>;
@@ -45,6 +50,7 @@ interface DataContextType {
     taxRates: T.TaxRate[]; setTaxRates: React.Dispatch<React.SetStateAction<T.TaxRate[]>>;
     roles: T.Role[]; setRoles: React.Dispatch<React.SetStateAction<T.Role[]>>;
     inspectionDiagrams: T.InspectionDiagram[]; setInspectionDiagrams: React.Dispatch<React.SetStateAction<T.InspectionDiagram[]>>;
+    
     isLoading: boolean;
     refreshActiveData: (isBackground?: boolean) => Promise<void>;
 }
@@ -55,15 +61,14 @@ export const DataContextProvider: React.FC<{ children: React.ReactNode }> = ({ c
     const [isLoading, setIsLoading] = useState(true);
     const isRefreshingRef = useRef(false);
 
-    // Shield for Production Latency
-    const pendingLocks = useRef<Map<string, number>>(new Map());
-
     // --- DATA STATES ---
-    const [customers, setCustomers] = usePersistentState<T.Customer[]>('brooks_customers', getInitialCustomers);
-    const [vehicles, setVehicles] = usePersistentState<T.Vehicle[]>('brooks_vehicles', getInitialVehicles);
-    const [parts, setParts] = usePersistentState<T.Part[]>('brooks_parts', getInitialParts);
+    // We keep these in state but we no longer "Bulk Load" them from the DB on start.
+    // They will be populated by specific search actions or when a Job is loaded.
+    const [customers, setCustomers] = useState<T.Customer[]>([]);
+    const [vehicles, setVehicles] = useState<T.Vehicle[]>([]);
+    const [parts, setParts] = useState<T.Part[]>([]);
 
-    const [jobs, setJobsRaw] = useState<T.Job[]>([]);
+    const [jobs, setJobs] = useState<T.Job[]>([]);
     const [purchases, setPurchases] = useState<T.Purchase[]>([]);
     const [purchaseOrders, setPurchaseOrders] = useState<T.PurchaseOrder[]>([]);
     const [suppliers, setSuppliers] = useState<T.Supplier[]>([]);
@@ -91,30 +96,14 @@ export const DataContextProvider: React.FC<{ children: React.ReactNode }> = ({ c
     const [roles, setRoles] = useState<T.Role[]>([]);
     const [inspectionDiagrams, setInspectionDiagrams] = useState<T.InspectionDiagram[]>([]);
 
-    /**
-     * PRODUCTION-READY SETTER
-     */
-    const setJobs: React.Dispatch<React.SetStateAction<T.Job[]>> = (action) => {
-        setJobsRaw(prev => {
-            const next = typeof action === 'function' ? action(prev) : action;
-            const now = Date.now();
-            next.forEach(job => {
-                const prevJob = prev.find(p => p.id === job.id);
-                if (!prevJob || JSON.stringify(prevJob) !== JSON.stringify(job)) {
-                    // 5 second lock for production network lag
-                    pendingLocks.current.set(job.id, now + 5000);
-                }
-            });
-            return next;
-        });
-    };
-
     const refreshActiveData = async (isBackground: boolean = false) => {
         if (isRefreshingRef.current) return;
         isRefreshingRef.current = true;
         if (!isBackground) setIsLoading(true);
         
         try {
+            // NOTICE: We have removed Customers, Vehicles, and Parts from this bulk call.
+            // This ensures the application loads instantly even with thousands of records.
             const allResults = await Promise.all([
                 getAll<T.Job>('brooks_jobs'),
                 getAll<T.Purchase>('brooks_purchases'),
@@ -135,34 +124,10 @@ export const DataContextProvider: React.FC<{ children: React.ReactNode }> = ({ c
                 getAll<T.Reminder>('brooks_reminders')
             ]);
 
-            const [allJobs] = allResults;
-
-            // --- PROTECTIVE MERGE WITH DEBUG LOGGING ---
-            setJobsRaw(currentLocal => {
-                const now = Date.now();
-                return allJobs.map(dbJob => {
-                    const lockExpiry = pendingLocks.current.get(dbJob.id);
-                    const localJob = currentLocal.find(l => l.id === dbJob.id);
-
-                    if (lockExpiry && now < lockExpiry && localJob) {
-                        // DETECT REVERSION ATTEMPTS
-                        if (dbJob.status !== localJob.status) {
-                            console.warn(`[DATA SHIELD] Blocked DB attempt to revert Job #${dbJob.id} from "${localJob.status}" back to "${dbJob.status}".`);
-                        }
-                        
-                        // MERGE: Keep DB updates for non-grid fields, but force Grid Position
-                        return {
-                            ...dbJob,
-                            status: localJob.status,
-                            position: localJob.position,
-                            segments: localJob.segments
-                        };
-                    }
-                    
-                    if (lockExpiry && now >= lockExpiry) pendingLocks.current.delete(dbJob.id);
-                    return dbJob;
-                });
-            });
+            // FILTER: Only load Jobs that are not "Closed". 
+            // This keeps the workshop grid fast and clear.
+            const activeJobs = allResults[0].filter(job => job.status !== 'Closed');
+            setJobs(activeJobs);
 
             setPurchases(allResults[1]);
             setPurchaseOrders(allResults[2]);
@@ -195,6 +160,7 @@ export const DataContextProvider: React.FC<{ children: React.ReactNode }> = ({ c
         return () => clearInterval(interval);
     }, []);
 
+    // Stabilize the grid sequence
     const sortedJobs = useMemo(() => {
         return [...jobs].sort((a, b) => {
             const posA = a.position ?? 9999;
@@ -211,9 +177,12 @@ export const DataContextProvider: React.FC<{ children: React.ReactNode }> = ({ c
     }, [lifts]);
 
     const value = useMemo(() => ({
-        jobs: sortedJobs, setJobs, vehicles, setVehicles, customers, setCustomers,
+        jobs: sortedJobs, setJobs, 
+        vehicles, setVehicles, 
+        customers, setCustomers,
+        parts, setParts,
         estimates, setEstimates, invoices, setInvoices, purchaseOrders, setPurchaseOrders,
-        purchases, setPurchases, parts, setParts, servicePackages, setServicePackages,
+        purchases, setPurchases, servicePackages, setServicePackages,
         suppliers, setSuppliers, engineers, setEngineers, lifts: sortedLifts, setLifts,
         rentalVehicles, setRentalVehicles, rentalBookings, setRentalBookings,
         saleVehicles, setSaleVehicles, saleOverheadPackages, setSaleOverheadPackages,
@@ -225,8 +194,8 @@ export const DataContextProvider: React.FC<{ children: React.ReactNode }> = ({ c
         taxRates, setTaxRates, roles, setRoles, inspectionDiagrams, setInspectionDiagrams,
         isLoading, refreshActiveData
     }), [
-        sortedJobs, vehicles, customers, estimates, invoices, purchaseOrders, purchases, 
-        parts, servicePackages, suppliers, engineers, sortedLifts, rentalVehicles, 
+        sortedJobs, vehicles, customers, parts, estimates, invoices, purchaseOrders, purchases, 
+        servicePackages, suppliers, engineers, sortedLifts, rentalVehicles, 
         rentalBookings, saleVehicles, saleOverheadPackages, prospects, storageBookings, 
         storageLocations, batteryChargers, nominalCodes, nominalCodeRules, 
         absenceRequests, inquiries, reminders, auditLog, businessEntities, 

@@ -64,12 +64,20 @@ export const DraggableJobCard: React.FC<{
     return (
         <div
             draggable={canDrag}
-            data-job-id={job.id} // Added for sequence tracking in the DOM
+            data-job-id={job.id}
             onDragStart={(e) => {
                 if (canDrag) {
-                    // Set dataTransfer for browser native DND fallback
+                    // Set DataTransfer immediately (Synchronous)
                     e.dataTransfer.setData('jobId', job.id);
-                    onDragStart(e, job.id, segmentToDrag.segmentId);
+                    e.dataTransfer.effectAllowed = 'move';
+                    
+                    // SAFETY TIMEOUT:
+                    // Pushes React state updates to the next event loop tick.
+                    // This prevents the "removeChild" crash by letting the browser
+                    // finish the physical "grab" of the DOM node before React re-renders.
+                    setTimeout(() => {
+                        onDragStart(e, job.id, segmentToDrag.segmentId);
+                    }, 0);
                 }
             }}
             onDragEnd={onDragEnd}
