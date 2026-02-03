@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useData } from '../../../core/state/DataContext';
 import { Vehicle, InspectionDiagram } from '../../../types';
-import { PlusCircle, Trash2, Upload, Zap, RefreshCw, Car, User, Hash } from 'lucide-react';
+import { PlusCircle, Trash2, Upload, Zap, RefreshCw, User, Hash } from 'lucide-react';
 import { CheckboxCell } from '../shared/CheckboxCell';
 import { useManagementTable } from '../hooks/useManagementTable';
 import { parseCsv } from '../../../utils/csvUtils';
@@ -9,42 +9,51 @@ import { saveImage, getImage } from '../../../utils/imageStore';
 import VehicleFormModal from '../../VehicleFormModal';
 import { saveDocument } from '../../../core/db';
 
-export const ManagementVehiclesTab = ({ searchTerm, onShowStatus }: { searchTerm: string, onShowStatus: (text: string, type: 'info' | 'success' | 'error') => void }) => {
-    const { vehicles, customers, inspectionDiagrams, setVehicles, refreshActiveData } = useData();
+export const ManagementVehiclesTab = ({ searchTerm = '', onShowStatus }: { searchTerm: string, onShowStatus: (text: string, type: 'info' | 'success' | 'error') => void }) => {
+    // 1. DEFENSIVE DESTRUCTURING: Fallback to [] for all arrays to prevent Production crashes
+    const { 
+        vehicles = [], 
+        customers = [], 
+        inspectionDiagrams = [], 
+        setVehicles, 
+        refreshActiveData 
+    } = useData();
     
-    // 1. Local State for Instant UI Feedback
+    // 2. Local State for Instant UI Feedback
     const [localVehicles, setLocalVehicles] = useState<Vehicle[]>(vehicles || []);
 
-    // 2. Sync with Global Data Context
+    // 3. Sync with Global Data Context
     useEffect(() => {
         if (vehicles) setLocalVehicles(vehicles);
     }, [vehicles]);
 
-    const { selectedIds, deleteItem, toggleSelection, toggleSelectAll, bulkDelete } = useManagementTable(vehicles, 'brooks_vehicles');
+    const { selectedIds, deleteItem, toggleSelection, toggleSelectAll, bulkDelete } = useManagementTable(localVehicles || [], 'brooks_vehicles');
 
     const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isUpdating, setIsUpdating] = useState(false);
 
-    const filtered = localVehicles.filter(v => 
-        v.registration.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        v.make.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        v.model.toLowerCase().includes(searchTerm.toLowerCase())
+    // Filter logic with defensive string handling
+    const filtered = (localVehicles || []).filter(v => 
+        (v.registration || '').toLowerCase().includes((searchTerm || '').toLowerCase()) ||
+        (v.make || '').toLowerCase().includes((searchTerm || '').toLowerCase()) ||
+        (v.model || '').toLowerCase().includes((searchTerm || '').toLowerCase())
     );
 
     const handleSave = async (updatedVehicle: Vehicle) => {
         try {
             await saveDocument('brooks_vehicles', updatedVehicle);
             const updateFn = (prev: Vehicle[]) => {
-                const exists = prev.find(v => v.id === updatedVehicle.id);
-                return exists ? prev.map(v => v.id === updatedVehicle.id ? updatedVehicle : v) : [...prev, updatedVehicle];
+                const current = prev || [];
+                const exists = current.find(v => v.id === updatedVehicle.id);
+                return exists ? current.map(v => v.id === updatedVehicle.id ? updatedVehicle : v) : [...current, updatedVehicle];
             };
             setLocalVehicles(updateFn);
             if (setVehicles) setVehicles(updateFn);
             
             setIsModalOpen(false);
             setSelectedVehicle(null);
-            await refreshActiveData(true);
+            if (refreshActiveData) await refreshActiveData(true);
             onShowStatus('Vehicle saved successfully.', 'success');
         } catch (error) {
             onShowStatus('Failed to save vehicle.', 'error');
@@ -58,6 +67,7 @@ export const ManagementVehiclesTab = ({ searchTerm, onShowStatus }: { searchTerm
         try {
             const data = await parseCsv(file);
             const importedList: Vehicle[] = [];
+            const currentList = localVehicles || [];
 
             for (const row of data) {
                 const id = row.id || crypto.randomUUID();
@@ -70,19 +80,19 @@ export const ManagementVehiclesTab = ({ searchTerm, onShowStatus }: { searchTerm
                     ...row
                 };
                 
-                if (!localVehicles.some(ex => ex.id === id)) {
+                if (!currentList.some(ex => ex.id === id)) {
                     await saveDocument('brooks_vehicles', newVehicle);
                     importedList.push(newVehicle);
                 }
             }
 
             if (importedList.length > 0) {
-                const finalUpdate = (prev: Vehicle[]) => [...prev, ...importedList];
+                const finalUpdate = (prev: Vehicle[]) => [...(prev || []), ...importedList];
                 setLocalVehicles(finalUpdate);
                 if (setVehicles) setVehicles(finalUpdate);
             }
             onShowStatus(`Imported ${importedList.length} vehicles.`, 'success');
-            await refreshActiveData(true);
+            if (refreshActiveData) await refreshActiveData(true);
         } catch (err) {
             onShowStatus('Error importing vehicles.', 'error');
         }
@@ -90,11 +100,13 @@ export const ManagementVehiclesTab = ({ searchTerm, onShowStatus }: { searchTerm
     };
 
     const autoAssignVehicleDiagrams = async () => {
-        if (!inspectionDiagrams?.length) { 
+        const diagramsList = inspectionDiagrams || [];
+        if (!diagramsList.length) { 
             onShowStatus("Library is empty. Upload diagrams first.", 'error'); 
             return; 
         }
-        const candidates = localVehicles.filter(v => !v.images?.some(img => img.isPrimaryDiagram));
+        
+        const candidates = (localVehicles || []).filter(v => !v.images?.some(img => img.isPrimaryDiagram));
         if (candidates.length === 0) { 
             onShowStatus("All vehicles already have diagrams.", 'success'); 
             return; 
@@ -102,7 +114,7 @@ export const ManagementVehiclesTab = ({ searchTerm, onShowStatus }: { searchTerm
         
         setIsUpdating(true);
         let assignedCount = 0;
-        const updatedVehicles = [...localVehicles];
+        const updatedVehicles = [...(localVehicles || [])];
 
         try {
             for (const v of candidates) {
@@ -111,7 +123,7 @@ export const ManagementVehiclesTab = ({ searchTerm, onShowStatus }: { searchTerm
                 const vMake = (v.make || '').toLowerCase().trim();
                 const vModel = (v.model || '').toLowerCase().trim();
                 
-                for (const d of inspectionDiagrams) {
+                for (const d of diagramsList) {
                     let score = 0;
                     const dMake = (d.make || '').toLowerCase().trim();
                     const dModel = (d.model || '').toLowerCase().trim();
@@ -132,7 +144,7 @@ export const ManagementVehiclesTab = ({ searchTerm, onShowStatus }: { searchTerm
                         await saveDocument('brooks_vehicles', updatedV);
                         
                         const idx = updatedVehicles.findIndex(veh => veh.id === v.id);
-                        updatedVehicles[idx] = updatedV;
+                        if (idx !== -1) updatedVehicles[idx] = updatedV;
                         assignedCount++;
                     }
                 }
@@ -180,7 +192,7 @@ export const ManagementVehiclesTab = ({ searchTerm, onShowStatus }: { searchTerm
                         <thead className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
                             <tr>
                                 <th className="p-4 w-12 text-center">
-                                    <input type="checkbox" checked={selectedIds.size === filtered.length && filtered.length > 0} onChange={() => toggleSelectAll(filtered)} className="rounded border-gray-300 text-indigo-600 w-4 h-4" />
+                                    <input type="checkbox" checked={filtered.length > 0 && selectedIds.size === filtered.length} onChange={() => toggleSelectAll(filtered)} className="rounded border-gray-300 text-indigo-600 w-4 h-4" />
                                 </th>
                                 <th className="p-4 font-black text-gray-400 uppercase text-[10px] tracking-widest">Registration</th>
                                 <th className="p-4 font-black text-gray-400 uppercase text-[10px] tracking-widest">Make & Model</th>
@@ -190,7 +202,7 @@ export const ManagementVehiclesTab = ({ searchTerm, onShowStatus }: { searchTerm
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                             {filtered.map(v => {
-                                const owner = customers.find(c => c.id === v.customerId);
+                                const owner = (customers || []).find(c => c.id === v.customerId);
                                 const hasDiagram = v.images?.some(img => img.isPrimaryDiagram);
                                 return (
                                     <tr key={v.id} className="hover:bg-gray-50/50 transition-colors group">
@@ -210,7 +222,7 @@ export const ManagementVehiclesTab = ({ searchTerm, onShowStatus }: { searchTerm
                                             </div>
                                         </td>
                                         <td className="p-4">
-                                            <div className="flex items-center gap-2 text-gray-600 font-medium">
+                                            <div className="flex items-center gap-2 text-gray-600 font-medium text-xs">
                                                 <User size={14} className="text-gray-300"/>
                                                 {owner ? `${owner.forename} ${owner.surname}` : <span className="text-gray-300 italic">Unassigned</span>}
                                             </div>
@@ -222,6 +234,11 @@ export const ManagementVehiclesTab = ({ searchTerm, onShowStatus }: { searchTerm
                                     </tr>
                                 );
                             })}
+                            {filtered.length === 0 && (
+                                <tr>
+                                    <td colSpan={5} className="p-12 text-center text-gray-400 font-bold uppercase tracking-widest text-xs">No vehicles found</td>
+                                </tr>
+                            )}
                         </tbody>
                     </table>
                 </div>
@@ -233,7 +250,7 @@ export const ManagementVehiclesTab = ({ searchTerm, onShowStatus }: { searchTerm
                     onClose={() => setIsModalOpen(false)} 
                     onSave={handleSave} 
                     vehicle={selectedVehicle} 
-                    customers={customers} 
+                    customers={customers || []} 
                 />
             )}
         </div>

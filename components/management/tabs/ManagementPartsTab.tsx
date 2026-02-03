@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useData } from '../../../core/state/DataContext';
 import { Part } from '../../../types';
-import { PlusCircle, Upload, Trash2, Loader2, Package, Hash, DollarSign, Search } from 'lucide-react';
+import { PlusCircle, Upload, Loader2, Hash, Package, TrendingUp, AlertCircle } from 'lucide-react';
 import { formatCurrency } from '../../../utils/formatUtils';
 import PartFormModal from '../../PartFormModal';
 import { useManagementTable } from '../hooks/useManagementTable';
@@ -15,18 +15,22 @@ const cleanToNumber = (val: any): number => {
     return isNaN(num) ? 0 : num;
 };
 
-export const ManagementPartsTab = ({ searchTerm, onShowStatus }: { searchTerm: string, onShowStatus: (text: string, type: 'info' | 'success' | 'error') => void }) => {
-    const { parts, suppliers, taxRates, setParts, refreshActiveData } = useData();
+export const ManagementPartsTab = ({ searchTerm = '', onShowStatus }: { searchTerm: string, onShowStatus: (text: string, type: 'info' | 'success' | 'error') => void }) => {
+    const { 
+        parts = [], 
+        suppliers = [], 
+        taxRates = [], 
+        setParts, 
+        refreshActiveData 
+    } = useData();
     
-    // 1. Local State for Instant UI Feedback
     const [localParts, setLocalParts] = useState<Part[]>(parts || []);
 
-    // 2. Sync with Global Data Context
     useEffect(() => {
         if (parts) setLocalParts(parts);
     }, [parts]);
 
-    const { deleteItem } = useManagementTable(parts, 'brooks_parts');
+    const { deleteItem } = useManagementTable(localParts || [], 'brooks_parts');
 
     const [selectedPart, setSelectedPart] = useState<Part | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -34,9 +38,9 @@ export const ManagementPartsTab = ({ searchTerm, onShowStatus }: { searchTerm: s
     const [isImporting, setIsImporting] = useState(false);
     const [importProgress, setImportProgress] = useState(0);
 
-    const filtered = localParts.filter(p => {
-        const pNum = p.partNumber ? String(p.partNumber).toLowerCase() : '';
-        const pDesc = p.description ? String(p.description).toLowerCase() : '';
+    const filtered = (localParts || []).filter(p => {
+        const pNum = (p.partNumber || '').toLowerCase();
+        const pDesc = (p.description || '').toLowerCase();
         const sTerm = (searchTerm || '').toLowerCase();
         return pNum.includes(sTerm) || pDesc.includes(sTerm);
     });
@@ -44,18 +48,16 @@ export const ManagementPartsTab = ({ searchTerm, onShowStatus }: { searchTerm: s
     const handleSave = async (updatedPart: Part) => {
         try {
             await saveDocument('brooks_parts', updatedPart);
-            
             const updateFn = (prev: Part[]) => {
-                const exists = prev.find(p => p.id === updatedPart.id);
-                return exists ? prev.map(p => p.id === updatedPart.id ? updatedPart : p) : [...prev, updatedPart];
+                const current = prev || [];
+                const exists = current.find(p => p.id === updatedPart.id);
+                return exists ? current.map(p => p.id === updatedPart.id ? updatedPart : p) : [...current, updatedPart];
             };
-
             setLocalParts(updateFn);
             if (setParts) setParts(updateFn);
-            
             setIsModalOpen(false);
             setSelectedPart(null);
-            await refreshActiveData(true);
+            if (refreshActiveData) await refreshActiveData(true);
             onShowStatus('Part saved successfully.', 'success');
         } catch (error) {
             onShowStatus('Failed to save part.', 'error');
@@ -67,14 +69,12 @@ export const ManagementPartsTab = ({ searchTerm, onShowStatus }: { searchTerm: s
         if (!file) return;
         setIsImporting(true);
         setImportProgress(0);
-    
         try {
             const data = await parseCsv(file);
             if (!data || data.length === 0) throw new Error("No data found");
-    
             const actualKeys = Object.keys(data[0]);
             const findKeySafe = (target: string) => actualKeys.find(k => k.toLowerCase().replace(/\s/g, '') === target.toLowerCase());
-    
+            
             const costKey = findKeySafe('costprice') || findKeySafe('cost') || "";
             const saleKey = findKeySafe('saleprice') || findKeySafe('sellprice') || findKeySafe('price') || "";
             const stockKey = findKeySafe('stockquantity') || findKeySafe('onstock') || findKeySafe('stock') || "";
@@ -82,7 +82,7 @@ export const ManagementPartsTab = ({ searchTerm, onShowStatus }: { searchTerm: s
             const descKey = findKeySafe('description') || findKeySafe('desc') || "";
     
             const newParts: Part[] = data.map((row: any, index: number) => ({
-                id: row.id || `PART_${Date.now()}_${index}`,
+                id: row.id || `PART_${Date.now()}_${index}_${Math.random().toString(36).substring(7)}`,
                 partNumber: String(row[partKey] || 'UNKNOWN').trim(),
                 description: String(row[descKey] || '').trim(),
                 costPrice: cleanToNumber(row[costKey]),
@@ -92,23 +92,12 @@ export const ManagementPartsTab = ({ searchTerm, onShowStatus }: { searchTerm: s
                 taxCodeId: row.taxCodeId || 'TAX-STD'
             }));
     
-            let addedCount = 0;
-            let updatedCount = 0;
-            const chunkSize = 50;
-
-            for (let i = 0; i < newParts.length; i += chunkSize) {
-                const chunk = newParts.slice(i, i + chunkSize);
+            for (let i = 0; i < newParts.length; i += 50) {
+                const chunk = newParts.slice(i, i + 50);
                 await Promise.all(chunk.map(async (p) => {
-                    const existing = localParts.find(ex => ex.id === p.id || (p.partNumber !== 'UNKNOWN' && ex.partNumber === p.partNumber));
-                    if (existing) {
-                        if (overwrite) {
-                            await saveDocument('brooks_parts', { ...existing, ...p });
-                            updatedCount++;
-                        }
-                    } else {
-                        await saveDocument('brooks_parts', p);
-                        addedCount++;
-                    }
+                    const existing = (localParts || []).find(ex => ex.id === p.id || (p.partNumber !== 'UNKNOWN' && ex.partNumber === p.partNumber));
+                    if (existing && overwrite) await saveDocument('brooks_parts', { ...existing, ...p });
+                    else if (!existing) await saveDocument('brooks_parts', p);
                 }));
                 setImportProgress(Math.round(((i + chunk.length) / newParts.length) * 100));
             }
@@ -116,8 +105,8 @@ export const ManagementPartsTab = ({ searchTerm, onShowStatus }: { searchTerm: s
             const finalParts = await getAll('brooks_parts') as Part[];
             setLocalParts(finalParts);
             if (setParts) setParts(finalParts);
-            onShowStatus(`Imported: ${addedCount} added, ${updatedCount} updated.`, 'success');
-            await refreshActiveData(true);
+            onShowStatus('Import complete.', 'success');
+            if (refreshActiveData) await refreshActiveData(true);
         } catch (err) {
             onShowStatus('Import failed.', 'error');
         } finally {
@@ -128,70 +117,108 @@ export const ManagementPartsTab = ({ searchTerm, onShowStatus }: { searchTerm: s
 
     return (
         <div className="p-1">
-            <div className="flex justify-between items-center mb-6">
+            {/* Header Section */}
+            <div className="flex justify-between items-end mb-8">
                 <div>
-                    <h2 className="text-xl font-black text-gray-900 uppercase tracking-tight">Parts Inventory</h2>
-                    <p className="text-sm text-gray-500 font-medium">Manage stock levels and wholesale pricing</p>
+                    <h2 className="text-2xl font-black text-slate-900 uppercase tracking-tighter flex items-center gap-2">
+                        <Package className="text-indigo-600" size={24} />
+                        Inventory Control
+                    </h2>
+                    <p className="text-sm text-slate-500 font-medium">Manage master parts list, tracking and wholesale values</p>
                 </div>
                 <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-2 bg-white border border-gray-200 px-3 py-2 rounded-xl shadow-sm">
-                        <input type="checkbox" id="overwrite" checked={overwrite} onChange={(e) => setOverwrite(e.target.checked)} className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500" />
-                        <label htmlFor="overwrite" className="text-[10px] font-black text-gray-400 uppercase cursor-pointer tracking-widest">Overwrite Duplicates</label>
+                    <div className="flex items-center gap-3 bg-slate-100 p-1.5 rounded-xl border border-slate-200">
+                        <div className="flex items-center gap-2 px-3 py-1.5">
+                            <input type="checkbox" id="overwrite" checked={overwrite} onChange={(e) => setOverwrite(e.target.checked)} className="w-4 h-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500" />
+                            <label htmlFor="overwrite" className="text-[10px] font-bold text-slate-500 uppercase cursor-pointer tracking-widest leading-none">Overwrite</label>
+                        </div>
+                        <label className={`flex items-center gap-2 px-4 py-2 rounded-lg cursor-pointer font-bold text-xs transition-all ${isImporting ? 'bg-slate-200 text-slate-400' : 'bg-white text-slate-700 shadow-sm hover:bg-slate-50'}`}>
+                            {isImporting ? <Loader2 className="animate-spin" size={14}/> : <Upload size={14}/>}
+                            {isImporting ? `${importProgress}%` : 'IMPORT CSV'}
+                            <input type="file" accept=".csv" className="hidden" onChange={handleImportParts} disabled={isImporting} />
+                        </label>
                     </div>
-                    
-                    <label className={`flex items-center gap-2 px-4 py-2.5 rounded-xl cursor-pointer shadow-sm border-2 font-bold text-sm transition-all active:scale-95 ${isImporting ? 'bg-gray-100 text-gray-400 border-gray-200' : 'bg-white border-indigo-600 text-indigo-600 hover:bg-indigo-50'}`}>
-                        {isImporting ? <Loader2 className="animate-spin" size={18}/> : <Upload size={18}/>}
-                        {isImporting ? `${importProgress}%` : 'Import CSV'}
-                        <input type="file" accept=".csv" className="hidden" onChange={handleImportParts} disabled={isImporting} />
-                    </label>
 
-                    <button onClick={() => { setSelectedPart(null); setIsModalOpen(true); }} className="bg-indigo-600 text-white px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all active:scale-95">
-                        <PlusCircle size={18}/> Add Part
+                    <button onClick={() => { setSelectedPart(null); setIsModalOpen(true); }} className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest flex items-center gap-2 hover:bg-indigo-700 shadow-xl shadow-indigo-100 transition-all active:scale-95">
+                        <PlusCircle size={18}/> Add New Part
                     </button>
                 </div>
             </div>
 
-            <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
+            {/* Table Section */}
+            <div className="bg-white border border-slate-200 rounded-2xl shadow-xl shadow-slate-200/50 overflow-hidden">
                 <div className="overflow-y-auto max-h-[65vh]">
-                    <table className="w-full text-sm text-left">
-                        <thead className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
-                            <tr>
-                                <th className="p-4 font-black text-gray-400 uppercase text-[10px] tracking-widest">Part Identification</th>
-                                <th className="p-4 font-black text-gray-400 uppercase text-[10px] tracking-widest text-right">Stock</th>
-                                <th className="p-4 font-black text-gray-400 uppercase text-[10px] tracking-widest text-right">Wholesale Cost</th>
-                                <th className="p-4 font-black text-gray-400 uppercase text-[10px] tracking-widest text-right">Retail Price</th>
-                                <th className="p-4 font-black text-gray-400 uppercase text-[10px] tracking-widest text-center">Actions</th>
+                    <table className="w-full text-left border-collapse">
+                        <thead>
+                            <tr className="bg-slate-50/80 border-b border-slate-200 sticky top-0 z-10">
+                                <th className="px-6 py-4 font-black text-slate-400 uppercase text-[10px] tracking-[0.15em]">Part Details</th>
+                                <th className="px-6 py-4 font-black text-slate-400 uppercase text-[10px] tracking-[0.15em] text-center">In Stock</th>
+                                <th className="px-6 py-4 font-black text-slate-400 uppercase text-[10px] tracking-[0.15em] text-right">Wholesale (Cost)</th>
+                                <th className="px-6 py-4 font-black text-slate-400 uppercase text-[10px] tracking-[0.15em] text-right">Retail (Sale)</th>
+                                <th className="px-6 py-4 font-black text-slate-400 uppercase text-[10px] tracking-[0.15em] text-center">Operations</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-100">
+                        <tbody className="divide-y divide-slate-100">
                             {filtered.length > 0 ? (
                                 filtered.map(p => (
-                                    <tr key={p.id} className="hover:bg-gray-50/50 transition-colors">
-                                        <td className="p-4">
-                                            <div className="flex items-center gap-3">
-                                                <div className="p-2 bg-gray-50 rounded-lg text-gray-400"><Hash size={14}/></div>
+                                    <tr key={p.id} className="group hover:bg-slate-50/80 transition-all">
+                                        <td className="px-6 py-5">
+                                            <div className="flex items-start gap-4">
+                                                <div className="mt-1 p-2 bg-slate-100 rounded-lg text-slate-400 group-hover:bg-indigo-50 group-hover:text-indigo-500 transition-colors">
+                                                    <Hash size={16}/>
+                                                </div>
                                                 <div>
-                                                    <div className="font-black text-indigo-600 text-xs tracking-tight">{p.partNumber}</div>
-                                                    <div className="text-gray-900 font-bold">{p.description}</div>
+                                                    <span className="inline-block px-2 py-0.5 rounded bg-indigo-50 text-indigo-600 font-black text-[9px] uppercase tracking-wider mb-1">
+                                                        {p.partNumber || 'NO-SKU'}
+                                                    </span>
+                                                    <div className="text-slate-900 font-bold text-sm leading-tight uppercase tracking-tight">
+                                                        {p.description}
+                                                    </div>
                                                 </div>
                                             </div>
                                         </td>
-                                        <td className="p-4 text-right">
-                                            <div className={`inline-block px-2 py-1 rounded-lg font-black text-xs ${p.stockQuantity <= 0 ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>
+                                        <td className="px-6 py-5 text-center">
+                                            <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full font-black text-xs ${p.stockQuantity <= 0 ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                                                {p.stockQuantity <= 0 && <AlertCircle size={12} />}
                                                 {p.stockQuantity}
                                             </div>
                                         </td>
-                                        <td className="p-4 text-right font-mono text-gray-400 font-bold">{formatCurrency(p.costPrice)}</td>
-                                        <td className="p-4 text-right font-mono text-gray-900 font-black">{formatCurrency(p.salePrice)}</td>
-                                        <td className="p-4 text-center">
-                                            <button onClick={() => { setSelectedPart(p); setIsModalOpen(true); }} className="font-black text-[10px] uppercase tracking-widest text-indigo-600 hover:text-indigo-800 p-2 hover:bg-indigo-50 rounded-lg transition-all">Edit</button>
-                                            <button onClick={() => { if(confirm('Delete part?')) deleteItem(p.id); }} className="font-black text-[10px] uppercase tracking-widest text-gray-300 hover:text-red-600 p-2 hover:bg-red-50 rounded-lg transition-all">Delete</button>
+                                        <td className="px-6 py-5 text-right">
+                                            <span className="font-mono text-slate-400 font-bold text-sm">
+                                                {formatCurrency(p.costPrice)}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-5 text-right">
+                                            <div className="flex flex-col items-end">
+                                                <span className="font-mono text-indigo-600 font-black text-base">
+                                                    {formatCurrency(p.salePrice)}
+                                                </span>
+                                                <div className="flex items-center gap-1 text-[9px] font-bold text-emerald-500">
+                                                    <TrendingUp size={10} />
+                                                    {Math.round(((p.salePrice - p.costPrice) / (p.costPrice || 1)) * 100)}% MARGIN
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-5">
+                                            <div className="flex justify-center items-center gap-2">
+                                                <button onClick={() => { setSelectedPart(p); setIsModalOpen(true); }} className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg font-black text-[10px] uppercase tracking-widest text-slate-600 hover:border-indigo-600 hover:text-indigo-600 shadow-sm transition-all">
+                                                    Edit
+                                                </button>
+                                                <button onClick={() => { if(window.confirm('Delete part?')) deleteItem(p.id); }} className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg font-black text-[10px] uppercase tracking-widest text-slate-300 hover:text-red-600 hover:border-red-100 hover:bg-red-50 transition-all">
+                                                    Del
+                                                </button>
+                                            </div>
                                         </td>
                                     </tr>
                                 ))
                             ) : (
                                 <tr>
-                                    <td colSpan={5} className="p-12 text-center text-gray-400 font-bold uppercase tracking-widest text-xs">No parts matching search criteria</td>
+                                    <td colSpan={5} className="py-20 text-center">
+                                        <div className="flex flex-col items-center gap-2 opacity-30">
+                                            <Package size={48} />
+                                            <span className="font-black uppercase tracking-[0.2em] text-xs">Zero results found</span>
+                                        </div>
+                                    </td>
                                 </tr>
                             )}
                         </tbody>
@@ -205,8 +232,8 @@ export const ManagementPartsTab = ({ searchTerm, onShowStatus }: { searchTerm: s
                     onClose={() => setIsModalOpen(false)} 
                     onSave={handleSave} 
                     part={selectedPart} 
-                    suppliers={suppliers} 
-                    taxRates={taxRates} 
+                    suppliers={suppliers || []} 
+                    taxRates={taxRates || []} 
                 />
             )}
         </div>

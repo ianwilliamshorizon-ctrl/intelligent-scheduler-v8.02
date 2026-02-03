@@ -8,8 +8,12 @@ import { saveImage } from '../../../utils/imageStore';
 import InspectionDiagramFormModal from '../../InspectionDiagramFormModal';
 import { saveDocument } from '../../../core/db';
 
-export const ManagementDiagramsTab = ({ searchTerm, onShowStatus }: { searchTerm: string, onShowStatus: (text: string, type: 'info' | 'success' | 'error') => void }) => {
-    const { inspectionDiagrams, setInspectionDiagrams, refreshActiveData } = useData();
+export const ManagementDiagramsTab = ({ searchTerm = '', onShowStatus }: { searchTerm: string, onShowStatus: (text: string, type: 'info' | 'success' | 'error') => void }) => {
+    const { 
+        inspectionDiagrams = [], 
+        setInspectionDiagrams, 
+        refreshActiveData 
+    } = useData();
     
     // 1. Local state for instant grid updates
     const [localDiagrams, setLocalDiagrams] = useState<InspectionDiagram[]>(inspectionDiagrams || []);
@@ -21,14 +25,15 @@ export const ManagementDiagramsTab = ({ searchTerm, onShowStatus }: { searchTerm
         }
     }, [inspectionDiagrams]);
 
-    const { deleteItem } = useManagementTable(inspectionDiagrams, 'brooks_inspectionDiagrams');
+    const { deleteItem } = useManagementTable(inspectionDiagrams || [], 'brooks_inspectionDiagrams');
 
     const [selectedDiagram, setSelectedDiagram] = useState<InspectionDiagram | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
 
-    const filtered = localDiagrams.filter(d => 
-        d.make.toLowerCase().includes(searchTerm.toLowerCase()) || 
-        d.model.toLowerCase().includes(searchTerm.toLowerCase())
+    // Defensive filtering
+    const filtered = (localDiagrams || []).filter(d => 
+        (d.make || '').toLowerCase().includes((searchTerm || '').toLowerCase()) || 
+        (d.model || '').toLowerCase().includes((searchTerm || '').toLowerCase())
     );
 
     /**
@@ -40,19 +45,22 @@ export const ManagementDiagramsTab = ({ searchTerm, onShowStatus }: { searchTerm
             await saveDocument('brooks_inspectionDiagrams', updatedDiagram);
             
             const updateFn = (prev: InspectionDiagram[]) => {
-                const exists = prev.find(d => d.id === updatedDiagram.id);
-                if (exists) return prev.map(d => d.id === updatedDiagram.id ? updatedDiagram : d);
-                return [...prev, updatedDiagram];
+                const current = prev || [];
+                const exists = current.find(d => d.id === updatedDiagram.id);
+                if (exists) return current.map(d => d.id === updatedDiagram.id ? updatedDiagram : d);
+                return [...current, updatedDiagram];
             };
 
             setLocalDiagrams(updateFn);
             if (setInspectionDiagrams) setInspectionDiagrams(updateFn);
             
-            await refreshActiveData(true);
+            if (refreshActiveData) await refreshActiveData(true);
             setIsModalOpen(false);
             setSelectedDiagram(null);
+            onShowStatus("Diagram saved successfully.", "success");
         } catch (error) {
             console.error("Save failed:", error);
+            onShowStatus("Failed to save diagram.", "error");
         }
     };
 
@@ -81,17 +89,18 @@ export const ManagementDiagramsTab = ({ searchTerm, onShowStatus }: { searchTerm
                             let model = nameWithoutExt;
                             const parts = nameWithoutExt.split(' ');
                             
-                            const commonMakes = ['porsche', 'audi', 'vw', 'volkswagen', 'bmw', 'mercedes', 'ford', 'ferrari', 'mclaren', 'lamborghini', 'honda', 'toyota'];
+                            const commonMakes = ['porsche', 'audi', 'vw', 'volkswagen', 'bmw', 'mercedes', 'ford', 'ferrari', 'mclaren', 'lamborghini', 'honda', 'toyota', 'land rover', 'range rover'];
                             
+                            // Check if first word matches a known make
                             if (commonMakes.includes(parts[0].toLowerCase())) {
                                 make = parts[0]; 
                                 model = parts.slice(1).join(' ');
                             }
                             
                             make = make.charAt(0).toUpperCase() + make.slice(1); 
-                            model = model.charAt(0).toUpperCase() + model.slice(1);
+                            model = (model || 'Standard').charAt(0).toUpperCase() + (model || 'Standard').slice(1);
                             
-                            const imageId = `diag_bulk_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                            const imageId = `diag_bulk_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
                             
                             try {
                                 await saveImage(imageId, dataUrl);
@@ -107,7 +116,7 @@ export const ManagementDiagramsTab = ({ searchTerm, onShowStatus }: { searchTerm
                                 successCount++;
                                 
                                 // Update UI per item so the user sees progress
-                                setLocalDiagrams(prev => [...prev, newDiagram]);
+                                setLocalDiagrams(prev => [...(prev || []), newDiagram]);
                             } catch (err) { 
                                 console.error(`Failed to save image for ${file.name}`, err); 
                             }
@@ -121,11 +130,11 @@ export const ManagementDiagramsTab = ({ searchTerm, onShowStatus }: { searchTerm
 
             // Sync global context once at the end of bulk operation
             if (setInspectionDiagrams) {
-                setInspectionDiagrams(prev => [...prev, ...newlyAdded]);
+                setInspectionDiagrams(prev => [...(prev || []), ...newlyAdded]);
             }
 
             onShowStatus(`Successfully imported ${successCount} diagrams.`, 'success');
-            await refreshActiveData(true);
+            if (refreshActiveData) await refreshActiveData(true);
         } catch (e) { 
             console.error("Bulk upload failed", e); 
             onShowStatus("An error occurred during bulk upload.", 'error'); 
@@ -156,7 +165,7 @@ export const ManagementDiagramsTab = ({ searchTerm, onShowStatus }: { searchTerm
                 </div>
             </div>
             
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6 overflow-y-auto max-h-[70vh] pr-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6 overflow-y-auto max-h-[70vh] pr-2 pb-8">
                 {filtered.map(d => (
                     <div key={d.id} className="group relative bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-xl hover:border-indigo-200 transition-all duration-300">
                         <div className="aspect-square bg-gray-50 flex items-center justify-center p-4">
@@ -167,13 +176,13 @@ export const ManagementDiagramsTab = ({ searchTerm, onShowStatus }: { searchTerm
                             />
                         </div>
                         
-                        <div className="p-4 border-t border-gray-50">
-                            <h4 className="font-black text-xs text-gray-900 uppercase tracking-tight truncate">{d.make}</h4>
-                            <p className="text-[11px] text-gray-500 font-medium truncate">{d.model}</p>
+                        <div className="p-4 border-t border-gray-50 bg-white">
+                            <h4 className="font-black text-[10px] text-indigo-600 uppercase tracking-widest truncate">{d.make}</h4>
+                            <p className="text-xs text-gray-900 font-bold truncate uppercase">{d.model}</p>
                         </div>
 
                         {/* Hover Overlay Actions */}
-                        <div className="absolute inset-0 bg-indigo-900/10 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                        <div className="absolute inset-0 bg-indigo-900/10 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 backdrop-blur-[1px]">
                             <button 
                                 onClick={() => { setSelectedDiagram(d); setIsModalOpen(true); }} 
                                 className="p-2.5 bg-white rounded-xl text-indigo-600 hover:bg-indigo-600 hover:text-white shadow-xl transition-all transform translate-y-4 group-hover:translate-y-0"
@@ -182,7 +191,7 @@ export const ManagementDiagramsTab = ({ searchTerm, onShowStatus }: { searchTerm
                             </button>
                             <button 
                                 onClick={() => {
-                                    if(window.confirm('Delete this diagram?')) deleteItem(d.id);
+                                    if(window.confirm(`Delete the ${d.make} ${d.model} template?`)) deleteItem(d.id);
                                 }} 
                                 className="p-2.5 bg-white rounded-xl text-red-600 hover:bg-red-600 hover:text-white shadow-xl transition-all transform translate-y-4 group-hover:translate-y-0 delay-75"
                             >

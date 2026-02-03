@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useData } from '../../../core/state/DataContext';
 import { Customer } from '../../../types';
-import { PlusCircle, Trash2, Upload, User, Phone, Mail, MapPin, Hash, Search } from 'lucide-react';
+import { PlusCircle, Trash2, Upload, User, Phone, Mail, Hash } from 'lucide-react';
 import { CheckboxCell } from '../shared/CheckboxCell';
 import { useManagementTable } from '../hooks/useManagementTable';
 import { generateCustomerId } from '../../../core/utils/customerUtils';
@@ -9,8 +9,9 @@ import { parseCsv } from '../../../utils/csvUtils';
 import CustomerFormModal from '../../CustomerFormModal';
 import { saveDocument } from '../../../core/db';
 
-export const ManagementCustomersTab = ({ searchTerm, onShowStatus }: { searchTerm: string, onShowStatus: (text: string, type: 'info' | 'success' | 'error') => void }) => {
-    const { customers, setCustomers, refreshActiveData } = useData();
+export const ManagementCustomersTab = ({ searchTerm = '', onShowStatus }: { searchTerm: string, onShowStatus: (text: string, type: 'info' | 'success' | 'error') => void }) => {
+    // Defensively destructure with fallbacks
+    const { customers = [], setCustomers, refreshActiveData } = useData();
     
     // 1. Local State for Instant UI Feedback
     const [localCustomers, setLocalCustomers] = useState<Customer[]>(customers || []);
@@ -22,15 +23,17 @@ export const ManagementCustomersTab = ({ searchTerm, onShowStatus }: { searchTer
         }
     }, [customers]);
 
-    const { selectedIds, deleteItem, toggleSelection, toggleSelectAll, bulkDelete } = useManagementTable(customers, 'brooks_customers');
+    // Pass safe array to hook
+    const { selectedIds, deleteItem, toggleSelection, toggleSelectAll, bulkDelete } = useManagementTable(localCustomers || [], 'brooks_customers');
     
     const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
 
-    const filtered = localCustomers.filter(c => 
-        `${c.forename} ${c.surname}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (c.companyName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        c.id.toLowerCase().includes(searchTerm.toLowerCase())
+    // Filtered list with defensive checks
+    const filtered = (localCustomers || []).filter(c => 
+        `${c.forename} ${c.surname}`.toLowerCase().includes((searchTerm || '').toLowerCase()) ||
+        (c.companyName || '').toLowerCase().includes((searchTerm || '').toLowerCase()) ||
+        (c.id || '').toLowerCase().includes((searchTerm || '').toLowerCase())
     );
 
     /**
@@ -42,9 +45,10 @@ export const ManagementCustomersTab = ({ searchTerm, onShowStatus }: { searchTer
             await saveDocument('brooks_customers', updatedCustomer);
             
             const updateFn = (prev: Customer[]) => {
-                const exists = prev.find(c => c.id === updatedCustomer.id);
-                if (exists) return prev.map(c => c.id === updatedCustomer.id ? updatedCustomer : c);
-                return [...prev, updatedCustomer];
+                const existingList = prev || [];
+                const exists = existingList.find(c => c.id === updatedCustomer.id);
+                if (exists) return existingList.map(c => c.id === updatedCustomer.id ? updatedCustomer : c);
+                return [...existingList, updatedCustomer];
             };
 
             setLocalCustomers(updateFn);
@@ -52,7 +56,7 @@ export const ManagementCustomersTab = ({ searchTerm, onShowStatus }: { searchTer
             
             setIsModalOpen(false);
             setSelectedCustomer(null);
-            await refreshActiveData(true);
+            if (refreshActiveData) await refreshActiveData(true);
             onShowStatus('Customer saved successfully.', 'success');
         } catch (error) {
             onShowStatus('Failed to save customer.', 'error');
@@ -71,9 +75,10 @@ export const ManagementCustomersTab = ({ searchTerm, onShowStatus }: { searchTer
         try {
             const data = await parseCsv(file);
             const importedList: Customer[] = [];
+            const currentList = localCustomers || [];
 
             for (const row of data) {
-                const id = row.id || generateCustomerId(row.surname || 'Unknown', [...localCustomers, ...importedList]);
+                const id = row.id || generateCustomerId(row.surname || 'Unknown', [...currentList, ...importedList]);
                 const newCustomer: Customer = {
                     id,
                     forename: row.forename || 'Unknown',
@@ -89,20 +94,20 @@ export const ManagementCustomersTab = ({ searchTerm, onShowStatus }: { searchTer
                     ...row
                 };
 
-                if (!localCustomers.some(ex => ex.id === id)) {
+                if (!currentList.some(ex => ex.id === id)) {
                     await saveDocument('brooks_customers', newCustomer);
                     importedList.push(newCustomer);
                 }
             }
 
             if (importedList.length > 0) {
-                const finalUpdate = (prev: Customer[]) => [...prev, ...importedList];
+                const finalUpdate = (prev: Customer[]) => [...(prev || []), ...importedList];
                 setLocalCustomers(finalUpdate);
                 if (setCustomers) setCustomers(finalUpdate);
             }
 
             onShowStatus(`Successfully imported ${importedList.length} customers.`, 'success');
-            await refreshActiveData(true);
+            if (refreshActiveData) await refreshActiveData(true);
         } catch (err) {
             console.error(err);
             onShowStatus('Error importing customers. Check file format.', 'error');
@@ -144,7 +149,7 @@ export const ManagementCustomersTab = ({ searchTerm, onShowStatus }: { searchTer
                                 <th className="p-4 w-12 text-center">
                                     <input 
                                         type="checkbox" 
-                                        checked={selectedIds.size === filtered.length && filtered.length > 0} 
+                                        checked={filtered.length > 0 && selectedIds.size === filtered.length} 
                                         onChange={() => toggleSelectAll(filtered)} 
                                         className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4" 
                                     />
@@ -162,7 +167,7 @@ export const ManagementCustomersTab = ({ searchTerm, onShowStatus }: { searchTer
                                     <td className="p-4">
                                         <div className="flex items-center gap-3">
                                             <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-black text-xs shadow-sm">
-                                                {c.forename[0]}{c.surname[0]}
+                                                {(c.forename?.[0] || '')}{(c.surname?.[0] || '')}
                                             </div>
                                             <div>
                                                 <div className="font-bold text-gray-900">{c.forename} {c.surname}</div>
@@ -226,7 +231,7 @@ export const ManagementCustomersTab = ({ searchTerm, onShowStatus }: { searchTer
                     }} 
                     onSave={handleSave} 
                     customer={selectedCustomer} 
-                    existingCustomers={customers} 
+                    existingCustomers={customers || []} 
                 />
             )}
         </div>
