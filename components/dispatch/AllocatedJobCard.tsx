@@ -109,6 +109,7 @@ export const AllocatedJobCard: React.FC<{
             <div className="flex-grow overflow-hidden my-0.5 min-h-0">
                  <p className="text-xs font-semibold truncate leading-tight">{job.description}</p>
                  <p className="text-[10px] truncate leading-tight opacity-80" title={getCustomerDisplayName(customer)}>{getCustomerDisplayName(customer)}</p>
+                 <p className="font-mono text-[10px] text-black bg-gray-300 px-1.5 py-0.5 rounded-sm self-start leading-tight">#{job.id}</p>
             </div>
             
             <div className="flex justify-between items-end text-xs mt-auto pt-1 border-t border-white/20 flex-shrink-0">
