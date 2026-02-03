@@ -12,10 +12,11 @@ export const ManagementPackagesTab = ({ searchTerm = '', onShowStatus }: { searc
     const { servicePackages = [], setServicePackages, taxRates, businessEntities, parts, refreshActiveData } = useData();
     const { selectedEntityId } = useApp();
     
-    const [localPackages, setLocalPackages] = useState<ServicePackage[]>(servicePackages || []);
+    // 1. Local State for Instant UI Feedback
+    const [localPackages, setLocalPackages] = useState<ServicePackage[]>(Array.isArray(servicePackages) ? servicePackages : []);
 
     useEffect(() => {
-        if (servicePackages) setLocalPackages(servicePackages);
+        setLocalPackages(Array.isArray(servicePackages) ? servicePackages : []);
     }, [servicePackages]);
 
     const { deleteItem } = useManagementTable(servicePackages, 'brooks_servicePackages');
@@ -23,28 +24,38 @@ export const ManagementPackagesTab = ({ searchTerm = '', onShowStatus }: { searc
     const [selectedPackage, setSelectedPackage] = useState<ServicePackage | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
 
-    // Filtering logic
+    // Filtering logic with defensive checks
     const filtered = localPackages.filter(p => 
-        p.name.toLowerCase().includes(searchTerm.toLowerCase())
+        (p.name || '').toLowerCase().includes(searchTerm.toLowerCase())
     );
 
+    // 2. Optimized Save with Settle Buffer
     const handleSave = async (updatedPackage: ServicePackage) => {
         try {
             await saveDocument('brooks_servicePackages', updatedPackage);
             
             const updateFn = (prev: ServicePackage[]) => {
-                const exists = prev.find(p => p.id === updatedPackage.id);
+                const current = Array.isArray(prev) ? prev : [];
+                const exists = current.find(p => p.id === updatedPackage.id);
                 return exists 
-                    ? prev.map(p => p.id === updatedPackage.id ? updatedPackage : p)
-                    : [...prev, updatedPackage];
+                    ? current.map(p => p.id === updatedPackage.id ? updatedPackage : p)
+                    : [...current, updatedPackage];
             };
 
+            // Immediate UI Update
             setLocalPackages(updateFn);
             if (setServicePackages) setServicePackages(updateFn);
 
-            await refreshActiveData(true);
             setIsModalOpen(false);
             setSelectedPackage(null);
+
+            // 3. Cloud Settle Buffer
+            if (refreshActiveData) {
+                setTimeout(async () => {
+                    await refreshActiveData(true);
+                }, 800);
+            }
+
             onShowStatus('Service package configuration saved.', 'success');
         } catch (error: any) {
             onShowStatus(error.message || 'Failed to save package', 'error');
@@ -95,7 +106,7 @@ export const ManagementPackagesTab = ({ searchTerm = '', onShowStatus }: { searc
                                                     <div className="flex items-center gap-1.5 mt-0.5">
                                                         <Tag size={12} className="text-slate-300" />
                                                         <span className="text-[10px] text-slate-400 uppercase font-black tracking-widest">
-                                                            {p.id.split('-')[0]}
+                                                            {p.id?.split('-')[0] || 'NEW'}
                                                         </span>
                                                     </div>
                                                 </div>

@@ -1,119 +1,139 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../../../core/state/AppContext';
 import { useData } from '../../../core/state/DataContext';
-import { User } from '../../../types';
-import { PlusCircle } from 'lucide-react';
+import { User as UserType } from '../../../types';
+import { PlusCircle, User, Mail, ShieldCheck, Edit3, Trash2, Users } from 'lucide-react';
 import UserFormModal from '../../UserFormModal';
 import { useManagementTable } from '../hooks/useManagementTable';
 import { saveDocument } from '../../../core/db/index';
 
 export const ManagementStaffTab = () => {
-    const { users, setUsers } = useApp();
-    const { roles, refreshActiveData } = useData();
+    const { users = [], setUsers } = useApp();
+    const { roles = [], refreshActiveData } = useData();
     
-    // 1. LOCAL STATE: This is what the table actually renders.
-    // This ensures the UI updates the MILLISECOND you hit save.
-    const [localUsers, setLocalUsers] = useState<User[]>(users);
+    // 1. Initialize with fallback to prevent .map crashes
+    const [localUsers, setLocalUsers] = useState<UserType[]>(Array.isArray(users) ? users : []);
 
-    // Sync local state if global users change (e.g. on background refresh)
     useEffect(() => {
-        setLocalUsers(users);
+        if (Array.isArray(users)) {
+            setLocalUsers(users);
+        }
     }, [users]);
 
-    const { deleteItem } = useManagementTable(users, 'brooks_users');
-    const [selectedUser, setSelectedUser] = useState<User | null>(null);
+    const { deleteItem } = useManagementTable(localUsers, 'brooks_users');
+    const [selectedUser, setSelectedUser] = useState<UserType | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
 
-    const handleSave = async (updatedUser: User) => {
+    const handleSave = async (updatedUser: UserType) => {
         try {
-            // 2. SAVE TO DB
+            // 2. Await the DB write fully
             await saveDocument('brooks_users', updatedUser);
             
-            // 3. UPDATE LOCAL UI IMMEDIATELY (The "Magic" fix)
-            setLocalUsers(prev => {
-                const exists = prev.find(u => u.id === updatedUser.id);
-                if (exists) {
-                    return prev.map(u => u.id === updatedUser.id ? updatedUser : u);
-                }
-                return [...prev, updatedUser];
-            });
+            // 3. Update UI states immediately
+            const updateLogic = (prev: UserType[]) => {
+                const current = Array.isArray(prev) ? prev : [];
+                const exists = current.find(u => u.id === updatedUser.id);
+                return exists 
+                    ? current.map(u => u.id === updatedUser.id ? updatedUser : u) 
+                    : [...current, updatedUser];
+            };
 
-            // 4. UPDATE GLOBAL CONTEXT (For the rest of the app)
-            if (setUsers) {
-                setUsers(prev => {
-                    const exists = prev.find(u => u.id === updatedUser.id);
-                    if (exists) return prev.map(u => u.id === updatedUser.id ? updatedUser : u);
-                    return [...prev, updatedUser];
-                });
-            }
+            setLocalUsers(updateLogic);
+            if (setUsers) setUsers(updateLogic);
 
-            // 5. TRIGGER BACKGROUND SYNC
-            await refreshActiveData(true);
-            
             setIsModalOpen(false);
             setSelectedUser(null);
+
+            // 4. THE FIX: Delay the background sync slightly 
+            // This prevents a "race condition" where the refresh pulls old data before the DB settles.
+            if (refreshActiveData) {
+                setTimeout(async () => {
+                    await refreshActiveData(true);
+                }, 800); 
+            }
         } catch (error: any) {
-            console.error("Save failed:", error);
+            console.error("Staff Save failed:", error);
             alert(`Failed to save: ${error.message}`);
         }
     };
 
     return (
-        <div className="p-2">
-            <div className="flex justify-between items-center mb-6">
+        <div className="p-1">
+            <div className="flex justify-between items-end mb-8">
                 <div>
-                    <h2 className="text-xl font-black text-gray-900 uppercase">Staff & Users</h2>
+                    <h2 className="text-2xl font-black text-slate-900 uppercase tracking-tighter flex items-center gap-2">
+                        <Users className="text-indigo-600" size={24} />
+                        Staff & Access
+                    </h2>
+                    <p className="text-sm text-slate-500 font-medium">Manage team members and system permissions</p>
                 </div>
                 <button 
                     onClick={() => { setSelectedUser(null); setIsModalOpen(true); }} 
-                    className="bg-indigo-600 text-white px-5 py-2.5 rounded-xl font-bold flex items-center gap-2"
+                    className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest flex items-center gap-2 hover:bg-indigo-700 shadow-xl shadow-indigo-100 transition-all active:scale-95"
                 >
                     <PlusCircle size={18}/> Add Staff Member
                 </button>
             </div>
 
-            <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
-                <table className="w-full text-sm text-left">
-                    <thead className="bg-gray-50 border-b border-gray-200">
-                        <tr>
-                            <th className="p-4 font-black text-gray-400 uppercase text-[10px]">Name</th>
-                            <th className="p-4 font-black text-gray-400 uppercase text-[10px]">Email / Login</th>
-                            <th className="p-4 font-black text-gray-400 uppercase text-[10px]">Role</th>
-                            <th className="p-4 font-black text-gray-400 uppercase text-[10px] text-right">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                        {/* We map OVER localUsers, NOT the global users */}
-                        {localUsers.map(u => (
-                            <tr key={u.id} className="hover:bg-gray-50/50">
-                                <td className="p-4 font-bold text-gray-900">{u.name}</td>
-                                <td className="p-4 text-gray-600 font-medium">
-                                    {/* This is the field you were editing */}
-                                    {u.email}
-                                </td>
-                                <td className="p-4">
-                                    <span className="px-3 py-1 bg-indigo-50 text-indigo-700 rounded-full text-[11px] font-black uppercase">
-                                        {u.role}
-                                    </span>
-                                </td>
-                                <td className="p-4 text-right">
-                                    <button 
-                                        onClick={() => { setSelectedUser(u); setIsModalOpen(true); }} 
-                                        className="text-indigo-600 font-black mr-4 text-xs uppercase"
-                                    >
-                                        Edit
-                                    </button>
-                                    <button 
-                                        onClick={() => deleteItem(u.id)} 
-                                        className="text-gray-300 hover:text-red-600 font-black text-xs uppercase"
-                                    >
-                                        Delete
-                                    </button>
-                                </td>
+            <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                <div className="overflow-y-auto max-h-[70vh]">
+                    <table className="w-full text-sm text-left border-collapse">
+                        <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
+                            <tr>
+                                <th className="px-6 py-4 font-black text-slate-400 uppercase text-[10px] tracking-[0.15em]">Team Member</th>
+                                <th className="px-6 py-4 font-black text-slate-400 uppercase text-[10px] tracking-[0.15em]">System Access</th>
+                                <th className="px-6 py-4 font-black text-slate-400 uppercase text-[10px] tracking-[0.15em]">Role</th>
+                                <th className="px-6 py-4 font-black text-slate-400 uppercase text-[10px] tracking-[0.15em] text-right">Actions</th>
                             </tr>
-                        ))}
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                            {localUsers.map(u => (
+                                <tr key={u.id} className="group hover:bg-slate-50/50 transition-colors">
+                                    <td className="px-6 py-5">
+                                        <div className="flex items-center gap-3">
+                                            <div className="h-10 w-10 bg-indigo-50 rounded-full flex items-center justify-center text-indigo-600 border border-indigo-100">
+                                                <User size={18} />
+                                            </div>
+                                            <div className="font-black text-slate-900 uppercase text-xs tracking-tight">{u.name}</div>
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-5">
+                                        <div className="flex items-center gap-2 text-slate-500 font-medium">
+                                            <Mail size={14} className="text-slate-300" />
+                                            {u.email}
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-5">
+                                        <div className="flex items-center gap-2">
+                                            <ShieldCheck size={14} className="text-emerald-500" />
+                                            <span className="px-3 py-1 bg-slate-100 text-slate-700 rounded-lg text-[10px] font-black uppercase tracking-widest border border-slate-200">
+                                                {u.role}
+                                            </span>
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-5 text-right">
+                                        <div className="flex justify-end gap-1">
+                                            <button 
+                                                onClick={() => { setSelectedUser(u); setIsModalOpen(true); }} 
+                                                className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all"
+                                            >
+                                                <Edit3 size={18} />
+                                            </button>
+                                            <button 
+                                                onClick={() => {
+                                                    if(window.confirm(`Remove ${u.name}?`)) deleteItem(u.id);
+                                                }} 
+                                                className="p-2 text-slate-200 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all"
+                                            >
+                                                <Trash2 size={18} />
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
             </div>
             
             {isModalOpen && (
@@ -122,7 +142,7 @@ export const ManagementStaffTab = () => {
                     onClose={() => { setIsModalOpen(false); setSelectedUser(null); }} 
                     onSave={handleSave} 
                     user={selectedUser} 
-                    roles={roles} 
+                    roles={roles || []} 
                 />
             )}
         </div>

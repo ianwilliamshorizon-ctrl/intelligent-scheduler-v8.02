@@ -9,42 +9,53 @@ import { saveDocument } from '../../../core/db/index';
 export const ManagementLiftsTab = ({ searchTerm = '', onShowStatus }: { searchTerm: string, onShowStatus: (text: string, type: 'info' | 'success' | 'error') => void }) => {
     const { lifts = [], setLifts, businessEntities = [], refreshActiveData } = useData();
     
-    const [localLifts, setLocalLifts] = useState<Lift[]>(lifts || []);
+    // 1. Local State for Instant UI Feedback
+    const [localLifts, setLocalLifts] = useState<Lift[]>(Array.isArray(lifts) ? lifts : []);
 
     useEffect(() => {
-        if (lifts) setLocalLifts(lifts);
+        setLocalLifts(Array.isArray(lifts) ? lifts : []);
     }, [lifts]);
 
     const { deleteItem } = useManagementTable(lifts, 'brooks_lifts');
     const [selectedLift, setSelectedLift] = useState<Lift | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
 
+    // 2. Cloud-Sync Optimized Save
     const handleSave = async (updatedLift: Lift) => {
         try {
             await saveDocument('brooks_lifts', updatedLift);
             
             const updateFn = (prev: Lift[]) => {
-                const exists = prev.find(l => l.id === updatedLift.id);
-                return exists ? prev.map(l => l.id === updatedLift.id ? updatedLift : l) : [...prev, updatedLift];
+                const current = Array.isArray(prev) ? prev : [];
+                const exists = current.find(l => l.id === updatedLift.id);
+                return exists ? current.map(l => l.id === updatedLift.id ? updatedLift : l) : [...current, updatedLift];
             };
 
+            // Update local and context state immediately
             setLocalLifts(updateFn);
             if (setLifts) setLifts(updateFn);
 
-            await refreshActiveData(true);
             setIsModalOpen(false);
             setSelectedLift(null);
+
+            // 3. Settle Buffer for Cloud indexing
+            if (refreshActiveData) {
+                setTimeout(async () => {
+                    await refreshActiveData(true);
+                }, 800);
+            }
+
             onShowStatus('Workshop lift updated successfully.', 'success');
         } catch (error: any) {
             onShowStatus(error.message || 'Failed to save lift', 'error');
         }
     };
 
-    // Filter and Grouping logic
+    // Filter and Grouping logic with defensive checks
     const liftsByEntity = useMemo(() => {
         const filtered = localLifts.filter(l => 
-            l.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            l.type.toLowerCase().includes(searchTerm.toLowerCase())
+            (l.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (l.type || '').toLowerCase().includes(searchTerm.toLowerCase())
         );
 
         return filtered.reduce((acc, lift) => {

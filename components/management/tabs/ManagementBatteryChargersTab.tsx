@@ -1,48 +1,66 @@
 import React, { useState, useEffect } from 'react';
 import { useData } from '../../../core/state/DataContext';
 import { BatteryCharger } from '../../../types';
-import { PlusCircle, Edit3, Trash2, BatteryCharging, MapPin, Building2, Zap } from 'lucide-react';
+import { PlusCircle, Edit3, Trash2, BatteryCharging, MapPin, Building2, Zap, SearchX } from 'lucide-react';
 import BatteryChargerFormModal from '../../BatteryChargerFormModal';
 import { useManagementTable } from '../hooks/useManagementTable';
 import { saveDocument } from '../../../core/db/index';
 
 export const ManagementBatteryChargersTab = ({ searchTerm = '', onShowStatus }: { searchTerm: string, onShowStatus: (text: string, type: 'info' | 'success' | 'error') => void }) => {
-    const { batteryChargers = [], setBatteryChargers, businessEntities = [], refreshActiveData } = useData();
+    const { 
+        batteryChargers = [], 
+        setBatteryChargers, 
+        businessEntities = [], 
+        refreshActiveData 
+    } = useData();
     
-    const [localChargers, setLocalChargers] = useState<BatteryCharger[]>(batteryChargers || []);
+    // Local state for immediate UI feedback
+    const [localChargers, setLocalChargers] = useState<BatteryCharger[]>(Array.isArray(batteryChargers) ? batteryChargers : []);
 
     useEffect(() => {
-        if (batteryChargers) setLocalChargers(batteryChargers);
+        setLocalChargers(Array.isArray(batteryChargers) ? batteryChargers : []);
     }, [batteryChargers]);
 
-    const { deleteItem } = useManagementTable(batteryChargers, 'brooks_batteryChargers');
+    const { deleteItem } = useManagementTable(localChargers, 'brooks_batteryChargers');
 
     const [selectedCharger, setSelectedCharger] = useState<BatteryCharger | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
 
-    // Filter logic
+    // Defensive filter logic
     const filtered = localChargers.filter(c => 
-        c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+        (c.name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
         (c.locationDescription || '').toLowerCase().includes(searchTerm.toLowerCase())
     );
 
+    /**
+     * handleSave - Processes both creation and updates for hardware assets
+     */
     const handleSave = async (updatedCharger: BatteryCharger) => {
         try {
             await saveDocument('brooks_batteryChargers', updatedCharger);
             
             const updateFn = (prev: BatteryCharger[]) => {
-                const exists = prev.find(c => c.id === updatedCharger.id);
+                const current = Array.isArray(prev) ? prev : [];
+                const exists = current.find(c => c.id === updatedCharger.id);
                 return exists 
-                    ? prev.map(c => c.id === updatedCharger.id ? updatedCharger : c) 
-                    : [...prev, updatedCharger];
+                    ? current.map(c => c.id === updatedCharger.id ? updatedCharger : c) 
+                    : [...current, updatedCharger];
             };
 
+            // Update local and global state immediately
             setLocalChargers(updateFn);
             if (setBatteryChargers) setBatteryChargers(updateFn);
             
-            await refreshActiveData(true);
             setIsModalOpen(false);
             setSelectedCharger(null);
+
+            // Buffer for cloud propagation before data refresh
+            if (refreshActiveData) {
+                setTimeout(async () => {
+                    await refreshActiveData(true);
+                }, 800);
+            }
+            
             onShowStatus('Charger configuration saved.', 'success');
         } catch (error: any) {
             onShowStatus(error.message || 'Failed to save charger', 'error');
@@ -135,7 +153,7 @@ export const ManagementBatteryChargersTab = ({ searchTerm = '', onShowStatus }: 
                                 <tr>
                                     <td colSpan={4} className="py-24 text-center">
                                         <div className="flex flex-col items-center gap-3 opacity-20">
-                                            <BatteryCharging size={64} strokeWidth={1} />
+                                            <SearchX size={64} strokeWidth={1} />
                                             <span className="font-black uppercase tracking-[0.3em] text-xs">No Assets Logged</span>
                                         </div>
                                     </td>

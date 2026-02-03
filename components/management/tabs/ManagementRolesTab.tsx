@@ -8,11 +8,11 @@ import { saveDocument } from '../../../core/db/index';
 export const ManagementRolesTab = ({ searchTerm = '', onShowStatus }: { searchTerm: string, onShowStatus: (text: string, type: 'info' | 'success' | 'error') => void }) => {
     const { roles = [], setRoles, refreshActiveData } = useData();
     
-    // Local state for instant UI updates
-    const [localRoles, setLocalRoles] = useState<Role[]>(roles);
+    // 1. Local state for instant UI updates
+    const [localRoles, setLocalRoles] = useState<Role[]>(Array.isArray(roles) ? roles : []);
 
     useEffect(() => {
-        if (roles) setLocalRoles(roles);
+        setLocalRoles(Array.isArray(roles) ? roles : []);
     }, [roles]);
 
     const [selectedRole, setSelectedRole] = useState<Role | null>(null);
@@ -20,25 +20,39 @@ export const ManagementRolesTab = ({ searchTerm = '', onShowStatus }: { searchTe
 
     // Filter roles based on the management-wide search term
     const filteredRoles = localRoles.filter(r => 
-        r.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+        (r.name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
         (r.description || '').toLowerCase().includes(searchTerm.toLowerCase())
     );
 
+    /**
+     * handleSave - Optimized for Cloud Sync
+     */
     const handleSave = async (updatedRole: Role) => {
         try {
             await saveDocument('brooks_roles', updatedRole);
             
             const updateFn = (prev: Role[]) => {
-                const exists = prev.find(r => r.id === updatedRole.id);
-                return exists ? prev.map(r => r.id === updatedRole.id ? updatedRole : r) : [...prev, updatedRole];
+                const current = Array.isArray(prev) ? prev : [];
+                const exists = current.find(r => r.id === updatedRole.id);
+                return exists 
+                    ? current.map(r => r.id === updatedRole.id ? updatedRole : r) 
+                    : [...current, updatedRole];
             };
             
+            // Instant UI Update
             setLocalRoles(updateFn);
             if (setRoles) setRoles(updateFn);
 
-            await refreshActiveData(true);
             setIsModalOpen(false);
             setSelectedRole(null);
+
+            // 2. Cloud Settle Buffer
+            if (refreshActiveData) {
+                setTimeout(async () => {
+                    await refreshActiveData(true);
+                }, 800);
+            }
+
             onShowStatus('System permissions updated.', 'success');
         } catch (error: any) {
             onShowStatus(error.message || 'Failed to save role', 'error');
@@ -91,7 +105,7 @@ export const ManagementRolesTab = ({ searchTerm = '', onShowStatus }: { searchTe
                                                 </div>
                                                 <div className="flex items-center gap-1 text-[10px] font-bold text-slate-400 uppercase mt-0.5">
                                                     <Fingerprint size={10} />
-                                                    ID: {role.id.slice(0, 8)}
+                                                    ID: {role.id?.slice(0, 8) || 'SYSTEM'}
                                                 </div>
                                             </div>
                                         </div>

@@ -16,13 +16,10 @@ export const ManagementDiagramsTab = ({ searchTerm = '', onShowStatus }: { searc
     } = useData();
     
     // 1. Local state for instant grid updates
-    const [localDiagrams, setLocalDiagrams] = useState<InspectionDiagram[]>(inspectionDiagrams || []);
+    const [localDiagrams, setLocalDiagrams] = useState<InspectionDiagram[]>(Array.isArray(inspectionDiagrams) ? inspectionDiagrams : []);
 
-    // 2. Sync with global data context
     useEffect(() => {
-        if (inspectionDiagrams) {
-            setLocalDiagrams(inspectionDiagrams);
-        }
+        setLocalDiagrams(Array.isArray(inspectionDiagrams) ? inspectionDiagrams : []);
     }, [inspectionDiagrams]);
 
     const { deleteItem } = useManagementTable(inspectionDiagrams || [], 'brooks_inspectionDiagrams');
@@ -37,26 +34,31 @@ export const ManagementDiagramsTab = ({ searchTerm = '', onShowStatus }: { searc
     );
 
     /**
-     * handleSave
-     * Single item save from the modal
+     * handleSave - Optimized for Cloud Sync
      */
     const handleSave = async (updatedDiagram: InspectionDiagram) => {
         try {
             await saveDocument('brooks_inspectionDiagrams', updatedDiagram);
             
             const updateFn = (prev: InspectionDiagram[]) => {
-                const current = prev || [];
+                const current = Array.isArray(prev) ? prev : [];
                 const exists = current.find(d => d.id === updatedDiagram.id);
-                if (exists) return current.map(d => d.id === updatedDiagram.id ? updatedDiagram : d);
-                return [...current, updatedDiagram];
+                return exists ? current.map(d => d.id === updatedDiagram.id ? updatedDiagram : d) : [...current, updatedDiagram];
             };
 
+            // Instant UI update
             setLocalDiagrams(updateFn);
             if (setInspectionDiagrams) setInspectionDiagrams(updateFn);
             
-            if (refreshActiveData) await refreshActiveData(true);
             setIsModalOpen(false);
             setSelectedDiagram(null);
+
+            // Cloud settle buffer
+            if (refreshActiveData) {
+                setTimeout(async () => {
+                    await refreshActiveData(true);
+                }, 800);
+            }
             onShowStatus("Diagram saved successfully.", "success");
         } catch (error) {
             console.error("Save failed:", error);
@@ -66,12 +68,12 @@ export const ManagementDiagramsTab = ({ searchTerm = '', onShowStatus }: { searc
 
     /**
      * handleBulkUploadDiagrams
-     * Enhanced to update local UI for every successful upload
+     * Optimized to update UI per item but refresh cloud only once at end
      */
     const handleBulkUploadDiagrams = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (!e.target.files || e.target.files.length === 0) return;
         
-        onShowStatus("Uploading diagrams...", 'info');
+        onShowStatus("Processing bulk upload...", 'info');
         const files: File[] = Array.from(e.target.files);
         let successCount = 0;
         const newlyAdded: InspectionDiagram[] = [];
@@ -91,7 +93,6 @@ export const ManagementDiagramsTab = ({ searchTerm = '', onShowStatus }: { searc
                             
                             const commonMakes = ['porsche', 'audi', 'vw', 'volkswagen', 'bmw', 'mercedes', 'ford', 'ferrari', 'mclaren', 'lamborghini', 'honda', 'toyota', 'land rover', 'range rover'];
                             
-                            // Check if first word matches a known make
                             if (commonMakes.includes(parts[0].toLowerCase())) {
                                 make = parts[0]; 
                                 model = parts.slice(1).join(' ');
@@ -115,7 +116,7 @@ export const ManagementDiagramsTab = ({ searchTerm = '', onShowStatus }: { searc
                                 newlyAdded.push(newDiagram);
                                 successCount++;
                                 
-                                // Update UI per item so the user sees progress
+                                // Incremental UI update for visual progress
                                 setLocalDiagrams(prev => [...(prev || []), newDiagram]);
                             } catch (err) { 
                                 console.error(`Failed to save image for ${file.name}`, err); 
@@ -128,13 +129,19 @@ export const ManagementDiagramsTab = ({ searchTerm = '', onShowStatus }: { searc
                 });
             }
 
-            // Sync global context once at the end of bulk operation
+            // Sync global context once
             if (setInspectionDiagrams) {
                 setInspectionDiagrams(prev => [...(prev || []), ...newlyAdded]);
             }
 
             onShowStatus(`Successfully imported ${successCount} diagrams.`, 'success');
-            if (refreshActiveData) await refreshActiveData(true);
+            
+            // Single cloud refresh after the whole batch is finished
+            if (refreshActiveData) {
+                setTimeout(async () => {
+                    await refreshActiveData(true);
+                }, 1000); // Slightly longer for bulk
+            }
         } catch (e) { 
             console.error("Bulk upload failed", e); 
             onShowStatus("An error occurred during bulk upload.", 'error'); 
@@ -181,7 +188,6 @@ export const ManagementDiagramsTab = ({ searchTerm = '', onShowStatus }: { searc
                             <p className="text-xs text-gray-900 font-bold truncate uppercase">{d.model}</p>
                         </div>
 
-                        {/* Hover Overlay Actions */}
                         <div className="absolute inset-0 bg-indigo-900/10 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 backdrop-blur-[1px]">
                             <button 
                                 onClick={() => { setSelectedDiagram(d); setIsModalOpen(true); }} 
