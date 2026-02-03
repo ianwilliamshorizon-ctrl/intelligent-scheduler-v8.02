@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { PurchaseOrder, PurchaseOrderLineItem, Supplier, BusinessEntity, TaxRate, Part } from '../types';
 import { Save, PlusCircle, Trash2, X, CheckSquare, Eye, ArrowDownCircle } from 'lucide-react';
@@ -30,14 +29,39 @@ const MemoizedEditableLineItemRow = React.memo(({ item, taxRates, onLineItemChan
     return (
         <>
             <div className={`grid grid-cols-12 gap-2 items-center p-2 border bg-white ${isCostPriceChanged ? 'rounded-t-lg border-b-0' : 'rounded-lg'} ${isFullyReceived && isOrderedOrLater ? 'bg-green-50/50' : ''}`}>
-                <input type="text" placeholder="Part Number" value={item.partNumber || ''} onChange={e => onLineItemChange(item.id, 'partNumber', e.target.value)} className="col-span-2 p-1 border rounded disabled:bg-gray-100 disabled:cursor-not-allowed" disabled={isOrderedOrLater} />
-                <input type="text" placeholder="Description" value={item.description} onChange={e => onLineItemChange(item.id, 'description', e.target.value)} className="col-span-3 p-1 border rounded disabled:bg-gray-100 disabled:cursor-not-allowed" disabled={isOrderedOrLater} />
-                <input type="number" step="1" value={item.quantity} onChange={e => onLineItemChange(item.id, 'quantity', e.target.value)} className="col-span-1 p-1 border rounded text-right disabled:bg-gray-100 disabled:cursor-not-allowed" disabled={isOrderedOrLater} />
+                <input 
+                    type="text" 
+                    placeholder="Part Number" 
+                    /* FIX: Controlled input fallback */
+                    value={item.partNumber || ''} 
+                    onChange={e => onLineItemChange(item.id, 'partNumber', e.target.value)} 
+                    className="col-span-2 p-1 border rounded disabled:bg-gray-100 disabled:cursor-not-allowed" 
+                    disabled={isOrderedOrLater} 
+                />
+                <input 
+                    type="text" 
+                    placeholder="Description" 
+                    /* FIX: Controlled input fallback */
+                    value={item.description || ''} 
+                    onChange={e => onLineItemChange(item.id, 'description', e.target.value)} 
+                    className="col-span-3 p-1 border rounded disabled:bg-gray-100 disabled:cursor-not-allowed" 
+                    disabled={isOrderedOrLater} 
+                />
+                <input 
+                    type="number" 
+                    step="1" 
+                    /* FIX: Controlled input fallback */
+                    value={item.quantity ?? ''} 
+                    onChange={e => onLineItemChange(item.id, 'quantity', e.target.value)} 
+                    className="col-span-1 p-1 border rounded text-right disabled:bg-gray-100 disabled:cursor-not-allowed" 
+                    disabled={isOrderedOrLater} 
+                />
                 
                 <div className="col-span-1 relative">
                     <input 
                         type="number" 
                         step="1" 
+                        /* FIX: Controlled input fallback */
                         value={item.receivedQuantity ?? ''} 
                         onChange={e => onLineItemChange(item.id, 'receivedQuantity', e.target.value)} 
                         placeholder="0" 
@@ -50,9 +74,23 @@ const MemoizedEditableLineItemRow = React.memo(({ item, taxRates, onLineItemChan
                     )}
                 </div>
 
-                <input type="number" step="0.01" value={item.unitPrice} onChange={e => onLineItemChange(item.id, 'unitPrice', e.target.value)} className="col-span-2 p-1 border rounded text-right" placeholder="Unit Cost"/>
-                <select value={item.taxCodeId || ''} onChange={e => onLineItemChange(item.id, 'taxCodeId', e.target.value)} className="col-span-2 p-1 border rounded text-xs disabled:bg-gray-100 disabled:cursor-not-allowed" disabled={isOrderedOrLater}>
-                    <option value="">-- Tax --</option>{taxRates.map(t => <option key={t.id} value={t.id}>{t.code}</option>)}
+                <input 
+                    type="number" 
+                    step="0.01" 
+                    /* FIX: Controlled input fallback */
+                    value={item.unitPrice ?? ''} 
+                    onChange={e => onLineItemChange(item.id, 'unitPrice', e.target.value)} 
+                    className="col-span-2 p-1 border rounded text-right" 
+                    placeholder="Unit Cost"
+                />
+                <select 
+                    value={item.taxCodeId || ''} 
+                    onChange={e => onLineItemChange(item.id, 'taxCodeId', e.target.value)} 
+                    className="col-span-2 p-1 border rounded text-xs disabled:bg-gray-100 disabled:cursor-not-allowed" 
+                    disabled={isOrderedOrLater}
+                >
+                    <option value="">-- Tax --</option>
+                    {taxRates.map(t => <option key={t.id} value={t.id}>{t.code}</option>)}
                 </select>
                 <button onClick={() => onRemoveLineItem(item.id)} className="text-red-500 hover:text-red-700 justify-self-center disabled:opacity-50 disabled:cursor-not-allowed" disabled={isOrderedOrLater}><Trash2 size={14} /></button>
             </div>
@@ -65,7 +103,8 @@ const MemoizedEditableLineItemRow = React.memo(({ item, taxRates, onLineItemChan
                         <input
                             type="number"
                             step="0.01"
-                            value={newSalePrice}
+                            /* FIX: Controlled input fallback */
+                            value={newSalePrice || ''}
                             onChange={(e) => onNewSalePriceChange(e.target.value)}
                             className="w-full p-1 border rounded text-right border-amber-300 focus:ring-amber-500"
                             placeholder="New Sale Price"
@@ -114,11 +153,10 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
         setNewSalePrices({});
         
         if (purchaseOrder) {
-             // Deep copy to avoid direct mutation
              setFormData(JSON.parse(JSON.stringify(purchaseOrder)));
         } else {
              setFormData({
-                entityId: selectedEntityId,
+                entityId: selectedEntityId || '',
                 orderDate: formatDate(new Date()),
                 status: 'Draft',
                 lineItems: [],
@@ -178,7 +216,7 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
             ...prev,
             lineItems: (prev.lineItems || []).map(item => ({
                 ...item,
-                receivedQuantity: item.quantity // Auto-fill received to match ordered
+                receivedQuantity: item.quantity 
             }))
         }));
     };
@@ -186,7 +224,6 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
     const getPartUpdates = useCallback((): Part[] => {
         const updatedParts: Part[] = [];
         (formData.lineItems || []).forEach(item => {
-            // FIX: Safely access purchaseOrder.lineItems to prevent crash when saving a new PO (where purchaseOrder is null)
             const originalItem = (purchaseOrder?.lineItems || []).find(li => li.id === item.id);
             const isCostPriceChanged = originalItem !== undefined && item.unitPrice !== originalItem.unitPrice;
             
@@ -194,7 +231,7 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
                 const partToUpdate = parts.find(p => p.partNumber === item.partNumber);
                 if (partToUpdate) {
                     const newCostPrice = item.unitPrice;
-                    let newSalePrice = partToUpdate.salePrice; // Default to old sale price
+                    let newSalePrice = partToUpdate.salePrice; 
                     
                     if (newSalePrices[item.id] !== undefined) {
                         const parsedSalePrice = parseFloat(newSalePrices[item.id]);
@@ -230,7 +267,6 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
             }
         }
         
-        // Validation: Mandatory Supplier Reference when Receiving
         if ((newStatus === 'Received' || newStatus === 'Partially Received') && !formData.supplierReference) {
             alert('Supplier Reference / Invoice No. is mandatory when marking goods as Received or Partially Received.');
             return;
@@ -238,8 +274,6 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
         
         const entity = businessEntities.find(e => e.id === formData.entityId);
         const entityShortCode = entity?.shortCode || 'UNK';
-
-        // If we are editing, ensure we use the existing ID. If new, generate one.
         const finalId = purchaseOrder?.id || formData.id || generatePurchaseOrderId(allPurchaseOrders, entityShortCode);
 
         const payload: any = {
@@ -259,7 +293,6 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
             return;
         }
         
-        // Validation: Mandatory Supplier Reference
         if (!formData.supplierReference) {
              alert('Supplier Reference / Invoice No. is mandatory when marking goods as Received.');
              return;
@@ -337,33 +370,77 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
                         </div>
                         <div>
                             <label className="font-semibold text-sm">Internal Reference*</label>
-                            <input name="vehicleRegistrationRef" value={formData.vehicleRegistrationRef || ''} onChange={handleChange} placeholder="e.g., Vehicle Reg, Stock, Workshop Supplies" className="w-full p-2 border rounded mt-1 disabled:bg-gray-100 disabled:cursor-not-allowed" required disabled={isOrderedOrLater} />
+                            <input 
+                                name="vehicleRegistrationRef" 
+                                /* FIX: Controlled input fallback */
+                                value={formData.vehicleRegistrationRef || ''} 
+                                onChange={handleChange} 
+                                placeholder="e.g., Vehicle Reg, Stock, Workshop Supplies" 
+                                className="w-full p-2 border rounded mt-1 disabled:bg-gray-100 disabled:cursor-not-allowed" 
+                                required 
+                                disabled={isOrderedOrLater} 
+                            />
                         </div>
                          <div>
                             <label className="font-semibold text-sm">Supplier Reference / Invoice No.</label>
-                            <input name="supplierReference" value={formData.supplierReference || ''} onChange={handleChange} className="w-full p-2 border rounded mt-1 border-indigo-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" placeholder="Required when receiving" />
+                            <input 
+                                name="supplierReference" 
+                                /* FIX: Controlled input fallback */
+                                value={formData.supplierReference || ''} 
+                                onChange={handleChange} 
+                                className="w-full p-2 border rounded mt-1 border-indigo-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" 
+                                placeholder="Required when receiving" 
+                            />
                         </div>
                         <div>
                              <label className="font-semibold text-sm">Secondary Ref (Balance)</label>
-                             <input name="secondarySupplierReference" value={formData.secondarySupplierReference || ''} onChange={handleChange} className="w-full p-2 border rounded mt-1" placeholder="e.g. Invoice # for remaining items" />
+                             <input 
+                                name="secondarySupplierReference" 
+                                /* FIX: Controlled input fallback */
+                                value={formData.secondarySupplierReference || ''} 
+                                onChange={handleChange} 
+                                className="w-full p-2 border rounded mt-1" 
+                                placeholder="e.g. Invoice # for remaining items" 
+                            />
                         </div>
                         <div>
                             <label className="font-semibold text-sm">Order Date</label>
-                            <input name="orderDate" type="date" value={formData.orderDate} onChange={handleChange} className="w-full p-2 border rounded mt-1 disabled:bg-gray-100 disabled:cursor-not-allowed" disabled={isOrderedOrLater} />
+                            <input 
+                                name="orderDate" 
+                                type="date" 
+                                /* FIX: Controlled input fallback */
+                                value={formData.orderDate || ''} 
+                                onChange={handleChange} 
+                                className="w-full p-2 border rounded mt-1 disabled:bg-gray-100 disabled:cursor-not-allowed" 
+                                disabled={isOrderedOrLater} 
+                            />
                         </div>
                         <div>
                             <label className="font-semibold text-sm">Status</label>
-                            <select name="status" value={formData.status} onChange={handleChange} className="w-full p-2 border rounded bg-white mt-1">
-                                <option>Draft</option>
-                                <option>Ordered</option>
-                                <option>Partially Received</option>
-                                <option>Received</option>
-                                <option>Cancelled</option>
+                            <select 
+                                name="status" 
+                                /* FIX: Controlled input fallback */
+                                value={formData.status || ''} 
+                                onChange={handleChange} 
+                                className="w-full p-2 border rounded bg-white mt-1"
+                            >
+                                <option value="Draft">Draft</option>
+                                <option value="Ordered">Ordered</option>
+                                <option value="Partially Received">Partially Received</option>
+                                <option value="Received">Received</option>
+                                <option value="Cancelled">Cancelled</option>
                             </select>
                         </div>
                         <div className="md:col-span-2">
                             <label className="font-semibold text-sm">Notes</label>
-                            <textarea name="notes" value={formData.notes || ''} onChange={handleChange} rows={2} className="w-full p-2 border rounded mt-1" />
+                            <textarea 
+                                name="notes" 
+                                /* FIX: Controlled input fallback */
+                                value={formData.notes || ''} 
+                                onChange={handleChange} 
+                                rows={2} 
+                                className="w-full p-2 border rounded mt-1" 
+                            />
                         </div>
                     </div>
 
@@ -390,7 +467,6 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
                                 <div className="col-span-1"></div>
                             </div>
                             {(formData.lineItems || []).map(item => {
-                                // Safely access original items, handling null purchaseOrder
                                 const originalItem = (purchaseOrder?.lineItems || []).find(li => li.id === item.id);
                                 const isCostPriceChanged = originalItem !== undefined && item.unitPrice !== originalItem.unitPrice;
                                 const part = item.partNumber ? partsMap.get(item.partNumber) : undefined;

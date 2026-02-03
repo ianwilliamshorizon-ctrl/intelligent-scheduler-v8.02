@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useState, useRef } from 'react';
 import * as T from '../../types';
 import { usePersistentState } from './usePersistentState';
 import {
@@ -13,7 +13,7 @@ import {
     getInitialEstimates, getInitialInvoices
 } from '../data/initialData';
 import { saveImage } from '../../utils/imageStore';
-import { getWhere, getByIds } from '../db/index'; 
+import { getWhere, getByIds, getAll } from '../db/index'; 
 
 interface DataContextType {
     jobs: T.Job[]; setJobs: React.Dispatch<React.SetStateAction<T.Job[]>>;
@@ -47,27 +47,28 @@ interface DataContextType {
     roles: T.Role[]; setRoles: React.Dispatch<React.SetStateAction<T.Role[]>>;
     inspectionDiagrams: T.InspectionDiagram[]; setInspectionDiagrams: React.Dispatch<React.SetStateAction<T.InspectionDiagram[]>>;
     isLoading: boolean;
-    refreshActiveData: () => Promise<void>;
+    refreshActiveData: (isBackground?: boolean) => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
 export const DataContextProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [isLoading, setIsLoading] = useState(true);
+    const isRefreshingRef = useRef(false);
 
     // Dynamic Hot Data Path
     const [jobs, setJobs] = useState<T.Job[]>([]);
+    const [purchases, setPurchases] = useState<T.Purchase[]>([]);
+    const [purchaseOrders, setPurchaseOrders] = useState<T.PurchaseOrder[]>([]);
     const [vehicles, setVehicles] = useState<T.Vehicle[]>([]);
     const [customers, setCustomers] = useState<T.Customer[]>([]);
     const [parts, setParts] = useState<T.Part[]>([]); 
-    const [purchaseOrders, setPurchaseOrders] = useState<T.PurchaseOrder[]>([]);
+    const [suppliers, setSuppliers] = useState<T.Supplier[]>([]); // Moved to Hot Path
 
     // Persistent Collections
     const [estimates, setEstimates] = usePersistentState<T.Estimate[]>('brooks_estimates', getInitialEstimates);
     const [invoices, setInvoices] = usePersistentState<T.Invoice[]>('brooks_invoices', getInitialInvoices);
-    const [purchases, setPurchases] = usePersistentState<T.Purchase[]>('brooks_purchases', getInitialPurchases);
     const [servicePackages, setServicePackages] = usePersistentState<T.ServicePackage[]>('brooks_servicePackages', getInitialServicePackages);
-    const [suppliers, setSuppliers] = usePersistentState<T.Supplier[]>('brooks_suppliers', getInitialSuppliers);
     const [engineers, setEngineers] = usePersistentState<T.Engineer[]>('brooks_engineers', getInitialEngineers);
     const [lifts, setLifts] = usePersistentState<T.Lift[]>('brooks_lifts', getInitialLifts);
     const [rentalVehicles, setRentalVehicles] = usePersistentState<T.RentalVehicle[]>('brooks_rentalVehicles', getInitialRentalVehicles);
@@ -89,48 +90,65 @@ export const DataContextProvider: React.FC<{ children: React.ReactNode }> = ({ c
     const [roles, setRoles] = usePersistentState<T.Role[]>('brooks_roles', getInitialRoles);
     const [inspectionDiagrams, setInspectionDiagrams] = usePersistentState<T.InspectionDiagram[]>('brooks_inspectionDiagrams', getInitialInspectionDiagrams);
 
-    const refreshActiveData = async () => {
-        setIsLoading(true);
+    const refreshActiveData = async (isBackground: boolean = false) => {
+        if (isRefreshingRef.current) return;
+        isRefreshingRef.current = true;
+        if (!isBackground) setIsLoading(true);
+        
         try {
-            console.log("⚡ Booting Hot Data Path...");
+            const activeStatuses = ['Unallocated', 'Inquiry', 'Draft', 'Estimate', 'Authorized', 'In Progress', 'Pending Parts', 'Scheduled'];
             
-            // Explicitly included 'Unallocated' and 'Inquiry'
-            const activeStatuses = [
-                'Unallocated', 
-                'Inquiry', 
-                'Draft', 
-                'Estimate', 
-                'Authorized', 
-                'In Progress', 
-                'Pending Parts', 
-                'Scheduled'
-            ];
-            
-            // 1. Fetch the jobs
-            const activeJobs = await getWhere<T.Job>('brooks_jobs', 'status', 'in', activeStatuses);
-            
-            // 2. Map dependencies
-            const customerIds = [...new Set(activeJobs.map(j => j.customerId).filter(Boolean))];
-            const vehicleIds = [...new Set(activeJobs.map(j => j.vehicleId).filter(Boolean))];
-
-            // 3. Parallel fetch of required context data
-            const [activeCustomers, activeVehicles, activePOs] = await Promise.all([
-                getByIds<T.Customer>('brooks_customers', customerIds),
-                getByIds<T.Vehicle>('brooks_vehicles', vehicleIds),
+            // 1. Fetch In-Flight Documents
+            const [activeJobs, activePurchases, activePOs] = await Promise.all([
+                getWhere<T.Job>('brooks_jobs', 'status', 'in', activeStatuses),
+                getWhere<T.Purchase>('brooks_purchases', 'paymentStatus', 'in', ['Unpaid', 'Partially Paid']),
                 getWhere<T.PurchaseOrder>('brooks_purchaseOrders', 'status', 'in', ['Draft', 'Ordered', 'Partially Received', 'Received'])
             ]);
 
+            // 2. Identify Dependencies (Parts & Suppliers)
+            const activePartIds = new Set<string>();
+            const activeSupplierIds = new Set<string>();
+
+            // Suppliers from POs and Purchases
+            activePOs.forEach(po => po.supplierId && activeSupplierIds.add(po.supplierId));
+            activePurchases.forEach(p => p.supplierId && activeSupplierIds.add(p.supplierId));
+
+            // Parts from POs
+            activePOs.forEach(po => po.lineItems?.forEach(li => li.id && activePartIds.add(li.id)));
+            
+            // Parts from Active Jobs (via Estimates)
+            const activeEstimateIds = activeJobs.map(j => j.estimateId).filter(Boolean);
+            const resolvedEstimates = await getByIds<T.Estimate>('brooks_estimates', activeEstimateIds as string[]);
+            resolvedEstimates.forEach(est => est.lineItems?.forEach(li => li.partId && activePartIds.add(li.partId)));
+
+            const customerIds = [...new Set(activeJobs.map(j => j.customerId).filter(Boolean))];
+            const vehicleIds = [...new Set(activeJobs.map(j => j.vehicleId).filter(Boolean))];
+
+            // 3. Resolve everything in parallel
+            const [activeCustomers, activeVehicles, resolvedParts, resolvedSuppliers] = await Promise.all([
+                getByIds<T.Customer>('brooks_customers', customerIds),
+                getByIds<T.Vehicle>('brooks_vehicles', vehicleIds),
+                getByIds<T.Part>('brooks_parts', Array.from(activePartIds)),
+                // If background sync, only get suppliers used in active docs. 
+                // If initial load, get them all so the "New PO" list works.
+                isBackground 
+                    ? getByIds<T.Supplier>('brooks_suppliers', Array.from(activeSupplierIds))
+                    : getAll<T.Supplier>('brooks_suppliers')
+            ]);
+
             setJobs(activeJobs);
+            setPurchases(activePurchases);
+            setPurchaseOrders(activePOs);
             setCustomers(activeCustomers);
             setVehicles(activeVehicles);
-            setPurchaseOrders(activePOs);
-            setParts([]); 
-
-            console.log(`✅ Ready: ${activeJobs.length} Jobs loaded (including Unallocated).`);
+            setParts(resolvedParts);
+            setSuppliers(resolvedSuppliers);
+            
         } catch (error) {
-            console.error("Data Boot Error:", error);
+            console.error("Data Sync Error:", error);
         } finally {
-            setIsLoading(false);
+            if (!isBackground) setIsLoading(false);
+            isRefreshingRef.current = false;
         }
     };
 
@@ -138,7 +156,13 @@ export const DataContextProvider: React.FC<{ children: React.ReactNode }> = ({ c
         refreshActiveData();
     }, []);
 
-    // Migration logic for local image storage
+    useEffect(() => {
+        const pollInterval = setInterval(() => {
+            refreshActiveData(true);
+        }, 5000); 
+        return () => clearInterval(pollInterval);
+    }, []);
+
     useEffect(() => {
         const migrate = async () => {
             if (vehicles.length === 0) return;

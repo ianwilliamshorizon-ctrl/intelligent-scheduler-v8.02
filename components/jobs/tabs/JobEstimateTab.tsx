@@ -1,7 +1,7 @@
 import React from 'react';
 import { EstimateLineItem, TaxRate, Part, PurchaseOrder, ServicePackage, Estimate } from '../../../types';
 import { Trash2, PlusCircle, FileText, CheckCircle, AlertTriangle } from 'lucide-react';
-import { formatCurrency } from '../../../utils/formatUtils';
+import { formatCurrency } from '../../../core/utils/formatUtils';
 import SearchableSelect from '../../SearchableSelect';
 
 // Reusable Row Component within the tab
@@ -44,27 +44,31 @@ const MemoizedEditableLineItemRow = React.memo(({
     };
 
     return (
-         <div className={`grid grid-cols-12 gap-2 items-center p-2 rounded-lg border ${isPackageComponent ? 'bg-gray-100' : 'bg-white shadow-sm'}`}>
+         <div className={`grid grid-cols-12 gap-2 items-center p-2 rounded-lg border transition-colors ${
+            isPackageHeader ? 'bg-indigo-50/30 border-indigo-100 shadow-sm' : 
+            isPackageComponent ? 'bg-gray-50 border-gray-100 ml-2' : 
+            'bg-white shadow-sm border-gray-200'
+         }`}>
             <input 
                 type="text" 
-                placeholder="Part Number" 
+                placeholder="Part No." 
                 value={item.partNumber || ''} 
                 onChange={e => onLineItemChange(item.id, 'partNumber', e.target.value)} 
-                className="col-span-2 p-1 border rounded text-xs disabled:bg-gray-100 disabled:text-gray-500" 
+                className="col-span-2 p-1 border rounded text-xs disabled:bg-gray-100 disabled:text-gray-400" 
                 disabled={isReadOnly || isPackageHeader || isPackageComponent || item.isLabor} 
             />
             <div className="col-span-5 relative">
                  <input
                     type="text"
                     placeholder="Description"
-                    value={item.description}
+                    value={item.description || ''}
                     onChange={handleDescriptionChange}
                     onFocus={() => !item.isLabor && !isPackageHeader && !isPackageComponent && onSetActivePartSearch(item.id)}
                     onBlur={() => setTimeout(() => onSetActivePartSearch(null), 200)}
-                    className="w-full p-1 border rounded text-xs disabled:bg-gray-100 disabled:text-gray-500"
+                    className={`w-full p-1 border rounded text-xs disabled:bg-gray-100 disabled:text-gray-500 ${isPackageHeader ? 'font-bold' : ''}`}
                     disabled={isReadOnly || isPackageHeader || isPackageComponent}
                 />
-                 {activePartSearch === item.id && filteredParts.length > 0 && (
+                 {activePartSearch === item.id && (filteredParts || []).length > 0 && (
                     <div className="absolute z-50 top-full left-0 w-full bg-white border rounded shadow-xl max-h-60 overflow-y-auto mt-1 border-indigo-100">
                         {filteredParts.map(part => (
                             <div 
@@ -72,7 +76,12 @@ const MemoizedEditableLineItemRow = React.memo(({
                                 onMouseDown={() => onSelectPart(item.id, part)} 
                                 className="p-2 hover:bg-indigo-50 cursor-pointer border-b last:border-0 border-gray-50"
                             >
-                                <p className="font-bold text-gray-800 text-xs">{part.partNumber}</p>
+                                <div className="flex justify-between items-start">
+                                    <p className="font-bold text-gray-800 text-xs">{part.partNumber}</p>
+                                    <p className={`text-[10px] font-bold px-1 rounded ${part.stockQuantity > 0 ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                                        Stock: {part.stockQuantity}
+                                    </p>
+                                </div>
                                 <p className="text-gray-600 text-[10px] truncate">{part.description}</p>
                                 <p className="text-indigo-600 font-mono text-[10px]">{formatCurrency(part.salePrice)}</p>
                             </div>
@@ -83,18 +92,18 @@ const MemoizedEditableLineItemRow = React.memo(({
             <input 
                 type="number" 
                 step="0.1" 
-                value={item.quantity} 
+                value={item.quantity || 0} 
                 onChange={e => onLineItemChange(item.id, 'quantity', parseFloat(e.target.value) || 0)} 
-                className="col-span-1 p-1 border rounded text-right text-xs disabled:bg-gray-100" 
+                className="col-span-1 p-1 border rounded text-right text-xs disabled:bg-gray-100 disabled:text-gray-400" 
                 disabled={isReadOnly || isPackageHeader} 
             />
             {canViewPricing ? (
                 <input 
                     type="number" 
                     step="0.01" 
-                    value={item.unitPrice} 
+                    value={item.unitPrice || 0} 
                     onChange={e => onLineItemChange(item.id, 'unitPrice', parseFloat(e.target.value) || 0)} 
-                    className="col-span-2 p-1 border rounded text-right text-xs disabled:bg-gray-100" 
+                    className="col-span-2 p-1 border rounded text-right text-xs disabled:bg-gray-100 disabled:text-gray-400" 
                     placeholder="Sale (Net)" 
                     disabled={isReadOnly || isPackageHeader || isPackageComponent}
                 />
@@ -108,11 +117,11 @@ const MemoizedEditableLineItemRow = React.memo(({
                 disabled={isReadOnly || isPackageHeader}
             >
                 <option value="">--</option>
-                {taxRates.map(t => <option key={t.id} value={t.id}>{t.code}</option>)}
+                {(taxRates || []).map(t => <option key={t.id} value={t.id}>{t.code}</option>)}
             </select>
             <button 
                 onClick={() => onRemoveLineItem(item.id)} 
-                className="col-span-1 text-red-400 hover:text-red-600 justify-self-center disabled:opacity-30" 
+                className="col-span-1 text-red-400 hover:text-red-600 justify-self-center disabled:opacity-30 transition-colors" 
                 disabled={isReadOnly || isPackageComponent}
             >
                 <Trash2 size={14} />
@@ -153,7 +162,7 @@ interface JobEstimateTabProps {
 }
 
 export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
-    partsStatus, purchaseOrderIds, purchaseOrders, supplierMap, editableEstimate, supplementaryEstimates,
+    partsStatus, purchaseOrderIds, purchaseOrders, supplierMap, editableEstimate, supplementaryEstimates = [],
     estimateBreakdown, isReadOnly, canViewPricing, taxRates, filteredParts, activePartSearch, servicePackages,
     totalNet, vatBreakdown, grandTotal, onChange, onOpenPurchaseOrder, onCreateEstimate, onRaiseSupplementaryEstimate, onViewEstimate,
     onAddLineItem, onAddPackage, onLineItemChange, onRemoveLineItem, onPartSearchChange, onSetActivePartSearch, onSelectPart
@@ -179,22 +188,44 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
             
             {supplementaryEstimates.length > 0 && (
                 <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl">
-                    <h4 className="font-bold text-amber-900 mb-3 flex items-center gap-2"><FileText size={18}/> Supplementary Estimates</h4>
+                    <h4 className="font-bold text-amber-900 mb-3 flex items-center gap-2">
+                        <FileText size={18}/> Supplementary Estimates
+                    </h4>
                     <div className="space-y-2">
                         {supplementaryEstimates.map(est => {
-                             const total = (est.lineItems || []).reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
-                             return (
-                                <div key={est.id} className="flex justify-between items-center bg-white p-3 rounded-lg border border-amber-100 shadow-sm">
+                            const total = (est?.lineItems || []).reduce((sum, item) => {
+                                const qty = item?.quantity || 0;
+                                const price = item?.unitPrice || 0;
+                                return sum + (qty * price);
+                            }, 0);
+
+                            return (
+                                <div key={est.id || Math.random()} className="flex justify-between items-center bg-white p-3 rounded-lg border border-amber-100 shadow-sm">
                                     <div className="flex items-center gap-3">
-                                        <span className="font-mono font-bold text-amber-700">#{est.estimateNumber}</span>
-                                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${est.status === 'Approved' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'}`}>{est.status}</span>
+                                        <span className="font-mono font-bold text-amber-700">
+                                            #{est?.estimateNumber || 'N/A'}
+                                        </span>
+                                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${
+                                            est?.status === 'Approved' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'
+                                        }`}>
+                                            {est?.status || 'Draft'}
+                                        </span>
                                     </div>
                                     <div className="flex items-center gap-4">
-                                        {canViewPricing && <span className="font-bold text-gray-900">{formatCurrency(total)}</span>}
-                                        <button onClick={() => onViewEstimate(est)} className="text-xs bg-amber-600 text-white px-3 py-1.5 rounded-md hover:bg-amber-700 font-bold transition-colors">View Details</button>
+                                        {canViewPricing && (
+                                            <span className="font-bold text-gray-900">
+                                                {formatCurrency(total)}
+                                            </span>
+                                        )}
+                                        <button 
+                                            onClick={() => onViewEstimate && onViewEstimate(est)} 
+                                            className="text-xs bg-amber-600 text-white px-3 py-1.5 rounded-md hover:bg-amber-700 font-bold transition-colors shadow-sm"
+                                        >
+                                            View Details
+                                        </button>
                                     </div>
                                 </div>
-                             );
+                            );
                         })}
                     </div>
                 </div>
@@ -227,7 +258,7 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
                                     </div>
                                     <div className="w-64">
                                         <SearchableSelect
-                                            options={servicePackages.map(p => ({ id: p.id, label: p.name }))}
+                                            options={(servicePackages || []).map(p => ({ id: p.id, label: p.name }))}
                                             value={null} 
                                             onChange={(packageId) => { if (packageId) onAddPackage(packageId); }}
                                             placeholder="Quick Add Package..."
@@ -246,38 +277,38 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
                             </div>
                             
                             <div className="space-y-1">
-                                {estimateBreakdown.packages.length > 0 && <h5 className="font-bold text-indigo-900 text-[10px] uppercase pt-4 pb-2 flex items-center gap-2"><div className="h-px bg-indigo-100 flex-grow"/> Service Packages <div className="h-px bg-indigo-100 flex-grow"/></h5>}
-                                {estimateBreakdown.packages.map(({ header, children }: any) => (
-                                    <div key={header.id} className="mb-4">
+                                {(estimateBreakdown?.packages || []).length > 0 && <h5 className="font-bold text-indigo-900 text-[10px] uppercase pt-4 pb-2 flex items-center gap-2"><div className="h-px bg-indigo-100 flex-grow"/> Service Packages <div className="h-px bg-indigo-100 flex-grow"/></h5>}
+                                {(estimateBreakdown?.packages || []).map(({ header, children }: any) => (
+                                    <div key={header.id} className="mb-4 space-y-1">
                                         <MemoizedEditableLineItemRow canViewPricing={canViewPricing} isReadOnly={isReadOnly} item={header} taxRates={taxRates} onLineItemChange={onLineItemChange} onRemoveLineItem={onRemoveLineItem} filteredParts={[]} activePartSearch={null} onPartSearchChange={()=>{}} onSetActivePartSearch={()=>{}} onSelectPart={()=>{}} />
-                                        <div className="pl-6 border-l-2 border-indigo-50 ml-4 space-y-1 mt-1">
-                                            {children.map((child: any) => (
+                                        <div className="pl-4 border-l-2 border-indigo-100/50 space-y-1">
+                                            {(children || []).map((child: any) => (
                                                 <MemoizedEditableLineItemRow key={child.id} canViewPricing={canViewPricing} isReadOnly={isReadOnly} item={child} taxRates={taxRates} onLineItemChange={onLineItemChange} onRemoveLineItem={onRemoveLineItem} filteredParts={[]} activePartSearch={null} onPartSearchChange={()=>{}} onSetActivePartSearch={()=>{}} onSelectPart={()=>{}} />
                                             ))}
                                         </div>
                                     </div>
                                 ))}
                                 
-                                {estimateBreakdown.standaloneLabor.length > 0 && <h5 className="font-bold text-blue-900 text-[10px] uppercase pt-4 pb-2 flex items-center gap-2"><div className="h-px bg-blue-100 flex-grow"/> Labor <div className="h-px bg-blue-100 flex-grow"/></h5>}
-                                {estimateBreakdown.standaloneLabor.map((item: any) => <MemoizedEditableLineItemRow key={item.id} canViewPricing={canViewPricing} isReadOnly={isReadOnly} item={item} taxRates={taxRates} onLineItemChange={onLineItemChange} onRemoveLineItem={onRemoveLineItem} filteredParts={filteredParts} activePartSearch={activePartSearch} onPartSearchChange={onPartSearchChange} onSetActivePartSearch={onSetActivePartSearch} onSelectPart={onSelectPart} />)}
+                                {(estimateBreakdown?.standaloneLabor || []).length > 0 && <h5 className="font-bold text-blue-900 text-[10px] uppercase pt-4 pb-2 flex items-center gap-2"><div className="h-px bg-blue-100 flex-grow"/> Labor <div className="h-px bg-blue-100 flex-grow"/></h5>}
+                                {(estimateBreakdown?.standaloneLabor || []).map((item: any) => <MemoizedEditableLineItemRow key={item.id} canViewPricing={canViewPricing} isReadOnly={isReadOnly} item={item} taxRates={taxRates} onLineItemChange={onLineItemChange} onRemoveLineItem={onRemoveLineItem} filteredParts={filteredParts} activePartSearch={activePartSearch} onPartSearchChange={onPartSearchChange} onSetActivePartSearch={onSetActivePartSearch} onSelectPart={onSelectPart} />)}
                                 
-                                {estimateBreakdown.standaloneParts.length > 0 && <h5 className="font-bold text-emerald-900 text-[10px] uppercase pt-4 pb-2 flex items-center gap-2"><div className="h-px bg-emerald-100 flex-grow"/> Parts <div className="h-px bg-emerald-100 flex-grow"/></h5>}
-                                {estimateBreakdown.standaloneParts.map((item: any) => <MemoizedEditableLineItemRow key={item.id} canViewPricing={canViewPricing} isReadOnly={isReadOnly} item={item} taxRates={taxRates} onLineItemChange={onLineItemChange} onRemoveLineItem={onRemoveLineItem} filteredParts={filteredParts} activePartSearch={activePartSearch} onPartSearchChange={onPartSearchChange} onSetActivePartSearch={onSetActivePartSearch} onSelectPart={onSelectPart} />)}
+                                {(estimateBreakdown?.standaloneParts || []).length > 0 && <h5 className="font-bold text-emerald-900 text-[10px] uppercase pt-4 pb-2 flex items-center gap-2"><div className="h-px bg-emerald-100 flex-grow"/> Parts <div className="h-px bg-emerald-100 flex-grow"/></h5>}
+                                {(estimateBreakdown?.standaloneParts || []).map((item: any) => <MemoizedEditableLineItemRow key={item.id} canViewPricing={canViewPricing} isReadOnly={isReadOnly} item={item} taxRates={taxRates} onLineItemChange={onLineItemChange} onRemoveLineItem={onRemoveLineItem} filteredParts={filteredParts} activePartSearch={activePartSearch} onPartSearchChange={onPartSearchChange} onSetActivePartSearch={onSetActivePartSearch} onSelectPart={onSelectPart} />)}
                             </div>
                             
                             {canViewPricing && (
                                 <div className="mt-6 pt-6 border-t border-gray-100 flex justify-end">
                                     <div className="w-72 bg-gray-50 p-4 rounded-xl border border-gray-100 space-y-2">
-                                        <div className="flex justify-between text-gray-600"><span>Net Total</span><span className="font-bold">{formatCurrency(totalNet)}</span></div>
-                                        {vatBreakdown.map(b => (
+                                        <div className="flex justify-between text-gray-600"><span>Net Total</span><span className="font-bold">{formatCurrency(totalNet || 0)}</span></div>
+                                        {(vatBreakdown || []).map(b => (
                                             <div key={b.name} className="flex justify-between text-gray-500 text-xs italic">
                                                 <span>VAT @ {b.rate}%</span>
-                                                <span>{formatCurrency(b.vat)}</span>
+                                                <span>{formatCurrency(b.vat || 0)}</span>
                                             </div>
                                         ))}
                                         <div className="flex justify-between font-black text-xl mt-2 pt-2 border-t border-gray-200 text-indigo-900">
                                             <span>Total</span>
-                                            <span>{formatCurrency(grandTotal)}</span>
+                                            <span>{formatCurrency(grandTotal || 0)}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -293,9 +324,9 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
                 </div>
                 <div className="p-4 space-y-2">
                     {(purchaseOrderIds || []).length > 0 ? (purchaseOrderIds || []).map(poId => {
-                        const po = purchaseOrders.find(p => p.id === poId);
+                        const po = (purchaseOrders || []).find(p => p.id === poId);
                         if (!po) return <div key={poId} className="p-3 border rounded-lg bg-red-50 text-xs text-red-700 font-medium">Error: PO {poId} not found in local state.</div>;
-                        const poTotal = (po.lineItems || []).reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
+                        const poTotal = (po.lineItems || []).reduce((sum, item) => sum + ((item.unitPrice || 0) * (item.quantity || 0)), 0);
                         return (
                             <button key={poId} type="button" onClick={() => onOpenPurchaseOrder(po)} className="w-full text-left border rounded-xl bg-white p-3 hover:border-indigo-300 hover:shadow-sm transition-all group">
                                 <div className="flex justify-between items-center">
@@ -304,7 +335,7 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
                                         <p className="text-xs text-gray-500">{po?.supplierId ? (supplierMap.get(po.supplierId) || 'Unknown Supplier') : 'N/A'}</p>
                                     </div>
                                     <div className="text-right">
-                                        <span className={`text-[10px] font-bold px-2 py-1 rounded-md uppercase ${po.status === 'Received' ? 'bg-green-100 text-green-700' : 'bg-blue-50 text-blue-600'}`}>{po.status}</span>
+                                        <span className={`text-[10px] font-bold px-2 py-1 rounded-md uppercase ${po.status === 'Received' ? 'bg-green-100 text-green-700' : 'bg-blue-50 text-blue-600'}`}>{po.status || 'Draft'}</span>
                                         {canViewPricing && <p className="font-bold mt-1 text-gray-700">{formatCurrency(poTotal)}</p>}
                                     </div>
                                 </div>
