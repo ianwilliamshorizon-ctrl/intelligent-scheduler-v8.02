@@ -1,8 +1,7 @@
-
 import React, { useState } from 'react';
 import { useData } from '../../../core/state/DataContext';
 import { BusinessEntity, Job, Invoice } from '../../../types';
-import { PlusCircle, Upload } from 'lucide-react';
+import { PlusCircle, Upload, Building2, MapPin, Briefcase, FileText } from 'lucide-react';
 import EntityFormModal from '../../EntityFormModal';
 import { useManagementTable } from '../hooks/useManagementTable';
 import { parseCsv } from '../../../utils/csvUtils';
@@ -27,7 +26,6 @@ export const ManagementEntitiesTab = ({ onShowStatus }: { onShowStatus: (text: s
             const entity = businessEntities.find(e => e.id === entityId);
             const entityShortCode = entity?.shortCode || 'UNK';
             
-            // Generate jobs and filter duplicates based on existing 'jobs' state
             const newJobs: Job[] = data.map((row: any) => {
                 const reg = (row.registration || '').toUpperCase().replace(/\s/g, '');
                 const vehicle = vehicles.find(v => v.registration === reg);
@@ -44,7 +42,6 @@ export const ManagementEntitiesTab = ({ onShowStatus }: { onShowStatus: (text: s
             
             const uniqueNew = newJobs.filter(j => !jobs.some(ex => ex.id === j.id));
             
-            // Persist
             for (const job of uniqueNew) {
                 await saveDocument('brooks_jobs', job);
             }
@@ -79,7 +76,6 @@ export const ManagementEntitiesTab = ({ onShowStatus }: { onShowStatus: (text: s
             
             const uniqueNew = newInvoices.filter(i => !invoices.some(ex => ex.id === i.id));
             
-            // Persist
             for (const inv of uniqueNew) {
                 await saveDocument('brooks_invoices', inv);
             }
@@ -90,37 +86,74 @@ export const ManagementEntitiesTab = ({ onShowStatus }: { onShowStatus: (text: s
     };
 
     return (
-        <div>
-            <div className="flex justify-end mb-4">
-                 <button onClick={() => { setSelectedEntity(null); setIsModalOpen(true); }} className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 shadow flex items-center gap-2">
-                    <PlusCircle size={16}/> Add Business Entity
+        <div className="p-1 space-y-6">
+            {/* Header */}
+            <div className="flex justify-between items-end">
+                <div>
+                    <h2 className="text-xl font-black text-gray-900 uppercase tracking-tight">Business Entities</h2>
+                    <p className="text-sm text-gray-500 font-medium">Manage legal entities and data imports</p>
+                </div>
+                <button 
+                    onClick={() => { setSelectedEntity(null); setIsModalOpen(true); }} 
+                    className="bg-indigo-600 text-white px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:bg-indigo-700 transition-all active:scale-95 shadow-lg shadow-indigo-100"
+                >
+                    <PlusCircle size={18}/> Add Business Entity
                 </button>
             </div>
-             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 overflow-y-auto max-h-[70vh]">
+
+            {/* Entity Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {businessEntities.map(e => (
-                    <div key={e.id} className={`p-4 border-2 rounded-lg transition-all border-${e.color}-200 bg-white relative group`}>
-                        <div className={`w-full h-2 bg-${e.color}-500 rounded-t mb-2`}></div>
-                        <div className="flex justify-between items-start cursor-pointer" onClick={() => { setSelectedEntity(e); setIsModalOpen(true); }}>
-                            <div>
-                                <h3 className="font-bold text-lg">{e.name}</h3>
-                                <p className="text-sm text-gray-500">{e.type}</p>
-                                <p className="text-xs text-gray-400 mt-2">{e.city}</p>
+                    <div key={e.id} className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all flex flex-col">
+                        {/* Decorative Top Bar based on entity color */}
+                        <div className={`h-1.5 w-full bg-${e.color}-500 opacity-80`}></div>
+                        
+                        {/* Card Body */}
+                        <div className="p-5 flex-grow">
+                            <div className="flex justify-between items-start mb-4">
+                                <div className="flex items-center gap-3">
+                                    <div className={`p-2 bg-${e.color}-50 text-${e.color}-600 rounded-lg`}>
+                                        <Building2 size={20} />
+                                    </div>
+                                    <div onClick={() => { setSelectedEntity(e); setIsModalOpen(true); }} className="cursor-pointer">
+                                        <h3 className="font-black text-gray-900 uppercase text-sm tracking-tight hover:text-indigo-600 transition-colors">{e.name}</h3>
+                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{e.type}</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 text-gray-500 text-sm font-medium mb-6">
+                                <MapPin size={14} className="text-gray-300" />
+                                {e.city || 'No city set'}
+                            </div>
+
+                            {/* Import Actions Card-Style */}
+                            <div className="grid grid-cols-2 gap-2">
+                                <label className="flex flex-col items-center justify-center p-3 border border-gray-100 bg-gray-50 rounded-xl cursor-pointer hover:bg-blue-50 hover:border-blue-200 transition-all group">
+                                    <Briefcase size={16} className="text-gray-400 group-hover:text-blue-600 mb-1" />
+                                    <span className="text-[10px] font-black uppercase text-gray-500 group-hover:text-blue-700">Jobs</span>
+                                    <input type="file" accept=".csv" className="hidden" onClick={() => setImportTargetEntityId(e.id)} onChange={handleImportJobs} />
+                                </label>
+
+                                <label className="flex flex-col items-center justify-center p-3 border border-gray-100 bg-gray-50 rounded-xl cursor-pointer hover:bg-green-50 hover:border-green-200 transition-all group">
+                                    <FileText size={16} className="text-gray-400 group-hover:text-green-600 mb-1" />
+                                    <span className="text-[10px] font-black uppercase text-gray-500 group-hover:text-green-700">Invoices</span>
+                                    <input type="file" accept=".csv" className="hidden" onClick={() => setImportTargetEntityId(e.id)} onChange={handleImportInvoices} />
+                                </label>
                             </div>
                         </div>
-                        <div className="mt-4 pt-4 border-t flex gap-2 justify-end">
-                            <label className="text-xs flex items-center gap-1 cursor-pointer bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200" title="Import Jobs CSV">
-                                <Upload size={12} /> Import Jobs
-                                <input type="file" accept=".csv" className="hidden" onClick={() => setImportTargetEntityId(e.id)} onChange={handleImportJobs} />
-                            </label>
-                            <label className="text-xs flex items-center gap-1 cursor-pointer bg-green-100 text-green-700 px-2 py-1 rounded hover:bg-green-200" title="Import Invoices CSV">
-                                <Upload size={12} /> Import Invoices
-                                <input type="file" accept=".csv" className="hidden" onClick={() => setImportTargetEntityId(e.id)} onChange={handleImportInvoices} />
-                            </label>
-                        </div>
+
+                        {/* Quick Edit Footer */}
+                        <button 
+                            onClick={() => { setSelectedEntity(e); setIsModalOpen(true); }}
+                            className="w-full py-3 bg-gray-50 text-[10px] font-black uppercase tracking-widest text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors border-t border-gray-100"
+                        >
+                            Edit Entity Details
+                        </button>
                     </div>
                 ))}
             </div>
-            
+
             {isModalOpen && (
                 <EntityFormModal 
                     isOpen={isModalOpen} 

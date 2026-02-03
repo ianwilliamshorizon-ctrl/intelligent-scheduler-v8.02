@@ -56,39 +56,39 @@ export const DataContextProvider: React.FC<{ children: React.ReactNode }> = ({ c
     const [isLoading, setIsLoading] = useState(true);
     const isRefreshingRef = useRef(false);
 
-    // Dynamic Hot Data Path
+    // --- HEAVY PERSISTENT DATA (Stay as Persistent) ---
+    const [customers, setCustomers] = usePersistentState<T.Customer[]>('brooks_customers', getInitialCustomers);
+    const [vehicles, setVehicles] = usePersistentState<T.Vehicle[]>('brooks_vehicles', getInitialVehicles);
+    const [parts, setParts] = usePersistentState<T.Part[]>('brooks_parts', getInitialParts);
+
+    // --- HOT PATH / MANAGED DATA (Switched to standard useState for instant sync) ---
     const [jobs, setJobs] = useState<T.Job[]>([]);
     const [purchases, setPurchases] = useState<T.Purchase[]>([]);
     const [purchaseOrders, setPurchaseOrders] = useState<T.PurchaseOrder[]>([]);
-    const [vehicles, setVehicles] = useState<T.Vehicle[]>([]);
-    const [customers, setCustomers] = useState<T.Customer[]>([]);
-    const [parts, setParts] = useState<T.Part[]>([]); 
-    const [suppliers, setSuppliers] = useState<T.Supplier[]>([]); // Moved to Hot Path
-
-    // Persistent Collections
-    const [estimates, setEstimates] = usePersistentState<T.Estimate[]>('brooks_estimates', getInitialEstimates);
-    const [invoices, setInvoices] = usePersistentState<T.Invoice[]>('brooks_invoices', getInitialInvoices);
-    const [servicePackages, setServicePackages] = usePersistentState<T.ServicePackage[]>('brooks_servicePackages', getInitialServicePackages);
-    const [engineers, setEngineers] = usePersistentState<T.Engineer[]>('brooks_engineers', getInitialEngineers);
-    const [lifts, setLifts] = usePersistentState<T.Lift[]>('brooks_lifts', getInitialLifts);
-    const [rentalVehicles, setRentalVehicles] = usePersistentState<T.RentalVehicle[]>('brooks_rentalVehicles', getInitialRentalVehicles);
-    const [rentalBookings, setRentalBookings] = usePersistentState<T.RentalBooking[]>('brooks_rentalBookings', getInitialRentalBookings);
-    const [saleVehicles, setSaleVehicles] = usePersistentState<T.SaleVehicle[]>('brooks_saleVehicles', getInitialSaleVehicles);
-    const [saleOverheadPackages, setSaleOverheadPackages] = usePersistentState<T.SaleOverheadPackage[]>('brooks_saleOverheadPackages', getInitialSaleOverheadPackages);
-    const [prospects, setProspects] = usePersistentState<T.Prospect[]>('brooks_prospects', getInitialProspects);
-    const [storageBookings, setStorageBookings] = usePersistentState<T.StorageBooking[]>('brooks_storageBookings', getInitialStorageBookings);
-    const [storageLocations, setStorageLocations] = usePersistentState<T.StorageLocation[]>('brooks_storageLocations', getInitialStorageLocations);
-    const [batteryChargers, setBatteryChargers] = usePersistentState<T.BatteryCharger[]>('brooks_batteryChargers', getInitialBatteryChargers);
-    const [nominalCodes, setNominalCodes] = usePersistentState<T.NominalCode[]>('brooks_nominalCodes', getInitialNominalCodes);
-    const [nominalCodeRules, setNominalCodeRules] = usePersistentState<T.NominalCodeRule[]>('brooks_nominalCodeRules', getInitialNominalCodeRules);
-    const [absenceRequests, setAbsenceRequests] = usePersistentState<T.AbsenceRequest[]>('brooks_absenceRequests', getInitialAbsenceRequests);
-    const [inquiries, setInquiries] = usePersistentState<T.Inquiry[]>('brooks_inquiries', getInitialInquiries);
-    const [reminders, setReminders] = usePersistentState<T.Reminder[]>('brooks_reminders', getInitialReminders);
-    const [auditLog, setAuditLog] = usePersistentState<T.AuditLogEntry[]>('brooks_auditLog', getInitialAuditLog);
-    const [businessEntities, setBusinessEntities] = usePersistentState<T.BusinessEntity[]>('brooks_businessEntities', getInitialBusinessEntities);
-    const [taxRates, setTaxRates] = usePersistentState<T.TaxRate[]>('brooks_taxRates', getInitialTaxRates);
-    const [roles, setRoles] = usePersistentState<T.Role[]>('brooks_roles', getInitialRoles);
-    const [inspectionDiagrams, setInspectionDiagrams] = usePersistentState<T.InspectionDiagram[]>('brooks_inspectionDiagrams', getInitialInspectionDiagrams);
+    const [suppliers, setSuppliers] = useState<T.Supplier[]>([]);
+    const [engineers, setEngineers] = useState<T.Engineer[]>([]);
+    const [lifts, setLifts] = useState<T.Lift[]>([]);
+    const [estimates, setEstimates] = useState<T.Estimate[]>([]);
+    const [invoices, setInvoices] = useState<T.Invoice[]>([]);
+    const [servicePackages, setServicePackages] = useState<T.ServicePackage[]>([]);
+    const [rentalVehicles, setRentalVehicles] = useState<T.RentalVehicle[]>([]);
+    const [rentalBookings, setRentalBookings] = useState<T.RentalBooking[]>([]);
+    const [saleVehicles, setSaleVehicles] = useState<T.SaleVehicle[]>([]);
+    const [saleOverheadPackages, setSaleOverheadPackages] = useState<T.SaleOverheadPackage[]>([]);
+    const [prospects, setProspects] = useState<T.Prospect[]>([]);
+    const [storageBookings, setStorageBookings] = useState<T.StorageBooking[]>([]);
+    const [storageLocations, setStorageLocations] = useState<T.StorageLocation[]>([]);
+    const [batteryChargers, setBatteryChargers] = useState<T.BatteryCharger[]>([]);
+    const [nominalCodes, setNominalCodes] = useState<T.NominalCode[]>([]);
+    const [nominalCodeRules, setNominalCodeRules] = useState<T.NominalCodeRule[]>([]);
+    const [absenceRequests, setAbsenceRequests] = useState<T.AbsenceRequest[]>([]);
+    const [inquiries, setInquiries] = useState<T.Inquiry[]>([]);
+    const [reminders, setReminders] = useState<T.Reminder[]>([]);
+    const [auditLog, setAuditLog] = useState<T.AuditLogEntry[]>([]);
+    const [businessEntities, setBusinessEntities] = useState<T.BusinessEntity[]>([]);
+    const [taxRates, setTaxRates] = useState<T.TaxRate[]>([]);
+    const [roles, setRoles] = useState<T.Role[]>([]);
+    const [inspectionDiagrams, setInspectionDiagrams] = useState<T.InspectionDiagram[]>([]);
 
     const refreshActiveData = async (isBackground: boolean = false) => {
         if (isRefreshingRef.current) return;
@@ -96,56 +96,52 @@ export const DataContextProvider: React.FC<{ children: React.ReactNode }> = ({ c
         if (!isBackground) setIsLoading(true);
         
         try {
-            const activeStatuses = ['Unallocated', 'Inquiry', 'Draft', 'Estimate', 'Authorized', 'In Progress', 'Pending Parts', 'Scheduled'];
-            
-            // 1. Fetch In-Flight Documents
-            const [activeJobs, activePurchases, activePOs] = await Promise.all([
-                getWhere<T.Job>('brooks_jobs', 'status', 'in', activeStatuses),
-                getWhere<T.Purchase>('brooks_purchases', 'paymentStatus', 'in', ['Unpaid', 'Partially Paid']),
-                getWhere<T.PurchaseOrder>('brooks_purchaseOrders', 'status', 'in', ['Draft', 'Ordered', 'Partially Received', 'Received'])
+            // Fetch everything small and managed in parallel
+            const [
+                allJobs, allPurchases, allPOs, allSuppliers, allEngineers, 
+                allLifts, allEstimates, allInvoices, allPackages,
+                allProspects, allTaxRates, allRoles, allBusinessEntities,
+                allNominal, allAbsence, allInquiries, allReminders
+            ] = await Promise.all([
+                getAll<T.Job>('brooks_jobs'),
+                getAll<T.Purchase>('brooks_purchases'),
+                getAll<T.PurchaseOrder>('brooks_purchaseOrders'),
+                getAll<T.Supplier>('brooks_suppliers'),
+                getAll<T.Engineer>('brooks_engineers'),
+                getAll<T.Lift>('brooks_lifts'),
+                getAll<T.Estimate>('brooks_estimates'),
+                getAll<T.Invoice>('brooks_invoices'),
+                getAll<T.ServicePackage>('brooks_servicePackages'),
+                getAll<T.Prospect>('brooks_prospects'),
+                getAll<T.TaxRate>('brooks_taxRates'),
+                getAll<T.Role>('brooks_roles'),
+                getAll<T.BusinessEntity>('brooks_businessEntities'),
+                getAll<T.NominalCode>('brooks_nominalCodes'),
+                getAll<T.AbsenceRequest>('brooks_absenceRequests'),
+                getAll<T.Inquiry>('brooks_inquiries'),
+                getAll<T.Reminder>('brooks_reminders')
             ]);
 
-            // 2. Identify Dependencies (Parts & Suppliers)
-            const activePartIds = new Set<string>();
-            const activeSupplierIds = new Set<string>();
+            setJobs(allJobs);
+            setPurchases(allPurchases);
+            setPurchaseOrders(allPOs);
+            setSuppliers(allSuppliers);
+            setEngineers(allEngineers);
+            setLifts(allLifts);
+            setEstimates(allEstimates);
+            setInvoices(allInvoices);
+            setServicePackages(allPackages);
+            setProspects(allProspects);
+            setTaxRates(allTaxRates);
+            setRoles(allRoles);
+            setBusinessEntities(allBusinessEntities);
+            setNominalCodes(allNominal);
+            setAbsenceRequests(allAbsence);
+            setInquiries(allInquiries);
+            setReminders(allReminders);
 
-            // Suppliers from POs and Purchases
-            activePOs.forEach(po => po.supplierId && activeSupplierIds.add(po.supplierId));
-            activePurchases.forEach(p => p.supplierId && activeSupplierIds.add(p.supplierId));
-
-            // Parts from POs
-            activePOs.forEach(po => po.lineItems?.forEach(li => li.id && activePartIds.add(li.id)));
-            
-            // Parts from Active Jobs (via Estimates)
-            const activeEstimateIds = activeJobs.map(j => j.estimateId).filter(Boolean);
-            const resolvedEstimates = await getByIds<T.Estimate>('brooks_estimates', activeEstimateIds as string[]);
-            resolvedEstimates.forEach(est => est.lineItems?.forEach(li => li.partId && activePartIds.add(li.partId)));
-
-            const customerIds = [...new Set(activeJobs.map(j => j.customerId).filter(Boolean))];
-            const vehicleIds = [...new Set(activeJobs.map(j => j.vehicleId).filter(Boolean))];
-
-            // 3. Resolve everything in parallel
-            const [activeCustomers, activeVehicles, resolvedParts, resolvedSuppliers] = await Promise.all([
-                getByIds<T.Customer>('brooks_customers', customerIds),
-                getByIds<T.Vehicle>('brooks_vehicles', vehicleIds),
-                getByIds<T.Part>('brooks_parts', Array.from(activePartIds)),
-                // If background sync, only get suppliers used in active docs. 
-                // If initial load, get them all so the "New PO" list works.
-                isBackground 
-                    ? getByIds<T.Supplier>('brooks_suppliers', Array.from(activeSupplierIds))
-                    : getAll<T.Supplier>('brooks_suppliers')
-            ]);
-
-            setJobs(activeJobs);
-            setPurchases(activePurchases);
-            setPurchaseOrders(activePOs);
-            setCustomers(activeCustomers);
-            setVehicles(activeVehicles);
-            setParts(resolvedParts);
-            setSuppliers(resolvedSuppliers);
-            
         } catch (error) {
-            console.error("Data Sync Error:", error);
+            console.error("Data Refresh Error:", error);
         } finally {
             if (!isBackground) setIsLoading(false);
             isRefreshingRef.current = false;
@@ -156,33 +152,13 @@ export const DataContextProvider: React.FC<{ children: React.ReactNode }> = ({ c
         refreshActiveData();
     }, []);
 
+    // 5-second poll to keep the "Hot Path" fresh
     useEffect(() => {
         const pollInterval = setInterval(() => {
             refreshActiveData(true);
         }, 5000); 
         return () => clearInterval(pollInterval);
     }, []);
-
-    useEffect(() => {
-        const migrate = async () => {
-            if (vehicles.length === 0) return;
-            let vChanged = false;
-            const updatedVehicles = JSON.parse(JSON.stringify(vehicles));
-            for (const vehicle of updatedVehicles) {
-                if (vehicle.images && Array.isArray(vehicle.images)) {
-                    for (const image of vehicle.images) {
-                        if ((image as any).dataUrl) {
-                            vChanged = true;
-                            await saveImage(image.id, (image as any).dataUrl);
-                            delete (image as any).dataUrl;
-                        }
-                    }
-                }
-            }
-            if (vChanged) setVehicles(updatedVehicles);
-        };
-        migrate();
-    }, [vehicles.length]);
 
     const sortedLifts = useMemo(() => {
         return [...lifts].sort((a, b) => 
@@ -204,7 +180,14 @@ export const DataContextProvider: React.FC<{ children: React.ReactNode }> = ({ c
         reminders, setReminders, auditLog, setAuditLog, businessEntities, setBusinessEntities,
         taxRates, setTaxRates, roles, setRoles, inspectionDiagrams, setInspectionDiagrams,
         isLoading, refreshActiveData
-    }), [jobs, vehicles, customers, estimates, invoices, purchaseOrders, purchases, parts, servicePackages, suppliers, engineers, sortedLifts, rentalVehicles, rentalBookings, saleVehicles, saleOverheadPackages, prospects, storageBookings, storageLocations, batteryChargers, nominalCodes, nominalCodeRules, absenceRequests, inquiries, reminders, auditLog, businessEntities, taxRates, roles, inspectionDiagrams, isLoading]);
+    }), [
+        jobs, vehicles, customers, estimates, invoices, purchaseOrders, purchases, 
+        parts, servicePackages, suppliers, engineers, sortedLifts, rentalVehicles, 
+        rentalBookings, saleVehicles, saleOverheadPackages, prospects, storageBookings, 
+        storageLocations, batteryChargers, nominalCodes, nominalCodeRules, 
+        absenceRequests, inquiries, reminders, auditLog, businessEntities, 
+        taxRates, roles, inspectionDiagrams, isLoading
+    ]);
 
     return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
 };

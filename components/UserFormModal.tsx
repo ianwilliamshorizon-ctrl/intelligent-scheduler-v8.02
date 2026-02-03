@@ -11,7 +11,6 @@ interface UserFormModalProps {
 }
 
 const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, user, roles }) => {
-    // We use Partial<T.User> but only initialize properties that exist in the type
     const [formData, setFormData] = useState<Partial<T.User>>({
         name: '',
         email: '',
@@ -19,30 +18,34 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, 
         role: undefined
     });
 
+    // THE FIX: We only want to initialize the form when the modal OPENS 
+    // or when the User ID changes. We ignore general "roles" or "user" object 
+    // updates caused by background polling.
     useEffect(() => {
-        if (user) {
-            setFormData(user);
-        } else {
-            setFormData({
-                name: '',
-                email: '',
-                password: '',
-                role: roles.length > 0 ? (roles[0].name as T.UserRole) : undefined
-            });
+        if (isOpen) {
+            if (user) {
+                // Spread the user to ensure we have a fresh local copy
+                setFormData({ ...user });
+            } else {
+                setFormData({
+                    name: '',
+                    email: '',
+                    password: '',
+                    role: roles.length > 0 ? (roles[0].name as T.UserRole) : undefined
+                });
+            }
         }
-    }, [user, isOpen, roles]);
+        // We strictly only trigger on 'isOpen' or 'user.id'
+    }, [isOpen, user?.id]); 
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         
-        // Custom ID logic: User_FirstName
         const firstName = formData.name?.split(' ')[0] || 'User';
         
-        // Construct the final object
         const finalUser = {
             ...formData,
-            // Ensure ID is set for database naming
-            id: formData.id || `User_${firstName}`,
+            id: formData.id || `User_${firstName}_${Date.now()}`, // Added timestamp to prevent ID collisions
         } as T.User;
 
         onSave(finalUser);
@@ -63,7 +66,6 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, 
                 </div>
 
                 <form onSubmit={handleSubmit} className="p-4 space-y-4">
-                    {/* FULL NAME */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
                         <input
@@ -76,7 +78,6 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, 
                         />
                     </div>
 
-                    {/* EMAIL (The Login ID) */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
                         <input
@@ -89,7 +90,6 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, 
                         />
                     </div>
 
-                    {/* PASSWORD */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
                         <input
@@ -102,7 +102,6 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, 
                         />
                     </div>
 
-                    {/* ROLE */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">System Role</label>
                         <select
