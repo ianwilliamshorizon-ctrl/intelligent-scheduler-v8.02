@@ -64,24 +64,15 @@ export const DraggableJobCard: React.FC<{
     return (
         <div
             draggable={canDrag}
-            data-job-id={job.id}
             onDragStart={(e) => {
                 if (canDrag) {
-                    // Set DataTransfer immediately (Synchronous)
                     e.dataTransfer.setData('jobId', job.id);
                     e.dataTransfer.effectAllowed = 'move';
-                    
-                    // SAFETY TIMEOUT:
-                    // Pushes React state updates to the next event loop tick.
-                    // This prevents the "removeChild" crash by letting the browser
-                    // finish the physical "grab" of the DOM node before React re-renders.
-                    setTimeout(() => {
-                        onDragStart(e, job.id, segmentToDrag.segmentId);
-                    }, 0);
+                    onDragStart(e, job.id, segmentToDrag.segmentId);
                 }
             }}
             onDragEnd={onDragEnd}
-            className={`p-2.5 rounded-lg shadow-md border space-y-2 ${canDrag ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'} draggable-job transition-all duration-200 ${getCardColorClasses()}`}
+            className={`p-2.5 rounded-lg shadow-md border space-y-2 ${canDrag ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'} draggable-job ${getCardColorClasses()}`}
             title={canDrag ? `Drag to schedule: ${job.description} (${segmentToDrag.duration}h)`: 'View job details'}
         >
             <div className="flex justify-between items-start">
@@ -91,9 +82,10 @@ export const DraggableJobCard: React.FC<{
                 </h4>
                 <span className="font-mono text-xs bg-gray-200 px-1.5 py-0.5 rounded ml-2 flex-shrink-0">#{job.id}</span>
             </div>
+
             <div className="text-xs text-gray-600 space-y-1">
-                <p><strong>Vehicle:</strong> {vehicle?.registration} - {vehicle?.make} {vehicle?.model}</p>
-                <p><strong>Customer:</strong> {getCustomerDisplayName(customer)} ({customer?.mobile || customer?.phone})</p>
+                <p><strong>Vehicle:</strong> {vehicle ? `${vehicle.registration} - ${vehicle.make} ${vehicle.model}` : 'Loading vehicle...'}</p>
+                <p><strong>Customer:</strong> {customer ? `${getCustomerDisplayName(customer)} (${customer.mobile || customer.phone || 'No Phone'})` : 'Loading customer...'}</p>
                 <p><strong>Job Length:</strong> {job.estimatedHours} hours ({unallocatedSegments.length} segment{unallocatedSegments.length > 1 ? 's' : ''})</p>
             </div>
 
@@ -113,13 +105,21 @@ export const DraggableJobCard: React.FC<{
                     ))}
                 </div>
             )}
-             <div className="flex justify-between items-center pt-2 border-t mt-2">
+
+            <div className="flex justify-between items-center pt-2 border-t mt-2">
                 <div className="flex items-center gap-4 text-xs">
-                     {partsStatusInfo && <span title={partsStatusInfo.title} className={`flex items-center gap-1 font-semibold ${partsStatusInfo.color}`}>{partsStatusInfo.icon && <partsStatusInfo.icon size={14}/>} {partsStatus}</span>}
+                    {partsStatusInfo && (
+                        <span title={partsStatusInfo.title} className={`flex items-center gap-1 font-semibold ${partsStatusInfo.color}`}>
+                            {partsStatusInfo.icon && <partsStatusInfo.icon size={14}/>} 
+                            {partsStatus}
+                        </span>
+                    )}
                     <span title={`Vehicle Status: ${currentVehicleStatus.text}`} className={`flex items-center gap-1 font-semibold ${currentVehicleStatus.color}`}>
-                        <currentVehicleStatus.icon size={14}/> {currentVehicleStatus.text}
+                        <currentVehicleStatus.icon size={14}/> 
+                        {currentVehicleStatus.text}
                     </span>
                 </div>
+                
                 <div className="flex items-center gap-1">
                     <button type="button" onClick={(e) => { e.stopPropagation(); onOpenAssistant(job.id); }} className="p-1.5 bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200" title="Technical Assistant"><Wand2 size={14} /></button>
                     {job.vehicleStatus === 'Awaiting Arrival' && <button type="button" onClick={() => onCheckIn(job.id)} className="p-1.5 bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200" title="Check Vehicle In"><LogIn size={14} /></button>}

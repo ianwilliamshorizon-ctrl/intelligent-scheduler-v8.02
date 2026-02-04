@@ -9,6 +9,8 @@ import EmailPurchaseOrderModal from './EmailPurchaseOrderModal';
 import { usePrint } from '../core/hooks/usePrint';
 
 const PrintablePurchaseOrder: React.FC<any> = ({ purchaseOrder, supplier, entity, taxRates, totals }) => {
+    const showReceived = ['Partially Received', 'Received'].includes(purchaseOrder.status);
+
     return (
         <div className="bg-white font-sans text-sm text-gray-800 printable-page" style={{ width: '210mm', padding: '15mm', boxSizing: 'border-box' }}>
             <header className="pb-6 border-b mb-6">
@@ -50,6 +52,7 @@ const PrintablePurchaseOrder: React.FC<any> = ({ purchaseOrder, supplier, entity
                                 <th style={{ textAlign: 'left', padding: '8px', color: '#4b5563' }}>Part Number</th>
                                 <th style={{ textAlign: 'left', padding: '8px', color: '#4b5563', width: '40%' }}>Description</th>
                                 <th style={{ textAlign: 'right', padding: '8px', color: '#4b5563' }}>Qty</th>
+                                {showReceived && <th style={{ textAlign: 'right', padding: '8px', color: '#4b5563' }}>Rec'd</th>}
                                 <th style={{ textAlign: 'right', padding: '8px', color: '#4b5563' }}>Unit Cost</th>
                                 <th style={{ textAlign: 'right', padding: '8px', color: '#4b5563' }}>Total</th>
                             </tr>
@@ -62,6 +65,7 @@ const PrintablePurchaseOrder: React.FC<any> = ({ purchaseOrder, supplier, entity
                                         <td style={{ padding: '8px', fontFamily: 'monospace' }}>{item.partNumber || 'N/A'}</td>
                                         <td style={{ padding: '8px' }}>{item.description}</td>
                                         <td style={{ padding: '8px', textAlign: 'right' }}>{item.quantity}</td>
+                                        {showReceived && <td style={{ padding: '8px', textAlign: 'right' }}>{item.receivedQuantity || 0}</td>}
                                         <td style={{ padding: '8px', textAlign: 'right' }}>{formatCurrency(item.unitPrice)}</td>
                                         <td style={{ padding: '8px', textAlign: 'right', fontWeight: '500' }}>{formatCurrency(net)}</td>
                                     </tr>

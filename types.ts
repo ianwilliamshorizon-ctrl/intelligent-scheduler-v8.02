@@ -1,4 +1,5 @@
-import React from 'react';
+
+
 export type ViewType = 'dashboard' | 'dispatch' | 'workflow' | 'jobs' | 'estimates' | 'invoices' | 'purchaseOrders' | 'sales' | 'storage' | 'rentals' | 'concierge' | 'communications' | 'absence' | 'inquiries';
 
 export type UserRole = 'Admin' | 'Dispatcher' | 'Engineer' | 'Sales' | 'Garage Concierge';
@@ -11,7 +12,6 @@ export interface User {
     email?: string;
     password?: string;
     role: UserRole;
-    defaultEntityId?: string;
     holidayEntitlement: number;
     holidayApproverId?: string;
     engineerId?: string;
@@ -633,25 +633,24 @@ export interface EngineerChangeEvent {
 
 export interface UnbillableTimeEvent {
 }
-// Find line 640 or the ConfirmationState interface
-export interface ConfirmationState {
-    isOpen: boolean;
-    title: string;
-    message: React.ReactNode; 
-    onConfirm?: () => void;
-    onCancel?: () => void;
-    type?: "warning" | "success" | "danger" | "info";
-    confirmText?: string; // Add this
-    cancelText?: string;  // Add this
+
+// --- Inspection Template Types ---
+
+export interface InspectionItemTemplate {
+    id: string;
+    label: string;
 }
 
-export interface AppState {
-    user: User | null;
-    currentView: string;
-    selectedEntityId: string;
-    businessEntities: BusinessEntity[];
-    filteredBusinessEntities: BusinessEntity[]; // <--- Ensure this is exactly here
-    confirmation: ConfirmationState;
-    setConfirmation: (state: ConfirmationState) => void;
-    // ... include any other properties your AppContext uses
+export interface InspectionSectionTemplate {
+    id: string;
+    title: string;
+    items: InspectionItemTemplate[];
+}
+
+export interface InspectionTemplate {
+    id: string;
+    name: string;
+    description?: string;
+    sections: InspectionSectionTemplate[];
+    isDefault?: boolean;
 }

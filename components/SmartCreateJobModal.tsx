@@ -1,23 +1,25 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
-import { X, Loader2, Wand2, Check, Car, Plus, Trash2 } from 'lucide-react';
-import { parseJobRequest, generateEstimateFromDescription } from '../core/services/geminiService';
-import { Vehicle, ServicePackage, Customer, EstimateLineItem, Part } from '../types';
-import { formatDate, getTodayISOString, getFutureDateISOString } from '../core/utils/dateUtils';
+import { X, Loader2, Wand2, Check, Car, Plus, Trash2, Calendar, AlertTriangle, Calculator, FileText, User, Phone, Mail, Edit, DollarSign, Wallet, TrendingUp } from 'lucide-react';
+import { parseJobRequest } from '../core/services/geminiService';
+import { Vehicle, ServicePackage, Customer, EstimateLineItem, Job, Estimate } from '../types';
+import { formatDate, getTodayISOString, getFutureDateISOString, splitJobIntoSegments } from '../core/utils/dateUtils';
 import AddNewVehicleForm from './AddNewVehicleForm';
 import { useData } from '../core/state/DataContext';
 import { useApp } from '../core/state/AppContext';
 import { formatCurrency } from '../utils/formatUtils';
-import { searchDocuments } from '../core/db/index'; 
 import SearchableSelect from './SearchableSelect';
+import { generateEstimateNumber, generateJobId } from '../core/utils/numberGenerators';
+import { getCustomerDisplayName } from '../core/utils/customerUtils';
 
 interface SmartCreateJobModalProps {
     isOpen: boolean;
     onClose: () => void;
     creationMode: 'job' | 'estimate';
-    onJobCreate: (jobData: any) => void;
-    onVehicleAndJobCreate: (customer: Customer, vehicle: Vehicle, jobData: any) => void;
-    onEstimateCreate: (estimateData: any) => void;
-    onVehicleAndEstimateCreate: (customer: Customer, vehicle: Vehicle, estimateData: any) => void;
+    onJobCreate: (jobData: Job) => void;
+    onVehicleAndJobCreate: (customer: Customer, vehicle: Vehicle, jobData: Job) => void;
+    onEstimateCreate: (estimateData: Estimate) => void;
+    onVehicleAndEstimateCreate: (customer: Customer, vehicle: Vehicle, estimateData: Estimate) => void;
     vehicles: Vehicle[];
     customers: Customer[];
     servicePackages: ServicePackage[];
@@ -36,60 +38,95 @@ const SmartCreateJobModal: React.FC<SmartCreateJobModalProps> = ({
     vehicles, 
     customers, 
     servicePackages, 
-    defaultDate,
+    defaultDate, 
     initialPrompt,
 }) => {
-    // ⚡ Performance: Removed 'parts' from useData to avoid loading 21k array
-    const { taxRates } = useData();
-    const { filteredBusinessEntities: businessEntities, selectedEntityId } = useApp();
+    const { taxRates, jobs, businessEntities, estimates } = useData();
+    const { selectedEntityId, currentUser } = useApp();
 
     const [prompt, setPrompt] = useState(initialPrompt || '');
-    const [parsedJob, setParsedJob] = useState<any>(null);
+    const [parsedData, setParsedData] = useState<any>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
+    
+    // Core Entity States
     const [vehicleExists, setVehicleExists] = useState<boolean | null>(null);
     const [foundVehicle, setFoundVehicle] = useState<Vehicle | null>(null);
+    const [foundCustomer, setFoundCustomer] = useState<Customer | null>(null);
+    const [selectedDate, setSelectedDate] = useState<string>(defaultDate || getTodayISOString());
     
-    const [isGeneratingAiEstimate, setIsGeneratingAiEstimate] = useState(false);
+    // Builder States
     const [lineItems, setLineItems] = useState<EstimateLineItem[]>([]);
-    const [optionalItems, setOptionalItems] = useState<EstimateLineItem[]>([]);
     const [notes, setNotes] = useState('');
     const [showAddNewVehicle, setShowAddNewVehicle] = useState(false);
 
     const isEstimateMode = creationMode === 'estimate';
     const standardTaxRateId = useMemo(() => taxRates.find(t => t.code === 'T1')?.id, [taxRates]);
+    
+    const selectedEntity = useMemo(() => businessEntities.find(e => e.id === selectedEntityId) || businessEntities[0], [businessEntities, selectedEntityId]);
 
     useEffect(() => {
         if (isOpen) {
-            setPrompt(initialPrompt || '');
-            setParsedJob(null);
+            const promptToUse = initialPrompt || '';
+            setPrompt(promptToUse);
+            setParsedData(null);
             setIsLoading(false);
             setError('');
             setVehicleExists(null);
             setFoundVehicle(null);
-            setIsGeneratingAiEstimate(false);
+            setFoundCustomer(null);
             setLineItems([]);
-            setOptionalItems([]);
             setNotes('');
             setShowAddNewVehicle(false);
+            setSelectedDate(defaultDate || getTodayISOString());
 
-            if (initialPrompt) {
-               setTimeout(() => handleParseRequest(initialPrompt), 100);
+            if (promptToUse) {
+               setTimeout(() => handleParseRequest(promptToUse), 100);
            }
         }
     }, [isOpen, initialPrompt]);
 
-    // ⚡ HOT PATH: Denormalize details so the dashboard/list doesn't lag
-    const attachDisplayDetails = (data: any, customer: Customer, vehicle: Vehicle) => {
+    // Capacity Calculation
+    const capacityStats = useMemo(() => {
+        if (!selectedDate || !selectedEntity) return { allocated: 0, max: 0, available: 0, isOver: false, currentJobHours: 0 };
+        
+        // 1. Calculate existing load for this entity on this date
+        const entityJobs = jobs.filter(j => j.entityId === selectedEntity.id);
+        const allocatedHours = entityJobs
+            .flatMap(j => j.segments || [])
+            .filter(s => s.date === selectedDate && s.status !== 'Cancelled')
+            .reduce((sum, s) => sum + s.duration, 0);
+
+        // 2. Calculate labor hours for the NEW job being built
+        const currentJobHours = lineItems
+            .filter(item => item.isLabor && !item.isOptional)
+            .reduce((sum, item) => sum + item.quantity, 0);
+
+        const max = selectedEntity.dailyCapacityHours || 40;
+        const totalProjected = allocatedHours + currentJobHours;
+        
         return {
-            ...data,
-            displayDetails: {
-                customerName: `${customer.forename} ${customer.surname}`,
-                vehicleReg: vehicle.registration,
-                vehicleModel: `${vehicle.make} ${vehicle.model}`
-            }
+            allocated: allocatedHours,
+            max,
+            available: Math.max(0, max - allocatedHours),
+            currentJobHours,
+            totalProjected,
+            isOver: totalProjected > max
         };
-    };
+    }, [jobs, selectedEntity, selectedDate, lineItems]);
+
+    // Financial Totals
+    const totals = useMemo(() => {
+        const net = lineItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
+        const cost = lineItems.reduce((sum, item) => sum + (item.quantity * (item.unitCost || 0)), 0);
+        // Approximation of VAT
+        const vat = net * 0.2;
+        const gross = net + vat; 
+        const profit = net - cost;
+        const margin = net > 0 ? (profit / net) * 100 : 0;
+        
+        return { net, vat, gross, cost, profit, margin };
+    }, [lineItems]);
 
     const handleParseRequest = async (promptOverride?: string) => {
         const currentPrompt = promptOverride || prompt;
@@ -99,34 +136,76 @@ const SmartCreateJobModal: React.FC<SmartCreateJobModalProps> = ({
         }
         setIsLoading(true);
         setError('');
-        
+        setParsedData(null);
+        setLineItems([]);
+
         try {
             const contextDate = defaultDate || formatDate(new Date());
             let finalResult = await parseJobRequest(currentPrompt, servicePackages, contextDate);
 
+            // 1. Match Vehicle
             const registration = finalResult.vehicleRegistration?.toUpperCase().replace(/\s/g, '');
-            if (!registration) throw new Error("Could not identify a vehicle registration.");
-
             const found = vehicles.find(v => v.registration.toUpperCase().replace(/\s/g, '') === registration);
             
+            // Re-parse with vehicle context if needed
             if (found && (!finalResult.servicePackageNames || finalResult.servicePackageNames.length === 0)) {
                 finalResult = await parseJobRequest(currentPrompt, servicePackages, contextDate, { make: found.make, model: found.model });
             }
 
-            if (!finalResult.scheduledDate && defaultDate && !isEstimateMode) {
-                finalResult.scheduledDate = defaultDate;
-            }
+            if (finalResult.scheduledDate) setSelectedDate(finalResult.scheduledDate);
             
-            setParsedJob(finalResult);
+            setParsedData(finalResult);
             setNotes(finalResult.notes || '');
             
             if (found) {
                 setVehicleExists(true);
                 setFoundVehicle(found);
+                const cust = customers.find(c => c.id === found.customerId);
+                setFoundCustomer(cust || null);
             } else {
                 setVehicleExists(false);
-                if (!isEstimateMode) setShowAddNewVehicle(true);
+                setFoundVehicle(null);
+                
+                // 2. Match Customer if Vehicle not found
+                if (finalResult.customerName) {
+                    const lowerName = finalResult.customerName.toLowerCase();
+                    const matchedCust = customers.find(c => getCustomerDisplayName(c).toLowerCase().includes(lowerName));
+                    setFoundCustomer(matchedCust || null);
+                } else {
+                    setFoundCustomer(null);
+                }
             }
+
+            // Auto-populate line items if packages detected
+            if (finalResult.servicePackageNames && finalResult.servicePackageNames.length > 0) {
+                finalResult.servicePackageNames.forEach((pkgName: string) => {
+                    const pkg = servicePackages.find(p => p.name === pkgName);
+                    if (pkg) handleSelectPackage(pkg.id);
+                });
+            } else if (finalResult.estimatedHours) {
+                // Add generic labor if no package but hours found
+                setLineItems(prev => [...prev, {
+                    id: crypto.randomUUID(),
+                    description: finalResult.description || 'Labor',
+                    quantity: finalResult.estimatedHours,
+                    unitPrice: selectedEntity.laborRate || 0,
+                    unitCost: selectedEntity.laborCostRate || 0,
+                    isLabor: true,
+                    taxCodeId: standardTaxRateId
+                }]);
+            } else {
+                // Default if nothing specific found
+                setLineItems(prev => [...prev, {
+                    id: crypto.randomUUID(),
+                    description: finalResult.description || 'Diagnosis / Inspection',
+                    quantity: 1,
+                    unitPrice: selectedEntity.laborRate || 0,
+                    unitCost: selectedEntity.laborCostRate || 0,
+                    isLabor: true,
+                    taxCodeId: standardTaxRateId
+                }]);
+            }
+
         } catch (err: any) {
             setError(err.message || 'An unknown error occurred.');
         } finally {
@@ -135,79 +214,163 @@ const SmartCreateJobModal: React.FC<SmartCreateJobModalProps> = ({
     };
 
     const handleFinalCreate = () => {
-        if (!foundVehicle) {
-            setShowAddNewVehicle(true);
-            return;
-        }
+        try {
+            if (!vehicleExists && !foundVehicle) {
+                setShowAddNewVehicle(true);
+                return;
+            }
+            if (!selectedEntity) {
+                setError("Business entity configuration missing. Please contact admin.");
+                return;
+            }
 
-        const customer = customers.find(c => c.id === foundVehicle.customerId);
-        if (!customer) return setError("Associated customer not found.");
-
-        if (isEstimateMode) {
-            const estimateData = attachDisplayDetails({
-                ...parsedJob,
-                customerId: customer.id,
-                vehicleId: foundVehicle.id,
-                vehicleRegistration: foundVehicle.registration,
-                lineItems,
-                notes,
+            const entityShortCode = selectedEntity.shortCode || 'UNK';
+            const newEstimateId = `est_${Date.now()}`;
+            
+            const newEstimate: Estimate = {
+                id: newEstimateId,
+                estimateNumber: generateEstimateNumber(estimates, entityShortCode),
+                entityId: selectedEntity.id,
+                customerId: foundVehicle!.customerId,
+                vehicleId: foundVehicle!.id,
                 issueDate: getTodayISOString(),
                 expiryDate: getFutureDateISOString(30),
-                status: 'Draft'
-            }, customer, foundVehicle);
-            onEstimateCreate(estimateData);
-        } else {
-            const jobData = attachDisplayDetails({
-                ...parsedJob,
-                customerId: customer.id,
-                vehicleId: foundVehicle.id,
-            }, customer, foundVehicle);
-            onJobCreate(jobData);
+                status: isEstimateMode ? 'Draft' : 'Converted to Job',
+                lineItems: lineItems,
+                notes: notes,
+                createdByUserId: currentUser.id,
+                jobId: isEstimateMode ? undefined : 'pending_creation' // Will be updated below
+            };
+
+            if (isEstimateMode) {
+                onEstimateCreate(newEstimate);
+                handleClose();
+                return;
+            }
+
+            // 2. Create Job (If Job Mode)
+            const totalHours = lineItems.filter(li => li.isLabor).reduce((sum, li) => sum + li.quantity, 0);
+            // Ensure at least 0.5 hours for any job so it gets a segment
+            const validEstimatedHours = Math.max(0.5, totalHours);
+            
+            const newJobId = generateJobId(jobs, entityShortCode);
+            
+            const newJob: Job = {
+                id: newJobId,
+                entityId: selectedEntity.id,
+                vehicleId: foundVehicle!.id,
+                customerId: foundVehicle!.customerId,
+                description: parsedData?.description || 'New Job',
+                estimatedHours: validEstimatedHours,
+                scheduledDate: selectedDate,
+                status: 'Unallocated', // Initial status
+                createdAt: getTodayISOString(),
+                createdByUserId: currentUser.id,
+                segments: [], // Generated below
+                estimateId: newEstimate.id,
+                notes: notes,
+                vehicleStatus: 'Awaiting Arrival',
+                partsStatus: lineItems.some(li => !li.isLabor && !li.isPackageComponent) ? 'Awaiting Order' : 'Not Required',
+                purchaseOrderIds: undefined
+            };
+
+            // CRITICAL: Generate segments based on the new job data so it appears on the timeline/unallocated list
+            const segments = splitJobIntoSegments(newJob);
+            newJob.segments = segments;
+            
+            // Link estimate to job
+            newEstimate.jobId = newJobId;
+
+            // Save both
+            onEstimateCreate(newEstimate);
+            onJobCreate(newJob);
+            
+            handleClose();
+        } catch (e: any) {
+            console.error("Failed to create job:", e);
+            setError(`Failed to create: ${e.message}`);
         }
-        onClose();
     };
 
     const handleSaveNewVehicleAndCreate = (newCustomer: Customer, newVehicle: Vehicle) => {
-        const baseData = isEstimateMode ? { 
-            ...parsedJob, 
-            lineItems, 
-            notes,
-            issueDate: getTodayISOString(),
-            expiryDate: getFutureDateISOString(30),
-            status: 'Draft' 
-        } : parsedJob;
+        try {
+            setFoundVehicle(newVehicle);
+            setFoundCustomer(newCustomer);
+            setVehicleExists(true);
+            
+            const entityShortCode = selectedEntity?.shortCode || 'UNK';
+            const newEstimateId = `est_${Date.now()}`;
+            
+            const newEstimate: Estimate = {
+                id: newEstimateId,
+                estimateNumber: generateEstimateNumber(estimates, entityShortCode),
+                entityId: selectedEntity.id,
+                customerId: newCustomer.id,
+                vehicleId: newVehicle.id,
+                issueDate: getTodayISOString(),
+                expiryDate: getFutureDateISOString(30),
+                status: isEstimateMode ? 'Draft' : 'Converted to Job',
+                lineItems: lineItems,
+                notes: notes,
+                createdByUserId: currentUser.id
+            };
 
-        const dataWithDisplay = attachDisplayDetails(baseData, newCustomer, newVehicle);
-
-        if (isEstimateMode) {
-            onVehicleAndEstimateCreate(newCustomer, newVehicle, dataWithDisplay);
-        } else {
-            onVehicleAndJobCreate(newCustomer, newVehicle, dataWithDisplay);
+            if (isEstimateMode) {
+                 onVehicleAndEstimateCreate(newCustomer, newVehicle, newEstimate);
+            } else {
+                 const totalHours = lineItems.filter(li => li.isLabor).reduce((sum, li) => sum + li.quantity, 0);
+                 const validEstimatedHours = Math.max(0.5, totalHours);
+                 
+                 const newJobId = generateJobId(jobs, entityShortCode);
+                 const newJob: Job = {
+                    id: newJobId,
+                    entityId: selectedEntity.id,
+                    vehicleId: newVehicle.id,
+                    customerId: newCustomer.id,
+                    description: parsedData?.description || 'New Job',
+                    estimatedHours: validEstimatedHours,
+                    scheduledDate: selectedDate,
+                    status: 'Unallocated',
+                    createdAt: getTodayISOString(),
+                    createdByUserId: currentUser.id,
+                    segments: [],
+                    estimateId: newEstimate.id,
+                    notes: notes,
+                    vehicleStatus: 'Awaiting Arrival',
+                    partsStatus: 'Not Required'
+                };
+                
+                newJob.segments = splitJobIntoSegments(newJob);
+                
+                newEstimate.jobId = newJobId;
+                onVehicleAndJobCreate(newCustomer, newVehicle, newJob);
+                onEstimateCreate(newEstimate); 
+            }
+            handleClose();
+        } catch (e: any) {
+            console.error("Failed to create new vehicle and job:", e);
+            setError(`Failed to save: ${e.message}`);
         }
+    };
+
+    const handleClose = () => {
         onClose();
     };
 
-    const availablePackages = useMemo(() => {
-        if (!foundVehicle) return servicePackages.filter(p => !p.applicableMake);
-        return servicePackages.filter(p => {
-            if (!p.applicableMake) return true;
-            return p.applicableMake.toLowerCase() === foundVehicle.make.toLowerCase();
-        });
-    }, [servicePackages, foundVehicle]);
-
+    // --- Builder Actions ---
+    
     const handleSelectPackage = (packageId: string) => {
         const pkg = servicePackages.find(p => p.id === packageId);
         if (!pkg) return;
         
-        const totalCost = (pkg.costItems || []).reduce((sum, item) => sum + ((item.unitCost || 0) * item.quantity), 0);
+        // FIX: Header cost set to 0. Children items will carry the cost.
         const headerItem: EstimateLineItem = {
             id: crypto.randomUUID(),
             description: pkg.name,
             quantity: 1,
             unitPrice: pkg.totalPrice,
-            unitCost: totalCost,
-            isLabor: false, 
-            taxCodeId: pkg.taxCodeId || standardTaxRateId,
+            unitCost: 0, // Cost is distributed among children to avoid double counting
+            isLabor: false, taxCodeId: standardTaxRateId,
             servicePackageId: pkg.id,
             servicePackageName: pkg.name,
         };
@@ -217,249 +380,302 @@ const SmartCreateJobModal: React.FC<SmartCreateJobModalProps> = ({
         setLineItems(prev => [...prev, headerItem, ...childItems]);
     };
 
-    const handleAiGenerate = async () => {
-        setIsGeneratingAiEstimate(true);
-        setError('');
-        try {
-            const entity = businessEntities.find(e => e.id === selectedEntityId);
-            if (!entity) throw new Error("Could not find selected business entity.");
-
-            // Pass empty parts array - we will fetch specifically what we need after the AI suggests them
-            const { mainItems, optionalExtras, suggestedNotes } = await generateEstimateFromDescription(
-                prompt,
-                foundVehicle ? { make: foundVehicle.make, model: foundVehicle.model } : { make: 'Unknown', model: 'Unknown' },
-                [], 
-                availablePackages,
-                entity.laborRate || 100
-            );
-
-            const processAiItems = async (items: any[], isOptional = false): Promise<EstimateLineItem[]> => {
-                const newItems: EstimateLineItem[] = [];
-                for (const item of items) {
-                    if (item.servicePackageName) {
-                        const pkg = servicePackages.find(p => p.name === item.servicePackageName);
-                        if (pkg) handleSelectPackage(pkg.id);
-                        continue;
-                    }
-
-                    const newItem: EstimateLineItem = {
-                        id: crypto.randomUUID(),
-                        description: item.description || '', 
-                        quantity: item.quantity || 1,
-                        isLabor: item.isLabor || false, 
-                        taxCodeId: standardTaxRateId,
-                        partNumber: item.partNumber, 
-                        unitPrice: 0, 
-                        unitCost: 0, 
-                        isOptional,
-                    };
-
-                    if (item.isLabor) {
-                        newItem.unitPrice = entity.laborRate || 0;
-                        newItem.unitCost = entity.laborCostRate || 0;
-                    } else if (item.partNumber) {
-                        // ⚡ Performance: Fetch specifically by part number from the index
-                        const searchResults = await searchDocuments('brooks_parts', 'partNumber', item.partNumber.toUpperCase());
-                        if (searchResults && searchResults.length > 0) {
-                            const partData = searchResults[0] as Part;
-                            newItem.description = partData.description;
-                            newItem.partId = partData.id;
-                            newItem.unitPrice = partData.salePrice;
-                            newItem.unitCost = partData.costPrice;
-                            newItem.taxCodeId = partData.taxCodeId || standardTaxRateId;
-                        }
-                    }
-                    newItems.push(newItem);
-                }
-                return newItems;
-            };
-
-            const processedMain = await processAiItems(mainItems);
-            setLineItems(prev => [...prev, ...processedMain]);
-
-            const processedOpt = await processAiItems(optionalExtras, true);
-            setOptionalItems(prev => [...prev, ...processedOpt]);
-
-            if (suggestedNotes) {
-                setNotes(prev => prev ? `${prev}\n\n[AI Suggestions]\n${suggestedNotes}` : `[AI Suggestions]\n${suggestedNotes}`);
-            }
-
-        } catch (err: any) {
-            setError(err.message);
-        } finally {
-            setIsGeneratingAiEstimate(false);
-        }
+    const handleAddLabor = () => {
+        setLineItems(prev => [...prev, {
+            id: crypto.randomUUID(),
+            description: 'Labor',
+            quantity: 1,
+            unitPrice: selectedEntity.laborRate || 0,
+            unitCost: selectedEntity.laborCostRate || 0,
+            isLabor: true,
+            taxCodeId: standardTaxRateId
+        }]);
     };
-    
+
+    const handleAddPart = () => {
+        setLineItems(prev => [...prev, {
+            id: crypto.randomUUID(),
+            description: 'Part',
+            quantity: 1,
+            unitPrice: 0,
+            unitCost: 0,
+            isLabor: false,
+            taxCodeId: standardTaxRateId
+        }]);
+    };
+
     const handleRemoveLineItem = (id: string) => {
         const itemToRemove = lineItems.find(i => i.id === id);
-        if (itemToRemove?.servicePackageId && !itemToRemove.isPackageComponent) {
+        if (itemToRemove && itemToRemove.servicePackageId && !itemToRemove.isPackageComponent) {
             setLineItems(prev => prev.filter(li => li.servicePackageId !== itemToRemove.servicePackageId));
         } else {
             setLineItems(prev => prev.filter(li => li.id !== id));
         }
     };
-
-    const handleAddOptionalItem = (itemToAdd: EstimateLineItem) => {
-        setLineItems(prev => [...prev, { ...itemToAdd, isOptional: false }]);
-        setOptionalItems(prev => prev.filter(item => item.id !== itemToAdd.id));
+    
+    const handleLineItemChange = (id: string, field: keyof EstimateLineItem, value: any) => {
+        setLineItems(prev => prev.map(item => item.id === id ? { ...item, [field]: value } : item));
     };
+
+    const handleCustomerSelect = (customerId: string) => {
+        const customer = customers.find(c => c.id === customerId);
+        setFoundCustomer(customer || null);
+    };
+
+    // --- Renderers ---
+
+    const renderInitialPrompt = () => (
+        <div>
+            <p className="text-sm text-gray-600 mb-4">Describe the {isEstimateMode ? 'work required' : 'job'} in plain English. {defaultDate ? `Date is pre-selected as ${defaultDate}.` : `Try: "Book an MOT and a Minor Service for the Ford Transit REG123 for tomorrow."`}</p>
+            <textarea
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                placeholder="e.g., Minor service for Porsche 911 (REG456), should take about 6 hours..."
+                rows={3}
+                className="w-full mt-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+            />
+            <button
+                onClick={() => handleParseRequest()}
+                className="mt-4 w-full flex justify-center items-center py-3 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition duration-200"
+                disabled={isLoading}
+            >
+                {isLoading ? <Loader2 size={20} className="mr-2 animate-spin"/> : <Wand2 size={20} className="mr-2" />}
+                {isLoading ? 'Analyzing...' : `Parse ${isEstimateMode ? 'Estimate' : 'Job'} Request`}
+            </button>
+        </div>
+    );
+    
+    const renderBuilder = () => (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full overflow-hidden">
+            {/* Left Column: Context Blocks */}
+            <div className="lg:col-span-1 flex flex-col gap-4 overflow-y-auto pr-2">
+                 
+                 {/* Customer Block */}
+                 <div className="bg-white rounded-lg border shadow-sm p-4 space-y-2">
+                     <h3 className="font-bold text-gray-700 flex items-center gap-2 border-b pb-2"><User size={16}/> Customer</h3>
+                     {foundCustomer ? (
+                         <div className="text-sm space-y-1">
+                             <div className="flex justify-between items-start">
+                                 <p className="font-semibold text-indigo-700">{getCustomerDisplayName(foundCustomer)}</p>
+                                 <button onClick={() => setFoundCustomer(null)} className="text-xs text-gray-400 hover:text-gray-600"><Edit size={12}/></button>
+                             </div>
+                             <p className="flex items-center gap-2 text-gray-600"><Phone size={12}/> {foundCustomer.mobile || foundCustomer.phone || 'N/A'}</p>
+                             <p className="flex items-center gap-2 text-gray-600"><Mail size={12}/> {foundCustomer.email || 'N/A'}</p>
+                         </div>
+                     ) : (
+                         <div className="space-y-2">
+                             <div className="p-2 bg-amber-50 text-amber-800 rounded text-sm mb-2">
+                                 {parsedData?.customerName ? `AI Suggested: "${parsedData.customerName}"` : 'Customer not identified.'}
+                             </div>
+                             <SearchableSelect 
+                                options={customers.map(c => ({ id: c.id, label: getCustomerDisplayName(c) }))}
+                                value={null}
+                                onChange={(val) => val && handleCustomerSelect(val)}
+                                placeholder="Search existing customer..."
+                             />
+                             <div className="text-center text-xs text-gray-500">- OR -</div>
+                             <button onClick={() => setShowAddNewVehicle(true)} className="w-full py-1.5 text-xs bg-indigo-50 text-indigo-700 font-semibold rounded hover:bg-indigo-100">Create New Customer</button>
+                         </div>
+                     )}
+                 </div>
+
+                 {/* Vehicle Block */}
+                 <div className="bg-white rounded-lg border shadow-sm p-4 space-y-2">
+                    <h3 className="font-bold text-gray-700 flex items-center gap-2 border-b pb-2"><Car size={16}/> Vehicle</h3>
+                    {foundVehicle ? (
+                        <div className="text-sm space-y-1">
+                            <p className="font-bold text-green-700 flex items-center gap-2">
+                                <Check size={14}/> {foundVehicle.registration}
+                            </p>
+                            <p className="text-gray-600">{foundVehicle.make} {foundVehicle.model}</p>
+                             {foundVehicle.vin && <p className="text-xs text-gray-500 font-mono">VIN: {foundVehicle.vin}</p>}
+                        </div>
+                    ) : (
+                        <div className="space-y-2">
+                            <div className="p-2 bg-red-50 text-red-800 rounded text-sm mb-2">
+                                 Registration <strong>{parsedData?.vehicleRegistration || 'UNKNOWN'}</strong> not found.
+                            </div>
+                            {!showAddNewVehicle && (
+                                <button onClick={() => setShowAddNewVehicle(true)} className="w-full py-2 bg-green-600 text-white font-semibold rounded hover:bg-green-700 text-xs shadow-sm">
+                                    Add New Vehicle
+                                </button>
+                            )}
+                        </div>
+                    )}
+                 </div>
+
+                 {/* Financial Summary Block */}
+                 <div className="bg-white rounded-lg border shadow-sm p-4 space-y-2">
+                    <h3 className="font-bold text-gray-700 flex items-center gap-2 border-b pb-2"><Wallet size={16}/> Financial Summary</h3>
+                    <div className="space-y-1 text-sm">
+                        <div className="flex justify-between text-gray-600">
+                            <span>Total Cost Price:</span>
+                            <span>{formatCurrency(totals.cost)}</span>
+                        </div>
+                        <div className="flex justify-between text-gray-600">
+                            <span>Total Sale Price (Net):</span>
+                            <span>{formatCurrency(totals.net)}</span>
+                        </div>
+                         <div className="flex justify-between text-green-700 font-bold pt-1 border-t border-dashed">
+                            <span>Total Profit:</span>
+                            <span>{formatCurrency(totals.profit)}</span>
+                        </div>
+                        <div className="flex justify-between text-gray-600">
+                            <span>Profit Margin:</span>
+                            <span>{totals.margin.toFixed(1)}%</span>
+                        </div>
+                        <div className="flex justify-between font-bold text-lg text-indigo-700 pt-1 border-t mt-1">
+                            <span>Total Gross:</span>
+                            <span>{formatCurrency(totals.gross)}</span>
+                        </div>
+                    </div>
+                </div>
+
+                 {/* Notes Block */}
+                 <div className="bg-white rounded-lg border shadow-sm p-4 flex-grow flex flex-col min-h-[150px]">
+                    <h3 className="font-bold text-gray-700 flex items-center gap-2 border-b pb-2 mb-2"><FileText size={16}/> Notes</h3>
+                    <textarea 
+                        value={notes} 
+                        onChange={(e) => setNotes(e.target.value)} 
+                        className="w-full flex-grow p-2 border rounded resize-none text-sm focus:ring-2 focus:ring-indigo-500"
+                        placeholder="Job instructions..."
+                    />
+                 </div>
+
+                 {/* Date & Capacity (Only in Job Mode) */}
+                 {!isEstimateMode && (
+                     <div className={`p-4 rounded-lg border bg-white shadow-sm ${capacityStats.isOver ? 'border-red-300' : ''}`}>
+                        <label className="block text-sm font-semibold text-gray-700 mb-1 flex items-center gap-2">
+                            <Calendar size={16}/> Scheduled Date
+                        </label>
+                        <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="w-full p-2 border rounded mb-3 bg-gray-50"/>
+                        
+                        <div className="space-y-1">
+                            <div className="flex justify-between text-xs font-semibold">
+                                <span>Workshop Capacity</span>
+                                <span className={capacityStats.isOver ? 'text-red-600' : 'text-gray-600'}>
+                                    {capacityStats.totalProjected.toFixed(1)} / {capacityStats.max} hrs
+                                </span>
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden flex">
+                                <div className="bg-gray-500 h-2.5" style={{ width: `${Math.min(100, (capacityStats.allocated / capacityStats.max) * 100)}%` }} title="Existing Jobs"></div>
+                                <div className={`h-2.5 ${capacityStats.isOver ? 'bg-red-500' : 'bg-green-500'}`} style={{ width: `${Math.min(100, (capacityStats.currentJobHours / capacityStats.max) * 100)}%` }} title="This Job"></div>
+                            </div>
+                            {capacityStats.isOver && <p className="text-xs text-red-600 font-bold mt-1 flex items-center gap-1"><AlertTriangle size={12}/> Over Capacity!</p>}
+                        </div>
+                     </div>
+                 )}
+            </div>
+
+            {/* Right Column: Line Items */}
+            <div className="lg:col-span-2 flex flex-col h-full overflow-hidden border rounded-lg bg-gray-50">
+                 {showAddNewVehicle ? (
+                    <div className="p-4 overflow-y-auto">
+                        <AddNewVehicleForm
+                            initialRegistration={parsedData.vehicleRegistration}
+                            onSave={handleSaveNewVehicleAndCreate}
+                            onCancel={() => setShowAddNewVehicle(false)}
+                            customers={customers}
+                            saveButtonText={`Save & Create ${isEstimateMode ? 'Estimate' : 'Job'}`}
+                        />
+                    </div>
+                 ) : (
+                    <>
+                        <div className="p-4 bg-white border-b flex-shrink-0">
+                             <h3 className="font-bold text-gray-700 mb-3 flex items-center gap-2"><DollarSign size={18}/> Work Items & Costs</h3>
+                             <div className="flex gap-2 mb-2">
+                                <div className="flex-grow">
+                                    <SearchableSelect
+                                        options={servicePackages.map(p => ({ id: p.id, label: `${p.name} (£${p.totalPrice})` }))}
+                                        value={null}
+                                        onChange={(id) => id && handleSelectPackage(id)}
+                                        placeholder="+ Add Service Package..."
+                                    />
+                                </div>
+                                <button onClick={handleAddLabor} className="px-3 py-2 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 text-sm font-semibold flex items-center gap-1"><Plus size={14}/> Labor</button>
+                                <button onClick={handleAddPart} className="px-3 py-2 bg-green-100 text-green-700 rounded hover:bg-green-200 text-sm font-semibold flex items-center gap-1"><Plus size={14}/> Part</button>
+                             </div>
+                        </div>
+
+                        <div className="flex-grow overflow-y-auto p-4 space-y-2">
+                            {lineItems.length === 0 && <p className="text-center text-gray-400 italic py-10">No items added. Add packages or items to build the job.</p>}
+                            {lineItems.map(item => (
+                                <div key={item.id} className={`flex items-center gap-2 p-2 rounded border text-sm ${item.isPackageComponent ? 'bg-gray-100 ml-4' : 'bg-white shadow-sm'}`}>
+                                    <input 
+                                        value={item.description} 
+                                        onChange={e => handleLineItemChange(item.id, 'description', e.target.value)}
+                                        className="flex-grow p-1 border rounded bg-transparent"
+                                        placeholder="Description"
+                                        disabled={!!item.isPackageComponent}
+                                    />
+                                    <div className="flex items-center gap-1 w-24">
+                                        <input 
+                                            type="number" 
+                                            value={item.quantity} 
+                                            onChange={e => handleLineItemChange(item.id, 'quantity', parseFloat(e.target.value))}
+                                            className="w-12 p-1 border rounded text-right"
+                                            disabled={!!item.servicePackageId && !item.isPackageComponent} // Package header qty locked usually
+                                        />
+                                        <span className="text-xs text-gray-500">{item.isLabor ? 'hrs' : 'qty'}</span>
+                                    </div>
+                                    <div className="w-24 text-right font-mono">
+                                        {formatCurrency(item.unitPrice * item.quantity)}
+                                    </div>
+                                    {!item.isPackageComponent && (
+                                        <button onClick={() => handleRemoveLineItem(item.id)} className="text-red-400 hover:text-red-600"><Trash2 size={16}/></button>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Financial Summary Footer */}
+                        <div className="p-4 bg-white border-t flex-shrink-0 space-y-3">
+                            <div className="flex justify-between items-center font-bold text-lg text-gray-800">
+                                <span>Total Estimated Cost:</span>
+                                <span className="text-indigo-700">{formatCurrency(totals.gross)}</span>
+                            </div>
+                            
+                            <button 
+                                onClick={handleFinalCreate} 
+                                disabled={lineItems.length === 0 || (capacityStats.isOver && !isEstimateMode)}
+                                className={`w-full py-3 rounded-lg font-bold text-white shadow-md flex items-center justify-center gap-2 transition-all
+                                    ${lineItems.length === 0 ? 'bg-gray-300 cursor-not-allowed' : capacityStats.isOver && !isEstimateMode ? 'bg-red-500 hover:bg-red-600' : 'bg-green-600 hover:bg-green-700'}
+                                `}
+                            >
+                                {capacityStats.isOver && !isEstimateMode ? <AlertTriangle size={20}/> : <Check size={20}/>}
+                                {capacityStats.isOver && !isEstimateMode ? 'Over Capacity - Select different date' : `Confirm & Create ${isEstimateMode ? 'Estimate' : 'Job'}`}
+                            </button>
+                        </div>
+                    </>
+                 )}
+            </div>
+        </div>
+    );
 
     if (!isOpen) return null;
 
     return (
         <div className="fixed inset-0 bg-gray-900 bg-opacity-75 z-50 flex justify-center items-center p-4">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl flex flex-col max-h-[90vh] overflow-hidden">
-                <div className="flex-shrink-0 flex justify-between items-center border-b p-6">
-                    <h2 className="text-2xl font-bold text-indigo-700 flex items-center"><Wand2 className="mr-2"/> {isEstimateMode ? 'Smart Estimate Builder' : 'Smart Job Creator'}</h2>
-                    <button onClick={onClose}><X size={24} className="text-gray-400 hover:text-gray-600" /></button>
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl flex flex-col h-[90vh] transform transition-all">
+                <div className="flex-shrink-0 flex justify-between items-center border-b p-4 bg-gray-50 rounded-t-xl">
+                    <h2 className="text-xl font-bold text-indigo-700 flex items-center gap-2">
+                        {isEstimateMode ? <Calculator size={24}/> : <Wand2 size={24}/>} 
+                        {isEstimateMode ? 'Smart Estimate Builder' : 'Smart Job Creator'}
+                    </h2>
+                    <button onClick={handleClose}><X size={24} className="text-gray-500 hover:text-gray-800" /></button>
                 </div>
-                
-                <div className="flex-grow overflow-y-auto p-6">
-                    {error && <div className="p-3 bg-red-50 text-red-700 rounded-lg text-sm mb-4 border border-red-100">{error}</div>}
+                <div className="flex-grow overflow-hidden p-6 bg-gray-50">
+                    {error && <div className="p-3 bg-red-100 text-red-700 rounded-lg text-sm mb-4 border border-red-200">{error}</div>}
                     
                     {isLoading ? (
-                        <div className="flex flex-col items-center justify-center py-12">
-                            <Loader2 size={40} className="animate-spin text-indigo-600 mb-4"/>
-                            <p className="font-semibold text-gray-700 text-lg">Analyzing your request...</p>
-                        </div>
-                    ) : !parsedJob ? (
-                        <div className="animate-fade-in">
-                            <p className="text-sm text-gray-600 mb-4 font-medium uppercase tracking-wider">Describe the {isEstimateMode ? 'work required' : 'job'} in plain English</p>
-                            <textarea
-                                value={prompt}
-                                onChange={(e) => setPrompt(e.target.value)}
-                                placeholder="e.g., Book an MOT and a Minor Service for the Ford Transit REG123 for tomorrow."
-                                rows={4}
-                                className="w-full p-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 shadow-sm"
-                            />
-                            <button
-                                onClick={() => handleParseRequest()}
-                                className="mt-6 w-full flex justify-center items-center py-4 bg-indigo-600 text-white font-bold rounded-xl shadow-lg hover:bg-indigo-700 transition"
-                                disabled={isLoading}
-                            >
-                                <Wand2 size={20} className="mr-2" /> Parse {isEstimateMode ? 'Estimate' : 'Job'} Request
-                            </button>
-                        </div>
-                    ) : isEstimateMode ? (
-                        <div className="animate-fade-in grid grid-cols-1 lg:grid-cols-2 gap-8">
-                            <div className="space-y-6">
-                                {foundVehicle ? (
-                                    <div className="p-4 bg-green-50 border border-green-200 rounded-xl">
-                                        <p className="font-bold text-green-800 flex items-center gap-2"><Car size={18}/> Vehicle Identified</p>
-                                        <p className="text-green-700">{foundVehicle.make} {foundVehicle.model} ({foundVehicle.registration})</p>
-                                    </div>
-                                ) : (
-                                     <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl">
-                                        <p className="font-bold text-amber-800">Vehicle Not Found</p>
-                                        <p className="text-sm text-amber-700">Reg: <span className="font-mono bg-amber-100 px-1 rounded">{parsedJob.vehicleRegistration}</span>. You can add the details at the end.</p>
-                                    </div>
-                                )}
-                                
-                                <div className="space-y-4">
-                                    <div className="p-4 bg-white border rounded-xl shadow-sm">
-                                        <h4 className="font-bold text-gray-700 mb-3 text-sm">Standard Service Packages</h4>
-                                        <SearchableSelect
-                                            options={availablePackages.map(p => ({ id: p.id, label: p.name }))}
-                                            value={null}
-                                            onChange={(id) => id && handleSelectPackage(id)}
-                                            placeholder="Search & Add Package..."
-                                        />
-                                    </div>
-
-                                    <div className="p-4 bg-indigo-50 border border-indigo-100 rounded-xl">
-                                        <h4 className="font-bold text-indigo-900 mb-1 text-sm">AI Detailed Generator</h4>
-                                        <p className="text-xs text-indigo-700 mb-3 italic">Generates specific parts & labor from your prompt.</p>
-                                        <button onClick={handleAiGenerate} disabled={isGeneratingAiEstimate} className="w-full flex justify-center items-center py-2.5 bg-indigo-600 text-white font-bold rounded-lg shadow hover:bg-indigo-700 disabled:opacity-50">
-                                            {isGeneratingAiEstimate ? <Loader2 size={18} className="animate-spin mr-2"/> : <Wand2 size={18} className="mr-2"/>}
-                                            {isGeneratingAiEstimate ? 'Building...' : 'Generate with AI ✨'}
-                                        </button>
-                                    </div>
-
-                                    {optionalItems.length > 0 && (
-                                        <div className="p-4 bg-white border border-indigo-200 rounded-xl animate-fade-in">
-                                            <h4 className="font-bold text-indigo-800 mb-3 text-sm italic">Suggested Extras</h4>
-                                            <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
-                                                {optionalItems.map(item => (
-                                                    <div key={item.id} className="flex justify-between items-center p-2 bg-indigo-50 rounded-lg border border-indigo-100">
-                                                        <span className="text-xs font-medium text-indigo-900">{item.description}</span>
-                                                        <button onClick={() => handleAddOptionalItem(item)} className="p-1 bg-white text-indigo-600 rounded-md shadow-sm border border-indigo-200"><Plus size={14} /></button>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-
-                            <div className="space-y-4">
-                                {showAddNewVehicle ? (
-                                     <AddNewVehicleForm initialRegistration={parsedJob.vehicleRegistration} onSave={handleSaveNewVehicleAndCreate} onCancel={() => setShowAddNewVehicle(false)} customers={customers} saveButtonText="Save & Create Estimate" />
-                                ) : (
-                                    <div className="p-5 bg-white border rounded-xl shadow-md flex flex-col h-full">
-                                        <h4 className="font-bold text-gray-800 mb-4 flex justify-between items-center uppercase text-xs tracking-widest">
-                                            Estimate Review
-                                            <span className="text-indigo-600">{lineItems.length} items</span>
-                                        </h4>
-                                        <div className="flex-grow space-y-2 overflow-y-auto pr-1 max-h-80 min-h-48 mb-4">
-                                            {lineItems.length === 0 && <p className="text-sm text-gray-400 text-center py-10">Use AI or Packages to add items.</p>}
-                                            {lineItems.map(item => (
-                                                <div key={item.id} className={`p-3 rounded-lg border text-sm flex justify-between items-center ${item.isPackageComponent ? 'bg-gray-50 border-gray-100' : 'bg-white shadow-sm'}`}>
-                                                    <div className="truncate">
-                                                        <p className="font-bold text-gray-800">{item.quantity}x {item.description}</p>
-                                                        {!item.isPackageComponent && <p className="text-[10px] text-gray-500 font-mono uppercase">{item.partNumber || 'Labour'}</p>}
-                                                    </div>
-                                                    <div className="flex items-center gap-3">
-                                                        <span className="font-bold text-indigo-900">{item.isPackageComponent ? 'INC' : formatCurrency(item.unitPrice * item.quantity)}</span>
-                                                        {!item.isPackageComponent && <button onClick={() => handleRemoveLineItem(item.id)} className="text-red-400 hover:text-red-600"><Trash2 size={14}/></button>}
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                        
-                                        <div className="border-t pt-4 mt-auto">
-                                            <label className="font-bold text-gray-600 text-xs uppercase mb-1 block">Internal Notes</label>
-                                            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className="w-full p-2 border rounded-lg text-sm bg-gray-50" />
-                                            <button onClick={handleFinalCreate} disabled={lineItems.length === 0} className="mt-4 w-full py-4 bg-green-600 text-white font-bold rounded-xl shadow-lg hover:bg-green-700 disabled:opacity-50">
-                                                <Check size={20} className="inline mr-2" /> Confirm & Create Estimate
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
+                         <div className="flex flex-col items-center justify-center h-full">
+                             <Loader2 size={48} className="animate-spin text-indigo-600 mb-4"/>
+                             <p className="text-gray-600 font-semibold">Analyzing request...</p>
+                         </div>
+                    ) : !parsedData ? (
+                        renderInitialPrompt()
                     ) : (
-                        <div className="animate-fade-in max-w-2xl mx-auto">
-                            {showAddNewVehicle ? (
-                                <AddNewVehicleForm initialRegistration={parsedJob.vehicleRegistration} onSave={handleSaveNewVehicleAndCreate} onCancel={() => setShowAddNewVehicle(false)} customers={customers} saveButtonText="Save & Book Job" />
-                            ) : (
-                                <div className="p-6 bg-gray-50 border rounded-2xl space-y-6">
-                                    <h3 className="font-bold text-xl text-gray-800">Confirm Booking:</h3>
-                                    {foundVehicle && (
-                                        <div className="flex items-center gap-4 p-4 bg-white rounded-xl border border-green-200">
-                                            <div className="p-3 bg-green-100 text-green-700 rounded-full"><Car size={24}/></div>
-                                            <div>
-                                                <p className="font-bold text-lg">{foundVehicle.registration}</p>
-                                                <p className="text-gray-600">{foundVehicle.make} {foundVehicle.model}</p>
-                                            </div>
-                                        </div>
-                                    )}
-                                    <div className="grid grid-cols-2 gap-4 text-sm">
-                                        <div className="p-3 bg-white rounded-lg border">
-                                            <p className="text-gray-500 font-bold uppercase text-[10px]">Date</p>
-                                            <p className="font-semibold">{parsedJob.scheduledDate}</p>
-                                        </div>
-                                        <div className="p-3 bg-white rounded-lg border">
-                                            <p className="text-gray-500 font-bold uppercase text-[10px]">Work</p>
-                                            <p className="font-semibold truncate">{parsedJob.description}</p>
-                                        </div>
-                                    </div>
-                                    <button onClick={handleFinalCreate} className="w-full py-4 bg-indigo-600 text-white font-bold rounded-xl shadow-lg hover:bg-indigo-700">
-                                        <Check size={20} className="inline mr-2" /> Confirm and Create Job
-                                    </button>
-                                </div>
-                            )}
-                        </div>
+                        renderBuilder()
                     )}
                 </div>
             </div>

@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Vehicle, Customer, Job, Estimate, Invoice } from '../types';
 import FormModal from './FormModal';
 import { lookupVehicleByVRM } from '../services/vehicleLookupService';
-import { Loader2, Search, Briefcase, FileText, History, Receipt, CalendarPlus, Eye, ArrowRightLeft, ShieldCheck, AlertCircle } from 'lucide-react';
+import { Loader2, Search, Briefcase, FileText, History, Receipt, CalendarPlus, Eye, ArrowRightLeft, ShieldCheck, AlertCircle, Printer } from 'lucide-react';
 import SearchableSelect from './SearchableSelect';
 import { useAuditLogger } from '../core/hooks/useAuditLogger';
 import VehicleImageManager from './VehicleImageManager';
@@ -11,6 +11,7 @@ import { useApp } from '../core/state/AppContext';
 import * as T from '../types';
 import { formatCurrency } from '../utils/formatUtils';
 import { formatDate, dateStringToDate } from '../core/utils/dateUtils';
+import { useData } from '../core/state/DataContext';
 
 const Section = ({ title, icon: Icon, children, defaultOpen = true }: { title: string, icon: React.ElementType, children?: React.ReactNode, defaultOpen?: boolean }) => {
     const [isOpen, setIsOpen] = useState(defaultOpen);
@@ -45,7 +46,7 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({ isOpen, onClose, on
     const { logEvent } = useAuditLogger();
     const { currentUser } = useApp();
     const [isTransferMode, setIsTransferMode] = useState(false);
-
+    
     useEffect(() => {
         const initialData = vehicle || {
             customerId: '',
@@ -55,7 +56,6 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({ isOpen, onClose, on
             transmissionType: 'Manual',
         };
         setFormData(initialData);
-        // If it's a new vehicle (no ID), allow editing immediately. If existing, lock it until "Transfer" is clicked.
         setIsTransferMode(!vehicle?.id);
     }, [vehicle, isOpen]);
 
@@ -154,6 +154,13 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({ isOpen, onClose, on
         'Part Paid': 'bg-amber-200 text-amber-800',
         Paid: 'bg-green-200 text-green-800',
         Overdue: 'bg-red-200 text-red-800',
+    };
+    
+    const openHistoryReport = () => {
+        if (vehicle?.id) {
+            const event = new CustomEvent('open-vehicle-history-report', { detail: { vehicleId: vehicle.id } });
+            window.dispatchEvent(event);
+        }
     };
 
     return (
@@ -304,9 +311,18 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({ isOpen, onClose, on
                     {vehicle?.id && jobs && estimates && invoices && (
                         <Section title="Vehicle History" icon={Briefcase}>
                             <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2">
-                                <div className="p-2 bg-gray-100 rounded text-xs text-gray-600 mb-2 flex items-center gap-2">
-                                    <ShieldCheck size={12} className="text-green-600"/>
-                                    <span>History linked to VIN: <span className="font-mono font-bold text-gray-800">{formData.vin || 'N/A'}</span></span>
+                                <div className="p-2 bg-gray-100 rounded text-xs text-gray-600 mb-2 flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <ShieldCheck size={12} className="text-green-600"/>
+                                        <span>History linked to VIN: <span className="font-mono font-bold text-gray-800">{formData.vin || 'N/A'}</span></span>
+                                    </div>
+                                    <button 
+                                        type="button"
+                                        onClick={openHistoryReport}
+                                        className="text-indigo-600 hover:text-indigo-800 flex items-center gap-1 font-semibold hover:underline"
+                                    >
+                                        <Printer size={12}/> Print Full History
+                                    </button>
                                 </div>
                                 {vehicleJobs.length === 0 && vehicleEstimates.length === 0 && vehicleInvoices.length === 0 && (
                                     <p className="text-sm text-gray-500">No history found for this vehicle.</p>

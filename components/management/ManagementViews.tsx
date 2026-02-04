@@ -11,3 +11,4 @@ export * from './tabs/ManagementPackagesTab';
 export * from './tabs/ManagementNominalCodesTab';
 export * from './tabs/ManagementLiftsTab';
 export * from './tabs/ManagementBatteryChargersTab';
+export * from './tabs/ManagementInspectionTemplatesTab';

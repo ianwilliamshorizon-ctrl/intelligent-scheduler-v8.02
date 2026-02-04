@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useData } from '../../../core/state/DataContext';
 import { Part } from '../../../types';
-import { PlusCircle, Upload, Loader2, Hash, Package, TrendingUp, AlertCircle } from 'lucide-react';
+import { PlusCircle, Upload, Loader2, Hash, Package, TrendingUp, AlertCircle, Search } from 'lucide-react';
 import { formatCurrency } from '../../../utils/formatUtils';
 import PartFormModal from '../../PartFormModal';
 import { useManagementTable } from '../hooks/useManagementTable';
 import { parseCsv } from '../../../utils/csvUtils';
-import { saveDocument, getAll } from '../../../core/db';
+import { saveDocument, getAll, subscribeToCollection } from '../../../core/db';
 
 const cleanToNumber = (val: any): number => {
     if (val === undefined || val === null || val === '') return 0;
@@ -17,50 +17,59 @@ const cleanToNumber = (val: any): number => {
 
 export const ManagementPartsTab = ({ searchTerm = '', onShowStatus }: { searchTerm: string, onShowStatus: (text: string, type: 'info' | 'success' | 'error') => void }) => {
     const { 
-        parts = [], 
         suppliers = [], 
         taxRates = [], 
         setParts, 
         refreshActiveData 
     } = useData();
     
-    const [localParts, setLocalParts] = useState<Part[]>(parts || []);
+    // 1. DATABASE CONTROLLED STATE
+    const [localParts, setLocalParts] = useState<Part[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [isImporting, setIsImporting] = useState(false);
+    const [importProgress, setImportProgress] = useState(0);
 
+    // 2. LIVE SYNC EFFECT: Connect directly to the Cloud DB
     useEffect(() => {
-        if (parts) setLocalParts(parts);
-    }, [parts]);
+        setIsLoading(true);
+        console.log("[Inventory] Establishing Live Stream to brooks_parts...");
+        
+        const unsubscribe = subscribeToCollection<Part>('brooks_parts', (data) => {
+            setLocalParts(data);
+            if (setParts) setParts(data);
+            setIsLoading(false);
+            console.log(`[Inventory] Sync Complete. ${data.length} parts loaded.`);
+        });
+
+        return () => unsubscribe();
+    }, [setParts]);
 
     const { deleteItem } = useManagementTable(localParts || [], 'brooks_parts');
 
     const [selectedPart, setSelectedPart] = useState<Part | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [overwrite, setOverwrite] = useState(false);
-    const [isImporting, setIsImporting] = useState(false);
-    const [importProgress, setImportProgress] = useState(0);
 
-    const filtered = (localParts || []).filter(p => {
-        const pNum = (p.partNumber || '').toLowerCase();
-        const pDesc = (p.description || '').toLowerCase();
-        const sTerm = (searchTerm || '').toLowerCase();
-        return pNum.includes(sTerm) || pDesc.includes(sTerm);
-    });
+    // 3. PERFORMANCE FILTERING (Handles 21k parts without crashing the browser)
+    const filtered = React.useMemo(() => {
+        if (!searchTerm) return localParts.slice(0, 100); // Limit view for speed
+        const s = searchTerm.toLowerCase();
+        return localParts
+            .filter(p => 
+                (p.partNumber || '').toLowerCase().includes(s) || 
+                (p.description || '').toLowerCase().includes(s)
+            )
+            .slice(0, 100); 
+    }, [localParts, searchTerm]);
 
     const handleSave = async (updatedPart: Part) => {
         try {
             await saveDocument('brooks_parts', updatedPart);
-            const updateFn = (prev: Part[]) => {
-                const current = prev || [];
-                const exists = current.find(p => p.id === updatedPart.id);
-                return exists ? current.map(p => p.id === updatedPart.id ? updatedPart : p) : [...current, updatedPart];
-            };
-            setLocalParts(updateFn);
-            if (setParts) setParts(updateFn);
             setIsModalOpen(false);
             setSelectedPart(null);
-            if (refreshActiveData) await refreshActiveData(true);
-            onShowStatus('Part saved successfully.', 'success');
+            onShowStatus('Part saved to Cloud successfully.', 'success');
         } catch (error) {
-            onShowStatus('Failed to save part.', 'error');
+            onShowStatus('Cloud save failed.', 'error');
         }
     };
 
@@ -72,6 +81,7 @@ export const ManagementPartsTab = ({ searchTerm = '', onShowStatus }: { searchTe
         try {
             const data = await parseCsv(file);
             if (!data || data.length === 0) throw new Error("No data found");
+            
             const actualKeys = Object.keys(data[0]);
             const findKeySafe = (target: string) => actualKeys.find(k => k.toLowerCase().replace(/\s/g, '') === target.toLowerCase());
             
@@ -82,7 +92,7 @@ export const ManagementPartsTab = ({ searchTerm = '', onShowStatus }: { searchTe
             const descKey = findKeySafe('description') || findKeySafe('desc') || "";
     
             const newParts: Part[] = data.map((row: any, index: number) => ({
-                id: row.id || `PART_${Date.now()}_${index}_${Math.random().toString(36).substring(7)}`,
+                id: row.id || `PART_${Date.now()}_${index}`,
                 partNumber: String(row[partKey] || 'UNKNOWN').trim(),
                 description: String(row[descKey] || '').trim(),
                 costPrice: cleanToNumber(row[costKey]),
@@ -92,21 +102,21 @@ export const ManagementPartsTab = ({ searchTerm = '', onShowStatus }: { searchTe
                 taxCodeId: row.taxCodeId || 'TAX-STD'
             }));
     
-            for (let i = 0; i < newParts.length; i += 50) {
-                const chunk = newParts.slice(i, i + 50);
+            // CHUNKED UPLOAD to prevent Firestore timeouts
+            for (let i = 0; i < newParts.length; i += 25) {
+                const chunk = newParts.slice(i, i + 25);
                 await Promise.all(chunk.map(async (p) => {
-                    const existing = (localParts || []).find(ex => ex.id === p.id || (p.partNumber !== 'UNKNOWN' && ex.partNumber === p.partNumber));
-                    if (existing && overwrite) await saveDocument('brooks_parts', { ...existing, ...p });
-                    else if (!existing) await saveDocument('brooks_parts', p);
+                    const existing = localParts.find(ex => ex.partNumber === p.partNumber);
+                    if (existing && overwrite) {
+                        await saveDocument('brooks_parts', { ...existing, ...p });
+                    } else if (!existing) {
+                        await saveDocument('brooks_parts', p);
+                    }
                 }));
                 setImportProgress(Math.round(((i + chunk.length) / newParts.length) * 100));
             }
             
-            const finalParts = await getAll('brooks_parts') as Part[];
-            setLocalParts(finalParts);
-            if (setParts) setParts(finalParts);
-            onShowStatus('Import complete.', 'success');
-            if (refreshActiveData) await refreshActiveData(true);
+            onShowStatus('Cloud Import Complete.', 'success');
         } catch (err) {
             onShowStatus('Import failed.', 'error');
         } finally {
@@ -123,8 +133,11 @@ export const ManagementPartsTab = ({ searchTerm = '', onShowStatus }: { searchTe
                     <h2 className="text-2xl font-black text-slate-900 uppercase tracking-tighter flex items-center gap-2">
                         <Package className="text-indigo-600" size={24} />
                         Inventory Control
+                        {isLoading && <Loader2 className="animate-spin text-slate-300" size={20} />}
                     </h2>
-                    <p className="text-sm text-slate-500 font-medium">Manage master parts list, tracking and wholesale values</p>
+                    <p className="text-sm text-slate-500 font-medium">
+                        {isLoading ? 'Fetching live registry...' : `Total Registry: ${localParts.length} Parts`}
+                    </p>
                 </div>
                 <div className="flex items-center gap-3">
                     <div className="flex items-center gap-3 bg-slate-100 p-1.5 rounded-xl border border-slate-200">
@@ -159,7 +172,14 @@ export const ManagementPartsTab = ({ searchTerm = '', onShowStatus }: { searchTe
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
-                            {filtered.length > 0 ? (
+                            {isLoading ? (
+                                <tr>
+                                    <td colSpan={5} className="py-20 text-center">
+                                        <Loader2 className="animate-spin mx-auto text-indigo-500 mb-2" size={32} />
+                                        <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Loading Cloud Inventory...</span>
+                                    </td>
+                                </tr>
+                            ) : filtered.length > 0 ? (
                                 filtered.map(p => (
                                     <tr key={p.id} className="group hover:bg-slate-50/80 transition-all">
                                         <td className="px-6 py-5">
@@ -195,7 +215,7 @@ export const ManagementPartsTab = ({ searchTerm = '', onShowStatus }: { searchTe
                                                 </span>
                                                 <div className="flex items-center gap-1 text-[9px] font-bold text-emerald-500">
                                                     <TrendingUp size={10} />
-                                                    {Math.round(((p.salePrice - p.costPrice) / (p.costPrice || 1)) * 100)}% MARGIN
+                                                    {p.costPrice > 0 ? Math.round(((p.salePrice - p.costPrice) / p.costPrice) * 100) : 0}% MARGIN
                                                 </div>
                                             </div>
                                         </td>
@@ -204,7 +224,7 @@ export const ManagementPartsTab = ({ searchTerm = '', onShowStatus }: { searchTe
                                                 <button onClick={() => { setSelectedPart(p); setIsModalOpen(true); }} className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg font-black text-[10px] uppercase tracking-widest text-slate-600 hover:border-indigo-600 hover:text-indigo-600 shadow-sm transition-all">
                                                     Edit
                                                 </button>
-                                                <button onClick={() => { if(window.confirm('Delete part?')) deleteItem(p.id); }} className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg font-black text-[10px] uppercase tracking-widest text-slate-300 hover:text-red-600 hover:border-red-100 hover:bg-red-50 transition-all">
+                                                <button onClick={() => { if(window.confirm('Delete part from Cloud?')) deleteItem(p.id); }} className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg font-black text-[10px] uppercase tracking-widest text-slate-300 hover:text-red-600 hover:border-red-100 hover:bg-red-50 transition-all">
                                                     Del
                                                 </button>
                                             </div>
@@ -216,7 +236,7 @@ export const ManagementPartsTab = ({ searchTerm = '', onShowStatus }: { searchTe
                                     <td colSpan={5} className="py-20 text-center">
                                         <div className="flex flex-col items-center gap-2 opacity-30">
                                             <Package size={48} />
-                                            <span className="font-black uppercase tracking-[0.2em] text-xs">Zero results found</span>
+                                            <span className="font-black uppercase tracking-[0.2em] text-xs">Zero results found in Cloud</span>
                                         </div>
                                     </td>
                                 </tr>

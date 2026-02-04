@@ -3,7 +3,7 @@ import {
     getFirestore, doc, getDoc, setDoc, deleteDoc, collection, 
     onSnapshot, Firestore, runTransaction,
     query, WithFieldValue, getDocs,
- where, orderBy, limit
+    where, orderBy, limit
 } from 'firebase/firestore';
 import { getAuth, Auth } from 'firebase/auth';
 import { firebaseConfig, currentEnvironment } from '../config/firebaseConfig';
@@ -12,23 +12,20 @@ import { firebaseConfig, currentEnvironment } from '../config/firebaseConfig';
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
 // 2. Database Routing Logic
-// We point to 'isdevdb' only if the environment is strictly 'Development'
 const targetDbId = currentEnvironment === 'Development' ? 'isdevdb' : undefined;
 
-// 3. Immediate Export (Ensures Sidebar stability)
+// 3. Exports
 export const db: Firestore = getFirestore(app, targetDbId);
 export const auth: Auth = getAuth(app);
 
-// --- THE TRACE (Check your browser console F12) ---
+// --- THE TRACE ---
 console.log("-----------------------------------------");
 console.log("🛠️ FIREBASE CONNECTION TRACE");
 console.log(`📍 Environment: ${currentEnvironment}`);
-console.log(`🗄️ Target Database ID: ${targetDbId || '(default)'}`);
-console.log(`🆔 Project ID: ${firebaseConfig.projectId}`);
-// Access internal property to confirm actual connection path
+console.log(`🗄️ Target Database: ${targetDbId || '(default)'}`);
 // @ts-ignore
 const activePath = db?._databaseId?.database || 'default';
-console.log(`✅ Active Database: ${activePath}`);
+console.log(`✅ Active Path: ${activePath}`);
 console.log("-----------------------------------------");
 
 export const getStorageType = (): 'memory' | 'firestore' => {
@@ -37,17 +34,23 @@ export const getStorageType = (): 'memory' | 'firestore' => {
 
 // --- Standard Helper Functions ---
 
-export const getAll = async <T>(collectionName: string): Promise<T[]> => {
+/**
+ * Global Fetch: Retrieves all documents from a collection.
+ * Essential for Service Packages and Tax Rates.
+ */
+export const getAllDocuments = async <T>(collectionName: string): Promise<T[]> => {
     if (!db) return [];
     try {
         const snapshot = await getDocs(collection(db, collectionName));
-        const items = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as T[];
-        console.log(`[Trace] Fetched ${items.length} items from ${collectionName}`);
-        return items;
+        return snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as T[];
     } catch (e) {
-        console.error(`Error fetching collection ${collectionName}:`, e);
+        console.error(`Error in getAllDocuments for ${collectionName}:`, e);
         return [];
     }
+};
+
+export const getAll = async <T>(collectionName: string): Promise<T[]> => {
+    return getAllDocuments<T>(collectionName);
 };
 
 export const getById = async <T>(collectionName: string, id: string): Promise<T | null> => {
@@ -81,30 +84,17 @@ export const subscribeToCollection = <T>(
     });
 };
 
-/**
- * Saves a document to Firestore.
- * Supports custom IDs (e.g., "User_Simon") via the third parameter or the data.id property.
- */
 export const saveDocument = async <T extends { id: string }>(
     collectionName: string, 
     data: WithFieldValue<T>,
     customId?: string
 ): Promise<void> => {
     if (!db) return;
-
-    // Prioritize customId override, then fallback to data.id
     const docId = customId || (data as any).id;
-
-    if (!docId || typeof docId !== 'string') {
-        throw new Error("A valid string Document ID is required for saveDocument");
-    }
+    if (!docId) throw new Error("A valid Document ID is required");
 
     const docRef = doc(db, collectionName, docId);
-    
-    // Ensure the ID is inside the data object for consistency
     const dataWithId = { ...data, id: docId };
-    
-    // Clean data for Firestore
     const cleanData = JSON.parse(JSON.stringify(dataWithId));
 
     await setDoc(docRef, cleanData, { merge: true });
@@ -114,6 +104,8 @@ export const deleteDocument = async (collectionName: string, docId: string): Pro
     if (!db) return;
     await deleteDoc(doc(db, collectionName, docId));
 };
+
+// --- Settings Helpers ---
 
 export const setItem = async (key: string, value: any) => {
     if (!db) return;
@@ -140,10 +132,6 @@ export const getItem = async <T>(key: string): Promise<T | null> => {
     return null;
 };
 
-export const clearStore = async () => {
-    console.warn("clearStore is not fully implemented for Firestore.");
-};
-
 export const generateSequenceId = async (prefix: string, entityShortCode: string): Promise<string> => {
     if (!db) return `${entityShortCode}${prefix}${Date.now()}`; 
     const counterRef = doc(db, 'brooks_counters', `${entityShortCode}_${prefix}`);
@@ -164,12 +152,9 @@ export const generateSequenceId = async (prefix: string, entityShortCode: string
         return `${entityShortCode}${prefix}${Date.now().toString().slice(-5)}`;
     }
 };
-// --- NEW PERFORMANCE HELPER FUNCTIONS ---
 
-/**
- * Targeted Querying: Fetches records matching a specific condition.
- * Used to fetch only 'Active' jobs/estimates.
- */
+// --- Advanced Query Helpers ---
+
 export const getWhere = async <T>(collectionName: string, field: string, operator: any, value: any): Promise<T[]> => {
     if (!db) return [];
     try {
@@ -182,15 +167,10 @@ export const getWhere = async <T>(collectionName: string, field: string, operato
     }
 };
 
-/**
- * Batch Fetch by IDs: Grabs specific documents (e.g., the 30 customers linked to 30 active jobs).
- * Firestore limits 'in' queries to 30 items per batch.
- */
 export const getByIds = async <T>(collectionName: string, ids: string[]): Promise<T[]> => {
     if (!db || ids.length === 0) return [];
     try {
         const results: T[] = [];
-        // Process in chunks of 30 because Firestore 'in' has a limit
         for (let i = 0; i < ids.length; i += 30) {
             const batchIds = ids.slice(i, i + 30);
             const q = query(collection(db, collectionName), where('id', 'in', batchIds));
@@ -206,17 +186,17 @@ export const getByIds = async <T>(collectionName: string, ids: string[]): Promis
 
 /**
  * Global Search: For "Cold Data" lookup (Parts/Customers).
- * Limits results to keep the app fast.
+ * Note: Firestore is case-sensitive. The UI must pass the correct casing.
  */
 export const searchDocuments = async <T>(
     collectionName: string, 
     searchField: string, 
     searchTerm: string, 
-    maxResults = 10
+    maxResults = 20
 ): Promise<T[]> => {
     if (!db || !searchTerm) return [];
     try {
-        const term = searchTerm.toLowerCase().trim();
+        const term = searchTerm.trim();
         const q = query(
             collection(db, collectionName),
             orderBy(searchField),
@@ -230,4 +210,8 @@ export const searchDocuments = async <T>(
         console.error(`Error searching ${collectionName}:`, e);
         return [];
     }
+};
+
+export const clearStore = async () => {
+    console.warn("clearStore is not fully implemented for Firestore.");
 };

@@ -1,9 +1,11 @@
-import React from 'react';
-import { ChecklistSection, TyreCheckData, VehicleDamagePoint } from '../../../types';
-import { ClipboardCheck, Disc, MapPin } from 'lucide-react';
+
+import React, { useMemo } from 'react';
+import { ChecklistSection, TyreCheckData, VehicleDamagePoint, InspectionTemplate } from '../../../types';
 import InspectionChecklist from '../../InspectionChecklist';
 import TyreCheck from '../../TyreCheck';
 import VehicleDamageReport from '../../VehicleDamageReport';
+import { useData } from '../../../core/state/DataContext';
+import { FileText, RefreshCw } from 'lucide-react';
 
 interface JobInspectionTabProps {
     checklistData: ChecklistSection[];
@@ -28,76 +30,85 @@ export const JobInspectionTab: React.FC<JobInspectionTabProps> = ({
     onTyreUpdate,
     onDamageReportUpdate
 }) => {
+    const { inspectionTemplates } = useData();
+
+    const handleApplyTemplate = (templateId: string) => {
+        const template = inspectionTemplates.find(t => t.id === templateId);
+        if (!template) return;
+
+        if (checklistData.length > 0) {
+            if (!confirm("Applying a new template will overwrite the existing checklist. Continue?")) return;
+        }
+
+        const newChecklist: ChecklistSection[] = template.sections.map(s => ({
+            id: s.id,
+            title: s.title,
+            items: s.items.map(i => ({
+                id: crypto.randomUUID(),
+                label: i.label,
+                status: 'na'
+            })),
+            comments: ''
+        }));
+        
+        onChecklistUpdate(newChecklist);
+    };
+
+    const hasChecklist = checklistData && checklistData.length > 0;
+
     return (
-        <div className="space-y-8 animate-fade-in pb-10">
-            {/* Health Check / Inspection Checklist Section */}
-            <section>
-                <div className="flex items-center justify-between mb-4">
+        <div className="space-y-6">
+            {!isReadOnly && (
+                <div className="p-3 bg-gray-100 rounded-lg flex justify-between items-center border border-gray-200">
                     <div className="flex items-center gap-2">
-                        <div className="h-8 w-1 bg-indigo-600 rounded-full"></div>
-                        <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-                            <ClipboardCheck size={20} className="text-indigo-600" />
-                            Vehicle Health Check
-                        </h3>
+                        <FileText size={18} className="text-indigo-600"/>
+                        <span className="text-sm font-semibold text-gray-700">Checklist Template:</span>
+                        {hasChecklist ? (
+                            <span className="text-sm text-gray-600">Custom / Loaded</span>
+                        ) : (
+                            <span className="text-sm text-gray-500 italic">None selected</span>
+                        )}
                     </div>
-                    {isReadOnly && (
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 bg-gray-100 px-2 py-1 rounded">
-                            Read Only
-                        </span>
-                    )}
-                </div>
-                <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-                    <InspectionChecklist
-                        checklistData={checklistData}
-                        onUpdate={onChecklistUpdate}
-                        isReadOnly={isReadOnly}
-                    />
-                </div>
-            </section>
-
-            {/* Tyre Depth and Condition Section */}
-            <section>
-                <div className="flex items-center gap-2 mb-4">
-                    <div className="h-8 w-1 bg-emerald-600 rounded-full"></div>
-                    <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-                        <Disc size={20} className="text-emerald-600" />
-                        Tyre Inspection
-                    </h3>
-                </div>
-                <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-                    <TyreCheck
-                        tyreData={tyreData}
-                        onUpdate={onTyreUpdate}
-                        isReadOnly={isReadOnly}
-                    />
-                </div>
-            </section>
-
-            {/* Visual Damage Report Section */}
-            <section>
-                <div className="flex items-center gap-2 mb-4">
-                    <div className="h-8 w-1 bg-amber-500 rounded-full"></div>
-                    <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-                        <MapPin size={20} className="text-amber-500" />
-                        Damage Mapping
-                    </h3>
-                </div>
-                <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-                    <div className="mb-6 p-3 bg-amber-50/50 border border-amber-100 rounded-lg">
-                        <p className="text-sm text-amber-900/70 leading-relaxed">
-                            <strong>Instructions:</strong> Click or tap on the diagram below to mark scratches, dents, or chips. 
-                            Active points will be saved automatically to the job record.
-                        </p>
+                    <div className="flex items-center gap-2">
+                         <select 
+                            className="text-sm border rounded p-1.5 bg-white max-w-xs"
+                            onChange={(e) => { if(e.target.value) handleApplyTemplate(e.target.value); e.target.value = ''; }}
+                            defaultValue=""
+                        >
+                            <option value="" disabled>Load Template...</option>
+                            {inspectionTemplates.map(t => (
+                                <option key={t.id} value={t.id}>{t.name}</option>
+                            ))}
+                        </select>
                     </div>
-                    <VehicleDamageReport
-                        activePoints={damagePoints}
-                        onUpdate={onDamageReportUpdate}
-                        isReadOnly={isReadOnly}
-                        vehicleModel={vehicleModel}
-                        imageId={diagramImageId}
-                    />
                 </div>
-            </section>
+            )}
+
+            {hasChecklist ? (
+                <InspectionChecklist
+                    checklistData={checklistData}
+                    onUpdate={onChecklistUpdate}
+                    isReadOnly={isReadOnly}
+                />
+            ) : (
+                <div className="text-center py-10 bg-gray-50 border-2 border-dashed rounded-lg text-gray-500">
+                    <p>No inspection checklist loaded.</p>
+                    <p className="text-sm">Select a template above to begin.</p>
+                </div>
+            )}
+
+            <TyreCheck
+                tyreData={tyreData}
+                onUpdate={onTyreUpdate}
+                isReadOnly={isReadOnly}
+            />
+            <VehicleDamageReport
+                activePoints={damagePoints}
+                onUpdate={onDamageReportUpdate}
+                isReadOnly={isReadOnly}
+                vehicleModel={vehicleModel}
+                imageId={diagramImageId}
+            />
         </div>
     );
 };

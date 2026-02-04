@@ -1,4 +1,3 @@
-
 import React, { useMemo } from 'react';
 import { Job, JobSegment, PurchaseOrder } from '../../types';
 import { Clock } from 'lucide-react';
@@ -58,7 +57,22 @@ export const TimelineView: React.FC<TimelineViewProps> = (props) => {
     const { jobs, lifts, engineers, customers, vehicles, purchaseOrders } = useData();
     const { currentUser, selectedEntityId } = useApp();
 
-    const entityLifts = useMemo(() => lifts.filter(l => l.entityId === selectedEntityId), [lifts, selectedEntityId]);
+    // FIXED: Apply sorting logic here because this is where the timeline draws its columns
+    const entityLifts = useMemo(() => {
+        return lifts
+            .filter(l => selectedEntityId === 'all' || l.entityId === selectedEntityId)
+            .sort((a, b) => {
+                // Take first 7 chars to handle "Lift 1" vs "Lift 10" while ignoring "/ MOT"
+                const nameA = (a.name || '').substring(0, 7).trim();
+                const nameB = (b.name || '').substring(0, 7).trim();
+                
+                return nameA.localeCompare(nameB, undefined, { 
+                    numeric: true, 
+                    sensitivity: 'base' 
+                });
+            });
+    }, [lifts, selectedEntityId]);
+
     const vehiclesById = useMemo(() => new Map(vehicles.map(v => [v.id, v])), [vehicles]);
     const customersById = useMemo(() => new Map(customers.map(c => [c.id, c])), [customers]);
     const engineersById = useMemo(() => new Map(engineers.map(e => [e.id, e])), [engineers]);

@@ -58,12 +58,18 @@ export const ManagementLiftsTab = ({ searchTerm = '', onShowStatus }: { searchTe
             (l.type || '').toLowerCase().includes(searchTerm.toLowerCase())
         );
 
-        return filtered.reduce((acc, lift) => {
+        const grouped = filtered.reduce((acc, lift) => {
             const entityName = (businessEntities || []).find(e => e.id === lift.entityId)?.name || 'Independent / Unknown';
             if (!acc[entityName]) acc[entityName] = [];
             acc[entityName].push(lift);
             return acc;
         }, {} as Record<string, Lift[]>);
+
+        for (const entityName in grouped) {
+            grouped[entityName].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+        }
+
+        return grouped;
     }, [localLifts, businessEntities, searchTerm]);
 
     return (
@@ -107,9 +113,7 @@ export const ManagementLiftsTab = ({ searchTerm = '', onShowStatus }: { searchTe
                                                 </div>
                                             </td>
                                         </tr>
-                                        {liftsByEntity[entityName]
-                                            .sort((a, b) => a.name.localeCompare(b.name))
-                                            .map(lift => (
+                                        {liftsByEntity[entityName].map(lift => (
                                             <tr key={lift.id} className="group hover:bg-slate-50/30 transition-colors">
                                                 <td className="px-6 py-5">
                                                     <div className="flex items-center gap-3">

@@ -1,33 +1,30 @@
-import React, { createContext, useContext, useEffect, useMemo, useState, useRef } from 'react';
+import React, { createContext, useContext, useEffect, useMemo } from 'react';
 import * as T from '../../types';
 import { usePersistentState } from './usePersistentState';
 import {
-    getInitialEngineers, getInitialSuppliers, getInitialServicePackages, getInitialTaxRates,
+    getInitialJobs, getInitialVehicles, getInitialCustomers, getInitialEngineers,
+    getInitialEstimates, getInitialInvoices, getInitialPurchaseOrders,
+    getInitialSuppliers, getInitialParts, getInitialServicePackages, getInitialTaxRates,
     getInitialBusinessEntities, getInitialLifts, getInitialSaleVehicles,
     getInitialSaleOverheadPackages, getInitialStorageBookings, getInitialRentalVehicles,
     getInitialRentalBookings, getInitialStorageLocations, getInitialBatteryChargers,
     getInitialNominalCodes, getInitialNominalCodeRules, getInitialPurchases,
     getInitialAbsenceRequests, getInitialUsers, getInitialProspects, getInitialInquiries,
     getInitialReminders, getInitialAuditLog, getInitialRoles, getInitialInspectionDiagrams,
-    getInitialParts, getInitialJobs, getInitialCustomers, getInitialVehicles,
-    getInitialEstimates, getInitialInvoices
-} from '../data/initialData';
-import { getAll, getById } from '../db/index'; 
+    getInitialInspectionTemplates
+} from '../../data/initialData';
+import { saveImage } from '../../utils/imageStore';
+import * as DB from '../db'; // Import your Firestore helper functions
 
 interface DataContextType {
-    // Workflow Data (Live on Grid)
     jobs: T.Job[]; setJobs: React.Dispatch<React.SetStateAction<T.Job[]>>;
-    
-    // Large Volume Data (Now handled on-demand to keep UI flying)
     vehicles: T.Vehicle[]; setVehicles: React.Dispatch<React.SetStateAction<T.Vehicle[]>>;
     customers: T.Customer[]; setCustomers: React.Dispatch<React.SetStateAction<T.Customer[]>>;
-    parts: T.Part[]; setParts: React.Dispatch<React.SetStateAction<T.Part[]>>;
-    
-    // Support Data
     estimates: T.Estimate[]; setEstimates: React.Dispatch<React.SetStateAction<T.Estimate[]>>;
     invoices: T.Invoice[]; setInvoices: React.Dispatch<React.SetStateAction<T.Invoice[]>>;
     purchaseOrders: T.PurchaseOrder[]; setPurchaseOrders: React.Dispatch<React.SetStateAction<T.PurchaseOrder[]>>;
     purchases: T.Purchase[]; setPurchases: React.Dispatch<React.SetStateAction<T.Purchase[]>>;
+    parts: T.Part[]; setParts: React.Dispatch<React.SetStateAction<T.Part[]>>;
     servicePackages: T.ServicePackage[]; setServicePackages: React.Dispatch<React.SetStateAction<T.ServicePackage[]>>;
     suppliers: T.Supplier[]; setSuppliers: React.Dispatch<React.SetStateAction<T.Supplier[]>>;
     engineers: T.Engineer[]; setEngineers: React.Dispatch<React.SetStateAction<T.Engineer[]>>;
@@ -50,156 +47,144 @@ interface DataContextType {
     taxRates: T.TaxRate[]; setTaxRates: React.Dispatch<React.SetStateAction<T.TaxRate[]>>;
     roles: T.Role[]; setRoles: React.Dispatch<React.SetStateAction<T.Role[]>>;
     inspectionDiagrams: T.InspectionDiagram[]; setInspectionDiagrams: React.Dispatch<React.SetStateAction<T.InspectionDiagram[]>>;
+    inspectionTemplates: T.InspectionTemplate[]; setInspectionTemplates: React.Dispatch<React.SetStateAction<T.InspectionTemplate[]>>;
     
-    isLoading: boolean;
-    refreshActiveData: (isBackground?: boolean) => Promise<void>;
+    startEditing: (id?: string) => void;
+    stopEditing: () => void;
+    refreshActiveData: (force?: boolean) => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
 export const DataContextProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const [isLoading, setIsLoading] = useState(true);
-    const isRefreshingRef = useRef(false);
+    // --- Initialize State via Custom Hook ---
+    const [jobs, setJobs] = usePersistentState<T.Job[]>('brooks_jobs', getInitialJobs);
+    const [vehicles, setVehicles] = usePersistentState<T.Vehicle[]>('brooks_vehicles', getInitialVehicles);
+    const [customers, setCustomers] = usePersistentState<T.Customer[]>('brooks_customers', getInitialCustomers);
+    const [estimates, setEstimates] = usePersistentState<T.Estimate[]>('brooks_estimates', getInitialEstimates);
+    const [invoices, setInvoices] = usePersistentState<T.Invoice[]>('brooks_invoices', getInitialInvoices);
+    const [purchaseOrders, setPurchaseOrders] = usePersistentState<T.PurchaseOrder[]>('brooks_purchaseOrders', getInitialPurchaseOrders);
+    const [purchases, setPurchases] = usePersistentState<T.Purchase[]>('brooks_purchases', getInitialPurchases);
+    const [parts, setParts] = usePersistentState<T.Part[]>('brooks_parts', getInitialParts);
+    const [servicePackages, setServicePackages] = usePersistentState<T.ServicePackage[]>('brooks_servicePackages', getInitialServicePackages);
+    const [suppliers, setSuppliers] = usePersistentState<T.Supplier[]>('brooks_suppliers', getInitialSuppliers);
+    const [engineers, setEngineers] = usePersistentState<T.Engineer[]>('brooks_engineers', getInitialEngineers);
+    const [lifts, setLifts] = usePersistentState<T.Lift[]>('brooks_lifts', getInitialLifts);
+    const [rentalVehicles, setRentalVehicles] = usePersistentState<T.RentalVehicle[]>('brooks_rentalVehicles', getInitialRentalVehicles);
+    const [rentalBookings, setRentalBookings] = usePersistentState<T.RentalBooking[]>('brooks_rentalBookings', getInitialRentalBookings);
+    const [saleVehicles, setSaleVehicles] = usePersistentState<T.SaleVehicle[]>('brooks_saleVehicles', getInitialSaleVehicles);
+    const [saleOverheadPackages, setSaleOverheadPackages] = usePersistentState<T.SaleOverheadPackage[]>('brooks_saleOverheadPackages', getInitialSaleOverheadPackages);
+    const [prospects, setProspects] = usePersistentState<T.Prospect[]>('brooks_prospects', getInitialProspects);
+    const [storageBookings, setStorageBookings] = usePersistentState<T.StorageBooking[]>('brooks_storageBookings', getInitialStorageBookings);
+    const [storageLocations, setStorageLocations] = usePersistentState<T.StorageLocation[]>('brooks_storageLocations', getInitialStorageLocations);
+    const [batteryChargers, setBatteryChargers] = usePersistentState<T.BatteryCharger[]>('brooks_batteryChargers', getInitialBatteryChargers);
+    const [nominalCodes, setNominalCodes] = usePersistentState<T.NominalCode[]>('brooks_nominalCodes', getInitialNominalCodes);
+    const [nominalCodeRules, setNominalCodeRules] = usePersistentState<T.NominalCodeRule[]>('brooks_nominalCodeRules', getInitialNominalCodeRules);
+    const [absenceRequests, setAbsenceRequests] = usePersistentState<T.AbsenceRequest[]>('brooks_absenceRequests', getInitialAbsenceRequests);
+    const [inquiries, setInquiries] = usePersistentState<T.Inquiry[]>('brooks_inquiries', getInitialInquiries);
+    const [reminders, setReminders] = usePersistentState<T.Reminder[]>('brooks_reminders', getInitialReminders);
+    const [auditLog, setAuditLog] = usePersistentState<T.AuditLogEntry[]>('brooks_auditLog', getInitialAuditLog);
+    const [businessEntities, setBusinessEntities] = usePersistentState<T.BusinessEntity[]>('brooks_businessEntities', getInitialBusinessEntities);
+    const [taxRates, setTaxRates] = usePersistentState<T.TaxRate[]>('brooks_taxRates', getInitialTaxRates);
+    const [roles, setRoles] = usePersistentState<T.Role[]>('brooks_roles', getInitialRoles);
+    const [inspectionDiagrams, setInspectionDiagrams] = usePersistentState<T.InspectionDiagram[]>('brooks_inspectionDiagrams', getInitialInspectionDiagrams);
+    const [inspectionTemplates, setInspectionTemplates] = usePersistentState<T.InspectionTemplate[]>('brooks_inspectionTemplates', getInitialInspectionTemplates);
 
-    // --- DATA STATES ---
-    // We keep these in state but we no longer "Bulk Load" them from the DB on start.
-    // They will be populated by specific search actions or when a Job is loaded.
-    const [customers, setCustomers] = useState<T.Customer[]>([]);
-    const [vehicles, setVehicles] = useState<T.Vehicle[]>([]);
-    const [parts, setParts] = useState<T.Part[]>([]);
-
-    const [jobs, setJobs] = useState<T.Job[]>([]);
-    const [purchases, setPurchases] = useState<T.Purchase[]>([]);
-    const [purchaseOrders, setPurchaseOrders] = useState<T.PurchaseOrder[]>([]);
-    const [suppliers, setSuppliers] = useState<T.Supplier[]>([]);
-    const [engineers, setEngineers] = useState<T.Engineer[]>([]);
-    const [lifts, setLifts] = useState<T.Lift[]>([]);
-    const [estimates, setEstimates] = useState<T.Estimate[]>([]);
-    const [invoices, setInvoices] = useState<T.Invoice[]>([]);
-    const [servicePackages, setServicePackages] = useState<T.ServicePackage[]>([]);
-    const [rentalVehicles, setRentalVehicles] = useState<T.RentalVehicle[]>([]);
-    const [rentalBookings, setRentalBookings] = useState<T.RentalBooking[]>([]);
-    const [saleVehicles, setSaleVehicles] = useState<T.SaleVehicle[]>([]);
-    const [saleOverheadPackages, setSaleOverheadPackages] = useState<T.SaleOverheadPackage[]>([]);
-    const [prospects, setProspects] = useState<T.Prospect[]>([]);
-    const [storageBookings, setStorageBookings] = useState<T.StorageBooking[]>([]);
-    const [storageLocations, setStorageLocations] = useState<T.StorageLocation[]>([]);
-    const [batteryChargers, setBatteryChargers] = useState<T.BatteryCharger[]>([]);
-    const [nominalCodes, setNominalCodes] = useState<T.NominalCode[]>([]);
-    const [nominalCodeRules, setNominalCodeRules] = useState<T.NominalCodeRule[]>([]);
-    const [absenceRequests, setAbsenceRequests] = useState<T.AbsenceRequest[]>([]);
-    const [inquiries, setInquiries] = useState<T.Inquiry[]>([]);
-    const [reminders, setReminders] = useState<T.Reminder[]>([]);
-    const [auditLog, setAuditLog] = useState<T.AuditLogEntry[]>([]);
-    const [businessEntities, setBusinessEntities] = useState<T.BusinessEntity[]>([]);
-    const [taxRates, setTaxRates] = useState<T.TaxRate[]>([]);
-    const [roles, setRoles] = useState<T.Role[]>([]);
-    const [inspectionDiagrams, setInspectionDiagrams] = useState<T.InspectionDiagram[]>([]);
-
-    const refreshActiveData = async (isBackground: boolean = false) => {
-        if (isRefreshingRef.current) return;
-        isRefreshingRef.current = true;
-        if (!isBackground) setIsLoading(true);
-        
-        try {
-            // NOTICE: We have removed Customers, Vehicles, and Parts from this bulk call.
-            // This ensures the application loads instantly even with thousands of records.
-            const allResults = await Promise.all([
-                getAll<T.Job>('brooks_jobs'),
-                getAll<T.Purchase>('brooks_purchases'),
-                getAll<T.PurchaseOrder>('brooks_purchaseOrders'),
-                getAll<T.Supplier>('brooks_suppliers'),
-                getAll<T.Engineer>('brooks_engineers'),
-                getAll<T.Lift>('brooks_lifts'),
-                getAll<T.Estimate>('brooks_estimates'),
-                getAll<T.Invoice>('brooks_invoices'),
-                getAll<T.ServicePackage>('brooks_servicePackages'),
-                getAll<T.Prospect>('brooks_prospects'),
-                getAll<T.TaxRate>('brooks_taxRates'),
-                getAll<T.Role>('brooks_roles'),
-                getAll<T.BusinessEntity>('brooks_businessEntities'),
-                getAll<T.NominalCode>('brooks_nominalCodes'),
-                getAll<T.AbsenceRequest>('brooks_absenceRequests'),
-                getAll<T.Inquiry>('brooks_inquiries'),
-                getAll<T.Reminder>('brooks_reminders')
-            ]);
-
-            // FILTER: Only load Jobs that are not "Closed". 
-            // This keeps the workshop grid fast and clear.
-            const activeJobs = allResults[0].filter(job => job.status !== 'Closed');
-            setJobs(activeJobs);
-
-            setPurchases(allResults[1]);
-            setPurchaseOrders(allResults[2]);
-            setSuppliers(allResults[3]);
-            setEngineers(allResults[4]);
-            setLifts(allResults[5]);
-            setEstimates(allResults[6]);
-            setInvoices(allResults[7]);
-            setServicePackages(allResults[8]);
-            setProspects(allResults[9]);
-            setTaxRates(allResults[10]);
-            setRoles(allResults[11]);
-            setBusinessEntities(allResults[12]);
-            setNominalCodes(allResults[13]);
-            setAbsenceRequests(allResults[14]);
-            setInquiries(allResults[15]);
-            setReminders(allResults[16]);
-
-        } catch (error) {
-            console.error("Data Refresh Error:", error);
-        } finally {
-            if (!isBackground) setIsLoading(false);
-            isRefreshingRef.current = false;
-        }
-    };
-
+    // --- Initialization & Forced Firestore Sync ---
     useEffect(() => {
-        refreshActiveData();
-        const interval = setInterval(() => refreshActiveData(true), 5000);
-        return () => clearInterval(interval);
+        const syncFirestoreData = async () => {
+            // Delay to allow Firestore connection to stabilize
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            console.log("%c 🔥 FIRESTORE SYNC CHECK ", "background: #f38220; color: white; font-weight: bold;");
+
+            // 1. Forced Seed for Inspection Templates if empty in Firestore
+            if (!inspectionTemplates || inspectionTemplates.length === 0) {
+                const seed = getInitialInspectionTemplates();
+                if (seed && seed.length > 0) {
+                    console.warn("⚠️ Templates empty in Firestore. Pushing seed to 'brooks_settings/brooks_inspectionTemplates'...");
+                    try {
+                        await DB.setItem('brooks_inspectionTemplates', seed);
+                        setInspectionTemplates(seed);
+                        console.log("✅ Firestore Seed Successful");
+                    } catch (err) {
+                        console.error("❌ Firestore Seed Failed:", err);
+                    }
+                }
+            } else {
+                console.log(`ℹ️ Templates found in Firestore: ${inspectionTemplates.length}`);
+            }
+
+            // 2. Image Migration Logic
+            let vChanged = false;
+            const updatedVehicles = JSON.parse(JSON.stringify(vehicles));
+            for (const vehicle of updatedVehicles) {
+                if (vehicle.images && Array.isArray(vehicle.images)) {
+                    for (const image of vehicle.images) {
+                        if ((image as any).dataUrl) {
+                            vChanged = true;
+                            await saveImage(image.id, (image as any).dataUrl);
+                            delete (image as any).dataUrl;
+                        }
+                    }
+                }
+            }
+            if (vChanged) setVehicles(updatedVehicles);
+        };
+
+        syncFirestoreData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // Stabilize the grid sequence
-    const sortedJobs = useMemo(() => {
-        return [...jobs].sort((a, b) => {
-            const posA = a.position ?? 9999;
-            const posB = b.position ?? 9999;
-            if (posA !== posB) return posA - posB;
-            return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
-        });
-    }, [jobs]);
-
-    const sortedLifts = useMemo(() => {
-        return [...lifts].sort((a, b) => 
-            a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
-        );
-    }, [lifts]);
-
     const value = useMemo(() => ({
-        jobs: sortedJobs, setJobs, 
-        vehicles, setVehicles, 
+        jobs, setJobs,
+        vehicles, setVehicles,
         customers, setCustomers,
+        estimates, setEstimates,
+        invoices, setInvoices,
+        purchaseOrders, setPurchaseOrders,
+        purchases, setPurchases,
         parts, setParts,
-        estimates, setEstimates, invoices, setInvoices, purchaseOrders, setPurchaseOrders,
-        purchases, setPurchases, servicePackages, setServicePackages,
-        suppliers, setSuppliers, engineers, setEngineers, lifts: sortedLifts, setLifts,
-        rentalVehicles, setRentalVehicles, rentalBookings, setRentalBookings,
-        saleVehicles, setSaleVehicles, saleOverheadPackages, setSaleOverheadPackages,
-        prospects, setProspects, storageBookings, setStorageBookings,
-        storageLocations, setStorageLocations, batteryChargers, setBatteryChargers,
-        nominalCodes, setNominalCodes, nominalCodeRules, setNominalCodeRules,
-        absenceRequests, setAbsenceRequests, inquiries, setInquiries,
-        reminders, setReminders, auditLog, setAuditLog, businessEntities, setBusinessEntities,
-        taxRates, setTaxRates, roles, setRoles, inspectionDiagrams, setInspectionDiagrams,
-        isLoading, refreshActiveData
+        servicePackages, setServicePackages,
+        suppliers, setSuppliers,
+        engineers, setEngineers,
+        lifts, setLifts,
+        rentalVehicles, setRentalVehicles,
+        rentalBookings, setRentalBookings,
+        saleVehicles, setSaleVehicles,
+        saleOverheadPackages, setSaleOverheadPackages,
+        prospects, setProspects,
+        storageBookings, setStorageBookings,
+        storageLocations, setStorageLocations,
+        batteryChargers, setBatteryChargers,
+        nominalCodes, setNominalCodes,
+        nominalCodeRules, setNominalCodeRules,
+        absenceRequests, setAbsenceRequests,
+        inquiries, setInquiries,
+        reminders, setReminders,
+        auditLog, setAuditLog,
+        businessEntities, setBusinessEntities,
+        taxRates, setTaxRates,
+        roles, setRoles,
+        inspectionDiagrams, setInspectionDiagrams,
+        inspectionTemplates, setInspectionTemplates,
+        
+        startEditing: (id?: string) => {
+            console.log(`Started editing${id ? ': ' + id : ''}`);
+        },
+        stopEditing: () => {
+            console.log('Stopped editing');
+        },
+        refreshActiveData: async (force: boolean = false) => {
+            console.log(`Data refresh requested (force: ${force})`);
+        }
     }), [
-        sortedJobs, vehicles, customers, parts, estimates, invoices, purchaseOrders, purchases, 
-        servicePackages, suppliers, engineers, sortedLifts, rentalVehicles, 
-        rentalBookings, saleVehicles, saleOverheadPackages, prospects, storageBookings, 
-        storageLocations, batteryChargers, nominalCodes, nominalCodeRules, 
-        absenceRequests, inquiries, reminders, auditLog, businessEntities, 
-        taxRates, roles, inspectionDiagrams, isLoading
+        jobs, vehicles, customers, estimates, invoices, purchaseOrders, purchases, parts, 
+        servicePackages, suppliers, engineers, lifts, rentalVehicles, rentalBookings, 
+        saleVehicles, saleOverheadPackages, prospects, storageBookings, storageLocations, 
+        batteryChargers, nominalCodes, nominalCodeRules, absenceRequests, inquiries, 
+        reminders, auditLog, businessEntities, taxRates, roles, inspectionDiagrams, 
+        inspectionTemplates
     ]);
 
     return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
@@ -207,6 +192,8 @@ export const DataContextProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
 export const useData = (): DataContextType => {
     const context = useContext(DataContext);
-    if (!context) throw new Error('useData must be used within a DataContextProvider');
+    if (!context) {
+        throw new Error('useData must be used within a DataContextProvider');
+    }
     return context;
 };

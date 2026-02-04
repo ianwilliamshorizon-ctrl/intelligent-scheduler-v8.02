@@ -62,10 +62,11 @@ const DispatchView: React.FC<DispatchViewProps> = ({ setDefaultDateForModal, set
     // -- Derived Data via Hooks --
     const { 
         entityEngineers, 
+        entityLifts,
         unallocatedJobs, 
         allocatedSegmentsByLift 
     } = useDispatchFilters({
-        jobs, lifts, engineers, selectedEntityId, currentDate, unallocatedDateFilter, showOnSiteOnly
+        jobs, lifts, engineers, businessEntities, selectedEntityId, currentDate, unallocatedDateFilter, showOnSiteOnly
     });
 
     // -- Drag & Drop Logic via Hook --
@@ -169,6 +170,7 @@ const DispatchView: React.FC<DispatchViewProps> = ({ setDefaultDateForModal, set
             
             {viewMode === 'timeline' && (
                 <TimelineView
+                    lifts={entityLifts}
                     onDragStart={handleDragStart}
                     onDragEnd={handleDragEnd}
                     onTimelineDragEnter={(e) => { e.preventDefault(); }}
