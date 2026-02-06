@@ -21,59 +21,86 @@ interface ScheduleJobFromEstimateModalProps {
     onEditJob: (jobId: string) => void;
 }
 
-const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> = ({ isOpen, onClose, onConfirm, estimate, customer, vehicle, jobs, vehicles, maxDailyCapacityHours, businessEntities, customers, absenceRequests, onEditJob }) => {
-    const [scheduledDate, setScheduledDate] = useState(() => estimate.jobId ? getRelativeDate(0) : (estimate as any).requestedDate || getRelativeDate(0));
+const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> = ({ 
+    isOpen, 
+    onClose, 
+    onConfirm, 
+    estimate, 
+    customer, 
+    vehicle, 
+    jobs, 
+    vehicles, 
+    maxDailyCapacityHours, 
+    businessEntities, 
+    customers, 
+    absenceRequests, 
+    onEditJob 
+}) => {
+    const [scheduledDate, setScheduledDate] = useState(() => estimate?.jobId ? getRelativeDate(0) : (estimate as any)?.requestedDate || getRelativeDate(0));
     const [suggestion, setSuggestion] = useState<{ suggestedDate: string; originalDate: string } | null>(null);
     const [currentMonth, setCurrentMonth] = useState(() => dateStringToDate(scheduledDate));
 
     useEffect(() => {
-        if (isOpen) {
-            setScheduledDate(estimate.jobId ? getRelativeDate(0) : (estimate as any).requestedDate || getRelativeDate(0));
-            setCurrentMonth(dateStringToDate(estimate.jobId ? getRelativeDate(0) : (estimate as any).requestedDate || getRelativeDate(0)));
+        if (isOpen && estimate) {
+            const initialDate = estimate.jobId ? getRelativeDate(0) : (estimate as any).requestedDate || getRelativeDate(0);
+            setScheduledDate(initialDate);
+            setCurrentMonth(dateStringToDate(initialDate));
             setSuggestion(null);
         }
     }, [isOpen, estimate]);
     
     const laborHours = useMemo(() => {
-        // Calculate hours from labor items. If 0 (e.g. only parts or optional items), default to 1 to ensure a segment is created.
-        const hours = (estimate?.lineItems || [])
-            .filter(item => item.isLabor && !item.isOptional)
-            .reduce((sum, item) => sum + item.quantity, 0);
+        const items = estimate?.lineItems || [];
+        const hours = items
+            .filter(item => item && item.isLabor && !item.isOptional)
+            .reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
         return Math.max(hours, 1);
     }, [estimate]);
     
-    const entityForEstimate = useMemo(() => businessEntities.find(e => e.id === estimate.entityId), [businessEntities, estimate]);
+    // Safety fix for the .find() crash
+    const entityForEstimate = useMemo(() => 
+        (businessEntities || []).find(e => e.id === estimate?.entityId), 
+    [businessEntities, estimate?.entityId]);
 
     const jobsForEntity = useMemo(() => {
-        if (!entityForEstimate) return jobs;
-        return jobs.filter(j => j.entityId === entityForEstimate.id);
+        const allJobs = jobs || [];
+        if (!entityForEstimate) return allJobs;
+        return allJobs.filter(j => j && j.entityId === entityForEstimate.id);
     }, [jobs, entityForEstimate]);
 
     const absencesByDate = useMemo(() => {
         const map = new Map<string, number>();
-        absenceRequests.forEach(req => {
-            if (req.status === 'Approved' || req.status === 'Pending') {
-                 let currentDate = dateStringToDate(req.startDate);
-                 const endDate = dateStringToDate(req.endDate);
-                 while(currentDate <= endDate) {
-                    const dateStr = formatDate(currentDate);
-                    map.set(dateStr, (map.get(dateStr) || 0) + 8); // Assuming 8 hours per day
-                    currentDate = addDays(currentDate, 1);
-                }
+        (absenceRequests || []).forEach(req => {
+            if (req && (req.status === 'Approved' || req.status === 'Pending')) {
+                 try {
+                    let currentDate = dateStringToDate(req.startDate);
+                    const endDate = dateStringToDate(req.endDate);
+                    while(currentDate <= endDate) {
+                        const dateStr = formatDate(currentDate);
+                        map.set(dateStr, (map.get(dateStr) || 0) + 8);
+                        currentDate = addDays(currentDate, 1);
+                    }
+                 } catch (e) {
+                    console.error("Error parsing absence dates", e);
+                 }
             }
         });
         return map;
     }, [absenceRequests]);
 
     const dailyStats = useMemo(() => {
-        const maxCapacity = entityForEstimate?.dailyCapacityHours || maxDailyCapacityHours;
-        const currentLoad = (jobsForEntity.flatMap(j => j.segments) || [])
-            .filter(s => s.date === scheduledDate && s.status !== 'Cancelled')
-            .reduce((sum, s) => sum + s.duration, 0);
+        const maxCapacity = entityForEstimate?.dailyCapacityHours || maxDailyCapacityHours || 8;
+        const absenceHours = absencesByDate.get(scheduledDate) || 0;
+        const effectiveCapacity = Math.max(0, maxCapacity - absenceHours);
+
+        const currentLoad = (jobsForEntity || [])
+            .flatMap(j => (j && Array.isArray(j.segments)) ? j.segments : [])
+            .filter(s => s && s.date === scheduledDate && s.status !== 'Cancelled')
+            .reduce((sum, s) => sum + (Number(s.duration) || 0), 0);
         
         const newTotalLoad = currentLoad + laborHours;
-        const remainingCapacity = maxCapacity - newTotalLoad;
-        const loadPercentage = maxCapacity > 0 ? newTotalLoad / maxCapacity : 1;
+        const remainingCapacity = effectiveCapacity - newTotalLoad;
+        const loadPercentage = effectiveCapacity > 0 ? newTotalLoad / effectiveCapacity : (newTotalLoad > 0 ? 1.1 : 0);
 
         let statusColor = 'bg-green-100 border-green-200 text-green-800';
         if (remainingCapacity < 0) {
@@ -84,11 +111,13 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
 
         return {
             maxCapacity,
+            absenceHours,
+            effectiveCapacity,
             currentLoad,
             remainingCapacity,
             statusColor
         };
-    }, [scheduledDate, jobsForEntity, laborHours, entityForEstimate, maxDailyCapacityHours]);
+    }, [scheduledDate, jobsForEntity, laborHours, entityForEstimate, maxDailyCapacityHours, absencesByDate]);
 
     const handleMonthChange = (offset: number) => {
         setCurrentMonth(prev => {
@@ -104,24 +133,35 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
         setCurrentMonth(today);
     };
 
-    if (!isOpen) return null;
+    if (!isOpen || !estimate) return null;
 
     const handleConfirmClick = () => {
-        const dailyHours = (jobsForEntity.flatMap(j => j.segments) || [])
+        const dailyHours = (jobsForEntity || [])
+            .flatMap(j => Array.isArray(j.segments) ? j.segments : [])
             .filter(s => s.date === scheduledDate && s.status !== 'Cancelled')
-            .reduce((sum, s) => sum + s.duration, 0);
+            .reduce((sum, s) => sum + (Number(s.duration) || 0), 0);
             
-        const entityCapacity = entityForEstimate?.dailyCapacityHours || maxDailyCapacityHours;
+        const baseCapacity = entityForEstimate?.dailyCapacityHours || maxDailyCapacityHours || 8;
+        const absenceHours = absencesByDate.get(scheduledDate) || 0;
+        const effectiveCapacity = Math.max(0, baseCapacity - absenceHours);
 
-        if (dailyHours + laborHours > entityCapacity) {
-            const alternativeDate = findNextAvailableDate(scheduledDate, laborHours, jobsForEntity, entityCapacity);
+        if (dailyHours + laborHours > effectiveCapacity) {
+            const alternativeDate = findNextAvailableDate(scheduledDate, laborHours, jobsForEntity, baseCapacity);
             setSuggestion({ suggestedDate: alternativeDate, originalDate: scheduledDate });
         } else {
             const newJob: Job = {
-                id: generateJobId(jobs, entityForEstimate?.shortCode || 'UNK'),
-                entityId: estimate.entityId, vehicleId: estimate.vehicleId, customerId: estimate.customerId,
-                description: `Work from Estimate #${estimate.estimateNumber}`, estimatedHours: laborHours, scheduledDate: scheduledDate,
-                status: 'Unallocated', createdAt: formatDate(new Date()), segments: [], estimateId: estimate.id, notes: estimate.notes,
+                id: generateJobId(jobs || [], entityForEstimate?.shortCode || 'UNK'),
+                entityId: estimate.entityId, 
+                vehicleId: estimate.vehicleId, 
+                customerId: estimate.customerId,
+                description: `Work from Estimate #${estimate.estimateNumber}`, 
+                estimatedHours: laborHours, 
+                scheduledDate: scheduledDate,
+                status: 'Unallocated', 
+                createdAt: formatDate(new Date()), 
+                segments: [], 
+                estimateId: estimate.id, 
+                notes: estimate.notes || '',
                 vehicleStatus: 'Awaiting Arrival',
             };
             newJob.segments = splitJobIntoSegments(newJob);
@@ -133,10 +173,18 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
     const handleAcceptSuggestion = () => {
         if (!suggestion) return;
         const newJob: Job = {
-            id: generateJobId(jobs, entityForEstimate?.shortCode || 'UNK'),
-            entityId: estimate.entityId, vehicleId: estimate.vehicleId, customerId: estimate.customerId,
-            description: `Work from Estimate #${estimate.estimateNumber}`, estimatedHours: laborHours, scheduledDate: suggestion.suggestedDate,
-            status: 'Unallocated', createdAt: formatDate(new Date()), segments: [], estimateId: estimate.id, notes: estimate.notes,
+            id: generateJobId(jobs || [], entityForEstimate?.shortCode || 'UNK'),
+            entityId: estimate.entityId, 
+            vehicleId: estimate.vehicleId, 
+            customerId: estimate.customerId,
+            description: `Work from Estimate #${estimate.estimateNumber}`, 
+            estimatedHours: laborHours, 
+            scheduledDate: suggestion.suggestedDate,
+            status: 'Unallocated', 
+            createdAt: formatDate(new Date()), 
+            segments: [], 
+            estimateId: estimate.id, 
+            notes: estimate.notes || '',
             vehicleStatus: 'Awaiting Arrival',
         };
         newJob.segments = splitJobIntoSegments(newJob);
@@ -145,7 +193,6 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
     };
 
     const monthYearString = currentMonth.toLocaleString('default', { month: 'long', year: 'numeric', timeZone: 'UTC' });
-
 
     return (
         <div className="fixed inset-0 bg-gray-900 bg-opacity-75 z-[80] flex justify-center items-center p-4">
@@ -156,7 +203,7 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
                             <Calendar size={20} className="mr-2"/>
                             Schedule Job from Estimate
                         </h2>
-                        <p className="text-sm text-gray-500 mt-1">Select a day from the calendar to book this job for <span className="font-semibold">{entityForEstimate?.name}</span>.</p>
+                        <p className="text-sm text-gray-500 mt-1">Select a day from the calendar to book this job for <span className="font-semibold">{entityForEstimate?.name || 'Loading...'}</span>.</p>
                     </div>
                     <button type="button" onClick={onClose}><X size={24} className="text-gray-500 hover:text-gray-800" /></button>
                 </div>
@@ -178,14 +225,27 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
                                 <div className="p-3 bg-gray-50 rounded-lg border space-y-1 text-sm">
                                     <p><strong>Estimate:</strong> <span className="font-mono bg-gray-200 px-1 rounded">#{estimate.estimateNumber}</span></p>
                                     <p><strong>Customer:</strong> {customer?.forename} {customer?.surname}</p>
-                                    <p><strong>Vehicle:</strong> {vehicle?.registration}</p>
+                                    <p><strong>Vehicle:</strong> {vehicle?.registration || 'N/A'}</p>
                                     <p><strong>Labor Hours:</strong> {laborHours.toFixed(1)} hrs</p>
                                 </div>
                                 
                                 <div className={`p-3 rounded-lg border text-sm ${dailyStats.statusColor}`}>
                                     <h4 className="font-bold flex items-center gap-2 mb-2"><Gauge size={16}/> Capacity Impact</h4>
                                     <div className="space-y-1">
-                                        <div className="flex justify-between"><span>Max Capacity:</span> <span>{dailyStats.maxCapacity} hrs</span></div>
+                                        <div className="flex justify-between"><span>Total Capacity:</span> <span>{dailyStats.maxCapacity} hrs</span></div>
+                                        
+                                        {dailyStats.absenceHours > 0 && (
+                                            <div className="flex justify-between text-red-600 font-medium">
+                                                <span>Staff Absence:</span> 
+                                                <span>- {dailyStats.absenceHours} hrs</span>
+                                            </div>
+                                        )}
+                                        
+                                        <div className="flex justify-between font-semibold border-b border-black/10 pb-1 mb-1">
+                                            <span>Net Availability:</span> 
+                                            <span>{dailyStats.effectiveCapacity.toFixed(1)} hrs</span>
+                                        </div>
+
                                         <div className="flex justify-between"><span>Current Load:</span> <span>{dailyStats.currentLoad.toFixed(1)} hrs</span></div>
                                         <div className="flex justify-between font-semibold border-t border-black/10 pt-1 mt-1"><span>New Job:</span> <span>+ {laborHours.toFixed(1)} hrs</span></div>
                                         <div className="flex justify-between font-bold text-base mt-1"><span>Remaining:</span> <span>{dailyStats.remainingCapacity.toFixed(1)} hrs</span></div>
@@ -215,11 +275,11 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
                                <div className="flex-grow min-h-0">
                                     <BookingCalendarView
                                         jobs={jobsForEntity}
-                                        vehicles={vehicles}
-                                        customers={customers}
+                                        vehicles={vehicles || []}
+                                        customers={customers || []}
                                         onAddJob={() => {}}
                                         onDragStart={() => {}}
-                                        maxDailyCapacityHours={entityForEstimate?.dailyCapacityHours || maxDailyCapacityHours}
+                                        maxDailyCapacityHours={entityForEstimate?.dailyCapacityHours || maxDailyCapacityHours || 8}
                                         absencesByDate={absencesByDate}
                                         onDayClick={(date) => setScheduledDate(date)}
                                         onEditJob={onEditJob}

@@ -1,6 +1,8 @@
-import React, { createContext, useContext, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useRef } from 'react';
 import * as T from '../../types';
 import { usePersistentState } from './usePersistentState';
+import * as DB from '../db'; 
+
 import {
     getInitialJobs, getInitialVehicles, getInitialCustomers, getInitialEngineers,
     getInitialEstimates, getInitialInvoices, getInitialPurchaseOrders,
@@ -12,9 +14,7 @@ import {
     getInitialAbsenceRequests, getInitialUsers, getInitialProspects, getInitialInquiries,
     getInitialReminders, getInitialAuditLog, getInitialRoles, getInitialInspectionDiagrams,
     getInitialInspectionTemplates
-} from '../../data/initialData';
-import { saveImage } from '../../utils/imageStore';
-import * as DB from '../db'; // Import your Firestore helper functions
+} from '../data/initialData'; 
 
 interface DataContextType {
     jobs: T.Job[]; setJobs: React.Dispatch<React.SetStateAction<T.Job[]>>;
@@ -48,16 +48,11 @@ interface DataContextType {
     roles: T.Role[]; setRoles: React.Dispatch<React.SetStateAction<T.Role[]>>;
     inspectionDiagrams: T.InspectionDiagram[]; setInspectionDiagrams: React.Dispatch<React.SetStateAction<T.InspectionDiagram[]>>;
     inspectionTemplates: T.InspectionTemplate[]; setInspectionTemplates: React.Dispatch<React.SetStateAction<T.InspectionTemplate[]>>;
-    
-    startEditing: (id?: string) => void;
-    stopEditing: () => void;
-    refreshActiveData: (force?: boolean) => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
 export const DataContextProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    // --- Initialize State via Custom Hook ---
     const [jobs, setJobs] = usePersistentState<T.Job[]>('brooks_jobs', getInitialJobs);
     const [vehicles, setVehicles] = usePersistentState<T.Vehicle[]>('brooks_vehicles', getInitialVehicles);
     const [customers, setCustomers] = usePersistentState<T.Customer[]>('brooks_customers', getInitialCustomers);
@@ -75,7 +70,7 @@ export const DataContextProvider: React.FC<{ children: React.ReactNode }> = ({ c
     const [saleVehicles, setSaleVehicles] = usePersistentState<T.SaleVehicle[]>('brooks_saleVehicles', getInitialSaleVehicles);
     const [saleOverheadPackages, setSaleOverheadPackages] = usePersistentState<T.SaleOverheadPackage[]>('brooks_saleOverheadPackages', getInitialSaleOverheadPackages);
     const [prospects, setProspects] = usePersistentState<T.Prospect[]>('brooks_prospects', getInitialProspects);
-    const [storageBookings, setStorageBookings] = usePersistentState<T.StorageBooking[]>('brooks_storageBookings', getInitialStorageBookings);
+    const [storageBookings, setStorageBookings] = usePersistentState<T.StorageBooking[]>('brooks_storageBooking', getInitialStorageBookings);
     const [storageLocations, setStorageLocations] = usePersistentState<T.StorageLocation[]>('brooks_storageLocations', getInitialStorageLocations);
     const [batteryChargers, setBatteryChargers] = usePersistentState<T.BatteryCharger[]>('brooks_batteryChargers', getInitialBatteryChargers);
     const [nominalCodes, setNominalCodes] = usePersistentState<T.NominalCode[]>('brooks_nominalCodes', getInitialNominalCodes);
@@ -90,94 +85,70 @@ export const DataContextProvider: React.FC<{ children: React.ReactNode }> = ({ c
     const [inspectionDiagrams, setInspectionDiagrams] = usePersistentState<T.InspectionDiagram[]>('brooks_inspectionDiagrams', getInitialInspectionDiagrams);
     const [inspectionTemplates, setInspectionTemplates] = usePersistentState<T.InspectionTemplate[]>('brooks_inspectionTemplates', getInitialInspectionTemplates);
 
-    // --- Initialization & Forced Firestore Sync ---
+    const isFirstRun = useRef(true);
+
     useEffect(() => {
-        const syncFirestoreData = async () => {
-            // Delay to allow Firestore connection to stabilize
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            
-            console.log("%c 🔥 FIRESTORE SYNC CHECK ", "background: #f38220; color: white; font-weight: bold;");
+        if (!isFirstRun.current) return;
+        isFirstRun.current = false;
 
-            // 1. Forced Seed for Inspection Templates if empty in Firestore
-            if (!inspectionTemplates || inspectionTemplates.length === 0) {
-                const seed = getInitialInspectionTemplates();
-                if (seed && seed.length > 0) {
-                    console.warn("⚠️ Templates empty in Firestore. Pushing seed to 'brooks_settings/brooks_inspectionTemplates'...");
+        const performCleanInstall = async () => {
+            // 1. CHECK BEFORE WRITING:
+            // We only want to auto-sync if the database is fundamentally empty.
+            // Since we usePersistentState, we can check if our local arrays are empty.
+            if (servicePackages.length > 0 || parts.length > 0) {
+                console.log("ℹ️ [DB] Data already exists. Skipping Master Sync.");
+                return;
+            }
+
+            console.warn("🚨 MASTER SYNC: Performing Clean Install...");
+            (window as any).isSyncing = true; 
+
+            const syncMap = [
+                { col: 'brooks_taxRates', data: getInitialTaxRates() },
+                { col: 'brooks_suppliers', data: getInitialSuppliers() },
+                { col: 'brooks_businessEntities', data: getInitialBusinessEntities() },
+                { col: 'brooks_roles', data: getInitialRoles() },
+                { col: 'brooks_customers', data: getInitialCustomers() },
+                { col: 'brooks_vehicles', data: getInitialVehicles() },
+                { col: 'brooks_parts', data: getInitialParts() },
+                { col: 'brooks_servicePackages', data: getInitialServicePackages() },
+                { col: 'brooks_engineers', data: getInitialEngineers() },
+                { col: 'brooks_inspectionTemplates', data: getInitialInspectionTemplates() }
+            ];
+
+            for (const task of syncMap) {
+                console.log(`🧹 Syncing ${task.col} (${task.data.length} items)...`);
+                for (const item of task.data) {
                     try {
-                        await DB.setItem('brooks_inspectionTemplates', seed);
-                        setInspectionTemplates(seed);
-                        console.log("✅ Firestore Seed Successful");
+                        await DB.saveDocument(task.col, item as any);
                     } catch (err) {
-                        console.error("❌ Firestore Seed Failed:", err);
-                    }
-                }
-            } else {
-                console.log(`ℹ️ Templates found in Firestore: ${inspectionTemplates.length}`);
-            }
-
-            // 2. Image Migration Logic
-            let vChanged = false;
-            const updatedVehicles = JSON.parse(JSON.stringify(vehicles));
-            for (const vehicle of updatedVehicles) {
-                if (vehicle.images && Array.isArray(vehicle.images)) {
-                    for (const image of vehicle.images) {
-                        if ((image as any).dataUrl) {
-                            vChanged = true;
-                            await saveImage(image.id, (image as any).dataUrl);
-                            delete (image as any).dataUrl;
-                        }
+                        console.error(`❌ Sync error in ${task.col} for ID ${item.id}:`, err);
                     }
                 }
             }
-            if (vChanged) setVehicles(updatedVehicles);
+            
+            (window as any).isSyncing = false; 
+            console.log("🏁 CLEAN INSTALL COMPLETE.");
         };
 
-        syncFirestoreData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+        performCleanInstall();
+    }, [servicePackages.length, parts.length]); // Dependencies to ensure we have data info
 
     const value = useMemo(() => ({
-        jobs, setJobs,
-        vehicles, setVehicles,
-        customers, setCustomers,
-        estimates, setEstimates,
-        invoices, setInvoices,
-        purchaseOrders, setPurchaseOrders,
-        purchases, setPurchases,
-        parts, setParts,
-        servicePackages, setServicePackages,
-        suppliers, setSuppliers,
-        engineers, setEngineers,
-        lifts, setLifts,
-        rentalVehicles, setRentalVehicles,
-        rentalBookings, setRentalBookings,
-        saleVehicles, setSaleVehicles,
-        saleOverheadPackages, setSaleOverheadPackages,
-        prospects, setProspects,
-        storageBookings, setStorageBookings,
-        storageLocations, setStorageLocations,
-        batteryChargers, setBatteryChargers,
-        nominalCodes, setNominalCodes,
-        nominalCodeRules, setNominalCodeRules,
-        absenceRequests, setAbsenceRequests,
-        inquiries, setInquiries,
-        reminders, setReminders,
-        auditLog, setAuditLog,
-        businessEntities, setBusinessEntities,
-        taxRates, setTaxRates,
-        roles, setRoles,
-        inspectionDiagrams, setInspectionDiagrams,
+        jobs, setJobs, vehicles, setVehicles, customers, setCustomers,
+        estimates, setEstimates, invoices, setInvoices, purchaseOrders, setPurchaseOrders,
+        purchases, setPurchases, parts, setParts, servicePackages, setServicePackages,
+        suppliers, setSuppliers, engineers, setEngineers, lifts, setLifts,
+        rentalVehicles, setRentalVehicles, rentalBookings, setRentalBookings,
+        saleVehicles, setSaleVehicles, saleOverheadPackages, setSaleOverheadPackages,
+        prospects, setProspects, storageBookings, setStorageBookings,
+        storageLocations, setStorageLocations, batteryChargers, setBatteryChargers,
+        nominalCodes, setNominalCodes, nominalCodeRules, setNominalCodeRules,
+        absenceRequests, setAbsenceRequests, inquiries, setInquiries,
+        reminders, setReminders, auditLog, setAuditLog,
+        businessEntities, setBusinessEntities, taxRates, setTaxRates,
+        roles, setRoles, inspectionDiagrams, setInspectionDiagrams,
         inspectionTemplates, setInspectionTemplates,
-        
-        startEditing: (id?: string) => {
-            console.log(`Started editing${id ? ': ' + id : ''}`);
-        },
-        stopEditing: () => {
-            console.log('Stopped editing');
-        },
-        refreshActiveData: async (force: boolean = false) => {
-            console.log(`Data refresh requested (force: ${force})`);
-        }
     }), [
         jobs, vehicles, customers, estimates, invoices, purchaseOrders, purchases, parts, 
         servicePackages, suppliers, engineers, lifts, rentalVehicles, rentalBookings, 
@@ -190,10 +161,8 @@ export const DataContextProvider: React.FC<{ children: React.ReactNode }> = ({ c
     return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
 };
 
-export const useData = (): DataContextType => {
+export const useData = () => {
     const context = useContext(DataContext);
-    if (!context) {
-        throw new Error('useData must be used within a DataContextProvider');
-    }
+    if (!context) throw new Error('useData must be used within a DataContextProvider');
     return context;
 };

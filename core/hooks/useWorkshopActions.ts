@@ -10,8 +10,16 @@ import { calculateJobStatus } from '../utils/jobUtils';
 export const useWorkshopActions = () => {
     const data = useData();
     const { currentUser, setConfirmation } = useApp();
+    
+    // Destructure setters to enable local state updates
     const { 
-        jobs, estimates, purchaseOrders, inquiries, parts, businessEntities, vehicles
+        jobs, setJobs,
+        estimates, setEstimates,
+        purchaseOrders, setPurchaseOrders,
+        inquiries, setInquiries,
+        parts, setParts,
+        businessEntities, 
+        vehicles, setVehicles
     } = data;
 
     // Helper to determine collection name based on item properties
@@ -37,13 +45,25 @@ export const useWorkshopActions = () => {
         return 'brooks_items';
     };
 
-    // Refactored to Write to Cloud directly
+    // Updated handleSaveItem to perform Optimistic Update
     const handleSaveItem = async <Type extends { id: string }>(
-        setter: React.Dispatch<React.SetStateAction<Type[]>>, // Kept for type compatibility but ignored
+        setter: React.Dispatch<React.SetStateAction<Type[]>>,
         item: Type,
         collectionOverride?: string
     ) => {
-        // Optimistic UI is handled by Firestore SDK + onSnapshot in usePersistentState
+        // 1. Optimistic / Local Update
+        setter(prev => {
+            const index = prev.findIndex(i => i.id === item.id);
+            if (index >= 0) {
+                const newArr = [...prev];
+                newArr[index] = item;
+                return newArr;
+            } else {
+                return [...prev, item];
+            }
+        });
+
+        // 2. Persist to DB
         const col = collectionOverride || getCollectionName(item);
         await saveDocument(col, item);
     };
@@ -51,14 +71,19 @@ export const useWorkshopActions = () => {
     const updateLinkedInquiryStatus = async (estimateId: string, newStatus: T.Inquiry['status'], extraUpdates: Partial<T.Inquiry> = {}) => {
         const targetInquiry = inquiries.find(i => i.linkedEstimateId === estimateId && i.status !== 'Closed');
         if (targetInquiry) {
-            await saveDocument('brooks_inquiries', { ...targetInquiry, status: newStatus, ...extraUpdates });
+            const updatedInquiry = { ...targetInquiry, status: newStatus, ...extraUpdates };
+            // Optimistic Update
+            setInquiries(prev => prev.map(i => i.id === updatedInquiry.id ? updatedInquiry : i));
+            // Persist
+            await saveDocument('brooks_inquiries', updatedInquiry);
         }
     };
 
     const handleSaveEstimate = async (estimate: T.Estimate) => {
         const isNew = !estimates.some(e => e.id === estimate.id);
         
-        await saveDocument('brooks_estimates', estimate);
+        // Optimistic Save
+        handleSaveItem(setEstimates, estimate, 'brooks_estimates');
         
         if (estimate.status === 'Sent') updateLinkedInquiryStatus(estimate.id, 'Sent');
         
@@ -77,7 +102,7 @@ export const useWorkshopActions = () => {
                 linkedEstimateId: estimate.id,
                 actionNotes: 'Auto-generated from workshop.',
             };
-            await saveDocument('brooks_inquiries', newInquiry);
+            handleSaveItem(setInquiries, newInquiry, 'brooks_inquiries');
             
             setConfirmation({ isOpen: true, title: 'Sent to Inquiries', message: `Supplementary Estimate #${estimate.estimateNumber} has been created and sent to the Inquiries queue for review.`, type: 'success' });
         }
@@ -89,14 +114,15 @@ export const useWorkshopActions = () => {
             createdByUserId: po.createdByUserId || currentUser.id
         };
 
+        // Optimistic Save PO
+        handleSaveItem(setPurchaseOrders, poToSave, 'brooks_purchaseOrders');
+
         // Update parts pricing if updates are included in the payload
         if (po.partUpdates && po.partUpdates.length > 0) {
             for (const part of po.partUpdates) {
-                await saveDocument('brooks_parts', part);
+                handleSaveItem(setParts, part, 'brooks_parts');
             }
         }
-
-        await saveDocument('brooks_purchaseOrders', poToSave);
 
         if (po.jobId) {
             const job = jobs.find(j => j.id === po.jobId);
@@ -117,13 +143,12 @@ export const useWorkshopActions = () => {
                 const needsIdLink = !job.purchaseOrderIds?.includes(po.id);
                 if (newPartsStatus !== job.partsStatus || needsIdLink) {
                     const updatedJob = { ...job, partsStatus: newPartsStatus, purchaseOrderIds: needsIdLink ? [...(job.purchaseOrderIds || []), po.id] : job.purchaseOrderIds };
-                    await saveDocument('brooks_jobs', updatedJob);
+                    handleSaveItem(setJobs, updatedJob, 'brooks_jobs');
                 }
             }
         }
         
         // Auto-close inquiries if parts ordered
-        // Logic simplified for async
         inquiries.forEach(async (inq) => {
             const isLinkedToPO = inq.linkedPurchaseOrderIds?.includes(po.id);
             if (isLinkedToPO) {
@@ -133,11 +158,12 @@ export const useWorkshopActions = () => {
                 const allOrderedOrBetter = allInqPos.every(p => ['Ordered', 'Partially Received', 'Received'].includes(p.status));
                 
                 if (allOrderedOrBetter && inq.status !== 'Closed') {
-                     await saveDocument('brooks_inquiries', { 
+                     const updatedInquiry = { 
                          ...inq, 
-                         status: 'Closed', 
+                         status: 'Closed' as const, 
                          actionNotes: (inq.actionNotes || '') + `\n[System]: All parts ordered. Inquiry closed.` 
-                     });
+                     };
+                     handleSaveItem(setInquiries, updatedInquiry, 'brooks_inquiries');
                 }
             }
         });
@@ -194,7 +220,7 @@ export const useWorkshopActions = () => {
                              createdByUserId: currentUser.id,
                              lineItems: items.map(item => ({ id: crypto.randomUUID(), partNumber: item.partNumber, description: item.description, quantity: item.quantity, receivedQuantity: 0, unitPrice: item.unitCost || 0, taxCodeId: item.taxCodeId }))
                          };
-                         await saveDocument('brooks_purchaseOrders', newPO);
+                         handleSaveItem(setPurchaseOrders, newPO, 'brooks_purchaseOrders');
                          newPurchaseOrderIds.push(newPOId);
                      }
                  }
@@ -213,7 +239,7 @@ export const useWorkshopActions = () => {
                      const mainEstimate = estimates.find(e => e.id === existingJob.estimateId);
                      if (mainEstimate) {
                          const mergedItems = [...(mainEstimate.lineItems || []), ...approvedLineItems];
-                         await saveDocument('brooks_estimates', { ...mainEstimate, lineItems: mergedItems });
+                         handleSaveItem(setEstimates, { ...mainEstimate, lineItems: mergedItems }, 'brooks_estimates');
                          updatedEstimate.notes = (updatedEstimate.notes || '') + ' [Merged into Job Estimate]';
                      }
                  } else if (!existingJob.estimateId) {
@@ -221,18 +247,19 @@ export const useWorkshopActions = () => {
                  }
                  
                  if (Object.keys(jobUpdates).length > 0) {
-                     await saveDocument('brooks_jobs', { ...existingJob, ...jobUpdates });
+                     handleSaveItem(setJobs, { ...existingJob, ...jobUpdates }, 'brooks_jobs');
                  }
 
                  // Update Inquiry
                  const existingInquiry = inquiries.find(i => i.linkedEstimateId === estimate.id);
                  if (existingInquiry) {
-                     await saveDocument('brooks_inquiries', { 
+                     const updatedInquiry = { 
                          ...existingInquiry, 
-                         status: 'Approved', 
+                         status: 'Approved' as const, 
                          linkedPurchaseOrderIds: [...(existingInquiry.linkedPurchaseOrderIds || []), ...newPurchaseOrderIds], 
                          actionNotes: (existingInquiry.actionNotes || '') + '\n[System]: Supplementary Estimate Approved. Parts ordered/work authorized.' 
-                     });
+                     };
+                     handleSaveItem(setInquiries, updatedInquiry, 'brooks_inquiries');
                  }
 
                  updatedEstimate.status = 'Closed'; 
@@ -265,27 +292,28 @@ export const useWorkshopActions = () => {
                      const newPOId = await generateSequenceId('944', entityShortCode);
                      const vehicle = vehicles.find(v => v.id === estimate.vehicleId);
                      const newPO: T.PurchaseOrder = { id: newPOId, entityId: estimate.entityId, supplierId: supplierId === 'no_supplier' ? null : supplierId, vehicleRegistrationRef: vehicle?.registration || 'N/A', orderDate: formatDate(new Date()), status: 'Draft', jobId: newJobId, createdByUserId: currentUser.id, lineItems: items.map(item => ({ id: crypto.randomUUID(), partNumber: item.partNumber, description: item.description, quantity: item.quantity, receivedQuantity: 0, unitPrice: item.unitCost || 0, taxCodeId: item.taxCodeId })) };
-                     await saveDocument('brooks_purchaseOrders', newPO);
+                     handleSaveItem(setPurchaseOrders, newPO, 'brooks_purchaseOrders');
                      newPurchaseOrderIds.push(newPOId);
                  }
                  
                  const newJob: T.Job = { id: newJobId, entityId: estimate.entityId, vehicleId: estimate.vehicleId, customerId: estimate.customerId, description: `Work from Est #${estimate.estimateNumber}`, estimatedHours: Math.max(1, totalHours), scheduledDate: scheduledDate, status: 'Unallocated', createdAt: formatDate(new Date()), createdByUserId: currentUser.id, segments: [], estimateId: estimate.id, notes: notes || estimate.notes, vehicleStatus: 'Awaiting Arrival', partsStatus: newPurchaseOrderIds.length > 0 ? 'Awaiting Order' : 'Not Required', purchaseOrderIds: newPurchaseOrderIds.length > 0 ? newPurchaseOrderIds : undefined };
                  newJob.segments = splitJobIntoSegments(newJob);
                  
-                 await saveDocument('brooks_jobs', newJob);
+                 handleSaveItem(setJobs, newJob, 'brooks_jobs');
                  
                  updatedEstimate = { ...updatedEstimate, status: 'Converted to Job', jobId: newJob.id };
                  
                  const existingInquiry = inquiries.find(i => i.linkedEstimateId === estimate.id);
                  if (existingInquiry) {
                       const status = newPurchaseOrderIds.length > 0 ? 'Approved' : 'Closed';
-                      await saveDocument('brooks_inquiries', { 
+                      const updatedInquiry = { 
                           ...existingInquiry, 
                           status: status as any, 
                           linkedJobId: newJob.id, 
                           linkedPurchaseOrderIds: [...(existingInquiry.linkedPurchaseOrderIds || []), ...newPurchaseOrderIds], 
                           actionNotes: (existingInquiry.actionNotes || '') + `\n[System]: Job Scheduled.` 
-                      });
+                      };
+                      handleSaveItem(setInquiries, updatedInquiry, 'brooks_inquiries');
                  }
                  setConfirmation({ isOpen: true, title: 'Job Created', message: `Job #${newJob.id} created for ${scheduledDate}.`, type: 'success' });
              } else {
@@ -294,7 +322,7 @@ export const useWorkshopActions = () => {
                  const newJobId = await generateSequenceId('992', entityShortCode);
                  const newJob: T.Job = { id: newJobId, entityId: estimate.entityId, vehicleId: estimate.vehicleId, customerId: estimate.customerId, description: `Work from Est #${estimate.estimateNumber}`, estimatedHours: Math.max(1, totalHours), scheduledDate: scheduledDate, status: 'Unallocated', createdAt: formatDate(new Date()), createdByUserId: currentUser.id, segments: [], estimateId: estimate.id, notes: notes || estimate.notes, vehicleStatus: 'Awaiting Arrival', partsStatus: 'Not Required', purchaseOrderIds: undefined };
                  newJob.segments = splitJobIntoSegments(newJob);
-                 await saveDocument('brooks_jobs', newJob);
+                 handleSaveItem(setJobs, newJob, 'brooks_jobs');
                  updatedEstimate = { ...updatedEstimate, status: 'Converted to Job', jobId: newJobId };
                  setConfirmation({ isOpen: true, title: 'Job Created', message: `Job #${newJobId} created for ${scheduledDate}.`, type: 'success' });
              }
@@ -302,7 +330,7 @@ export const useWorkshopActions = () => {
              setConfirmation({ isOpen: true, title: 'Estimate Approved', message: 'Estimate has been marked as approved.', type: 'success' });
              updateLinkedInquiryStatus(estimate.id, 'Approved');
         }
-        await saveDocument('brooks_estimates', updatedEstimate);
+        handleSaveItem(setEstimates, updatedEstimate, 'brooks_estimates');
     };
 
     const handleUpdateSegmentStatus = async (jobId: string, segmentId: string, newStatus: T.JobSegment['status'], extraUpdates: Partial<T.JobSegment> = {}) => {
@@ -310,7 +338,7 @@ export const useWorkshopActions = () => {
         if (job) {
             const newSegments = job.segments.map(s => s.segmentId === segmentId ? { ...s, status: newStatus, ...extraUpdates } : s);
             const updatedJob = { ...job, segments: newSegments, status: calculateJobStatus(newSegments) };
-            await saveDocument('brooks_jobs', updatedJob);
+            handleSaveItem(setJobs, updatedJob, 'brooks_jobs');
         }
     };
 
@@ -319,7 +347,7 @@ export const useWorkshopActions = () => {
         if (job) {
             const newSegments = job.segments.map(s => s.status === 'Engineer Complete' ? { ...s, status: 'QC Complete' as const, qcCompletedAt: new Date().toISOString(), qcCompletedByUserId: currentUser.id } : s);
             const updatedJob = { ...job, segments: newSegments, status: 'Complete' as const };
-            await saveDocument('brooks_jobs', updatedJob);
+            handleSaveItem(setJobs, updatedJob, 'brooks_jobs');
         }
     };
 
@@ -327,7 +355,7 @@ export const useWorkshopActions = () => {
         const job = jobs.find(j => j.id === jobId);
         if (job) {
             const newSegments = job.segments.map(s => s.segmentId === segmentId ? { ...s, engineerId: newEngineerId } : s);
-            await saveDocument('brooks_jobs', { ...job, segments: newSegments });
+            handleSaveItem(setJobs, { ...job, segments: newSegments }, 'brooks_jobs');
         }
     };
 
@@ -336,7 +364,7 @@ export const useWorkshopActions = () => {
         if (job) {
             const newSegments = job.segments.map(s => s.segmentId === segmentId ? { ...s, status: 'Unallocated' as const, allocatedLift: null, scheduledStartSegment: null, engineerId: null } : s);
             const updatedJob = { ...job, segments: newSegments, status: calculateJobStatus(newSegments) };
-            await saveDocument('brooks_jobs', updatedJob);
+            handleSaveItem(setJobs, updatedJob, 'brooks_jobs');
         }
     };
 

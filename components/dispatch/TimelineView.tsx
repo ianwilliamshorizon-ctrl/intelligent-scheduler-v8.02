@@ -57,19 +57,13 @@ export const TimelineView: React.FC<TimelineViewProps> = (props) => {
     const { jobs, lifts, engineers, customers, vehicles, purchaseOrders } = useData();
     const { currentUser, selectedEntityId } = useApp();
 
-    // FIXED: Apply sorting logic here because this is where the timeline draws its columns
     const entityLifts = useMemo(() => {
         return lifts
             .filter(l => selectedEntityId === 'all' || l.entityId === selectedEntityId)
             .sort((a, b) => {
-                // Take first 7 chars to handle "Lift 1" vs "Lift 10" while ignoring "/ MOT"
                 const nameA = (a.name || '').substring(0, 7).trim();
                 const nameB = (b.name || '').substring(0, 7).trim();
-                
-                return nameA.localeCompare(nameB, undefined, { 
-                    numeric: true, 
-                    sensitivity: 'base' 
-                });
+                return nameA.localeCompare(nameB, undefined, { numeric: true, sensitivity: 'base' });
             });
     }, [lifts, selectedEntityId]);
 
@@ -83,6 +77,7 @@ export const TimelineView: React.FC<TimelineViewProps> = (props) => {
     
     return (
         <div className="flex-grow flex p-4 gap-4 min-h-0">
+            {/* UNALLOCATED COLUMN */}
              <div
                 className="w-80 flex-shrink-0 flex flex-col bg-gray-100 rounded-lg shadow-inner unallocated-drop-zone min-h-0"
                 onDragOver={onDragOverUnallocated}
@@ -93,7 +88,7 @@ export const TimelineView: React.FC<TimelineViewProps> = (props) => {
                  <div className="p-3 border-b">
                     <div className="flex justify-between items-center mb-2">
                         <h3 className="font-bold text-gray-800">Unallocated Jobs</h3>
-                        <span className="flex items-center gap-1.5 text-sm font-semibold text-gray-600 bg-gray-200 px-2 py-1 rounded-full" title="Total hours for filtered unallocated jobs">
+                        <span className="flex items-center gap-1.5 text-sm font-semibold text-gray-600 bg-gray-200 px-2 py-1 rounded-full" title="Total hours">
                             <Clock size={14} />
                             {totalUnallocatedHours.toFixed(1)}h
                         </span>
@@ -141,9 +136,9 @@ export const TimelineView: React.FC<TimelineViewProps> = (props) => {
                     ))}
                 </div>
             </div>
-            <div
-                className="flex-grow flex bg-white rounded-lg shadow-md overflow-auto min-w-0"
-            >
+
+            {/* TIMELINE SECTION */}
+            <div className="flex-grow flex bg-white rounded-lg shadow-md overflow-auto min-w-0">
                 <div className="flex-shrink-0 border-r flex flex-col bg-white sticky left-0 z-20">
                     <h4 className="flex items-center justify-center font-bold p-2 border-b sticky top-0 bg-white z-30 text-transparent select-none h-16">&nbsp;</h4>
                     {TIME_SEGMENTS.map(time => <div key={time} className="flex-1 text-xs text-right pr-2 text-gray-500 border-b flex items-center justify-end">{time}</div>)}
@@ -164,17 +159,15 @@ export const TimelineView: React.FC<TimelineViewProps> = (props) => {
                                 {TIME_SEGMENTS.map((_, index) => <div key={index} className="flex-1 border-b border-gray-200"></div>)}
                                 {allocatedSegments?.map(segment => {
                                     const job = jobs.find(j => j.id === segment.parentJobId);
-                                    const vehicle = job ? vehiclesById.get(job.vehicleId) : undefined;
-                                    const engineer = segment.engineerId ? engineersById.get(segment.engineerId) : undefined;
-                                    const customer = job ? customersById.get(job.customerId) : undefined;
                                     if (!job) return null;
+                                    
                                     return <AllocatedJobCard 
                                         key={segment.segmentId}
                                         job={job}
                                         segment={segment}
-                                        vehicle={vehicle}
-                                        customer={customer}
-                                        engineer={engineer}
+                                        vehicle={vehiclesById.get(job.vehicleId)}
+                                        customer={customersById.get(job.customerId)}
+                                        engineer={segment.engineerId ? engineersById.get(segment.engineerId) : undefined}
                                         purchaseOrders={purchaseOrders}
                                         onDragStart={onDragStart}
                                         onDragEnd={onDragEnd}
@@ -186,6 +179,7 @@ export const TimelineView: React.FC<TimelineViewProps> = (props) => {
                                         onUnscheduleSegment={onUnscheduleSegment}
                                         currentUser={currentUser}
                                         onOpenAssistant={onOpenAssistant}
+                                        onCheckIn={onCheckIn}
                                     />;
                                 })}
                             </div>

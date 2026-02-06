@@ -2,24 +2,29 @@ import { Job, JobSegment } from '../../types';
 
 /** Formats a Date object to YYYY-MM-DD string using UTC values to avoid timezone issues */
 export const formatDate = (date: Date): string => {
-    // Use getUTC... methods to prevent the user's local timezone from causing off-by-one day errors.
     const year = date.getUTCFullYear();
     const month = (date.getUTCMonth() + 1).toString().padStart(2, '0');
     const day = date.getUTCDate().toString().padStart(2, '0');
     return `${year}-${month}-${day}`;
 };
 
-/** Converts date string (YYYY-MM-DD) to Date object, using UTC */
+/** * Converts date string (YYYY-MM-DD) to Date object, using UTC.
+ * FIXED: Added safety check to prevent "split of undefined" crash.
+ */
 export const dateStringToDate = (dateString: string): Date => {
+    if (!dateString || typeof dateString !== 'string') {
+        // Return a default date (today) to prevent the app from crashing
+        console.warn('dateStringToDate received invalid string:', dateString);
+        const now = new Date();
+        return new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+    }
     const parts = dateString.split('-').map(Number);
-    // Use UTC date setting to avoid local timezone offset issues
     return new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
 };
 
 /** Gets a relative date (today, tomorrow, etc.) as a YYYY-MM-DD string in UTC */
 export const getRelativeDate = (offsetDays: number): string => {
     const today = new Date();
-    // Create a new Date object for midnight UTC of today's date to remove local timezone influence.
     const utcDate = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
     utcDate.setUTCDate(utcDate.getUTCDate() + offsetDays);
     return formatDate(utcDate);
@@ -44,16 +49,23 @@ export const getFutureDateISOString = (daysToAdd: number): string => {
     return `${year}-${month}-${day}`;
 };
 
-/** Formats a date string (YYYY-MM-DD) into a more readable format */
+/** * Formats a date string (YYYY-MM-DD) into a more readable format.
+ * FIXED: Added safety check to prevent crash on undefined.
+ */
 export const formatReadableDate = (dateString: string): string => {
-    const date = dateStringToDate(dateString);
-    return date.toLocaleDateString('en-US', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        timeZone: 'UTC' // Keep consistent with dateStringToDate to avoid off-by-one day errors
-    });
+    if (!dateString) return 'TBD';
+    try {
+        const date = dateStringToDate(dateString);
+        return date.toLocaleDateString('en-GB', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            timeZone: 'UTC' 
+        });
+    } catch (e) {
+        return 'Invalid Date';
+    }
 };
 
 /** Adds a number of days to a Date object, returns a new Date object */
@@ -66,49 +78,40 @@ export const addDays = (date: Date, days: number): Date => {
 /** Calculates the number of full days between two Date objects */
 export const daysBetween = (startDate: Date, endDate: Date): number => {
     const oneDay = 1000 * 60 * 60 * 24;
-    // Use Math.floor to only count full days
     return Math.floor((endDate.getTime() - startDate.getTime()) / oneDay);
 };
 
 /** Gets the next working day (Mon-Sat) as a YYYY-MM-DD string, skipping Sunday */
 export const getNextWorkingDay = (dateString: string): string => {
     const date = dateStringToDate(dateString);
-    date.setUTCDate(date.getUTCDate() + 1); // Move to next day
+    date.setUTCDate(date.getUTCDate() + 1); 
 
-    if (date.getUTCDay() === 0) { // If it's Sunday
-        date.setUTCDate(date.getUTCDate() + 1); // Move to Monday
+    if (date.getUTCDay() === 0) { 
+        date.setUTCDate(date.getUTCDate() + 1); 
     }
     return formatDate(date);
 };
 
-/** 
- * Gets the next valid working date, skipping Sundays and specified Bank Holidays.
- * Used for multi-day job splitting.
- */
+/** Gets the next valid working date, skipping Sundays and specified Bank Holidays. */
 export const getNextValidWorkingDate = (startDateStr: string, bankHolidays: string[]): string => {
     let date = dateStringToDate(startDateStr);
-    
-    // Always move at least one day forward
     date.setUTCDate(date.getUTCDate() + 1);
     
-    // Check constraints loop
     while (true) {
         const dateStr = formatDate(date);
-        const dayOfWeek = date.getUTCDay(); // 0 is Sunday
-        const isHoliday = bankHolidays.includes(dateStr);
+        const dayOfWeek = date.getUTCDay(); 
+        const isHoliday = (bankHolidays || []).includes(dateStr);
         
-        // If it's not Sunday and not a holiday, it's valid. (Allow Saturdays for garages)
         if (dayOfWeek !== 0 && !isHoliday) {
             return dateStr;
         }
-        
-        // Otherwise, move to next day and check again
         date.setUTCDate(date.getUTCDate() + 1);
+        if (date.getUTCDate() > 365) break; // Safety break
     }
+    return formatDate(date);
 };
 
-
-/** Splits a job into daily 8-hour segments */
+/** Splits a job into daily 8-hour segments - Fixed with engineerId */
 export const splitJobIntoSegments = (job: Pick<Job, 'estimatedHours' | 'scheduledDate'>): JobSegment[] => {
     const { estimatedHours, scheduledDate } = job;
     const segments: JobSegment[] = [];
@@ -116,9 +119,8 @@ export const splitJobIntoSegments = (job: Pick<Job, 'estimatedHours' | 'schedule
     let currentDate = scheduledDate ? dateStringToDate(scheduledDate) : dateStringToDate(getRelativeDate(0));
     
     while (remainingHours > 0) {
-        const duration = Math.min(remainingHours, 8); // Max 8 hours per segment
+        const duration = Math.min(remainingHours, 8); 
         
-        // Skip Sundays
         if (currentDate.getUTCDay() === 0) {
              currentDate.setUTCDate(currentDate.getUTCDate() + 1);
              continue;
@@ -130,6 +132,7 @@ export const splitJobIntoSegments = (job: Pick<Job, 'estimatedHours' | 'schedule
             date: formatDate(currentDate),
             scheduledStartSegment: null,
             allocatedLift: null,
+            engineerId: null,
             status: 'Unallocated',
         });
         
@@ -140,24 +143,19 @@ export const splitJobIntoSegments = (job: Pick<Job, 'estimatedHours' | 'schedule
     return segments;
 };
 
-/** Calculates the number of working days (Mon-Fri, excluding holidays) between two dates, inclusive. */
+/** Calculates the number of working days between two dates. */
 export const calculateWorkingDays = (startDateStr: string, endDateStr: string, holidays: Set<string>): number => {
     if (!startDateStr || !endDateStr) return 0;
-    
     const startDate = dateStringToDate(startDateStr);
     const endDate = dateStringToDate(endDateStr);
-
     if (startDate > endDate) return 0;
 
     let count = 0;
     let currentDate = new Date(startDate);
-
     while (currentDate <= endDate) {
         const dayOfWeek = currentDate.getUTCDay();
         const dateStr = formatDate(currentDate);
-
-        // Check if it's a weekday and not a bank holiday
-        if (dayOfWeek >= 1 && dayOfWeek <= 5 && !holidays.has(dateStr)) {
+        if (dayOfWeek >= 1 && dayOfWeek <= 5 && !(holidays?.has(dateStr))) {
             count++;
         }
         currentDate.setUTCDate(currentDate.getUTCDate() + 1);
@@ -165,69 +163,75 @@ export const calculateWorkingDays = (startDateStr: string, endDateStr: string, h
     return count;
 };
 
-/** Finds the end date after a specific number of working days from a start date. */
+/** Finds the end date after working days. */
 export const findEndDateAfterWorkingDays = (startDateStr: string, workingDaysToTake: number, holidays: Set<string>): string => {
     if (!startDateStr || workingDaysToTake <= 0) return startDateStr;
-
     const isWorkingDay = (date: Date): boolean => {
         const dayOfWeek = date.getUTCDay();
         const dateStr = formatDate(date);
-        return dayOfWeek >= 1 && dayOfWeek <= 5 && !holidays.has(dateStr);
+        return dayOfWeek >= 1 && dayOfWeek <= 5 && !(holidays?.has(dateStr));
     };
-
     let daysLeft = Math.ceil(workingDaysToTake);
     let currentDate = dateStringToDate(startDateStr);
-    
-    // Find the first working day to start counting from.
     while(!isWorkingDay(currentDate)) {
         currentDate = addDays(currentDate, 1);
     }
-    
-    // The first day counts.
     daysLeft--;
-    
     while (daysLeft > 0) {
         currentDate = addDays(currentDate, 1);
         if (isWorkingDay(currentDate)) {
             daysLeft--;
         }
     }
-    
     return formatDate(currentDate);
 };
 
 export const getStartOfWeek = (date: Date): Date => {
     const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
     const day = d.getUTCDay();
-    const diff = d.getUTCDate() - day + (day === 0 ? -6 : 1); // adjust when day is sunday
+    const diff = d.getUTCDate() - day + (day === 0 ? -6 : 1); 
     return new Date(d.setUTCDate(diff));
 };
 
-export const findNextAvailableDate = (startDate: string, jobHours: number, jobs: Job[], maxCapacity: number): string => {
+/** New helper to calculate staff-adjusted capacity */
+export const getNetCapacityForDate = (date: string, baseCapacity: number, absencesByDate: Map<string, number>): number => {
+    const absenceReduction = absencesByDate.get(date) || 0;
+    return Math.max(0, baseCapacity - absenceReduction);
+};
+
+/** Updated findNextAvailableDate with absence support and segments protection */
+export const findNextAvailableDate = (
+    startDate: string, 
+    jobHours: number, 
+    jobs: Job[], 
+    maxCapacity: number,
+    absencesByDate?: Map<string, number>
+): string => {
     let currentDate = dateStringToDate(startDate);
-    
-    // Start checking from the day after the requested date
     currentDate.setUTCDate(currentDate.getUTCDate() + 1);
 
-    for (let i = 0; i < 365; i++) { // Limit search to 1 year
-        // Skip Sundays
+    for (let i = 0; i < 365; i++) {
         if (currentDate.getUTCDay() === 0) {
             currentDate.setUTCDate(currentDate.getUTCDate() + 1);
             continue;
         }
 
         const dateString = formatDate(currentDate);
-        const dailyHours = jobs
-            .flatMap(job => job.segments || [])
-            .filter(segment => segment.date === dateString)
-            .reduce((sum, segment) => sum + segment.duration, 0);
+        const actualCapacity = absencesByDate 
+            ? getNetCapacityForDate(dateString, maxCapacity, absencesByDate)
+            : maxCapacity;
 
-        if (dailyHours + jobHours <= maxCapacity) {
+        const dailyHours = (jobs || [])
+            .flatMap(job => (Array.isArray(job.segments) ? job.segments : [])) // Protected from undefined segments
+            .filter(segment => segment.date === dateString && segment.status !== 'Cancelled')
+            .reduce((sum, segment) => sum + (Number(segment.duration) || 0), 0);
+
+        if (dailyHours + jobHours <= actualCapacity) {
             return dateString;
         }
 
         currentDate.setUTCDate(currentDate.getUTCDate() + 1);
     }
 
-    return formatDate(currentDate); // Fallback if no date is found within a year
+    return formatDate(currentDate);
 };

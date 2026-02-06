@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Job, JobSegment, Vehicle, Customer, Engineer, PurchaseOrder, User } from '../../types';
 import { Package as PackageIcon, KeyRound, PauseCircle, PlayCircle, UserCog, Trash2, Wand2, Edit } from 'lucide-react';
@@ -16,6 +15,7 @@ export const AllocatedJobCard: React.FC<{
     onDragStart: (e: React.DragEvent, parentJobId: string, segmentId: string) => void;
     onDragEnd: (e: React.DragEvent) => void;
     onEdit: (jobId: string) => void;
+    onStartWork: (jobId: string, segmentId: string) => void;
     onPause: (jobId: string, segmentId: string) => void;
     onRestart: (jobId: string, segmentId: string) => void;
     onReassign: (jobId: string, segmentId: string) => void;
@@ -23,20 +23,21 @@ export const AllocatedJobCard: React.FC<{
     onUnscheduleSegment: (jobId: string, segmentId: string) => void;
     currentUser: User;
     onOpenAssistant: (jobId: string) => void;
-}> = ({ job, segment, vehicle, customer, engineer, purchaseOrders, onDragStart, onDragEnd, onEdit, onPause, onRestart, onReassign, onOpenPurchaseOrder, onUnscheduleSegment, currentUser, onOpenAssistant }) => {
+}> = ({ job, segment, vehicle, customer, engineer, purchaseOrders, onDragStart, onDragEnd, onEdit, onStartWork, onPause, onRestart, onReassign, onOpenPurchaseOrder, onUnscheduleSegment, currentUser, onOpenAssistant }) => {
     
     // Calculate precise height percentage based on grid size
     const segments = segment.duration * (60 / SEGMENT_DURATION_MINUTES);
     
     // Visual Clamping: Ensure the card doesn't visually overflow the bottom of the grid
-    // This helps if there's a slight mismatch in calculation or floating point error
     const maxSegmentsAvailable = TIME_SEGMENTS.length - (segment.scheduledStartSegment || 0);
     const segmentsToRender = Math.min(segments, maxSegmentsAvailable);
     
-    const topPercent = (segment.scheduledStartSegment || 0) * (100 / TIME_SEGMENTS.length);
-    const heightPercent = segmentsToRender * (100 / TIME_SEGMENTS.length);
+    const topPercent = (segment.scheduledStartSegment || 0) * (100 / Math.max(1, TIME_SEGMENTS.length));
+    const heightPercent = segmentsToRender * (100 / Math.max(1, TIME_SEGMENTS.length));
 
-    const associatedPOs = (job.purchaseOrderIds || []).map(id => purchaseOrders.find(po => po.id === id)).filter(Boolean) as PurchaseOrder[];
+    // Safe access to purchase orders
+    const associatedPOs = (job.purchaseOrderIds || []).map(id => (purchaseOrders || []).find(po => po.id === id)).filter(Boolean) as PurchaseOrder[];
+    
     const [isPoMenuOpen, setIsPoMenuOpen] = useState(false);
     const poMenuRef = useRef<HTMLDivElement>(null);
     const canDrag = currentUser.role === 'Admin' || currentUser.role === 'Dispatcher';
@@ -58,6 +59,17 @@ export const AllocatedJobCard: React.FC<{
     if (segment.status === 'QC Complete') statusColor = 'bg-green-500';
     if (segment.status === 'Paused') statusColor = 'bg-red-500';
 
+    const canStartOrPause = (currentUser.role === 'Engineer' && engineer?.id === currentUser.engineerId) || currentUser.role === 'Admin' || currentUser.role === 'Dispatcher';
+
+    const handleAction = (e: React.MouseEvent, action: () => void) => {
+        e.stopPropagation();
+        try {
+            action();
+        } catch (err) {
+            console.error("Action failed", err);
+        }
+    };
+
     return (
         <div
             draggable={canDrag}
@@ -67,13 +79,16 @@ export const AllocatedJobCard: React.FC<{
             style={{
                 top: `${topPercent}%`,
                 height: `${heightPercent}%`,
-                minHeight: '40px', // Reduced min-height to allow smaller segments
+                minHeight: '40px', 
             }}
             title={`${job.description}\nAssigned to: ${engineer?.name || (segment.engineerId ? 'Unknown' : 'Unassigned')}`}
         >
             <div className="flex justify-between items-start text-xs flex-shrink-0">
-                <span className="font-bold truncate">{vehicle?.registration || 'Unknown Vehicle'}</span>
-                <div className="flex items-center gap-1">
+                <div className="flex flex-col min-w-0 pr-1">
+                    <span className="font-bold truncate">{vehicle?.registration || 'Unknown Vehicle'}</span>
+                    <span className="text-[9px] font-mono opacity-90 truncate">#{job.id}</span>
+                </div>
+                <div className="flex items-center gap-1 flex-shrink-0">
                     {associatedPOs && associatedPOs.length > 0 && (
                         <div className="relative" ref={poMenuRef}>
                             <button
@@ -89,7 +104,7 @@ export const AllocatedJobCard: React.FC<{
                                     {associatedPOs.map(po => (
                                         <button 
                                             key={po.id} 
-                                            onClick={(e) => { e.stopPropagation(); onOpenPurchaseOrder(po); setIsPoMenuOpen(false); }} 
+                                            onClick={(e) => handleAction(e, () => { onOpenPurchaseOrder(po); setIsPoMenuOpen(false); })} 
                                             className="w-full text-left p-1.5 text-xs hover:bg-indigo-50 font-mono flex justify-between items-center"
                                         >
                                             <span>{po.id}</span>
@@ -109,18 +124,26 @@ export const AllocatedJobCard: React.FC<{
             <div className="flex-grow overflow-hidden my-0.5 min-h-0">
                  <p className="text-xs font-semibold truncate leading-tight">{job.description}</p>
                  <p className="text-[10px] truncate leading-tight opacity-80" title={getCustomerDisplayName(customer)}>{getCustomerDisplayName(customer)}</p>
-                 <p className="font-mono text-[10px] text-black bg-gray-300 px-1.5 py-0.5 rounded-sm self-start leading-tight">#{job.id}</p>
             </div>
             
             <div className="flex justify-between items-end text-xs mt-auto pt-1 border-t border-white/20 flex-shrink-0">
                 <span className="font-semibold truncate max-w-[60px]">{engineer?.name || (segment.engineerId ? 'Unknown' : 'Unassigned')}</span>
                  <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                    {segment.status === 'In Progress' && <button onClick={(e) => { e.stopPropagation(); onPause(job.id, segment.segmentId);}} title="Pause Job" className="p-1 rounded bg-white/20 hover:bg-white/40 text-white"><PauseCircle size={14} /></button>}
-                    {segment.status === 'Paused' && <button onClick={(e) => { e.stopPropagation(); onRestart(job.id, segment.segmentId);}} title="Restart Job" className="p-1 rounded bg-white/20 hover:bg-white/40 text-white"><PlayCircle size={14} /></button>}
+                    {canStartOrPause && segment.status === 'Allocated' && <button onClick={(e) => handleAction(e, () => onStartWork(job.id, segment.segmentId))} title="Start Job" className="p-1 rounded bg-white/20 hover:bg-white/40 text-white"><PlayCircle size={14} /></button>}
+                    {canStartOrPause && segment.status === 'In Progress' && <button onClick={(e) => handleAction(e, () => onPause(job.id, segment.segmentId))} title="Pause Job" className="p-1 rounded bg-white/20 hover:bg-white/40 text-white"><PauseCircle size={14} /></button>}
+                    {canStartOrPause && segment.status === 'Paused' && <button onClick={(e) => handleAction(e, () => onRestart(job.id, segment.segmentId))} title="Restart Job" className="p-1 rounded bg-white/20 hover:bg-white/40 text-white"><PlayCircle size={14} /></button>}
                     
+                    <button 
+                        onClick={(e) => handleAction(e, () => onEdit(job.id))} 
+                        title="Edit Job" 
+                        className="p-1 rounded bg-white/20 hover:bg-white/40 text-white"
+                    >
+                        <Edit size={14} />
+                    </button>
+
                     {canDrag && (
                         <button 
-                            onClick={(e) => { e.stopPropagation(); onReassign(job.id, segment.segmentId); }} 
+                            onClick={(e) => handleAction(e, () => onReassign(job.id, segment.segmentId))} 
                             title="Re-assign Engineer" 
                             className="p-1 rounded bg-white/20 hover:bg-white/40 text-white"
                         >
@@ -129,16 +152,13 @@ export const AllocatedJobCard: React.FC<{
                     )}
                     {canUnschedule && (
                         <button 
-                            onClick={(e) => { e.stopPropagation(); onUnscheduleSegment(job.id, segment.segmentId); }} 
-                            title="Return to Unallocated Queue" 
-                            className="p-1 rounded bg-red-500/80 hover:bg-red-600 text-white"
+                            onClick={(e) => handleAction(e, () => onUnscheduleSegment(job.id, segment.segmentId))} 
+                            title="Unschedule (Move back to Unallocated)" 
+                            className="p-1 rounded bg-white/20 hover:bg-white/40 text-white hover:text-red-300"
                         >
                             <Trash2 size={14} />
                         </button>
                     )}
-                    
-                    <button onClick={(e) => { e.stopPropagation(); onOpenAssistant(job.id); }} className="p-1 rounded bg-white/20 hover:bg-white/40 text-white" title="Assistant"><Wand2 size={14} /></button>
-                    <button onClick={(e) => { e.stopPropagation(); onEdit(job.id);}} className="p-1 rounded bg-white/20 hover:bg-white/40 text-white" title="Edit"><Edit size={14} /></button>
                 </div>
             </div>
         </div>

@@ -1,6 +1,5 @@
 import React from 'react';
 import { Job, Vehicle, Customer, Estimate, BusinessEntity, Engineer, TaxRate } from '../types';
-import { formatCurrency } from '../utils/formatUtils';
 
 interface PrintableJobCardProps {
     job: Job;
@@ -13,110 +12,160 @@ interface PrintableJobCardProps {
 }
 
 const PrintableJobCard: React.FC<PrintableJobCardProps> = ({ job, vehicle, customer, estimates, entity, engineers, taxRates }) => {
-    const technicianIds = new Set(job.segments.map(s => s.engineerId).filter(Boolean));
-    const technicianNames = Array.from(technicianIds).map(id => engineers.find(e => e.id === id)?.name).filter(Boolean).join(', ');
+    
+    // 1. DATA RESOLUTION (The Fix)
+    // If 'customer' prop is missing or blank, we check the job object for any embedded data
+    // We strictly avoid "Walk-in" strings.
+    
+    const fName = customer?.forename || (job as any).customerForename || "";
+    const sName = customer?.surname || (job as any).customerSurname || "";
+    const customerFullName = `${fName} ${sName}`.trim();
+
+    // 2. BACKUP IDENTIFIER
+    // If there is absolutely no name, we show the Account ID (e.g., THOR0001) 
+    // This makes it obvious that the record is found but the name fields are empty.
+    const displayName = customerFullName || (job.customerId ? `ACCOUNT: ${job.customerId}` : "DATA MISSING");
+
+    // 3. TECHNICIAN RESOLUTION
+    const technicianIds = new Set(job.segments?.map(s => s.engineerId).filter(Boolean) || []);
+    const technicianNames = Array.from(technicianIds)
+        .map(id => engineers.find(e => e.id === id)?.name)
+        .filter(Boolean)
+        .join(', ');
 
     return (
         <div className="bg-white font-sans text-sm text-gray-800 printable-page" style={{ width: '210mm', minHeight: '297mm', padding: '10mm', boxSizing: 'border-box', display: 'flex', flexDirection: 'column' }}>
-            <header className="flex justify-between items-start pb-4 border-b mb-4">
+            
+            {/* BRANDING HEADER */}
+            <header className="flex justify-between items-start pb-4 border-b-2 border-gray-900 mb-6">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900">{entity?.name}</h1>
-                    <h2 className="text-xl font-semibold text-gray-700">Technician Job Sheet #{job.id}</h2>
+                    <h1 className="text-2xl font-black text-gray-900 uppercase tracking-tighter">{entity?.name || 'WORKSHOP'}</h1>
+                    <div className="flex items-center gap-2 mt-1">
+                        <span className="bg-indigo-600 text-white px-2 py-0.5 text-[10px] font-bold rounded uppercase">Technician Copy</span>
+                        <h2 className="text-lg font-bold text-gray-700 uppercase tracking-tight">Job Sheet #{job.id}</h2>
+                    </div>
                 </div>
                 <div className="text-right">
-                    <p>Date: {job.createdAt}</p>
-                    <p className="font-bold mt-2">Parts Status: {job.partsStatus || 'Not Required'}</p>
+                    <p className="text-[10px] font-bold text-gray-400 uppercase">Printed Date</p>
+                    <p className="font-bold">{new Date().toLocaleDateString('en-GB')}</p>
+                    <p className="text-[10px] font-bold text-gray-400 uppercase mt-2">Key Number</p>
+                    <p className="font-bold text-xl">{job.keyNumber || 'N/A'}</p>
                 </div>
             </header>
+
             <main className="flex-grow space-y-6">
-                <section className="grid grid-cols-2 gap-6">
-                    <div>
-                        <h3 className="text-xs font-semibold text-gray-500 uppercase">Customer</h3>
-                        <p className="font-bold text-gray-800">{customer?.forename} {customer?.surname}</p>
-                        <p className="text-xs">Tel: {customer?.phone || 'N/A'}</p>
-                        <p className="text-xs">Mobile: {customer?.mobile || 'N/A'}</p>
+                {/* CONTACT & VEHICLE INFO */}
+                <section className="grid grid-cols-2 gap-8">
+                    <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                        <h3 className="text-[10px] font-black text-gray-400 uppercase mb-2 tracking-widest">Customer Information</h3>
+                        <p className="text-lg font-black text-gray-900 uppercase">
+                            {displayName}
+                        </p>
+                        <div className="mt-2 text-xs space-y-1 text-gray-600">
+                            <p>{customer?.addressLine1 || "Address not provided"}</p>
+                            <p>{customer?.city} {customer?.postcode}</p>
+                            <div className="pt-2 mt-2 border-t border-gray-200 flex flex-col font-bold text-gray-900">
+                                <span>Tel: {customer?.mobile || customer?.phone || 'No Contact Number'}</span>
+                                <span className="text-indigo-600 font-normal">{customer?.email || 'No Email Recorded'}</span>
+                            </div>
+                        </div>
                     </div>
-                    <div>
-                        <h3 className="text-xs font-semibold text-gray-500 uppercase">Vehicle</h3>
-                        <p className="font-bold text-gray-800">{vehicle?.make} {vehicle?.model} (<span className="font-mono">{vehicle?.registration}</span>)</p>
+
+                    <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                        <h3 className="text-[10px] font-black text-gray-400 uppercase mb-2 tracking-widest">Vehicle Details</h3>
+                        <p className="text-lg font-black text-gray-900 uppercase">{vehicle?.make} {vehicle?.model || 'Unknown Vehicle'}</p>
+                        <div className="mt-2">
+                            <span className="bg-yellow-400 text-black px-4 py-1.5 rounded font-mono font-bold text-xl border-2 border-black shadow-sm inline-block">
+                                {vehicle?.registration || 'NO REG'}
+                            </span>
+                        </div>
+                        <div className="mt-4 grid grid-cols-2 text-[10px] font-mono text-gray-500 uppercase">
+                            <span>VIN: {vehicle?.vin?.slice(-8) || 'N/A'}</span>
+                            <span className="text-right">Color: {vehicle?.color || 'N/A'}</span>
+                        </div>
                     </div>
                 </section>
 
-                <section>
-                    <h3 className="font-semibold text-gray-800 p-2 bg-gray-100 border-b">Work Required: {job.description}</h3>
-                    <p className="p-2 text-gray-700 whitespace-pre-wrap">{job.notes || "No additional booking notes provided."}</p>
-                </section>
-                
-                {estimates && estimates.length > 0 ? (
-                     <section>
-                        <h3 className="font-semibold text-gray-800 p-2 bg-gray-100 border-b">Parts & Labour</h3>
-                        <div className="grid grid-cols-12 gap-2 text-xs font-semibold text-gray-500 px-1.5 py-1 border-b">
-                            <div className="col-span-2">Part No.</div>
-                            <div className="col-span-8">Description</div>
-                            <div className="col-span-1 text-right">Qty</div>
-                            <div className="col-span-1 text-center">Chk</div>
+                {/* JOB DESCRIPTION */}
+                <section className="border-2 border-gray-900 rounded-lg overflow-hidden">
+                    <div className="bg-gray-900 text-white px-4 py-2 flex justify-between items-center">
+                        <h3 className="text-xs font-bold uppercase tracking-widest">Primary Work Description</h3>
+                        <span className="text-[10px] uppercase font-bold text-gray-400">Hours: {job.estimatedHours || 0}h</span>
+                    </div>
+                    <div className="p-4 bg-white">
+                        <p className="text-lg font-bold text-gray-900 mb-2 underline decoration-indigo-500 underline-offset-4">{job.description}</p>
+                        <div className="p-3 bg-gray-50 rounded text-gray-800 whitespace-pre-wrap min-h-[60px] border border-gray-100 italic">
+                            {job.notes || "No booking notes provided."}
                         </div>
-                        {estimates.map(est => (
-                            <React.Fragment key={est.id}>
-                                {estimates.length > 1 && (
-                                    <div className="col-span-12 bg-gray-50 p-1 text-xs font-bold text-gray-700 border-b mt-2">
-                                        Source: Estimate #{est.estimateNumber}
-                                    </div>
+                    </div>
+                </section>
+
+                {/* PARTS & LABOUR CHECKLIST */}
+                <section>
+                    <h3 className="text-xs font-bold text-gray-400 uppercase mb-2 ml-1 text-center">Required Parts & Labour Items</h3>
+                    <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
+                        <table className="w-full text-left border-collapse">
+                            <thead className="bg-gray-50 text-[10px] uppercase text-gray-500 border-b">
+                                <tr>
+                                    <th className="px-4 py-2 w-1/4">Ref / Part No.</th>
+                                    <th className="px-4 py-2 w-1/2">Description</th>
+                                    <th className="px-4 py-2 text-right">Qty</th>
+                                    <th className="px-4 py-2 text-center w-16">Completed</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {estimates && estimates.length > 0 ? (
+                                    estimates.flatMap(est => (est.lineItems || []).map(item => (
+                                        <tr key={item.id} className="text-sm">
+                                            <td className="px-4 py-3 font-mono text-[10px] text-gray-400">{item.partNumber || (item.isLabor ? 'LABOUR' : 'PART')}</td>
+                                            <td className="px-4 py-3 text-gray-900 font-semibold">{item.description}</td>
+                                            <td className="px-4 py-3 text-right font-bold">{item.quantity}</td>
+                                            <td className="px-4 py-3">
+                                                <div className="w-5 h-5 border-2 border-gray-300 rounded mx-auto"></div>
+                                            </td>
+                                        </tr>
+                                    )))
+                                ) : (
+                                    <tr>
+                                        <td colSpan={4} className="px-4 py-10 text-center text-gray-400 italic">No line items linked to this job card.</td>
+                                    </tr>
                                 )}
-                                {(est.lineItems || []).map(item => (
-                                    <div key={item.id} className="grid grid-cols-12 gap-2 items-start p-1.5 border-b text-sm">
-                                        <div className="col-span-2 font-mono text-xs">{item.partNumber || (item.isLabor ? 'LABOR' : 'N/A')}</div>
-                                        <div className="col-span-8">{item.description}</div>
-                                        <div className="col-span-1 text-right">{item.quantity}</div>
-                                        <div className="col-span-1 border-l border-gray-300"></div>
-                                    </div>
-                                ))}
-                            </React.Fragment>
-                        ))}
-                    </section>
-                ) : (
-                    <section className="p-4 text-center text-gray-500 italic">
-                        No estimate items linked to this job.
-                    </section>
-                )}
-
-                <section>
-                    <h3 className="font-semibold text-gray-800 p-2 bg-gray-100 border-b">Vehicle Condition Report</h3>
-                    <div className="p-2 grid grid-cols-2 gap-4">
-                        <div>
-                            <p className="font-semibold">Mileage In</p>
-                            <p className="text-lg">{typeof job.mileage === 'number' ? `${job.mileage.toLocaleString()} miles` : 'N/A'}</p>
-                        </div>
-                        <div>
-                             <p className="font-semibold">Tyre Report (mm)</p>
-                             <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm mt-1">
-                                <span>Offside Front:</span> <span className="font-mono">{job.tyreDepths?.osf?.toFixed(1) || 'N/A'}</span>
-                                <span>Nearside Front:</span> <span className="font-mono">{job.tyreDepths?.nsf?.toFixed(1) || 'N/A'}</span>
-                                <span>Offside Rear:</span> <span className="font-mono">{job.tyreDepths?.osr?.toFixed(1) || 'N/A'}</span>
-                                <span>Nearside Rear:</span> <span className="font-mono">{job.tyreDepths?.nsr?.toFixed(1) || 'N/A'}</span>
-                             </div>
-                        </div>
+                            </tbody>
+                        </table>
                     </div>
                 </section>
-                
-                 <section className="flex-grow">
-                     <h3 className="font-semibold text-gray-800 p-2 bg-gray-100 border-b">Technician Observations & Notes</h3>
-                     <div className="p-2 min-h-[150px] border border-gray-200 rounded mt-2">
-                        {(job.technicianObservations && job.technicianObservations.length > 0) ? (
-                            <ul className="list-disc list-inside space-y-1 text-gray-700">
-                                {job.technicianObservations.map((obs, index) => <li key={index}>{obs}</li>)}
-                            </ul>
-                        ) : null}
-                     </div>
+
+                {/* TECHNICIAN OBSERVATIONS */}
+                <section className="flex-grow flex flex-col">
+                    <h3 className="text-xs font-bold text-gray-400 uppercase mb-2 ml-1">Technician Findings / Required Repairs</h3>
+                    <div className="flex-grow border-2 border-dashed border-gray-200 rounded-lg p-4 bg-gray-50/30">
+                        <div className="space-y-8 pt-4">
+                            <div className="border-b border-gray-200 pb-2 text-gray-300 text-[10px] uppercase">Notes / Observations:</div>
+                            <div className="border-b border-gray-100"></div>
+                            <div className="border-b border-gray-100"></div>
+                            <div className="border-b border-gray-100"></div>
+                        </div>
+                    </div>
                 </section>
             </main>
-            <footer className="mt-auto pt-4 border-t text-xs text-gray-500">
-                <div className="grid grid-cols-2 gap-8 mt-8">
-                    <div><p className="mb-8">Technician: {technicianNames || '_____________________'}</p><div className="border-t pt-1">Technician Signature</div></div>
-                    <div><p className="mb-8">Date: _______________</p><div className="border-t pt-1">QC Signature</div></div>
+
+            {/* FOOTER SIGN-OFF */}
+            <footer className="mt-8 pt-6 border-t-2 border-gray-900 text-[11px]">
+                <div className="grid grid-cols-2 gap-16">
+                    <div>
+                        <p className="mb-8 uppercase font-bold text-gray-400 tracking-widest">Lead Technician</p>
+                        <p className="mb-1 text-sm text-black font-black">{technicianNames || '________________'}</p>
+                        <div className="border-t border-black pt-1">Sign-off Signature</div>
+                    </div>
+                    <div className="text-right">
+                        <p className="mb-8 uppercase font-bold text-gray-400 tracking-widest">Quality Assurance / Date</p>
+                        <p className="mb-1 text-black font-bold">___ / ___ / 202___</p>
+                        <div className="border-t border-black pt-1 w-48 ml-auto">Manager Signature</div>
+                    </div>
                 </div>
             </footer>
         </div>
     );
 };
+
 export default PrintableJobCard;

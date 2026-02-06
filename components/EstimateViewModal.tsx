@@ -1,20 +1,19 @@
-
-import React, { useMemo, useState, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import ReactDOM from 'react-dom/client';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
-import { Estimate, Customer, Vehicle, EstimateLineItem, TaxRate, BusinessEntity, Part, User, Job } from '../types';
-import { X, CheckSquare, Mail, Download, Loader2, CalendarCheck, Printer, CheckCircle, MessageSquare, Monitor, ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react';
+import { Estimate, Customer, Vehicle, EstimateLineItem, TaxRate, BusinessEntity, Part, User } from '../types';
+import { X, CheckSquare, Mail, Download, Loader2, Printer, CheckCircle, MessageSquare, Monitor, Image as ImageIcon, Gauge, AlertTriangle, ChevronLeft, ChevronRight, AlertCircle, CalendarCheck, Package } from 'lucide-react';
 import EmailEstimateModal from './EmailEstimateModal';
 import { formatCurrency } from '../utils/formatUtils';
-import { useApp } from '../core/state/AppContext';
-import { formatDate, getRelativeDate, dateStringToDate, addDays, formatReadableDate } from '../core/utils/dateUtils';
+import { formatDate, getRelativeDate, dateStringToDate, addDays } from '../core/utils/dateUtils';
 import { usePrint } from '../core/hooks/usePrint';
 import { useData } from '../core/state/DataContext';
 import { BookingCalendarView } from './BookingCalendarView';
 import { getDisplayDate } from './estimates/EstimateShared';
 import { PrintableEstimate } from './estimates/PrintableEstimate';
 import { CustomerServicePackage, SelectableEstimateItemRow } from './estimates/CustomerViewComponents';
+import AsyncImage from './AsyncImage';
 
 interface EstimateViewModalProps {
     isOpen: boolean;
@@ -28,7 +27,6 @@ interface EstimateViewModalProps {
     onCustomerApprove?: (estimate: Estimate, selectedOptionalItemIds: string[], dateRange: { start: string, end: string }, notes: string) => void;
     onDecline?: (estimate: Estimate) => void;
     onEmailSuccess: (estimate: Estimate) => void;
-    onViewAsCustomer?: () => void;
     viewMode?: 'internal' | 'customer';
     parts: Part[];
     users: User[];
@@ -36,7 +34,7 @@ interface EstimateViewModalProps {
     onCreateInquiry?: (estimate: Estimate) => void;
 }
 
-export const EstimateViewModal: React.FC<EstimateViewModalProps> = ({ isOpen, onClose, estimate, customer, vehicle, taxRates, entityDetails, onApprove, onCustomerApprove, onDecline, onEmailSuccess, onViewAsCustomer, viewMode = 'internal', parts, users, currentUser, onCreateInquiry }) => {
+const EstimateViewModal: React.FC<EstimateViewModalProps> = ({ isOpen, onClose, estimate, customer, vehicle, taxRates, entityDetails, onApprove, onCustomerApprove, onDecline, onEmailSuccess, viewMode = 'internal', parts, users, currentUser, onCreateInquiry }) => {
     const { jobs, businessEntities, vehicles, customers, absenceRequests } = useData();
     const [isEmailing, setIsEmailing] = useState(false);
     const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
@@ -71,7 +69,7 @@ export const EstimateViewModal: React.FC<EstimateViewModalProps> = ({ isOpen, on
     }, [isConfirmingApproval]);
     
     const isInteractive = isCustomerMode 
-        ? (!['Converted to Job', 'Closed', 'Declined'].includes(estimate.status))
+        ? (!['Converted to Job', 'Closed', 'Declined', 'Approved'].includes(estimate.status))
         : (estimate.status === 'Draft' || estimate.status === 'Sent');
     
     const isSupplementary = !!estimate.jobId;
@@ -105,29 +103,6 @@ export const EstimateViewModal: React.FC<EstimateViewModalProps> = ({ isOpen, on
         return undefined;
     }, [entityDetails, estimate.entityId, businessEntities]);
 
-    // Calculate capacity for manual approval date
-    const manualApprovalCapacity = useMemo(() => {
-        if (!approvalDate || !resolvedEntity) return null;
-
-        const entityJobs = jobs.filter(j => j.entityId === estimate.entityId);
-        
-        const allocatedHours = entityJobs
-            .flatMap(j => j.segments || [])
-            .filter(s => s.date === approvalDate && s.status !== 'Cancelled')
-            .reduce((sum, s) => sum + s.duration, 0);
-
-        const maxHours = resolvedEntity.dailyCapacityHours || 0;
-        const remainingHours = Math.max(0, maxHours - allocatedHours);
-        const isOverCapacity = (allocatedHours + projectedLaborHours) > maxHours;
-
-        return {
-            allocated: allocatedHours,
-            max: maxHours,
-            remaining: remainingHours,
-            isOverCapacity
-        };
-    }, [approvalDate, jobs, resolvedEntity, estimate.entityId, projectedLaborHours]);
-
     const absencesByDate = useMemo(() => {
         const map = new Map<string, number>();
         absenceRequests.forEach(req => {
@@ -143,6 +118,43 @@ export const EstimateViewModal: React.FC<EstimateViewModalProps> = ({ isOpen, on
         });
         return map;
     }, [absenceRequests]);
+
+    // Calculate capacity for manual approval date
+    const manualApprovalCapacity = useMemo(() => {
+        if (!approvalDate || !resolvedEntity) return null;
+
+        const entityJobs = jobs.filter(j => j.entityId === estimate.entityId);
+        
+        const allocatedHours = entityJobs
+            .flatMap(j => j.segments || [])
+            .filter(s => s.date === approvalDate && s.status !== 'Cancelled')
+            .reduce((sum, s) => sum + s.duration, 0);
+
+        const absenceHours = absencesByDate.get(approvalDate) || 0;
+        const maxHours = resolvedEntity.dailyCapacityHours || 0;
+        const effectiveCapacity = Math.max(0, maxHours - absenceHours);
+        
+        const newTotalLoad = allocatedHours + projectedLaborHours;
+        const remainingHours = effectiveCapacity - newTotalLoad;
+        const loadPercentage = effectiveCapacity > 0 ? newTotalLoad / effectiveCapacity : (newTotalLoad > 0 ? 1.1 : 0);
+
+        let statusColor = 'bg-green-100 border-green-200 text-green-800';
+        if (remainingHours < 0) {
+            statusColor = 'bg-red-100 border-red-200 text-red-800';
+        } else if (loadPercentage > 0.8) {
+            statusColor = 'bg-amber-100 border-amber-200 text-amber-800';
+        }
+
+        return {
+            allocated: allocatedHours,
+            max: maxHours,
+            absence: absenceHours,
+            effective: effectiveCapacity,
+            remaining: remainingHours,
+            statusColor,
+            isOverCapacity: remainingHours < 0
+        };
+    }, [approvalDate, jobs, resolvedEntity, estimate.entityId, projectedLaborHours, absencesByDate]);
 
     const entityJobs = useMemo(() => {
         const targetEntityId = estimate.entityId;
@@ -366,15 +378,14 @@ export const EstimateViewModal: React.FC<EstimateViewModalProps> = ({ isOpen, on
     const essentialGroups = useMemo(() => groupItems(essentialItems), [essentialItems]);
     const optionalGroups = useMemo(() => groupItems(optionalItems), [optionalItems]);
 
-    if (!isOpen) return null;
-
     return (
         <>
+            {/* Z-Index lowered to 60 to sit behind Email Modal (Z-90) */}
             <div className="fixed inset-0 bg-gray-900 bg-opacity-75 z-[60] flex justify-center items-center p-4">
                 <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
                     <header className="flex-shrink-0 flex justify-between items-center p-4 border-b bg-gray-50 rounded-t-xl">
                         <div>
-                            <h2 className="text-xl font-bold text-gray-800">Estimate #{estimate.estimateNumber}</h2>
+                            <h2 className="text-xl font-bold text-gray-800">{isSupplementary ? 'Supplementary ' : ''}Estimate #{estimate.estimateNumber}</h2>
                              {isCustomerMode ? (
                                  <div className="flex items-center gap-2 mt-1">
                                     <span className="text-xs bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">Customer View</span>
@@ -405,11 +416,29 @@ export const EstimateViewModal: React.FC<EstimateViewModalProps> = ({ isOpen, on
                                         <p className="text-sm text-gray-600 mt-1">{resolvedEntity?.addressLine1}, {resolvedEntity?.postcode}</p>
                                     </div>
                                     <div className="text-right">
-                                        <h2 className="text-xl font-semibold text-gray-800">Estimate</h2>
+                                        <h2 className="text-xl font-semibold text-gray-800">{isSupplementary ? 'Supplementary ' : ''}Estimate</h2>
                                         <p className="text-lg font-mono text-indigo-600">#{estimate.estimateNumber}</p>
                                         <p className="text-sm text-gray-500">{getDisplayDate(estimate.issueDate)}</p>
                                     </div>
                                 </div>
+                                
+                                {estimate.media && estimate.media.length > 0 && (
+                                    <div className="bg-white p-4 rounded-xl border-2 border-gray-100">
+                                        <h3 className="text-lg font-bold text-gray-800 mb-4 pb-2 border-b border-gray-100 flex items-center gap-2">
+                                            <ImageIcon size={20} className="text-indigo-600"/> Technician Report & Media
+                                        </h3>
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                                            {estimate.media.map(m => (
+                                                <div key={m.id} className="space-y-1">
+                                                    <div className="rounded-lg overflow-hidden border bg-gray-100 h-32 flex items-center justify-center relative group">
+                                                        <AsyncImage imageId={m.id} className="w-full h-full object-cover" />
+                                                    </div>
+                                                    {m.notes && <p className="text-xs text-gray-600 italic bg-gray-50 p-1 rounded">{m.notes}</p>}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
 
                                 {essentialItems.length > 0 && (
                                     <div>
@@ -434,7 +463,7 @@ export const EstimateViewModal: React.FC<EstimateViewModalProps> = ({ isOpen, on
                                 {optionalItems.length > 0 && (
                                     <div className="bg-indigo-50 p-5 rounded-xl border-2 border-indigo-100">
                                         <h3 className="text-lg font-bold text-indigo-900 mb-2 border-b border-indigo-200 pb-2 flex items-center gap-2">
-                                            <CheckSquare size={20}/> Optional Upgrades & Recommendations
+                                            <CheckSquare size={20}/> {isSupplementary ? 'Required / Recommended Work' : 'Optional Upgrades & Recommendations'}
                                         </h3>
                                         <p className="text-sm text-indigo-700 mb-4 bg-white/60 p-2 rounded">
                                             Select the items you would like to include in the job. The total will update automatically.
@@ -559,65 +588,128 @@ export const EstimateViewModal: React.FC<EstimateViewModalProps> = ({ isOpen, on
                              <h3 className="text-xl font-bold">Approve & Schedule Estimate</h3>
                              <button onClick={() => setIsApproving(false)}><X size={24} className="text-gray-500"/></button>
                         </div>
-                        <div className="flex-grow overflow-hidden grid grid-cols-1 lg:grid-cols-3 gap-6 min-h-0">
-                            <div className="flex flex-col gap-4 overflow-y-auto pr-2">
+                        <div className={`flex-grow overflow-hidden grid grid-cols-1 ${isSupplementary ? '' : 'lg:grid-cols-3'} gap-6 min-h-0`}>
+                            <div className={`flex flex-col gap-4 overflow-y-auto pr-2 ${isSupplementary ? 'max-w-2xl mx-auto w-full' : ''}`}>
                                 <div className="bg-gray-50 p-4 rounded-lg border">
                                     <h4 className="font-bold text-sm mb-2">Optional Items</h4>
                                     {optionalItems.length > 0 ? (
                                         <div className="space-y-2">
-                                            {optionalItems.map(item => (
+                                            {optionalGroups.packages.map(pkg => (
+                                                <div key={pkg.header.id} className="flex items-center gap-3 p-2 bg-white border rounded cursor-pointer hover:border-indigo-300" onClick={() => handleToggleOptional(pkg.header.id)}>
+                                                    <div className="flex justify-center flex-shrink-0">
+                                                         <div className={`h-5 w-5 rounded border flex items-center justify-center ${selectedOptionalItems.has(pkg.header.id) ? 'bg-indigo-600 border-indigo-600' : 'bg-white border-gray-300'}`}>
+                                                             {selectedOptionalItems.has(pkg.header.id) && <CheckSquare size={14} className="text-white" />}
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex-grow">
+                                                        <div className="flex items-center gap-2">
+                                                            <Package size={14} className="text-indigo-600"/>
+                                                            <span className="text-sm font-semibold">{pkg.header.description}</span>
+                                                        </div>
+                                                        <div className="text-xs text-gray-500 pl-6">{pkg.children.length} item(s) included</div>
+                                                    </div>
+                                                    <span className="text-sm font-bold">{formatCurrency(pkg.header.unitPrice * pkg.header.quantity)}</span>
+                                                </div>
+                                            ))}
+                                            {optionalGroups.standalone.map(item => (
                                                 <div key={item.id} className="flex items-center gap-3 p-2 bg-white border rounded cursor-pointer hover:border-indigo-300" onClick={() => handleToggleOptional(item.id)}>
                                                     <div className="flex justify-center flex-shrink-0">
                                                         <div className={`h-5 w-5 rounded border flex items-center justify-center ${selectedOptionalItems.has(item.id) ? 'bg-indigo-600 border-indigo-600' : 'bg-white border-gray-300'} cursor-pointer`}>
                                                              {selectedOptionalItems.has(item.id) && <CheckSquare size={14} className="text-white" />}
                                                         </div>
                                                     </div>
-                                                    <span className="text-sm">{item.description} ({formatCurrency(item.unitPrice * item.quantity)})</span>
+                                                    <span className="text-sm flex-grow">{item.description}</span>
+                                                    <span className="text-sm font-semibold">{formatCurrency(item.unitPrice * item.quantity)}</span>
                                                 </div>
                                             ))}
                                         </div>
                                     ) : <p className="text-xs text-gray-500">No optional items.</p>}
                                 </div>
-                                <div className="bg-indigo-50 p-4 rounded-lg border border-indigo-100">
-                                    <h4 className="font-bold text-sm text-indigo-900 mb-2">Schedule Job</h4>
-                                    <div className="space-y-2">
-                                         <div>
-                                            <label className="block text-xs font-semibold text-indigo-700">Selected Date</label>
-                                            <input type="date" value={approvalDate} onChange={(e) => setApprovalDate(e.target.value)} className="w-full p-2 border rounded-md"/>
-                                         </div>
-                                         {manualApprovalCapacity && (
-                                            <div className="text-xs space-y-1 bg-white p-2 rounded border">
-                                                <div className="flex justify-between"><span className="text-gray-600">Existing Load:</span><span className="font-semibold">{manualApprovalCapacity.allocated.toFixed(1)} hrs</span></div>
-                                                <div className="flex justify-between"><span className="text-gray-600">This Job:</span><span className="font-semibold">{projectedLaborHours.toFixed(1)} hrs</span></div>
-                                                <div className={`flex justify-between pt-1 border-t font-bold ${manualApprovalCapacity.isOverCapacity ? 'text-red-600' : 'text-green-600'}`}><span>Capacity Status:</span><span>{manualApprovalCapacity.isOverCapacity ? 'Over Capacity' : 'OK'}</span></div>
+                                
+                                {!isSupplementary && (
+                                    <>
+                                        <div className={`p-4 rounded-lg border ${manualApprovalCapacity?.statusColor}`}>
+                                            <h4 className="font-bold text-sm mb-2 flex items-center gap-2"><Gauge size={16}/> Capacity Impact</h4>
+                                            
+                                            {manualApprovalCapacity ? (
+                                                <div className="space-y-1 text-sm">
+                                                    <div className="flex justify-between"><span>Total Capacity:</span> <span>{manualApprovalCapacity.max} hrs</span></div>
+                                                    
+                                                    {manualApprovalCapacity.absence > 0 && (
+                                                        <div className="flex justify-between text-red-600 font-medium">
+                                                            <span>Staff Absence:</span> 
+                                                            <span>- {manualApprovalCapacity.absence} hrs</span>
+                                                        </div>
+                                                    )}
+                                                    
+                                                    <div className="flex justify-between font-semibold border-b border-black/10 pb-1 mb-1">
+                                                        <span>Net Availability:</span> 
+                                                        <span>{manualApprovalCapacity.effective.toFixed(1)} hrs</span>
+                                                    </div>
+
+                                                    <div className="flex justify-between"><span>Current Load:</span> <span>{manualApprovalCapacity.allocated.toFixed(1)} hrs</span></div>
+                                                    <div className="flex justify-between font-semibold border-t border-black/10 pt-1 mt-1"><span>New Job:</span> <span>+ {projectedLaborHours.toFixed(1)} hrs</span></div>
+                                                    <div className="flex justify-between font-bold text-base mt-1"><span>Remaining:</span> <span>{manualApprovalCapacity.remaining.toFixed(1)} hrs</span></div>
+                                                    
+                                                    {manualApprovalCapacity.isOverCapacity && (
+                                                        <p className="mt-2 text-xs font-bold text-red-700 flex items-center"><AlertTriangle size={12} className="mr-1"/> Over Capacity!</p>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <p className="text-xs text-gray-500">Select a date to view capacity.</p>
+                                            )}
+                                        </div>
+
+                                        <div className="bg-indigo-50 p-4 rounded-lg border border-indigo-100">
+                                            <h4 className="font-bold text-sm text-indigo-900 mb-2">Schedule Job</h4>
+                                            <div className="space-y-2">
+                                                 <div>
+                                                    <label className="block text-xs font-semibold text-indigo-700">Selected Date</label>
+                                                    <input type="date" value={approvalDate} onChange={(e) => setApprovalDate(e.target.value)} className="w-full p-2 border rounded-md"/>
+                                                 </div>
                                             </div>
-                                        )}
-                                    </div>
-                                </div>
+                                        </div>
+                                    </>
+                                )}
+
                                 {isSupplementary && (
-                                    <div>
-                                         <label className="block text-sm font-medium text-gray-700 mb-1">Customer Notes</label>
-                                         <textarea value={approvalNotes} onChange={(e) => setApprovalNotes(e.target.value)} rows={3} className="w-full p-2 border rounded-lg text-sm" placeholder="Any specific instructions..." />
+                                    <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                                        <h4 className="font-bold text-blue-900 mb-2 flex items-center gap-2"><CheckCircle size={18}/> Add to Active Job</h4>
+                                        <p className="text-sm text-blue-800">
+                                            Approving this supplementary estimate will immediately add these items to the job in progress.
+                                        </p>
+                                        <ul className="list-disc list-inside text-sm text-blue-800 mt-2 ml-1">
+                                            <li>Purchase Orders will be raised automatically.</li>
+                                            <li>Labor hours will be added to the job.</li>
+                                            <li>This estimate will be marked as Closed.</li>
+                                        </ul>
                                     </div>
                                 )}
+                                
+                                <div>
+                                     <label className="block text-sm font-medium text-gray-700 mb-1">Approval Notes</label>
+                                     <textarea value={approvalNotes} onChange={(e) => setApprovalNotes(e.target.value)} rows={3} className="w-full p-2 border rounded-lg text-sm" placeholder="Any specific instructions..." />
+                                </div>
                             </div>
-                            <div className="lg:col-span-2 flex flex-col h-full min-h-0 bg-gray-50 rounded-lg border p-4">
-                                 <div className="flex justify-between items-center mb-4 flex-shrink-0">
-                                     <h4 className="font-bold text-gray-700">Calendar Availability</h4>
-                                     <div className="flex items-center gap-2">
-                                        <button onClick={() => handleMonthChange(-1)} className="p-1 rounded hover:bg-gray-200"><ChevronLeft/></button>
-                                        <span className="font-semibold text-sm w-32 text-center">{currentMonthDate.toLocaleString('default', { month: 'long', year: 'numeric', timeZone: 'UTC' })}</span>
-                                        <button onClick={() => handleMonthChange(1)} className="p-1 rounded hover:bg-gray-200"><ChevronRight/></button>
+                            {!isSupplementary && (
+                                <div className="lg:col-span-2 flex flex-col h-full min-h-0 bg-gray-50 rounded-lg border p-4">
+                                     <div className="flex justify-between items-center mb-4 flex-shrink-0">
+                                         <h4 className="font-bold text-gray-700">Calendar Availability</h4>
+                                         <div className="flex items-center gap-2">
+                                            <button onClick={() => handleMonthChange(-1)} className="p-1 rounded hover:bg-gray-200"><ChevronLeft/></button>
+                                            <span className="font-semibold text-sm w-32 text-center">{currentMonthDate.toLocaleString('default', { month: 'long', year: 'numeric', timeZone: 'UTC' })}</span>
+                                            <button onClick={() => handleMonthChange(1)} className="p-1 rounded hover:bg-gray-200"><ChevronRight/></button>
+                                         </div>
                                      </div>
-                                 </div>
-                                 <div className="flex-grow min-h-0 overflow-hidden">
-                                    <BookingCalendarView jobs={entityJobs} vehicles={vehicles} customers={customers} onAddJob={() => {}} onDragStart={() => {}} maxDailyCapacityHours={resolvedEntity?.dailyCapacityHours || 40} absencesByDate={absencesByDate} onDayClick={(date) => setApprovalDate(date)} onEditJob={() => {}} currentMonthDate={currentMonthDate} selectedDate={approvalDate}/>
-                                 </div>
-                            </div>
+                                     <div className="flex-grow min-h-0 overflow-hidden">
+                                        <BookingCalendarView jobs={entityJobs} vehicles={vehicles} customers={customers} onAddJob={() => {}} onDragStart={() => {}} maxDailyCapacityHours={resolvedEntity?.dailyCapacityHours || 40} absencesByDate={absencesByDate} onDayClick={(date) => setApprovalDate(date)} onEditJob={() => {}} currentMonthDate={currentMonthDate} selectedDate={approvalDate}/>
+                                     </div>
+                                </div>
+                            )}
                         </div>
                         <div className="flex justify-end gap-2 mt-4 pt-4 border-t flex-shrink-0">
                             <button onClick={() => setIsApproving(false)} className="px-4 py-2 bg-gray-200 rounded-lg font-semibold hover:bg-gray-300">Cancel</button>
-                            <button onClick={() => { onApprove(estimate, Array.from(selectedOptionalItems), approvalNotes, approvalDate); setIsApproving(false); onClose(); }} className="px-6 py-2 bg-green-600 text-white rounded-lg font-bold hover:bg-green-700 shadow-md">Confirm Approval</button>
+                            <button onClick={() => { onApprove(estimate, Array.from(selectedOptionalItems), approvalNotes, isSupplementary ? undefined : approvalDate); setIsApproving(false); onClose(); }} className="px-6 py-2 bg-green-600 text-white rounded-lg font-bold hover:bg-green-700 shadow-md">Confirm Approval</button>
                         </div>
                     </div>
                 </div>

@@ -1,11 +1,10 @@
-
-import React, { useMemo } from 'react';
-import { ChecklistSection, TyreCheckData, VehicleDamagePoint, InspectionTemplate } from '../../../types';
+import React from 'react';
+import { ChecklistSection, TyreCheckData, VehicleDamagePoint } from '../../../types';
 import InspectionChecklist from '../../InspectionChecklist';
 import TyreCheck from '../../TyreCheck';
 import VehicleDamageReport from '../../VehicleDamageReport';
 import { useData } from '../../../core/state/DataContext';
-import { FileText, RefreshCw } from 'lucide-react';
+import { FileText } from 'lucide-react';
 
 interface JobInspectionTabProps {
     checklistData: ChecklistSection[];
@@ -17,6 +16,7 @@ interface JobInspectionTabProps {
     onChecklistUpdate: (updatedChecklist: ChecklistSection[]) => void;
     onTyreUpdate: (updatedTyreData: TyreCheckData) => void;
     onDamageReportUpdate: (updatedDamagePoints: VehicleDamagePoint[]) => void;
+    onApplyTemplate: (template: any) => void; // Added this prop
 }
 
 export const JobInspectionTab: React.FC<JobInspectionTabProps> = ({
@@ -28,30 +28,24 @@ export const JobInspectionTab: React.FC<JobInspectionTabProps> = ({
     isReadOnly,
     onChecklistUpdate,
     onTyreUpdate,
-    onDamageReportUpdate
+    onDamageReportUpdate,
+    onApplyTemplate // Destructure the new prop
 }) => {
     const { inspectionTemplates } = useData();
 
-    const handleApplyTemplate = (templateId: string) => {
+    const handleSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const templateId = e.target.value;
+        if (!templateId) return;
+
         const template = inspectionTemplates.find(t => t.id === templateId);
-        if (!template) return;
-
-        if (checklistData.length > 0) {
-            if (!confirm("Applying a new template will overwrite the existing checklist. Continue?")) return;
+        if (template) {
+            // Pass the template object back up to EditJobModal
+            // EditJobModal will handle the "Nice Toast" warning logic
+            onApplyTemplate(template);
         }
-
-        const newChecklist: ChecklistSection[] = template.sections.map(s => ({
-            id: s.id,
-            title: s.title,
-            items: s.items.map(i => ({
-                id: crypto.randomUUID(),
-                label: i.label,
-                status: 'na'
-            })),
-            comments: ''
-        }));
         
-        onChecklistUpdate(newChecklist);
+        // Reset the select so the same template can be selected again if needed
+        e.target.value = '';
     };
 
     const hasChecklist = checklistData && checklistData.length > 0;
@@ -64,15 +58,15 @@ export const JobInspectionTab: React.FC<JobInspectionTabProps> = ({
                         <FileText size={18} className="text-indigo-600"/>
                         <span className="text-sm font-semibold text-gray-700">Checklist Template:</span>
                         {hasChecklist ? (
-                            <span className="text-sm text-gray-600">Custom / Loaded</span>
+                            <span className="text-sm text-gray-600 font-medium">Custom / Loaded</span>
                         ) : (
                             <span className="text-sm text-gray-500 italic">None selected</span>
                         )}
                     </div>
                     <div className="flex items-center gap-2">
                          <select 
-                            className="text-sm border rounded p-1.5 bg-white max-w-xs"
-                            onChange={(e) => { if(e.target.value) handleApplyTemplate(e.target.value); e.target.value = ''; }}
+                            className="text-sm border rounded p-1.5 bg-white max-w-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                            onChange={handleSelectChange}
                             defaultValue=""
                         >
                             <option value="" disabled>Load Template...</option>
@@ -92,7 +86,7 @@ export const JobInspectionTab: React.FC<JobInspectionTabProps> = ({
                 />
             ) : (
                 <div className="text-center py-10 bg-gray-50 border-2 border-dashed rounded-lg text-gray-500">
-                    <p>No inspection checklist loaded.</p>
+                    <p className="font-medium">No inspection checklist loaded.</p>
                     <p className="text-sm">Select a template above to begin.</p>
                 </div>
             )}
@@ -102,6 +96,7 @@ export const JobInspectionTab: React.FC<JobInspectionTabProps> = ({
                 onUpdate={onTyreUpdate}
                 isReadOnly={isReadOnly}
             />
+            
             <VehicleDamageReport
                 activePoints={damagePoints}
                 onUpdate={onDamageReportUpdate}

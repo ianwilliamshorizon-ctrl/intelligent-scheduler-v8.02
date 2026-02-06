@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { ServicePackage, EstimateLineItem, TaxRate, BusinessEntity, Part } from '../types';
-import { PlusCircle, Trash2 } from 'lucide-react';
+import { PlusCircle, Trash2, Filter } from 'lucide-react';
 import { formatCurrency } from '../utils/formatUtils';
 import FormModal from './FormModal';
 import SearchableSelect from './SearchableSelect';
@@ -98,14 +98,20 @@ const ServicePackageFormModal = ({ isOpen, onClose, onSave, servicePackage, taxR
         <FormModal isOpen={isOpen} onClose={onClose} onSave={handleSave} title={servicePackage?.id ? "Edit Service Package" : "Add Service Package"} maxWidth="max-w-5xl">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Business Entity</label>
+                    <select name="entityId" value={formData.entityId || ''} onChange={handleChange} className="w-full p-2 border rounded bg-white">
+                        {businessEntities.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                    </select>
+                </div>
+                <div className="md:col-span-2">
                     <label className="block text-sm font-medium text-gray-700 mb-1">Package Name</label>
                     <input name="name" value={formData.name || ''} onChange={handleChange} placeholder="e.g., Porsche 911 Minor Service" className="w-full p-2 border rounded" />
                 </div>
-                 <div>
+                 <div className="md:col-span-2">
                     <label className="block text-sm font-medium text-gray-700 mb-1">Total Sell Price (£)</label>
                     <input name="totalPrice" type="number" step="0.01" value={formData.totalPrice || ''} onChange={handleChange} placeholder="e.g., 495.00" className="w-full p-2 border rounded" />
                 </div>
-                <div>
+                <div className="md:col-span-2">
                     <label className="block text-sm font-medium text-gray-700 mb-1">Default Tax Code</label>
                     <select name="taxCodeId" value={formData.taxCodeId || ''} onChange={handleChange} className="w-full p-2 border rounded bg-white">
                         {taxRates.map(t => <option key={t.id} value={t.id}>{t.code} ({t.rate}%)</option>)}
@@ -115,6 +121,27 @@ const ServicePackageFormModal = ({ isOpen, onClose, onSave, servicePackage, taxR
             <div className="mt-2">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
                 <textarea name="description" value={formData.description || ''} onChange={handleChange} placeholder="Optional details about the package" className="w-full p-2 border rounded" rows={2}/>
+            </div>
+            
+            <div className="mt-4 p-4 bg-gray-50 border rounded-lg">
+                <h4 className="font-bold text-sm text-gray-700 mb-3 flex items-center gap-2"><Filter size={16}/> Vehicle Compatibility (Hierarchical)</h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Make (Level 1)</label>
+                        <input name="applicableMake" value={formData.applicableMake || ''} onChange={handleChange} placeholder="e.g. Porsche" className="w-full p-2 border rounded text-sm" />
+                        <p className="text-[10px] text-gray-500 mt-1">Leave blank for all makes.</p>
+                    </div>
+                    <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Model (Level 2)</label>
+                        <input name="applicableModel" value={formData.applicableModel || ''} onChange={handleChange} placeholder="e.g. Cayman" className="w-full p-2 border rounded text-sm" />
+                         <p className="text-[10px] text-gray-500 mt-1">Leave blank for all models of this make.</p>
+                    </div>
+                    <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Variant/Type (Level 3)</label>
+                        <input name="applicableVariant" value={formData.applicableVariant || ''} onChange={handleChange} placeholder="e.g. GT4" className="w-full p-2 border rounded text-sm" />
+                         <p className="text-[10px] text-gray-500 mt-1">Specific trim. Leave blank for all types.</p>
+                    </div>
+                </div>
             </div>
             
             <h4 className="font-bold mb-2 mt-4">Cost Items (Parts & Labor)</h4>

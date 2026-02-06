@@ -1,4 +1,3 @@
-
 import React, { useMemo } from 'react';
 import { Job, Vehicle, Customer, PurchaseOrder, User, JobSegment, Engineer, VehicleStatus } from '../../types';
 import { Package as PackageIcon, PackageCheck, CheckCircle, ArrowRightCircle, Clock, KeyRound, Car, Wand2, LogIn, ClipboardCheck, FileText, LogOut, PlayCircle, Play, PauseCircle, User as UserIcon } from 'lucide-react';
@@ -165,10 +164,38 @@ export const ConciergeJobCard: React.FC<ConciergeJobCardProps> = (props) => {
                 </div>
                 <div className="flex items-center gap-1">
                     <button onClick={(e) => { e.stopPropagation(); onOpenAssistant(job.id); }} className="p-0.5 text-blue-600 hover:bg-blue-100 rounded" title="Assistant"><Wand2 size={12} /></button>
-                    {highlightAction === 'checkIn' && <button onClick={(e) => { e.stopPropagation(); onCheckIn(job.id); }} className="text-[10px] flex items-center gap-0.5 bg-blue-100 text-blue-800 px-1 py-0.5 rounded hover:bg-blue-200"><LogIn size={10} /> In</button>}
-                    {job.status === 'Pending QC' && onQcApprove && (currentUser.role === 'Admin' || currentUser.role === 'Dispatcher') && <button onClick={(e) => {e.stopPropagation(); onQcApprove(job.id);}} className="text-[10px] flex items-center gap-0.5 bg-orange-100 text-orange-800 px-1 py-0.5 rounded hover:bg-orange-200"><ClipboardCheck size={10}/> QC</button>}
-                    {highlightAction === 'invoice' && onGenerateInvoice && <button onClick={(e) => { e.stopPropagation(); onGenerateInvoice(job.id); }} className="text-[10px] flex items-center gap-0.5 bg-indigo-100 text-indigo-800 px-1 py-0.5 rounded hover:bg-indigo-200"><FileText size={10} /> Inv</button>}
-                    {highlightAction === 'collect' && onCollect && <button onClick={(e) => { e.stopPropagation(); onCollect(job.id); }} className="text-[10px] flex items-center gap-0.5 bg-green-100 text-green-800 px-1 py-0.5 rounded hover:bg-green-200"><LogOut size={10} /> Out</button>}
+                    
+                    {/* Check In Action */}
+                    {highlightAction === 'checkIn' && (
+                        <button onClick={(e) => { e.stopPropagation(); onCheckIn(job.id); }} className="text-[10px] flex items-center gap-0.5 bg-blue-100 text-blue-800 px-1 py-0.5 rounded hover:bg-blue-200">
+                            <LogIn size={10} /> In
+                        </button>
+                    )}
+                    
+                    {/* Invoice Action */}
+                    {highlightAction === 'invoice' && onGenerateInvoice && (
+                        <button onClick={(e) => { e.stopPropagation(); onGenerateInvoice(job.id); }} className="text-[10px] flex items-center gap-0.5 bg-indigo-100 text-indigo-800 px-1 py-0.5 rounded hover:bg-indigo-200">
+                            <FileText size={10} /> Inv
+                        </button>
+                    )}
+
+                    {/* FIXED Check Out Action - Matches ConciergeView Handover Logic */}
+                    {(highlightAction === 'collect' || vehicleStatus === 'Awaiting Collection' || (vehicleStatus === 'On Site' && !!job.invoiceId)) && onCollect && (
+                        <button 
+                            onClick={(e) => { e.stopPropagation(); onCollect(job.id); }} 
+                            className="text-[10px] flex items-center gap-1 bg-green-600 text-white px-2 py-0.5 rounded hover:bg-green-700 shadow-sm"
+                        >
+                            <LogOut size={10} /> 
+                            <span className="font-bold">OUT</span>
+                        </button>
+                    )}
+
+                    {/* QC Action (Only show if not in collect/invoice mode) */}
+                    {job.status === 'Pending QC' && highlightAction !== 'collect' && onQcApprove && (currentUser.role === 'Admin' || currentUser.role === 'Dispatcher') && (
+                        <button onClick={(e) => {e.stopPropagation(); onQcApprove(job.id);}} className="text-[10px] flex items-center gap-0.5 bg-orange-100 text-orange-800 px-1 py-0.5 rounded hover:bg-orange-200">
+                            <ClipboardCheck size={10}/> QC
+                        </button>
+                    )}
                 </div>
             </div>
         </div>

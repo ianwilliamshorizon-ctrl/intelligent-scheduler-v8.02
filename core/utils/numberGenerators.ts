@@ -1,3 +1,4 @@
+
 import { Estimate, Invoice, RentalBooking, Job, PurchaseOrder, Purchase } from '../../types';
 
 /**
@@ -20,12 +21,13 @@ const getNextSequence = (items: any[], entityShortCode: string, prefix: string, 
     });
 
     const newNumber = maxNumber + 1;
-    return String(newNumber).padStart(5, '0');
+    // Updated to 6 digits
+    return String(newNumber).padStart(6, '0');
 };
 
 /**
  * Generates a unique sequential estimate number with an entity prefix.
- * Format: [3-letter entity code]991[5-digit sequence]
+ * Format: [3-letter entity code]991[6-digit sequence]
  */
 export const generateEstimateNumber = (allEstimates: Estimate[], entityShortCode: string): string => {
     const prefix = '991';
@@ -35,7 +37,7 @@ export const generateEstimateNumber = (allEstimates: Estimate[], entityShortCode
 
 /**
  * Generates a unique sequential job ID with an entity prefix.
- * Format: [3-letter entity code]992[5-digit sequence]
+ * Format: [3-letter entity code]992[6-digit sequence]
  */
 export const generateJobId = (allJobs: Job[], entityShortCode: string): string => {
     const prefix = '992';
@@ -46,7 +48,7 @@ export const generateJobId = (allJobs: Job[], entityShortCode: string): string =
 
 /**
  * Generates a unique sequential invoice ID with an entity prefix.
- * Format: [3-letter entity code]911[5-digit sequence]
+ * Format: [3-letter entity code]911[6-digit sequence]
  */
 export const generateInvoiceId = (allInvoices: Invoice[], entityShortCode: string): string => {
     const prefix = '911';
@@ -56,7 +58,7 @@ export const generateInvoiceId = (allInvoices: Invoice[], entityShortCode: strin
 
 /**
  * Generates a unique sequential purchase order ID with an entity prefix.
- * Format: [3-letter entity code]944[5-digit sequence]
+ * Format: [3-letter entity code]944[6-digit sequence]
  */
 export const generatePurchaseOrderId = (allPurchaseOrders: PurchaseOrder[], entityShortCode: string): string => {
     const prefix = '944';
@@ -66,9 +68,9 @@ export const generatePurchaseOrderId = (allPurchaseOrders: PurchaseOrder[], enti
 
 /**
  * Generates a unique sequential purchase ID with an entity prefix.
- * Format: [3-letter entity code]945[5-digit sequence]
+ * Format: [3-letter entity code]945[6-digit sequence]
  */
-export const generatePurchaseId = (allPurchases: any[], entityShortCode: string): string => {
+export const generatePurchaseId = (allPurchases: Purchase[], entityShortCode: string): string => {
     const prefix = '945'; // Different from PO's 944
     const sequence = getNextSequence(allPurchases, entityShortCode, prefix, 'id');
     return `${entityShortCode}${prefix}${sequence}`;
@@ -79,7 +81,7 @@ export const generatePurchaseId = (allPurchases: any[], entityShortCode: string)
  * Generates a unique sequential rental booking ID starting with 'BS'.
  * It finds the highest existing number and increments it.
  * @param allBookings An array of all existing rental bookings.
- * @returns A unique rental booking ID string (e.g., "BS00001").
+ * @returns A unique rental booking ID string (e.g., "BS000001").
  */
 export const generateRentalBookingId = (allBookings: RentalBooking[]): string => {
     const prefix = 'BS';
@@ -91,5 +93,5 @@ export const generateRentalBookingId = (allBookings: RentalBooking[]): string =>
     
     const newNumber = maxNumber + 1;
     
-    return `${prefix}${String(newNumber).padStart(5, '0')}`;
+    return `${prefix}${String(newNumber).padStart(6, '0')}`;
 };

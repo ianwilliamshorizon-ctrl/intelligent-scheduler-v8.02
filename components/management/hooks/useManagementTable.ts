@@ -19,9 +19,9 @@ export const useManagementTable = <T extends { id: string }>(
         const path = getPath(collectionName);
         console.log(`Saving to ${path} with ID: ${newItem.id}`);
         
-        // Pass newItem.id as the third argument to saveDocument 
-        // to ensure the DB document ID matches your "User_Simon" format
-        await saveDocument(path, newItem, newItem.id);
+        // Removed the third argument (newItem.id) to match the expected 2 arguments
+        // saveDocument handles the ID inside the data object or internally
+        await saveDocument(path, newItem);
     };
 
     const deleteItem = async (id: string) => {

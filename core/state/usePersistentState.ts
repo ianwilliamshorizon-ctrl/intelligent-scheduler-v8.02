@@ -1,46 +1,59 @@
-
 import React, { useState, useEffect, useRef } from 'react';
-import { subscribeToCollection, getItem } from '../db';
+import { subscribeToCollection, getItem, saveDocument, setItem } from '../db';
 
-export const usePersistentState = <T,>(storageKey: string, getInitialValue: () => T): [T, React.Dispatch<React.SetStateAction<T>>] => {
+export const usePersistentState = <T,>(
+  storageKey: string, 
+  getInitialValue: () => T
+): [T, React.Dispatch<React.SetStateAction<T>>] => {
   const [state, setState] = useState<T>(getInitialValue());
-  const [isHydrated, setIsHydrated] = useState(false);
+  const isMounted = useRef(true);
 
   useEffect(() => {
+    isMounted.current = true;
     let unsubscribe = () => {};
-
-    // Determine if this is a Collection (Array) or a Setting (Object/Primitive)
-    // By convention in this app, keys starting with 'brooks_' that hold arrays are collections.
+    
     const initialVal = getInitialValue();
     const isCollection = Array.isArray(initialVal);
 
     if (isCollection) {
-        // Real-time Sync for Collections (Jobs, Customers, etc.)
         unsubscribe = subscribeToCollection(storageKey, (data) => {
-            // Firestore returns the data. We update local state.
-            // This handles the "User B sees User A's changes" requirement.
-            setState(data as unknown as T);
-            setIsHydrated(true);
+            if (!isMounted.current) return;
+
+            // 🛑 THE SYNC LOCK:
+            // If the Master Sync is running, ignore Firestore snapshots.
+            // This prevents the state from dropping to 1 item while seeding.
+            if ((window as any).isSyncing) return;
+
+            const incomingData = data as unknown as any[];
+            const localData = initialVal as any[];
+            
+            if (incomingData && incomingData.length >= localData.length) {
+                setState(data as unknown as T);
+            } 
         });
     } else {
-        // One-time fetch for Settings/Config (legacy behavior for non-collection items)
         getItem<T>(storageKey).then((data) => {
-            if (data) setState(data);
-            setIsHydrated(true);
+            if (isMounted.current && data !== null) setState(data);
         });
     }
 
     return () => {
+        isMounted.current = false;
         unsubscribe();
     };
   }, [storageKey]);
 
-  // We wrap setState to ensure we aren't just updating local state for Collections.
-  // NOTE: In a pure Firestore architecture, you typically don't set state directly for collections,
-  // you call db.saveDocument(). However, to keep compatibility with the huge existing codebase
-  // that passes `setJobs` around, we keep this. 
-  // IMPORTANT: The actual *writes* to DB must happen in the Action Hooks (useWorkshopActions), 
-  // not here in the setter, otherwise we get infinite loops or massive writes.
-  
-  return [state, setState];
+  const setPersistentState: React.Dispatch<React.SetStateAction<T>> = (value) => {
+    setState((prevState) => {
+      const newState = typeof value === 'function' ? (value as any)(prevState) : value;
+      if (Array.isArray(newState)) {
+        newState.forEach(item => { if (item.id) saveDocument(storageKey, item); });
+      } else {
+        setItem(storageKey, newState);
+      }
+      return newState;
+    });
+  };
+
+  return [state, setPersistentState];
 };

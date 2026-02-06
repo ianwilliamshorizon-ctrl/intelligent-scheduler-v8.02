@@ -7,6 +7,7 @@ import { CheckboxCell } from '../shared/CheckboxCell';
 import { useManagementTable } from '../hooks/useManagementTable';
 import { parseCsv } from '../../../utils/csvUtils';
 import { saveImage, getImage } from '../../../utils/imageStore';
+import { getCustomerDisplayName } from '../../../core/utils/customerUtils';
 import VehicleFormModal from '../../VehicleFormModal';
 import { saveDocument } from '../../../core/db';
 
@@ -18,11 +19,16 @@ export const ManagementVehiclesTab = ({ searchTerm, onShowStatus }: { searchTerm
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isUpdating, setIsUpdating] = useState(false);
 
-    const filtered = vehicles.filter(v => 
-        v.registration.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        v.make.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        v.model.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    // Client-side filtering (Safe fallback)
+    const filtered = (vehicles || []).filter(v => {
+        if (!v) return false;
+        const term = searchTerm.toLowerCase();
+        const reg = (v.registration || '').toLowerCase();
+        const make = (v.make || '').toLowerCase();
+        const model = (v.model || '').toLowerCase();
+        
+        return reg.includes(term) || make.includes(term) || model.includes(term);
+    });
 
     const handleImportVehicles = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -140,9 +146,13 @@ export const ManagementVehiclesTab = ({ searchTerm, onShowStatus }: { searchTerm
                             return (
                                 <tr key={v.id} className="border-b hover:bg-gray-50">
                                     <CheckboxCell id={v.id} selectedIds={selectedIds} onToggle={toggleSelection} />
-                                    <td className="p-2 font-mono font-bold">{v.registration}</td>
+                                    <td className="p-2">
+                                        <span className="font-mono font-bold bg-[#FFCC00] text-black border border-black/20 px-2 py-0.5 rounded text-sm">
+                                            {v.registration}
+                                        </span>
+                                    </td>
                                     <td className="p-2">{v.make} {v.model}</td>
-                                    <td className="p-2">{owner ? `${owner.forename} ${owner.surname}` : 'Unknown'}</td>
+                                    <td className="p-2">{getCustomerDisplayName(owner)}</td>
                                     <td className="p-2">
                                         <button onClick={() => { setSelectedVehicle(v); setIsModalOpen(true); }} className="text-indigo-600 hover:underline mr-3">Edit</button>
                                         <button onClick={() => deleteItem(v.id)} className="text-red-600 hover:underline">Delete</button>

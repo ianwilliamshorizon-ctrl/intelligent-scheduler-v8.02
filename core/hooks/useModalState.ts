@@ -36,7 +36,7 @@ export interface ModalState {
     assistantContextJobId: string | null;
     customerModal: { isOpen: boolean; customerId: string | null };
     vehicleModal: { isOpen: boolean; vehicleId: string | null };
-    // NEW FIELDS FROM ERROR LOG
+    vehicleHistoryModal: { isOpen: boolean; vehicleId: string | null };
     isNominalExportOpen: boolean;
     isCheckInModalOpen: boolean;
     isCheckOutModalOpen: boolean;
@@ -77,7 +77,7 @@ export interface ModalSetters {
     setAssistantContextJobId: React.Dispatch<React.SetStateAction<string | null>>;
     setCustomerModal: React.Dispatch<React.SetStateAction<{ isOpen: boolean; customerId: string | null }>>;
     setVehicleModal: React.Dispatch<React.SetStateAction<{ isOpen: boolean; vehicleId: string | null }>>;
-    // NEW SETTERS
+    setVehicleHistoryModal: React.Dispatch<React.SetStateAction<{ isOpen: boolean; vehicleId: string | null }>>;
     setIsNominalExportOpen: React.Dispatch<React.SetStateAction<boolean>>;
     setIsCheckInModalOpen: React.Dispatch<React.SetStateAction<boolean>>;
     setIsCheckOutModalOpen: React.Dispatch<React.SetStateAction<boolean>>;
@@ -118,6 +118,7 @@ export const useModalState = (): [ModalState, ModalSetters] => {
     const [assistantContextJobId, setAssistantContextJobId] = useState<string | null>(null);
     const [customerModal, setCustomerModal] = useState<{ isOpen: boolean; customerId: string | null }>({ isOpen: false, customerId: null });
     const [vehicleModal, setVehicleModal] = useState<{ isOpen: boolean; vehicleId: string | null }>({ isOpen: false, vehicleId: null });
+    const [vehicleHistoryModal, setVehicleHistoryModal] = useState<{ isOpen: boolean; vehicleId: string | null }>({ isOpen: false, vehicleId: null });
 
     // NEW STATES
     const [isNominalExportOpen, setIsNominalExportOpen] = useState(false);
@@ -134,7 +135,7 @@ export const useModalState = (): [ModalState, ModalSetters] => {
         addSaleVehicleModalOpen, manageSaleVehicleModal,
         prospectModal, estimateFormModal, estimateViewModal, scheduleJobFromEstimateModal,
         scheduleEmailModal, inquiryModal, isAssistantOpen, assistantContextJobId,
-        customerModal, vehicleModal,
+        customerModal, vehicleModal, vehicleHistoryModal,
         isNominalExportOpen, isCheckInModalOpen, isCheckOutModalOpen
     };
 
@@ -148,7 +149,7 @@ export const useModalState = (): [ModalState, ModalSetters] => {
         setAddSaleVehicleModalOpen, setManageSaleVehicleModal,
         setProspectModal, setEstimateFormModal, setEstimateViewModal, setScheduleJobFromEstimateModal,
         setScheduleEmailModal, setInquiryModal, setIsAssistantOpen, setAssistantContextJobId,
-        setCustomerModal, setVehicleModal,
+        setCustomerModal, setVehicleModal, setVehicleHistoryModal,
         setIsNominalExportOpen, setIsCheckInModalOpen, setIsCheckOutModalOpen
     };
 

@@ -1,4 +1,3 @@
-
 import React, { useMemo, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import jsPDF from 'jspdf';
@@ -47,21 +46,19 @@ const PrintableInvoice: React.FC<any> = ({ invoice, customer, vehicle, entity, j
         return rows;
     }, [invoice.lineItems]);
 
-    // Resolve diagram image for damage report if needed
     const diagramImageId = useMemo(() => {
         return vehicle?.images?.find((img: any) => img.isPrimaryDiagram)?.id ?? null;
     }, [vehicle]);
 
     const hasTechnicianNotes = job && job.technicianObservations && job.technicianObservations.length > 0;
     
-    // Split inspection checklist into groups for paging
     const inspectionGroups = useMemo(() => {
         if (!job?.inspectionChecklist) return { part1: [], part2: [], part3: [], part4: [] };
         
-        const part1: ChecklistSection[] = []; // Interior, Exterior
-        const part2: ChecklistSection[] = []; // Engine
-        const part3: ChecklistSection[] = []; // Below
-        const part4: ChecklistSection[] = []; // Final + others
+        const part1: ChecklistSection[] = []; 
+        const part2: ChecklistSection[] = []; 
+        const part3: ChecklistSection[] = []; 
+        const part4: ChecklistSection[] = []; 
         
         job.inspectionChecklist.forEach((s: ChecklistSection) => {
             if (['section_interior_electrics', 'section_exterior'].includes(s.id)) part1.push(s);
@@ -108,7 +105,16 @@ const PrintableInvoice: React.FC<any> = ({ invoice, customer, vehicle, entity, j
         <div className="bg-gray-100 font-sans text-sm text-gray-800">
             {/* 1. INVOICE SECTION (Page 1+) */}
             <div className="printable-page invoice-section" style={{ ...pageStyle, display: 'flex', flexDirection: 'column' }}>
-                <div className="invoice-content flex-grow flex flex-col">
+                
+                {/* PAID WATERMARK */}
+                {invoice.status === 'Paid' && (
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 border-[12px] border-green-600 p-8 opacity-15 rounded-2xl -rotate-[25deg] pointer-events-none z-0">
+                        <h1 className="text-9xl font-black text-green-600 m-0 leading-none">PAID</h1>
+                        <p className="text-center text-2xl text-green-600 font-bold uppercase tracking-widest mt-2">{invoice.issueDate}</p>
+                    </div>
+                )}
+
+                <div className="invoice-content flex-grow flex flex-col z-10">
                     <header className="pb-6 border-b">
                         <div className="flex justify-between items-start">
                             <div style={{ marginBottom: '5mm' }}>
@@ -169,7 +175,6 @@ const PrintableInvoice: React.FC<any> = ({ invoice, customer, vehicle, entity, j
                                     const net = header.quantity * header.unitPrice;
                                     return (
                                         <React.Fragment key={`pkg-${header.id}`}>
-                                            {/* Spacer to prevent PDF rendering overlap */}
                                             <div className="h-2"></div>
                                             <div className="grid grid-cols-12 gap-2 items-center px-1.5 py-1.5 text-sm bg-gray-100 font-bold">
                                                 <div className="col-span-7">{header.description}</div>
@@ -217,11 +222,10 @@ const PrintableInvoice: React.FC<any> = ({ invoice, customer, vehicle, entity, j
                 </div>
             </div>
 
-            {/* 2. TECHNICIAN NOTES SECTION (New Page) */}
+            {/* 2. TECHNICIAN NOTES SECTION */}
             {hasTechnicianNotes && (
                 <div className="printable-page pdf-page-section" style={{ ...pageStyle, pageBreakBefore: 'always', breakBefore: 'page' }}>
                     {renderHeader('Technician Report')}
-
                     <section className="mb-8">
                         <h3 className="text-lg font-bold text-gray-700 mb-3 bg-gray-100 p-2 rounded">Notes & Observations</h3>
                         <ul className="list-disc list-inside space-y-2 ml-2">
@@ -233,64 +237,47 @@ const PrintableInvoice: React.FC<any> = ({ invoice, customer, vehicle, entity, j
                 </div>
             )}
 
-            {/* 3. INSPECTION RESULTS SECTION(S) - Split into pages */}
-            
-            {/* Page for Interior/Exterior */}
+            {/* 3. INSPECTION SECTIONS */}
             {hasAnyInspectionData && hasPart1 && (
                 <div className="printable-page pdf-page-section" style={{ ...pageStyle, pageBreakBefore: 'always', breakBefore: 'page' }}>
                     {renderHeader('Inspection: Interior & Exterior')}
-                    <section>
-                         <InspectionChecklist checklistData={inspectionGroups.part1} onUpdate={()=>{}} isReadOnly={true} />
-                    </section>
+                    <section><InspectionChecklist checklistData={inspectionGroups.part1} onUpdate={()=>{}} isReadOnly={true} /></section>
                 </div>
             )}
 
-            {/* Page for Engine */}
             {hasAnyInspectionData && hasPart2 && (
                 <div className="printable-page pdf-page-section" style={{ ...pageStyle, pageBreakBefore: 'always', breakBefore: 'page' }}>
                     {renderHeader('Inspection: Engine Compartment')}
-                    <section>
-                         <InspectionChecklist checklistData={inspectionGroups.part2} onUpdate={()=>{}} isReadOnly={true} />
-                    </section>
+                    <section><InspectionChecklist checklistData={inspectionGroups.part2} onUpdate={()=>{}} isReadOnly={true} /></section>
                 </div>
             )}
 
-            {/* Page for Underbody */}
             {hasAnyInspectionData && hasPart3 && (
                 <div className="printable-page pdf-page-section" style={{ ...pageStyle, pageBreakBefore: 'always', breakBefore: 'page' }}>
                     {renderHeader('Inspection: Underbody')}
-                    <section>
-                         <InspectionChecklist checklistData={inspectionGroups.part3} onUpdate={()=>{}} isReadOnly={true} />
-                    </section>
+                    <section><InspectionChecklist checklistData={inspectionGroups.part3} onUpdate={()=>{}} isReadOnly={true} /></section>
                 </div>
             )}
 
-            {/* Page for Final Checks & Tyres (Without Bodywork) */}
             {hasAnyInspectionData && hasPart4 && (
                 <div className="printable-page pdf-page-section" style={{ ...pageStyle, pageBreakBefore: 'always', breakBefore: 'page' }}>
                     {renderHeader('Inspection: Final Checks & Tyres')}
                     <section>
                         {inspectionGroups.part4.length > 0 && (
-                            <div className="mb-6">
-                                <InspectionChecklist checklistData={inspectionGroups.part4} onUpdate={()=>{}} isReadOnly={true} />
-                            </div>
+                            <div className="mb-6"><InspectionChecklist checklistData={inspectionGroups.part4} onUpdate={()=>{}} isReadOnly={true} /></div>
                         )}
-
                         {job.tyreCheck && (
-                            <div className="mb-6 page-break-inside-avoid">
-                                <TyreCheck tyreData={job.tyreCheck} onUpdate={()=>{}} isReadOnly={true} />
-                            </div>
+                            <div className="mb-6 page-break-inside-avoid"><TyreCheck tyreData={job.tyreCheck} onUpdate={()=>{}} isReadOnly={true} /></div>
                         )}
                     </section>
                 </div>
             )}
 
-            {/* Page for Bodywork Inspection (Separate Page) */}
             {hasDamageReport && (
                  <div className="printable-page pdf-page-section" style={{ ...pageStyle, pageBreakBefore: 'always', breakBefore: 'page' }}>
-                     {renderHeader('Inspection: Bodywork Report')}
-                     <section>
-                         <div className="mb-6 break-inside-avoid page-break-inside-avoid">
+                    {renderHeader('Inspection: Bodywork Report')}
+                    <section>
+                        <div className="mb-6 break-inside-avoid page-break-inside-avoid">
                             <h4 className="font-bold text-gray-600 mb-2 ml-1">Bodywork Inspection</h4>
                             <div className="border rounded-lg bg-white overflow-hidden p-4">
                                 <VehicleDamageReport 
@@ -301,8 +288,8 @@ const PrintableInvoice: React.FC<any> = ({ invoice, customer, vehicle, entity, j
                                     imageId={diagramImageId}
                                 />
                             </div>
-                         </div>
-                     </section>
+                        </div>
+                    </section>
                  </div>
             )}
         </div>
@@ -321,7 +308,7 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ isOpen, onClose, invoice, c
         let subtotal = 0;
         
         (invoice.lineItems || []).forEach(item => {
-            if (item.isPackageComponent) return; // Only sum headers and standalone items
+            if (item.isPackageComponent) return;
 
             const itemNet = item.quantity * item.unitPrice;
             subtotal += itemNet;
@@ -346,7 +333,6 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ isOpen, onClose, invoice, c
 
     const handleDownloadPdf = async () => {
         setIsGeneratingPdf(true);
-        // Trigger status update
         if (job && onInvoiceAction) {
             onInvoiceAction(job.id);
         }
@@ -363,7 +349,7 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ isOpen, onClose, invoice, c
             </React.StrictMode>
         );
 
-        await new Promise(resolve => setTimeout(resolve, 1500)); // Increased timeout for images and layout
+        await new Promise(resolve => setTimeout(resolve, 1500));
 
         try {
             const canvas = await html2canvas(printMountPoint, {
@@ -376,10 +362,7 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ isOpen, onClose, invoice, c
             const pdf = new jsPDF('p', 'mm', 'a4');
             const pdfWidth = pdf.internal.pageSize.getWidth();
             const pdfHeight = pdf.internal.pageSize.getHeight();
-            const imgWidth = canvas.width;
-            const imgHeight = canvas.height;
-            const ratio = imgHeight / imgWidth;
-            const canvasHeightOnPdf = pdfWidth * ratio;
+            const canvasHeightOnPdf = pdfWidth * (canvas.height / canvas.width);
             
             let heightLeft = canvasHeightOnPdf;
             let position = 0;
@@ -397,7 +380,7 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ isOpen, onClose, invoice, c
             pdf.save(`Invoice-${invoice.id}.pdf`);
         } catch (error) {
             console.error("Error generating PDF:", error);
-            alert("Failed to generate PDF. Please try using the 'Print' button and saving as PDF.");
+            alert("Failed to generate PDF.");
         } finally {
             root.unmount();
             document.body.removeChild(printMountPoint);
@@ -406,16 +389,20 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ isOpen, onClose, invoice, c
     };
 
     const handlePrintInvoice = () => {
-        // Trigger status update
         if (job && onInvoiceAction) {
             onInvoiceAction(job.id);
         }
         print(<PrintableInvoice {...{ invoice, customer, vehicle, entity, job, taxRates, totals }} />);
     };
     
+    // UPDATED: Logic to update status, trigger job move, and close modal
     const handleMarkAsPaid = () => {
         if (invoice) {
             onUpdateInvoice({ ...invoice, status: 'Paid' });
+            if (job && onInvoiceAction) {
+                onInvoiceAction(job.id);
+            }
+            onClose();
         }
     };
 

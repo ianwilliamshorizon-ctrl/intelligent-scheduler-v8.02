@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { X, Send } from 'lucide-react';
 import { Estimate, Customer, Vehicle, EstimateLineItem, TaxRate } from '../types';
-import { formatCurrency } from '../core/utils/formatUtils';
+import { formatCurrency } from '../utils/formatUtils';
 
 interface EmailEstimateModalProps {
     isOpen: boolean;
@@ -34,8 +34,9 @@ const EmailEstimateModal: React.FC<EmailEstimateModalProps> = ({ isOpen, onClose
 
     const customerEmail = customer?.email || `${String(customer?.forename || '').toLowerCase()}.${String(customer?.surname || '').toLowerCase()}@example.com`;
 
+    // Z-Index raised to 90 to be higher than EstimateViewModal (Z-60)
     return (
-        <div className="fixed inset-0 bg-gray-900 bg-opacity-70 z-[70] flex justify-center items-center p-4">
+        <div className="fixed inset-0 bg-gray-900 bg-opacity-70 z-[90] flex justify-center items-center p-4">
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl p-6 transform transition-all animate-fade-in-up">
                 <div className="flex justify-between items-center border-b pb-3 mb-4">
                     <h2 className="text-xl font-bold text-indigo-700 flex items-center">

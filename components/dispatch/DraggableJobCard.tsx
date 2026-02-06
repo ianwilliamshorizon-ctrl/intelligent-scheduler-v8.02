@@ -1,6 +1,7 @@
 import React from 'react';
 import { Job, Vehicle, Customer, PurchaseOrder, User, VehicleStatus } from '../../types';
 import { Package as PackageIcon, PackageCheck, CheckCircle, ArrowRightCircle, Clock, Wrench, Edit, Wand2, LogIn } from 'lucide-react';
+// We are keeping the import but will bypass it for the display to be safe
 import { getCustomerDisplayName } from '../../core/utils/customerUtils';
 import { getPoStatusColor } from '../../core/utils/statusUtils';
 
@@ -17,6 +18,16 @@ export const DraggableJobCard: React.FC<{
     currentUser: User;
     onOpenAssistant: (jobId: string) => void;
 }> = ({ job, vehicle, customer, purchaseOrders, onDragStart, onDragEnd, onEdit, onCheckIn, onOpenPurchaseOrder, currentUser, onOpenAssistant }) => {
+    
+    // --- DEBUG LOG ---
+    // This will show you exactly what is inside the customer object in the console
+    console.log(`DEBUG [Job ${job.id}]: Customer Data:`, {
+        id: customer?.id,
+        forename: customer?.forename,
+        surname: customer?.surname,
+        email: customer?.email
+    });
+
     const unallocatedSegments = (job.segments || []).filter(s => s.status === 'Unallocated');
 
     if (unallocatedSegments.length === 0) return null;
@@ -24,6 +35,11 @@ export const DraggableJobCard: React.FC<{
     const canDrag = currentUser.role === 'Admin' || currentUser.role === 'Dispatcher';
     const segmentToDrag = unallocatedSegments[0];
     const { partsStatus, vehicleStatus } = job;
+
+    // CUSTOMER NAME LOGIC: Strict Forename + Surname
+    const fName = customer?.forename || '';
+    const sName = customer?.surname || '';
+    const strictDisplayName = `${fName} ${sName}`.trim() || `Account: ${job.customerId || 'Unknown'}`;
 
     const partsStatusInfo = {
         'Awaiting Order': { title: 'Awaiting Parts Order', color: 'text-red-600', icon: PackageIcon },
@@ -65,14 +81,14 @@ export const DraggableJobCard: React.FC<{
         <div
             draggable={canDrag}
             onDragStart={(e) => {
-                if (canDrag) {
-                    e.dataTransfer.setData('jobId', job.id);
-                    e.dataTransfer.effectAllowed = 'move';
-                    onDragStart(e, job.id, segmentToDrag.segmentId);
-                }
+                console.log('DRAG START: Job', job.id);
+                if (canDrag) onDragStart(e, job.id, segmentToDrag.segmentId);
             }}
-            onDragEnd={onDragEnd}
-            className={`p-2.5 rounded-lg shadow-md border space-y-2 ${canDrag ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'} draggable-job ${getCardColorClasses()}`}
+            onDragEnd={(e) => {
+                console.log('DRAG END: Job', job.id);
+                onDragEnd(e);
+            }}
+            className={`p-2.5 rounded-lg shadow-md border space-y-2 ${canDrag ? 'cursor-grab' : 'cursor-default'} draggable-job ${getCardColorClasses()}`}
             title={canDrag ? `Drag to schedule: ${job.description} (${segmentToDrag.duration}h)`: 'View job details'}
         >
             <div className="flex justify-between items-start">
@@ -82,10 +98,11 @@ export const DraggableJobCard: React.FC<{
                 </h4>
                 <span className="font-mono text-xs bg-gray-200 px-1.5 py-0.5 rounded ml-2 flex-shrink-0">#{job.id}</span>
             </div>
-
+            
             <div className="text-xs text-gray-600 space-y-1">
-                <p><strong>Vehicle:</strong> {vehicle ? `${vehicle.registration} - ${vehicle.make} ${vehicle.model}` : 'Loading vehicle...'}</p>
-                <p><strong>Customer:</strong> {customer ? `${getCustomerDisplayName(customer)} (${customer.mobile || customer.phone || 'No Phone'})` : 'Loading customer...'}</p>
+                <p><strong>Vehicle:</strong> {vehicle?.registration} - {vehicle?.make} {vehicle?.model}</p>
+                {/* MODIFIED: Using strictDisplayName instead of the utility function */}
+                <p><strong>Customer:</strong> {strictDisplayName} ({customer?.mobile || customer?.phone || 'No Phone'})</p>
                 <p><strong>Job Length:</strong> {job.estimatedHours} hours ({unallocatedSegments.length} segment{unallocatedSegments.length > 1 ? 's' : ''})</p>
             </div>
 
@@ -95,7 +112,12 @@ export const DraggableJobCard: React.FC<{
                         <button
                             key={po.id}
                             type="button"
-                            onClick={(e) => { e.stopPropagation(); onOpenPurchaseOrder(po); }}
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onClick={(e) => { 
+                                console.log('CLICK: PO', po.id);
+                                e.stopPropagation(); 
+                                onOpenPurchaseOrder(po); 
+                            }}
                             className={`flex items-center gap-1 px-1.5 py-0.5 rounded border text-[10px] transition-colors ${getPoStatusColor(po.status, 'bg')} ${getPoStatusColor(po.status, 'text')} border-current opacity-90 hover:opacity-100`}
                             title={`View PO #${po.id} (${po.status})`}
                         >
@@ -108,22 +130,65 @@ export const DraggableJobCard: React.FC<{
 
             <div className="flex justify-between items-center pt-2 border-t mt-2">
                 <div className="flex items-center gap-4 text-xs">
-                    {partsStatusInfo && (
-                        <span title={partsStatusInfo.title} className={`flex items-center gap-1 font-semibold ${partsStatusInfo.color}`}>
-                            {partsStatusInfo.icon && <partsStatusInfo.icon size={14}/>} 
-                            {partsStatus}
-                        </span>
-                    )}
+                    {partsStatusInfo && <span title={partsStatusInfo.title} className={`flex items-center gap-1 font-semibold ${partsStatusInfo.color}`}>{partsStatusInfo.icon && <partsStatusInfo.icon size={14}/>} {partsStatus}</span>}
                     <span title={`Vehicle Status: ${currentVehicleStatus.text}`} className={`flex items-center gap-1 font-semibold ${currentVehicleStatus.color}`}>
-                        <currentVehicleStatus.icon size={14}/> 
-                        {currentVehicleStatus.text}
+                        <currentVehicleStatus.icon size={14}/> {currentVehicleStatus.text}
                     </span>
                 </div>
                 
                 <div className="flex items-center gap-1">
-                    <button type="button" onClick={(e) => { e.stopPropagation(); onOpenAssistant(job.id); }} className="p-1.5 bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200" title="Technical Assistant"><Wand2 size={14} /></button>
-                    {job.vehicleStatus === 'Awaiting Arrival' && <button type="button" onClick={() => onCheckIn(job.id)} className="p-1.5 bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200" title="Check Vehicle In"><LogIn size={14} /></button>}
-                    <button type="button" onClick={() => onEdit(job.id)} className="p-1.5 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200" title="Edit Job"><Edit size={14} /></button>
+                    <button 
+                        type="button"
+                        onPointerDown={(e) => {
+                            console.log('POINTER DOWN: Assistant', job.id);
+                            e.stopPropagation();
+                        }}
+                        onClick={(e) => { 
+                            console.log('CLICK: Assistant', job.id);
+                            e.stopPropagation(); 
+                            onOpenAssistant(job.id); 
+                        }} 
+                        className="p-1.5 bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200" 
+                        title="Technical Assistant"
+                    >
+                        <center><Wand2 size={14} /></center>
+                    </button>
+                    
+                    {job.vehicleStatus === 'Awaiting Arrival' && (
+                        <button 
+                            type="button"
+                            onPointerDown={(e) => {
+                                console.log('POINTER DOWN: CheckIn', job.id);
+                                e.stopPropagation();
+                            }}
+                            onClick={(e) => { 
+                                console.log('CLICK: CheckIn', job.id);
+                                e.stopPropagation(); 
+                                onCheckIn(job.id); 
+                            }} 
+                            className="p-1.5 bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200" 
+                            title="Check Vehicle In"
+                        >
+                            <LogIn size={14} />
+                        </button>
+                    )}
+                    
+                    <button 
+                        type="button"
+                        onPointerDown={(e) => {
+                            console.log('POINTER DOWN: Edit', job.id);
+                            e.stopPropagation();
+                        }}
+                        onClick={(e) => { 
+                            console.log('CLICK: Edit', job.id);
+                            e.stopPropagation(); 
+                            onEdit(job.id); 
+                        }} 
+                        className="p-1.5 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200" 
+                        title="Edit Job"
+                    >
+                        <Edit size={14} />
+                    </button>
                 </div>
             </div>
         </div>

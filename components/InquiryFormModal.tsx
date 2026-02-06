@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Inquiry, User, Customer, Vehicle, Estimate, PurchaseOrder } from '../types';
 import FormModal from './FormModal';
@@ -161,7 +162,10 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({ isOpen, onClose, on
                             <div className="flex gap-2">
                                 {onViewEstimate && (
                                     <button 
-                                        onClick={() => onViewEstimate(linkedEstimate)}
+                                        onClick={() => {
+                                            onViewEstimate(linkedEstimate);
+                                            onClose(); // Close inquiry modal to focus on estimate
+                                        }}
                                         className="px-3 py-1.5 bg-white text-indigo-700 border border-indigo-200 font-semibold rounded-lg hover:bg-indigo-50 text-xs"
                                     >
                                         Review Estimate
@@ -170,7 +174,10 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({ isOpen, onClose, on
                                 {onEditEstimate && linkedEstimate.status === 'Draft' && (
                                     <button
                                         type="button"
-                                        onClick={() => onEditEstimate(linkedEstimate)}
+                                        onClick={() => {
+                                            onEditEstimate(linkedEstimate);
+                                            onClose(); // Close inquiry modal to focus on estimate
+                                        }}
                                         className="flex items-center gap-1.5 text-sm py-1.5 px-3 bg-yellow-500 text-white font-semibold rounded-lg hover:bg-yellow-600"
                                     >
                                         <Edit size={14}/> Edit Estimate
@@ -178,7 +185,10 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({ isOpen, onClose, on
                                 )}
                                 {linkedEstimate.status === 'Approved' && !linkedEstimate.jobId && onScheduleEstimate && (
                                      <button 
-                                        onClick={() => onScheduleEstimate(linkedEstimate, formData.id)}
+                                        onClick={() => {
+                                            onScheduleEstimate(linkedEstimate, formData.id);
+                                            onClose(); // Close inquiry modal to focus on schedule modal
+                                        }}
                                         className="px-3 py-1.5 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 shadow-md flex items-center gap-1 text-xs"
                                     >
                                         <CalendarCheck size={14}/> Schedule Job
@@ -263,6 +273,8 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({ isOpen, onClose, on
                             <option>Open</option>
                             <option>In Progress</option>
                             <option>Sent</option>
+                            <option>Approved</option>
+                            <option>Rejected</option>
                             <option>Closed</option>
                         </select>
                     </div>

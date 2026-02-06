@@ -1,7 +1,8 @@
-import React from 'react';
-import { EstimateLineItem, TaxRate, Part, PurchaseOrder, ServicePackage, Estimate } from '../../../types';
-import { Trash2, PlusCircle, FileText, CheckCircle, AlertTriangle } from 'lucide-react';
-import { formatCurrency } from '../../../core/utils/formatUtils';
+
+import React, { useMemo, useState } from 'react';
+import { EstimateLineItem, TaxRate, Part, PurchaseOrder, ServicePackage, Estimate, Vehicle } from '../../../types';
+import { Trash2, PlusCircle, FileText, CheckCircle, AlertTriangle, Image as ImageIcon, ChevronDown, ChevronUp } from 'lucide-react';
+import { formatCurrency } from '../../../utils/formatUtils';
 import SearchableSelect from '../../SearchableSelect';
 
 // Reusable Row Component within the tab
@@ -17,21 +18,10 @@ interface EditableLineItemRowProps {
     onSelectPart: (lineItemId: string, part: Part) => void;
     isReadOnly: boolean;
     canViewPricing: boolean;
+    onManageMedia: (itemId: string) => void; 
 }
 
-const MemoizedEditableLineItemRow = React.memo(({ 
-    item, 
-    taxRates, 
-    onLineItemChange, 
-    onRemoveLineItem, 
-    filteredParts, 
-    activePartSearch, 
-    onPartSearchChange, 
-    onSetActivePartSearch, 
-    onSelectPart, 
-    isReadOnly, 
-    canViewPricing 
-}: EditableLineItemRowProps) => {
+const MemoizedEditableLineItemRow = React.memo(({ item, taxRates, onLineItemChange, onRemoveLineItem, filteredParts, activePartSearch, onPartSearchChange, onSetActivePartSearch, onSelectPart, isReadOnly, canViewPricing, onManageMedia }: EditableLineItemRowProps) => {
     const isPackageComponent = item.isPackageComponent;
     const isPackageHeader = !!item.servicePackageId && !item.isPackageComponent;
 
@@ -44,98 +34,88 @@ const MemoizedEditableLineItemRow = React.memo(({
     };
 
     return (
-         <div className={`grid grid-cols-12 gap-2 items-center p-2 rounded-lg border transition-colors ${
-            isPackageHeader ? 'bg-indigo-50/30 border-indigo-100 shadow-sm' : 
-            isPackageComponent ? 'bg-gray-50 border-gray-100 ml-2' : 
-            'bg-white shadow-sm border-gray-200'
-         }`}>
-            <input 
-                type="text" 
-                placeholder="Part No." 
-                value={item.partNumber || ''} 
-                onChange={e => onLineItemChange(item.id, 'partNumber', e.target.value)} 
-                className="col-span-2 p-1 border rounded text-xs disabled:bg-gray-100 disabled:text-gray-400" 
-                disabled={isReadOnly || isPackageHeader || isPackageComponent || item.isLabor} 
-            />
+         <div className={`grid grid-cols-12 gap-2 items-center p-2 rounded-lg border ${isPackageComponent ? 'bg-gray-100' : 'bg-white'}`}>
+            <div className="col-span-2 flex items-center gap-1">
+                <input type="text" placeholder="Part Number" value={item.partNumber || ''} onChange={e => onLineItemChange(item.id, 'partNumber', e.target.value)} className="w-full p-1 border rounded disabled:bg-gray-200 text-xs" disabled={isReadOnly || isPackageHeader || isPackageComponent || item.isLabor} />
+            </div>
+            
             <div className="col-span-5 relative">
                  <input
                     type="text"
                     placeholder="Description"
-                    value={item.description || ''}
+                    value={item.description}
                     onChange={handleDescriptionChange}
                     onFocus={() => !item.isLabor && !isPackageHeader && !isPackageComponent && onSetActivePartSearch(item.id)}
-                    onBlur={() => setTimeout(() => onSetActivePartSearch(null), 200)}
-                    className={`w-full p-1 border rounded text-xs disabled:bg-gray-100 disabled:text-gray-500 ${isPackageHeader ? 'font-bold' : ''}`}
+                    onBlur={() => setTimeout(() => onSetActivePartSearch(null), 150)}
+                    className="w-full p-1 border rounded disabled:bg-gray-200"
                     disabled={isReadOnly || isPackageHeader || isPackageComponent}
                 />
-                 {activePartSearch === item.id && (filteredParts || []).length > 0 && (
-                    <div className="absolute z-50 top-full left-0 w-full bg-white border rounded shadow-xl max-h-60 overflow-y-auto mt-1 border-indigo-100">
+                 {activePartSearch === item.id && filteredParts.length > 0 && (
+                    <div className="absolute z-20 top-full left-0 w-full bg-white border rounded shadow-lg max-h-40 overflow-y-auto mt-1">
                         {filteredParts.map(part => (
-                            <div 
-                                key={part.id} 
-                                onMouseDown={() => onSelectPart(item.id, part)} 
-                                className="p-2 hover:bg-indigo-50 cursor-pointer border-b last:border-0 border-gray-50"
-                            >
-                                <div className="flex justify-between items-start">
-                                    <p className="font-bold text-gray-800 text-xs">{part.partNumber}</p>
-                                    <p className={`text-[10px] font-bold px-1 rounded ${part.stockQuantity > 0 ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
-                                        Stock: {part.stockQuantity}
-                                    </p>
-                                </div>
-                                <p className="text-gray-600 text-[10px] truncate">{part.description}</p>
-                                <p className="text-indigo-600 font-mono text-[10px]">{formatCurrency(part.salePrice)}</p>
+                            <div key={part.id} onMouseDown={() => onSelectPart(item.id, part)} className="p-2 hover:bg-indigo-100 cursor-pointer text-sm">
+                                <p className="font-semibold">{part.partNumber} - {part.description}</p>
                             </div>
                         ))}
                     </div>
                 )}
             </div>
-            <input 
-                type="number" 
-                step="0.1" 
-                value={item.quantity || 0} 
-                onChange={e => onLineItemChange(item.id, 'quantity', parseFloat(e.target.value) || 0)} 
-                className="col-span-1 p-1 border rounded text-right text-xs disabled:bg-gray-100 disabled:text-gray-400" 
-                disabled={isReadOnly || isPackageHeader} 
-            />
+            
+            <input type="number" step="0.1" value={item.quantity} onChange={e => onLineItemChange(item.id, 'quantity', e.target.value)} className="col-span-1 p-1 border rounded text-right disabled:bg-gray-200" disabled={isReadOnly || isPackageHeader} />
+            
             {canViewPricing ? (
-                <input 
-                    type="number" 
-                    step="0.01" 
-                    value={item.unitPrice || 0} 
-                    onChange={e => onLineItemChange(item.id, 'unitPrice', parseFloat(e.target.value) || 0)} 
-                    className="col-span-2 p-1 border rounded text-right text-xs disabled:bg-gray-100 disabled:text-gray-400" 
-                    placeholder="Sale (Net)" 
-                    disabled={isReadOnly || isPackageHeader || isPackageComponent}
-                />
+                <input type="number" step="0.01" value={item.unitPrice} onChange={e => onLineItemChange(item.id, 'unitPrice', e.target.value)} className="col-span-2 p-1 border rounded text-right disabled:bg-gray-200" placeholder="Sale (Net)" disabled={isReadOnly || isPackageHeader || isPackageComponent}/>
             ) : (
-                <div className="col-span-2 p-1 text-right font-semibold text-gray-400 text-xs italic">Hidden</div>
+                <div className="col-span-2 p-1 text-right font-semibold text-gray-500">Hidden</div>
             )}
-            <select 
-                value={item.taxCodeId || ''} 
-                onChange={e => onLineItemChange(item.id, 'taxCodeId', e.target.value)} 
-                className="col-span-1 p-1 border rounded text-[10px] disabled:bg-gray-100" 
-                disabled={isReadOnly || isPackageHeader}
-            >
-                <option value="">--</option>
-                {(taxRates || []).map(t => <option key={t.id} value={t.id}>{t.code}</option>)}
-            </select>
-            <button 
-                onClick={() => onRemoveLineItem(item.id)} 
-                className="col-span-1 text-red-400 hover:text-red-600 justify-self-center disabled:opacity-30 transition-colors" 
-                disabled={isReadOnly || isPackageComponent}
-            >
-                <Trash2 size={14} />
-            </button>
+            
+            <div className="col-span-1">
+                <select value={item.taxCodeId || ''} onChange={e => onLineItemChange(item.id, 'taxCodeId', e.target.value)} className="w-full p-1 border rounded text-xs disabled:bg-gray-200" disabled={isReadOnly || isPackageHeader}>
+                    <option value="">-- Tax --</option>{taxRates.map(t => <option key={t.id} value={t.id}>{t.code}</option>)}
+                </select>
+            </div>
+            
+            <div className="col-span-1 flex justify-end gap-1">
+                {!isPackageComponent && !isPackageHeader && (
+                    <button 
+                        onClick={() => onManageMedia(item.id)} 
+                        className={`p-1 rounded hover:bg-gray-200 ${item.media && item.media.length > 0 ? 'text-indigo-600' : 'text-gray-400'}`} 
+                        title="Attach Photo/Video"
+                    >
+                        <ImageIcon size={14}/>
+                    </button>
+                )}
+                <button onClick={() => onRemoveLineItem(item.id)} className="text-red-500 hover:text-red-700 disabled:opacity-50" disabled={isReadOnly || isPackageComponent}><Trash2 size={14} /></button>
+            </div>
         </div>
     );
 });
+
+// Component to render a read-only list of items for supplementary estimates
+const ReadOnlyEstimateList: React.FC<{ items: EstimateLineItem[] }> = ({ items }) => (
+    <div className="mt-2 text-xs bg-gray-50 rounded border p-2 space-y-1">
+        <div className="grid grid-cols-12 font-bold text-gray-500 pb-1 border-b mb-1">
+            <div className="col-span-2">Part No.</div>
+            <div className="col-span-8">Description</div>
+            <div className="col-span-2 text-right">Qty</div>
+        </div>
+        {items.map((item, i) => (
+            <div key={i} className="grid grid-cols-12">
+                <div className="col-span-2 font-mono">{item.partNumber || '-'}</div>
+                <div className="col-span-8">{item.description}</div>
+                <div className="col-span-2 text-right">{item.quantity}</div>
+            </div>
+        ))}
+    </div>
+);
+
 
 interface JobEstimateTabProps {
     partsStatus: string;
     purchaseOrderIds: string[];
     purchaseOrders: PurchaseOrder[];
     supplierMap: Map<string, string>;
-    editableEstimate: any; 
+    editableEstimate: any;
     supplementaryEstimates: Estimate[];
     estimateBreakdown: { packages: any[], standaloneLabor: any[], standaloneParts: any[] };
     isReadOnly: boolean;
@@ -159,25 +139,86 @@ interface JobEstimateTabProps {
     onPartSearchChange: (value: string) => void;
     onSetActivePartSearch: (id: string | null) => void;
     onSelectPart: (lineItemId: string, part: Part) => void;
+    onManageMedia: (itemId: string) => void;
+    vehicle?: Vehicle;
 }
 
 export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
-    partsStatus, purchaseOrderIds, purchaseOrders, supplierMap, editableEstimate, supplementaryEstimates = [],
+    partsStatus, purchaseOrderIds, purchaseOrders, supplierMap, editableEstimate, supplementaryEstimates,
     estimateBreakdown, isReadOnly, canViewPricing, taxRates, filteredParts, activePartSearch, servicePackages,
     totalNet, vatBreakdown, grandTotal, onChange, onOpenPurchaseOrder, onCreateEstimate, onRaiseSupplementaryEstimate, onViewEstimate,
-    onAddLineItem, onAddPackage, onLineItemChange, onRemoveLineItem, onPartSearchChange, onSetActivePartSearch, onSelectPart
+    onAddLineItem, onAddPackage, onLineItemChange, onRemoveLineItem, onPartSearchChange, onSetActivePartSearch, onSelectPart, onManageMedia,
+    vehicle
 }) => {
+    // State to track expanded supplementary estimates
+    const [expandedSuppEstIds, setExpandedSuppEstIds] = useState<Set<string>>(new Set());
+
+    const toggleExpandSuppEst = (id: string) => {
+        setExpandedSuppEstIds(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(id)) newSet.delete(id);
+            else newSet.add(id);
+            return newSet;
+        });
+    };
+    
+    // Sort and Filter Packages based on Vehicle Hierarchy
+    const sortedPackages = useMemo(() => {
+        if (!vehicle) {
+            return servicePackages
+                .filter(p => !p.applicableMake)
+                .map(p => ({ id: p.id, label: p.name }));
+        }
+
+        const vMake = (vehicle.make || '').toLowerCase().trim();
+        const vModel = (vehicle.model || '').toLowerCase().trim();
+
+        const scored = servicePackages.map(pkg => {
+            const pMake = (pkg.applicableMake || '').toLowerCase().trim();
+            const pModel = (pkg.applicableModel || '').toLowerCase().trim();
+            const pVariant = (pkg.applicableVariant || '').toLowerCase().trim();
+            
+            let score = -1;
+
+            if (!pMake) {
+                score = 0; 
+            } else if (vMake === pMake || vMake.includes(pMake) || pMake.includes(vMake)) {
+                if (!pModel) {
+                    score = 1; 
+                } else if (vModel.includes(pModel)) {
+                    if (!pVariant) {
+                        score = 2; 
+                    } else if (vModel.includes(pVariant)) {
+                        score = 3; 
+                    } else {
+                        score = -1; 
+                    }
+                } else {
+                    score = -1; 
+                }
+            }
+            return { pkg, score };
+        });
+
+        return scored
+            .filter(item => item.score >= 0)
+            .sort((a, b) => b.score - a.score || a.pkg.name.localeCompare(b.pkg.name))
+            .map(item => {
+                let label = item.pkg.name;
+                if (item.score === 3) label = `★ ${label} (Exact Match)`;
+                else if (item.score === 2) label = `★ ${label} (Model Match)`;
+                else if (item.score === 1) label = `${label} (Make Match)`;
+                
+                return { id: item.pkg.id, label };
+            });
+
+    }, [servicePackages, vehicle]);
+
     return (
-        <div className="space-y-6 text-sm">
-            <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
-                <label className="font-bold text-gray-700 text-xs uppercase tracking-wider">Parts Logistics Status</label>
-                <select 
-                    name="partsStatus" 
-                    value={partsStatus || 'Not Required'} 
-                    onChange={onChange} 
-                    className="w-full p-2.5 border rounded-lg bg-gray-50 mt-2 focus:ring-2 focus:ring-indigo-500 outline-none transition-all" 
-                    disabled={isReadOnly}
-                >
+        <div className="space-y-4 text-sm">
+            <div>
+                <label className="font-semibold">Parts Status</label>
+                <select name="partsStatus" value={partsStatus || 'Not Required'} onChange={onChange} className="w-full p-2 border rounded bg-white mt-1" disabled={isReadOnly}>
                     <option>Not Required</option>
                     <option>Awaiting Order</option>
                     <option>Ordered</option>
@@ -187,163 +228,110 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
             </div>
             
             {supplementaryEstimates.length > 0 && (
-                <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl">
-                    <h4 className="font-bold text-amber-900 mb-3 flex items-center gap-2">
-                        <FileText size={18}/> Supplementary Estimates
-                    </h4>
+                <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-lg">
+                    <h4 className="font-bold text-indigo-900 mb-2 flex items-center gap-2"><FileText size={16}/> Supplementary Work</h4>
                     <div className="space-y-2">
                         {supplementaryEstimates.map(est => {
-                            const total = (est?.lineItems || []).reduce((sum, item) => {
-                                const qty = item?.quantity || 0;
-                                const price = item?.unitPrice || 0;
-                                return sum + (qty * price);
-                            }, 0);
-
-                            return (
-                                <div key={est.id || Math.random()} className="flex justify-between items-center bg-white p-3 rounded-lg border border-amber-100 shadow-sm">
-                                    <div className="flex items-center gap-3">
-                                        <span className="font-mono font-bold text-amber-700">
-                                            #{est?.estimateNumber || 'N/A'}
-                                        </span>
-                                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${
-                                            est?.status === 'Approved' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'
-                                        }`}>
-                                            {est?.status || 'Draft'}
-                                        </span>
+                             const total = (est.lineItems || []).reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
+                             const isExpanded = expandedSuppEstIds.has(est.id);
+                             return (
+                                <div key={est.id} className="bg-white p-2 rounded border border-indigo-100 shadow-sm">
+                                    <div className="flex justify-between items-center cursor-pointer" onClick={() => toggleExpandSuppEst(est.id)}>
+                                        <div className="flex items-center gap-2">
+                                            {isExpanded ? <ChevronUp size={16} className="text-gray-500"/> : <ChevronDown size={16} className="text-gray-500"/>}
+                                            <span className="font-mono font-semibold">#{est.estimateNumber}</span>
+                                            <span className={`text-[10px] px-2 py-0.5 rounded-full ${est.status === 'Approved' ? 'bg-green-100 text-green-800' : 'bg-gray-200 text-gray-700'}`}>{est.status}</span>
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                            {canViewPricing && <span className="font-bold text-sm">{formatCurrency(total)}</span>}
+                                            <button onClick={(e) => { e.stopPropagation(); onViewEstimate(est); }} className="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded hover:bg-indigo-200 font-semibold">Full View</button>
+                                        </div>
                                     </div>
-                                    <div className="flex items-center gap-4">
-                                        {canViewPricing && (
-                                            <span className="font-bold text-gray-900">
-                                                {formatCurrency(total)}
-                                            </span>
-                                        )}
-                                        <button 
-                                            onClick={() => onViewEstimate && onViewEstimate(est)} 
-                                            className="text-xs bg-amber-600 text-white px-3 py-1.5 rounded-md hover:bg-amber-700 font-bold transition-colors shadow-sm"
-                                        >
-                                            View Details
-                                        </button>
-                                    </div>
+                                    {isExpanded && est.lineItems && (
+                                        <ReadOnlyEstimateList items={est.lineItems} />
+                                    )}
                                 </div>
-                            );
+                             );
                         })}
                     </div>
                 </div>
             )}
             
-            <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-                <div className="p-4 border-b border-gray-50 flex justify-between items-center bg-gray-50/50">
-                    <h4 className="font-bold text-gray-800">Estimate & Costing</h4>
-                    <button onClick={onRaiseSupplementaryEstimate} className="text-xs flex items-center gap-1.5 bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-lg font-bold hover:bg-indigo-100 border border-indigo-200 transition-all">
-                         <PlusCircle size={14}/> Raise Supplementary
+            <div>
+                <div className="flex justify-between items-end mb-2">
+                    <h4 className="font-semibold">Main Job Package & Items</h4>
+                    <button onClick={onRaiseSupplementaryEstimate} className="text-xs flex items-center gap-1 bg-amber-100 text-amber-800 px-2 py-1 rounded font-semibold hover:bg-amber-200 border border-amber-300">
+                         <PlusCircle size={12}/> Raise Supplementary Estimate
                     </button>
                 </div>
 
-                <div className="p-4">
-                    {!editableEstimate && !isReadOnly && (
-                        <div className="text-center py-8">
-                            <AlertTriangle className="mx-auto text-amber-400 mb-2" size={32} />
-                            <p className="text-gray-500 mb-4">This job currently has no cost estimate linked.</p>
-                            <button onClick={onCreateEstimate} className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-indigo-700 transition-all">Create Primary Estimate</button>
-                        </div>
-                    )}
-                    
-                    {editableEstimate && (
-                        <div className="space-y-4">
-                            {!isReadOnly && (
-                                <div className="flex flex-wrap justify-between items-center gap-4 pb-2">
-                                    <div className="flex gap-2">
-                                        <button onClick={() => onAddLineItem(true)} className="flex items-center text-xs font-bold py-2 px-3 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 border border-blue-100 transition-all"><PlusCircle size={14} className="mr-1.5" /> Add Labor</button>
-                                        <button onClick={() => onAddLineItem(false)} className="flex items-center text-xs font-bold py-2 px-3 bg-emerald-50 text-emerald-700 rounded-lg hover:bg-emerald-100 border border-emerald-100 transition-all"><PlusCircle size={14} className="mr-1.5" /> Add Part</button>
-                                    </div>
-                                    <div className="w-64">
-                                        <SearchableSelect
-                                            options={(servicePackages || []).map(p => ({ id: p.id, label: p.name }))}
-                                            value={null} 
-                                            onChange={(packageId) => { if (packageId) onAddPackage(packageId); }}
-                                            placeholder="Quick Add Package..."
-                                        />
-                                    </div>
+                {!editableEstimate && !isReadOnly && <button onClick={onCreateEstimate} className="text-indigo-600 hover:underline">This job has no estimate. Click here to add items.</button>}
+                
+                {editableEstimate && (
+                    <div className="space-y-4">
+                        {!isReadOnly && (
+                            <div className="flex justify-between items-center pt-2">
+                                <div className="flex gap-2">
+                                    <button onClick={() => onAddLineItem(true)} className="flex items-center text-xs py-1 px-2 bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200"><PlusCircle size={14} className="mr-1" /> Add Labor</button>
+                                    <button onClick={() => onAddLineItem(false)} className="flex items-center text-xs py-1 px-2 bg-green-100 text-green-700 rounded-md hover:bg-green-200"><PlusCircle size={14} className="mr-1" /> Add Part</button>
                                 </div>
-                            )}
-
-                            <div className="hidden lg:grid grid-cols-12 gap-2 text-[10px] text-gray-400 font-bold uppercase tracking-widest px-2 mb-1">
-                                <div className="col-span-2">Part No.</div>
-                                <div className="col-span-5">Description</div>
-                                <div className="col-span-1 text-right">Qty/Hrs</div>
-                                <div className="col-span-2 text-right">{canViewPricing ? 'Sell (Net)' : ''}</div>
-                                <div className="col-span-1 text-center">Tax</div>
-                                <div className="col-span-1"></div>
-                            </div>
-                            
-                            <div className="space-y-1">
-                                {(estimateBreakdown?.packages || []).length > 0 && <h5 className="font-bold text-indigo-900 text-[10px] uppercase pt-4 pb-2 flex items-center gap-2"><div className="h-px bg-indigo-100 flex-grow"/> Service Packages <div className="h-px bg-indigo-100 flex-grow"/></h5>}
-                                {(estimateBreakdown?.packages || []).map(({ header, children }: any) => (
-                                    <div key={header.id} className="mb-4 space-y-1">
-                                        <MemoizedEditableLineItemRow canViewPricing={canViewPricing} isReadOnly={isReadOnly} item={header} taxRates={taxRates} onLineItemChange={onLineItemChange} onRemoveLineItem={onRemoveLineItem} filteredParts={[]} activePartSearch={null} onPartSearchChange={()=>{}} onSetActivePartSearch={()=>{}} onSelectPart={()=>{}} />
-                                        <div className="pl-4 border-l-2 border-indigo-100/50 space-y-1">
-                                            {(children || []).map((child: any) => (
-                                                <MemoizedEditableLineItemRow key={child.id} canViewPricing={canViewPricing} isReadOnly={isReadOnly} item={child} taxRates={taxRates} onLineItemChange={onLineItemChange} onRemoveLineItem={onRemoveLineItem} filteredParts={[]} activePartSearch={null} onPartSearchChange={()=>{}} onSetActivePartSearch={()=>{}} onSelectPart={()=>{}} />
-                                            ))}
-                                        </div>
-                                    </div>
-                                ))}
-                                
-                                {(estimateBreakdown?.standaloneLabor || []).length > 0 && <h5 className="font-bold text-blue-900 text-[10px] uppercase pt-4 pb-2 flex items-center gap-2"><div className="h-px bg-blue-100 flex-grow"/> Labor <div className="h-px bg-blue-100 flex-grow"/></h5>}
-                                {(estimateBreakdown?.standaloneLabor || []).map((item: any) => <MemoizedEditableLineItemRow key={item.id} canViewPricing={canViewPricing} isReadOnly={isReadOnly} item={item} taxRates={taxRates} onLineItemChange={onLineItemChange} onRemoveLineItem={onRemoveLineItem} filteredParts={filteredParts} activePartSearch={activePartSearch} onPartSearchChange={onPartSearchChange} onSetActivePartSearch={onSetActivePartSearch} onSelectPart={onSelectPart} />)}
-                                
-                                {(estimateBreakdown?.standaloneParts || []).length > 0 && <h5 className="font-bold text-emerald-900 text-[10px] uppercase pt-4 pb-2 flex items-center gap-2"><div className="h-px bg-emerald-100 flex-grow"/> Parts <div className="h-px bg-emerald-100 flex-grow"/></h5>}
-                                {(estimateBreakdown?.standaloneParts || []).map((item: any) => <MemoizedEditableLineItemRow key={item.id} canViewPricing={canViewPricing} isReadOnly={isReadOnly} item={item} taxRates={taxRates} onLineItemChange={onLineItemChange} onRemoveLineItem={onRemoveLineItem} filteredParts={filteredParts} activePartSearch={activePartSearch} onPartSearchChange={onPartSearchChange} onSetActivePartSearch={onSetActivePartSearch} onSelectPart={onSelectPart} />)}
-                            </div>
-                            
-                            {canViewPricing && (
-                                <div className="mt-6 pt-6 border-t border-gray-100 flex justify-end">
-                                    <div className="w-72 bg-gray-50 p-4 rounded-xl border border-gray-100 space-y-2">
-                                        <div className="flex justify-between text-gray-600"><span>Net Total</span><span className="font-bold">{formatCurrency(totalNet || 0)}</span></div>
-                                        {(vatBreakdown || []).map(b => (
-                                            <div key={b.name} className="flex justify-between text-gray-500 text-xs italic">
-                                                <span>VAT @ {b.rate}%</span>
-                                                <span>{formatCurrency(b.vat || 0)}</span>
-                                            </div>
-                                        ))}
-                                        <div className="flex justify-between font-black text-xl mt-2 pt-2 border-t border-gray-200 text-indigo-900">
-                                            <span>Total</span>
-                                            <span>{formatCurrency(grandTotal || 0)}</span>
-                                        </div>
-                                    </div>
+                                <div className="flex items-center gap-2 w-64">
+                                    <SearchableSelect
+                                        options={sortedPackages}
+                                        value={null} onChange={(packageId) => { if (packageId) onAddPackage(packageId); }}
+                                        placeholder="Add Package..."
+                                    />
                                 </div>
+                            </div>
+                        )}
+                        <div className="hidden lg:grid grid-cols-12 gap-2 text-xs text-gray-500 font-medium px-2">
+                            <div className="col-span-2">Part No.</div><div className="col-span-5">Description</div>
+                            <div className="col-span-1 text-right">Qty/Hrs</div>
+                            {canViewPricing ? (
+                                <div className="col-span-2 text-right">Sell Price (Net)</div>
+                            ) : (
+                                <div className="col-span-2"></div>
                             )}
+                            <div className="col-span-1">Tax</div><div className="col-span-1"></div>
                         </div>
-                    )}
-                </div>
+                        
+                        {estimateBreakdown.packages.length > 0 && <h5 className="font-bold text-gray-800 text-xs uppercase pt-2">Service Packages</h5>}
+                        {estimateBreakdown.packages.map(({ header, children }: any) => (<div key={header.id}><MemoizedEditableLineItemRow canViewPricing={canViewPricing} isReadOnly={isReadOnly} item={header} taxRates={taxRates} onLineItemChange={onLineItemChange} onRemoveLineItem={onRemoveLineItem} filteredParts={[]} activePartSearch={null} onPartSearchChange={()=>{}} onSetActivePartSearch={()=>{}} onSelectPart={()=>{}} onManageMedia={onManageMedia} /><div className="pl-6 border-l-2 ml-2 space-y-1 mt-1">{children.map((child: any) => (<MemoizedEditableLineItemRow key={child.id} canViewPricing={canViewPricing} isReadOnly={isReadOnly} item={child} taxRates={taxRates} onLineItemChange={onLineItemChange} onRemoveLineItem={onRemoveLineItem} filteredParts={[]} activePartSearch={null} onPartSearchChange={()=>{}} onSetActivePartSearch={()=>{}} onSelectPart={()=>{}} onManageMedia={onManageMedia} />))}</div></div>))}
+                        
+                        {estimateBreakdown.standaloneLabor.length > 0 && <h5 className="font-bold text-gray-800 text-xs uppercase pt-2">Labor</h5>}
+                        {estimateBreakdown.standaloneLabor.map((item: any) => <MemoizedEditableLineItemRow key={item.id} canViewPricing={canViewPricing} isReadOnly={isReadOnly} item={item} taxRates={taxRates} onLineItemChange={onLineItemChange} onRemoveLineItem={onRemoveLineItem} filteredParts={filteredParts} activePartSearch={activePartSearch} onPartSearchChange={onPartSearchChange} onSetActivePartSearch={onSetActivePartSearch} onSelectPart={onSelectPart} onManageMedia={onManageMedia} />)}
+                        
+                        {estimateBreakdown.standaloneParts.length > 0 && <h5 className="font-bold text-gray-800 text-xs uppercase pt-2">Parts</h5>}
+                        {estimateBreakdown.standaloneParts.map((item: any) => <MemoizedEditableLineItemRow key={item.id} canViewPricing={canViewPricing} isReadOnly={isReadOnly} item={item} taxRates={taxRates} onLineItemChange={onLineItemChange} onRemoveLineItem={onRemoveLineItem} filteredParts={filteredParts} activePartSearch={activePartSearch} onPartSearchChange={onPartSearchChange} onSetActivePartSearch={onSetActivePartSearch} onSelectPart={onSelectPart} onManageMedia={onManageMedia} />)}
+                        
+                        {canViewPricing && (
+                            <div className="mt-4 pt-4 border-t flex justify-end">
+                                <div className="w-64 text-sm">
+                                    <div className="flex justify-between"><span>Net Total</span><span className="font-semibold">{formatCurrency(totalNet)}</span></div>
+                                    {vatBreakdown.map(b => (<div key={b.name} className="flex justify-between text-gray-600"><span>VAT @ {b.rate}%</span><span>{formatCurrency(b.vat)}</span></div>))}
+                                    <div className="flex justify-between font-bold text-lg mt-2 pt-2 border-t"><span>Grand Total</span><span>{formatCurrency(grandTotal)}</span></div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
 
-            <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-                <div className="p-4 border-b border-gray-50 bg-gray-50/50">
-                    <h4 className="font-bold text-gray-800">Linked Purchase Orders</h4>
-                </div>
-                <div className="p-4 space-y-2">
+            <div>
+                <h4 className="font-semibold">Linked Purchase Orders</h4>
+                <div className="space-y-2 mt-1">
                     {(purchaseOrderIds || []).length > 0 ? (purchaseOrderIds || []).map(poId => {
-                        const po = (purchaseOrders || []).find(p => p.id === poId);
-                        if (!po) return <div key={poId} className="p-3 border rounded-lg bg-red-50 text-xs text-red-700 font-medium">Error: PO {poId} not found in local state.</div>;
-                        const poTotal = (po.lineItems || []).reduce((sum, item) => sum + ((item.unitPrice || 0) * (item.quantity || 0)), 0);
+                        const po = purchaseOrders.find(p => p.id === poId);
+                        if (!po) return <div key={poId} className="p-2 border rounded-md bg-red-50 text-xs text-red-700">Error: Purchase Order {poId} not found.</div>;
+                        const poTotal = (po.lineItems || []).reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0);
                         return (
-                            <button key={poId} type="button" onClick={() => onOpenPurchaseOrder(po)} className="w-full text-left border rounded-xl bg-white p-3 hover:border-indigo-300 hover:shadow-sm transition-all group">
-                                <div className="flex justify-between items-center">
-                                    <div>
-                                        <p className="font-bold text-gray-900 group-hover:text-indigo-600 transition-colors">{poId}</p>
-                                        <p className="text-xs text-gray-500">{po?.supplierId ? (supplierMap.get(po.supplierId) || 'Unknown Supplier') : 'N/A'}</p>
-                                    </div>
-                                    <div className="text-right">
-                                        <span className={`text-[10px] font-bold px-2 py-1 rounded-md uppercase ${po.status === 'Received' ? 'bg-green-100 text-green-700' : 'bg-blue-50 text-blue-600'}`}>{po.status || 'Draft'}</span>
-                                        {canViewPricing && <p className="font-bold mt-1 text-gray-700">{formatCurrency(poTotal)}</p>}
-                                    </div>
+                            <button key={poId} type="button" onClick={() => onOpenPurchaseOrder(po)} className="w-full text-left border rounded-md bg-gray-50 text-xs hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                                <div className="p-2 flex justify-between items-center">
+                                    <div><p><strong>{poId}</strong> - {po?.supplierId ? (supplierMap.get(po.supplierId) || 'Unknown Supplier') : 'N/A'}</p><p>Status: <span className="font-semibold">{po.status}</span>{canViewPricing && <> - Total: <span className="font-semibold">{formatCurrency(poTotal)}</span></>} </p></div>
                                 </div>
                             </button>
                         );
-                    }) : (
-                        <div className="text-center py-4 text-gray-400 italic text-xs">No purchase orders linked to this job yet.</div>
-                    )}
+                    }) : <p className="text-xs text-gray-500">No purchase orders linked.</p>}
                 </div>
             </div>
         </div>

@@ -1,70 +1,83 @@
-import { initializeApp, getApps, getApp } from 'firebase/app';
+import { initializeApp, getApp, getApps } from 'firebase/app';
 import { 
-    getFirestore, doc, getDoc, setDoc, deleteDoc, collection, 
+    getFirestore, doc, getDoc, setDoc, deleteDoc, collection, getDocs,
     onSnapshot, Firestore, runTransaction,
-    query, WithFieldValue, getDocs,
-    where, orderBy, limit
+    query, WithFieldValue,
+    initializeFirestore,
+    CACHE_SIZE_UNLIMITED,
+    persistentLocalCache
 } from 'firebase/firestore';
 import { getAuth, Auth } from 'firebase/auth';
-import { firebaseConfig, currentEnvironment } from '../config/firebaseConfig';
+import { firebaseConfig } from '../config/firebaseConfig';
 
-// 1. Initialize the Firebase App
-const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+const isFirebaseConfigured = !!(firebaseConfig.apiKey && firebaseConfig.projectId);
 
-// 2. Database Routing Logic
-const targetDbId = currentEnvironment === 'Development' ? 'isdevdb' : undefined;
-
-// 3. Exports
-export const db: Firestore = getFirestore(app, targetDbId);
-export const auth: Auth = getAuth(app);
-
-// --- THE TRACE ---
-console.log("-----------------------------------------");
-console.log("🛠️ FIREBASE CONNECTION TRACE");
-console.log(`📍 Environment: ${currentEnvironment}`);
-console.log(`🗄️ Target Database: ${targetDbId || '(default)'}`);
-// @ts-ignore
-const activePath = db?._databaseId?.database || 'default';
-console.log(`✅ Active Path: ${activePath}`);
-console.log("-----------------------------------------");
-
-export const getStorageType = (): 'memory' | 'firestore' => {
-    return (firebaseConfig.apiKey && firebaseConfig.projectId) ? 'firestore' : 'memory';
-};
-
-// --- Standard Helper Functions ---
+let db: Firestore;
+let auth: Auth | undefined;
 
 /**
- * Global Fetch: Retrieves all documents from a collection.
- * Essential for Service Packages and Tax Rates.
+ * ENVIRONMENT-BASED DATABASE SELECTOR
+ * Development/Workstations -> 'isdevdb'
+ * UAT/Production -> '(default)' 
  */
-export const getAllDocuments = async <T>(collectionName: string): Promise<T[]> => {
-    if (!db) return [];
-    try {
-        const snapshot = await getDocs(collection(db, collectionName));
-        return snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as T[];
-    } catch (e) {
-        console.error(`Error in getAllDocuments for ${collectionName}:`, e);
-        return [];
+const getDatabaseId = () => {
+    const mode = import.meta.env.MODE; // 'development', 'production', or 'uat'
+    
+    switch (mode) {
+        case 'development':
+            return 'isdevdb';
+        case 'uat':
+            return '(default)'; // or 'isuatdb' if you have one
+        case 'production':
+            return '(default)';
+        default:
+            return 'isdevdb';
     }
 };
 
-export const getAll = async <T>(collectionName: string): Promise<T[]> => {
-    return getAllDocuments<T>(collectionName);
+const DATABASE_ID = getDatabaseId();
+
+export const COLLECTIONS = {
+    PACKAGES: 'brooks_servicePackages',
+    SETTINGS: 'brooks_settings',
+    COUNTERS: 'brooks_counters'
 };
 
-export const getById = async <T>(collectionName: string, id: string): Promise<T | null> => {
-    if (!db) return null;
+if (isFirebaseConfigured) {
+    const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+    
     try {
-        const docRef = doc(db, collectionName, id);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-            return { ...docSnap.data(), id: docSnap.id } as T;
-        }
+        // WORKSTATION OPTIMIZED INITIALIZATION
+        db = initializeFirestore(app, {
+            experimentalForceLongPolling: true,
+            localCache: persistentLocalCache({
+                cacheSizeBytes: CACHE_SIZE_UNLIMITED
+            })
+        }, DATABASE_ID);
+        
+        console.log(`🔥 [DB] Firestore Initialized in [${import.meta.env.MODE}] mode.`);
+        console.log(`🎯 Targeting Database: [${DATABASE_ID}]`);
+        
+        // Expose to window for debugging
+        (window as any).db = db;
+        
     } catch (e) {
-        console.error(`Error fetching doc ${id} from ${collectionName}:`, e);
+        db = getFirestore(app, DATABASE_ID);
+        console.warn(`⚠️ [DB] Standard fallback used for [${DATABASE_ID}].`);
     }
-    return null;
+
+    auth = getAuth(app);
+} else {
+    console.error("❌ [DB] Firebase is NOT configured. Check your firebaseConfig.ts");
+}
+
+export const getStorageType = () => isFirebaseConfigured ? 'firestore' : 'memory';
+export const getStorageTypeString = () => getStorageType();
+
+const cleanDataForFirestore = (data: any) => {
+    return JSON.parse(JSON.stringify(data, (key, value) => 
+        value === undefined ? null : value
+    ));
 };
 
 export const subscribeToCollection = <T>(
@@ -72,146 +85,114 @@ export const subscribeToCollection = <T>(
     callback: (data: T[]) => void
 ): () => void => {
     if (!db) return () => {};
+
     const q = query(collection(db, collectionName));
-    return onSnapshot(q, (snapshot) => {
+
+    const unsubscribe = onSnapshot(q, { includeMetadataChanges: true }, (snapshot) => {
+        if (snapshot.metadata.fromCache && snapshot.docs.length === 0) return; 
+
         const items = snapshot.docs.map(doc => ({
             ...doc.data(),
             id: doc.id
         })) as unknown as T[];
-        callback(items);
+        
+        const sortedItems = items.sort((a: any, b: any) => {
+            const valA = (a.name || a.label || a.id || '').toLowerCase();
+            const valB = (b.name || b.label || b.id || '').toLowerCase();
+            return valA.localeCompare(valB);
+        });
+        
+        callback(sortedItems);
     }, (error) => {
-        console.error(`Error listening to ${collectionName}:`, error);
+        console.error(`[Firestore Subscription Error] ${collectionName}:`, error);
     });
+
+    return unsubscribe;
+};
+
+export const getAll = async <T>(collectionName: string): Promise<T[]> => {
+    if (!db) return [];
+    try {
+        const snapshot = await getDocs(collection(db, collectionName));
+        return snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as T[];
+    } catch (err) {
+        console.error(`[Firestore getAll Error] ${collectionName}:`, err);
+        return [];
+    }
 };
 
 export const saveDocument = async <T extends { id: string }>(
     collectionName: string, 
-    data: WithFieldValue<T>,
-    customId?: string
+    data: WithFieldValue<T>
 ): Promise<void> => {
     if (!db) return;
-    const docId = customId || (data as any).id;
-    if (!docId) throw new Error("A valid Document ID is required");
-
+    
+    const docId = String(data.id);
     const docRef = doc(db, collectionName, docId);
-    const dataWithId = { ...data, id: docId };
-    const cleanData = JSON.parse(JSON.stringify(dataWithId));
-
-    await setDoc(docRef, cleanData, { merge: true });
+    
+    try {
+        const cleaned = cleanDataForFirestore(data);
+        await setDoc(docRef, cleaned, { merge: true });
+        console.log(`✅ [DB] Document Saved to ${DATABASE_ID}: ${collectionName}/${docId}`);
+    } catch (err) {
+        console.error(`❌ [DB] Save Failed: ${docId}`, err);
+        throw err;
+    }
 };
 
 export const deleteDocument = async (collectionName: string, docId: string): Promise<void> => {
     if (!db) return;
-    await deleteDoc(doc(db, collectionName, docId));
+    try {
+        await deleteDoc(doc(db, collectionName, docId));
+        console.log(`🗑️ [DB] Document Deleted: ${docId}`);
+    } catch (err) {
+        console.error(`❌ [DB] Delete Failed: ${docId}`, err);
+    }
 };
 
-// --- Settings Helpers ---
+export const generateSequenceId = async (prefix: string, entityShortCode: string): Promise<string> => {
+    if (!db) return `${entityShortCode}${prefix}${Math.floor(100000 + Math.random() * 900000)}`;
+    const counterRef = doc(db, COLLECTIONS.COUNTERS, `${entityShortCode}_${prefix}`);
+    try {
+        const newId = await runTransaction(db, async (transaction) => {
+            const counterDoc = await transaction.get(counterRef);
+            let currentCount = 0;
+            if (counterDoc.exists()) currentCount = counterDoc.data().count || 0;
+            const nextCount = currentCount + 1;
+            transaction.set(counterRef, { count: nextCount }, { merge: true });
+            return nextCount;
+        });
+        return `${entityShortCode}${prefix}${String(newId).padStart(6, '0')}`;
+    } catch (e) {
+        return `${entityShortCode}${prefix}${Math.floor(100000 + Math.random() * 900000)}`;
+    }
+};
 
 export const setItem = async (key: string, value: any) => {
     if (!db) return;
-    try {
-        const docRef = doc(db, 'brooks_settings', key);
-        const payload = (typeof value !== 'object' || Array.isArray(value)) ? { value } : value;
-        await setDoc(docRef, payload, { merge: true });
-    } catch (e) {
-        console.error("Error setting item:", e);
-    }
+    const docRef = doc(db, COLLECTIONS.SETTINGS, key);
+    const cleanValue = cleanDataForFirestore(value);
+    const payload = (typeof cleanValue !== 'object' || Array.isArray(cleanValue)) 
+        ? { value: cleanValue } : cleanValue;
+    await setDoc(docRef, payload, { merge: true });
 };
 
 export const getItem = async <T>(key: string): Promise<T | null> => {
     if (!db) return null;
     try {
-        const snap = await getDoc(doc(db, 'brooks_settings', key));
+        const snap = await getDoc(doc(db, COLLECTIONS.SETTINGS, key));
         if (snap.exists()) {
             const data = snap.data();
             return (data.value !== undefined ? data.value : data) as T;
         }
-    } catch (e) {
-        console.error("Error getting item:", e);
+    } catch (err) {
+        console.error(`[DB getItem Error] ${key}:`, err);
     }
     return null;
 };
 
-export const generateSequenceId = async (prefix: string, entityShortCode: string): Promise<string> => {
-    if (!db) return `${entityShortCode}${prefix}${Date.now()}`; 
-    const counterRef = doc(db, 'brooks_counters', `${entityShortCode}_${prefix}`);
-    try {
-        const newId = await runTransaction(db, async (transaction) => {
-            const counterDoc = await transaction.get(counterRef);
-            let currentCount = 0;
-            if (counterDoc.exists()) {
-                currentCount = counterDoc.data().count || 0;
-            }
-            const nextCount = currentCount + 1;
-            transaction.set(counterRef, { count: nextCount }, { merge: true });
-            return nextCount;
-        });
-        return `${entityShortCode}${prefix}${String(newId).padStart(5, '0')}`;
-    } catch (e) {
-        console.error("Transaction failed: ", e);
-        return `${entityShortCode}${prefix}${Date.now().toString().slice(-5)}`;
-    }
-};
-
-// --- Advanced Query Helpers ---
-
-export const getWhere = async <T>(collectionName: string, field: string, operator: any, value: any): Promise<T[]> => {
-    if (!db) return [];
-    try {
-        const q = query(collection(db, collectionName), where(field, operator, value));
-        const querySnapshot = await getDocs(q);
-        return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as T[];
-    } catch (e) {
-        console.error(`Error in getWhere for ${collectionName}:`, e);
-        return [];
-    }
-};
-
-export const getByIds = async <T>(collectionName: string, ids: string[]): Promise<T[]> => {
-    if (!db || ids.length === 0) return [];
-    try {
-        const results: T[] = [];
-        for (let i = 0; i < ids.length; i += 30) {
-            const batchIds = ids.slice(i, i + 30);
-            const q = query(collection(db, collectionName), where('id', 'in', batchIds));
-            const snapshot = await getDocs(q);
-            results.push(...snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as T)));
-        }
-        return results;
-    } catch (e) {
-        console.error(`Error in getByIds for ${collectionName}:`, e);
-        return [];
-    }
-};
-
-/**
- * Global Search: For "Cold Data" lookup (Parts/Customers).
- * Note: Firestore is case-sensitive. The UI must pass the correct casing.
- */
-export const searchDocuments = async <T>(
-    collectionName: string, 
-    searchField: string, 
-    searchTerm: string, 
-    maxResults = 20
-): Promise<T[]> => {
-    if (!db || !searchTerm) return [];
-    try {
-        const term = searchTerm.trim();
-        const q = query(
-            collection(db, collectionName),
-            orderBy(searchField),
-            where(searchField, '>=', term),
-            where(searchField, '<=', term + '\uf8ff'),
-            limit(maxResults)
-        );
-        const querySnapshot = await getDocs(q);
-        return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as T));
-    } catch (e) {
-        console.error(`Error searching ${collectionName}:`, e);
-        return [];
-    }
-};
-
 export const clearStore = async () => {
-    console.warn("clearStore is not fully implemented for Firestore.");
+    console.warn("Manual clear required in Firebase Console for Firestore.");
 };
+
+export { auth, db };

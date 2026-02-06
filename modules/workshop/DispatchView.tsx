@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { useApp } from '../../core/state/AppContext';
 import { useData } from '../../core/state/DataContext';
@@ -33,7 +32,20 @@ interface DispatchViewProps {
     onUnscheduleSegment: (jobId: string, segmentId: string) => void;
 }
 
-const DispatchView: React.FC<DispatchViewProps> = ({ setDefaultDateForModal, setIsSmartCreateOpen, setSmartCreateMode, setSelectedJobId, setIsEditModalOpen, onOpenPurchaseOrder, onPause, onRestart, onReassignEngineer, onCheckIn, onOpenAssistant, onUnscheduleSegment }) => {
+const DispatchView: React.FC<DispatchViewProps> = ({ 
+    setDefaultDateForModal, 
+    setIsSmartCreateOpen, 
+    setSmartCreateMode, 
+    setSelectedJobId, 
+    setIsEditModalOpen, 
+    onOpenPurchaseOrder, 
+    onPause, 
+    onRestart, 
+    onReassignEngineer, 
+    onCheckIn, 
+    onOpenAssistant, 
+    onUnscheduleSegment 
+}) => {
     const { jobs, setJobs, lifts, engineers, customers, vehicles, purchaseOrders, absenceRequests, businessEntities } = useData();
     const { selectedEntityId } = useApp();
     
@@ -85,10 +97,7 @@ const DispatchView: React.FC<DispatchViewProps> = ({ setDefaultDateForModal, set
     const handleAssignConfirm = (engineerId: string, startSegmentIndex: number) => {
         if (!assignModalData) return;
         const { job, segment, lift } = assignModalData;
-
-        // Use the centralized logic to flow segments (handling holidays/weekends)
         confirmJobSchedule(job.id, segment.segmentId, lift.id, engineerId, startSegmentIndex);
-        
         setAssignModalData(null);
     };
 
@@ -145,7 +154,6 @@ const DispatchView: React.FC<DispatchViewProps> = ({ setDefaultDateForModal, set
     
     const handleReassignConfirm = (engineerId: string) => {
         if (!reassignModalData) return;
-        
         onReassignEngineer(reassignModalData.jobId, reassignModalData.segmentId, engineerId);
         setReassignModalData(null);
     };
@@ -188,13 +196,13 @@ const DispatchView: React.FC<DispatchViewProps> = ({ setDefaultDateForModal, set
                     showOnSiteOnly={showOnSiteOnly}
                     setShowOnSiteOnly={setShowOnSiteOnly}
                     onEditJob={(id) => { setSelectedJobId(id); setIsEditModalOpen(true); }}
-                    onCheckIn={onCheckIn}
+                    onCheckIn={(id) => { setSelectedJobId(id); onCheckIn(id); }}
                     onOpenPurchaseOrder={onOpenPurchaseOrder}
                     onPause={onPause}
                     onRestart={onRestart}
                     onReassign={handleReassignClick}
                     onUnscheduleSegment={onUnscheduleSegment}
-                    onOpenAssistant={onOpenAssistant}
+                    onOpenAssistant={(id) => { setSelectedJobId(id); onOpenAssistant(id); }}
                 />
             )}
             
@@ -205,7 +213,7 @@ const DispatchView: React.FC<DispatchViewProps> = ({ setDefaultDateForModal, set
                         vehicles={vehicles}
                         customers={customers}
                         onAddJob={(date) => { setDefaultDateForModal(date); setIsSmartCreateOpen(true); setSmartCreateMode('job'); }}
-                        onDragStart={() => {}} // No drag in month view
+                        onDragStart={() => {}} 
                         maxDailyCapacityHours={dailyCapacity}
                         absencesByDate={absencesByDate}
                         onDayClick={(date) => { setCurrentDate(date); setViewMode('timeline'); }}
@@ -220,7 +228,7 @@ const DispatchView: React.FC<DispatchViewProps> = ({ setDefaultDateForModal, set
                 <WeeklyView 
                     weekStart={weekStart}
                     onEditJob={(id) => { setSelectedJobId(id); setIsEditModalOpen(true); }}
-                    onOpenAssistant={onOpenAssistant}
+                    onOpenAssistant={(id) => { setSelectedJobId(id); onOpenAssistant(id); }}
                 />
             )}
             

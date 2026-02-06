@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Estimate, Customer, Vehicle, BusinessEntity, TaxRate, ServicePackage, Part, EstimateLineItem, Job, User } from '../types';
-import { Save, PlusCircle, Gauge, Info, FileText, ChevronUp, ChevronDown, Trash2, X, TrendingUp, Plus } from 'lucide-react';
+import { Estimate, Customer, Vehicle, BusinessEntity, TaxRate, ServicePackage, Part, EstimateLineItem, Job, User, CheckInPhoto } from '../types';
+import { Save, PlusCircle, Gauge, Info, FileText, ChevronUp, ChevronDown, Trash2, X, TrendingUp, Plus, Image as ImageIcon } from 'lucide-react';
 import { formatDate, addDays, getTodayISOString, getFutureDateISOString } from '../core/utils/dateUtils';
 import { generateEstimateNumber } from '../core/utils/numberGenerators';
 import { formatCurrency } from '../utils/formatUtils';
@@ -9,6 +8,8 @@ import CustomerFormModal from './CustomerFormModal';
 import VehicleFormModal from './VehicleFormModal';
 import SearchableSelect from './SearchableSelect';
 import FormModal from './FormModal';
+import MediaManagerModal from './MediaManagerModal';
+import AsyncImage from './AsyncImage';
 
 interface EditableLineItemRowProps {
     item: EstimateLineItem;
@@ -79,12 +80,12 @@ const MemoizedEditableLineItemRow = React.memo(({ item, taxRates, onLineItemChan
                     <input 
                         type="text" 
                         placeholder="Description" 
-                        value={item.description} 
+                        value={item.description || ''} 
                         onChange={handleDescriptionChange}
                         onFocus={() => {
                             if (!item.isLabor && !item.servicePackageId && !item.isPackageComponent) {
                                 onSetActivePartSearch(item.id);
-                                onPartSearchChange(item.description);
+                                onPartSearchChange(item.description || '');
                             }
                         }}
                         onBlur={() => setTimeout(() => onSetActivePartSearch(null), 150)}
@@ -107,7 +108,10 @@ const MemoizedEditableLineItemRow = React.memo(({ item, taxRates, onLineItemChan
             <input type="number" step="0.1" value={item.quantity} onChange={e => onLineItemChange(item.id, 'quantity', e.target.value)} className="col-span-1 p-1 border rounded text-right" />
             <input type="number" step="0.01" value={item.unitCost || ''} onChange={e => onLineItemChange(item.id, 'unitCost', e.target.value)} className="col-span-2 p-1 border rounded text-right" placeholder="Cost Price" />
             <input type="number" step="0.01" value={item.unitPrice} onChange={e => onLineItemChange(item.id, 'unitPrice', e.target.value)} className="col-span-2 p-1 border rounded text-right" placeholder="Sale Price" disabled={!!isPackageComponent}/>
-            <button onClick={() => onRemoveLineItem(item.id)} className="col-span-1 text-red-500 hover:text-red-700 justify-self-center disabled:opacity-50" disabled={!!isPackageComponent}><Trash2 size={14} /></button>
+            
+            <div className="col-span-1 flex justify-center gap-1">
+                <button onClick={() => onRemoveLineItem(item.id)} className="text-red-500 hover:text-red-700 disabled:opacity-50 p-1" disabled={!!isPackageComponent}><Trash2 size={14} /></button>
+            </div>
         </div>
     );
 });
@@ -156,24 +160,30 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
     // Search state
     const [partSearchTerm, setPartSearchTerm] = useState('');
     const [activePartSearch, setActivePartSearch] = useState<string | null>(null);
+
+    // Media Manager State
+    const [isMediaModalOpen, setIsMediaModalOpen] = useState(false);
     
     const taxRatesMap = useMemo(() => new Map(taxRates.map(t => [t.id, t])), [taxRates]);
     const standardTaxRateId = useMemo(() => taxRates.find(t => t.code === 'T1')?.id, [taxRates]);
 
     useEffect(() => { 
-        setFormData(estimate && Object.keys(estimate).length > 0 
-            ? JSON.parse(JSON.stringify(estimate)) 
-            : { 
-                customerId: '', 
-                vehicleId: '', 
-                entityId: selectedEntityId !== 'all' ? selectedEntityId : businessEntities[0]?.id || '', 
-                issueDate: getTodayISOString(), 
-                expiryDate: getFutureDateISOString(30),
-                status: 'Draft', 
-                lineItems: [], 
-                notes: '',
-                createdByUserId: currentUser.id
-            });
+        if (isOpen) {
+            setFormData(estimate && Object.keys(estimate).length > 0 
+                ? JSON.parse(JSON.stringify(estimate)) 
+                : { 
+                    customerId: '', 
+                    vehicleId: '', 
+                    entityId: selectedEntityId !== 'all' ? selectedEntityId : businessEntities[0]?.id || '', 
+                    issueDate: getTodayISOString(), 
+                    expiryDate: getFutureDateISOString(30),
+                    status: 'Draft', 
+                    lineItems: [], 
+                    notes: '',
+                    createdByUserId: currentUser.id,
+                    media: []
+                });
+        }
     }, [estimate, isOpen, businessEntities, selectedEntityId, currentUser.id]);
     
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
@@ -211,9 +221,7 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
     const entityLaborCostRate = useMemo(() => businessEntities.find(e => e.id === formData.entityId)?.laborCostRate, [businessEntities, formData.entityId]);
     
     const addLineItem = (isLabor: boolean) => {
-        // Default to Optional if this is a supplementary estimate (has a jobId)
         const isOptional = !!formData.jobId;
-        
         const newItem: EstimateLineItem = { 
             id: crypto.randomUUID(), 
             description: '', 
@@ -232,11 +240,8 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
         const pkg = servicePackages.find(p => p.id === packageId);
         if (!pkg) return;
         
-        // Default to Optional if this is a supplementary estimate (has a jobId)
         const isOptional = !!formData.jobId;
-    
         const newItems: EstimateLineItem[] = [];
-        // FIX: Cost set to 0 for header to avoid double counting
         const totalCost = 0; 
         const mainPackageItem: EstimateLineItem = {
             id: crypto.randomUUID(),
@@ -274,12 +279,10 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
     const removeLineItem = useCallback((id: string) => {
         setFormData(prev => {
             const itemToRemove = (prev.lineItems || []).find(i => i.id === id);
-    
             if (itemToRemove && itemToRemove.servicePackageId && !itemToRemove.isPackageComponent) {
                 const packageId = itemToRemove.servicePackageId;
                 return { ...prev, lineItems: (prev.lineItems || []).filter(item => item.servicePackageId !== packageId) };
             }
-    
             return { ...prev, lineItems: (prev.lineItems || []).filter(item => item.id !== id) };
         });
     }, []);
@@ -313,10 +316,8 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
     
     const handleSave = () => {
         if (!formData.customerId || !formData.entityId) return alert('Customer and Business Entity are required.');
-        
         const entity = businessEntities.find(e => e.id === formData.entityId);
         const entityShortCode = entity?.shortCode || 'UNK';
-        
         onSave({ 
             id: formData.id || `est_${Date.now()}`,
             estimateNumber: formData.estimateNumber || generateEstimateNumber(estimates, entityShortCode), 
@@ -324,6 +325,9 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
         } as Estimate);
         onClose();
     };
+    
+    const handleManageMedia = () => setIsMediaModalOpen(true);
+    const handleSaveMedia = (media: CheckInPhoto[]) => setFormData(prev => ({ ...prev, media }));
 
     const filteredVehicles = useMemo(() => vehicles.filter(v => v.customerId === formData.customerId), [vehicles, formData.customerId]);
 
@@ -333,12 +337,10 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
         const customParts: EstimateLineItem[] = [];
         const packageHeaders = (formData.lineItems || []).filter(item => item.servicePackageId && !item.isPackageComponent);
         const allItems = formData.lineItems || [];
-    
         packageHeaders.forEach(header => {
             packages.push({ header: header, children: allItems.filter(item => item.isPackageComponent && item.servicePackageId === header.servicePackageId) });
         });
-    
-        (formData.lineItems || []).forEach(item => {
+        allItems.forEach(item => {
             if (!item.servicePackageId) {
                 if (item.isLabor) customLabor.push(item);
                 else customParts.push(item);
@@ -402,11 +404,33 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                                     <button type="button" onClick={() => setIsAddingVehicle(true)} disabled={!formData.customerId} className="p-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"><Plus size={20} /></button>
                                 </div>
                             </div>
-                            <div><label className="font-semibold">Business Entity</label><select name="entityId" value={formData.entityId} onChange={handleChange} className="w-full p-2 border rounded bg-white mt-1"><option value="">-- Select Entity --</option>{businessEntities.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}</select></div>
-                            <div><label className="font-semibold">Issue Date</label><input name="issueDate" type="date" value={formData.issueDate} onChange={handleChange} className="w-full p-2 border rounded mt-1" /></div>
-                             <div><label className="font-semibold">Expiry Date</label><input name="expiryDate" type="date" value={formData.expiryDate} onChange={handleChange} className="w-full p-2 border rounded mt-1" /></div>
-                            <div><label className="font-semibold">Status</label><select name="status" value={formData.status} onChange={handleChange} className="w-full p-2 border rounded bg-white mt-1"><option>Draft</option><option>Sent</option><option>Approved</option><option>Declined</option><option>Converted to Job</option><option>Closed</option></select></div>
-                            <div><label className="font-semibold">Notes</label><textarea name="notes" value={formData.notes || ''} onChange={handleChange} rows={4} className="w-full p-2 border rounded mt-1" /></div>
+                            <div><label className="font-semibold">Business Entity</label><select name="entityId" value={formData.entityId || ''} onChange={handleChange} className="w-full p-2 border rounded bg-white mt-1"><option value="">-- Select Entity --</option>{businessEntities.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}</select></div>
+                            <div><label className="font-semibold">Issue Date</label><input name="issueDate" type="date" value={formData.issueDate || ''} onChange={handleChange} className="w-full p-2 border rounded mt-1" /></div>
+                             <div><label className="font-semibold">Expiry Date</label><input name="expiryDate" type="date" value={formData.expiryDate || ''} onChange={handleChange} className="w-full p-2 border rounded mt-1" /></div>
+                            <div><label className="font-semibold">Status</label><select name="status" value={formData.status || 'Draft'} onChange={handleChange} className="w-full p-2 border rounded bg-white mt-1"><option>Draft</option><option>Sent</option><option>Approved</option><option>Declined</option><option>Converted to Job</option><option>Closed</option></select></div>
+                            
+                            <div className="bg-gray-50 p-2 rounded-lg border mt-2">
+                                <div className="flex justify-between items-center mb-2">
+                                     <label className="font-semibold text-sm">Notes & Media</label>
+                                     <button type="button" onClick={handleManageMedia} className="text-xs bg-white border border-gray-300 text-indigo-600 px-2 py-1 rounded flex items-center gap-1 hover:bg-indigo-50 shadow-sm">
+                                        <ImageIcon size={14}/> Photos & Videos
+                                    </button>
+                                </div>
+                                <textarea name="notes" value={formData.notes || ''} onChange={handleChange} rows={4} className="w-full p-2 border rounded text-sm" placeholder="Internal notes..." />
+                                
+                                {formData.media && formData.media.length > 0 && (
+                                    <div className="mt-2">
+                                        <p className="text-xs font-bold text-gray-500 mb-1">{formData.media.length} items attached</p>
+                                        <div className="flex gap-2 overflow-x-auto pb-1">
+                                            {formData.media.map(m => (
+                                                <div key={m.id} className="w-12 h-12 bg-gray-200 rounded border overflow-hidden flex-shrink-0 relative group">
+                                                     <AsyncImage imageId={m.id} className="w-full h-full object-cover" />
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </Section>
                 </div>
@@ -480,20 +504,21 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                     </Section>
                 </div>
             </div>
+
             {isAddingCustomer && (
                 <CustomerFormModal
                     isOpen={isAddingCustomer}
                     onClose={() => setIsAddingCustomer(false)}
                     onSave={(newCustomer) => {
                         onSaveCustomer(newCustomer);
-                        setFormData(prev => ({ ...prev, customerId: newCustomer.id, vehicleId: '' }));
+                        setFormData(prev => ({ ...prev, customerId: newCustomer.id }));
                         setIsAddingCustomer(false);
                     }}
                     customer={null}
-                    existingCustomers={customers}
                 />
             )}
-            {isAddingVehicle && formData.customerId && (
+
+            {isAddingVehicle && (
                 <VehicleFormModal
                     isOpen={isAddingVehicle}
                     onClose={() => setIsAddingVehicle(false)}
@@ -502,8 +527,19 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                         setFormData(prev => ({ ...prev, vehicleId: newVehicle.id }));
                         setIsAddingVehicle(false);
                     }}
-                    vehicle={{ customerId: formData.customerId }}
+                    vehicle={null}
                     customers={customers}
+                    defaultCustomerId={formData.customerId}
+                />
+            )}
+
+            {isMediaModalOpen && (
+                <MediaManagerModal
+                    isOpen={isMediaModalOpen}
+                    onClose={() => setIsMediaModalOpen(false)}
+                    onSave={handleSaveMedia}
+                    initialPhotos={formData.media || []}
+                    title="Estimate Media Manager"
                 />
             )}
         </FormModal>
