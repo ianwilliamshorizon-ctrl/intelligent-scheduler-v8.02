@@ -2,6 +2,8 @@ import React, { createContext, useContext, useEffect, useMemo, useRef } from 're
 import * as T from '../../types';
 import { usePersistentState } from './usePersistentState';
 import * as DB from '../db'; 
+import { db } from '../db';
+import { writeBatch, doc } from 'firebase/firestore';
 
 import {
     getInitialJobs, getInitialVehicles, getInitialCustomers, getInitialEngineers,
@@ -92,16 +94,7 @@ export const DataContextProvider: React.FC<{ children: React.ReactNode }> = ({ c
         isFirstRun.current = false;
 
         const performCleanInstall = async () => {
-            // 1. CHECK BEFORE WRITING:
-            // We only want to auto-sync if the database is fundamentally empty.
-            // Since we usePersistentState, we can check if our local arrays are empty.
-            if (servicePackages.length > 0 || parts.length > 0) {
-                console.log("ℹ️ [DB] Data already exists. Skipping Master Sync.");
-                return;
-            }
-
-            console.warn("🚨 MASTER SYNC: Performing Clean Install...");
-            (window as any).isSyncing = true; 
+            if (servicePackages.length > 0 || parts.length > 0) return;
 
             const syncMap = [
                 { col: 'brooks_taxRates', data: getInitialTaxRates() },
@@ -116,23 +109,26 @@ export const DataContextProvider: React.FC<{ children: React.ReactNode }> = ({ c
                 { col: 'brooks_inspectionTemplates', data: getInitialInspectionTemplates() }
             ];
 
+            let batch = writeBatch(db);
+            let count = 0;
+
             for (const task of syncMap) {
-                console.log(`🧹 Syncing ${task.col} (${task.data.length} items)...`);
                 for (const item of task.data) {
-                    try {
-                        await DB.saveDocument(task.col, item as any);
-                    } catch (err) {
-                        console.error(`❌ Sync error in ${task.col} for ID ${item.id}:`, err);
+                    const docRef = doc(db, task.col, item.id);
+                    batch.set(docRef, item);
+                    count++;
+                    if (count >= 450) {
+                        await batch.commit();
+                        batch = writeBatch(db);
+                        count = 0;
                     }
                 }
             }
-            
-            (window as any).isSyncing = false; 
-            console.log("🏁 CLEAN INSTALL COMPLETE.");
+            if (count > 0) await batch.commit();
         };
 
         performCleanInstall();
-    }, [servicePackages.length, parts.length]); // Dependencies to ensure we have data info
+    }, [servicePackages.length, parts.length]);
 
     const value = useMemo(() => ({
         jobs, setJobs, vehicles, setVehicles, customers, setCustomers,
@@ -150,15 +146,18 @@ export const DataContextProvider: React.FC<{ children: React.ReactNode }> = ({ c
         roles, setRoles, inspectionDiagrams, setInspectionDiagrams,
         inspectionTemplates, setInspectionTemplates,
     }), [
-        jobs, vehicles, customers, estimates, invoices, purchaseOrders, purchases, parts, 
-        servicePackages, suppliers, engineers, lifts, rentalVehicles, rentalBookings, 
-        saleVehicles, saleOverheadPackages, prospects, storageBookings, storageLocations, 
-        batteryChargers, nominalCodes, nominalCodeRules, absenceRequests, inquiries, 
-        reminders, auditLog, businessEntities, taxRates, roles, inspectionDiagrams, 
-        inspectionTemplates
+        jobs.length, vehicles.length, customers.length, estimates.length, invoices.length, 
+        parts.length, purchaseOrders.length, purchases.length, servicePackages.length, 
+        suppliers.length, engineers.length, lifts.length, rentalVehicles.length, 
+        rentalBookings.length, saleVehicles.length, saleOverheadPackages.length, 
+        prospects.length, storageBookings.length, storageLocations.length, 
+        batteryChargers.length, nominalCodes.length, nominalCodeRules.length, 
+        absenceRequests.length, inquiries.length, reminders.length, auditLog.length, 
+        businessEntities.length, taxRates.length, roles.length, inspectionDiagrams.length, 
+        inspectionTemplates.length
     ]);
 
-    return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
+    return <DataContext.Provider value={value as any}>{children}</DataContext.Provider>;
 };
 
 export const useData = () => {
