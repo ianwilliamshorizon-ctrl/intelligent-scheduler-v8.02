@@ -88,9 +88,9 @@ export interface Customer {
     isCashCustomer?: boolean;
     marketingConsent: boolean;
     serviceReminderConsent: boolean;
-    communicationPreference?: 'Email' | 'SMS' | 'WhatsApp' | 'None';
+    communicationPreference?: 'Email' | 'SMS' | 'WhatsApp' | 'Phone' | 'None'; // Added 'Phone'
+    searchField?: string; // This is the magic field for high-speed searching
 }
-
 export interface PreviousRegistration {
     registration: string;
     changedAt: string;

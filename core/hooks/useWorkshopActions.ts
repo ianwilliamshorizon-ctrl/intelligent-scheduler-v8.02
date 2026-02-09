@@ -1,4 +1,3 @@
-
 import React, { useCallback } from 'react';
 import { useData } from '../state/DataContext';
 import { useApp } from '../state/AppContext';
@@ -45,27 +44,57 @@ export const useWorkshopActions = () => {
         return 'brooks_items';
     };
 
-    // Updated handleSaveItem to perform Optimistic Update
+    // --- New: Search String Generator ---
+    const generateSearchField = (item: any): string => {
+        const parts: string[] = [];
+
+        // Customer: Name and Company
+        if (item.forename || item.surname || item.companyName) {
+            parts.push(item.forename, item.surname, item.companyName);
+        }
+        // Vehicle: Reg, Make, Model
+        if (item.registration || item.vrm) {
+            parts.push(item.registration || item.vrm, item.make, item.model);
+        }
+        // Part: Part Number and Description
+        if (item.partNumber || item.partName || item.description) {
+            parts.push(item.partNumber, item.partName, item.description);
+        }
+
+        return parts
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase()
+            .trim();
+    };
+
+    // Updated handleSaveItem to perform Search Indexing and Optimistic Update
     const handleSaveItem = async <Type extends { id: string }>(
         setter: React.Dispatch<React.SetStateAction<Type[]>>,
         item: Type,
         collectionOverride?: string
     ) => {
+        // 0. Generate Search Index
+        const searchField = generateSearchField(item);
+        const itemToSave = searchField 
+            ? { ...item, searchField } 
+            : item;
+
         // 1. Optimistic / Local Update
         setter(prev => {
-            const index = prev.findIndex(i => i.id === item.id);
+            const index = prev.findIndex(i => i.id === itemToSave.id);
             if (index >= 0) {
                 const newArr = [...prev];
-                newArr[index] = item;
+                newArr[index] = itemToSave;
                 return newArr;
             } else {
-                return [...prev, item];
+                return [...prev, itemToSave];
             }
         });
 
         // 2. Persist to DB
-        const col = collectionOverride || getCollectionName(item);
-        await saveDocument(col, item);
+        const col = collectionOverride || getCollectionName(itemToSave);
+        await saveDocument(col, itemToSave);
     };
 
     const handleDeleteJob = async (jobId: string) => {
@@ -262,7 +291,6 @@ export const useWorkshopActions = () => {
                  }
 
                  // 2. Update Inquiry Status to 'Approved' & Link POs
-                 // We do NOT close it yet. User must choose to "Apply to Job" or "Create New Job" in Inquiries View.
                  const existingInquiry = inquiries.find(i => i.linkedEstimateId === estimate.id);
                  if (existingInquiry) {
                      const updatedInquiry = { 
@@ -286,7 +314,6 @@ export const useWorkshopActions = () => {
         }
         // SCENARIO 2: New Job from Estimate (Date selected)
         else if (scheduledDate) {
-             // ... [Existing Logic for New Job Creation] ...
              const entity = businessEntities.find(e => e.id === estimate.entityId);
              const laborItems = approvedLineItems.filter(li => li.isLabor);
              const totalHours = laborItems.reduce((acc, i) => acc + i.quantity, 0);
@@ -343,33 +370,24 @@ export const useWorkshopActions = () => {
         handleSaveItem(setEstimates, updatedEstimate, 'brooks_estimates');
     };
 
-    /**
-     * Merges an approved supplementary estimate into the parent job.
-     * This is the "Apply to card in flight" action.
-     */
     const handleMergeEstimateToJob = async (estimate: T.Estimate, jobId: string) => {
         const job = jobs.find(j => j.id === jobId);
         if (!job) return;
 
-        // 1. Identify Items
         const approvedItems = (estimate.lineItems || []).filter(li => !li.isOptional);
         const additionalLaborHours = approvedItems.filter(li => li.isLabor).reduce((sum, i) => sum + i.quantity, 0);
 
-        // 2. Identify linked POs
-        // We find POs created for this estimate (usually linked via the JobID already or tracked in Inquiry)
         const inquiry = inquiries.find(i => i.linkedEstimateId === estimate.id);
         const linkedPOIds = inquiry?.linkedPurchaseOrderIds || [];
 
-        // 3. Create new segments for added hours (Unallocated)
         let newSegments = [...(job.segments || [])];
         if (additionalLaborHours > 0) {
             let remainingToAdd = additionalLaborHours;
-            // Create chunks of up to 8 hours
             while (remainingToAdd > 0) {
                 const chunkDuration = Math.min(remainingToAdd, 8);
                 newSegments.push({
                     segmentId: crypto.randomUUID(),
-                    date: null, // No date yet = Unallocated
+                    date: null, 
                     duration: chunkDuration,
                     status: 'Unallocated',
                     allocatedLift: null,
@@ -380,20 +398,16 @@ export const useWorkshopActions = () => {
             }
         }
 
-        // 4. Update Job
         const updatedJob: T.Job = {
             ...job,
             estimatedHours: (job.estimatedHours || 0) + additionalLaborHours,
             purchaseOrderIds: [...(job.purchaseOrderIds || []), ...linkedPOIds],
-            // If we added POs, update parts status to reflect they might be on order
             partsStatus: linkedPOIds.length > 0 ? 'Awaiting Order' : job.partsStatus,
-            // Append notes
             notes: (job.notes || '') + `\n\n--- Supplementary Work (Est #${estimate.estimateNumber}) ---\n` + (estimate.notes || ''),
             segments: newSegments,
             status: calculateJobStatus(newSegments)
         };
         
-        // 5. Close Inquiry and Estimate
         const closedEstimate: T.Estimate = { ...estimate, status: 'Closed', notes: (estimate.notes || '') + '\n[Merged into Job]' };
         
         await handleSaveItem(setJobs, updatedJob, 'brooks_jobs');

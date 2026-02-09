@@ -1,20 +1,36 @@
 import { Customer } from '../../types';
 
 /**
+ * Generates a unified search string for Firestore/Local filtering.
+ * Concatenates key fields into a single lowercase string.
+ */
+export const generateCustomerSearchField = (customer: Partial<Customer>): string => {
+    return [
+        customer.forename,
+        customer.surname,
+        customer.id,
+        customer.mobile,
+        customer.phone,
+        customer.companyName,
+        customer.postcode
+    ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+    .trim();
+};
+
+/**
  * Generates a unique customer ID based on their surname.
- * The format is the first 5 letters of the surname (or the whole surname if shorter),
- * followed by a 3-digit sequential number (e.g., SMITH001 or JO001).
- * @param surname The customer's surname.
- * @param allCustomers An array of all existing customers to check for uniqueness.
- * @returns A unique customer ID string.
+ * Format: PREFIX + 4-digit sequential number (e.g., SMITH0001).
  */
 export const generateCustomerId = (surname: string, allCustomers: Customer[]): string => {
     if (!surname) {
-        surname = 'CUST'; // Fallback for empty surname
+        surname = 'CUST'; 
     }
 
-    // 1. Create the prefix from the surname (up to 5 chars, uppercase).
-    const prefix = surname.substring(0, 5).toUpperCase();
+    // 1. Create the prefix (up to 4 chars to allow for 4-digit numbers in a compact ID).
+    const prefix = surname.substring(0, 4).toUpperCase();
 
     // 2. Find all customers with the same prefix.
     const matchingCustomers = allCustomers.filter(c => c.id && c.id.startsWith(prefix));
@@ -22,29 +38,29 @@ export const generateCustomerId = (surname: string, allCustomers: Customer[]): s
     // 3. Find the highest existing number for that prefix.
     let maxNumber = 0;
     matchingCustomers.forEach(c => {
-        // The numeric part starts after the prefix.
-        const numberPartStr = c.id.substring(prefix.length);
+        // Extract numeric part regardless of prefix length
+        const numberPartStr = c.id.replace(prefix, '');
         const numberPart = parseInt(numberPartStr, 10);
         if (!isNaN(numberPart) && numberPart > maxNumber) {
             maxNumber = numberPart;
         }
     });
 
-    // 4. The new number is the highest existing number + 1.
+    // 4. Increment and format as 4 digits (e.g., 0001) to match your example "CART0001"
     const newNumber = maxNumber + 1;
+    const formattedNumber = String(newNumber).padStart(4, '0');
 
-    // 5. Format the new number as a 3-digit string with leading zeros.
-    const formattedNumber = String(newNumber).padStart(3, '0');
-
-    // 6. Combine and return.
     return `${prefix}${formattedNumber}`;
 };
 
-
+/**
+ * Returns a formatted name for UI display.
+ */
 export const getCustomerDisplayName = (customer?: Customer): string => {
     if (!customer) return 'Unknown Customer';
     if (customer.isBusinessCustomer && customer.companyName) {
         return `${customer.companyName} (${customer.forename} ${customer.surname})`;
     }
-    return `${customer.title || ''} ${customer.forename} ${customer.surname}`.trim();
+    const fullName = `${customer.title || ''} ${customer.forename} ${customer.surname}`.trim();
+    return fullName || 'Unnamed Customer';
 };

@@ -1,124 +1,156 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { ChevronDown, X } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import debounce from 'lodash/debounce';
+import { searchRecords, RecordItem, BrooksCollection } from '../core/services/firebaseServices';
 
-interface Option {
-    id: string;
-    label: string;
+interface Props {
+  collectionName: BrooksCollection;
+  onSelect: (item: RecordItem) => void;
+  placeholder?: string;
 }
 
-interface SearchableSelectProps {
-    options: Option[];
-    value: string | null;
-    onChange: (value: string | null) => void;
-    placeholder?: string;
-    disabled?: boolean;
-}
+const SearchableSelect: React.FC<Props> = ({ 
+  collectionName, 
+  onSelect, 
+  placeholder = "Search..." 
+}) => {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<RecordItem[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
+  
+  // Refs for race conditions and click-outside handling
+  const requestRef = useRef<string>('');
+  const containerRef = useRef<HTMLDivElement>(null);
 
-const SearchableSelect: React.FC<SearchableSelectProps> = ({ options, value, onChange, placeholder = "Select...", disabled = false }) => {
-    const [isOpen, setIsOpen] = useState(false);
-    const [searchTerm, setSearchTerm] = useState('');
-    const wrapperRef = useRef<HTMLDivElement>(null);
-    const inputRef = useRef<HTMLInputElement>(null);
-
-    const selectedOption = useMemo(() => options.find(option => option.id === value), [options, value]);
-
-    useEffect(() => {
-        // When a value is selected externally or cleared, update the input text
-        setSearchTerm(selectedOption ? selectedOption.label : '');
-    }, [selectedOption]);
-
-    const filteredOptions = useMemo(() => {
-        if (!searchTerm || (selectedOption && searchTerm === selectedOption.label)) {
-            return options;
-        }
-        const lowercasedTerm = searchTerm.toLowerCase();
-        return options.filter(option =>
-            option.label.toLowerCase().includes(lowercasedTerm)
-        );
-    }, [options, searchTerm, selectedOption]);
-
-    const handleSelect = (option: Option) => {
-        onChange(option.id);
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
         setIsOpen(false);
-        // If the component is used as a one-shot action button (value is controlled as null),
-        // clear the search term after selection. Otherwise, display the selected label.
-        if (value === null) {
-            setSearchTerm('');
-        } else {
-            setSearchTerm(option.label);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const fetchResults = useCallback(
+    debounce(async (searchTerm: string) => {
+      // Don't search for empty or very short strings
+      if (!searchTerm.trim() || searchTerm.length < 2) {
+        setResults([]);
+        setIsLoading(false);
+        return;
+      }
+
+      requestRef.current = searchTerm;
+      setIsLoading(true);
+
+      try {
+        const data = await searchRecords(collectionName, searchTerm, 15);
+        
+        // Ensure state only updates if the search term matches the current input (Race Condition Guard)
+        if (requestRef.current === searchTerm) {
+          setResults(data);
         }
-    };
+      } catch (error) {
+        console.error("SearchableSelect Component Error:", error);
+      } finally {
+        if (requestRef.current === searchTerm) {
+          setIsLoading(false);
+        }
+      }
+    }, 300), 
+    [collectionName]
+  );
 
-    const handleClear = (e: React.MouseEvent) => {
-        e.stopPropagation();
-        onChange(null);
-        setSearchTerm('');
-        setIsOpen(true);
-        inputRef.current?.focus();
-    };
+  useEffect(() => {
+    fetchResults(query);
+    return () => fetchResults.cancel();
+  }, [query, fetchResults]);
 
-    useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
-            if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
-                setIsOpen(false);
-                // If user clicks away without selecting, revert to the selected option's label or clear
-                setSearchTerm(selectedOption ? selectedOption.label : '');
-            }
-        };
-        document.addEventListener("mousedown", handleClickOutside);
-        return () => document.removeEventListener("mousedown", handleClickOutside);
-    }, [wrapperRef, selectedOption]);
+  const handleSelect = (item: RecordItem) => {
+    onSelect(item);
+    setQuery(item.name);
+    setIsOpen(false);
+  };
 
-    return (
-        <div className="relative w-full" ref={wrapperRef}>
-            <div className="relative">
-                <input
-                    ref={inputRef}
-                    type="text"
-                    value={searchTerm}
-                    onChange={(e) => {
-                        setSearchTerm(e.target.value);
-                        if (!isOpen) setIsOpen(true);
-                        if(e.target.value === '') {
-                           onChange(null); // Clear selection if input is cleared
-                        }
-                    }}
-                    onFocus={() => setIsOpen(true)}
-                    placeholder={placeholder}
-                    className="w-full p-2 border rounded bg-white pr-16"
-                    disabled={disabled}
-                />
-                <div className="absolute inset-y-0 right-0 flex items-center pr-2">
-                    {value && !disabled && (
-                         <button type="button" onClick={handleClear} className="p-1 text-gray-400 hover:text-gray-600">
-                             <X size={16} />
-                         </button>
-                    )}
-                    <div className="h-full w-px bg-gray-200 mx-1"></div>
-                    <button type="button" onClick={() => setIsOpen(!isOpen)} className="p-1 text-gray-400 hover:text-gray-600" disabled={disabled}>
-                        <ChevronDown size={16} className={`transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-                    </button>
-                </div>
-            </div>
-            {isOpen && !disabled && (
-                <ul className="absolute z-10 w-full mt-1 bg-white border rounded shadow-lg max-h-60 overflow-y-auto">
-                    {filteredOptions.length > 0 ? (
-                        filteredOptions.map(option => (
-                            <li
-                                key={option.id}
-                                onClick={() => handleSelect(option)}
-                                className="px-3 py-2 cursor-pointer hover:bg-indigo-50 text-sm"
-                            >
-                                {option.label}
-                            </li>
-                        ))
-                    ) : (
-                        <li className="px-3 py-2 text-gray-500 text-sm">No results found</li>
-                    )}
-                </ul>
-            )}
-        </div>
-    );
+  return (
+    <div ref={containerRef} style={{ position: 'relative', width: '100%' }}>
+      <input
+        type="text"
+        value={query}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          setIsOpen(true);
+        }}
+        onFocus={() => {
+          if (query.length >= 2) setIsOpen(true);
+        }}
+        placeholder={placeholder}
+        style={{ 
+          width: '100%', 
+          padding: '12px', 
+          borderRadius: '4px', 
+          border: '1px solid #ccc',
+          fontSize: '16px',
+          boxSizing: 'border-box',
+          outline: 'none',
+          backgroundColor: '#fff'
+        }}
+      />
+
+      {/* Dropdown Menu */}
+      {isOpen && (query.trim().length >= 2 || isLoading) && (
+        <ul style={{
+          position: 'absolute',
+          top: '100%',
+          left: 0,
+          right: 0,
+          border: '1px solid #ddd',
+          backgroundColor: '#fff',
+          listStyle: 'none',
+          margin: '4px 0 0 0',
+          padding: 0,
+          zIndex: 9999, // High z-index to ensure it's not hidden
+          maxHeight: '250px',
+          overflowY: 'auto',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+          borderRadius: '4px'
+        }}>
+          {isLoading ? (
+            <li style={{ padding: '12px', color: '#888', textAlign: 'center' }}>
+              <span className="flex items-center justify-center gap-2">
+                Searching...
+              </span>
+            </li>
+          ) : results.length > 0 ? (
+            results.map((item) => (
+              <li 
+                key={item.id} 
+                onClick={() => handleSelect(item)}
+                style={{ 
+                  padding: '12px', 
+                  cursor: 'pointer', 
+                  borderBottom: '1px solid #f0f0f0',
+                  color: '#333',
+                  fontSize: '14px'
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f3f4f6')}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#fff')}
+              >
+                <div style={{ fontWeight: '600' }}>{item.name}</div>
+                {item.id && <div style={{ fontSize: '10px', color: '#999' }}>{item.id}</div>}
+              </li>
+            ))
+          ) : (
+            <li style={{ padding: '12px', color: '#ef4444', textAlign: 'center', fontSize: '14px' }}>
+              No results found
+            </li>
+          )}
+        </ul>
+      )}
+    </div>
+  );
 };
 
 export default SearchableSelect;
