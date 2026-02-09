@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, memo } from 'react';
+import { VList } from 'virtua'; 
 import { useData } from '../../../core/state/DataContext';
 import { Part } from '../../../types';
 import { PlusCircle, Upload, RefreshCw, Search } from 'lucide-react';
@@ -23,7 +24,7 @@ const PartRow = memo(({
     onEdit: (p: Part) => void, 
     onDelete: (id: string) => void 
 }) => (
-    <div className="border-b border-gray-100 flex items-center hover:bg-gray-50 transition-colors text-sm bg-white shrink-0 h-[56px]">
+    <div className="border-b border-gray-100 flex items-center hover:bg-indigo-50/50 transition-colors text-sm bg-white h-[56px] w-full shrink-0">
         <div className="px-4 w-[20%] font-mono font-bold text-indigo-700 truncate">
             <HighlightText text={String(p.partNumber)} highlight={searchTerm} />
         </div>
@@ -39,13 +40,13 @@ const PartRow = memo(({
         <div className="px-4 w-[15%] flex justify-center gap-2">
             <button 
                 onClick={() => onEdit(p)} 
-                className="px-2 py-1 bg-indigo-50 text-indigo-700 rounded hover:bg-indigo-100 text-xs font-bold transition-colors"
+                className="px-2 py-1 bg-indigo-50 text-indigo-700 rounded hover:bg-indigo-600 hover:text-white text-xs font-bold transition-all"
             >
                 Edit
             </button>
             <button 
                 onClick={() => onDelete(p.id)} 
-                className="px-2 py-1 bg-red-50 text-red-600 rounded hover:bg-red-100 text-xs font-bold transition-colors"
+                className="px-2 py-1 bg-red-50 text-red-600 rounded hover:bg-red-600 hover:text-white text-xs font-bold transition-all"
             >
                 Del
             </button>
@@ -53,7 +54,7 @@ const PartRow = memo(({
     </div>
 ));
 
-const HighlightText = ({ text, highlight }: { text: string; highlight: string }) => {
+const HighlightText = memo(({ text, highlight }: { text: string; highlight: string }) => {
     if (!highlight.trim()) return <>{text}</>;
     const words = highlight.split(' ').filter(w => w.trim().length > 0);
     const pattern = new RegExp(`(${words.join('|')})`, 'gi');
@@ -67,7 +68,7 @@ const HighlightText = ({ text, highlight }: { text: string; highlight: string })
             )}
         </>
     );
-};
+});
 
 export const ManagementPartsTab = ({ searchTerm, onShowStatus }: { searchTerm: string, onShowStatus: (text: string, type: 'info' | 'success' | 'error') => void }) => {
     const { parts, suppliers, taxRates } = useData();
@@ -79,7 +80,7 @@ export const ManagementPartsTab = ({ searchTerm, onShowStatus }: { searchTerm: s
     const [debouncedSearch, setDebouncedSearch] = useState(searchTerm);
 
     useEffect(() => {
-        const handler = setTimeout(() => setDebouncedSearch(searchTerm), 200);
+        const handler = setTimeout(() => setDebouncedSearch(searchTerm), 300);
         return () => clearTimeout(handler);
     }, [searchTerm]);
 
@@ -135,8 +136,8 @@ export const ManagementPartsTab = ({ searchTerm, onShowStatus }: { searchTerm: s
     };
 
     return (
-        <div className="space-y-4">
-            <div className="flex justify-between items-center">
+        <div className="space-y-4 h-full flex flex-col">
+            <div className="flex justify-between items-center shrink-0">
                 <div className="text-sm text-gray-500 font-medium italic">
                     {debouncedSearch ? `Found ${filtered.length} matches` : `Total Inventory: ${parts.length} items`}
                 </div>
@@ -152,25 +153,25 @@ export const ManagementPartsTab = ({ searchTerm, onShowStatus }: { searchTerm: s
                 </div>
             </div>
 
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col h-[70vh] overflow-hidden">
-                {/* Header Section */}
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col overflow-hidden flex-1 min-h-[400px]">
+                {/* Header */}
                 <div className="bg-gray-50 border-b border-gray-200 flex text-[10px] font-bold text-gray-600 uppercase tracking-widest shrink-0">
                     <div className="p-4 w-[20%]">Part Number</div>
                     <div className="p-4 w-[40%]">Description</div>
-                    <div className="p-4 w-[10%] text-right">Stock</div>
+                    <div className={`p-4 w-[10%] text-right`}>Stock</div>
                     <div className="p-4 w-[15%] text-right">Unit Price</div>
                     <div className="p-4 w-[15%] text-center">Actions</div>
                 </div>
 
-                {/* Standard Scrollable List */}
-                <div className="flex-1 overflow-y-auto bg-white min-h-0">
+                {/* Body - Clean VList inside a flex-1 container */}
+                <div className="flex-1 min-h-0 bg-white overflow-hidden">
                     {filtered.length === 0 ? (
                         <div className="p-12 text-center h-full flex flex-col items-center justify-center">
                             <Search size={24} className="text-gray-300 mb-2" />
-                            <div className="text-gray-400">No results for "{debouncedSearch}"</div>
+                            <div className="text-gray-400">No results found</div>
                         </div>
                     ) : (
-                        <div className="flex flex-col min-w-full">
+                        <VList>
                             {filtered.map((p) => (
                                 <PartRow 
                                     key={p.id} 
@@ -180,7 +181,7 @@ export const ManagementPartsTab = ({ searchTerm, onShowStatus }: { searchTerm: s
                                     onDelete={deleteItem}
                                 />
                             ))}
-                        </div>
+                        </VList>
                     )}
                 </div>
             </div>
