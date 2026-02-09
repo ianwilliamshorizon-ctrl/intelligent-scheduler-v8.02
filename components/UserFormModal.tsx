@@ -1,30 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
+import { X, Loader } from 'lucide-react';
 import * as T from '../types';
 
 interface UserFormModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSave: (user: T.User) => void;
+    onSave: (user: T.User) => Promise<void>;
     user: T.User | null;
     roles: T.Role[];
 }
 
 const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, user, roles }) => {
-    const [formData, setFormData] = useState<Partial<T.User>>({
-        name: '',
-        email: '',
-        password: '',
-        role: undefined
-    });
+    const [formData, setFormData] = useState<Partial<T.User>>({});
+    const [isSaving, setIsSaving] = useState(false);
 
-    // THE FIX: We only want to initialize the form when the modal OPENS 
-    // or when the User ID changes. We ignore general "roles" or "user" object 
-    // updates caused by background polling.
     useEffect(() => {
         if (isOpen) {
             if (user) {
-                // Spread the user to ensure we have a fresh local copy
                 setFormData({ ...user });
             } else {
                 setFormData({
@@ -35,20 +27,26 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, 
                 });
             }
         }
-        // We strictly only trigger on 'isOpen' or 'user.id'
-    }, [isOpen, user?.id]); 
+    }, [isOpen, user?.id]);
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        
+        setIsSaving(true);
+
         const firstName = formData.name?.split(' ')[0] || 'User';
-        
+
         const finalUser = {
             ...formData,
-            id: formData.id || `User_${firstName}_${Date.now()}`, // Added timestamp to prevent ID collisions
+            id: formData.id || `User_${firstName}_${Date.now()}`,
         } as T.User;
 
-        onSave(finalUser);
+        try {
+            await onSave(finalUser);
+        } catch (error) {
+            // Error is handled by the parent component
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     if (!isOpen) return null;
@@ -60,7 +58,7 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, 
                     <h3 className="font-bold text-gray-800">
                         {user ? 'Edit Staff Member' : 'Add New Staff Member'}
                     </h3>
-                    <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
+                    <button onClick={onClose} className="text-gray-500 hover:text-gray-700" disabled={isSaving}>
                         <X size={20} />
                     </button>
                 </div>
@@ -75,6 +73,7 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, 
                             value={formData.name || ''}
                             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                             placeholder="e.g. Simon Brook"
+                            disabled={isSaving}
                         />
                     </div>
 
@@ -87,6 +86,7 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, 
                             value={formData.email || ''}
                             onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                             placeholder="simon@brookspeed.com"
+                            disabled={isSaving}
                         />
                     </div>
 
@@ -99,6 +99,7 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, 
                             value={formData.password || ''}
                             onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                             placeholder={user ? "Leave blank to keep current" : "Enter password"}
+                            disabled={isSaving}
                         />
                     </div>
 
@@ -109,6 +110,7 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, 
                             value={formData.role || ''}
                             onChange={(e) => setFormData({ ...formData, role: e.target.value as T.UserRole })}
                             required
+                            disabled={isSaving}
                         >
                             <option value="" disabled>Select a role</option>
                             {roles.map(r => (
@@ -118,18 +120,27 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, 
                     </div>
 
                     <div className="pt-4 flex gap-3">
-                        <button 
-                            type="button" 
-                            onClick={onClose} 
+                        <button
+                            type="button"
+                            onClick={onClose}
                             className="flex-1 px-4 py-2 border rounded-md text-gray-700 hover:bg-gray-50 text-sm font-medium"
+                            disabled={isSaving}
                         >
                             Cancel
                         </button>
-                        <button 
-                            type="submit" 
-                            className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 text-sm font-medium shadow-sm"
+                        <button
+                            type="submit"
+                            className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 text-sm font-medium shadow-sm flex items-center justify-center"
+                            disabled={isSaving}
                         >
-                            {user ? 'Update Staff' : 'Create Staff'}
+                            {isSaving ? (
+                                <>
+                                    <Loader className="animate-spin mr-2" size={16} />
+                                    Saving...
+                                </>
+                            ) : (
+                                user ? 'Update Staff' : 'Create Staff'
+                            )}
                         </button>
                     </div>
                 </form>

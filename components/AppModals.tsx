@@ -1,3 +1,4 @@
+
 import React from 'react';
 import * as T from '../types';
 import { useData } from '../core/state/DataContext';
@@ -40,38 +41,54 @@ import CustomerFormModal from './CustomerFormModal';
 import VehicleFormModal from './VehicleFormModal';
 import VehicleHistoryReportModal from './VehicleHistoryReportModal';
 
+// Define the shape of the actions object passed from App.tsx
+interface AppModalActions {
+    handleSaveItem: (setter: React.Dispatch<React.SetStateAction<any[]>>, item: any, collectionOverride?: string) => Promise<void>;
+    setCustomers: React.Dispatch<React.SetStateAction<T.Customer[]>>;
+    setVehicles: React.Dispatch<React.SetStateAction<T.Vehicle[]>>;
+    handleSavePurchaseOrder: (po: T.PurchaseOrder) => Promise<void>;
+    handleSaveEstimate: (estimate: T.Estimate) => Promise<void>;
+    handleApproveEstimate: (estimate: T.Estimate, selectedOptionalItemIds: string[], notes?: string, scheduledDate?: string) => Promise<void>;
+    handleCustomerApproveEstimate: (estimate: T.Estimate, selectedOptionalItemIds: string[], dateRange: any, notes: string) => void;
+    handleCustomerDeclineEstimate: (estimate: T.Estimate) => void;
+    updateLinkedInquiryStatus: (estimateId: string, newStatus: T.Inquiry['status'], extraUpdates?: Partial<T.Inquiry>) => Promise<void>;
+    handleMarkJobAsAwaitingCollection: (jobId: string) => void;
+    handleDeleteJob: (jobId: string) => Promise<void>;
+}
+
 interface AppModalsProps {
     modals: ModalState;
     setters: ModalSetters;
-    actions: any; 
+    actions: AppModalActions;
 }
 
 const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions }) => {
     const { 
         jobs, vehicles, customers, estimates, invoices, purchaseOrders, 
         parts, servicePackages, suppliers, businessEntities, taxRates, 
-        rentalBookings, rentalVehicles, 
-        saleVehicles, prospects, setPurchaseOrders, setJobs, 
-        setEstimates, setInvoices, setRentalBookings, 
+        nominalCodes, nominalCodeRules, rentalBookings, rentalVehicles, 
+        saleVehicles, prospects, absenceRequests, setPurchaseOrders, setJobs, 
+        setEstimates, setInvoices, setStorageBookings, setRentalBookings, 
         setSaleVehicles, setProspects, setInquiries, setParts,
         saleOverheadPackages, inquiries, batteryChargers
     } = useData();
     
     const { currentUser, selectedEntityId, confirmation, setConfirmation, users } = useApp();
 
+    // Helper for saving
     const handleSaveItem = actions.handleSaveItem;
 
     return (
         <>
             <ConfirmationModal 
-                isOpen={confirmation?.isOpen || false} 
-                title={confirmation?.title || ''} 
-                message={confirmation?.message || ''} 
+                isOpen={confirmation.isOpen} 
+                title={confirmation.title} 
+                message={confirmation.message} 
                 onClose={() => setConfirmation({ ...confirmation, isOpen: false })} 
-                onConfirm={confirmation?.onConfirm || (() => {})}
-                confirmText={confirmation?.confirmText}
-                cancelText={confirmation?.cancelText}
-                type={confirmation?.type}
+                onConfirm={confirmation.onConfirm}
+                confirmText={confirmation.confirmText}
+                cancelText={confirmation.cancelText}
+                type={confirmation.type}
             />
 
             {modals.isEditJobModalOpen && modals.selectedJobId && (
@@ -98,6 +115,8 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions }) => {
                     onViewVehicle={(vehicleId) => setters.setVehicleModal({ isOpen: true, vehicleId })}
                     onCheckIn={(job) => setters.setCheckInJob(job)}
                     onCheckOut={(job) => setters.setCheckOutJob(job)}
+                    onSavePart={(part) => handleSaveItem(setParts, part, 'brooks_parts')}
+                    onDelete={actions.handleDeleteJob}
                 />
             )}
 
@@ -118,7 +137,7 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions }) => {
                 />
             )}
 
-            {modals.poModal?.isOpen && (
+            {modals.poModal.isOpen && (
                 <PurchaseOrderFormModal
                     isOpen={modals.poModal.isOpen}
                     onClose={() => setters.setPoModal({isOpen: false, po: null})}
@@ -140,7 +159,9 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions }) => {
                     isOpen={modals.batchPoModalOpen}
                     onClose={() => setters.setBatchPoModalOpen(false)}
                     onSave={(poData) => { 
-                        const newId = `BPP944${Date.now()}`; 
+                        const entity = businessEntities.find(e => e.id === poData.entityId);
+                        const entityShortCode = entity?.shortCode || 'UNK';
+                        const newId = generatePurchaseOrderId(purchaseOrders, entityShortCode);
                         const newPo: T.PurchaseOrder = { id: newId, ...poData, createdByUserId: currentUser.id } as T.PurchaseOrder;
                         actions.handleSavePurchaseOrder(newPo);
                     }}
@@ -154,7 +175,7 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions }) => {
                 />
             )}
 
-            {modals.viewPoModal?.isOpen && modals.viewPoModal.po && (
+            {modals.viewPoModal.isOpen && modals.viewPoModal.po && (
                 <PurchaseOrderViewModal
                     isOpen={modals.viewPoModal.isOpen}
                     onClose={() => setters.setViewPoModal({isOpen: false, po: null})}
@@ -167,7 +188,7 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions }) => {
                 />
             )}
 
-            {modals.invoiceFormModal?.isOpen && (
+            {modals.invoiceFormModal.isOpen && (
                 <InvoiceFormModal 
                     isOpen={modals.invoiceFormModal.isOpen}
                     onClose={() => setters.setInvoiceFormModal({isOpen: false, invoice: null})}
@@ -193,7 +214,7 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions }) => {
                 />
             )}
 
-            {modals.viewInvoiceModal?.isOpen && modals.viewInvoiceModal.invoice && (
+            {modals.viewInvoiceModal.isOpen && modals.viewInvoiceModal.invoice && (
                 <InvoiceModal
                     isOpen={modals.viewInvoiceModal.isOpen}
                     onClose={() => setters.setViewInvoiceModal({isOpen: false, invoice: null})}
@@ -208,7 +229,7 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions }) => {
                 />
             )}
 
-            {modals.salesInvoiceModal?.isOpen && modals.salesInvoiceModal.invoice && (
+            {modals.salesInvoiceModal.isOpen && modals.salesInvoiceModal.invoice && (
                 <SalesInvoiceModal 
                     isOpen={modals.salesInvoiceModal.isOpen}
                     onClose={() => setters.setSalesInvoiceModal({isOpen: false, invoice: null})}
@@ -222,7 +243,7 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions }) => {
                 />
             )}
 
-            {modals.rentalBookingModal?.isOpen && (
+            {modals.rentalBookingModal.isOpen && (
                 <RentalBookingModal 
                     isOpen={modals.rentalBookingModal.isOpen}
                     onClose={() => setters.setRentalBookingModal({isOpen: false, booking: null})}
@@ -236,7 +257,7 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions }) => {
                 />
             )}
 
-            {modals.rentalConditionModal?.isOpen && modals.rentalConditionModal.booking && (
+            {modals.rentalConditionModal.isOpen && modals.rentalConditionModal.booking && (
                 <RentalCheckInCheckOutModal 
                     isOpen={modals.rentalConditionModal.isOpen}
                     onClose={() => setters.setRentalConditionModal({isOpen: false, booking: null, mode: 'checkOut'})}
@@ -248,7 +269,7 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions }) => {
                 />
             )}
 
-            {modals.rentalAgreementModal?.isOpen && modals.rentalAgreementModal.booking && (
+            {modals.rentalAgreementModal.isOpen && modals.rentalAgreementModal.booking && (
                 <RentalAgreementModal 
                     isOpen={modals.rentalAgreementModal.isOpen}
                     onClose={() => setters.setRentalAgreementModal({isOpen: false, booking: null})}
@@ -260,7 +281,7 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions }) => {
                 />
             )}
 
-            {modals.rentalReturnReportModal?.isOpen && modals.rentalReturnReportModal.booking && (
+            {modals.rentalReturnReportModal.isOpen && modals.rentalReturnReportModal.booking && (
                 <RentalCheckInReportModal 
                     isOpen={modals.rentalReturnReportModal.isOpen}
                     onClose={() => setters.setRentalReturnReportModal({isOpen: false, booking: null})}
@@ -272,7 +293,7 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions }) => {
                 />
             )}
 
-            {modals.sorContractModal?.isOpen && modals.sorContractModal.saleVehicle && (
+            {modals.sorContractModal.isOpen && modals.sorContractModal.saleVehicle && (
                 <SORContractModal 
                     isOpen={modals.sorContractModal.isOpen}
                     onClose={() => setters.setSorContractModal({isOpen: false, saleVehicle: null})}
@@ -283,7 +304,7 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions }) => {
                 />
             )}
 
-            {modals.ownerStatementModal?.isOpen && modals.ownerStatementModal.saleVehicle && (
+            {modals.ownerStatementModal.isOpen && modals.ownerStatementModal.saleVehicle && (
                 <OwnerStatementModal 
                     isOpen={modals.ownerStatementModal.isOpen}
                     onClose={() => setters.setOwnerStatementModal({isOpen: false, saleVehicle: null})}
@@ -294,7 +315,7 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions }) => {
                 />
             )}
 
-            {modals.internalStatementModal?.isOpen && modals.internalStatementModal.saleVehicle && (
+            {modals.internalStatementModal.isOpen && modals.internalStatementModal.saleVehicle && (
                 <InternalSaleStatementModal 
                     isOpen={modals.internalStatementModal.isOpen}
                     onClose={() => setters.setInternalStatementModal({isOpen: false, saleVehicle: null})}
@@ -329,12 +350,13 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions }) => {
                 />
             )}
 
-            {modals.manageSaleVehicleModal?.isOpen && modals.manageSaleVehicleModal.saleVehicle && (
+            {modals.manageSaleVehicleModal.isOpen && modals.manageSaleVehicleModal.saleVehicle && (
                 <ManageSaleVehicleModal 
                     isOpen={modals.manageSaleVehicleModal.isOpen}
                     onClose={() => setters.setManageSaleVehicleModal({isOpen: false, saleVehicle: null})}
                     onSave={(sv) => handleSaveItem(setSaleVehicles, sv, 'brooks_saleVehicles')}
                     saleVehicle={modals.manageSaleVehicleModal.saleVehicle}
+                    
                     allJobs={jobs}
                     allEstimates={estimates}
                     allCustomers={customers}
@@ -346,6 +368,7 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions }) => {
                     taxRates={taxRates}
                     businessEntities={businessEntities}
                     prospects={prospects}
+                    
                     onSaleFinalized={(sv, inv) => {
                         handleSaveItem(setSaleVehicles, sv, 'brooks_saleVehicles');
                         handleSaveItem(setInvoices, inv, 'brooks_invoices');
@@ -363,7 +386,7 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions }) => {
                 />
             )}
 
-            {modals.prospectModal?.isOpen && (
+            {modals.prospectModal.isOpen && (
                 <ProspectFormModal 
                     isOpen={modals.prospectModal.isOpen}
                     onClose={() => setters.setProspectModal({isOpen: false, prospect: null})}
@@ -377,7 +400,7 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions }) => {
                 />
             )}
 
-            {modals.estimateFormModal?.isOpen && (
+            {modals.estimateFormModal.isOpen && (
                 <EstimateFormModal 
                     isOpen={modals.estimateFormModal.isOpen}
                     onClose={() => setters.setEstimateFormModal({isOpen: false, estimate: null})}
@@ -394,10 +417,11 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions }) => {
                     estimates={estimates}
                     currentUser={currentUser}
                     selectedEntityId={selectedEntityId}
+                    onSavePart={(part) => handleSaveItem(setParts, part, 'brooks_parts')}
                 />
             )}
 
-            {modals.estimateViewModal?.isOpen && modals.estimateViewModal.estimate && (
+            {modals.estimateViewModal.isOpen && modals.estimateViewModal.estimate && (
                 <EstimateViewModal 
                     isOpen={modals.estimateViewModal.isOpen}
                     onClose={() => setters.setEstimateViewModal({isOpen: false, estimate: null})}
@@ -421,60 +445,87 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions }) => {
                 />
             )}
 
-            {modals.scheduleJobFromEstimateModal?.isOpen && modals.scheduleJobFromEstimateModal.estimate && (
+            {modals.scheduleJobFromEstimateModal.isOpen && modals.scheduleJobFromEstimateModal.estimate && (
                 <ScheduleJobFromEstimateModal 
                     isOpen={modals.scheduleJobFromEstimateModal.isOpen}
                     onClose={() => setters.setScheduleJobFromEstimateModal({isOpen: false, estimate: null})}
                     onConfirm={(job, est, options) => {
-                        const targetInquiryId = modals.scheduleJobFromEstimateModal.inquiryId || inquiries.find(i => i.linkedEstimateId === est.id)?.id;
+                        const originalEstimate = modals.scheduleJobFromEstimateModal.estimate;
+                        
+                        const targetInquiryId = modals.scheduleJobFromEstimateModal.inquiryId || inquiries.find(i => i.linkedEstimateId === originalEstimate?.id)?.id;
                         const inquiry = targetInquiryId ? inquiries.find(i => i.id === targetInquiryId) : null;
                         
-                        const linkedPOIds = inquiry?.linkedPurchaseOrderIds || [];
-                        const existingDraftPOs = linkedPOIds
-                            .map(id => purchaseOrders.find(po => po.id === id))
-                            .filter(po => po && po.status === 'Draft');
-
                         let newPurchaseOrderIds: string[] = [];
-                        let newPOs: T.PurchaseOrder[] = [];
+                        
+                        if (originalEstimate && originalEstimate.jobId) {
+                            const originJob = jobs.find(j => j.id === originalEstimate.jobId);
+                            if (originJob) {
+                                const updateNote = `\n[System]: Supplementary Estimate #${originalEstimate.estimateNumber} was converted to a separate Job #${job.id} scheduled for ${job.scheduledDate}.`;
+                                const updatedOriginJob = {
+                                    ...originJob,
+                                    notes: (originJob.notes || '') + updateNote
+                                };
+                                handleSaveItem(setJobs, updatedOriginJob, 'brooks_jobs');
+                                
+                                const linkedPOIds = inquiry?.linkedPurchaseOrderIds || [];
+                                const posToMove = linkedPOIds
+                                    .map(id => purchaseOrders.find(po => po.id === id))
+                                    .filter((po): po is T.PurchaseOrder => !!po);
 
-                        if (existingDraftPOs.length > 0) {
-                            existingDraftPOs.forEach(po => {
-                                if (po) {
+                                posToMove.forEach(po => {
                                     const updatedPO = { ...po, jobId: job.id };
                                     handleSaveItem(setPurchaseOrders, updatedPO, 'brooks_purchaseOrders');
                                     newPurchaseOrderIds.push(po.id);
-                                }
-                            });
+                                });
+                            }
                         } else {
-                            const partItems = (est.lineItems || []).filter(li => !li.isLabor && li.partId && !li.isOptional);
-                            
-                            if (partItems.length > 0) {
-                                 const partsBySupplier: Record<string, T.EstimateLineItem[]> = {};
-                                 partItems.forEach(item => {
-                                     const partDef = parts.find(p => p.id === item.partId);
-                                     const supplierId = partDef?.defaultSupplierId || 'no_supplier';
-                                     if (!partsBySupplier[supplierId]) partsBySupplier[supplierId] = [];
-                                     partsBySupplier[supplierId].push(item);
-                                 });
-                                 
-                                 const entity = businessEntities.find(e => e.id === job.entityId);
-                                 const entityShortCode = entity?.shortCode || 'UNK';
-                                 let tempAllPOs = [...purchaseOrders]; 
-                
-                                 Object.entries(partsBySupplier).forEach(([supplierId, items]) => {
-                                     const newPOId = generatePurchaseOrderId(tempAllPOs, entityShortCode);
-                                     const vehicle = vehicles.find(v => v.id === job.vehicleId);
-                                     const newPO: T.PurchaseOrder = {
-                                         id: newPOId, entityId: job.entityId, supplierId: supplierId === 'no_supplier' ? null : supplierId,
-                                         vehicleRegistrationRef: vehicle?.registration || 'N/A', orderDate: formatDate(new Date()), status: 'Draft', jobId: job.id, createdByUserId: currentUser.id,
-                                         lineItems: items.map(item => ({ id: crypto.randomUUID(), partNumber: item.partNumber, description: item.description, quantity: item.quantity, receivedQuantity: 0, unitPrice: item.unitCost || 0, taxCodeId: item.taxCodeId }))
-                                     };
-                                     newPOs.push(newPO); 
-                                     newPurchaseOrderIds.push(newPOId); 
-                                     tempAllPOs.push(newPO);
-                                 });
-                                 
-                                 newPOs.forEach(po => handleSaveItem(setPurchaseOrders, po, 'brooks_purchaseOrders'));
+                            const linkedPOIds = inquiry?.linkedPurchaseOrderIds || [];
+                            const existingDraftPOs = linkedPOIds
+                                .map(id => purchaseOrders.find(po => po.id === id))
+                                .filter(po => po && po.status === 'Draft');
+
+                            if (existingDraftPOs.length > 0) {
+                                existingDraftPOs.forEach(po => {
+                                    if (po) {
+                                        const updatedPO = { ...po, jobId: job.id };
+                                        handleSaveItem(setPurchaseOrders, updatedPO, 'brooks_purchaseOrders');
+                                        newPurchaseOrderIds.push(po.id);
+                                    }
+                                });
+                            } else {
+                                const partItems = (est.lineItems || []).filter(li => !li.isLabor && li.partId && !li.isOptional);
+                                
+                                if (partItems.length > 0) {
+                                     const partsBySupplier: Record<string, T.EstimateLineItem[]> = {};
+                                     partItems.forEach(item => {
+                                         const partDef = parts.find(p => p.id === item.partId);
+                                         const supplierId = partDef?.defaultSupplierId || 'no_supplier';
+                                         if (!partsBySupplier[supplierId]) partsBySupplier[supplierId] = [];
+                                         partsBySupplier[supplierId].push(item);
+                                     });
+                                     
+                                     const entity = businessEntities.find(e => e.id === job.entityId);
+                                     const entityShortCode = entity?.shortCode || 'UNK';
+                                     
+                                     let tempAllPOs = [...purchaseOrders]; 
+                                     
+                                     const newPOs: T.PurchaseOrder[] = [];
+                    
+                                     Object.entries(partsBySupplier).forEach(([supplierId, items]) => {
+                                         const newPOId = generatePurchaseOrderId(tempAllPOs, entityShortCode);
+                                         const vehicle = vehicles.find(v => v.id === job.vehicleId);
+                                         const newPO: T.PurchaseOrder = {
+                                             id: newPOId, entityId: job.entityId, supplierId: supplierId === 'no_supplier' ? null : supplierId,
+                                             vehicleRegistrationRef: vehicle?.registration || 'N/A', orderDate: formatDate(new Date()), status: 'Draft', jobId: job.id, createdByUserId: currentUser.id,
+                                             lineItems: items.map(item => ({ id: crypto.randomUUID(), partNumber: item.partNumber, description: item.description, quantity: item.quantity, receivedQuantity: 0, unitPrice: item.unitCost || 0, taxCodeId: item.taxCodeId }))
+                                         };
+                                         newPOs.push(newPO); 
+                                         newPurchaseOrderIds.push(newPOId); 
+                                         tempAllPOs.push(newPO);
+                                     });
+                                     
+                                     newPOs.forEach(po => handleSaveItem(setPurchaseOrders, po, 'brooks_purchaseOrders'));
+                                }
                             }
                         }
 
@@ -490,6 +541,7 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions }) => {
                         
                         if (inquiry) {
                              const allLinkedIds = [...new Set([...(inquiry.linkedPurchaseOrderIds || []), ...newPurchaseOrderIds])];
+                             
                              const hasParts = allLinkedIds.length > 0;
 
                              if (!hasParts) {
@@ -502,28 +554,137 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions }) => {
                         }
 
                         setters.setScheduleJobFromEstimateModal({isOpen: false, estimate: null});
-                        setters.setScheduleEmailModal({
-                            isOpen: true,
-                            data: {
-                                job: jobToSave,
-                                customer: customers.find(c => c.id === jobToSave.customerId),
-                                vehicle: vehicles.find(v => v.id === jobToSave.vehicleId),
-                                isAlternative: options.isAlternative,
-                            }
+                        setConfirmation({
+                            isOpen: true, 
+                            title: 'Job Scheduled', 
+                            message: `Job #${jobToSave.id} has been scheduled for ${jobToSave.scheduledDate}.`, 
+                            type: 'success'
                         });
                     }}
+                    estimate={modals.scheduleJobFromEstimateModal.estimate}
+                    customer={customers.find(c => c.id === modals.scheduleJobFromEstimateModal.estimate!.customerId)}
+                    vehicle={vehicles.find(v => v.id === modals.scheduleJobFromEstimateModal.estimate!.vehicleId)}
+                    jobs={jobs}
+                    vehicles={vehicles}
+                    maxDailyCapacityHours={businessEntities.find(e => e.id === modals.scheduleJobFromEstimateModal.estimate!.entityId)?.dailyCapacityHours || 40}
+                    businessEntities={businessEntities}
+                    customers={customers}
+                    absenceRequests={absenceRequests}
+                    onEditJob={(id) => { setters.setSelectedJobId(id); setters.setIsEditJobModalOpen(true); }}
                 />
             )}
 
-            {/* Added logic to render the ScheduleConfirmationEmailModal which prevents line 648 crash */}
-            {modals.scheduleEmailModal?.isOpen && modals.scheduleEmailModal.data && (
-                <ScheduleConfirmationEmailModal
+            {modals.scheduleEmailModal.isOpen && (
+                <ScheduleConfirmationEmailModal 
                     isOpen={modals.scheduleEmailModal.isOpen}
-                    onClose={() => setters.setScheduleEmailModal({ isOpen: false, data: null })}
-                    job={modals.scheduleEmailModal.data.job}
-                    customer={modals.scheduleEmailModal.data.customer}
-                    vehicle={modals.scheduleEmailModal.data.vehicle}
-                    isAlternative={modals.scheduleEmailModal.data.isAlternative}
+                    onClose={() => setters.setScheduleEmailModal({isOpen: false, data: null})}
+                    onSend={() => {
+                        setters.setScheduleEmailModal({isOpen: false, data: null});
+                        setConfirmation({isOpen: true, title: 'Email Sent', message: 'Booking confirmation email sent.', type: 'success'});
+                    }}
+                    data={modals.scheduleEmailModal.data}
+                />
+            )}
+
+            {modals.inquiryModal.isOpen && (
+                <InquiryFormModal 
+                    isOpen={modals.inquiryModal.isOpen}
+                    onClose={() => setters.setInquiryModal({isOpen: false, inquiry: null})}
+                    onSave={(inq) => handleSaveItem(setInquiries, inq, 'brooks_inquiries')}
+                    inquiry={modals.inquiryModal.inquiry}
+                    users={users}
+                    customers={customers}
+                    vehicles={vehicles}
+                    estimates={estimates}
+                    onViewEstimate={(est) => setters.setEstimateViewModal({isOpen: true, estimate: est})}
+                    onScheduleEstimate={(est, inquiryId) => setters.setScheduleJobFromEstimateModal({isOpen: true, estimate: est, inquiryId})}
+                    onOpenPurchaseOrder={(po) => setters.setViewPoModal({isOpen: true, po})}
+                    onEditEstimate={(est) => setters.setEstimateFormModal({isOpen: true, estimate: est})}
+                />
+            )}
+
+            {modals.isAssistantOpen && (
+                <LiveAssistant 
+                    isOpen={modals.isAssistantOpen}
+                    onClose={() => setters.setIsAssistantOpen(false)}
+                    jobId={modals.assistantContextJobId}
+                    onAddNote={() => {}}
+                    onReviewPackage={() => {}}
+                />
+            )}
+
+            {modals.checkInJob && (
+                <CheckInModal 
+                    isOpen={!!modals.checkInJob}
+                    onClose={() => setters.setCheckInJob(null)}
+                    onSave={(updatedJob) => handleSaveItem(setJobs, updatedJob, 'brooks_jobs')}
+                    job={modals.checkInJob}
+                />
+            )}
+
+            {modals.checkOutJob && (
+                <CheckOutModal 
+                    isOpen={!!modals.checkOutJob}
+                    onClose={() => setters.setCheckOutJob(null)}
+                    onSave={(updatedJob) => handleSaveItem(setJobs, updatedJob, 'brooks_jobs')}
+                    job={modals.checkOutJob}
+                    invoice={invoices.find(i => i.jobId === modals.checkOutJob!.id) || null}
+                    vehicle={vehicles.find(v => v.id === modals.checkOutJob!.vehicleId) || null}
+                    customer={customers.find(c => c.id === modals.checkOutJob!.customerId) || null}
+                    onUpdateInvoice={(inv) => handleSaveItem(setInvoices, inv, 'brooks_invoices')}
+                />
+            )}
+
+            {modals.exportModal.isOpen && (
+                <NominalCodeExportModal 
+                    isOpen={modals.exportModal.isOpen}
+                    onClose={() => setters.setExportModal({isOpen: false, type: 'invoices', items: []})}
+                    type={modals.exportModal.type}
+                    items={modals.exportModal.items}
+                    nominalCodes={nominalCodes}
+                    nominalCodeRules={nominalCodeRules}
+                    customers={customers}
+                    vehicles={vehicles}
+                    taxRates={taxRates}
+                />
+            )}
+
+            {modals.customerModal?.isOpen && modals.customerModal?.customerId && (
+                <CustomerFormModal
+                    isOpen={modals.customerModal.isOpen}
+                    onClose={() => setters.setCustomerModal({ isOpen: false, customerId: null })}
+                    onSave={(c) => handleSaveItem(actions.setCustomers, c, 'brooks_customers')}
+                    customer={customers.find(c => c.id === modals.customerModal.customerId) || null}
+                    existingCustomers={customers}
+                    jobs={jobs}
+                    vehicles={vehicles}
+                    estimates={estimates}
+                    invoices={invoices}
+                    onViewVehicle={(vehicleId) => setters.setVehicleModal({ isOpen: true, vehicleId })}
+                />
+            )}
+
+            {modals.vehicleModal?.isOpen && modals.vehicleModal?.vehicleId && (
+                <VehicleFormModal
+                    isOpen={modals.vehicleModal.isOpen}
+                    onClose={() => setters.setVehicleModal({ isOpen: false, vehicleId: null })}
+                    onSave={(v) => handleSaveItem(actions.setVehicles, v, 'brooks_vehicles')}
+                    vehicle={vehicles.find(v => v.id === modals.vehicleModal.vehicleId) || null}
+                    customers={customers}
+                    jobs={jobs}
+                    estimates={estimates}
+                    invoices={invoices}
+                    onViewJob={(jobId) => { setters.setVehicleModal({ isOpen: false, vehicleId: null }); setters.setSelectedJobId(jobId); setters.setIsEditJobModalOpen(true); }}
+                    onViewEstimate={(est) => { setters.setVehicleModal({ isOpen: false, vehicleId: null }); setters.setEstimateViewModal({ isOpen: true, estimate: est }); }}
+                    onViewInvoice={(inv) => { setters.setVehicleModal({ isOpen: false, vehicleId: null }); setters.setViewInvoiceModal({ isOpen: true, invoice: inv }); }}
+                />
+            )}
+
+            {modals.vehicleHistoryReportModal?.isOpen && modals.vehicleHistoryReportModal?.vehicleId && (
+                <VehicleHistoryReportModal 
+                    isOpen={modals.vehicleHistoryReportModal.isOpen}
+                    onClose={() => setters.setVehicleHistoryReportModal({isOpen: false, vehicleId: null})}
+                    vehicleId={modals.vehicleHistoryReportModal.vehicleId}
                 />
             )}
         </>

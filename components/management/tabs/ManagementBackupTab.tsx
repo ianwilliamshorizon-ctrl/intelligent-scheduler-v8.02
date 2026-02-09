@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useApp } from '../../../core/state/AppContext';
 import { useData } from '../../../core/state/DataContext';
@@ -25,7 +24,9 @@ export const ManagementBackupTab: React.FC<ManagementBackupTabProps> = ({
     
     // Connection Status Check
     const storageType = getStorageType();
-    const isConnectedToCloud = storageType === 'firestore' || storageType === 'emulator';
+    
+    // FIX: Cast storageType to string to allow comparison with 'emulator'
+    const isConnectedToCloud = (storageType as string) === 'firestore' || (storageType as string) === 'emulator';
 
     const handleRestore = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -110,7 +111,10 @@ export const ManagementBackupTab: React.FC<ManagementBackupTabProps> = ({
 
              <div className="p-4 border rounded-lg bg-green-50 border-green-200">
                 <h3 className="text-lg font-bold text-green-900 mb-2 flex items-center gap-2"><Server size={20}/> Database Connection</h3>
-                <div className="flex items-center gap-2 mb-2"><div className={`w-3 h-3 rounded-full ${isConnectedToCloud ? 'bg-green-500' : 'bg-orange-500'}`}></div><span className="font-semibold text-sm">{isConnectedToCloud ? (storageType === 'emulator' ? 'Connected to Emulator (Dev)' : 'Connected to Cloud Firestore') : 'Using Local Storage (IndexedDB)'}</span></div>
+                <div className="flex items-center gap-2 mb-2"><div className={`w-3 h-3 rounded-full ${isConnectedToCloud ? 'bg-green-500' : 'bg-orange-500'}`}></div><span className="font-semibold text-sm">
+                    {/* FIX: Cast storageType to string for rendering check */}
+                    {isConnectedToCloud ? ((storageType as string) === 'emulator' ? 'Connected to Emulator (Dev)' : 'Connected to Cloud Firestore') : 'Using Local Storage (IndexedDB)'}
+                </span></div>
                 {!isConnectedToCloud && <p className="text-xs text-orange-800">Warning: Running locally. Data stored in browser only.</p>}
             </div>
 

@@ -1,8 +1,9 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useData } from '../core/state/DataContext';
 import { useApp } from '../core/state/AppContext';
 import { Job, Vehicle, Customer, Engineer, JobSegment, Lift, Estimate, TaxRate, EstimateLineItem, Part, ServicePackage, BusinessEntity, RentalBooking, User as AppUser, PurchaseOrder, Supplier, UnbillableTimeEvent, EngineerChangeEvent, PurchaseOrderLineItem, ChecklistSection, TyreCheckData, VehicleDamagePoint, CheckInPhoto } from '../types';
-import { X, Save, Car, User, FileText, Wrench, Package, DollarSign, Edit, Plus, Trash2, KeyRound, MessageSquare, ChevronUp, ChevronDown, ListChecks, PlusCircle, ClipboardCheck, CarFront, Image as ImageIcon } from 'lucide-react';
+import { X, Save, Car, User, FileText, Wrench, Package, DollarSign, Edit, Plus, Trash2, KeyRound, MessageSquare, ChevronUp, ChevronDown, ListChecks, PlusCircle, ClipboardCheck, CarFront, Image as ImageIcon, Ban } from 'lucide-react';
 import { formatCurrency } from '../utils/formatUtils';
 import { formatDate, addDays } from '../core/utils/dateUtils';
 import { generateEstimateNumber, generatePurchaseOrderId } from '../core/utils/numberGenerators';
@@ -14,6 +15,7 @@ import { JobDetailsTab } from './jobs/tabs/JobDetailsTab';
 import { initialTyreCheckData } from '../core/data/initialChecklistData';
 import MediaManagerModal from './MediaManagerModal';
 import AsyncImage from './AsyncImage';
+import PartFormModal from './PartFormModal';
 
 const Section = ({ title, icon: Icon, children, defaultOpen = true }: { title: string, icon: React.ElementType, children?: React.ReactNode, defaultOpen?: boolean }) => {
     const [isOpen, setIsOpen] = useState(defaultOpen);
@@ -27,6 +29,70 @@ const Section = ({ title, icon: Icon, children, defaultOpen = true }: { title: s
         </div>
     );
 };
+
+interface EditableLineItemRowProps {
+    item: EstimateLineItem;
+    taxRates: TaxRate[];
+    filteredParts: Part[];
+    activePartSearch: string | null;
+    onLineItemChange: (id: string, field: keyof EstimateLineItem, value: any) => void;
+    onRemoveLineItem: (id: string) => void;
+    onPartSearchChange: (value: string) => void;
+    onSetActivePartSearch: (id: string | null) => void;
+    onSelectPart: (lineItemId: string, part: Part) => void;
+    isReadOnly: boolean;
+    canViewPricing: boolean;
+}
+
+const MemoizedEditableLineItemRow = React.memo(({ item, taxRates, onLineItemChange, onRemoveLineItem, filteredParts, activePartSearch, onPartSearchChange, onSetActivePartSearch, onSelectPart, isReadOnly, canViewPricing }: EditableLineItemRowProps) => {
+    const isPackageComponent = item.isPackageComponent;
+    const isPackageHeader = !!item.servicePackageId && !item.isPackageComponent;
+
+     const handleDescriptionChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const value = e.target.value;
+        onLineItemChange(item.id, 'description', value);
+        if (!item.isLabor && !isPackageHeader && !isPackageComponent) {
+            onPartSearchChange(value);
+        }
+    };
+
+    return (
+         <div className={`grid grid-cols-12 gap-2 items-center p-2 rounded-lg border ${isPackageComponent ? 'bg-gray-100' : 'bg-white'}`}>
+            <input type="text" placeholder="Part Number" value={item.partNumber || ''} onChange={e => onLineItemChange(item.id, 'partNumber', e.target.value)} className="col-span-2 p-1 border rounded disabled:bg-gray-200" disabled={isReadOnly || isPackageHeader || isPackageComponent || item.isLabor} />
+            <div className="col-span-5 relative">
+                 <input
+                    type="text"
+                    placeholder="Description"
+                    value={item.description}
+                    onChange={handleDescriptionChange}
+                    onFocus={() => !item.isLabor && !isPackageHeader && !isPackageComponent && onSetActivePartSearch(item.id)}
+                    onBlur={() => setTimeout(() => onSetActivePartSearch(null), 150)}
+                    className="w-full p-1 border rounded disabled:bg-gray-200"
+                    disabled={isReadOnly || isPackageHeader || isPackageComponent}
+                />
+                 {activePartSearch === item.id && filteredParts.length > 0 && (
+                    <div className="absolute z-20 top-full left-0 w-full bg-white border rounded shadow-lg max-h-40 overflow-y-auto mt-1">
+                        {filteredParts.map(part => (
+                            <div key={part.id} onMouseDown={() => onSelectPart(item.id, part)} className="p-2 hover:bg-indigo-100 cursor-pointer text-sm">
+                                <p className="font-semibold">{part.partNumber} - {part.description}</p>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+            <input type="number" step="0.1" value={item.quantity} onChange={e => onLineItemChange(item.id, 'quantity', e.target.value)} className="col-span-1 p-1 border rounded text-right disabled:bg-gray-200" disabled={isReadOnly || isPackageHeader} />
+            {canViewPricing ? (
+                <input type="number" step="0.01" value={item.unitPrice} onChange={e => onLineItemChange(item.id, 'unitPrice', e.target.value)} className="col-span-2 p-1 border rounded text-right disabled:bg-gray-200" placeholder="Sale (Net)" disabled={isReadOnly || isPackageHeader || isPackageComponent}/>
+            ) : (
+                <div className="col-span-2 p-1 text-right font-semibold text-gray-500">Hidden</div>
+            )}
+            <select value={item.taxCodeId || ''} onChange={e => onLineItemChange(item.id, 'taxCodeId', e.target.value)} className="col-span-1 p-1 border rounded text-xs disabled:bg-gray-200" disabled={isReadOnly || isPackageHeader}>
+                <option value="">-- Tax --</option>{taxRates.map(t => <option key={t.id} value={t.id}>{t.code}</option>)}
+            </select>
+            <button onClick={() => onRemoveLineItem(item.id)} className="col-span-1 text-red-500 hover:text-red-700 justify-self-center disabled:opacity-50" disabled={isReadOnly || isPackageComponent}><Trash2 size={14} /></button>
+        </div>
+    );
+});
 
 const EditJobModal: React.FC<{
     isOpen: boolean;
@@ -42,7 +108,9 @@ const EditJobModal: React.FC<{
     onViewVehicle: (vehicleId: string) => void;
     onCheckIn: (job: Job) => void;
     onCheckOut: (job: Job) => void;
-}> = ({ isOpen, onClose, selectedJobId, onOpenPurchaseOrder, rentalBookings, onOpenRentalBooking, onOpenConditionReport, onRaiseSupplementaryEstimate, onViewEstimate, onViewCustomer, onViewVehicle, onCheckIn, onCheckOut }) => {
+    onSavePart?: (part: Part) => void;
+    onDelete?: (jobId: string) => void;
+}> = ({ isOpen, onClose, selectedJobId, onOpenPurchaseOrder, rentalBookings, onOpenRentalBooking, onOpenConditionReport, onRaiseSupplementaryEstimate, onViewEstimate, onViewCustomer, onViewVehicle, onCheckIn, onCheckOut, onSavePart, onDelete }) => {
     const {
         jobs, setJobs, vehicles, customers, engineers, estimates, setEstimates, purchaseOrders, setPurchaseOrders, suppliers, parts, servicePackages, taxRates, businessEntities, inspectionTemplates
     } = useData();
@@ -62,6 +130,11 @@ const EditJobModal: React.FC<{
     const [mediaModalTitle, setMediaModalTitle] = useState('');
     const [mediaModalData, setMediaModalData] = useState<CheckInPhoto[]>([]);
     const [onMediaSaveCallback, setOnMediaSaveCallback] = useState<((media: CheckInPhoto[]) => void) | null>(null);
+
+    // Part Creation State
+    const [isAddingPart, setIsAddingPart] = useState(false);
+    const [targetLineItemId, setTargetLineItemId] = useState<string | null>(null);
+    const [newPartDescription, setNewPartDescription] = useState('');
 
     const canViewPricing = useMemo(() => {
         if (!currentUser) return false;
@@ -229,7 +302,7 @@ const EditJobModal: React.FC<{
 
     const addLineItem = (isLabor: boolean) => {
         const currentEstimate = handleCreateEstimateIfNeeded();
-        if (!currentEstimate || !editableJob) return;
+        if (!currentEstimate) return;
 
         const entity = businessEntities.find(e => e.id === editableJob.entityId);
 
@@ -258,8 +331,15 @@ const EditJobModal: React.FC<{
         const newItems: EstimateLineItem[] = [];
         const totalCost = (pkg.costItems || []).reduce((sum, item) => sum + ((item.unitCost || 0) * item.quantity), 0);
         const mainPackageItem: EstimateLineItem = {
-            id: crypto.randomUUID(), description: pkg.name, quantity: 1, unitPrice: pkg.totalPrice, unitCost: totalCost, isLabor: false, 
-            taxCodeId: standardTaxRateId, servicePackageId: pkg.id, servicePackageName: pkg.name, isPackageComponent: false,
+            id: crypto.randomUUID(),
+            description: pkg.name,
+            quantity: 1,
+            unitPrice: pkg.totalPrice,
+            unitCost: totalCost, // Cost is distributed among children to avoid double counting
+            isLabor: false, taxCodeId: standardTaxRateId,
+            servicePackageId: pkg.id,
+            servicePackageName: pkg.name,
+            isPackageComponent: false,
         };
         newItems.push(mainPackageItem);
     
@@ -290,6 +370,25 @@ const EditJobModal: React.FC<{
         setEditableEstimate(prev => prev ? ({ ...prev, lineItems: (prev.lineItems || []).map(item => item.id === lineItemId ? { ...item, partNumber: part.partNumber, description: part.description, unitPrice: part.salePrice, unitCost: part.costPrice, partId: part.id, taxCodeId: part.taxCodeId || item.taxCodeId, fromStock: part.stockQuantity > 0 } : item) }) : null);
         setActivePartSearch(null);
         setPartSearchTerm('');
+    };
+
+    const handleAddNewPartClick = (lineItemId: string, searchTerm: string) => {
+        setTargetLineItemId(lineItemId);
+        setNewPartDescription(searchTerm);
+        setIsAddingPart(true);
+        setActivePartSearch(null); // Close dropdown
+    };
+
+    const handleSaveNewPart = (part: Part) => {
+        if (onSavePart) {
+            onSavePart(part);
+        }
+        // Auto-select the newly created part for the target line item
+        if (targetLineItemId) {
+            handleSelectPart(targetLineItemId, part);
+        }
+        setIsAddingPart(false);
+        setTargetLineItemId(null);
     };
 
     const estimateBreakdown = useMemo(() => {
@@ -358,8 +457,17 @@ const EditJobModal: React.FC<{
         setJobs(prevJobs => prevJobs.map(j => (j.id === jobToSave.id ? jobToSave : j)));
         onClose();
     };
+    
+    const handleCancelJob = () => {
+        if (editableJob && onDelete) {
+            if (confirm("Are you sure you want to cancel this job? It will be moved to the Cancelled status but retained in history.")) {
+                onDelete(editableJob.id);
+                onClose();
+            }
+        }
+    };
 
-    if (!isOpen || !editableJob || !job) return null;
+    if (!isOpen || !editableJob) return null;
 
     const engineerMap = new Map(engineers.map(e => [e.id, e.name]));
     const supplierMap = new Map(suppliers.map(s => [s.id, s.name]));
@@ -385,6 +493,7 @@ const EditJobModal: React.FC<{
                         totalNet={totalNet}
                         vatBreakdown={vatBreakdown}
                         grandTotal={grandTotal}
+                        currentJobHours={editableJob.estimatedHours}
                         onChange={handleChange}
                         onOpenPurchaseOrder={onOpenPurchaseOrder}
                         onCreateEstimate={handleCreateEstimateIfNeeded}
@@ -397,8 +506,9 @@ const EditJobModal: React.FC<{
                         onPartSearchChange={setPartSearchTerm}
                         onSetActivePartSearch={setActivePartSearch}
                         onSelectPart={handleSelectPart}
-                        onManageMedia={handleOpenLineItemMedia} 
-                        vehicle={vehicle} 
+                        onManageMedia={handleOpenLineItemMedia}
+                        vehicle={vehicle}
+                        onAddNewPart={handleAddNewPartClick}
                     />
                 );
             case 'inspection':
@@ -417,43 +527,22 @@ const EditJobModal: React.FC<{
                 );
             case 'notes':
                  return (
-                    <div className="space-y-4">
-                         <div className="border rounded-lg bg-gray-50 p-3">
-                            <h4 className="font-bold text-gray-800 text-sm mb-2 flex justify-between items-center">
-                                <span>Technician Media</span>
-                                <button 
-                                    onClick={handleOpenTechnicianMedia} 
-                                    className="text-xs bg-white border border-gray-300 text-indigo-600 px-2 py-1 rounded flex items-center gap-1 hover:bg-indigo-50"
-                                    disabled={isReadOnly}
-                                >
-                                    <ImageIcon size={14}/> Manage Photos/Videos
-                                </button>
-                            </h4>
-                            {editableJob.technicianImages && editableJob.technicianImages.length > 0 ? (
-                                <div className="flex gap-2 overflow-x-auto pb-2">
-                                    {editableJob.technicianImages.map(img => (
-                                        <div key={img.id} className="relative group min-w-[80px] w-20 h-20 bg-gray-200 rounded overflow-hidden">
-                                            <AsyncImage imageId={img.id} className="w-full h-full object-cover" />
-                                        </div>
-                                    ))}
-                                </div>
-                            ) : (
-                                <p className="text-xs text-gray-500 italic">No media attached.</p>
-                            )}
+                    <div className="space-y-3">
+                        <div className="flex justify-between items-center mb-2">
+                             <h4 className="font-bold text-gray-700">Technician Observations</h4>
+                             <button onClick={handleOpenTechnicianMedia} className="text-xs bg-indigo-50 text-indigo-600 px-2 py-1 rounded flex items-center gap-1 hover:bg-indigo-100 border border-indigo-200">
+                                <ImageIcon size={14}/> Photos & Videos
+                             </button>
                         </div>
-
-                        <div className="space-y-2">
-                             <h4 className="font-bold text-gray-800 text-sm">Observations</h4>
-                            {(editableJob.technicianObservations || []).map((obs, index) => (
-                                <div key={index} className="flex justify-between items-center text-sm p-2 bg-white border rounded-md">
-                                    <span>{obs}</span>
-                                    <button onClick={() => handleRemoveObservation(index)} disabled={isReadOnly}><Trash2 size={14} className="text-red-500"/></button>
-                                </div>
-                            ))}
-                             <div className="flex items-center gap-2 pt-2">
-                                <input value={newObservation} onChange={e => setNewObservation(e.target.value)} placeholder="Add new observation..." className="w-full p-2 border rounded-md" disabled={isReadOnly}/>
-                                <button onClick={handleAddObservation} className="p-2 bg-indigo-100 text-indigo-700 rounded-md hover:bg-indigo-200 disabled:opacity-50" disabled={isReadOnly}><Plus size={20}/></button>
+                        {(editableJob.technicianObservations || []).map((obs, index) => (
+                            <div key={index} className="flex justify-between items-center text-sm p-2 bg-gray-50 rounded-md">
+                                <span>{obs}</span>
+                                <button onClick={() => handleRemoveObservation(index)} disabled={isReadOnly}><Trash2 size={14} className="text-red-500"/></button>
                             </div>
+                        ))}
+                         <div className="flex items-center gap-2 pt-2 border-t">
+                            <input value={newObservation} onChange={e => setNewObservation(e.target.value)} placeholder="Add new observation..." className="w-full p-2 border rounded-md" disabled={isReadOnly}/>
+                            <button onClick={handleAddObservation} className="p-2 bg-indigo-100 text-indigo-700 rounded-md hover:bg-indigo-200 disabled:opacity-50" disabled={isReadOnly}><Plus size={20}/></button>
                         </div>
                     </div>
                 );
@@ -475,73 +564,95 @@ const EditJobModal: React.FC<{
     }
 
     return (
-        <>
-            <div className="fixed inset-0 bg-gray-900 bg-opacity-75 z-[60] flex justify-center items-center p-4">
-                <div className="bg-white rounded-xl shadow-2xl w-full max-w-[95vw] max-h-[90vh] flex flex-col">
-                    <header className="flex-shrink-0 flex justify-between items-center p-4 border-b">
-                        <div className="flex items-center gap-3">
-                            <div>
-                                <h2 className="text-xl font-bold text-indigo-700">Edit Job #{job.id}</h2>
-                                <p className="text-sm text-gray-600">{job.description}</p>
+        <div className="fixed inset-0 bg-gray-900 bg-opacity-75 z-[60] flex justify-center items-center p-4">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-[95vw] max-h-[90vh] flex flex-col">
+                <header className="flex-shrink-0 flex justify-between items-center p-4 border-b">
+                    <div className="flex items-center gap-3">
+                        <div>
+                            <h2 className="text-xl font-bold text-indigo-700">Edit Job #{job.id}</h2>
+                            <p className="text-sm text-gray-600">{job.description}</p>
+                        </div>
+                         {job.status === 'Cancelled' && <span className="bg-red-100 text-red-800 px-2 py-0.5 rounded text-xs font-bold uppercase">Cancelled</span>}
+                    </div>
+                    <button type="button" onClick={onClose}><X size={24} /></button>
+                </header>
+                <main className="flex-grow overflow-y-auto p-6 grid grid-cols-1 lg:grid-cols-6 gap-6 bg-gray-50">
+                    <div className="lg:col-span-2 space-y-4">
+                        <JobDetailsTab 
+                            editableJob={editableJob}
+                            vehicle={vehicle}
+                            customer={customer}
+                            isReadOnly={isReadOnly}
+                            linkedBooking={linkedBooking}
+                            rentalVehicleRegistration={linkedBooking ? vehicles.find(v => v.id === linkedBooking.rentalVehicleId)?.registration : undefined}
+                            onBookCourtesyCar={handleBookCourtesyCar}
+                            onOpenRentalBooking={onOpenRentalBooking}
+                            onOpenConditionReport={onOpenConditionReport}
+                            onChange={handleChange}
+                            onViewCustomer={onViewCustomer}
+                            onViewVehicle={onViewVehicle}
+                        />
+                         <div className="border rounded-lg bg-white shadow-sm p-4">
+                            <h3 className="text-md font-bold mb-2 flex items-center gap-2"><DollarSign size={16}/> Billing</h3>
+                            <div className="text-sm space-y-2">
+                                <p><strong>Estimate:</strong> {editableEstimate ? `#${editableEstimate.estimateNumber}` : 'N/A'}</p>
+                                <p><strong>Invoice:</strong> {job.invoiceId ? `#${job.invoiceId}` : 'Not Invoiced'}</p>
                             </div>
                         </div>
-                        <button type="button" onClick={onClose}><X size={24} /></button>
-                    </header>
-                    <main className="flex-grow overflow-y-auto p-6 grid grid-cols-1 lg:grid-cols-6 gap-6 bg-gray-50">
-                        <div className="lg:col-span-2 space-y-4">
-                            <JobDetailsTab 
-                                editableJob={editableJob}
-                                vehicle={vehicle}
-                                customer={customer}
-                                isReadOnly={isReadOnly}
-                                linkedBooking={linkedBooking}
-                                rentalVehicleRegistration={linkedBooking ? vehicles.find(v => v.id === linkedBooking.rentalVehicleId)?.registration : undefined}
-                                onBookCourtesyCar={handleBookCourtesyCar}
-                                onOpenRentalBooking={onOpenRentalBooking}
-                                onOpenConditionReport={onOpenConditionReport}
-                                onChange={handleChange}
-                                onViewCustomer={onViewCustomer}
-                                onViewVehicle={onViewVehicle}
-                            />
-                             <div className="border rounded-lg bg-white shadow-sm p-4">
-                                <h3 className="text-md font-bold mb-2 flex items-center gap-2"><DollarSign size={16}/> Billing</h3>
-                                <div className="text-sm space-y-2">
-                                    <p><strong>Estimate:</strong> {editableEstimate ? `#${editableEstimate.estimateNumber}` : 'N/A'}</p>
-                                    <p><strong>Invoice:</strong> {job.invoiceId ? `#${job.invoiceId}` : 'Not Invoiced'}</p>
-                                </div>
-                            </div>
+                    </div>
+                    <div className="lg:col-span-4">
+                        <div className="flex gap-1 p-1 bg-gray-200 rounded-lg mb-4">
+                            <button onClick={() => setActiveTab('estimate')} className={`w-full py-2 rounded-md font-semibold text-sm transition ${activeTab === 'estimate' ? 'bg-white shadow' : 'text-gray-600'}`}>Estimate & Parts</button>
+                            <button onClick={() => setActiveTab('inspection')} className={`w-full py-2 rounded-md font-semibold text-sm transition ${activeTab === 'inspection' ? 'bg-white shadow' : 'text-gray-600'}`}>Inspection</button>
+                            <button onClick={() => setActiveTab('notes')} className={`w-full py-2 rounded-md font-semibold text-sm transition ${activeTab === 'notes' ? 'bg-white shadow' : 'text-gray-600'}`}>Technician Notes</button>
+                            <button onClick={() => setActiveTab('segments')} className={`w-full py-2 rounded-md font-semibold text-sm transition ${activeTab === 'segments' ? 'bg-white shadow' : 'text-gray-600'}`}>Segments</button>
                         </div>
-                        <div className="lg:col-span-4">
-                            <div className="flex gap-1 p-1 bg-gray-200 rounded-lg mb-4">
-                                <button onClick={() => setActiveTab('estimate')} className={`w-full py-2 rounded-md font-semibold text-sm transition ${activeTab === 'estimate' ? 'bg-white shadow' : 'text-gray-600'}`}>Estimate & Parts</button>
-                                <button onClick={() => setActiveTab('inspection')} className={`w-full py-2 rounded-md font-semibold text-sm transition ${activeTab === 'inspection' ? 'bg-white shadow' : 'text-gray-600'}`}>Inspection</button>
-                                <button onClick={() => setActiveTab('notes')} className={`w-full py-2 rounded-md font-semibold text-sm transition ${activeTab === 'notes' ? 'bg-white shadow' : 'text-gray-600'}`}>Technician Notes</button>
-                                <button onClick={() => setActiveTab('segments')} className={`w-full py-2 rounded-md font-semibold text-sm transition ${activeTab === 'segments' ? 'bg-white shadow' : 'text-gray-600'}`}>Segments</button>
-                            </div>
-                            <div className="p-4 bg-white border rounded-lg min-h-[300px]">
-                                {isReadOnly && <div className="p-3 bg-yellow-100 text-yellow-800 rounded-lg text-sm mb-4">This job has been invoiced and is now read-only.</div>}
-                                {renderTabs()}
-                            </div>
+                        <div className="p-4 bg-white border rounded-lg min-h-[300px]">
+                            {isReadOnly && <div className="p-3 bg-yellow-100 text-yellow-800 rounded-lg text-sm mb-4">This job has been invoiced and is now read-only.</div>}
+                            {renderTabs()}
                         </div>
-                    </main>
-                    <footer className="flex-shrink-0 flex justify-end gap-2 p-4 border-t bg-gray-50">
-                        <button type="button" onClick={onClose} className="py-2 px-4 bg-gray-200 rounded-lg font-semibold">Cancel</button>
-                        <button type="button" onClick={handleSaveMain} className="flex items-center gap-2 py-2 px-4 bg-indigo-600 text-white font-semibold rounded-lg disabled:opacity-50" disabled={isReadOnly}><Save size={14}/> Save</button>
-                    </footer>
-                </div>
+                    </div>
+                </main>
+                <footer className="flex-shrink-0 flex justify-end gap-2 p-4 border-t bg-gray-50 items-center">
+                    {currentUser.role === 'Admin' && job.status !== 'Cancelled' && (
+                        <button 
+                            type="button" 
+                            onClick={handleCancelJob} 
+                            className="flex items-center gap-2 py-2 px-4 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 mr-auto text-sm font-semibold"
+                        >
+                            <Ban size={14}/> Cancel Job
+                        </button>
+                    )}
+                    
+                    <button type="button" onClick={onClose} className="py-2 px-4 bg-gray-200 rounded-lg font-semibold">Close</button>
+                    <button type="button" onClick={handleSaveMain} className="flex items-center gap-2 py-2 px-4 bg-indigo-600 text-white font-semibold rounded-lg disabled:opacity-50" disabled={isReadOnly}><Save size={14}/> Save Changes</button>
+                </footer>
             </div>
+            
+            {isMediaModalOpen && (
+                <MediaManagerModal
+                    isOpen={isMediaModalOpen}
+                    onClose={() => setIsMediaModalOpen(false)}
+                    title={mediaModalTitle}
+                    initialMedia={mediaModalData}
+                    onSave={(newMedia) => {
+                        if (onMediaSaveCallback) onMediaSaveCallback(newMedia);
+                        setIsMediaModalOpen(false);
+                    }}
+                />
+            )}
 
-            <MediaManagerModal 
-                isOpen={isMediaModalOpen}
-                onClose={() => setIsMediaModalOpen(false)}
-                title={mediaModalTitle}
-                initialMedia={mediaModalData}
-                onSave={(media) => {
-                    if (onMediaSaveCallback) onMediaSaveCallback(media);
-                    setIsMediaModalOpen(false);
-                }}
-            />
-        </>
+            {isAddingPart && (
+                <PartFormModal 
+                    isOpen={isAddingPart}
+                    onClose={() => { setIsAddingPart(false); setTargetLineItemId(null); }}
+                    onSave={handleSaveNewPart}
+                    part={{ description: newPartDescription }}
+                    suppliers={[]} // Or pass fetched suppliers if available in props
+                    taxRates={taxRates}
+                />
+            )}
+        </div>
     );
 };
 

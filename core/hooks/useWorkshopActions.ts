@@ -3,7 +3,7 @@ import React, { useCallback } from 'react';
 import { useData } from '../state/DataContext';
 import { useApp } from '../state/AppContext';
 import * as T from '../../types';
-import { generateSequenceId, saveDocument } from '../db';
+import { generateSequenceId, saveDocument, deleteDocument } from '../db';
 import { formatDate, splitJobIntoSegments } from '../utils/dateUtils';
 import { calculateJobStatus } from '../utils/jobUtils';
 
@@ -68,6 +68,27 @@ export const useWorkshopActions = () => {
         await saveDocument(col, item);
     };
 
+    const handleDeleteJob = async (jobId: string) => {
+        const job = jobs.find(j => j.id === jobId);
+        if (job) {
+             // Cancel job instead of deleting
+             const updatedJob: T.Job = { ...job, status: 'Cancelled' };
+             
+             // 1. Optimistic Update
+             setJobs(prev => prev.map(j => j.id === jobId ? updatedJob : j));
+             
+             // 2. Persist to DB
+             await saveDocument('brooks_jobs', updatedJob);
+             
+             setConfirmation({
+                 isOpen: true,
+                 title: 'Job Cancelled',
+                 message: `Job #${jobId} has been moved to Cancelled status and history retained.`,
+                 type: 'success'
+             });
+        }
+    };
+
     const updateLinkedInquiryStatus = async (estimateId: string, newStatus: T.Inquiry['status'], extraUpdates: Partial<T.Inquiry> = {}) => {
         const targetInquiry = inquiries.find(i => i.linkedEstimateId === estimateId && i.status !== 'Closed');
         if (targetInquiry) {
@@ -100,11 +121,19 @@ export const useWorkshopActions = () => {
                 linkedCustomerId: estimate.customerId,
                 linkedVehicleId: estimate.vehicleId,
                 linkedEstimateId: estimate.id,
+                linkedJobId: estimate.jobId,
                 actionNotes: 'Auto-generated from workshop.',
             };
             handleSaveItem(setInquiries, newInquiry, 'brooks_inquiries');
             
-            setConfirmation({ isOpen: true, title: 'Sent to Inquiries', message: `Supplementary Estimate #${estimate.estimateNumber} has been created and sent to the Inquiries queue for review.`, type: 'success' });
+            setConfirmation({ 
+                isOpen: true, 
+                title: 'Sent to Inquiries', 
+                message: `Supplementary Estimate #${estimate.estimateNumber} has been created and sent to the Inquiries queue for review.`, 
+                type: 'success',
+                confirmText: 'OK',
+                cancelText: '' // Hides the cancel button
+            });
         }
     };
 
@@ -128,7 +157,6 @@ export const useWorkshopActions = () => {
             const job = jobs.find(j => j.id === po.jobId);
             if (job) {
                 // Determine parts status based on *all* POs for this job
-                // Note: We use the local state 'purchaseOrders' for calculation as it reflects the snapshot
                 const otherJobPOs = purchaseOrders.filter(p => p.jobId === job.id && p.id !== po.id);
                 const allJobPOs = [...otherJobPOs, poToSave];
                 
@@ -157,11 +185,13 @@ export const useWorkshopActions = () => {
                 const allInqPos = [...otherInqPos, po];
                 const allOrderedOrBetter = allInqPos.every(p => ['Ordered', 'Partially Received', 'Received'].includes(p.status));
                 
-                if (allOrderedOrBetter && inq.status !== 'Closed') {
+                // Note: We don't auto-close for supplementary anymore, we wait for the user to "Apply" or "Schedule"
+                // But for initial inquiries (no job yet), we might still want this logic.
+                // Keeping it conservative: Only update action notes.
+                if (allOrderedOrBetter) {
                      const updatedInquiry = { 
                          ...inq, 
-                         status: 'Closed' as const, 
-                         actionNotes: (inq.actionNotes || '') + `\n[System]: All parts ordered. Inquiry closed.` 
+                         actionNotes: (inq.actionNotes || '') + `\n[System]: All parts ordered.` 
                      };
                      handleSaveItem(setInquiries, updatedInquiry, 'brooks_inquiries');
                 }
@@ -170,7 +200,7 @@ export const useWorkshopActions = () => {
     };
 
     const handleApproveEstimate = async (estimate: T.Estimate, selectedOptionalItemIds: string[], notes?: string, scheduledDate?: string) => {
-        // Logic for filtering items remains the same...
+        // Filter items based on selection
         const explicitItemIds = new Set((estimate.lineItems || []).filter(li => !li.isOptional || selectedOptionalItemIds.includes(li.id)).map(i => i.id));
         const allIncludedIds = new Set(explicitItemIds);
         (estimate.lineItems || []).forEach(item => {
@@ -181,17 +211,24 @@ export const useWorkshopActions = () => {
         });
         const activeLineItems = (estimate.lineItems || []).filter(li => allIncludedIds.has(li.id));
         const approvedLineItems = activeLineItems.map(li => ({ ...li, isOptional: false }));
-        let updatedEstimate: T.Estimate = { ...estimate, lineItems: approvedLineItems, status: 'Approved', notes: notes ? `${estimate.notes || ''}\n${notes}` : estimate.notes };
+        
+        // Update Estimate Status
+        let updatedEstimate: T.Estimate = { 
+            ...estimate, 
+            lineItems: approvedLineItems, 
+            status: 'Approved', 
+            notes: notes ? `${estimate.notes || ''}\n${notes}` : estimate.notes 
+        };
 
+        // SCENARIO 1: Supplementary Estimate (Linked to existing job, NO specific new date selected)
         if (estimate.jobId && !scheduledDate) {
-             // Supplementary Approval Logic
              const existingJob = jobs.find(j => j.id === estimate.jobId);
+             
              if (existingJob) {
-                 // Create POs logic...
+                 // 1. Generate Draft Purchase Orders (if parts needed)
                  const partItems = approvedLineItems.filter(li => !li.isLabor && li.partId);
                  const newPurchaseOrderIds: string[] = [];
                  
-                 // Generate POs
                  if (partItems.length > 0) {
                      const partsBySupplier: Record<string, T.EstimateLineItem[]> = {};
                      partItems.forEach(item => {
@@ -205,7 +242,6 @@ export const useWorkshopActions = () => {
                      const entityShortCode = entity?.shortCode || 'UNK';
                      
                      for (const [supplierId, items] of Object.entries(partsBySupplier)) {
-                         // ASYNC ID GENERATION
                          const newPOId = await generateSequenceId('944', entityShortCode);
                          const vehicle = vehicles.find(v => v.id === existingJob.vehicleId);
                          
@@ -216,7 +252,7 @@ export const useWorkshopActions = () => {
                              vehicleRegistrationRef: vehicle?.registration || 'N/A',
                              orderDate: formatDate(new Date()), 
                              status: 'Draft', 
-                             jobId: existingJob.id, 
+                             jobId: existingJob.id, // Link to parent job initially
                              createdByUserId: currentUser.id,
                              lineItems: items.map(item => ({ id: crypto.randomUUID(), partNumber: item.partNumber, description: item.description, quantity: item.quantity, receivedQuantity: 0, unitPrice: item.unitCost || 0, taxCodeId: item.taxCodeId }))
                          };
@@ -225,49 +261,32 @@ export const useWorkshopActions = () => {
                      }
                  }
 
-                 let jobUpdates: Partial<T.Job> = {};
-                 if (newPurchaseOrderIds.length > 0) {
-                     const allPOIds = [...(existingJob.purchaseOrderIds || []), ...newPurchaseOrderIds];
-                     jobUpdates.purchaseOrderIds = allPOIds; 
-                     jobUpdates.partsStatus = 'Awaiting Order'; 
-                 }
-                 const additionalHours = approvedLineItems.filter(li => li.isLabor).reduce((sum, i) => sum + i.quantity, 0);
-                 if (additionalHours > 0) jobUpdates.estimatedHours = (existingJob.estimatedHours || 0) + additionalHours;
-                 
-                 // Merge Logic
-                 if (existingJob.estimateId && existingJob.estimateId !== estimate.id) {
-                     const mainEstimate = estimates.find(e => e.id === existingJob.estimateId);
-                     if (mainEstimate) {
-                         const mergedItems = [...(mainEstimate.lineItems || []), ...approvedLineItems];
-                         handleSaveItem(setEstimates, { ...mainEstimate, lineItems: mergedItems }, 'brooks_estimates');
-                         updatedEstimate.notes = (updatedEstimate.notes || '') + ' [Merged into Job Estimate]';
-                     }
-                 } else if (!existingJob.estimateId) {
-                     jobUpdates.estimateId = estimate.id;
-                 }
-                 
-                 if (Object.keys(jobUpdates).length > 0) {
-                     handleSaveItem(setJobs, { ...existingJob, ...jobUpdates }, 'brooks_jobs');
-                 }
-
-                 // Update Inquiry
+                 // 2. Update Inquiry Status to 'Approved' & Link POs
+                 // We do NOT close it yet. User must choose to "Apply to Job" or "Create New Job" in Inquiries View.
                  const existingInquiry = inquiries.find(i => i.linkedEstimateId === estimate.id);
                  if (existingInquiry) {
                      const updatedInquiry = { 
                          ...existingInquiry, 
                          status: 'Approved' as const, 
                          linkedPurchaseOrderIds: [...(existingInquiry.linkedPurchaseOrderIds || []), ...newPurchaseOrderIds], 
-                         actionNotes: (existingInquiry.actionNotes || '') + '\n[System]: Supplementary Estimate Approved. Parts ordered/work authorized.' 
+                         actionNotes: (existingInquiry.actionNotes || '') + '\n[System]: Estimate Approved by Client. Action Required: Merge to Job or Reschedule.' 
                      };
                      handleSaveItem(setInquiries, updatedInquiry, 'brooks_inquiries');
                  }
 
-                 updatedEstimate.status = 'Closed'; 
-                 setConfirmation({ isOpen: true, title: 'Supplementary Work Approved', message: `Job #${existingJob.id} updated. New Purchase Order(s) created and tracking card added to Inquiries.`, type: 'success' });
+                 setConfirmation({ 
+                     isOpen: true, 
+                     title: 'Estimate Approved', 
+                     message: `Estimate marked as Approved. Purchase Orders (if any) have been created as Drafts. Go to Inquiries to order parts and apply work to the job card.`, 
+                     type: 'success',
+                     confirmText: 'OK',
+                     cancelText: ''
+                 });
              }
         }
+        // SCENARIO 2: New Job from Estimate (Date selected)
         else if (scheduledDate) {
-             // Create New Job Logic
+             // ... [Existing Logic for New Job Creation] ...
              const entity = businessEntities.find(e => e.id === estimate.entityId);
              const laborItems = approvedLineItems.filter(li => li.isLabor);
              const totalHours = laborItems.reduce((acc, i) => acc + i.quantity, 0);
@@ -282,10 +301,7 @@ export const useWorkshopActions = () => {
                      if (!partsBySupplier[supplierId]) partsBySupplier[supplierId] = [];
                      partsBySupplier[supplierId].push(item);
                  });
-                 
                  const entityShortCode = entity?.shortCode || 'UNK';
-                 
-                 // ASYNC ID GENERATION
                  const newJobId = await generateSequenceId('992', entityShortCode);
 
                  for (const [supplierId, items] of Object.entries(partsBySupplier)) {
@@ -298,39 +314,104 @@ export const useWorkshopActions = () => {
                  
                  const newJob: T.Job = { id: newJobId, entityId: estimate.entityId, vehicleId: estimate.vehicleId, customerId: estimate.customerId, description: `Work from Est #${estimate.estimateNumber}`, estimatedHours: Math.max(1, totalHours), scheduledDate: scheduledDate, status: 'Unallocated', createdAt: formatDate(new Date()), createdByUserId: currentUser.id, segments: [], estimateId: estimate.id, notes: notes || estimate.notes, vehicleStatus: 'Awaiting Arrival', partsStatus: newPurchaseOrderIds.length > 0 ? 'Awaiting Order' : 'Not Required', purchaseOrderIds: newPurchaseOrderIds.length > 0 ? newPurchaseOrderIds : undefined };
                  newJob.segments = splitJobIntoSegments(newJob);
-                 
                  handleSaveItem(setJobs, newJob, 'brooks_jobs');
-                 
                  updatedEstimate = { ...updatedEstimate, status: 'Converted to Job', jobId: newJob.id };
                  
                  const existingInquiry = inquiries.find(i => i.linkedEstimateId === estimate.id);
                  if (existingInquiry) {
-                      const status = newPurchaseOrderIds.length > 0 ? 'Approved' : 'Closed';
                       const updatedInquiry = { 
                           ...existingInquiry, 
-                          status: status as any, 
+                          status: 'Approved' as const, 
                           linkedJobId: newJob.id, 
                           linkedPurchaseOrderIds: [...(existingInquiry.linkedPurchaseOrderIds || []), ...newPurchaseOrderIds], 
                           actionNotes: (existingInquiry.actionNotes || '') + `\n[System]: Job Scheduled.` 
                       };
                       handleSaveItem(setInquiries, updatedInquiry, 'brooks_inquiries');
                  }
-                 setConfirmation({ isOpen: true, title: 'Job Created', message: `Job #${newJob.id} created for ${scheduledDate}.`, type: 'success' });
+                 setConfirmation({ isOpen: true, title: 'Job Created', message: `Job #${newJob.id} created for ${scheduledDate}.`, type: 'success', confirmText: 'OK', cancelText: '' });
              } else {
-                 // Fallback if no parts, still need to create job...
                  const entityShortCode = entity?.shortCode || 'UNK';
                  const newJobId = await generateSequenceId('992', entityShortCode);
                  const newJob: T.Job = { id: newJobId, entityId: estimate.entityId, vehicleId: estimate.vehicleId, customerId: estimate.customerId, description: `Work from Est #${estimate.estimateNumber}`, estimatedHours: Math.max(1, totalHours), scheduledDate: scheduledDate, status: 'Unallocated', createdAt: formatDate(new Date()), createdByUserId: currentUser.id, segments: [], estimateId: estimate.id, notes: notes || estimate.notes, vehicleStatus: 'Awaiting Arrival', partsStatus: 'Not Required', purchaseOrderIds: undefined };
                  newJob.segments = splitJobIntoSegments(newJob);
                  handleSaveItem(setJobs, newJob, 'brooks_jobs');
                  updatedEstimate = { ...updatedEstimate, status: 'Converted to Job', jobId: newJobId };
-                 setConfirmation({ isOpen: true, title: 'Job Created', message: `Job #${newJobId} created for ${scheduledDate}.`, type: 'success' });
+                 setConfirmation({ isOpen: true, title: 'Job Created', message: `Job #${newJobId} created for ${scheduledDate}.`, type: 'success', confirmText: 'OK', cancelText: '' });
              }
-        } else {
-             setConfirmation({ isOpen: true, title: 'Estimate Approved', message: 'Estimate has been marked as approved.', type: 'success' });
-             updateLinkedInquiryStatus(estimate.id, 'Approved');
-        }
+        } 
+        
         handleSaveItem(setEstimates, updatedEstimate, 'brooks_estimates');
+    };
+
+    /**
+     * Merges an approved supplementary estimate into the parent job.
+     * This is the "Apply to card in flight" action.
+     */
+    const handleMergeEstimateToJob = async (estimate: T.Estimate, jobId: string) => {
+        const job = jobs.find(j => j.id === jobId);
+        if (!job) return;
+
+        // 1. Identify Items
+        const approvedItems = (estimate.lineItems || []).filter(li => !li.isOptional);
+        const additionalLaborHours = approvedItems.filter(li => li.isLabor).reduce((sum, i) => sum + i.quantity, 0);
+
+        // 2. Identify linked POs
+        // We find POs created for this estimate (usually linked via the JobID already or tracked in Inquiry)
+        const inquiry = inquiries.find(i => i.linkedEstimateId === estimate.id);
+        const linkedPOIds = inquiry?.linkedPurchaseOrderIds || [];
+
+        // 3. Create new segments for added hours (Unallocated)
+        let newSegments = [...(job.segments || [])];
+        if (additionalLaborHours > 0) {
+            let remainingToAdd = additionalLaborHours;
+            // Create chunks of up to 8 hours
+            while (remainingToAdd > 0) {
+                const chunkDuration = Math.min(remainingToAdd, 8);
+                newSegments.push({
+                    segmentId: crypto.randomUUID(),
+                    date: null, // No date yet = Unallocated
+                    duration: chunkDuration,
+                    status: 'Unallocated',
+                    allocatedLift: null,
+                    scheduledStartSegment: null,
+                    engineerId: null
+                });
+                remainingToAdd -= chunkDuration;
+            }
+        }
+
+        // 4. Update Job
+        const updatedJob: T.Job = {
+            ...job,
+            estimatedHours: (job.estimatedHours || 0) + additionalLaborHours,
+            purchaseOrderIds: [...(job.purchaseOrderIds || []), ...linkedPOIds],
+            // If we added POs, update parts status to reflect they might be on order
+            partsStatus: linkedPOIds.length > 0 ? 'Awaiting Order' : job.partsStatus,
+            // Append notes
+            notes: (job.notes || '') + `\n\n--- Supplementary Work (Est #${estimate.estimateNumber}) ---\n` + (estimate.notes || ''),
+            segments: newSegments,
+            status: calculateJobStatus(newSegments)
+        };
+        
+        // 5. Close Inquiry and Estimate
+        const closedEstimate: T.Estimate = { ...estimate, status: 'Closed', notes: (estimate.notes || '') + '\n[Merged into Job]' };
+        
+        await handleSaveItem(setJobs, updatedJob, 'brooks_jobs');
+        await handleSaveItem(setEstimates, closedEstimate, 'brooks_estimates');
+        
+        if (inquiry) {
+            const closedInquiry = { ...inquiry, status: 'Closed' as const, actionNotes: (inquiry.actionNotes || '') + '\n[System]: Merged to Job.' };
+            await handleSaveItem(setInquiries, closedInquiry, 'brooks_inquiries');
+        }
+
+        setConfirmation({
+            isOpen: true,
+            title: 'Supplementary Work Merged',
+            message: `Items from Estimate #${estimate.estimateNumber} have been added to Job #${job.id}. ${additionalLaborHours > 0 ? `${additionalLaborHours} labor hours added to Unallocated queue.` : 'No labor hours added.'}`,
+            type: 'success',
+            confirmText: 'OK',
+            cancelText: ''
+        });
     };
 
     const handleUpdateSegmentStatus = async (jobId: string, segmentId: string, newStatus: T.JobSegment['status'], extraUpdates: Partial<T.JobSegment> = {}) => {
@@ -370,9 +451,11 @@ export const useWorkshopActions = () => {
 
     return {
         handleSaveItem,
+        handleDeleteJob,
         handleSaveEstimate,
         handleSavePurchaseOrder,
         handleApproveEstimate,
+        handleMergeEstimateToJob,
         handleUpdateSegmentStatus,
         handleQcApprove,
         handleReassignEngineer,

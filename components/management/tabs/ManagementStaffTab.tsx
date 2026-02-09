@@ -11,7 +11,6 @@ export const ManagementStaffTab = () => {
     const { users = [], setUsers } = useApp();
     const { roles = [], refreshActiveData } = useData();
     
-    // 1. Initialize with fallback to prevent .map crashes
     const [localUsers, setLocalUsers] = useState<UserType[]>(Array.isArray(users) ? users : []);
 
     useEffect(() => {
@@ -25,35 +24,30 @@ export const ManagementStaffTab = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
 
     const handleSave = async (updatedUser: UserType) => {
+        const updateLogic = (prev: UserType[]) => {
+            const current = Array.isArray(prev) ? prev : [];
+            const exists = current.find(u => u.id === updatedUser.id);
+            return exists
+                ? current.map(u => (u.id === updatedUser.id ? updatedUser : u))
+                : [...current, updatedUser];
+        };
+
+        if (setUsers) {
+            setUsers(updateLogic);
+        }
+
+        setIsModalOpen(false);
+        setSelectedUser(null);
+
         try {
-            // 2. Await the DB write fully
             await saveDocument('brooks_users', updatedUser);
-            
-            // 3. Update UI states immediately
-            const updateLogic = (prev: UserType[]) => {
-                const current = Array.isArray(prev) ? prev : [];
-                const exists = current.find(u => u.id === updatedUser.id);
-                return exists 
-                    ? current.map(u => u.id === updatedUser.id ? updatedUser : u) 
-                    : [...current, updatedUser];
-            };
-
-            setLocalUsers(updateLogic);
-            if (setUsers) setUsers(updateLogic);
-
-            setIsModalOpen(false);
-            setSelectedUser(null);
-
-            // 4. THE FIX: Delay the background sync slightly 
-            // This prevents a "race condition" where the refresh pulls old data before the DB settles.
             if (refreshActiveData) {
                 setTimeout(async () => {
                     await refreshActiveData(true);
-                }, 800); 
+                }, 800);
             }
-        } catch (error: any) {
-            console.error("Staff Save failed:", error);
-            alert(`Failed to save: ${error.message}`);
+        } catch (error) {
+            console.error("Failed to save staff member:", error);
         }
     };
 

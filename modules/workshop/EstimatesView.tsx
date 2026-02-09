@@ -3,7 +3,7 @@ import React, { useState, useMemo } from 'react';
 import { useData } from '../../core/state/DataContext';
 import { useApp } from '../../core/state/AppContext';
 import { Estimate, EstimateLineItem, Vehicle, ServicePackage } from '../../types';
-import { Plus, Eye, Edit, Trash2, Search, PlusCircle, Wand2, ChevronDown, ChevronUp, Loader2, Printer } from 'lucide-react';
+import { Plus, Eye, Edit, Trash2, Search, PlusCircle, Wand2, ChevronDown, ChevronUp, Loader2, Printer, CalendarCheck } from 'lucide-react';
 import { formatCurrency } from '../../utils/formatUtils';
 import { generateServicePackageName } from '../../core/services/geminiService';
 import { getRelativeDate } from '../../core/utils/dateUtils';
@@ -13,7 +13,14 @@ import ServicePackageFormModal from '../../components/ServicePackageFormModal';
 import { useWorkshopActions } from '../../core/hooks/useWorkshopActions';
 import { StatusFilter } from '../../components/shared/StatusFilter';
 
-const EstimatesView = ({ onOpenEstimateModal, onViewEstimate, onSmartCreateClick }: { onOpenEstimateModal: (estimate: Partial<Estimate> | null) => void; onViewEstimate: (estimate: Estimate) => void; onSmartCreateClick: () => void; }) => {
+interface EstimatesViewProps {
+    onOpenEstimateModal: (estimate: Partial<Estimate> | null) => void;
+    onViewEstimate: (estimate: Estimate) => void;
+    onSmartCreateClick: () => void;
+    onScheduleEstimate?: (estimate: Estimate) => void;
+}
+
+const EstimatesView: React.FC<EstimatesViewProps> = ({ onOpenEstimateModal, onViewEstimate, onSmartCreateClick, onScheduleEstimate }) => {
     const { estimates, customers, vehicles, taxRates, setServicePackages, servicePackages, businessEntities, parts } = useData();
     const { selectedEntityId, users, setConfirmation } = useApp();
     const { handleSaveItem } = useWorkshopActions();
@@ -200,6 +207,15 @@ const EstimatesView = ({ onOpenEstimateModal, onViewEstimate, onSmartCreateClick
                                         <td className="p-3 text-right font-semibold">{formatCurrency(calculateTotal(estimate.lineItems))}</td>
                                         <td className="p-3">
                                             <div className="flex gap-1" onClick={e => e.stopPropagation()}>
+                                                {estimate.status === 'Approved' && !estimate.jobId && onScheduleEstimate && (
+                                                    <button 
+                                                        onClick={() => onScheduleEstimate(estimate)} 
+                                                        className="p-1.5 bg-green-100 text-green-700 hover:bg-green-200 rounded-full" 
+                                                        title="Schedule Job"
+                                                    >
+                                                        <CalendarCheck size={16} />
+                                                    </button>
+                                                )}
                                                 <button onClick={() => onViewEstimate(estimate)} className="p-1.5 text-gray-600 hover:bg-gray-100 rounded-full" title="View"><Eye size={16} /></button>
                                                 <button onClick={() => onOpenEstimateModal(estimate)} className="p-1.5 text-indigo-600 hover:bg-indigo-100 rounded-full" title="Edit"><Edit size={16} /></button>
                                             </div>

@@ -32,9 +32,32 @@ interface EstimateViewModalProps {
     users: User[];
     currentUser: User;
     onCreateInquiry?: (estimate: Estimate) => void;
+    /**
+     * FIX: Added to resolve TS2322 error where property 
+     * 'onScheduleEstimate' was missing from the interface.
+     */
+    onScheduleEstimate?: (estimate: any) => any;
 }
 
-const EstimateViewModal: React.FC<EstimateViewModalProps> = ({ isOpen, onClose, estimate, customer, vehicle, taxRates, entityDetails, onApprove, onCustomerApprove, onDecline, onEmailSuccess, viewMode = 'internal', parts, users, currentUser, onCreateInquiry }) => {
+const EstimateViewModal: React.FC<EstimateViewModalProps> = ({ 
+    isOpen, 
+    onClose, 
+    estimate, 
+    customer, 
+    vehicle, 
+    taxRates, 
+    entityDetails, 
+    onApprove, 
+    onCustomerApprove, 
+    onDecline, 
+    onEmailSuccess, 
+    viewMode = 'internal', 
+    parts, 
+    users, 
+    currentUser, 
+    onCreateInquiry,
+    onScheduleEstimate 
+}) => {
     const { jobs, businessEntities, vehicles, customers, absenceRequests } = useData();
     const [isEmailing, setIsEmailing] = useState(false);
     const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
@@ -44,11 +67,20 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({ isOpen, onClose, 
     const [selectedOptionalItems, setSelectedOptionalItems] = useState<Set<string>>(new Set());
     const [isApproving, setIsApproving] = useState(false);
     const [approvalNotes, setApprovalNotes] = useState('');
-    const [approvalDate, setApprovalDate] = useState(formatDate(new Date())); // Default to today
+    const [approvalDate, setApprovalDate] = useState(formatDate(new Date()));
+    
+    // Default to today
     const [currentMonthDate, setCurrentMonthDate] = useState(() => dateStringToDate(formatDate(new Date())));
 
     const print = usePrint();
     const mainRef = useRef<HTMLDivElement>(null);
+    
+    /**
+     * SUBMISSION GUARD
+     * Prevents multiple rapid triggers of approval functions
+     * that often cause infinite loops in development environments.
+     */
+    const isSubmitting = useRef(false);
     
     // Customer Approval State
     const [isConfirmingApproval, setIsConfirmingApproval] = useState(false);
@@ -58,7 +90,7 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({ isOpen, onClose, 
     const [capacityWarning, setCapacityWarning] = useState<string | null>(null);
 
     const isCustomerMode = localViewMode === 'customer';
-    
+
     // Auto-scroll when confirmation starts
     useEffect(() => {
         if (isConfirmingApproval && mainRef.current) {
@@ -67,12 +99,13 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({ isOpen, onClose, 
             }, 100);
         }
     }, [isConfirmingApproval]);
-    
+
     const isInteractive = isCustomerMode 
         ? (!['Converted to Job', 'Closed', 'Declined', 'Approved'].includes(estimate.status))
         : (estimate.status === 'Draft' || estimate.status === 'Sent');
     
     const isSupplementary = !!estimate.jobId;
+    const isAlreadyApproved = estimate.status === 'Approved';
 
     const canViewPricing = useMemo(() => {
         if (isCustomerMode) return true;
@@ -94,7 +127,7 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({ isOpen, onClose, 
             .filter(item => !item.isOptional || selectedOptionalItems.has(item.id))
             .reduce((sum, item) => sum + item.quantity, 0);
     }, [estimate.lineItems, selectedOptionalItems]);
-    
+
     const resolvedEntity = useMemo(() => {
         if (entityDetails) return entityDetails;
         if (estimate.entityId) {
@@ -109,6 +142,7 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({ isOpen, onClose, 
             if (req.status === 'Approved' || req.status === 'Pending') {
                  let currentDate = dateStringToDate(req.startDate);
                  const endDate = dateStringToDate(req.endDate);
+            
                  while(currentDate <= endDate) {
                     const dateStr = formatDate(currentDate);
                     map.set(dateStr, (map.get(dateStr) || 0) + 8);
@@ -160,7 +194,7 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({ isOpen, onClose, 
         const targetEntityId = estimate.entityId;
         return jobs.filter(j => j.entityId === targetEntityId);
     }, [jobs, estimate.entityId]);
-    
+
     const handleMonthChange = (offset: number) => {
         setCurrentMonthDate(prev => {
             const newDate = new Date(Date.UTC(prev.getUTCFullYear(), prev.getUTCMonth(), 1));
@@ -238,15 +272,12 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({ isOpen, onClose, 
 
         const finalVatBreakdown = Object.values(breakdown);
         const totalVat = finalVatBreakdown.reduce((sum, b) => sum + b.vat, 0);
-
         const totals = { totalNet, grandTotal: totalNet + totalVat, vatBreakdown: finalVatBreakdown };
-        
         return { essentialItems: essentials, optionalItems: optionals, dynamicTotals: totals };
     }, [estimate.lineItems, selectedOptionalItems, taxRates, standardTaxRateId]);
 
     const handleToggleOptional = (itemId: string) => {
         if (!isInteractive && !isApproving) return;
-        
         setSelectedOptionalItems(prev => {
             const newSet = new Set(prev);
             if (newSet.has(itemId)) {
@@ -257,11 +288,10 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({ isOpen, onClose, 
             return newSet;
         });
     };
-    
+
     const handlePrint = (asInternal = false) => {
          const approvedEstimateForPdf: Estimate = { ...estimate, lineItems: estimate.lineItems };
-
-        print(
+         print(
             <PrintableEstimate 
                 estimate={approvedEstimateForPdf} 
                 customer={customer}
@@ -284,7 +314,6 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({ isOpen, onClose, 
         document.body.appendChild(printMountPoint);
 
         const approvedEstimateForPdf: Estimate = { ...estimate, lineItems: estimate.lineItems };
-
         const root = ReactDOM.createRoot(printMountPoint);
         root.render(
             <React.StrictMode>
@@ -301,7 +330,6 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({ isOpen, onClose, 
                 />
             </React.StrictMode>
         );
-        
         await new Promise(resolve => setTimeout(resolve, 800));
     
         try {
@@ -313,7 +341,6 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({ isOpen, onClose, 
             const canvasHeightOnPdf = pdfWidth * (canvas.height / canvas.width);
             let heightLeft = canvasHeightOnPdf;
             let position = 0;
-            
             pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, canvasHeightOnPdf);
             heightLeft -= pdfHeight;
 
@@ -341,11 +368,18 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({ isOpen, onClose, 
     };
     
     const handleSubmitApproval = () => {
+        // FIX: Added submission guard to prevent infinite loops
+        if (isSubmitting.current) return;
+        isSubmitting.current = true;
+
         if (onCustomerApprove) {
+            const dateRange = isSupplementary 
+                ? { start: estimate.issueDate, end: estimate.issueDate } 
+                : { start: preferredStartDate, end: preferredEndDate };
             onCustomerApprove(
                 estimate,
                 Array.from(selectedOptionalItems),
-                isSupplementary ? { start: '', end: '' } : { start: preferredStartDate, end: preferredEndDate },
+                dateRange,
                 customerNotes
             );
             onClose();
@@ -364,11 +398,9 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({ isOpen, onClose, 
         const standalone: EstimateLineItem[] = [];
         const headers = items.filter(i => i.servicePackageId && !i.isPackageComponent);
         const children = items.filter(i => i.isPackageComponent);
-        
         headers.forEach(header => {
             packages.push({ header, children: children.filter(c => c.servicePackageId === header.servicePackageId) });
         });
-        
         items.forEach(item => {
             if (!item.servicePackageId) standalone.push(item);
         });
@@ -387,12 +419,12 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({ isOpen, onClose, 
                         <div>
                             <h2 className="text-xl font-bold text-gray-800">{isSupplementary ? 'Supplementary ' : ''}Estimate #{estimate.estimateNumber}</h2>
                              {isCustomerMode ? (
-                                 <div className="flex items-center gap-2 mt-1">
+                               <div className="flex items-center gap-2 mt-1">
                                     <span className="text-xs bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">Customer View</span>
                                     <p className="text-xs text-gray-500">Interactive Approval Mode</p>
                                  </div>
                              ) : (
-                                 <div className="flex items-center gap-2 mt-1">
+                                <div className="flex items-center gap-2 mt-1">
                                     <span className="text-xs bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">Internal Preview</span>
                                     <p className="text-xs text-gray-500">Staff View (Print Preview)</p>
                                  </div>
@@ -474,7 +506,7 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({ isOpen, onClose, 
                                             ))}
                                             {optionalGroups.standalone.length > 0 && (
                                                 <div className="border border-indigo-200 rounded-lg overflow-hidden bg-white shadow-sm">
-                                                     {optionalGroups.standalone.map(item => (
+                                                    {optionalGroups.standalone.map(item => (
                                                         <SelectableEstimateItemRow key={item.id} item={item} isSelected={selectedOptionalItems.has(item.id)} onToggle={() => handleToggleOptional(item.id)} canInteract={isInteractive || isApproving} canViewPricing={canViewPricing} isOptional={true}/>
                                                      ))}
                                                 </div>
@@ -519,7 +551,7 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({ isOpen, onClose, 
                                                 <input type="date" value={preferredEndDate} min={preferredStartDate} onChange={(e) => setPreferredEndDate(e.target.value)} className={`w-full p-3 border rounded-lg bg-gray-50 focus:ring-2 outline-none ${capacityWarning ? 'border-orange-400 ring-orange-200 bg-orange-50' : 'border-gray-300 focus:ring-green-500'}`} />
                                             </div>
                                         </div>
-                                         {capacityWarning && (
+                                        {capacityWarning && (
                                             <div className="p-3 bg-orange-100 text-orange-800 text-sm rounded-lg border border-orange-200 mb-4 animate-fade-in">
                                                 <p className="font-semibold flex items-center gap-2"><AlertCircle size={16}/> High Demand Date</p>
                                                 <p className="mt-1">{capacityWarning}</p>
@@ -552,7 +584,7 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({ isOpen, onClose, 
                                     )}
                                     <div className="flex bg-gray-100 rounded-lg p-1">
                                         <button onClick={() => handlePrint(false)} className="flex items-center py-1.5 px-3 rounded text-sm font-semibold hover:bg-white hover:shadow transition">
-                                            <Printer size={16} className="mr-2"/> Customer Print
+                                             <Printer size={16} className="mr-2"/> Customer Print
                                         </button>
                                         <div className="w-px bg-gray-300 my-1 mx-1"></div>
                                         <button onClick={() => handlePrint(true)} className="flex items-center py-1.5 px-3 rounded text-sm font-semibold hover:bg-white hover:shadow transition">Internal Print</button>
@@ -563,7 +595,16 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({ isOpen, onClose, 
                                 </div>
                                 <div className="flex gap-2">
                                     {onCreateInquiry && <button onClick={() => onCreateInquiry(estimate)} className="flex items-center py-2 px-4 bg-purple-100 text-purple-700 font-semibold rounded-lg hover:bg-purple-200 transition"><MessageSquare size={16} className="mr-2"/> Raise Inquiry</button>}
-                                    <button onClick={() => { setIsApproving(true); setApprovalNotes(''); }} className="flex items-center py-2 px-4 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 shadow-md transition"><CheckSquare size={16} className="mr-2"/> Manual Approve</button>
+                                    {isAlreadyApproved && !estimate.jobId ? (
+                                        <button 
+                                            onClick={() => { setIsApproving(true); setApprovalNotes(''); }} 
+                                            className="flex items-center py-2 px-4 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 shadow-md transition"
+                                        >
+                                            <CalendarCheck size={16} className="mr-2"/> Schedule Job
+                                        </button>
+                                    ) : (
+                                        <button onClick={() => { setIsApproving(true); setApprovalNotes(''); }} className="flex items-center py-2 px-4 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 shadow-md transition"><CheckSquare size={16} className="mr-2"/> Manual Approve</button>
+                                    )}
                                 </div>
                             </>
                         ) : (
@@ -581,11 +622,12 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({ isOpen, onClose, 
                 </div>
             </div>
             {isEmailing && <EmailEstimateModal isOpen={isEmailing} onClose={() => setIsEmailing(false)} onSend={handleEmailSuccess} onViewAsCustomer={() => { setIsEmailing(false); setLocalViewMode('customer'); }} estimate={estimate} customer={customer} vehicle={vehicle} taxRates={taxRates}/>}
+            
             {isApproving && (
                 <div className="fixed inset-0 bg-gray-900 bg-opacity-75 z-[70] flex justify-center items-center p-4">
                     <div className="bg-white rounded-xl shadow-2xl w-full max-w-7xl h-[90vh] flex flex-col p-6">
                         <div className="flex justify-between items-center mb-4 border-b pb-4 flex-shrink-0">
-                             <h3 className="text-xl font-bold">Approve & Schedule Estimate</h3>
+                             <h3 className="text-xl font-bold">{isAlreadyApproved ? 'Schedule Approved Estimate' : 'Approve & Schedule Estimate'}</h3>
                              <button onClick={() => setIsApproving(false)}><X size={24} className="text-gray-500"/></button>
                         </div>
                         <div className={`flex-grow overflow-hidden grid grid-cols-1 ${isSupplementary ? '' : 'lg:grid-cols-3'} gap-6 min-h-0`}>
@@ -598,7 +640,7 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({ isOpen, onClose, 
                                                 <div key={pkg.header.id} className="flex items-center gap-3 p-2 bg-white border rounded cursor-pointer hover:border-indigo-300" onClick={() => handleToggleOptional(pkg.header.id)}>
                                                     <div className="flex justify-center flex-shrink-0">
                                                          <div className={`h-5 w-5 rounded border flex items-center justify-center ${selectedOptionalItems.has(pkg.header.id) ? 'bg-indigo-600 border-indigo-600' : 'bg-white border-gray-300'}`}>
-                                                             {selectedOptionalItems.has(pkg.header.id) && <CheckSquare size={14} className="text-white" />}
+                                                            {selectedOptionalItems.has(pkg.header.id) && <CheckSquare size={14} className="text-white" />}
                                                         </div>
                                                     </div>
                                                     <div className="flex-grow">
@@ -630,31 +672,26 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({ isOpen, onClose, 
                                     <>
                                         <div className={`p-4 rounded-lg border ${manualApprovalCapacity?.statusColor}`}>
                                             <h4 className="font-bold text-sm mb-2 flex items-center gap-2"><Gauge size={16}/> Capacity Impact</h4>
-                                            
                                             {manualApprovalCapacity ? (
                                                 <div className="space-y-1 text-sm">
                                                     <div className="flex justify-between"><span>Total Capacity:</span> <span>{manualApprovalCapacity.max} hrs</span></div>
-                                                    
                                                     {manualApprovalCapacity.absence > 0 && (
                                                         <div className="flex justify-between text-red-600 font-medium">
                                                             <span>Staff Absence:</span> 
                                                             <span>- {manualApprovalCapacity.absence} hrs</span>
                                                         </div>
                                                     )}
-                                                    
                                                     <div className="flex justify-between font-semibold border-b border-black/10 pb-1 mb-1">
                                                         <span>Net Availability:</span> 
                                                         <span>{manualApprovalCapacity.effective.toFixed(1)} hrs</span>
                                                     </div>
-
                                                     <div className="flex justify-between"><span>Current Load:</span> <span>{manualApprovalCapacity.allocated.toFixed(1)} hrs</span></div>
                                                     <div className="flex justify-between font-semibold border-t border-black/10 pt-1 mt-1"><span>New Job:</span> <span>+ {projectedLaborHours.toFixed(1)} hrs</span></div>
                                                     <div className="flex justify-between font-bold text-base mt-1"><span>Remaining:</span> <span>{manualApprovalCapacity.remaining.toFixed(1)} hrs</span></div>
-                                                    
                                                     {manualApprovalCapacity.isOverCapacity && (
                                                         <p className="mt-2 text-xs font-bold text-red-700 flex items-center"><AlertTriangle size={12} className="mr-1"/> Over Capacity!</p>
                                                     )}
-                                                </div>
+                                                 </div>
                                             ) : (
                                                 <p className="text-xs text-gray-500">Select a date to view capacity.</p>
                                             )}
@@ -663,7 +700,7 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({ isOpen, onClose, 
                                         <div className="bg-indigo-50 p-4 rounded-lg border border-indigo-100">
                                             <h4 className="font-bold text-sm text-indigo-900 mb-2">Schedule Job</h4>
                                             <div className="space-y-2">
-                                                 <div>
+                                                <div>
                                                     <label className="block text-xs font-semibold text-indigo-700">Selected Date</label>
                                                     <input type="date" value={approvalDate} onChange={(e) => setApprovalDate(e.target.value)} className="w-full p-2 border rounded-md"/>
                                                  </div>
@@ -687,8 +724,8 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({ isOpen, onClose, 
                                 )}
                                 
                                 <div>
-                                     <label className="block text-sm font-medium text-gray-700 mb-1">Approval Notes</label>
-                                     <textarea value={approvalNotes} onChange={(e) => setApprovalNotes(e.target.value)} rows={3} className="w-full p-2 border rounded-lg text-sm" placeholder="Any specific instructions..." />
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Approval Notes</label>
+                                    <textarea value={approvalNotes} onChange={(e) => setApprovalNotes(e.target.value)} rows={3} className="w-full p-2 border rounded-lg text-sm" placeholder="Any specific instructions..." />
                                 </div>
                             </div>
                             {!isSupplementary && (
@@ -702,14 +739,25 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({ isOpen, onClose, 
                                          </div>
                                      </div>
                                      <div className="flex-grow min-h-0 overflow-hidden">
-                                        <BookingCalendarView jobs={entityJobs} vehicles={vehicles} customers={customers} onAddJob={() => {}} onDragStart={() => {}} maxDailyCapacityHours={resolvedEntity?.dailyCapacityHours || 40} absencesByDate={absencesByDate} onDayClick={(date) => setApprovalDate(date)} onEditJob={() => {}} currentMonthDate={currentMonthDate} selectedDate={approvalDate}/>
+                                          <BookingCalendarView jobs={entityJobs} vehicles={vehicles} customers={customers} onAddJob={() => {}} onDragStart={() => {}} maxDailyCapacityHours={resolvedEntity?.dailyCapacityHours || 40} absencesByDate={absencesByDate} onDayClick={(date) => setApprovalDate(date)} onEditJob={() => {}} currentMonthDate={currentMonthDate} selectedDate={approvalDate}/>
                                      </div>
                                 </div>
                             )}
                         </div>
                         <div className="flex justify-end gap-2 mt-4 pt-4 border-t flex-shrink-0">
                             <button onClick={() => setIsApproving(false)} className="px-4 py-2 bg-gray-200 rounded-lg font-semibold hover:bg-gray-300">Cancel</button>
-                            <button onClick={() => { onApprove(estimate, Array.from(selectedOptionalItems), approvalNotes, isSupplementary ? undefined : approvalDate); setIsApproving(false); onClose(); }} className="px-6 py-2 bg-green-600 text-white rounded-lg font-bold hover:bg-green-700 shadow-md">Confirm Approval</button>
+                            <button 
+                                onClick={() => { 
+                                    if (isSubmitting.current) return;
+                                    isSubmitting.current = true;
+                                    onApprove(estimate, Array.from(selectedOptionalItems), approvalNotes, isSupplementary ? undefined : approvalDate);
+                                    setIsApproving(false); 
+                                    onClose(); 
+                                }} 
+                                className="px-6 py-2 bg-green-600 text-white rounded-lg font-bold hover:bg-green-700 shadow-md"
+                            >
+                                {isAlreadyApproved ? 'Schedule Job' : 'Confirm Approval'}
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -717,4 +765,5 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({ isOpen, onClose, 
         </>
     );
 };
+
 export default EstimateViewModal;

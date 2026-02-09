@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Inquiry, User, Customer, Vehicle, Estimate, PurchaseOrder } from '../types';
 import FormModal from './FormModal';
@@ -22,9 +21,24 @@ interface InquiryFormModalProps {
     onScheduleEstimate?: (estimate: Estimate, inquiryId?: string) => void; 
     onOpenPurchaseOrder?: (po: PurchaseOrder) => void;
     onEditEstimate?: (estimate: Estimate) => void;
+    updateEstimate?: (estimate: Estimate) => void;
 }
 
-const InquiryFormModal: React.FC<InquiryFormModalProps> = ({ isOpen, onClose, onSave, inquiry, users, customers, vehicles, estimates, onViewEstimate, onScheduleEstimate, onEditEstimate }) => {
+// FIXED: Added updateEstimate to the destructuring list below
+const InquiryFormModal: React.FC<InquiryFormModalProps> = ({ 
+    isOpen, 
+    onClose, 
+    onSave, 
+    inquiry, 
+    users, 
+    customers, 
+    vehicles, 
+    estimates, 
+    onViewEstimate, 
+    onScheduleEstimate, 
+    onEditEstimate,
+    updateEstimate 
+}) => {
     const { currentUser, selectedEntityId } = useApp();
     const { purchaseOrders } = useData();
     const [formData, setFormData] = useState<Partial<Inquiry>>({});
@@ -164,7 +178,7 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({ isOpen, onClose, on
                                     <button 
                                         onClick={() => {
                                             onViewEstimate(linkedEstimate);
-                                            onClose(); // Close inquiry modal to focus on estimate
+                                            onClose(); 
                                         }}
                                         className="px-3 py-1.5 bg-white text-indigo-700 border border-indigo-200 font-semibold rounded-lg hover:bg-indigo-50 text-xs"
                                     >
@@ -176,7 +190,7 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({ isOpen, onClose, on
                                         type="button"
                                         onClick={() => {
                                             onEditEstimate(linkedEstimate);
-                                            onClose(); // Close inquiry modal to focus on estimate
+                                            onClose();
                                         }}
                                         className="flex items-center gap-1.5 text-sm py-1.5 px-3 bg-yellow-500 text-white font-semibold rounded-lg hover:bg-yellow-600"
                                     >
@@ -187,7 +201,7 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({ isOpen, onClose, on
                                      <button 
                                         onClick={() => {
                                             onScheduleEstimate(linkedEstimate, formData.id);
-                                            onClose(); // Close inquiry modal to focus on schedule modal
+                                            onClose();
                                         }}
                                         className="px-3 py-1.5 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 shadow-md flex items-center gap-1 text-xs"
                                     >
@@ -255,7 +269,6 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({ isOpen, onClose, on
                         )}
                     </div>
                 )}
-
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Part, TaxRate, Supplier } from '../types';
 import FormModal from './FormModal';
@@ -6,7 +7,7 @@ interface PartFormModalProps {
     isOpen: boolean;
     onClose: () => void;
     onSave: (part: Part) => void;
-    part: Part | null;
+    part: Partial<Part> | null;
     suppliers: Supplier[];
     taxRates: TaxRate[];
 }

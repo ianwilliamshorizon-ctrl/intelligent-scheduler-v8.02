@@ -1,17 +1,17 @@
+
 import React from 'react';
 import { AlertTriangle } from 'lucide-react';
 import AnimatedCheckmark from './AnimatedCheckmark';
 
 interface ConfirmationModalProps {
     isOpen: boolean;
-    onClose: () => void;
-    onConfirm: () => void;
     title: string;
     message: React.ReactNode;
-    // Update this line below:
-    type?: 'success' | 'warning' | 'danger' | 'info'; 
+    onClose: () => void;
+    onConfirm?: () => void;
     confirmText?: string;
     cancelText?: string;
+    type?: 'success' | 'warning';
 }
 
 const ConfirmationModal: React.FC<ConfirmationModalProps> = ({ isOpen, title, message, onClose, onConfirm, confirmText = 'Confirm', cancelText = 'Cancel', type = 'success' }) => {
@@ -21,8 +21,17 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({ isOpen, title, me
 
     const confirmButtonColor = type === 'warning' ? 'bg-red-600 hover:bg-red-700' : 'bg-indigo-600 hover:bg-indigo-700';
     
-    // If onConfirm is not provided, use onClose (acts as a simple alert dismissal)
-    const handleConfirm = onConfirm || onClose;
+    // Robust handler: If onConfirm is passed, use it, otherwise use onClose.
+    // Ensure events don't bubble up.
+    const handleConfirm = (e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (onConfirm) {
+            onConfirm();
+        } else {
+            onClose();
+        }
+    };
 
     return (
         <div className="fixed inset-0 bg-gray-900 bg-opacity-75 z-[90] flex justify-center items-center p-4" aria-labelledby="modal-title" role="dialog" aria-modal="true">

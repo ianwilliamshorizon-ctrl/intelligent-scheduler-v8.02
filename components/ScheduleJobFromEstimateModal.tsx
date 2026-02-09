@@ -57,7 +57,6 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
         return Math.max(hours, 1);
     }, [estimate]);
     
-    // Safety fix for the .find() crash
     const entityForEstimate = useMemo(() => 
         (businessEntities || []).find(e => e.id === estimate?.entityId), 
     [businessEntities, estimate?.entityId]);
@@ -133,7 +132,26 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
         setCurrentMonth(today);
     };
 
-    if (!isOpen || !estimate) return null;
+    const createJobObject = (date: string): Job => {
+        const jobId = generateJobId(jobs || [], entityForEstimate?.shortCode || 'UNK');
+        const newJob: Job = {
+            id: jobId,
+            entityId: estimate.entityId, 
+            vehicleId: estimate.vehicleId, 
+            customerId: estimate.customerId,
+            description: `Work from Estimate #${estimate.estimateNumber}`, 
+            estimatedHours: laborHours, 
+            scheduledDate: date,
+            status: 'Unallocated', 
+            createdAt: formatDate(new Date()), 
+            segments: [], 
+            estimateId: estimate.id, 
+            notes: estimate.notes || '',
+            vehicleStatus: 'Awaiting Arrival',
+        };
+        newJob.segments = splitJobIntoSegments(newJob);
+        return newJob;
+    };
 
     const handleConfirmClick = () => {
         const dailyHours = (jobsForEntity || [])
@@ -149,48 +167,30 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
             const alternativeDate = findNextAvailableDate(scheduledDate, laborHours, jobsForEntity, baseCapacity);
             setSuggestion({ suggestedDate: alternativeDate, originalDate: scheduledDate });
         } else {
-            const newJob: Job = {
-                id: generateJobId(jobs || [], entityForEstimate?.shortCode || 'UNK'),
-                entityId: estimate.entityId, 
-                vehicleId: estimate.vehicleId, 
-                customerId: estimate.customerId,
-                description: `Work from Estimate #${estimate.estimateNumber}`, 
-                estimatedHours: laborHours, 
-                scheduledDate: scheduledDate,
-                status: 'Unallocated', 
-                createdAt: formatDate(new Date()), 
-                segments: [], 
-                estimateId: estimate.id, 
-                notes: estimate.notes || '',
-                vehicleStatus: 'Awaiting Arrival',
+            const newJob = createJobObject(scheduledDate);
+            const updatedEstimate: Estimate = { 
+                ...estimate, 
+                status: 'Converted to Job', 
+                jobId: newJob.id,
+                updatedAt: new Date().toISOString()
             };
-            newJob.segments = splitJobIntoSegments(newJob);
-            const updatedEstimate: Estimate = { ...estimate, status: 'Converted to Job', jobId: newJob.id };
             onConfirm(newJob, updatedEstimate, { isAlternative: false, originalDate: scheduledDate });
         }
     };
 
     const handleAcceptSuggestion = () => {
         if (!suggestion) return;
-        const newJob: Job = {
-            id: generateJobId(jobs || [], entityForEstimate?.shortCode || 'UNK'),
-            entityId: estimate.entityId, 
-            vehicleId: estimate.vehicleId, 
-            customerId: estimate.customerId,
-            description: `Work from Estimate #${estimate.estimateNumber}`, 
-            estimatedHours: laborHours, 
-            scheduledDate: suggestion.suggestedDate,
-            status: 'Unallocated', 
-            createdAt: formatDate(new Date()), 
-            segments: [], 
-            estimateId: estimate.id, 
-            notes: estimate.notes || '',
-            vehicleStatus: 'Awaiting Arrival',
+        const newJob = createJobObject(suggestion.suggestedDate);
+        const updatedEstimate: Estimate = { 
+            ...estimate, 
+            status: 'Converted to Job', 
+            jobId: newJob.id,
+            updatedAt: new Date().toISOString()
         };
-        newJob.segments = splitJobIntoSegments(newJob);
-        const updatedEstimate: Estimate = { ...estimate, status: 'Converted to Job', jobId: newJob.id };
         onConfirm(newJob, updatedEstimate, { isAlternative: true, originalDate: suggestion.originalDate });
     };
+
+    if (!isOpen || !estimate) return null;
 
     const monthYearString = currentMonth.toLocaleString('default', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 
@@ -266,9 +266,9 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
                             <div className="lg:col-span-9 flex flex-col h-full">
                                <div className="flex justify-between items-center mb-2 flex-shrink-0">
                                     <div className="flex items-center gap-1 bg-gray-200 rounded-lg p-1">
-                                        <button onClick={() => handleMonthChange(-1)} className="p-2 rounded-md hover:bg-gray-300"><ChevronLeft /></button>
-                                        <button onClick={handleToday} className="p-2 rounded-md hover:bg-gray-300 text-sm font-semibold">Today</button>
-                                        <button onClick={() => handleMonthChange(1)} className="p-2 rounded-md hover:bg-gray-300"><ChevronRight /></button>
+                                        <button type="button" onClick={() => handleMonthChange(-1)} className="p-2 rounded-md hover:bg-gray-300"><ChevronLeft /></button>
+                                        <button type="button" onClick={handleToday} className="p-2 rounded-md hover:bg-gray-300 text-sm font-semibold">Today</button>
+                                        <button type="button" onClick={() => handleMonthChange(1)} className="p-2 rounded-md hover:bg-gray-300"><ChevronRight /></button>
                                     </div>
                                     <h3 className="font-semibold text-gray-800 text-lg">{monthYearString}</h3>
                                </div>
