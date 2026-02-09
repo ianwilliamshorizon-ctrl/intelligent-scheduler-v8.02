@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, memo } from 'react';
 import { useData } from '../../../core/state/DataContext';
 import { Customer } from '../../../types';
 import { PlusCircle, Trash2, Upload, RefreshCw, Search } from 'lucide-react';
@@ -11,13 +11,73 @@ import { db } from '../../../core/db';
 import { writeBatch, doc, collection } from 'firebase/firestore';
 
 /**
- * HELPER: Highlight matching text in yellow
+ * MEMOIZED ROW: Prevents re-rendering 1000+ customers unless
+ * their specific data or selection status changes.
  */
+const CustomerRow = memo(({ 
+    c, 
+    searchTerm, 
+    isSelected, 
+    onToggle, 
+    onEdit, 
+    onDelete 
+}: { 
+    c: Customer, 
+    searchTerm: string, 
+    isSelected: boolean,
+    onToggle: (id: string) => void,
+    onEdit: (id: string) => void,
+    onDelete: (id: string) => void
+}) => (
+    <tr className="hover:bg-indigo-50/30 transition-colors group">
+        <CheckboxCell id={c.id} selectedIds={new Set(isSelected ? [c.id] : [])} onToggle={() => onToggle(c.id)} />
+        <td className="p-4">
+            <div className="font-bold text-gray-900 text-base">
+                <HighlightText text={`${c.forename} ${c.surname}`} highlight={searchTerm} />
+            </div>
+            {c.companyName && (
+                <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className="px-1.5 py-0.5 bg-indigo-100 text-indigo-700 rounded text-[10px] font-bold uppercase">Business</span>
+                    <span className="text-sm text-gray-500 font-medium">
+                        <HighlightText text={c.companyName} highlight={searchTerm} />
+                    </span>
+                </div>
+            )}
+        </td>
+        <td className="p-4">
+            <span className="font-mono text-xs bg-gray-100 px-2 py-1 rounded text-gray-600 border border-gray-200">
+                <HighlightText text={c.id} highlight={searchTerm} />
+            </span>
+        </td>
+        <td className="p-4">
+            <div className="text-gray-700 font-medium">{c.mobile || c.phone || 'No Phone'}</div>
+            <div className="text-gray-400 text-xs">{c.email || 'No Email Address'}</div>
+        </td>
+        <td className="p-4 font-bold text-gray-600">
+            <HighlightText text={c.postcode || '—'} highlight={searchTerm} />
+        </td>
+        <td className="p-4 text-right">
+            <div className="flex justify-end gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button 
+                    onClick={() => onEdit(c.id)} 
+                    className="px-3 py-1.5 bg-white border border-gray-200 rounded-md text-indigo-600 hover:bg-indigo-600 hover:text-white font-bold text-xs transition-all shadow-sm"
+                >
+                    Edit Profile
+                </button>
+                <button 
+                    onClick={() => onDelete(c.id)} 
+                    className="px-3 py-1.5 bg-white border border-gray-200 rounded-md text-red-600 hover:bg-red-600 hover:text-white font-bold text-xs transition-all shadow-sm"
+                >
+                    Delete
+                </button>
+            </div>
+        </td>
+    </tr>
+));
+
 const HighlightText = ({ text, highlight }: { text: string; highlight: string }) => {
     if (!highlight.trim()) return <>{text}</>;
     const words = highlight.split(' ').filter(w => w.trim().length > 0);
-    if (words.length === 0) return <>{text}</>;
-
     const pattern = new RegExp(`(${words.join('|')})`, 'gi');
     const parts = text.split(pattern);
 
@@ -43,22 +103,27 @@ export const ManagementCustomersTab = ({ searchTerm, onShowStatus }: { searchTer
     const [isImporting, setIsImporting] = useState(false);
 
     /**
-     * SMART FRAGMENT SEARCH
-     * Checks pre-computed searchField and fallback details
+     * DEBOUNCE: Even with a smart SearchField, we debounce the actual filtering logic 
+     * here to ensure the "Main Thread" doesn't hitch when recalculating the filtered array.
      */
+    const [debouncedSearch, setDebouncedSearch] = useState(searchTerm);
+
+    useEffect(() => {
+        const handler = setTimeout(() => setDebouncedSearch(searchTerm), 200);
+        return () => clearTimeout(handler);
+    }, [searchTerm]);
+
     const filtered = useMemo(() => {
         const list = customers || [];
-        if (!searchTerm) return list;
+        if (!debouncedSearch) return list;
         
-        const term = searchTerm.toLowerCase();
-        const searchWords = term.split(' ').filter(word => word.length > 0);
+        const searchWords = debouncedSearch.toLowerCase().split(' ').filter(word => word.length > 0);
         
         return list.filter(c => {
             const combinedData = `${c.id} ${c.forename} ${c.surname} ${c.companyName || ''} ${c.postcode || ''} ${c.searchField || ''}`.toLowerCase();
-            // Match MUST contain all words typed in the search box
             return searchWords.every(word => combinedData.includes(word));
         });
-    }, [customers, searchTerm]);
+    }, [customers, debouncedSearch]);
 
     const handleImportCustomers = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -71,14 +136,11 @@ export const ManagementCustomersTab = ({ searchTerm, onShowStatus }: { searchTer
             const data = await parseCsv(file);
             const batch = writeBatch(db);
             let addedCount = 0;
-
             const existingIds = new Set(customers.map(c => c.id.toLowerCase()));
 
             for (const row of data) {
-                // Generate a robust ID if not provided
                 const id = row.id || generateCustomerId(row.surname || 'New', customers);
                 
-                // Only add if ID doesn't already exist
                 if (!existingIds.has(id.toLowerCase())) {
                     const baseCustomer = {
                         ...row,
@@ -87,10 +149,9 @@ export const ManagementCustomersTab = ({ searchTerm, onShowStatus }: { searchTer
                         surname: row.surname || 'Unknown',
                         createdDate: row.createdDate || new Date().toISOString(),
                         marketingConsent: row.marketingConsent === 'true' || false,
-                        serviceReminderConsent: row.serviceReminderConsent !== 'false' // default true
+                        serviceReminderConsent: row.serviceReminderConsent !== 'false'
                     };
 
-                    // Injects searchField on import for fast future lookups
                     const finalCustomer = {
                         ...baseCustomer,
                         searchField: generateCustomerSearchField(baseCustomer)
@@ -101,7 +162,6 @@ export const ManagementCustomersTab = ({ searchTerm, onShowStatus }: { searchTer
                     addedCount++;
                 }
                 
-                // Firestore limit is 500, we commit at 400 for safety if the list is huge
                 if (addedCount > 0 && addedCount % 400 === 0) {
                     await batch.commit();
                 }
@@ -111,11 +171,10 @@ export const ManagementCustomersTab = ({ searchTerm, onShowStatus }: { searchTer
                 await batch.commit();
                 onShowStatus(`Successfully imported ${addedCount} customers.`, 'success');
             } else {
-                onShowStatus('No new customers found. Duplicates were skipped.', 'info');
+                onShowStatus('No new customers found.', 'info');
             }
         } catch (err) {
-            console.error("Import Error:", err);
-            onShowStatus('Error importing customers. Check file format.', 'error');
+            onShowStatus('Error importing customers.', 'error');
         } finally {
             setIsImporting(false);
             e.target.value = '';
@@ -129,22 +188,21 @@ export const ManagementCustomersTab = ({ searchTerm, onShowStatus }: { searchTer
                     {selectedIds.size > 0 && (
                         <button 
                             onClick={bulkDelete} 
-                            className="bg-red-100 text-red-700 px-4 py-2 rounded-lg hover:bg-red-200 flex items-center gap-2 text-sm font-bold transition-all border border-red-200 shadow-sm"
+                            className="bg-red-100 text-red-700 px-4 py-2 rounded-lg hover:bg-red-200 flex items-center gap-2 text-sm font-bold border border-red-200"
                         >
                             <Trash2 size={16}/> Delete ({selectedIds.size})
                         </button>
                     )}
                 </div>
                 <div className="flex gap-2">
-                    <label className={`flex items-center gap-2 bg-white text-gray-700 border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50 cursor-pointer shadow-sm transition-all text-sm font-semibold ${isImporting ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                    <label className={`flex items-center gap-2 bg-white text-gray-700 border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50 cursor-pointer shadow-sm transition-all text-sm font-semibold ${isImporting ? 'opacity-50' : ''}`}>
                         {isImporting ? <RefreshCw size={16} className="animate-spin text-blue-600" /> : <Upload size={16} className="text-blue-600"/>}
                         {isImporting ? 'Loading...' : 'Import CSV'}
                         <input type="file" accept=".csv" className="hidden" onChange={handleImportCustomers} disabled={isImporting} />
                     </label>
-                    
                     <button 
                         onClick={() => { setSelectedCustomerId(null); setIsModalOpen(true); }} 
-                        className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 shadow-md flex items-center gap-2 transition-all text-sm font-semibold"
+                        className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 shadow-md flex items-center gap-2 text-sm font-semibold"
                     >
                         <PlusCircle size={16}/> Add New Customer
                     </button>
@@ -161,7 +219,7 @@ export const ManagementCustomersTab = ({ searchTerm, onShowStatus }: { searchTer
                                         type="checkbox" 
                                         checked={selectedIds.size === filtered.length && filtered.length > 0} 
                                         onChange={() => toggleSelectAll(filtered)} 
-                                        className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" 
+                                        className="h-4 w-4 rounded border-gray-300 text-indigo-600" 
                                     />
                                 </th>
                                 <th className="p-4 font-bold text-gray-600 uppercase text-[11px] tracking-wider">Customer Details</th>
@@ -176,56 +234,20 @@ export const ManagementCustomersTab = ({ searchTerm, onShowStatus }: { searchTer
                                 <tr>
                                     <td colSpan={6} className="p-12 text-center">
                                         <Search size={24} className="text-gray-300 mx-auto mb-2" />
-                                        <div className="text-gray-400 text-lg">No matching customers found</div>
-                                        <div className="text-gray-300 text-sm">Try searching by name, postcode, or company.</div>
+                                        <div className="text-gray-400">No matching customers found</div>
                                     </td>
                                 </tr>
                             ) : (
                                 filtered.map(c => (
-                                    <tr key={c.id} className="hover:bg-indigo-50/30 transition-colors group">
-                                        <CheckboxCell id={c.id} selectedIds={selectedIds} onToggle={toggleSelection} />
-                                        <td className="p-4">
-                                            <div className="font-bold text-gray-900 text-base">
-                                                <HighlightText text={`${c.forename} ${c.surname}`} highlight={searchTerm} />
-                                            </div>
-                                            {c.companyName && (
-                                                <div className="flex items-center gap-1.5 mt-0.5">
-                                                    <span className="px-1.5 py-0.5 bg-indigo-100 text-indigo-700 rounded text-[10px] font-bold uppercase">Business</span>
-                                                    <span className="text-sm text-gray-500 font-medium">
-                                                        <HighlightText text={c.companyName} highlight={searchTerm} />
-                                                    </span>
-                                                </div>
-                                            )}
-                                        </td>
-                                        <td className="p-4">
-                                            <span className="font-mono text-xs bg-gray-100 px-2 py-1 rounded text-gray-600 border border-gray-200">
-                                                <HighlightText text={c.id} highlight={searchTerm} />
-                                            </span>
-                                        </td>
-                                        <td className="p-4">
-                                            <div className="text-gray-700 font-medium">{c.mobile || c.phone || 'No Phone'}</div>
-                                            <div className="text-gray-400 text-xs">{c.email || 'No Email Address'}</div>
-                                        </td>
-                                        <td className="p-4 font-bold text-gray-600">
-                                            <HighlightText text={c.postcode || '—'} highlight={searchTerm} />
-                                        </td>
-                                        <td className="p-4 text-right">
-                                            <div className="flex justify-end gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <button 
-                                                    onClick={() => { setSelectedCustomerId(c.id); setIsModalOpen(true); }} 
-                                                    className="px-3 py-1.5 bg-white border border-gray-200 rounded-md text-indigo-600 hover:bg-indigo-600 hover:text-white font-bold text-xs transition-all shadow-sm"
-                                                >
-                                                    Edit Profile
-                                                </button>
-                                                <button 
-                                                    onClick={() => deleteItem(c.id)} 
-                                                    className="px-3 py-1.5 bg-white border border-gray-200 rounded-md text-red-600 hover:bg-red-600 hover:text-white font-bold text-xs transition-all shadow-sm"
-                                                >
-                                                    Delete
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
+                                    <CustomerRow 
+                                        key={c.id} 
+                                        c={c} 
+                                        searchTerm={debouncedSearch} 
+                                        isSelected={selectedIds.has(c.id)}
+                                        onToggle={toggleSelection}
+                                        onEdit={(id) => { setSelectedCustomerId(id); setIsModalOpen(true); }}
+                                        onDelete={deleteItem}
+                                    />
                                 ))
                             )}
                         </tbody>
