@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useData } from '../../../core/state/DataContext';
 import { Vehicle, InspectionDiagram } from '../../../types';
@@ -19,13 +18,15 @@ export const ManagementVehiclesTab = ({ searchTerm, onShowStatus }: { searchTerm
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isUpdating, setIsUpdating] = useState(false);
 
-    // Client-side filtering (Safe fallback)
+    // Client-side filtering (Safe fallback with String coercion)
     const filtered = (vehicles || []).filter(v => {
         if (!v) return false;
         const term = searchTerm.toLowerCase();
-        const reg = (v.registration || '').toLowerCase();
-        const make = (v.make || '').toLowerCase();
-        const model = (v.model || '').toLowerCase();
+        
+        // Force fields to strings to prevent .toLowerCase() crashes on numeric data
+        const reg = String(v.registration || '').toLowerCase();
+        const make = String(v.make || '').toLowerCase();
+        const model = String(v.model || '').toLowerCase();
         
         return reg.includes(term) || make.includes(term) || model.includes(term);
     });
@@ -37,14 +38,13 @@ export const ManagementVehiclesTab = ({ searchTerm, onShowStatus }: { searchTerm
             const data = await parseCsv(file);
             const newVehicles: Vehicle[] = data.map((row: any) => ({
                 id: row.id || crypto.randomUUID(),
-                registration: (row.registration || '').toUpperCase().replace(/\s/g, ''),
-                make: row.make || 'Unknown',
-                model: row.model || 'Unknown',
+                registration: String(row.registration || '').toUpperCase().replace(/\s/g, ''),
+                make: String(row.make || 'Unknown'),
+                model: String(row.model || 'Unknown'),
                 customerId: row.customerId || 'unknown_owner',
                 ...row
             }));
             
-            // Persistent Save
             for (const v of newVehicles) {
                 if (!vehicles.some(ex => ex.id === v.id)) {
                     await saveDocument('brooks_vehicles', v);
@@ -53,15 +53,21 @@ export const ManagementVehiclesTab = ({ searchTerm, onShowStatus }: { searchTerm
             onShowStatus(`Imported vehicles successfully.`, 'success');
         } catch (err) {
             console.error(err);
-            onShowStatus('Error importing vehicles. Please check file format.', 'error');
+            onShowStatus('Error importing vehicles.', 'error');
         }
         e.target.value = '';
     };
 
     const autoAssignVehicleDiagrams = async () => {
-        if (!inspectionDiagrams || inspectionDiagrams.length === 0) { onShowStatus("Library is empty. Upload diagrams first.", 'error'); return; }
+        if (!inspectionDiagrams || inspectionDiagrams.length === 0) { 
+            onShowStatus("Library is empty. Upload diagrams first.", 'error'); 
+            return; 
+        }
         const candidates = vehicles.filter(v => !v.images?.some(img => img.isPrimaryDiagram));
-        if (candidates.length === 0) { onShowStatus("All vehicles already have diagrams.", 'success'); return; }
+        if (candidates.length === 0) { 
+            onShowStatus("All vehicles already have diagrams.", 'success'); 
+            return; 
+        }
         
         setIsUpdating(true);
         onShowStatus(`Scanning library for matches...`, 'info');
@@ -71,20 +77,29 @@ export const ManagementVehiclesTab = ({ searchTerm, onShowStatus }: { searchTerm
             for (const v of candidates) {
                 let bestMatch: InspectionDiagram | undefined;
                 let bestScore = 0;
-                const vMake = (v.make || '').toLowerCase().trim();
-                const vModel = (v.model || '').toLowerCase().trim();
+                
+                // Safe string conversion for comparisons
+                const vMake = String(v.make || '').toLowerCase().trim();
+                const vModel = String(v.model || '').toLowerCase().trim();
                 const vFull = `${vMake} ${vModel}`;
+
                 for (const d of inspectionDiagrams) {
                     let score = 0;
-                    const dMake = (d.make || '').toLowerCase().trim();
-                    const dModel = (d.model || '').toLowerCase().trim();
+                    const dMake = String(d.make || '').toLowerCase().trim();
+                    const dModel = String(d.model || '').toLowerCase().trim();
                     const dFull = `${dMake} ${dModel}`;
+
                     if (dMake === vMake && dModel === vModel) score = 100;
                     else if (dMake === vMake && vModel.includes(dModel) && dModel.length > 2) score = 80;
                     else if (vFull.includes(dModel) && dModel.length > 3) score = 60;
                     else if (dModel === 'generic' || dModel === 'saloon') score = 1;
-                    if (score > bestScore) { bestScore = score; bestMatch = d; }
+                    
+                    if (score > bestScore) { 
+                        bestScore = score; 
+                        bestMatch = d; 
+                    }
                 }
+
                 if (bestMatch && bestScore > 0) {
                     try {
                         const imageData = await getImage(bestMatch.imageId);
@@ -94,24 +109,32 @@ export const ManagementVehiclesTab = ({ searchTerm, onShowStatus }: { searchTerm
                              const newImages = v.images ? [...v.images] : [];
                              newImages.push({ id: newImageId, isPrimaryDiagram: true });
                              
-                             // Persistent Save for this vehicle
                              await saveDocument('brooks_vehicles', { ...v, images: newImages });
                              assignedCount++;
                         }
-                    } catch (imgErr) { console.error(`Failed to assign diagram to vehicle ${v.registration}`, imgErr); }
+                    } catch (imgErr) { 
+                        console.error(`Failed to assign diagram to vehicle ${v.registration}`, imgErr); 
+                    }
                 }
             }
             if (assignedCount > 0) {
                 onShowStatus(`Success! Assigned diagrams to ${assignedCount} vehicles.`, 'success');
-            } else { onShowStatus("Scan complete. No suitable matches found.", 'info'); }
-        } catch (e) { console.error("Auto assign error", e); onShowStatus("Error during auto-assignment.", 'error'); } finally { setIsUpdating(false); }
+            } else { 
+                onShowStatus("Scan complete. No suitable matches found.", 'info'); 
+            }
+        } catch (e) { 
+            console.error("Auto assign error", e); 
+            onShowStatus("Error during auto-assignment.", 'error'); 
+        } finally { 
+            setIsUpdating(false); 
+        }
     };
 
     return (
         <div>
              <div className="flex justify-between items-center mb-4">
                  <div className="flex items-center gap-2">
-                     {selectedIds.size > 0 && (
+                    {selectedIds.size > 0 && (
                         <button onClick={bulkDelete} className="bg-red-100 text-red-700 px-3 py-2 rounded hover:bg-red-200 flex items-center gap-2 text-sm font-semibold">
                             <Trash2 size={16}/> Delete ({selectedIds.size})
                         </button>
@@ -130,32 +153,35 @@ export const ManagementVehiclesTab = ({ searchTerm, onShowStatus }: { searchTerm
                     </button>
                 </div>
             </div>
-            <div className="overflow-y-auto max-h-[70vh]">
+            <div className="overflow-y-auto max-h-[70vh] border rounded-lg">
                 <table className="w-full text-sm text-left">
                     <thead className="bg-gray-100 sticky top-0">
                         <tr>
                             <th className="p-2 w-10 text-center">
                                 <input type="checkbox" checked={selectedIds.size === filtered.length && filtered.length > 0} onChange={() => toggleSelectAll(filtered)} className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
                             </th>
-                            <th className="p-2">Registration</th><th className="p-2">Make/Model</th><th className="p-2">Owner</th><th className="p-2">Actions</th>
+                            <th className="p-2">Registration</th>
+                            <th className="p-2">Make/Model</th>
+                            <th className="p-2">Owner</th>
+                            <th className="p-2">Actions</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody className="divide-y divide-gray-200 bg-white">
                         {filtered.map(v => {
                             const owner = customers.find(c => c.id === v.customerId);
                             return (
-                                <tr key={v.id} className="border-b hover:bg-gray-50">
+                                <tr key={v.id} className="hover:bg-gray-50">
                                     <CheckboxCell id={v.id} selectedIds={selectedIds} onToggle={toggleSelection} />
                                     <td className="p-2">
                                         <span className="font-mono font-bold bg-[#FFCC00] text-black border border-black/20 px-2 py-0.5 rounded text-sm">
-                                            {v.registration}
+                                            {String(v.registration)}
                                         </span>
                                     </td>
-                                    <td className="p-2">{v.make} {v.model}</td>
-                                    <td className="p-2">{getCustomerDisplayName(owner)}</td>
+                                    <td className="p-2">{String(v.make)} {String(v.model)}</td>
+                                    <td className="p-2 font-medium text-gray-700">{getCustomerDisplayName(owner)}</td>
                                     <td className="p-2">
-                                        <button onClick={() => { setSelectedVehicle(v); setIsModalOpen(true); }} className="text-indigo-600 hover:underline mr-3">Edit</button>
-                                        <button onClick={() => deleteItem(v.id)} className="text-red-600 hover:underline">Delete</button>
+                                        <button onClick={() => { setSelectedVehicle(v); setIsModalOpen(true); }} className="text-indigo-600 hover:text-indigo-900 font-semibold mr-3">Edit</button>
+                                        <button onClick={() => deleteItem(v.id)} className="text-red-600 hover:text-red-900 font-semibold">Delete</button>
                                     </td>
                                 </tr>
                             );
