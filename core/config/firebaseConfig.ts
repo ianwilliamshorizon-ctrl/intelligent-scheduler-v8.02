@@ -14,13 +14,7 @@ const getEnv = (key: string) => {
 }
   
 export const isDev = () => {
-    // Detects Localhost OR Google Cloud Workstations as a development environment
-    return (
-        (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.DEV) || 
-        window.location.hostname === 'localhost' || 
-        window.location.hostname === '127.0.0.1' ||
-        window.location.hostname.includes('cloudworkstations.dev')
-    );
+    return false;
 };
   
 // Determine the active environment
