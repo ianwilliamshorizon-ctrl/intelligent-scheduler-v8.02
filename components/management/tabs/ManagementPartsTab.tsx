@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, memo, useDeferredValue, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, memo, useDeferredValue, useCallback, useTransition } from 'react';
 import { VList } from 'virtua'; 
 import { useData } from '../../../core/state/DataContext';
 import { Part } from '../../../types';
@@ -11,8 +11,7 @@ import { db } from '../../../core/db';
 import { writeBatch, doc, collection } from 'firebase/firestore';
 
 /**
- * PRODUCTION ROW COMPONENT
- * Pure component - only re-renders if the part data itself changes.
+ * ROW COMPONENT - Optimized with specific prop checking
  */
 const PartRow = memo(({ 
     p, 
@@ -24,42 +23,48 @@ const PartRow = memo(({
     searchTerm: string, 
     onEdit: (p: Part) => void, 
     onDelete: (id: string) => void 
-}) => (
-    <div className="border-b border-gray-100 flex items-center hover:bg-indigo-50/50 transition-colors text-sm bg-white h-[56px] w-full shrink-0">
-        <div className="px-4 w-[20%] font-mono font-bold text-indigo-700 truncate">
-            <HighlightText text={String(p.partNumber)} highlight={searchTerm} />
+}) => {
+    // We only pass what we need to HighlightText to keep it fast
+    return (
+        <div className="border-b border-gray-100 flex items-center hover:bg-indigo-50/50 transition-colors text-sm bg-white h-[56px] w-full shrink-0">
+            <div className="px-4 w-[20%] font-mono font-bold text-indigo-700 truncate">
+                <HighlightText text={p.partNumber} highlight={searchTerm} />
+            </div>
+            <div className="px-4 w-[40%] text-gray-700 font-medium truncate">
+                <HighlightText text={p.description} highlight={searchTerm} />
+            </div>
+            <div className={`px-4 w-[10%] text-right font-bold ${p.stockQuantity <= 0 ? 'text-red-500' : 'text-emerald-600'}`}>
+                {p.stockQuantity}
+            </div>
+            <div className="px-4 w-[15%] text-right font-semibold text-gray-900">
+                {formatCurrency(p.salePrice)}
+            </div>
+            <div className="px-4 w-[15%] flex justify-center gap-2">
+                <button 
+                    onClick={() => onEdit(p)} 
+                    className="px-2 py-1 bg-indigo-50 text-indigo-700 rounded hover:bg-indigo-600 hover:text-white text-xs font-bold transition-all"
+                >
+                    Edit
+                </button>
+                <button 
+                    onClick={() => onDelete(p.id)} 
+                    className="px-2 py-1 bg-red-50 text-red-600 rounded hover:bg-red-600 hover:text-white text-xs font-bold transition-all"
+                >
+                    Del
+                </button>
+            </div>
         </div>
-        <div className="px-4 w-[40%] text-gray-700 font-medium truncate">
-            <HighlightText text={String(p.description)} highlight={searchTerm} />
-        </div>
-        <div className={`px-4 w-[10%] text-right font-bold ${p.stockQuantity <= 0 ? 'text-red-500' : 'text-emerald-600'}`}>
-            {p.stockQuantity}
-        </div>
-        <div className="px-4 w-[15%] text-right font-semibold text-gray-900">
-            {formatCurrency(p.salePrice)}
-        </div>
-        <div className="px-4 w-[15%] flex justify-center gap-2">
-            <button 
-                onClick={() => onEdit(p)} 
-                className="px-2 py-1 bg-indigo-50 text-indigo-700 rounded hover:bg-indigo-600 hover:text-white text-xs font-bold transition-all"
-            >
-                Edit
-            </button>
-            <button 
-                onClick={() => onDelete(p.id)} 
-                className="px-2 py-1 bg-red-50 text-red-600 rounded hover:bg-red-600 hover:text-white text-xs font-bold transition-all"
-            >
-                Del
-            </button>
-        </div>
-    </div>
-));
+    );
+});
 
 const HighlightText = memo(({ text, highlight }: { text: string; highlight: string }) => {
-    if (!highlight.trim()) return <>{text}</>;
+    const content = String(text);
+    if (!highlight.trim()) return <>{content}</>;
+    
     const words = highlight.split(' ').filter(w => w.trim().length > 0);
     const pattern = new RegExp(`(${words.join('|')})`, 'gi');
-    const parts = text.split(pattern);
+    const parts = content.split(pattern);
+    
     return (
         <>
             {parts.map((part, i) => 
@@ -79,29 +84,42 @@ export const ManagementPartsTab = ({ searchTerm, onShowStatus }: { searchTerm: s
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isImporting, setIsImporting] = useState(false);
     
-    // NEW: useDeferredValue tells React to prioritize the input typing
-    // over the list filtering.
+    // 1. useTransition allows clicks to interrupt the filtering process
+    const [isPending, startTransition] = useTransition();
+    
+    // 2. We use a deferred value for the actual filtering logic
     const deferredSearch = useDeferredValue(searchTerm);
 
-    const filtered = useMemo(() => {
-        const list = parts || [];
-        if (!deferredSearch) return list;
-        const searchWords = deferredSearch.toLowerCase().split(' ').filter(word => word.length > 0);
-        return list.filter(p => {
-            const pNum = String(p.partNumber || '').toLowerCase();
-            const pDesc = String(p.description || '').toLowerCase();
-            return searchWords.every(word => pNum.includes(word) || pDesc.includes(word));
-        });
-    }, [parts, deferredSearch]);
+    // 3. Pre-process parts to lowercase for faster searching
+    const searchableParts = useMemo(() => {
+        return parts.map(p => ({
+            ...p,
+            _lowPart: String(p.partNumber || '').toLowerCase(),
+            _lowDesc: String(p.description || '').toLowerCase()
+        }));
+    }, [parts]);
 
-    // Stable callbacks for the rows
+    const filtered = useMemo(() => {
+        const list = searchableParts || [];
+        if (!deferredSearch) return list;
+        
+        const searchWords = deferredSearch.toLowerCase().split(' ').filter(word => word.length > 0);
+        return list.filter(p => 
+            searchWords.every(word => p._lowPart.includes(word) || p._lowDesc.includes(word))
+        );
+    }, [searchableParts, deferredSearch]);
+
     const handleEdit = useCallback((p: Part) => {
-        setSelectedPart(p);
-        setIsModalOpen(true);
+        startTransition(() => {
+            setSelectedPart(p);
+            setIsModalOpen(true);
+        });
     }, []);
 
     const handleDelete = useCallback((id: string) => {
-        deleteItem(id);
+        startTransition(() => {
+            deleteItem(id);
+        });
     }, [deleteItem]);
 
     const handleImportParts = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -147,8 +165,9 @@ export const ManagementPartsTab = ({ searchTerm, onShowStatus }: { searchTerm: s
     return (
         <div className="space-y-4 h-full flex flex-col">
             <div className="flex justify-between items-center shrink-0">
-                <div className="text-sm text-gray-500 font-medium italic">
+                <div className="text-sm text-gray-500 font-medium flex items-center gap-2">
                     {deferredSearch ? `Found ${filtered.length} matches` : `Total Inventory: ${parts.length} items`}
+                    {isPending && <RefreshCw size={12} className="animate-spin text-indigo-400" />}
                 </div>
                 <div className="flex gap-2">
                     <label className={`flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 cursor-pointer shadow-sm text-sm font-semibold ${isImporting ? 'opacity-50 pointer-events-none' : ''}`}>
@@ -171,7 +190,7 @@ export const ManagementPartsTab = ({ searchTerm, onShowStatus }: { searchTerm: s
                     <div className="p-4 w-[15%] text-center">Actions</div>
                 </div>
 
-                <div className="flex-1 min-h-0 bg-white overflow-hidden">
+                <div className="flex-1 min-h-0 bg-white overflow-hidden relative">
                     {filtered.length === 0 ? (
                         <div className="p-12 text-center h-full flex flex-col items-center justify-center">
                             <Search size={24} className="text-gray-300 mb-2" />
