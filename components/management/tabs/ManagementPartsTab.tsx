@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, memo } from 'react';
+import React, { useState, useMemo, useEffect, memo, useDeferredValue, useCallback } from 'react';
 import { VList } from 'virtua'; 
 import { useData } from '../../../core/state/DataContext';
 import { Part } from '../../../types';
@@ -11,7 +11,8 @@ import { db } from '../../../core/db';
 import { writeBatch, doc, collection } from 'firebase/firestore';
 
 /**
- * ROW COMPONENT
+ * PRODUCTION ROW COMPONENT
+ * Pure component - only re-renders if the part data itself changes.
  */
 const PartRow = memo(({ 
     p, 
@@ -77,23 +78,31 @@ export const ManagementPartsTab = ({ searchTerm, onShowStatus }: { searchTerm: s
     const [selectedPart, setSelectedPart] = useState<Part | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isImporting, setIsImporting] = useState(false);
-    const [debouncedSearch, setDebouncedSearch] = useState(searchTerm);
-
-    useEffect(() => {
-        const handler = setTimeout(() => setDebouncedSearch(searchTerm), 300);
-        return () => clearTimeout(handler);
-    }, [searchTerm]);
+    
+    // NEW: useDeferredValue tells React to prioritize the input typing
+    // over the list filtering.
+    const deferredSearch = useDeferredValue(searchTerm);
 
     const filtered = useMemo(() => {
         const list = parts || [];
-        if (!debouncedSearch) return list;
-        const searchWords = debouncedSearch.toLowerCase().split(' ').filter(word => word.length > 0);
+        if (!deferredSearch) return list;
+        const searchWords = deferredSearch.toLowerCase().split(' ').filter(word => word.length > 0);
         return list.filter(p => {
             const pNum = String(p.partNumber || '').toLowerCase();
             const pDesc = String(p.description || '').toLowerCase();
             return searchWords.every(word => pNum.includes(word) || pDesc.includes(word));
         });
-    }, [parts, debouncedSearch]);
+    }, [parts, deferredSearch]);
+
+    // Stable callbacks for the rows
+    const handleEdit = useCallback((p: Part) => {
+        setSelectedPart(p);
+        setIsModalOpen(true);
+    }, []);
+
+    const handleDelete = useCallback((id: string) => {
+        deleteItem(id);
+    }, [deleteItem]);
 
     const handleImportParts = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -139,7 +148,7 @@ export const ManagementPartsTab = ({ searchTerm, onShowStatus }: { searchTerm: s
         <div className="space-y-4 h-full flex flex-col">
             <div className="flex justify-between items-center shrink-0">
                 <div className="text-sm text-gray-500 font-medium italic">
-                    {debouncedSearch ? `Found ${filtered.length} matches` : `Total Inventory: ${parts.length} items`}
+                    {deferredSearch ? `Found ${filtered.length} matches` : `Total Inventory: ${parts.length} items`}
                 </div>
                 <div className="flex gap-2">
                     <label className={`flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 cursor-pointer shadow-sm text-sm font-semibold ${isImporting ? 'opacity-50 pointer-events-none' : ''}`}>
@@ -154,16 +163,14 @@ export const ManagementPartsTab = ({ searchTerm, onShowStatus }: { searchTerm: s
             </div>
 
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col overflow-hidden flex-1 min-h-[400px]">
-                {/* Header */}
                 <div className="bg-gray-50 border-b border-gray-200 flex text-[10px] font-bold text-gray-600 uppercase tracking-widest shrink-0">
                     <div className="p-4 w-[20%]">Part Number</div>
                     <div className="p-4 w-[40%]">Description</div>
-                    <div className={`p-4 w-[10%] text-right`}>Stock</div>
+                    <div className="p-4 w-[10%] text-right">Stock</div>
                     <div className="p-4 w-[15%] text-right">Unit Price</div>
                     <div className="p-4 w-[15%] text-center">Actions</div>
                 </div>
 
-                {/* Body - Clean VList inside a flex-1 container */}
                 <div className="flex-1 min-h-0 bg-white overflow-hidden">
                     {filtered.length === 0 ? (
                         <div className="p-12 text-center h-full flex flex-col items-center justify-center">
@@ -176,9 +183,9 @@ export const ManagementPartsTab = ({ searchTerm, onShowStatus }: { searchTerm: s
                                 <PartRow 
                                     key={p.id} 
                                     p={p} 
-                                    searchTerm={debouncedSearch} 
-                                    onEdit={(part) => { setSelectedPart(part); setIsModalOpen(true); }}
-                                    onDelete={deleteItem}
+                                    searchTerm={deferredSearch} 
+                                    onEdit={handleEdit}
+                                    onDelete={handleDelete}
                                 />
                             ))}
                         </VList>
