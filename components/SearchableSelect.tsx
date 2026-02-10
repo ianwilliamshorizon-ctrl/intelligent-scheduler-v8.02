@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { db } from '../core/db'; 
-import { collection, query, where, getDocs, limit, orderBy } from 'firebase/firestore';
-import { Search, Loader2, X } from 'lucide-react';
+import { collection, query, getDocs, limit } from 'firebase/firestore';
+import { Search, Loader2, X, User, Phone, Car, Database, AlertCircle } from 'lucide-react';
 
 interface SearchableSelectProps {
     collectionName: string;
@@ -24,8 +24,8 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
     const [isOpen, setIsOpen] = useState(false);
     const wrapperRef = useRef<HTMLDivElement>(null);
 
-    useEffect(() => {
-        setSearchTerm(initialValue || "");
+    useEffect(() => { 
+        setSearchTerm(initialValue || ""); 
     }, [initialValue]);
 
     useEffect(() => {
@@ -38,60 +38,55 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    const handleSearch = async (value: string) => {
+    const handleSearch = async (value: string, forceAll = false) => {
         setSearchTerm(value);
-        if (value.length < 2) {
+        if (!forceAll && value.length < 2) {
             setResults([]);
             setIsOpen(false);
             return;
         }
 
+        if (!db) return;
         setIsSearching(true);
-        try {
-            const lowerVal = value.toLowerCase();
-            
-            // To allow searching by surname/phone/id, we need a query that isn't just a prefix
-            // Since Firestore is limited, we fetch a set of records and perform a more flexible local filter
-            const q = query(
-                collection(db, collectionName),
-                limit(100) // Fetch a slightly larger batch to filter locally
-            );
 
+        try {
+            const colRef = collection(db, collectionName);
+            const q = query(colRef, limit(500)); 
             const querySnapshot = await getDocs(q);
-            const allItems = querySnapshot.docs.map(doc => ({ 
+            
+            const allItems: any[] = querySnapshot.docs.map(doc => ({ 
                 id: doc.id, 
                 ...doc.data() 
             }));
 
-            // FLEXIBLE LOCAL FILTER: Checks if search term appears ANYWHERE in name, phone, or ID
+            const lowerVal = value.toLowerCase().replace(/\s/g, ''); 
             const filtered = allItems.filter((item: any) => {
-                const searchString = [
-                    item.forename,
-                    item.surname,
-                    item.phone,
-                    item.id,
-                    item.registration,
-                    item.name,
-                    item.searchField
-                ].join(' ').toLowerCase();
-                
-                return searchString.includes(lowerVal);
-            }).slice(0, 15); // Return top 15 matches
+                const searchableString = [
+                    item.registration || '',
+                    item.forename || '',
+                    item.surname || '',
+                    item.make || '',
+                    item.model || '',
+                    item.customerName || ''
+                ].join('').toLowerCase().replace(/\s/g, '');
+                return searchableString.includes(lowerVal);
+            });
 
-            setResults(filtered);
+            const sortedResults = filtered.sort((a, b) => {
+                const regA = (a.registration || '').toLowerCase().replace(/\s/g, '');
+                const regB = (b.registration || '').toLowerCase().replace(/\s/g, '');
+                if (regA.includes(lowerVal)) return -1;
+                if (regB.includes(lowerVal)) return 1;
+                return 0;
+            });
+
+            setResults(sortedResults.slice(0, 10));
             setIsOpen(true);
-        } catch (error) {
-            console.error(`Error searching ${collectionName}:`, error);
+        } catch (error: any) {
+            console.error(`❌ [SEARCH ERROR]`, error);
         } finally {
             setIsSearching(false);
         }
-    };
-
-    const handleClear = () => {
-        setSearchTerm("");
-        onSelect({ id: "" });
-        setResults([]);
-        setIsOpen(false);
     };
 
     return (
@@ -101,57 +96,60 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
                     type="text"
                     value={searchTerm}
                     onChange={(e) => handleSearch(e.target.value)}
-                    onFocus={() => searchTerm.length >= 2 && setIsOpen(true)}
+                    onFocus={() => { if(searchTerm.length >= 2) setIsOpen(true); }}
                     placeholder={placeholder}
-                    disabled={disabled}
-                    className="w-full pl-10 pr-10 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none disabled:bg-gray-100 text-sm"
+                    disabled={false} 
+                    className="w-full pl-10 pr-10 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm shadow-sm bg-white text-gray-900"
                 />
                 <div className="absolute left-3 top-2.5 text-gray-400">
                     {isSearching ? <Loader2 className="animate-spin" size={18} /> : <Search size={18} />}
                 </div>
-                {searchTerm && !disabled && (
-                    <button type="button" onClick={handleClear} className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600">
+                {searchTerm && (
+                    <button type="button" onClick={() => {setSearchTerm(""); setResults([]); setIsOpen(false);}} className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600">
                         <X size={18} />
                     </button>
                 )}
             </div>
 
-            {isOpen && results.length > 0 && (
-                <div className="absolute z-50 w-full mt-1 bg-white border rounded-lg shadow-xl max-h-60 overflow-y-auto">
-                    {results.map((item) => {
-                        const displayName = (item.forename || item.surname) 
-                            ? `${item.forename || ''} ${item.surname || ''}`.trim()
-                            : (item.registration || item.name || "Unknown");
-
-                        return (
-                            <div
-                                key={item.id}
-                                onClick={() => {
-                                    onSelect(item);
-                                    setIsOpen(false);
-                                }}
-                                className="p-3 hover:bg-indigo-50 cursor-pointer border-b last:border-0"
-                            >
-                                <div className="font-medium text-gray-900 flex justify-between">
-                                    <span>
-                                        {item.registration && <span className="text-indigo-600 font-bold mr-2">[{item.registration}]</span>}
-                                        {displayName}
-                                    </span>
-                                    <span className="text-[10px] text-gray-400 font-mono self-center">ID: {item.id.slice(-4)}</span>
-                                </div>
-                                <div className="text-xs text-gray-500 flex justify-between mt-0.5">
-                                    <span>{item.phone || 'No phone'}</span>
-                                    {item.email && <span className="italic">{item.email}</span>}
-                                </div>
+            {isOpen && (
+                <div className="absolute z-[100] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-[300px] overflow-y-auto">
+                    {results.length > 0 ? (
+                        <>
+                            <div className="p-2 border-b bg-gray-50 text-[10px] font-semibold text-gray-400 uppercase">
+                                Results
                             </div>
-                        );
-                    })}
-                </div>
-            )}
-            
-            {isOpen && searchTerm.length >= 2 && results.length === 0 && !isSearching && (
-                <div className="absolute z-50 w-full mt-1 bg-white border rounded-lg shadow-lg p-4 text-center text-sm text-gray-500 italic">
-                    No customers found matching "{searchTerm}"
+                            {results.map((item) => (
+                                <div key={item.id} onClick={() => { onSelect(item); setIsOpen(false); }} className="p-2.5 hover:bg-indigo-50 cursor-pointer border-b last:border-0 transition-colors">
+                                    <div className="flex items-center gap-3">
+                                        <div className="text-indigo-600">
+                                            {item.registration ? <Car size={16}/> : <User size={16}/>}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex justify-between items-center">
+                                                <p className="font-medium text-sm text-gray-900 truncate">
+                                                    {item.forename} {item.surname}
+                                                </p>
+                                                {item.registration && (
+                                                    <span className="text-[10px] font-bold text-indigo-600 uppercase">
+                                                        {item.registration}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            {(item.make || item.model) && (
+                                                <p className="text-xs text-gray-500 truncate">
+                                                    {item.make} {item.model}
+                                                </p>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </>
+                    ) : (
+                        <div className="p-4 text-center text-sm text-gray-500">
+                            No matching records
+                        </div>
+                    )}
                 </div>
             )}
         </div>

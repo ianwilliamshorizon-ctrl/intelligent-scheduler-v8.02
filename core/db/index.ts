@@ -10,32 +10,16 @@ import {
 import { getAuth, Auth } from 'firebase/auth';
 import { firebaseConfig } from '../config/firebaseConfig';
 
-const isFirebaseConfigured = !!(firebaseConfig.apiKey && firebaseConfig.projectId);
+/**
+ * ENVIRONMENT LOADER
+ * Mapping your specific .env.local keys
+ */
+const PROJECT_ID = import.meta.env.VITE_FIREBASE_PROJECT_ID_DEV || import.meta.env.VITE_FIREBASE_PROJECT_ID;
+const DATABASE_ID = import.meta.env.VITE_FIREBASE_DATABASE_ID_DEV || import.meta.env.VITE_FIREBASE_DATABASE_ID || 'isdevdb';
+const API_KEY = import.meta.env.VITE_FIREBASE_API_KEY_DEV || firebaseConfig.apiKey;
 
 let db: Firestore;
 let auth: Auth | undefined;
-
-/**
- * ENVIRONMENT-BASED DATABASE SELECTOR
- * Development/Workstations -> 'isdevdb'
- * UAT/Production -> '(default)' 
- */
-const getDatabaseId = () => {
-    const mode = import.meta.env.MODE; // 'development', 'production', or 'uat'
-    
-    switch (mode) {
-        case 'development':
-            return 'isdevdb';
-        case 'uat':
-            return '(default)'; // or 'isuatdb' if you have one
-        case 'production':
-            return '(default)';
-        default:
-            return 'isdevdb';
-    }
-};
-
-const DATABASE_ID = getDatabaseId();
 
 export const COLLECTIONS = {
     PACKAGES: 'brooks_servicePackages',
@@ -43,36 +27,48 @@ export const COLLECTIONS = {
     COUNTERS: 'brooks_counters'
 };
 
-if (isFirebaseConfigured) {
-    const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+// INITIALIZATION BLOCK
+if (PROJECT_ID && API_KEY) {
+    const activeConfig = {
+        ...firebaseConfig,
+        apiKey: API_KEY.replace(/['"]+/g, ''), // Strip quotes if they exist
+        projectId: PROJECT_ID.replace(/['"]+/g, '')
+    };
+
+    const app = !getApps().length ? initializeApp(activeConfig) : getApp();
     
     try {
-        // WORKSTATION OPTIMIZED INITIALIZATION
         db = initializeFirestore(app, {
             experimentalForceLongPolling: true,
             localCache: persistentLocalCache({
                 cacheSizeBytes: CACHE_SIZE_UNLIMITED
             })
-        }, DATABASE_ID);
+        }, DATABASE_ID.replace(/['"]+/g, ''));
         
-        console.log(`🔥 [DB] Firestore Initialized in [${import.meta.env.MODE}] mode.`);
-        console.log(`🎯 Targeting Database: [${DATABASE_ID}]`);
+        console.log(`🔥 [DB] System Online`);
+        console.log(`📡 Project: ${activeConfig.projectId}`);
+        console.log(`🎯 Database: ${DATABASE_ID}`);
         
-        // Expose to window for debugging
         (window as any).db = db;
-        
     } catch (e) {
         db = getFirestore(app, DATABASE_ID);
-        console.warn(`⚠️ [DB] Standard fallback used for [${DATABASE_ID}].`);
+        console.warn(`⚠️ [DB] Fallback used for ${DATABASE_ID}`);
     }
 
     auth = getAuth(app);
 } else {
-    console.error("❌ [DB] Firebase is NOT configured. Check your firebaseConfig.ts");
+    console.error("❌ [DB] Configuration Missing. Check VITE_ prefixes in .env.local");
+    const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+    db = getFirestore(app);
+    auth = getAuth(app);
 }
 
-export const getStorageType = () => isFirebaseConfigured ? 'firestore' : 'memory';
-export const getStorageTypeString = () => getStorageType();
+/**
+ * FULL UTILITY SUITE
+ */
+
+export const getStorageType = () => 'firestore';
+export const getStorageTypeString = () => 'firestore';
 
 const cleanDataForFirestore = (data: any) => {
     return JSON.parse(JSON.stringify(data, (key, value) => 
@@ -85,10 +81,8 @@ export const subscribeToCollection = <T>(
     callback: (data: T[]) => void
 ): () => void => {
     if (!db) return () => {};
-
     const q = query(collection(db, collectionName));
-
-    const unsubscribe = onSnapshot(q, { includeMetadataChanges: true }, (snapshot) => {
+    return onSnapshot(q, { includeMetadataChanges: true }, (snapshot) => {
         if (snapshot.metadata.fromCache && snapshot.docs.length === 0) return; 
 
         const items = snapshot.docs.map(doc => ({
@@ -106,8 +100,6 @@ export const subscribeToCollection = <T>(
     }, (error) => {
         console.error(`[Firestore Subscription Error] ${collectionName}:`, error);
     });
-
-    return unsubscribe;
 };
 
 export const getAll = async <T>(collectionName: string): Promise<T[]> => {
@@ -126,14 +118,12 @@ export const saveDocument = async <T extends { id: string }>(
     data: WithFieldValue<T>
 ): Promise<void> => {
     if (!db) return;
-    
     const docId = String(data.id);
     const docRef = doc(db, collectionName, docId);
-    
     try {
         const cleaned = cleanDataForFirestore(data);
         await setDoc(docRef, cleaned, { merge: true });
-        console.log(`✅ [DB] Document Saved to ${DATABASE_ID}: ${collectionName}/${docId}`);
+        console.log(`✅ [DB] Document Saved: ${collectionName}/${docId}`);
     } catch (err) {
         console.error(`❌ [DB] Save Failed: ${docId}`, err);
         throw err;
@@ -156,14 +146,14 @@ export const generateSequenceId = async (prefix: string, entityShortCode: string
     try {
         const newId = await runTransaction(db, async (transaction) => {
             const counterDoc = await transaction.get(counterRef);
-            let currentCount = 0;
-            if (counterDoc.exists()) currentCount = counterDoc.data().count || 0;
+            let currentCount = counterDoc.exists() ? counterDoc.data().count || 0 : 0;
             const nextCount = currentCount + 1;
             transaction.set(counterRef, { count: nextCount }, { merge: true });
             return nextCount;
         });
         return `${entityShortCode}${prefix}${String(newId).padStart(6, '0')}`;
     } catch (e) {
+        console.error("Sequence Error:", e);
         return `${entityShortCode}${prefix}${Math.floor(100000 + Math.random() * 900000)}`;
     }
 };
@@ -192,7 +182,7 @@ export const getItem = async <T>(key: string): Promise<T | null> => {
 };
 
 export const clearStore = async () => {
-    console.warn("Manual clear required in Firebase Console for Firestore.");
+    console.warn("Manual clear required in Firebase Console.");
 };
 
 export { auth, db };
