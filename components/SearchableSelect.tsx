@@ -80,7 +80,7 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
                 return 0;
             });
 
-            setResults(sortedResults.slice(0, 10));
+            setResults(sortedResults.slice(0, 50));
             setIsOpen(true);
         } catch (error: any) {
             console.error(`❌ [SEARCH ERROR]`, error);
