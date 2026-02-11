@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef, useMemo, useDeferredValue } from 'react';
-import { useData } from '../core/state/DataContext'; // Assuming this is where your global state lives
-import { Search, Loader2, X, User, Car } from 'lucide-react';
+import { useData } from '../core/state/DataContext'; 
+import { Search, X, User, Car } from 'lucide-react';
 
 interface SearchableSelectProps {
-    collectionName: 'customers' | 'vehicles'; // Maps to your useData() keys
+    collectionName: 'brooks_customers' | 'brooks_vehicles'; 
     onSelect: (item: any) => void;
     placeholder?: string;
     initialValue?: string;
@@ -22,15 +22,15 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
     const [isOpen, setIsOpen] = useState(false);
     const wrapperRef = useRef<HTMLDivElement>(null);
 
-    // 1. Match the "Perfect Logic": Use Deferred Value for UI responsiveness
+    // 1. Prioritize UI responsiveness
     const deferredSearch = useDeferredValue(searchTerm);
 
-    // 2. Sync initial value
+    // 2. Sync initial value when it changes (e.g., when a recent customer is clicked)
     useEffect(() => { 
         setSearchTerm(initialValue || ""); 
     }, [initialValue]);
 
-    // 3. Handle clicking outside to close dropdown
+    // 3. Close dropdown when clicking outside
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
             if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
@@ -41,18 +41,20 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    // 4. Match the "Perfect Logic": Pre-index for faster filtering
+    // 4. PRE-INDEX LOGIC: Matches your "Perfect" Management Tab
     const searchableItems = useMemo(() => {
-        const source = collectionName === 'customers' ? data.customers : data.vehicles;
+        // Correctly map your specific collection names to the useData keys
+        const source = collectionName === 'brooks_customers' ? data.customers : data.vehicles;
+        
         return source.map((item: any) => ({
             ...item,
-            _low: collectionName === 'customers' 
-                ? `${item.id} ${item.forename} ${item.surname} ${item.companyName || ''} ${item.postcode || ''} ${item.searchField || ''}`.toLowerCase()
-                : `${item.id} ${item.registration} ${item.make || ''} ${item.model || ''} ${item.customerName || ''}`.toLowerCase()
+            _low: collectionName === 'brooks_customers' 
+                ? `${item.id} ${item.forename || ''} ${item.surname || ''} ${item.companyName || ''} ${item.postcode || ''} ${item.searchField || ''}`.toLowerCase()
+                : `${item.id} ${item.registration || ''} ${item.make || ''} ${item.model || ''} ${item.customerName || ''}`.toLowerCase()
         }));
     }, [collectionName, data.customers, data.vehicles]);
 
-    // 5. Match the "Perfect Logic": Word-by-word filtering
+    // 5. WORD-BY-WORD FILTERING
     const filteredResults = useMemo(() => {
         if (!deferredSearch || deferredSearch.length < 1) return [];
         
@@ -60,7 +62,7 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
         
         return searchableItems
             .filter(item => searchWords.every(word => item._low.includes(word)))
-            .slice(0, 50); // Increased limit to 50 to prevent "cutting off"
+            .slice(0, 50); // High limit to prevent truncation
     }, [searchableItems, deferredSearch]);
 
     return (
@@ -76,7 +78,7 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
                     onFocus={() => setIsOpen(true)}
                     placeholder={placeholder}
                     disabled={disabled}
-                    className="w-full pl-10 pr-10 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm shadow-sm bg-white text-gray-900 disabled:bg-gray-50 disabled:text-gray-400"
+                    className="w-full pl-10 pr-10 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm shadow-sm bg-white text-gray-900 disabled:bg-gray-50 disabled:text-gray-400 transition-all"
                 />
                 <div className="absolute left-3 top-2.5 text-gray-400">
                     <Search size={18} />
@@ -96,42 +98,38 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
                 <div className="absolute z-[100] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-[300px] overflow-y-auto">
                     {filteredResults.length > 0 ? (
                         <>
-                            <div className="p-2 border-b bg-gray-50 text-[10px] font-semibold text-gray-400 uppercase">
-                                {collectionName} Results ({filteredResults.length})
+                            <div className="p-2 border-b bg-gray-50 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                                {collectionName.replace('brooks_', '')} Results ({filteredResults.length})
                             </div>
                             {filteredResults.map((item) => (
                                 <div 
                                     key={item.id} 
                                     onClick={() => { 
                                         onSelect(item); 
-                                        setSearchTerm(collectionName === 'customers' 
-                                            ? `${item.forename} ${item.surname}` 
-                                            : item.registration
-                                        );
                                         setIsOpen(false); 
                                     }} 
                                     className="p-2.5 hover:bg-indigo-50 cursor-pointer border-b last:border-0 transition-colors"
                                 >
                                     <div className="flex items-center gap-3">
-                                        <div className="text-indigo-600">
-                                            {collectionName === 'vehicles' ? <Car size={16}/> : <User size={16}/>}
+                                        <div className="text-indigo-600 shrink-0">
+                                            {item.registration ? <Car size={16}/> : <User size={16}/>}
                                         </div>
                                         <div className="flex-1 min-w-0">
-                                            <div className="flex justify-between items-center">
-                                                <p className="font-medium text-sm text-gray-900 truncate">
-                                                    {collectionName === 'customers' 
-                                                        ? `${item.forename} ${item.surname}` 
-                                                        : item.registration
+                                            <div className="flex justify-between items-center gap-2">
+                                                <p className="font-bold text-sm text-gray-900 truncate">
+                                                    {item.registration 
+                                                        ? item.registration.toUpperCase() 
+                                                        : `${item.forename} ${item.surname}`
                                                     }
                                                 </p>
-                                                <span className="text-[10px] font-mono text-gray-400">
+                                                <span className="text-[10px] font-mono text-gray-400 shrink-0">
                                                     {item.id}
                                                 </span>
                                             </div>
-                                            <p className="text-xs text-gray-500 truncate">
-                                                {collectionName === 'customers' 
-                                                    ? (item.companyName || item.postcode || 'Customer') 
-                                                    : `${item.make || ''} ${item.model || ''}`
+                                            <p className="text-xs text-gray-500 truncate mt-0.5">
+                                                {item.registration 
+                                                    ? `${item.make || ''} ${item.model || ''} ${item.customerName ? `• ${item.customerName}` : ''}`
+                                                    : (item.companyName || item.postcode || 'Customer Record')
                                                 }
                                             </p>
                                         </div>
@@ -140,8 +138,8 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
                             ))}
                         </>
                     ) : (
-                        <div className="p-4 text-center text-sm text-gray-500">
-                            No matching {collectionName} found
+                        <div className="p-4 text-center text-sm text-gray-500 italic">
+                            No matches found in {collectionName.replace('brooks_', '')}
                         </div>
                     )}
                 </div>
