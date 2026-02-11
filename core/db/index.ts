@@ -12,11 +12,34 @@ import { firebaseConfig } from '../config/firebaseConfig';
 
 /**
  * ENVIRONMENT LOADER
- * Mapping your specific .env.local keys
+ * This logic ensures that even in a production build, we can force 
+ * the app to use UAT or DEV keys via VITE_APP_ENV in .env.local.
  */
-const PROJECT_ID = import.meta.env.VITE_FIREBASE_PROJECT_ID_DEV || import.meta.env.VITE_FIREBASE_PROJECT_ID;
-const DATABASE_ID = import.meta.env.VITE_FIREBASE_DATABASE_ID_DEV || import.meta.env.VITE_FIREBASE_DATABASE_ID || 'isdevdb';
-const API_KEY = import.meta.env.VITE_FIREBASE_API_KEY_DEV || firebaseConfig.apiKey;
+
+// 1. Check for an explicit override (e.g., VITE_APP_ENV="uat")
+// 2. Otherwise, check if Vite is in production build mode
+const ENV_MODE = import.meta.env.VITE_APP_ENV || (import.meta.env.PROD ? 'production' : 'development');
+
+let PROJECT_ID: string;
+let DATABASE_ID: string;
+let API_KEY: string;
+
+if (ENV_MODE === 'uat') {
+    // UAT CONFIG
+    PROJECT_ID = import.meta.env.VITE_FIREBASE_PROJECT_ID_UAT;
+    DATABASE_ID = import.meta.env.VITE_FIREBASE_DATABASE_ID_UAT || 'uat-db';
+    API_KEY = import.meta.env.VITE_FIREBASE_API_KEY_UAT;
+} else if (ENV_MODE === 'production' && !import.meta.env.VITE_APP_ENV) {
+    // STRICT PRODUCTION (Only if no override is set)
+    PROJECT_ID = import.meta.env.VITE_FIREBASE_PROJECT_ID;
+    DATABASE_ID = import.meta.env.VITE_FIREBASE_DATABASE_ID || '(default)';
+    API_KEY = import.meta.env.VITE_FIREBASE_API_KEY || firebaseConfig.apiKey;
+} else {
+    // DEVELOPMENT CONFIG (Default fallback)
+    PROJECT_ID = import.meta.env.VITE_FIREBASE_PROJECT_ID_DEV || import.meta.env.VITE_FIREBASE_PROJECT_ID;
+    DATABASE_ID = import.meta.env.VITE_FIREBASE_DATABASE_ID_DEV || 'isdevdb';
+    API_KEY = import.meta.env.VITE_FIREBASE_API_KEY_DEV || firebaseConfig.apiKey;
+}
 
 let db: Firestore;
 let auth: Auth | undefined;
@@ -31,23 +54,25 @@ export const COLLECTIONS = {
 if (PROJECT_ID && API_KEY) {
     const activeConfig = {
         ...firebaseConfig,
-        apiKey: API_KEY.replace(/['"]+/g, ''), // Strip quotes if they exist
+        apiKey: API_KEY.replace(/['"]+/g, ''),
         projectId: PROJECT_ID.replace(/['"]+/g, '')
     };
 
     const app = !getApps().length ? initializeApp(activeConfig) : getApp();
     
     try {
+        const cleanDbId = DATABASE_ID.replace(/['"]+/g, '');
+        
         db = initializeFirestore(app, {
             experimentalForceLongPolling: true,
             localCache: persistentLocalCache({
                 cacheSizeBytes: CACHE_SIZE_UNLIMITED
             })
-        }, DATABASE_ID.replace(/['"]+/g, ''));
+        }, cleanDbId);
         
-        console.log(`🔥 [DB] System Online`);
+        console.log(`🔥 [DB] ${ENV_MODE.toUpperCase()} Mode Online`);
         console.log(`📡 Project: ${activeConfig.projectId}`);
-        console.log(`🎯 Database: ${DATABASE_ID}`);
+        console.log(`🎯 Database: ${cleanDbId}`);
         
         (window as any).db = db;
     } catch (e) {
@@ -57,7 +82,7 @@ if (PROJECT_ID && API_KEY) {
 
     auth = getAuth(app);
 } else {
-    console.error("❌ [DB] Configuration Missing. Check VITE_ prefixes in .env.local");
+    console.error(`❌ [DB] Config Missing for ${ENV_MODE}. check VITE_ keys in .env.local`);
     const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
     db = getFirestore(app);
     auth = getAuth(app);

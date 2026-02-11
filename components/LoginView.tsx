@@ -14,6 +14,13 @@ const LoginView: React.FC<LoginViewProps> = ({ users, onLogin, environment }) =>
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
 
+    /**
+     * Corrected Environment Detection
+     * We look at our custom VITE_APP_ENV first to ensure local builds 
+     * don't just default to "Production" text.
+     */
+    const activeEnv = (import.meta.env.VITE_APP_ENV as AppEnvironment) || environment;
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
@@ -32,15 +39,17 @@ const LoginView: React.FC<LoginViewProps> = ({ users, onLogin, environment }) =>
 
     return (
         <div className={`min-h-screen flex items-center justify-center p-4 transition-colors duration-500 ${
-            environment === 'Production' 
+            activeEnv === 'Production' 
                 ? 'bg-gradient-to-br from-slate-900 to-slate-800' 
+                : activeEnv === 'UAT'
+                ? 'bg-gradient-to-br from-slate-800 to-orange-900'
                 : 'bg-gradient-to-br from-slate-800 to-indigo-900'
         }`}>
             <div className="max-w-md w-full bg-white rounded-2xl shadow-2xl overflow-hidden animate-fade-in-up">
                 {/* Environment Banner for non-prod */}
-                {environment !== 'Production' && (
-                    <div className="bg-orange-500 text-white text-[10px] font-bold uppercase tracking-widest py-1 text-center flex items-center justify-center gap-1">
-                        <AlertTriangle size={10} /> {environment} Mode - Non-Secure Credentials Permitted <AlertTriangle size={10} />
+                {activeEnv !== 'Production' && (
+                    <div className={`${activeEnv === 'UAT' ? 'bg-orange-500' : 'bg-blue-600'} text-white text-[10px] font-bold uppercase tracking-widest py-1 text-center flex items-center justify-center gap-1`}>
+                        <AlertTriangle size={10} /> {activeEnv} Mode - Non-Secure Credentials Permitted <AlertTriangle size={10} />
                     </div>
                 )}
 
@@ -128,11 +137,11 @@ const LoginView: React.FC<LoginViewProps> = ({ users, onLogin, environment }) =>
                             Authorized Access Only &bull; v8.02
                         </p>
                         <div className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
-                            environment === 'UAT' ? 'bg-orange-100 text-orange-800' : 
-                            environment === 'Development' ? 'bg-blue-100 text-blue-800' :
+                            activeEnv === 'UAT' ? 'bg-orange-100 text-orange-800' : 
+                            activeEnv === 'Development' ? 'bg-blue-100 text-blue-800' :
                             'bg-green-100 text-green-800'
                         }`}>
-                            {environment} Environment
+                            {activeEnv} Environment
                         </div>
                     </div>
                 </div>
