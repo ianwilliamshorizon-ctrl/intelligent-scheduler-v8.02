@@ -376,13 +376,13 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                                 <label className="font-semibold">Vehicle (Optional)</label>
                                 <div className="flex flex-col gap-2 mt-1">
                                      <div className="flex items-center gap-2">
-                                        <SearchableSelect
-                                            collectionName="brooks_vehicles"
-                                            onSelect={handleVehicleSelect}
-                                            initialValue={selectedVehicle ? `${selectedVehicle.registration} - ${selectedVehicle.make} ${selectedVehicle.model}` : ''}
-                                            placeholder="Search vehicles..."
-                                            disabled={false} 
-                                        />
+                                     <SearchableSelect
+    collectionName="vehicles" // Matches the key in useData()
+    onSelect={(item) => setFormData(prev => ({ ...prev, vehicleId: item.id }))}
+    initialValue={selectedVehicle ? `${selectedVehicle.registration} - ${selectedVehicle.make} ${selectedVehicle.model}` : ''}
+    placeholder="Search registration, make, or owner..."
+    disabled={!formData.customerId}
+/>
                                         <button type="button" onClick={() => setIsAddingVehicle(true)} className="p-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 flex-shrink-0"><Plus size={20} /></button>
                                     </div>
                                     {linkedVehicles.length > 0 && !formData.vehicleId && (
