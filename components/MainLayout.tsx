@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useApp } from '../core/state/AppContext';
 import { useData } from '../core/state/DataContext';
 import { 
@@ -16,9 +16,23 @@ const MainLayout: React.FC<{ children: React.ReactNode, onOpenManagement: () => 
     } = useApp();
     const { roles, customers, vehicles, parts } = useData();
 
-    const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+    // Default: Closed on mobile (< 1024px), Open on desktop
+    const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth >= 1024);
     const [searchQuery, setSearchQuery] = useState('');
     const [isSearchFocused, setIsSearchFocused] = useState(false);
+
+    // Monitor screen resize to toggle sidebar behavior
+    useEffect(() => {
+        const handleResize = () => {
+            if (window.innerWidth < 1024) {
+                setIsSidebarOpen(false);
+            } else {
+                setIsSidebarOpen(true);
+            }
+        };
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
 
     // --- Search Logic ---
     const searchResults = useMemo(() => {
@@ -30,7 +44,7 @@ const MainLayout: React.FC<{ children: React.ReactNode, onOpenManagement: () => 
             .map(c => ({ id: c.id, label: `${c.forename} ${c.surname}`, sub: c.companyName, type: 'Customer', icon: UserCheck }));
 
         const vehicleMatches = vehicles
-            .filter(v => v.searchField?.includes(q))
+            .filter(v => v.searchField?.includes(q) || v.registration?.toLowerCase().includes(q))
             .map(v => ({ id: v.id, label: v.registration, sub: `${v.make} ${v.model}`, type: 'Vehicle', icon: Car }));
 
         const partMatches = parts
@@ -62,36 +76,74 @@ const MainLayout: React.FC<{ children: React.ReactNode, onOpenManagement: () => 
     const visibleNavItems = navItems.filter(item => allowedViews.includes(item.id as T.ViewType));
 
     return (
-        <div className="flex h-screen bg-gray-100 font-sans text-gray-900">
-            <aside className={`${isSidebarOpen ? 'w-64' : 'w-20'} bg-slate-900 text-white transition-all duration-300 flex flex-col flex-shrink-0 z-20`}>
-                <div className="p-4 flex items-center justify-between">
-                    {isSidebarOpen && <span className="font-bold text-xl tracking-tight">BROOKSPEED</span>}
-                    <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-1 rounded hover:bg-slate-800">
+        <div className="flex h-screen bg-gray-100 font-sans text-gray-900 overflow-hidden">
+            
+            {/* MOBILE OVERLAY: Dims the background when sidebar is open on mobile */}
+            {isSidebarOpen && (
+                <div 
+                    className="fixed inset-0 bg-black/50 z-40 lg:hidden" 
+                    onClick={() => setIsSidebarOpen(false)}
+                />
+            )}
+
+            {/* SIDEBAR: Absolute on mobile, Relative on desktop */}
+            <aside className={`
+                fixed inset-y-0 left-0 z-50 lg:relative
+                ${isSidebarOpen ? 'w-64 translate-x-0' : 'w-0 -translate-x-full lg:translate-x-0 lg:w-20'} 
+                bg-slate-900 text-white transition-all duration-300 flex flex-col flex-shrink-0
+            `}>
+                <div className="p-4 flex items-center justify-between h-16 border-b border-slate-800">
+                    {(isSidebarOpen || window.innerWidth < 1024) && (
+                        <span className="font-bold text-xl tracking-tight">BROOKSPEED</span>
+                    )}
+                    <button 
+                        onClick={() => setIsSidebarOpen(!isSidebarOpen)} 
+                        className="p-1 rounded hover:bg-slate-800 hidden lg:block"
+                    >
                         <Menu size={20} />
+                    </button>
+                    {/* Mobile Close X */}
+                    <button onClick={() => setIsSidebarOpen(false)} className="lg:hidden p-1">
+                        <X size={24} />
                     </button>
                 </div>
                 
-                <nav className="flex-grow overflow-y-auto py-4">
+                <nav className="flex-grow overflow-y-auto py-4 scrollbar-hide">
                     <div className="px-2 space-y-1">
                         {visibleNavItems.map(item => (
                             <button 
                                 key={item.id}
-                                onClick={() => setCurrentView(item.id as T.ViewType)} 
-                                className={`w-full flex items-center p-2 rounded-lg transition-colors ${currentView === item.id ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`}
+                                onClick={() => {
+                                    setCurrentView(item.id as T.ViewType);
+                                    if (window.innerWidth < 1024) setIsSidebarOpen(false);
+                                }} 
+                                className={`w-full flex items-center p-3 rounded-lg transition-colors ${
+                                    currentView === item.id 
+                                    ? 'bg-indigo-600 text-white' 
+                                    : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                                }`}
                                 title={!isSidebarOpen ? item.label : undefined}
                             >
-                                <item.icon size={20} className="min-w-[20px]" />
-                                {isSidebarOpen && <span className="ml-3">{item.label}</span>}
+                                <item.icon size={22} className="min-w-[22px]" />
+                                {(isSidebarOpen || window.innerWidth < 1024) && <span className="ml-3 font-medium">{item.label}</span>}
                             </button>
                         ))}
                     </div>
                 </nav>
             </aside>
 
-            <div className="flex-grow flex flex-col h-full overflow-hidden">
-                <header className="bg-white border-b border-gray-200 h-16 flex items-center justify-between px-6 flex-shrink-0 z-30 shadow-sm">
-                     <div className="flex items-center gap-8">
-                        <div className="flex items-center gap-2">
+            {/* MAIN APP AREA */}
+            <div className="flex-grow flex flex-col h-full overflow-hidden w-full">
+                
+                {/* HEADER */}
+                <header className="bg-white border-b border-gray-200 h-16 flex items-center justify-between px-4 lg:px-6 flex-shrink-0 z-30 shadow-sm">
+                    <div className="flex items-center gap-4 flex-1">
+                        {/* Mobile Menu Button */}
+                        <button onClick={() => setIsSidebarOpen(true)} className="lg:hidden p-2 -ml-2 text-gray-600">
+                            <Menu size={24} />
+                        </button>
+
+                        <div className="hidden md:flex items-center gap-2">
                              <Building2 size={18} className="text-indigo-600" />
                              <select 
                                 value={selectedEntityId} 
@@ -104,35 +156,28 @@ const MainLayout: React.FC<{ children: React.ReactNode, onOpenManagement: () => 
                              </select>
                         </div>
 
-                        {/* --- Global Search Bar --- */}
-                        <div className="relative w-96">
+                        {/* --- Global Search Bar: Shrinks on mobile --- */}
+                        <div className="relative w-full max-w-xs lg:max-w-md">
                             <div className="relative">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                                 <input 
                                     type="text"
-                                    placeholder="Search customers, vehicles, parts..."
+                                    placeholder="Search..."
                                     className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-full text-sm focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
                                     onFocus={() => setIsSearchFocused(true)}
                                     onBlur={() => setTimeout(() => setIsSearchFocused(false), 200)}
                                 />
-                                {searchQuery && (
-                                    <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                                        <X size={14} />
-                                    </button>
-                                )}
                             </div>
 
-                            {/* Search Results Dropdown */}
                             {isSearchFocused && searchResults.length > 0 && (
-                                <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden z-50">
+                                <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden z-50">
                                     {searchResults.map((result, idx) => (
                                         <button 
                                             key={`${result.type}-${result.id}-${idx}`}
                                             className="w-full flex items-center gap-3 px-4 py-3 hover:bg-indigo-50 border-b border-gray-50 last:border-none transition-colors text-left"
                                             onClick={() => {
-                                                console.log(`Maps to ${result.type}: ${result.id}`);
                                                 setSearchQuery('');
                                             }}
                                         >
@@ -148,39 +193,38 @@ const MainLayout: React.FC<{ children: React.ReactNode, onOpenManagement: () => 
                                 </div>
                             )}
                         </div>
-                     </div>
+                    </div>
 
-                     <div className="flex items-center gap-4">
-                         <div className="flex items-center gap-3">
-                            <div className="flex items-center gap-2 text-sm text-gray-700">
-                                <UserCheck size={16} />
-                                <span className="font-medium">{currentUser.name}</span>
-                                <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">{currentUser.role}</span>
+                    <div className="flex items-center gap-2 lg:gap-4 ml-2">
+                        <div className="hidden sm:flex items-center gap-3">
+                            <div className="flex flex-col items-end">
+                                <span className="text-xs font-bold text-gray-900 leading-none">{currentUser.name}</span>
+                                <span className="text-[10px] text-gray-500 uppercase">{currentUser.role}</span>
                             </div>
-                            <button 
-                                onClick={logout}
-                                className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors"
-                                title="Log Out"
-                            >
-                                <LogOut size={18} />
-                            </button>
                         </div>
 
-                         {currentUser.role === 'Admin' && (
-                             <button 
+                        <button 
+                            onClick={logout}
+                            className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors"
+                        >
+                            <LogOut size={18} />
+                        </button>
+
+                        {currentUser.role === 'Admin' && (
+                            <button 
                                 onClick={onOpenManagement} 
-                                className="p-2 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-full transition-colors"
-                                title="Global Settings"
+                                className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-full transition-colors"
                             >
-                                 <Settings size={20} />
-                             </button>
-                         )}
-                     </div>
+                                <Settings size={20} />
+                            </button>
+                        )}
+                    </div>
                 </header>
 
-                <div className="flex-grow overflow-hidden relative">
+                {/* VIEWPORT AREA */}
+                <main className="flex-grow overflow-auto relative bg-gray-100">
                     {children}
-                </div>
+                </main>
             </div>
         </div>
     );

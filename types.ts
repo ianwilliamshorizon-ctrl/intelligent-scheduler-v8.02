@@ -17,6 +17,7 @@ export interface User {
 export interface Role {
     id: string;
     name: string;
+    description?: string; // Added to fix ManagementRolesTab.tsx error
     baseRole: UserRole;
     defaultAllowedViews: ViewType[];
 }
@@ -88,9 +89,10 @@ export interface Customer {
     isCashCustomer?: boolean;
     marketingConsent: boolean;
     serviceReminderConsent: boolean;
-    communicationPreference?: 'Email' | 'SMS' | 'WhatsApp' | 'Phone' | 'None'; // Added 'Phone'
-    searchField?: string; // This is the magic field for high-speed searching
+    communicationPreference?: 'Email' | 'SMS' | 'WhatsApp' | 'Phone' | 'None';
+    searchField?: string;
 }
+
 export interface PreviousRegistration {
     registration: string;
     changedAt: string;
@@ -109,7 +111,7 @@ export interface Vehicle {
     registration: string;
     make: string;
     model: string;
-    type: string; // Used for Trim/Generation (e.g. 991 or GT3 RS)
+    type: string; 
     vin?: string;
     engineNumber?: string;
     colour?: string;
@@ -124,6 +126,7 @@ export interface Vehicle {
     covid19MotExemption?: boolean;
     previousRegistrations?: PreviousRegistration[];
     images?: VehicleImage[];
+    searchField?: string; // Added to fix MainLayout.tsx error
 }
 
 export type VehicleStatus = 'On Site' | 'Off-Site (Partner)' | 'Awaiting Arrival' | 'Awaiting Collection' | 'Collected';
@@ -246,6 +249,7 @@ export interface Estimate {
     jobId?: string;
     createdByUserId?: string;
     media?: CheckInPhoto[];
+    updatedAt?: string; // Added to fix ScheduleJobFromEstimateModal.tsx error
 }
 
 export interface Invoice {
@@ -278,6 +282,7 @@ export interface Part {
     id: string;
     partNumber: string;
     description: string;
+    partName?: string; // Added to fix MainLayout.tsx error
     salePrice: number;
     costPrice: number;
     stockQuantity: number;
@@ -285,6 +290,7 @@ export interface Part {
     defaultSupplierId?: string;
     alternateSupplierIds?: string[];
     taxCodeId?: string;
+    searchField?: string; // Added to fix MainLayout.tsx error
 }
 
 export interface PurchaseOrder {
@@ -341,11 +347,11 @@ export interface ServicePackage {
     name: string;
     description?: string;
     totalPrice: number;
-    costItems: EstimateLineItem[]; // Set as non-optional to match initialData
+    costItems: EstimateLineItem[]; 
     taxCodeId?: string;
     applicableMake?: string;
     applicableModel?: string;
-    applicableVarient?: string; // Unified with your hierarchy (Make -> Model -> Type)
+    applicableVarient?: string; 
 }
 
 export interface Lift {
@@ -652,4 +658,59 @@ export interface UnbillableTimeEvent {
 
 export interface EngineerChangeEvent {
     id: string;
+}
+
+/// Global AppState interface
+// Fixed to include everything ManagementStaffTab and AppContext need
+export interface AppState {
+    currentUser: User;
+    setCurrentUser: (user: User) => void;
+    users: User[];
+    setUsers: React.Dispatch<React.SetStateAction<User[]>>; 
+    currentView: ViewType;
+    setCurrentView: (view: ViewType) => void;
+    selectedEntityId: string;
+    setSelectedEntityId: (id: string) => void;
+    allWorkshops: BusinessEntity[];
+    logout: () => void;
+    appEnvironment: 'production' | 'development';
+    setAppEnvironment: (env: 'production' | 'development') => void;
+}
+
+// DataContextType interface
+// Updated to include all the data arrays and the refresh function
+export interface DataContextType {
+    jobs: Job[];
+    vehicles: Vehicle[];
+    customers: Customer[];
+    estimates: Estimate[];
+    invoices: Invoice[];
+    purchaseOrders: PurchaseOrder[];
+    purchases: Purchase[];
+    parts: Part[];
+    servicePackages: ServicePackage[];
+    suppliers: Supplier[];
+    engineers: Engineer[];
+    lifts: Lift[];
+    rentalVehicles: RentalVehicle[];
+    rentalBookings: RentalBooking[];
+    saleVehicles: SaleVehicle[];
+    saleOverheadPackages: SaleOverheadPackage[];
+    prospects: Prospect[];
+    storageBookings: StorageBooking[];
+    storageLocations: StorageLocation[];
+    batteryChargers: BatteryCharger[];
+    nominalCodes: NominalCode[];
+    nominalCodeRules: NominalCodeRule[];
+    absenceRequests: AbsenceRequest[];
+    inquiries: Inquiry[];
+    reminders: Reminder[];
+    businessEntities: BusinessEntity[];
+    taxRates: TaxRate[];
+    roles: Role[];
+    inspectionDiagrams: InspectionDiagram[];
+    inspectionTemplates: InspectionTemplate[];
+    refreshActiveData: () => Promise<void>; // This fixes the "Expected 0 arguments" error context
+    loading: boolean;
+    error: string | null;
 }
