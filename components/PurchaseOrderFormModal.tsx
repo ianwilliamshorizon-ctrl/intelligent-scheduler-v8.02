@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { PurchaseOrder, PurchaseOrderLineItem, Supplier, BusinessEntity, TaxRate, Part } from '../types';
-import { Save, PlusCircle, Trash2, X, CheckSquare, Eye, ArrowDownCircle } from 'lucide-react';
+import { Save, PlusCircle, Trash2, X, CheckSquare, Eye, ArrowDownCircle, AlertTriangle, CornerDownRight } from 'lucide-react';
 import { formatDate } from '../core/utils/dateUtils';
 import { generatePurchaseOrderId } from '../core/utils/numberGenerators';
 import { formatCurrency } from '../utils/formatUtils';
@@ -17,22 +17,25 @@ interface EditableLineItemRowProps {
     isCostPriceChanged: boolean;
     newSalePrice: string;
     onNewSalePriceChange: (value: string) => void;
+    isCredit: boolean;
 }
 
-const MemoizedEditableLineItemRow = React.memo(({ item, taxRates, onLineItemChange, onRemoveLineItem, isReceivingDisabled, isOrderedOrLater, isCostPriceChanged, newSalePrice, onNewSalePriceChange }: EditableLineItemRowProps) => {
+const MemoizedEditableLineItemRow = React.memo(({ item, taxRates, onLineItemChange, onRemoveLineItem, isReceivingDisabled, isOrderedOrLater, isCostPriceChanged, newSalePrice, onNewSalePriceChange, isCredit }: EditableLineItemRowProps) => {
     
     // Calculate remaining
     const ordered = item.quantity || 0;
     const received = item.receivedQuantity || 0;
-    const remaining = Math.max(0, ordered - received);
-    const isFullyReceived = received >= ordered && ordered > 0;
-
+    // For credit items (negative qty), received means "credit processed", so logic is inverted or hidden
+    const remaining = isCredit ? 0 : Math.max(0, ordered - received);
+    const isFullyReceived = isCredit ? (Math.abs(received) >= Math.abs(ordered)) : (received >= ordered && ordered > 0);
+    const isPendingReturn = item.returnStatus === 'Pending';
+    
     return (
         <>
-            <div className={`grid grid-cols-12 gap-2 items-center p-2 border bg-white ${isCostPriceChanged ? 'rounded-t-lg border-b-0' : 'rounded-lg'} ${isFullyReceived && isOrderedOrLater ? 'bg-green-50/50' : ''}`}>
+            <div className={`grid grid-cols-12 gap-2 items-center p-2 border bg-white ${isCostPriceChanged ? 'rounded-t-lg border-b-0' : 'rounded-lg'} ${isFullyReceived && isOrderedOrLater ? 'bg-green-50/50' : ''} ${isPendingReturn ? 'bg-amber-50 border-amber-200' : ''} ${isCredit ? 'bg-red-50/30' : ''}`}>
                 <input type="text" placeholder="Part Number" value={item.partNumber || ''} onChange={e => onLineItemChange(item.id, 'partNumber', e.target.value)} className="col-span-2 p-1 border rounded disabled:bg-gray-100 disabled:cursor-not-allowed" disabled={isOrderedOrLater} />
                 <input type="text" placeholder="Description" value={item.description} onChange={e => onLineItemChange(item.id, 'description', e.target.value)} className="col-span-3 p-1 border rounded disabled:bg-gray-100 disabled:cursor-not-allowed" disabled={isOrderedOrLater} />
-                <input type="number" step="1" value={item.quantity} onChange={e => onLineItemChange(item.id, 'quantity', e.target.value)} className="col-span-1 p-1 border rounded text-right disabled:bg-gray-100 disabled:cursor-not-allowed" disabled={isOrderedOrLater} />
+                <input type="number" step="1" value={item.quantity} onChange={e => onLineItemChange(item.id, 'quantity', e.target.value)} className={`col-span-1 p-1 border rounded text-right disabled:bg-gray-100 disabled:cursor-not-allowed ${isCredit ? 'text-red-600 font-bold' : ''}`} disabled={isOrderedOrLater} />
                 
                 <div className="col-span-1 relative">
                     <input 
@@ -43,22 +46,44 @@ const MemoizedEditableLineItemRow = React.memo(({ item, taxRates, onLineItemChan
                         placeholder="0" 
                         className={`w-full p-1 border rounded text-right disabled:bg-gray-100 ${!isReceivingDisabled && remaining > 0 ? 'border-blue-400 ring-1 ring-blue-100 font-bold' : ''}`} 
                         disabled={isReceivingDisabled} 
-                        title={`Ordered: ${ordered}, Remaining: ${remaining}`}
+                        title={`Ordered: ${ordered}`}
                     />
-                    {!isReceivingDisabled && remaining > 0 && (
+                    {!isReceivingDisabled && remaining > 0 && !isCredit && (
                          <div className="absolute -top-2 -right-1 w-2 h-2 bg-blue-500 rounded-full"></div>
                     )}
                 </div>
 
                 <input type="number" step="0.01" value={item.unitPrice} onChange={e => onLineItemChange(item.id, 'unitPrice', e.target.value)} className="col-span-2 p-1 border rounded text-right" placeholder="Unit Cost"/>
-                <select value={item.taxCodeId || ''} onChange={e => onLineItemChange(item.id, 'taxCodeId', e.target.value)} className="col-span-2 p-1 border rounded text-xs disabled:bg-gray-100 disabled:cursor-not-allowed" disabled={isOrderedOrLater}>
-                    <option value="">-- Tax --</option>{taxRates.map(t => <option key={t.id} value={t.id}>{t.code}</option>)}
-                </select>
-                <button onClick={() => onRemoveLineItem(item.id)} className="text-red-500 hover:text-red-700 justify-self-center disabled:opacity-50 disabled:cursor-not-allowed" disabled={isOrderedOrLater}><Trash2 size={14} /></button>
+                
+                <div className="col-span-2 flex items-center gap-1">
+                     <select value={item.taxCodeId || ''} onChange={e => onLineItemChange(item.id, 'taxCodeId', e.target.value)} className="w-full p-1 border rounded text-xs disabled:bg-gray-100 disabled:cursor-not-allowed" disabled={isOrderedOrLater}>
+                        <option value="">-- Tax --</option>{taxRates.map(t => <option key={t.id} value={t.id}>{t.code}</option>)}
+                    </select>
+                </div>
+                
+                <div className="col-span-1 flex justify-center">
+                    {!isReceivingDisabled && !isCredit ? (
+                         <button 
+                            type="button"
+                            onClick={() => onLineItemChange(item.id, 'returnStatus', isPendingReturn ? 'None' : 'Pending')}
+                            className={`p-1 rounded ${isPendingReturn ? 'bg-amber-100 text-amber-600' : 'text-gray-300 hover:text-amber-500'}`}
+                            title={isPendingReturn ? "Cancel Return" : "Mark for Return"}
+                        >
+                            <AlertTriangle size={16} fill={isPendingReturn ? "currentColor" : "none"}/>
+                        </button>
+                    ) : (
+                         <button onClick={() => onRemoveLineItem(item.id)} className="text-red-500 hover:text-red-700 disabled:opacity-50 disabled:cursor-not-allowed" disabled={isOrderedOrLater}><Trash2 size={14} /></button>
+                    )}
+                </div>
             </div>
+             {isPendingReturn && (
+                <div className="text-xs text-amber-700 bg-amber-50 px-2 pb-1 mx-2 rounded-b border-x border-b border-amber-200 -mt-1 mb-1 flex items-center gap-1">
+                    <CornerDownRight size={12}/> Pending Return
+                </div>
+            )}
             {isCostPriceChanged && (
-                <div className="grid grid-cols-12 gap-2 items-center p-2 rounded-b-lg border-x border-b bg-amber-50 border-amber-200">
-                    <div className="col-start-6 col-span-3 text-right text-sm font-semibold text-amber-800">
+                <div className="grid grid-cols-12 gap-2 items-center p-2 rounded-b-lg border-x border-b bg-blue-50 border-blue-200">
+                    <div className="col-start-6 col-span-3 text-right text-sm font-semibold text-blue-800">
                         Cost price changed. Update sale price:
                     </div>
                     <div className="col-span-2">
@@ -67,7 +92,7 @@ const MemoizedEditableLineItemRow = React.memo(({ item, taxRates, onLineItemChan
                             step="0.01"
                             value={newSalePrice}
                             onChange={(e) => onNewSalePriceChange(e.target.value)}
-                            className="w-full p-1 border rounded text-right border-amber-300 focus:ring-amber-500"
+                            className="w-full p-1 border rounded text-right border-blue-300 focus:ring-blue-500"
                             placeholder="New Sale Price"
                         />
                     </div>
@@ -102,11 +127,12 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
 
     const title = useMemo(() => {
         if (!formData?.id) return 'Create New Purchase Order';
+        if (formData.type === 'Credit') return `Credit Note Request #${formData.id}`;
         if (formData.status === 'Ordered' || formData.status === 'Partially Received') {
             return `Receive Goods for PO #${formData.id}`;
         }
         return `Edit Purchase Order #${formData.id}`;
-    }, [formData.id, formData.status]);
+    }, [formData.id, formData.status, formData.type]);
 
     useEffect(() => {
         if (!isOpen) return;
@@ -125,7 +151,8 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
                 notes: '',
                 vehicleRegistrationRef: '',
                 supplierReference: '',
-                secondarySupplierReference: ''
+                secondarySupplierReference: '',
+                type: 'Standard'
             });
         }
     }, [purchaseOrder, isOpen, selectedEntityId]);
@@ -186,7 +213,6 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
     const getPartUpdates = useCallback((): Part[] => {
         const updatedParts: Part[] = [];
         (formData.lineItems || []).forEach(item => {
-            // FIX: Safely access purchaseOrder.lineItems to prevent crash when saving a new PO (where purchaseOrder is null)
             const originalItem = (purchaseOrder?.lineItems || []).find(li => li.id === item.id);
             const isCostPriceChanged = originalItem !== undefined && item.unitPrice !== originalItem.unitPrice;
             
@@ -194,7 +220,7 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
                 const partToUpdate = parts.find(p => p.partNumber === item.partNumber);
                 if (partToUpdate) {
                     const newCostPrice = item.unitPrice;
-                    let newSalePrice = partToUpdate.salePrice; // Default to old sale price
+                    let newSalePrice = partToUpdate.salePrice;
                     
                     if (newSalePrices[item.id] !== undefined) {
                         const parsedSalePrice = parseFloat(newSalePrices[item.id]);
@@ -202,7 +228,6 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
                             newSalePrice = parsedSalePrice;
                         }
                     }
-                    
                     updatedParts.push({ ...partToUpdate, costPrice: newCostPrice, salePrice: newSalePrice });
                 }
             }
@@ -220,8 +245,11 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
         const lineItems = formData.lineItems || [];
 
         if (lineItems.length > 0 && formData.status !== 'Draft' && formData.status !== 'Cancelled') {
-            const allReceived = lineItems.every(item => (item.receivedQuantity || 0) >= item.quantity);
-            const anyReceived = lineItems.some(item => (item.receivedQuantity || 0) > 0);
+            // For credit notes (negative qty), received logic is flipped or simplified (received = done)
+            const isCredit = formData.type === 'Credit';
+            
+            const allReceived = lineItems.every(item => Math.abs((item.receivedQuantity || 0)) >= Math.abs(item.quantity));
+            const anyReceived = lineItems.some(item => Math.abs((item.receivedQuantity || 0)) > 0);
 
             if (allReceived) {
                 newStatus = 'Received';
@@ -238,14 +266,24 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
         
         const entity = businessEntities.find(e => e.id === formData.entityId);
         const entityShortCode = entity?.shortCode || 'UNK';
-
-        // If we are editing, ensure we use the existing ID. If new, generate one.
         const finalId = purchaseOrder?.id || formData.id || generatePurchaseOrderId(allPurchaseOrders, entityShortCode);
+
+        // Sanitize line items to ensure numbers (NaN safety)
+        const cleanedLineItems = (formData.lineItems || []).map(item => ({
+            ...item,
+            quantity: Number(item.quantity) || 0,
+            unitPrice: Number(item.unitPrice) || 0,
+            receivedQuantity: Number(item.receivedQuantity) || 0,
+            // Ensure returnStatus is either a valid string or undefined, not null
+            returnStatus: item.returnStatus || undefined
+        }));
 
         const payload: any = {
             ...formData,
             id: finalId,
             status: newStatus,
+            type: formData.type || 'Standard',
+            lineItems: cleanedLineItems,
             partUpdates: getPartUpdates(),
         };
         
@@ -259,7 +297,6 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
             return;
         }
         
-        // Validation: Mandatory Supplier Reference
         if (!formData.supplierReference) {
              alert('Supplier Reference / Invoice No. is mandatory when marking goods as Received.');
              return;
@@ -269,14 +306,20 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
         const entityShortCode = entity?.shortCode || 'UNK';
         const finalId = purchaseOrder?.id || formData.id || generatePurchaseOrderId(allPurchaseOrders, entityShortCode);
     
+        const cleanedLineItems = (formData.lineItems || []).map(item => ({
+            ...item,
+            quantity: Number(item.quantity) || 0,
+            unitPrice: Number(item.unitPrice) || 0,
+            receivedQuantity: Number(item.quantity) || 0,
+            returnStatus: item.returnStatus || undefined
+        }));
+
         const updatedPO: any = {
             ...formData,
             id: finalId,
-            lineItems: (formData.lineItems || []).map(item => ({
-                ...item,
-                receivedQuantity: Number(item.quantity)
-            })),
+            lineItems: cleanedLineItems,
             status: 'Received',
+            type: formData.type || 'Standard',
             partUpdates: getPartUpdates(),
         };
         
@@ -308,7 +351,7 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
         Object.values(breakdown).forEach(summary => {
             summary.vat = summary.net * (summary.rate / 100);
         });
-        const finalVatBreakdown = Object.values(breakdown).filter(b => b.net > 0 && b.rate > 0);
+        const finalVatBreakdown = Object.values(breakdown).filter(b => Math.abs(b.net) > 0 && b.rate > 0);
         const totalVat = finalVatBreakdown.reduce((sum, b) => sum + b.vat, 0);
         
         return { totalNet: currentTotalNet, grandTotal: currentTotalNet + totalVat, vatBreakdown: finalVatBreakdown };
@@ -370,6 +413,11 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
                     <div className="mt-6">
                         <div className="flex justify-between items-center mb-2">
                             <h3 className="font-bold">Line Items</h3>
+                            {!isReceivingDisabled && formData.type !== 'Credit' && (
+                                <div className="text-xs text-amber-800 bg-amber-100 px-2 py-1 rounded border border-amber-200">
+                                    Tip: Use the warning icon to flag incorrectly supplied items for return.
+                                </div>
+                            )}
                             {(formData.status === 'Ordered' || formData.status === 'Partially Received') && (
                                 <button 
                                     onClick={handleFillBalance} 
@@ -407,6 +455,7 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
                                         isCostPriceChanged={isCostPriceChanged && !!part}
                                         newSalePrice={newSalePrices[item.id] !== undefined ? newSalePrices[item.id] : (part?.salePrice?.toString() ?? '')}
                                         onNewSalePriceChange={(value) => setNewSalePrices(prev => ({...prev, [item.id]: value}))}
+                                        isCredit={formData.type === 'Credit'}
                                     />
                                 );
                             })}

@@ -3,7 +3,7 @@ import React, { useState, useMemo } from 'react';
 import { useData } from '../../core/state/DataContext';
 import { useApp } from '../../core/state/AppContext';
 import { Estimate, EstimateLineItem, Vehicle, ServicePackage } from '../../types';
-import { Plus, Eye, Edit, Trash2, Search, PlusCircle, Wand2, ChevronDown, ChevronUp, Loader2, Printer, CalendarCheck } from 'lucide-react';
+import { Plus, Eye, Edit, Trash2, Search, PlusCircle, Wand2, ChevronDown, ChevronUp, Loader2, Printer, CalendarCheck, XCircle } from 'lucide-react';
 import { formatCurrency } from '../../utils/formatUtils';
 import { generateServicePackageName } from '../../core/services/geminiService';
 import { getRelativeDate } from '../../core/utils/dateUtils';
@@ -21,9 +21,9 @@ interface EstimatesViewProps {
 }
 
 const EstimatesView: React.FC<EstimatesViewProps> = ({ onOpenEstimateModal, onViewEstimate, onSmartCreateClick, onScheduleEstimate }) => {
-    const { estimates, customers, vehicles, taxRates, setServicePackages, servicePackages, businessEntities, parts } = useData();
-    const { selectedEntityId, users, setConfirmation } = useApp();
-    const { handleSaveItem } = useWorkshopActions();
+    const { estimates, customers, vehicles, taxRates, setServicePackages, servicePackages, businessEntities, parts, setEstimates } = useData();
+    const { selectedEntityId, users, setConfirmation, currentUser } = useApp();
+    const { handleSaveItem, updateLinkedInquiryStatus } = useWorkshopActions();
     const print = usePrint();
     
     const [filter, setFilter] = useState('');
@@ -142,6 +142,21 @@ const EstimatesView: React.FC<EstimatesViewProps> = ({ onOpenEstimateModal, onVi
             />
         );
     };
+
+    const handleQuickClose = async (e: React.MouseEvent, estimate: Estimate) => {
+        e.stopPropagation();
+        setConfirmation({
+            isOpen: true,
+            title: 'Close Estimate',
+            message: 'Mark this estimate as Closed/Declined? It will be moved to the Closed status but kept in history.',
+            type: 'warning',
+            onConfirm: async () => {
+                await handleSaveItem(setEstimates, { ...estimate, status: 'Closed' }, 'brooks_estimates');
+                await updateLinkedInquiryStatus(estimate.id, 'Rejected');
+                setConfirmation({ isOpen: false, title: '', message: '' });
+            }
+        });
+    };
     
     return (
         <div className="w-full h-full flex flex-col p-4 sm:p-6 bg-gray-50">
@@ -206,7 +221,7 @@ const EstimatesView: React.FC<EstimatesViewProps> = ({ onOpenEstimateModal, onVi
                                         </td>
                                         <td className="p-3 text-right font-semibold">{formatCurrency(calculateTotal(estimate.lineItems))}</td>
                                         <td className="p-3">
-                                            <div className="flex gap-1" onClick={e => e.stopPropagation()}>
+                                            <div className="flex gap-1 items-center" onClick={e => e.stopPropagation()}>
                                                 {estimate.status === 'Approved' && !estimate.jobId && onScheduleEstimate && (
                                                     <button 
                                                         onClick={() => onScheduleEstimate(estimate)} 
@@ -218,6 +233,11 @@ const EstimatesView: React.FC<EstimatesViewProps> = ({ onOpenEstimateModal, onVi
                                                 )}
                                                 <button onClick={() => onViewEstimate(estimate)} className="p-1.5 text-gray-600 hover:bg-gray-100 rounded-full" title="View"><Eye size={16} /></button>
                                                 <button onClick={() => onOpenEstimateModal(estimate)} className="p-1.5 text-indigo-600 hover:bg-indigo-100 rounded-full" title="Edit"><Edit size={16} /></button>
+                                                {estimate.status !== 'Closed' && estimate.status !== 'Converted to Job' && (
+                                                    <button onClick={(e) => handleQuickClose(e, estimate)} className="p-1.5 text-red-500 hover:bg-red-100 rounded-full" title="Close Estimate (Declined/Error)">
+                                                        <XCircle size={16} />
+                                                    </button>
+                                                )}
                                             </div>
                                         </td>
                                     </tr>

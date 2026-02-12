@@ -14,6 +14,7 @@ export interface User {
     holidayEntitlement?: number;
     email?: string;
     allowedViews?: ViewType[];
+    defaultEntityId?: string; // Integrated from PO version
 }
 
 export interface Role {
@@ -92,7 +93,7 @@ export interface Customer {
     marketingConsent: boolean;
     serviceReminderConsent: boolean;
     communicationPreference?: 'Email' | 'SMS' | 'WhatsApp' | 'Phone' | 'None';
-    searchField?: string;
+    searchField?: string; // High-performance search field preserved
 }
 
 export interface PreviousRegistration {
@@ -128,7 +129,7 @@ export interface Vehicle {
     covid19MotExemption?: boolean;
     previousRegistrations?: PreviousRegistration[];
     images?: VehicleImage[];
-    searchField?: string;
+    searchField?: string; // High-performance search field preserved
 }
 
 export type VehicleStatus = 'On Site' | 'Off-Site (Partner)' | 'Awaiting Arrival' | 'Awaiting Collection' | 'Collected';
@@ -162,6 +163,7 @@ export interface ChecklistSection {
 }
 
 export type TyreLocation = 'frontLeft' | 'frontRight' | 'rearLeft' | 'rearRight' | 'spare';
+
 export interface TyreData {
     outer?: number;
     middle?: number;
@@ -277,6 +279,7 @@ export interface PurchaseOrderLineItem {
     receivedQuantity?: number;
     unitPrice: number; 
     taxCodeId?: string;
+    returnStatus?: 'None' | 'Pending' | 'Returned' | 'Credited'; // Integrated from PO version
 }
 
 export interface Part {
@@ -291,7 +294,7 @@ export interface Part {
     defaultSupplierId?: string;
     alternateSupplierIds?: string[];
     taxCodeId?: string;
-    searchField?: string;
+    searchField?: string; // High-performance search field preserved
 }
 
 export interface PurchaseOrder {
@@ -303,11 +306,13 @@ export interface PurchaseOrder {
     secondarySupplierReference?: string;
     orderDate: string;
     status: 'Draft' | 'Ordered' | 'Partially Received' | 'Received' | 'Cancelled';
+    type?: 'Standard' | 'Credit'; // Integrated from PO version
     jobId?: string | null;
     lineItems: PurchaseOrderLineItem[];
     notes?: string;
     createdByUserId?: string;
     partUpdates?: Part[];
+    linkedPurchaseOrderId?: string; // Integrated from PO version
 }
 
 export interface Purchase {
@@ -540,6 +545,7 @@ export interface NominalCode {
 }
 
 export type NominalCodeItemType = 'Labor' | 'Part' | 'MOT' | 'Purchase' | 'CourtesyCar' | 'Storage';
+
 export interface NominalCodeRule {
     id: string;
     priority: number;
@@ -652,38 +658,38 @@ export interface BackupSchedule {
     times: string[]; 
 }
 
-// --- Specific Component Interfaces to fix Component Errors ---
+// --- Component Props & Support Interfaces ---
 
 export interface LiveAssistantProps {
     isOpen: boolean;
     onClose: () => void;
     jobId: string | null;
     onAddNote: (note: string) => void;
-    apiKey: any; // Add this line
+    apiKey: any;
 }
 
 export interface SearchableSelectProps {
-    options: { id: string; label: string; }[]; // Add this line
+    options: { id: string; label: string; }[];
     value: any;
     onChange: (val: any) => void;
     placeholder: string;
 }
 
 export interface TimelineViewProps {
-    lifts: Lift[]; // Add this line
+    lifts: Lift[];
     jobs: Job[];
     onDragStart: (e: React.DragEvent, parentJobId: string, segmentId: string) => void;
     onDragEnd: (e: React.DragEvent) => void;
     onOpenAssistant: (id: string) => void;
 }
 
-// --- Global App Context and State ---
+// --- Global Context States ---
 
 export interface AppState {
     currentUser: User;
     setCurrentUser: (user: User) => void;
     users: User[];
-    setUsers: React.Dispatch<React.SetStateAction<User[]>>; // Ensure this is present
+    setUsers: React.Dispatch<React.SetStateAction<User[]>>;
     currentView: ViewType;
     setCurrentView: (view: ViewType) => void;
     selectedEntityId: string;
@@ -691,10 +697,9 @@ export interface AppState {
     allWorkshops: BusinessEntity[];
     logout: () => void;
     appEnvironment: 'production' | 'development';
-    setAppEnvironment: (env: 'production' | 'development') => void; // Add this line
+    setAppEnvironment: (env: 'production' | 'development') => void;
 }
-// DataContextType interface
-// Updated to include all the data arrays and the refresh function
+
 export interface DataContextType {
     jobs: Job[];
     vehicles: Vehicle[];
@@ -726,8 +731,7 @@ export interface DataContextType {
     roles: Role[];
     inspectionDiagrams: InspectionDiagram[];
     inspectionTemplates: InspectionTemplate[];
-    // ADD THIS LINE BELOW TO FIX THE ERROR
-    refreshActiveData: () => Promise<void>; 
+    refreshActiveData: () => Promise<void>; // High-performance refresh method
     loading: boolean;
     error: string | null;
 }
