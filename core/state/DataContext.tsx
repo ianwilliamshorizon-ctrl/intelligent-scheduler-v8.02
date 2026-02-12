@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useRef } from 'react';
 import * as T from '../../types';
 import { usePersistentState } from './usePersistentState';
-import * as DB from '../db'; 
 import { db } from '../db';
 import { writeBatch, doc } from 'firebase/firestore';
 
@@ -13,7 +12,7 @@ import {
     getInitialSaleOverheadPackages, getInitialStorageBookings, getInitialRentalVehicles,
     getInitialRentalBookings, getInitialStorageLocations, getInitialBatteryChargers,
     getInitialNominalCodes, getInitialNominalCodeRules, getInitialPurchases,
-    getInitialAbsenceRequests, getInitialUsers, getInitialProspects, getInitialInquiries,
+    getInitialAbsenceRequests, getInitialProspects, getInitialInquiries,
     getInitialReminders, getInitialAuditLog, getInitialRoles, getInitialInspectionDiagrams,
     getInitialInspectionTemplates
 } from '../data/initialData'; 
@@ -54,7 +53,8 @@ interface DataContextType {
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
-export const DataContextProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+// FIX: Exporting as BOTH DataProvider and DataContextProvider to ensure compatibility
+export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [jobs, setJobs] = usePersistentState<T.Job[]>('brooks_jobs', getInitialJobs);
     const [vehicles, setVehicles] = usePersistentState<T.Vehicle[]>('brooks_vehicles', getInitialVehicles);
     const [customers, setCustomers] = usePersistentState<T.Customer[]>('brooks_customers', getInitialCustomers);
@@ -160,8 +160,13 @@ export const DataContextProvider: React.FC<{ children: React.ReactNode }> = ({ c
     return <DataContext.Provider value={value as any}>{children}</DataContext.Provider>;
 };
 
+// Aliasing the export to resolve your SyntaxError
+export const DataContextProvider = DataProvider;
+
 export const useData = () => {
     const context = useContext(DataContext);
     if (!context) throw new Error('useData must be used within a DataContextProvider');
     return context;
 };
+
+export default DataProvider;

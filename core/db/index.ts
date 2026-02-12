@@ -1,3 +1,6 @@
+
+export * from '../../types';
+
 import { initializeApp, getApp, getApps } from 'firebase/app';
 import { 
     getFirestore, doc, getDoc, setDoc, deleteDoc, collection, getDocs,

@@ -1,3 +1,5 @@
+import React from 'react';
+
 export type ViewType = 'dashboard' | 'dispatch' | 'workflow' | 'concierge' | 'inquiries' | 'communications' | 'estimates' | 'invoices' | 'purchaseOrders' | 'jobs' | 'sales' | 'storage' | 'rentals' | 'absence';
 export type UserRole = 'Admin' | 'Dispatcher' | 'Engineer' | 'Sales' | 'Garage Concierge';
 export type AppEnvironment = 'Production' | 'UAT' | 'Development';
@@ -17,7 +19,7 @@ export interface User {
 export interface Role {
     id: string;
     name: string;
-    description?: string; // Added to fix ManagementRolesTab.tsx error
+    description?: string; 
     baseRole: UserRole;
     defaultAllowedViews: ViewType[];
 }
@@ -102,7 +104,7 @@ export interface PreviousRegistration {
 export interface VehicleImage {
     id: string;
     isPrimaryDiagram?: boolean;
-    dataUrl?: string; 
+    dataUrl?: string;
 }
 
 export interface Vehicle {
@@ -111,7 +113,7 @@ export interface Vehicle {
     registration: string;
     make: string;
     model: string;
-    type: string; 
+    type: string;
     vin?: string;
     engineNumber?: string;
     colour?: string;
@@ -126,7 +128,7 @@ export interface Vehicle {
     covid19MotExemption?: boolean;
     previousRegistrations?: PreviousRegistration[];
     images?: VehicleImage[];
-    searchField?: string; // Added to fix MainLayout.tsx error
+    searchField?: string;
 }
 
 export type VehicleStatus = 'On Site' | 'Off-Site (Partner)' | 'Awaiting Arrival' | 'Awaiting Collection' | 'Collected';
@@ -160,7 +162,6 @@ export interface ChecklistSection {
 }
 
 export type TyreLocation = 'frontLeft' | 'frontRight' | 'rearLeft' | 'rearRight' | 'spare';
-
 export interface TyreData {
     outer?: number;
     middle?: number;
@@ -249,7 +250,7 @@ export interface Estimate {
     jobId?: string;
     createdByUserId?: string;
     media?: CheckInPhoto[];
-    updatedAt?: string; // Added to fix ScheduleJobFromEstimateModal.tsx error
+    updatedAt?: string;
 }
 
 export interface Invoice {
@@ -282,7 +283,7 @@ export interface Part {
     id: string;
     partNumber: string;
     description: string;
-    partName?: string; // Added to fix MainLayout.tsx error
+    partName?: string; 
     salePrice: number;
     costPrice: number;
     stockQuantity: number;
@@ -290,7 +291,7 @@ export interface Part {
     defaultSupplierId?: string;
     alternateSupplierIds?: string[];
     taxCodeId?: string;
-    searchField?: string; // Added to fix MainLayout.tsx error
+    searchField?: string;
 }
 
 export interface PurchaseOrder {
@@ -347,7 +348,7 @@ export interface ServicePackage {
     name: string;
     description?: string;
     totalPrice: number;
-    costItems: EstimateLineItem[]; 
+    costItems: EstimateLineItem[];
     taxCodeId?: string;
     applicableMake?: string;
     applicableModel?: string;
@@ -539,14 +540,13 @@ export interface NominalCode {
 }
 
 export type NominalCodeItemType = 'Labor' | 'Part' | 'MOT' | 'Purchase' | 'CourtesyCar' | 'Storage';
-
 export interface NominalCodeRule {
     id: string;
     priority: number;
     entityId: string; 
     itemType: NominalCodeItemType;
     keywords: string; 
-    excludeKeywords: string; 
+    excludeKeywords: string;
     nominalCodeId: string;
 }
 
@@ -588,9 +588,6 @@ export interface Inquiry {
     linkedPurchaseOrderIds?: string[];
 }
 
-export type ReminderType = 'MOT' | 'Service' | 'Winter Check' | 'Marketing';
-export type ReminderStatus = 'Pending' | 'Sent' | 'Dismissed';
-
 export interface Reminder {
     id: string;
     customerId: string;
@@ -602,6 +599,9 @@ export interface Reminder {
     actionedAt?: string;
     eventName?: string; 
 }
+
+export type ReminderType = 'MOT' | 'Service' | 'Winter Check' | 'Marketing';
+export type ReminderStatus = 'Pending' | 'Sent' | 'Dismissed';
 
 export type AuditAction = 'CREATE' | 'UPDATE' | 'DELETE' | 'LOGIN' | 'LOGOUT' | 'APPROVE' | 'DECLINE';
 
@@ -652,21 +652,38 @@ export interface BackupSchedule {
     times: string[]; 
 }
 
-export interface UnbillableTimeEvent {
-    id: string;
+// --- Specific Component Interfaces to fix Component Errors ---
+
+export interface LiveAssistantProps {
+    isOpen: boolean;
+    onClose: () => void;
+    jobId: string | null;
+    onAddNote: (note: string) => void;
+    apiKey: any; // Add this line
 }
 
-export interface EngineerChangeEvent {
-    id: string;
+export interface SearchableSelectProps {
+    options: { id: string; label: string; }[]; // Add this line
+    value: any;
+    onChange: (val: any) => void;
+    placeholder: string;
 }
 
-/// Global AppState interface
-// Fixed to include everything ManagementStaffTab and AppContext need
+export interface TimelineViewProps {
+    lifts: Lift[]; // Add this line
+    jobs: Job[];
+    onDragStart: (e: React.DragEvent, parentJobId: string, segmentId: string) => void;
+    onDragEnd: (e: React.DragEvent) => void;
+    onOpenAssistant: (id: string) => void;
+}
+
+// --- Global App Context and State ---
+
 export interface AppState {
     currentUser: User;
     setCurrentUser: (user: User) => void;
     users: User[];
-    setUsers: React.Dispatch<React.SetStateAction<User[]>>; 
+    setUsers: React.Dispatch<React.SetStateAction<User[]>>; // Ensure this is present
     currentView: ViewType;
     setCurrentView: (view: ViewType) => void;
     selectedEntityId: string;
@@ -674,9 +691,8 @@ export interface AppState {
     allWorkshops: BusinessEntity[];
     logout: () => void;
     appEnvironment: 'production' | 'development';
-    setAppEnvironment: (env: 'production' | 'development') => void;
+    setAppEnvironment: (env: 'production' | 'development') => void; // Add this line
 }
-
 // DataContextType interface
 // Updated to include all the data arrays and the refresh function
 export interface DataContextType {
@@ -710,7 +726,8 @@ export interface DataContextType {
     roles: Role[];
     inspectionDiagrams: InspectionDiagram[];
     inspectionTemplates: InspectionTemplate[];
-    refreshActiveData: () => Promise<void>; // This fixes the "Expected 0 arguments" error context
+    // ADD THIS LINE BELOW TO FIX THE ERROR
+    refreshActiveData: () => Promise<void>; 
     loading: boolean;
     error: string | null;
 }
