@@ -1,22 +1,15 @@
-
 import React, { useMemo, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
-import { PurchaseOrder, Supplier, BusinessEntity, TaxRate, PurchaseOrderLineItem } from '../types';
-import { X, Mail, Download, Loader2, Edit, Printer, Phone, PackageCheck, AlertCircle, RefreshCw, CornerDownRight } from 'lucide-react';
+import { PurchaseOrder, Supplier, BusinessEntity, TaxRate } from '../types';
+import { X, Mail, Download, Loader2, Edit, Printer, Phone, PackageCheck } from 'lucide-react';
 import { formatCurrency } from '../utils/formatUtils';
 import EmailPurchaseOrderModal from './EmailPurchaseOrderModal';
 import { usePrint } from '../core/hooks/usePrint';
-import { generatePurchaseOrderId } from '../core/utils/numberGenerators';
-import { useData } from '../core/state/DataContext';
-import { useApp } from '../core/state/AppContext';
-import { formatDate } from '../core/utils/dateUtils';
-import { useWorkshopActions } from '../core/hooks/useWorkshopActions';
 
 const PrintablePurchaseOrder: React.FC<any> = ({ purchaseOrder, supplier, entity, taxRates, totals }) => {
     const showReceived = ['Partially Received', 'Received'].includes(purchaseOrder.status);
-    const isCredit = purchaseOrder.type === 'Credit';
 
     return (
         <div className="bg-white font-sans text-sm text-gray-800 printable-page" style={{ width: '210mm', padding: '15mm', boxSizing: 'border-box' }}>
@@ -28,12 +21,9 @@ const PrintablePurchaseOrder: React.FC<any> = ({ purchaseOrder, supplier, entity
                         <p>{entity?.city}, {entity?.postcode}</p>
                     </div>
                     <div className="text-right">
-                        <h2 className="text-2xl font-semibold text-gray-800">{isCredit ? 'CREDIT NOTE REQUEST' : 'PURCHASE ORDER'}</h2>
+                        <h2 className="text-2xl font-semibold text-gray-800">PURCHASE ORDER</h2>
                         <p className="text-lg">#{purchaseOrder?.id}</p>
                         <p className="mt-1">Date: {purchaseOrder?.orderDate}</p>
-                        {purchaseOrder.type === 'Credit' && purchaseOrder.linkedPurchaseOrderId && (
-                            <p className="text-xs text-gray-500 mt-1">Ref: {purchaseOrder.linkedPurchaseOrderId}</p>
-                        )}
                     </div>
                 </div>
             </header>
@@ -62,7 +52,7 @@ const PrintablePurchaseOrder: React.FC<any> = ({ purchaseOrder, supplier, entity
                                 <th style={{ textAlign: 'left', padding: '8px', color: '#4b5563' }}>Part Number</th>
                                 <th style={{ textAlign: 'left', padding: '8px', color: '#4b5563', width: '40%' }}>Description</th>
                                 <th style={{ textAlign: 'right', padding: '8px', color: '#4b5563' }}>Qty</th>
-                                {showReceived && !isCredit && <th style={{ textAlign: 'right', padding: '8px', color: '#4b5563' }}>Rec'd</th>}
+                                {showReceived && <th style={{ textAlign: 'right', padding: '8px', color: '#4b5563' }}>Rec'd</th>}
                                 <th style={{ textAlign: 'right', padding: '8px', color: '#4b5563' }}>Unit Cost</th>
                                 <th style={{ textAlign: 'right', padding: '8px', color: '#4b5563' }}>Total</th>
                             </tr>
@@ -75,7 +65,7 @@ const PrintablePurchaseOrder: React.FC<any> = ({ purchaseOrder, supplier, entity
                                         <td style={{ padding: '8px', fontFamily: 'monospace' }}>{item.partNumber || 'N/A'}</td>
                                         <td style={{ padding: '8px' }}>{item.description}</td>
                                         <td style={{ padding: '8px', textAlign: 'right' }}>{item.quantity}</td>
-                                        {showReceived && !isCredit && <td style={{ padding: '8px', textAlign: 'right' }}>{item.receivedQuantity || 0}</td>}
+                                        {showReceived && <td style={{ padding: '8px', textAlign: 'right' }}>{item.receivedQuantity || 0}</td>}
                                         <td style={{ padding: '8px', textAlign: 'right' }}>{formatCurrency(item.unitPrice)}</td>
                                         <td style={{ padding: '8px', textAlign: 'right', fontWeight: '500' }}>{formatCurrency(net)}</td>
                                     </tr>
@@ -84,11 +74,6 @@ const PrintablePurchaseOrder: React.FC<any> = ({ purchaseOrder, supplier, entity
                         </tbody>
                     </table>
                 </section>
-                {isCredit && (
-                    <div style={{ marginTop: '20px', padding: '10px', backgroundColor: '#fee2e2', color: '#991b1b', fontSize: '12px', borderRadius: '4px' }}>
-                        <strong>Note:</strong> This is a request for credit. Please process a credit note for the above returned/incorrect items.
-                    </div>
-                )}
             </main>
 
             <footer style={{ marginTop: 'auto', paddingTop: '2rem', borderTop: '1px solid #e5e7eb' }}>
@@ -115,13 +100,21 @@ const PrintablePurchaseOrder: React.FC<any> = ({ purchaseOrder, supplier, entity
     );
 };
 
-const PurchaseOrderViewModal: React.FC<{ isOpen: boolean; onClose: () => void; purchaseOrder: PurchaseOrder; supplier?: Supplier; entity?: BusinessEntity; taxRates: TaxRate[]; onSetStatusToOrdered: (po: PurchaseOrder) => void; onOpenForEditing?: (po: PurchaseOrder) => void; }> = ({ isOpen, onClose, purchaseOrder, supplier, entity, taxRates, onSetStatusToOrdered, onOpenForEditing }) => {
+const PurchaseOrderViewModal: React.FC<{ 
+    isOpen: boolean; 
+    onClose: () => void; 
+    purchaseOrder: PurchaseOrder; 
+    supplier?: Supplier; 
+    entity?: BusinessEntity; 
+    taxRates: TaxRate[]; 
+    onSetStatusToOrdered: (po: PurchaseOrder) => Promise<void> | void; 
+    onOpenForEditing?: (po: PurchaseOrder) => void; 
+}> = ({ isOpen, onClose, purchaseOrder, supplier, entity, taxRates, onSetStatusToOrdered, onOpenForEditing }) => {
+    
     const [isEmailing, setIsEmailing] = useState(false);
     const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+    const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
     const print = usePrint();
-    const { handleSaveItem } = useWorkshopActions();
-    const { purchaseOrders, setPurchaseOrders } = useData();
-    const { currentUser } = useApp();
 
     const totals = useMemo(() => {
         const breakdown: { [key: string]: { net: number; vat: number; rate: number; name: string; } } = {};
@@ -149,10 +142,6 @@ const PurchaseOrderViewModal: React.FC<{ isOpen: boolean; onClose: () => void; p
         return { totalNet, grandTotal: totalNet + totalVat, vatBreakdown: finalVatBreakdown };
     }, [purchaseOrder, taxRates]);
 
-    const itemsPendingReturn = useMemo(() => {
-        return (purchaseOrder.lineItems || []).filter(item => item.returnStatus === 'Pending');
-    }, [purchaseOrder.lineItems]);
-
     const handlePrint = () => {
         print(
             <PrintablePurchaseOrder {...{ purchaseOrder, supplier, entity, taxRates, totals }} />
@@ -179,7 +168,7 @@ const PurchaseOrderViewModal: React.FC<{ isOpen: boolean; onClose: () => void; p
             const imgData = canvas.toDataURL('image/png');
             const pdf = new jsPDF('p', 'mm', 'a4');
             pdf.addImage(imgData, 'PNG', 0, 0, pdf.internal.pageSize.getWidth(), pdf.internal.pageSize.getHeight(), undefined, 'FAST');
-            pdf.save(`${purchaseOrder.type === 'Credit' ? 'CreditRequest' : 'PurchaseOrder'}-${purchaseOrder.id}.pdf`);
+            pdf.save(`PurchaseOrder-${purchaseOrder.id}.pdf`);
         } catch (error) {
             console.error("Error generating PDF:", error);
             alert("Failed to generate PDF.");
@@ -190,68 +179,39 @@ const PurchaseOrderViewModal: React.FC<{ isOpen: boolean; onClose: () => void; p
         }
     };
     
-    const handleEmailSuccess = () => {
-        if (purchaseOrder.status === 'Draft') {
-            onSetStatusToOrdered({ ...purchaseOrder, status: 'Ordered' });
-        }
-        setIsEmailing(false);
-        onClose(); 
-    };
-
-    const handlePhoneOrder = () => {
-        if (purchaseOrder.status === 'Draft') {
-            onSetStatusToOrdered({ ...purchaseOrder, status: 'Ordered' });
-        }
-        onClose();
-    };
-
-    const handleCreateCreditNote = async () => {
-        if (!entity || !itemsPendingReturn.length) return;
-        
-        if (!confirm(`Create a Credit Request for ${itemsPendingReturn.length} items? This will generate a new negative PO.`)) return;
-
-        const entityShortCode = entity.shortCode || 'UNK';
-        const newPOId = generatePurchaseOrderId(purchaseOrders, entityShortCode); // Using synchronous helper for immediate ID
-        
-        const creditLineItems: PurchaseOrderLineItem[] = itemsPendingReturn.map(item => ({
-            ...item,
-            id: crypto.randomUUID(),
-            quantity: -Math.abs(item.quantity), // Ensure negative
-            receivedQuantity: 0,
-            returnStatus: 'Credited' // Final state on the credit note
-        }));
-
-        const creditPO: PurchaseOrder = {
-            id: newPOId,
-            entityId: purchaseOrder.entityId,
-            supplierId: purchaseOrder.supplierId,
-            vehicleRegistrationRef: purchaseOrder.vehicleRegistrationRef,
-            supplierReference: '', // To be filled when actual credit note arrives
-            orderDate: formatDate(new Date()),
-            status: 'Ordered', // Ready to send to supplier
-            type: 'Credit',
-            jobId: purchaseOrder.jobId,
-            createdByUserId: currentUser.id,
-            lineItems: creditLineItems,
-            notes: `Credit Note Request for items returned from PO #${purchaseOrder.id}`,
-            linkedPurchaseOrderId: purchaseOrder.id
-        };
-        
-        // 1. Save new Credit PO
-        await handleSaveItem(setPurchaseOrders, creditPO, 'brooks_purchaseOrders');
-
-        // 2. Update original PO items to 'Returned' status
-        const updatedOriginalLineItems = purchaseOrder.lineItems.map(item => {
-            if (item.returnStatus === 'Pending') {
-                return { ...item, returnStatus: 'Returned' as const };
+    const handleEmailSuccess = async () => {
+        setIsUpdatingStatus(true);
+        try {
+            if (purchaseOrder.status === 'Draft') {
+                // Ensure we await the parent state update before proceeding
+                await onSetStatusToOrdered({ ...purchaseOrder, status: 'Ordered' });
             }
-            return item;
-        });
-        
-        const updatedOriginalPO = { ...purchaseOrder, lineItems: updatedOriginalLineItems };
-        await handleSaveItem(setPurchaseOrders, updatedOriginalPO, 'brooks_purchaseOrders');
+            setIsEmailing(false);
+            onClose(); 
+        } catch (e) {
+            console.error("Failed to update status after email", e);
+            alert("Email sent but failed to update order status locally.");
+        } finally {
+            setIsUpdatingStatus(false);
+        }
+    };
 
-        onClose();
+    const handlePhoneOrder = async () => {
+        if (purchaseOrder.status === 'Draft') {
+            setIsUpdatingStatus(true);
+            try {
+                // Wait for the status change to persist to the central state
+                await onSetStatusToOrdered({ ...purchaseOrder, status: 'Ordered' });
+                onClose();
+            } catch (e) {
+                console.error("Failed to update status for phone order", e);
+                alert("Failed to update order status.");
+            } finally {
+                setIsUpdatingStatus(false);
+            }
+        } else {
+            onClose();
+        }
     };
 
     if (!isOpen) return null;
@@ -261,12 +221,7 @@ const PurchaseOrderViewModal: React.FC<{ isOpen: boolean; onClose: () => void; p
             <div className="fixed inset-0 bg-gray-900 bg-opacity-75 z-[70] flex justify-center items-center p-4">
                 <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
                     <header className="flex-shrink-0 flex justify-between items-center p-4 border-b">
-                        <div className="flex items-center gap-3">
-                            <h2 className="text-xl font-bold text-indigo-700">
-                                {purchaseOrder.type === 'Credit' ? 'Credit Note Request' : 'Purchase Order'} #{purchaseOrder.id}
-                            </h2>
-                            {purchaseOrder.type === 'Credit' && <span className="px-2 py-0.5 bg-red-100 text-red-800 text-xs font-bold rounded uppercase">Credit</span>}
-                        </div>
+                        <h2 className="text-xl font-bold text-indigo-700">Purchase Order #{purchaseOrder.id}</h2>
                         <button onClick={onClose}><X size={24} className="text-gray-500 hover:text-gray-800" /></button>
                     </header>
                     <main className="flex-grow overflow-y-auto">
@@ -289,32 +244,22 @@ const PurchaseOrderViewModal: React.FC<{ isOpen: boolean; onClose: () => void; p
                                     onClick={() => { onOpenForEditing(purchaseOrder); onClose(); }}
                                     className="flex items-center py-2 px-4 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700"
                                 >
-                                    <PackageCheck size={16} className="mr-2" /> {purchaseOrder.type === 'Credit' ? 'Receive Credit' : 'Receive Goods'}
+                                    <PackageCheck size={16} className="mr-2" /> Receive Goods
                                 </button>
                             )}
-                            
-                            {/* Create Credit Note Button */}
-                            {itemsPendingReturn.length > 0 && purchaseOrder.type !== 'Credit' && (
-                                <button 
-                                    onClick={handleCreateCreditNote}
-                                    className="flex items-center py-2 px-4 bg-amber-500 text-white font-semibold rounded-lg hover:bg-amber-600 animate-pulse"
-                                    title="Generate a negative PO for flagged items"
-                                >
-                                    <RefreshCw size={16} className="mr-2" /> Process Returns ({itemsPendingReturn.length})
-                                </button>
-                            )}
-
                             {purchaseOrder.status === 'Draft' && (
                                 <button 
                                     onClick={handlePhoneOrder}
-                                    className="flex items-center py-2 px-4 bg-teal-600 text-white font-semibold rounded-lg hover:bg-teal-700"
+                                    disabled={isUpdatingStatus}
+                                    className="flex items-center py-2 px-4 bg-teal-600 text-white font-semibold rounded-lg hover:bg-teal-700 disabled:opacity-50"
                                 >
-                                    <Phone size={16} className="mr-2" /> Ordered via Phone
+                                    {isUpdatingStatus ? <Loader2 size={16} className="mr-2 animate-spin"/> : <Phone size={16} className="mr-2" />} 
+                                    Ordered via Phone
                                 </button>
                             )}
                             <button 
                                 onClick={() => setIsEmailing(true)} 
-                                disabled={purchaseOrder.status === 'Received' || purchaseOrder.status === 'Cancelled'}
+                                disabled={purchaseOrder.status === 'Received' || purchaseOrder.status === 'Cancelled' || isUpdatingStatus}
                                 className="flex items-center py-2 px-4 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 <Mail size={16} className="mr-2" /> {purchaseOrder.status === 'Draft' ? 'Email & Mark Ordered' : 'Resend Email'}

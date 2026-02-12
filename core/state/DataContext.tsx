@@ -53,7 +53,6 @@ interface DataContextType {
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
-// FIX: Exporting as BOTH DataProvider and DataContextProvider to ensure compatibility
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [jobs, setJobs] = usePersistentState<T.Job[]>('brooks_jobs', getInitialJobs);
     const [vehicles, setVehicles] = usePersistentState<T.Vehicle[]>('brooks_vehicles', getInitialVehicles);
@@ -130,6 +129,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         performCleanInstall();
     }, [servicePackages.length, parts.length]);
 
+    // FIX: Removed .length dependencies so that edits (status changes) 
+    // trigger a context update and immediate UI re-render.
     const value = useMemo(() => ({
         jobs, setJobs, vehicles, setVehicles, customers, setCustomers,
         estimates, setEstimates, invoices, setInvoices, purchaseOrders, setPurchaseOrders,
@@ -146,21 +147,18 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         roles, setRoles, inspectionDiagrams, setInspectionDiagrams,
         inspectionTemplates, setInspectionTemplates,
     }), [
-        jobs.length, vehicles.length, customers.length, estimates.length, invoices.length, 
-        parts.length, purchaseOrders.length, purchases.length, servicePackages.length, 
-        suppliers.length, engineers.length, lifts.length, rentalVehicles.length, 
-        rentalBookings.length, saleVehicles.length, saleOverheadPackages.length, 
-        prospects.length, storageBookings.length, storageLocations.length, 
-        batteryChargers.length, nominalCodes.length, nominalCodeRules.length, 
-        absenceRequests.length, inquiries.length, reminders.length, auditLog.length, 
-        businessEntities.length, taxRates.length, roles.length, inspectionDiagrams.length, 
-        inspectionTemplates.length
+        jobs, vehicles, customers, estimates, invoices, purchaseOrders,
+        purchases, parts, servicePackages, suppliers, engineers, lifts,
+        rentalVehicles, rentalBookings, saleVehicles, saleOverheadPackages,
+        prospects, storageBookings, storageLocations, batteryChargers,
+        nominalCodes, nominalCodeRules, absenceRequests, inquiries,
+        reminders, auditLog, businessEntities, taxRates, roles, 
+        inspectionDiagrams, inspectionTemplates
     ]);
 
     return <DataContext.Provider value={value as any}>{children}</DataContext.Provider>;
 };
 
-// Aliasing the export to resolve your SyntaxError
 export const DataContextProvider = DataProvider;
 
 export const useData = () => {
