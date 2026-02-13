@@ -41,39 +41,38 @@ const FormModal: React.FC<FormModalProps> = ({ isOpen, onClose, title, children,
   );
 };
 
-const PurchaseFormModal = ({ 
-    isOpen, 
-    onClose, 
-    onSave, 
-    purchase, 
-    suppliers, 
-    jobs, 
-    vehicles, 
-    taxRates, 
-    selectedEntityId, 
-    purchases, 
-    businessEntities 
+const PurchaseFormModal = ({
+    isOpen,
+    onClose,
+    onSave,
+    purchase,
+    suppliers = [],
+    jobs = [],
+    vehicles = [],
+    taxRates = [],
+    selectedEntityId,
+    purchases = [],
+    businessEntities = []
 }: { 
     isOpen: boolean, 
     onClose: () => void, 
     onSave: (p: Purchase) => void, 
     purchase: Purchase | null, 
-    suppliers: Supplier[], 
-    jobs: Job[], 
-    vehicles: Vehicle[], 
-    taxRates: TaxRate[], 
+    suppliers?: Supplier[], 
+    jobs?: Job[], 
+    vehicles?: Vehicle[], 
+    taxRates?: TaxRate[], 
     selectedEntityId: string, 
-    purchases: Purchase[], 
-    businessEntities: BusinessEntity[] 
+    purchases?: Purchase[], 
+    businessEntities?: BusinessEntity[] 
 }) => {
     const [formData, setFormData] = useState<Partial<Purchase>>({});
     
-    const vehicleMap = useMemo(() => new Map(vehicles.map(v => [v.id, v.registration])), [vehicles]);
-    const standardTaxRateId = useMemo(() => taxRates.find(t => t.code === 'T1')?.id, [taxRates]);
+    const vehicleMap = useMemo(() => new Map((vehicles || []).map(v => [v.id, v.registration])), [vehicles]);
+    const standardTaxRateId = useMemo(() => (taxRates || []).find(t => t.code === 'T1')?.id, [taxRates]);
 
-    // FILTER: Only show jobs that are not Invoiced AND not Closed
     const inFlightJobs = useMemo(() => {
-        return jobs.filter(job => 
+        return (jobs || []).filter(job => 
             !job.invoiceId && 
             job.status !== 'Closed' && 
             job.status !== 'Invoiced'
@@ -86,7 +85,7 @@ const PurchaseFormModal = ({
             purchasePrice: 0, 
             markupPercent: 25, 
             jobId: null, 
-            supplierId: suppliers[0]?.id || null, 
+            supplierId: (suppliers || [])[0]?.id || null, 
             taxCodeId: standardTaxRateId 
         }); 
     }, [purchase, isOpen, suppliers, standardTaxRateId]);
@@ -114,18 +113,18 @@ const PurchaseFormModal = ({
              if (selectedEntityId !== 'all') { 
                 entityId = selectedEntityId;
              } else if (formData.jobId) { 
-                const job = jobs.find(j => j.id === formData.jobId); 
+                const job = (jobs || []).find(j => j.id === formData.jobId); 
                 entityId = job?.entityId; 
              }
         }
         
         if (!entityId) return alert("Could not determine business entity. Please select a specific entity or assign to a job.");
         
-        const entity = businessEntities.find(e => e.id === entityId);
+        const entity = (businessEntities || []).find(e => e.id === entityId);
         const entityShortCode = entity?.shortCode || 'UNK';
         
         onSave({ 
-            id: formData.id || generatePurchaseId(purchases, entityShortCode), 
+            id: formData.id || generatePurchaseId(purchases || [], entityShortCode), 
             purchaseDate: formData.purchaseDate || formatDate(new Date()), 
             entityId, 
             ...formData 
@@ -152,12 +151,12 @@ const PurchaseFormModal = ({
 
                 <select name="supplierId" value={formData.supplierId || ''} onChange={handleChange} className="p-2 border rounded bg-white">
                     <option value="">-- Select Supplier --</option>
-                    {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    {(suppliers || []).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
 
                 <select name="jobId" value={formData.jobId || ''} onChange={handleChange} className="p-2 border rounded bg-white">
                     <option value="">Workshop Stock (Unassigned)</option>
-                    {inFlightJobs.map(j => (
+                    {(inFlightJobs || []).map(j => (
                         <option key={j.id} value={j.id}>
                             {vehicleMap.get(j.vehicleId)} - {j.description}
                         </option>
@@ -165,7 +164,7 @@ const PurchaseFormModal = ({
                 </select>
                 
                 <select name="taxCodeId" value={formData.taxCodeId || ''} className="p-2 border rounded bg-gray-100" disabled>
-                    {taxRates.map(t => <option key={t.id} value={t.id}>{t.code} ({t.rate}%)</option>)}
+                    {(taxRates || []).map(t => <option key={t.id} value={t.id}>{t.code} ({t.rate}%)</option>)}
                 </select>
 
                 <input name="supplierReference" value={formData.supplierReference || ''} onChange={handleChange} placeholder="Supplier Reference / Invoice #" className="p-2 border rounded" />
