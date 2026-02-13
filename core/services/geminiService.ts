@@ -1,10 +1,10 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { ServicePackage, EstimateLineItem, Part } from '../../types';
 
-const apiKey = import.meta.env.VITE_API_KEY;
+const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
 
 if (!apiKey) {
-    console.warn("VITE_API_KEY environment variable not set. Gemini features will not work.");
+    console.warn("VITE_GEMINI_API_KEY environment variable not set. Gemini features will not work.");
 }
 
 const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
@@ -458,7 +458,7 @@ export const parseServicePackageFromContent = async (content: string): Promise<P
                     properties: {
                         description: { type: Type.STRING, description: "Description of the labor or part." },
                         quantity: { type: Type.NUMBER, description: "Quantity required." },
-                        isLabor: { type: Type.BOOLEAN, description: "True if it's a labor item, false if it's a part." },
+                        isLabor: { type: TERN, description: "True if it's a labor item, false if it's a part." },
                         unitCost: { type: Type.NUMBER, description: "Estimated unit cost price (optional, default to 0)." },
                         unitPrice: { type: Type.NUMBER, description: "Estimated unit sale price (optional, default to 0)." },
                         partNumber: { type: Type.STRING, description: "Part number if available." }
