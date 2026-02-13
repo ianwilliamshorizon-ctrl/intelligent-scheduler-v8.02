@@ -34,9 +34,9 @@ if (ENV_MODE === 'uat') {
     API_KEY = import.meta.env.VITE_FIREBASE_API_KEY_UAT;
 } else if (ENV_MODE === 'production' && !import.meta.env.VITE_APP_ENV) {
     // STRICT PRODUCTION (Only if no override is set)
-    PROJECT_ID = import.meta.env.VITE_FIREBASE_PROJECT_ID;
-    DATABASE_ID = import.meta.env.VITE_FIREBASE_DATABASE_ID || '(default)';
-    API_KEY = import.meta.env.VITE_FIREBASE_API_KEY || firebaseConfig.apiKey;
+    PROJECT_ID = import.meta.env.VITE_FIREBASE_PROJECT_ID_PROD;
+    DATABASE_ID = import.meta.env.VITE_FIREBASE_DATABASE_ID_PROD || '(default)';
+    API_KEY = import.meta.env.VITE_FIREBASE_API_KEY_PROD;
 } else {
     // DEVELOPMENT CONFIG (Default fallback)
     PROJECT_ID = import.meta.env.VITE_FIREBASE_PROJECT_ID_DEV || import.meta.env.VITE_FIREBASE_PROJECT_ID;
@@ -85,7 +85,7 @@ if (PROJECT_ID && API_KEY) {
 
     auth = getAuth(app);
 } else {
-    console.error(`❌ [DB] Config Missing for ${ENV_MODE}. check VITE_ keys in .env.local`);
+    console.error(`❌ [DB] Firebase config missing for ${ENV_MODE} environment. Ensure VITE_FIREBASE_... variables are set in your environment file (e.g., .env.production).`);
     const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
     db = getFirestore(app);
     auth = getAuth(app);
@@ -141,7 +141,7 @@ export const getAll = async <T>(collectionName: string): Promise<T[]> => {
     }
 };
 
-export const saveDocument = async <T extends { id: string }>(
+export const saveDocument = async <T extends { id: string }> (
     collectionName: string, 
     data: WithFieldValue<T>
 ): Promise<void> => {
