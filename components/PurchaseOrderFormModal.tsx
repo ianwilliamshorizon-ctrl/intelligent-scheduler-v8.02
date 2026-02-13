@@ -274,20 +274,32 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
         return updatedParts;
     }, [formData.lineItems, purchaseOrder, parts, newSalePrices]);
 
+    const calculateFinalStatus = (lineItems: PurchaseOrderLineItem[]): string => {
+        if (lineItems.length === 0) return formData.status || 'Draft';
+        
+        const allReceived = lineItems.every(item => 
+            Math.abs(Number(item.receivedQuantity || 0)) >= Math.abs(Number(item.quantity || 0))
+        );
+        const anyReceived = lineItems.some(item => 
+            Math.abs(Number(item.receivedQuantity || 0)) > 0
+        );
+
+        if (allReceived) return 'Received';
+        if (anyReceived) return 'Partially Received';
+        return 'Ordered';
+    };
+
     const handleSave = () => {
         if (!formData.supplierId || !formData.vehicleRegistrationRef) {
             alert('Supplier and Internal Reference are required.');
             return;
         }
 
-        let newStatus = formData.status;
         const lineItems = formData.lineItems || [];
+        let newStatus = formData.status || 'Draft';
 
-        if (lineItems.length > 0 && formData.status !== 'Draft' && formData.status !== 'Cancelled') {
-            const allReceived = lineItems.every(item => Math.abs(Number(item.receivedQuantity || 0)) >= Math.abs(Number(item.quantity || 0)));
-            const anyReceived = lineItems.some(item => Math.abs(Number(item.receivedQuantity || 0)) > 0);
-            if (allReceived) newStatus = 'Received';
-            else if (anyReceived) newStatus = 'Partially Received';
+        if (newStatus !== 'Draft' && newStatus !== 'Cancelled') {
+            newStatus = calculateFinalStatus(lineItems);
         }
 
         const entity = businessEntities.find(e => e.id === formData.entityId);
@@ -304,28 +316,28 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
         onClose();
     };
 
-    const handleMarkAndSaveAsReceived = () => {
+    const handleFinalizeReceipt = () => {
         if (!formData.supplierId || !formData.vehicleRegistrationRef) {
             alert('Supplier and Internal Reference are required.');
             return;
         }
+        
+        // Ensure we have a reference number if we are receiving anything
         if (!formData.supplierReference) {
-             alert('Supplier Reference / Invoice No. is mandatory when marking goods as Received.');
+             alert('Please enter a Supplier Reference / Invoice No. to finalize this receipt.');
              return;
         }
 
+        const lineItems = formData.lineItems || [];
+        const newStatus = calculateFinalStatus(lineItems);
+
         const entity = businessEntities.find(e => e.id === formData.entityId);
         const entityShortCode = entity?.shortCode || 'UNK';
-        const finalId = formData.id || generatePurchaseOrderId(allPurchaseOrders, entityShortCode);
     
         const updatedPO = {
             ...formData,
-            id: finalId,
-            lineItems: (formData.lineItems || []).map(item => ({
-                ...item,
-                receivedQuantity: item.quantity 
-            })),
-            status: 'Received',
+            id: formData.id || generatePurchaseOrderId(allPurchaseOrders, entityShortCode),
+            status: newStatus,
             partUpdates: getPartUpdates(),
         };
         
@@ -356,8 +368,8 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
                 </div>
                 
                 <div className="flex-grow overflow-y-auto p-6 bg-gray-50">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="md:col-span-1">
                             <label className="font-semibold text-sm block text-gray-700">Supplier*</label>
                             <select 
                                 name="supplierId"
@@ -373,12 +385,8 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
                             </select>
                         </div>
                         <div>
-                            <label className="font-semibold text-sm text-gray-700">Internal Reference (Reg/Job)*</label>
+                            <label className="font-semibold text-sm text-gray-700">Internal Ref (Reg/Job)*</label>
                             <input name="vehicleRegistrationRef" value={formData.vehicleRegistrationRef || ''} onChange={handleChange} className="w-full p-2 border rounded mt-1" disabled={isOrderedOrLater} />
-                        </div>
-                        <div>
-                            <label className="font-semibold text-sm text-gray-700">Supplier Reference (Invoice #)</label>
-                            <input name="supplierReference" value={formData.supplierReference || ''} onChange={handleChange} className="w-full p-2 border rounded mt-1" />
                         </div>
                         <div>
                             <label className="font-semibold text-sm text-gray-700">Status</label>
@@ -390,19 +398,30 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
                                 <option>Cancelled</option>
                             </select>
                         </div>
+                        <div>
+                            <label className="font-semibold text-sm text-gray-700">Supplier Ref (Invoice #)</label>
+                            <input name="supplierReference" value={formData.supplierReference || ''} onChange={handleChange} className="w-full p-2 border rounded mt-1" />
+                        </div>
+                        <div>
+                            <label className="font-semibold text-sm text-gray-700">Secondary Ref (Delivery Note)</label>
+                            <input name="secondarySupplierReference" value={formData.secondarySupplierReference || ''} onChange={handleChange} className="w-full p-2 border rounded mt-1" />
+                        </div>
+                        <div>
+                            <label className="font-semibold text-sm text-gray-700">Order Date</label>
+                            <input type="date" name="orderDate" value={formData.orderDate || ''} onChange={handleChange} className="w-full p-2 border rounded mt-1" />
+                        </div>
                     </div>
 
                     <div className="mt-6 space-y-2">
-                        <div className="flex justify-between items-center">
+                        <div className="flex justify-between items-end">
                             <h3 className="font-bold text-gray-800">Line Items</h3>
                             {isOrderedOrLater && !isReceivingDisabled && (
-                                <button onClick={handleFillBalance} className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded flex items-center gap-1 hover:bg-blue-200 font-semibold">
-                                    <ArrowDownCircle size={14}/> Receive All Items
+                                <button onClick={handleFillBalance} className="text-xs text-blue-600 flex items-center gap-1 hover:text-blue-800 font-bold mb-1">
+                                    <ArrowDownCircle size={14}/> Auto-fill "Rec'd" for all items
                                 </button>
                             )}
                         </div>
                         
-                        {/* Column Headers */}
                         <div className="grid grid-cols-12 gap-2 px-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
                             <div className="col-span-2">Part Number</div>
                             <div className="col-span-4">Description</div>
@@ -434,7 +453,11 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
                         )}
                     </div>
 
-                    <div className="mt-6 pt-4 border-t flex justify-end">
+                    <div className="mt-6 pt-4 border-t flex justify-between items-start">
+                        <div className="w-1/2">
+                            <label className="font-semibold text-sm text-gray-700 block mb-1">Internal Notes</label>
+                            <textarea name="notes" value={formData.notes || ''} onChange={handleChange} rows={3} className="w-full p-2 border rounded text-sm bg-white" placeholder="Add any internal notes here..." />
+                        </div>
                         <div className="w-64 space-y-1">
                             <div className="flex justify-between text-sm text-gray-600">
                                 <span>Net Total</span>
@@ -455,8 +478,8 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
                 <footer className="p-4 border-t flex justify-between bg-gray-50">
                     <div className="flex gap-2">
                         {!isReceivingDisabled && formData.type !== 'Credit' && (
-                            <button onClick={handleMarkAndSaveAsReceived} className="px-4 py-2 bg-green-600 text-white rounded-lg flex items-center gap-2 hover:bg-green-700 font-bold shadow-sm">
-                                <CheckSquare size={16}/> Mark All Received & Save
+                            <button onClick={handleFinalizeReceipt} className="px-4 py-2 bg-green-600 text-white rounded-lg flex items-center gap-2 hover:bg-green-700 font-bold shadow-sm">
+                                <CheckSquare size={16}/> Save & Finalize Receipt
                             </button>
                         )}
                         {purchaseOrder && formData.type !== 'Credit' && (

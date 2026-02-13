@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Estimate, Customer, Vehicle, BusinessEntity, TaxRate, ServicePackage, Part, EstimateLineItem, Job, User, CheckInPhoto } from '../types';
 import { Save, PlusCircle, Gauge, Info, FileText, ChevronUp, ChevronDown, Trash2, X, TrendingUp, Plus, Image as ImageIcon, History, Car, Wand2 } from 'lucide-react';
-import { formatDate, addDays, getTodayISOString, getFutureDateISOString } from '../core/utils/dateUtils';
+import { formatDate, getTodayISOString, getFutureDateISOString } from '../core/utils/dateUtils';
 import { generateEstimateNumber } from '../core/utils/numberGenerators';
 import { formatCurrency } from '../utils/formatUtils';
 import CustomerFormModal from './CustomerFormModal';
@@ -9,7 +9,6 @@ import VehicleFormModal from './VehicleFormModal';
 import SearchableSelect from './SearchableSelect';
 import FormModal from './FormModal';
 import MediaManagerModal from './MediaManagerModal';
-import AsyncImage from './AsyncImage';
 import PartFormModal from './PartFormModal';
 import LiveAssistant from './LiveAssistant';
 
@@ -37,7 +36,7 @@ const MemoizedEditableLineItemRow = React.memo(({
         const value = e.target.value;
         onLineItemChange(item.id, 'description', value);
         if (!item.isLabor && !isPackageHeader && !isPackageComponent) {
-             onPartSearchChange(value);
+            onPartSearchChange(value);
         }
     };
 
@@ -69,8 +68,8 @@ const MemoizedEditableLineItemRow = React.memo(({
                         onChange={handleDescriptionChange}
                         onFocus={() => {
                             if (!item.isLabor && !item.servicePackageId && !item.isPackageComponent) {
-                                 onSetActivePartSearch(item.id);
-                                 onPartSearchChange(item.description || '');
+                                onSetActivePartSearch(item.id);
+                                onPartSearchChange(item.description || '');
                             }
                         }}
                         onBlur={() => setTimeout(() => onSetActivePartSearch(null), 150)}
@@ -79,10 +78,10 @@ const MemoizedEditableLineItemRow = React.memo(({
                         autoComplete="off"
                     />
                      {activePartSearch === item.id && (
-                        <div className="absolute z-20 top-full left-0 w-full bg-white border rounded shadow-lg max-h-50 overflow-y-auto mt-1">
+                        <div className="absolute z-20 top-full left-0 w-full bg-white border rounded shadow-lg max-h-60 overflow-y-auto mt-1">
                             {filteredParts.map(part => (
                                 <div key={part.id} onMouseDown={() => onSelectPart(item.id, part)} className="p-2 hover:bg-indigo-100 cursor-pointer text-sm border-b last:border-0">
-                                     <p className="font-semibold text-indigo-700">{part.partNumber}</p>
+                                    <p className="font-semibold text-indigo-700">{part.partNumber}</p>
                                     <p className="text-gray-600 truncate">{part.description}</p>
                                 </div>
                             ))}
@@ -163,6 +162,29 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
 
+    // BIDIRECTIONAL LINKING LOGIC
+    const handleCustomerSelect = (item: any) => {
+        setRecentCustomerIds(prev => [item.id, ...prev.filter(id => id !== item.id)].slice(0, 3));
+        const customersCars = vehicles.filter(v => v.customerId === item.id);
+        setFormData(prev => ({ 
+            ...prev, 
+            customerId: item.id, 
+            vehicleId: customersCars.length === 1 ? customersCars[0].id : prev.vehicleId || '' 
+        }));
+    };
+
+    const handleVehicleSelect = (item: any) => {
+        const ownerId = item.customerId;
+        setFormData(prev => ({ 
+            ...prev, 
+            vehicleId: item.id, 
+            customerId: ownerId || prev.customerId 
+        }));
+        if (ownerId) {
+            setRecentCustomerIds(prev => [ownerId, ...prev.filter(id => id !== ownerId)].slice(0, 3));
+        }
+    };
+
     const handleLineItemChange = useCallback((id: string, field: keyof EstimateLineItem, value: any) => {
         setFormData(prev => {
             const lineItems = prev.lineItems || [];
@@ -178,7 +200,7 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                          return { ...item, isOptional: processedValue };
                     }
                      return item;
-                 });
+                });
             }
             return { ...prev, lineItems: updatedLineItems };
         });
@@ -198,15 +220,22 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
         setFormData(prev => ({ ...prev, lineItems: [...(prev.lineItems || []), newItem] }));
     };
 
-    const addPackage = (packageId: string) => {
-        const pkg = servicePackages.find(p => p.id === packageId);
+    const addPackage = (pkg: ServicePackage) => {
         if (!pkg) return;
         const isOptional = !!formData.jobId;
         const newItems: EstimateLineItem[] = [];
         const mainPackageItem: EstimateLineItem = {
-            id: crypto.randomUUID(), description: pkg.name, quantity: 1, unitPrice: pkg.totalPrice, unitCost: 0, 
-            isLabor: false, taxCodeId: pkg.taxCodeId || standardTaxRateId, servicePackageId: pkg.id, 
-            servicePackageName: pkg.name, isPackageComponent: false, isOptional
+            id: crypto.randomUUID(), 
+            description: pkg.name || (pkg as any).description || '', 
+            quantity: 1, 
+            unitPrice: pkg.totalPrice, 
+            unitCost: 0, 
+            isLabor: false, 
+            taxCodeId: pkg.taxCodeId || standardTaxRateId, 
+            servicePackageId: pkg.id, 
+            servicePackageName: pkg.name, 
+            isPackageComponent: false, 
+            isOptional
         };
         newItems.push(mainPackageItem);
         if (pkg.costItems) {
@@ -323,28 +352,6 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
         return vehicles.filter(v => v.customerId === formData.customerId);
     }, [vehicles, formData.customerId]);
 
-    const handleCustomerSelect = (item: any) => {
-        setRecentCustomerIds(prev => [item.id, ...prev.filter(id => id !== item.id)].slice(0, 3));
-        const customersCars = vehicles.filter(v => v.customerId === item.id);
-        setFormData(prev => ({ 
-            ...prev, 
-            customerId: item.id, 
-            vehicleId: customersCars.length === 1 ? customersCars[0].id : prev.vehicleId || '' 
-        }));
-    };
-
-    const handleVehicleSelect = (item: any) => {
-        const ownerId = item.customerId;
-        setFormData(prev => ({ 
-            ...prev, 
-            vehicleId: item.id, 
-            customerId: ownerId || prev.customerId 
-        }));
-        if (ownerId) {
-            setRecentCustomerIds(prev => [ownerId, ...prev.filter(id => id !== ownerId)].slice(0, 3));
-        }
-    };
-
     const recentCustomers = useMemo(() => customers.filter(c => recentCustomerIds.includes(c.id)), [customers, recentCustomerIds]);
 
     return (
@@ -352,15 +359,15 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
             isOpen={isOpen} 
             onClose={onClose} 
             onSave={handleSave} 
-            title={estimate?.id ? `Edit Estimate #${estimate.estimateNumber}` : 'Create New Estimate'} 
+            title={formData.id ? `Edit Estimate #${formData.estimateNumber}` : 'Create New Estimate'} 
             maxWidth="max-w-screen-2xl"
         >
-             <div className="mb-4 flex justify-end">
+            <div className="mb-4 flex justify-end">
                 <button 
                     type="button"
                     onClick={() => setIsAssistantOpen(true)}
                     className="flex items-center gap-2 px-4 py-2 bg-indigo-900 text-white rounded-xl font-bold text-sm shadow-lg hover:bg-black transition-all active:scale-95"
-                 >
+                >
                     <Wand2 size={18} /> Live Assistant
                 </button>
             </div>
@@ -373,19 +380,19 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                                 <label className="font-semibold">Customer</label>
                                 <div className="flex items-center gap-2 mt-1">
                                     <SearchableSelect
-                                         collectionName="brooks_customers"
+                                        collectionName="brooks_customers"
                                         onSelect={handleCustomerSelect}
                                         initialValue={selectedCustomer ? `${selectedCustomer.forename || ''} ${selectedCustomer.surname || ''}`.trim() : ''}
                                         placeholder="Search name, phone..."
                                     />
-                                     <button type="button" onClick={() => setIsAddingCustomer(true)} className="p-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 flex-shrink-0"><Plus size={20} /></button>
+                                    <button type="button" onClick={() => setIsAddingCustomer(true)} className="p-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 flex-shrink-0"><Plus size={20} /></button>
                                 </div>
                                 {recentCustomers.length > 0 && !formData.customerId && (
                                     <div className="mt-2 flex flex-wrap gap-1">
                                         <span className="text-[10px] font-bold text-gray-400 uppercase w-full mb-1 flex items-center gap-1"><History size={10}/> Recent:</span>
-                                         {recentCustomers.map(c => (
+                                        {recentCustomers.map(c => (
                                             <button key={c.id} type="button" onClick={() => handleCustomerSelect(c)} className="text-[10px] bg-white border border-gray-200 px-2 py-1 rounded hover:bg-indigo-50">{c.surname}</button>
-                                         ))}
+                                        ))}
                                     </div>
                                 )}
                             </div>
@@ -393,27 +400,33 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                                 <label className="font-semibold">Vehicle (Optional)</label>
                                 <div className="flex flex-col gap-2 mt-1">
                                     <div className="flex items-center gap-2">
-                                         <SearchableSelect
+                                        <SearchableSelect
                                             collectionName="brooks_vehicles"
                                             onSelect={handleVehicleSelect}
                                             initialValue={selectedVehicle ? `${selectedVehicle.registration || 'No Reg'} - ${selectedVehicle.make || ''} ${selectedVehicle.model || ''}` : ''}
                                             placeholder="Search registration or make..."
                                         />
-                                         <button type="button" onClick={() => setIsAddingVehicle(true)} className="p-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 flex-shrink-0"><Plus size={20} /></button>
+                                        <button type="button" onClick={() => setIsAddingVehicle(true)} className="p-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 flex-shrink-0"><Plus size={20} /></button>
                                     </div>
-                                     {linkedVehicles.length > 0 && !formData.vehicleId && (
+                                    {linkedVehicles.length > 0 && (
                                          <div className="p-2 bg-blue-50 border border-blue-100 rounded">
-                                             <p className="text-[10px] font-bold text-blue-600 uppercase mb-1 flex items-center gap-1"><Car size={10}/> Customer's Cars:</p>
+                                            <p className="text-[10px] font-bold text-blue-600 uppercase mb-1 flex items-center gap-1"><Car size={10}/> Customer's Cars:</p>
                                             <div className="flex flex-wrap gap-1">
-                                                 {linkedVehicles.map(v => (
-                                                    <button key={v.id} type="button" onClick={() => setFormData(prev => ({ ...prev, vehicleId: v.id }))} className="text-xs bg-white border border-blue-200 px-2 py-1 rounded hover:bg-blue-100 font-medium">{v.registration}</button>
-                                                 ))}
+                                                {linkedVehicles.map(v => (
+                                                    <button key={v.id} type="button" onClick={() => setFormData(prev => ({ ...prev, vehicleId: v.id }))} className={`text-xs px-2 py-1 rounded font-medium border ${formData.vehicleId === v.id ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-blue-200 text-blue-700 hover:bg-blue-100'}`}>{v.registration}</button>
+                                                ))}
                                             </div>
-                                          </div>
+                                         </div>
                                     )}
                                 </div>
-                             </div>
-                            <div><label className="font-semibold">Business Entity</label><select name="entityId" value={formData.entityId || ''} onChange={handleChange} className="w-full p-2 border rounded bg-white mt-1"><option value="">-- Select Entity --</option>{businessEntities.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}</select></div>
+                            </div>
+                            <div>
+                                <label className="font-semibold">Business Entity</label>
+                                <select name="entityId" value={formData.entityId || ''} onChange={handleChange} className="w-full p-2 border rounded bg-white mt-1">
+                                    <option value="">-- Select Entity --</option>
+                                    {businessEntities.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                                </select>
+                            </div>
                             <div className="grid grid-cols-2 gap-2">
                                 <div><label className="font-semibold">Issue Date</label><input name="issueDate" type="date" value={formData.issueDate || ''} onChange={handleChange} className="w-full p-2 border rounded mt-1" /></div>
                                 <div><label className="font-semibold">Expiry Date</label><input name="expiryDate" type="date" value={formData.expiryDate || ''} onChange={handleChange} className="w-full p-2 border rounded mt-1" /></div>
@@ -421,9 +434,9 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                             <div><label className="font-semibold">Status</label><select name="status" value={formData.status || 'Draft'} onChange={handleChange} className="w-full p-2 border rounded bg-white mt-1"><option>Draft</option><option>Sent</option><option>Approved</option><option>Declined</option><option>Converted to Job</option><option>Closed</option></select></div>
                             <div className="bg-gray-50 p-2 rounded-lg border mt-2">
                                 <div className="flex justify-between items-center mb-2">
-                                     <label className="font-semibold text-sm">Notes & Media</label>
+                                    <label className="font-semibold text-sm">Notes & Media</label>
                                      <button type="button" onClick={handleManageMedia} className="text-xs bg-white border border-gray-300 text-indigo-600 px-2 py-1 rounded flex items-center gap-1 hover:bg-indigo-50 shadow-sm"><ImageIcon size={14}/> Photos & Videos</button>
-                                 </div>
+                                </div>
                                 <textarea name="notes" value={formData.notes || ''} onChange={handleChange} rows={4} className="w-full p-2 border rounded text-sm" placeholder="Internal notes..." />
                             </div>
                         </div>
@@ -439,48 +452,59 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                                 <div className="col-span-2 text-right">Sell Price</div> <div className="col-span-1"></div>
                             </div>
                             {estimateBreakdown.packages.length > 0 && (
-                                 <div>
+                                <div>
                                     <h4 className="font-bold text-gray-800 mb-2 text-sm">Service Packages</h4>
-                                    <div className="space-y-2">{estimateBreakdown.packages.map(({ header, children }) => (<div key={header.id}><MemoizedEditableLineItemRow item={header} taxRates={taxRates} onLineItemChange={handleLineItemChange} onRemoveLineItem={removeLineItem} filteredParts={[]} activePartSearch={null} onPartSearchChange={()=>{}} onSetActivePartSearch={()=>{}} onSelectPart={()=>{}} onAddNewPart={()=>{}} /><div className="pl-6 border-l-2 ml-2 space-y-1 mt-1">{children.map(child => (<MemoizedEditableLineItemRow key={child.id} item={child} taxRates={taxRates} onLineItemChange={handleLineItemChange} onRemoveLineItem={removeLineItem} filteredParts={[]} activePartSearch={null} onPartSearchChange={()=>{}} onSetActivePartSearch={()=>{}} onSelectPart={()=>{}} onAddNewPart={()=>{}} />))}</div></div>))}</div>
+                                    <div className="space-y-2">
+                                        {estimateBreakdown.packages.map(({ header, children }) => (
+                                            <div key={header.id}>
+                                                <MemoizedEditableLineItemRow 
+                                                    item={header} taxRates={taxRates} onLineItemChange={handleLineItemChange} onRemoveLineItem={removeLineItem} filteredParts={[]} activePartSearch={null} onPartSearchChange={()=>{}} onSetActivePartSearch={()=>{}} onSelectPart={()=>{}} onAddNewPart={()=>{}} 
+                                                />
+                                                <div className="pl-6 border-l-2 ml-2 space-y-1 mt-1">
+                                                    {children.map(child => (
+                                                        <MemoizedEditableLineItemRow 
+                                                            key={child.id} item={child} taxRates={taxRates} onLineItemChange={handleLineItemChange} onRemoveLineItem={removeLineItem} filteredParts={[]} activePartSearch={null} onPartSearchChange={()=>{}} onSetActivePartSearch={()=>{}} onSelectPart={()=>{}} onAddNewPart={()=>{}} 
+                                                        />
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
                             )}
-                             {estimateBreakdown.customLabor.length > 0 && (
+                            {estimateBreakdown.customLabor.length > 0 && (
                                 <div className="p-2 border rounded-lg bg-gray-50/50">
                                     <h4 className="font-bold text-gray-800 mb-2 text-sm">Labor</h4>
-                                     <div className="space-y-2">{estimateBreakdown.customLabor.map(item => <MemoizedEditableLineItemRow key={item.id} item={item} taxRates={taxRates} onLineItemChange={handleLineItemChange} onRemoveLineItem={removeLineItem} filteredParts={filteredPartsList} activePartSearch={activePartSearch} onPartSearchChange={setPartSearchTerm} onSetActivePartSearch={setActivePartSearch} onSelectPart={handleSelectPart} onAddNewPart={handleAddNewPartClick} />)}</div>
+                                    <div className="space-y-2">{estimateBreakdown.customLabor.map(item => <MemoizedEditableLineItemRow key={item.id} item={item} taxRates={taxRates} onLineItemChange={handleLineItemChange} onRemoveLineItem={removeLineItem} filteredParts={filteredPartsList} activePartSearch={activePartSearch} onPartSearchChange={setPartSearchTerm} onSetActivePartSearch={setActivePartSearch} onSelectPart={handleSelectPart} onAddNewPart={handleAddNewPartClick} />)}</div>
                                 </div>
                             )}
                              {estimateBreakdown.customParts.length > 0 && (
                                  <div className="p-2 border rounded-lg bg-gray-50/50">
-                                     <h4 className="font-bold text-gray-800 mb-2 text-sm">Parts</h4>
+                                    <h4 className="font-bold text-gray-800 mb-2 text-sm">Parts</h4>
                                     <div className="space-y-2">{estimateBreakdown.customParts.map(item => <MemoizedEditableLineItemRow key={item.id} item={item} taxRates={taxRates} onLineItemChange={handleLineItemChange} onRemoveLineItem={removeLineItem} filteredParts={filteredPartsList} activePartSearch={activePartSearch} onPartSearchChange={setPartSearchTerm} onSetActivePartSearch={setActivePartSearch} onSelectPart={handleSelectPart} onAddNewPart={handleAddNewPartClick} />)}</div>
                                 </div>
                              )}
                             <div className="flex justify-between items-center pt-2">
                                 <div className="flex gap-2">
-                                     <button onClick={() => addLineItem(true)} className="flex items-center text-sm text-indigo-600 font-semibold hover:text-indigo-800"><PlusCircle size={16} className="mr-1" /> Add Labor</button>
+                                    <button onClick={() => addLineItem(true)} className="flex items-center text-sm text-indigo-600 font-semibold hover:text-indigo-800"><PlusCircle size={16} className="mr-1" /> Add Labor</button>
                                     <button onClick={() => addLineItem(false)} className="flex items-center text-sm text-indigo-600 font-semibold hover:text-indigo-800"><PlusCircle size={16} className="mr-1" /> Add Part</button>
                                  </div>
                                 <div className="w-64">
                                      <SearchableSelect 
-                                         collectionName="brooks_servicepackages"
-                                         searchField="searchField"
-                                         onSelect={(item) => addPackage(item.id)} 
-                                         placeholder="Search & Add Package..." 
-                                         options={servicePackages.map(pkg => ({ 
-                                             id: pkg.id, 
-                                             label: pkg.name || '' 
-                                         }))}
+                                        collectionName="brooks_servicepackages"
+                                        searchField="searchField"
+                                        onSelect={(item) => addPackage(item)} 
+                                        placeholder="Search & Add Package..." 
                                      />
-                                </div>
+                                 </div>
                             </div>
                           </div>
                     </Section>
-                    
+                             
                     <Section title="Totals Summary" icon={Gauge}>
                         <div className="w-full text-sm space-y-1">
                              <div className="flex justify-between text-gray-600"><span>Total Cost Price:</span><span>{formatCurrency(totalCost)}</span></div>
-                            <div className="flex justify-between text-gray-600"><span>Total Sale Price (Net):</span><span>{formatCurrency(totalNet)}</span></div>
+                             <div className="flex justify-between text-gray-600"><span>Total Sale Price (Net):</span><span>{formatCurrency(totalNet)}</span></div>
                             <div className={`flex justify-between font-bold ${totalProfit >= 0 ? 'text-green-700' : 'text-red-600'}`}><span>Total Profit:</span><span>{formatCurrency(totalProfit)}</span></div>
                             <div className="flex justify-between text-gray-600 border-b pb-2 mb-2"><span>Profit Margin:</span><span>{profitMargin.toFixed(1)}%</span></div>
                             {vatBreakdown.map(b => (<div key={b.name} className="flex justify-between text-gray-500 text-xs"><span>VAT @ {b.rate}%</span><span>{formatCurrency(b.vat)}</span></div>))}
@@ -513,6 +537,42 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                     vehicles={[]}
                     estimates={[]}
                     invoices={[]}
+                />
+            )}
+
+            {isMediaModalOpen && (
+                <MediaManagerModal
+                    isOpen={isMediaModalOpen}
+                    onClose={() => setIsMediaModalOpen(false)}
+                    onSave={handleSaveMedia}
+                    media={formData.media || []}
+                    jobId={formData.id || ''}
+                />
+            )}
+
+            {isAddingPart && (
+                <PartFormModal
+                    isOpen={isAddingPart}
+                    onClose={() => setIsAddingPart(false)}
+                    onSave={handleSaveNewPart}
+                    initialData={{ description: newPartDescription }}
+                    parts={parts}
+                    taxRates={taxRates}
+                />
+            )}
+
+            {isAddingVehicle && (
+                <VehicleFormModal
+                    isOpen={isAddingVehicle}
+                    onClose={() => setIsAddingVehicle(false)}
+                    onSave={(newVehicle) => {
+                        onSaveVehicle(newVehicle);
+                        handleVehicleSelect(newVehicle);
+                        setIsAddingVehicle(false);
+                    }}
+                    vehicleId={null}
+                    customers={customers}
+                    initialCustomerId={formData.customerId}
                 />
             )}
         </FormModal>
