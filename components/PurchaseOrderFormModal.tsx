@@ -1,15 +1,13 @@
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { PurchaseOrder, PurchaseOrderLineItem, Supplier, BusinessEntity, TaxRate, Part } from '../types';
-import { Save, PlusCircle, Trash2, X, CheckSquare, Eye, ArrowDownCircle, AlertTriangle, CornerDownRight } from 'lucide-react';
+import { Save, PlusCircle, Trash2, X, CheckSquare, Eye, ArrowDownCircle, AlertTriangle, CornerDownRight, RotateCcw } from 'lucide-react';
 import { formatDate } from '../core/utils/dateUtils';
 import { generatePurchaseOrderId } from '../core/utils/numberGenerators';
 import { formatCurrency } from '../utils/formatUtils';
-import SearchableSelect from './SearchableSelect';
 
 interface EditableLineItemRowProps {
     item: PurchaseOrderLineItem;
-    taxRates: TaxRate[];
+    parts: Part[];
     onLineItemChange: (id: string, field: keyof PurchaseOrderLineItem, value: any) => void;
     onRemoveLineItem: (id: string) => void;
     isReceivingDisabled: boolean;
@@ -20,46 +18,64 @@ interface EditableLineItemRowProps {
     isCredit: boolean;
 }
 
-const MemoizedEditableLineItemRow = React.memo(({ item, taxRates, onLineItemChange, onRemoveLineItem, isReceivingDisabled, isOrderedOrLater, isCostPriceChanged, newSalePrice, onNewSalePriceChange, isCredit }: EditableLineItemRowProps) => {
+const MemoizedEditableLineItemRow = React.memo(({ 
+    item, 
+    parts,
+    onLineItemChange, 
+    onRemoveLineItem, 
+    isReceivingDisabled, 
+    isOrderedOrLater, 
+    isCostPriceChanged, 
+    newSalePrice, 
+    onNewSalePriceChange, 
+    isCredit 
+}: EditableLineItemRowProps) => {
     
-    // Calculate remaining
     const ordered = item.quantity || 0;
     const received = item.receivedQuantity || 0;
-    // For credit items (negative qty), received means "credit processed", so logic is inverted or hidden
     const remaining = isCredit ? 0 : Math.max(0, ordered - received);
     const isFullyReceived = isCredit ? (Math.abs(received) >= Math.abs(ordered)) : (received >= ordered && ordered > 0);
     const isPendingReturn = item.returnStatus === 'Pending';
+
+    const handlePartNumberChange = (val: string) => {
+        onLineItemChange(item.id, 'partNumber', val);
+        const foundPart = parts.find(p => p.partNumber.toLowerCase() === val.toLowerCase());
+        if (foundPart) {
+            onLineItemChange(item.id, 'description', foundPart.description || '');
+            onLineItemChange(item.id, 'unitPrice', foundPart.costPrice || 0);
+        }
+    };
     
     return (
         <>
             <div className={`grid grid-cols-12 gap-2 items-center p-2 border bg-white ${isCostPriceChanged ? 'rounded-t-lg border-b-0' : 'rounded-lg'} ${isFullyReceived && isOrderedOrLater ? 'bg-green-50/50' : ''} ${isPendingReturn ? 'bg-amber-50 border-amber-200' : ''} ${isCredit ? 'bg-red-50/30' : ''}`}>
-                <input type="text" placeholder="Part Number" value={item.partNumber || ''} onChange={e => onLineItemChange(item.id, 'partNumber', e.target.value)} className="col-span-2 p-1 border rounded disabled:bg-gray-100 disabled:cursor-not-allowed" disabled={isOrderedOrLater} />
-                <input type="text" placeholder="Description" value={item.description} onChange={e => onLineItemChange(item.id, 'description', e.target.value)} className="col-span-3 p-1 border rounded disabled:bg-gray-100 disabled:cursor-not-allowed" disabled={isOrderedOrLater} />
-                <input type="number" step="1" value={item.quantity} onChange={e => onLineItemChange(item.id, 'quantity', e.target.value)} className={`col-span-1 p-1 border rounded text-right disabled:bg-gray-100 disabled:cursor-not-allowed ${isCredit ? 'text-red-600 font-bold' : ''}`} disabled={isOrderedOrLater} />
+                <div className="col-span-2">
+                    <input 
+                        type="text" 
+                        placeholder="Part Number" 
+                        value={item.partNumber || ''} 
+                        onChange={e => handlePartNumberChange(e.target.value)} 
+                        className="w-full p-1 border rounded disabled:bg-gray-100 disabled:cursor-not-allowed text-sm font-medium" 
+                        disabled={isOrderedOrLater} 
+                    />
+                </div>
+                <input type="text" placeholder="Description" value={item.description || ''} onChange={e => onLineItemChange(item.id, 'description', e.target.value)} className="col-span-4 p-1 border rounded disabled:bg-gray-100 disabled:cursor-not-allowed text-sm" disabled={isOrderedOrLater} />
+                <input type="number" step="1" value={item.quantity ?? 0} onChange={e => onLineItemChange(item.id, 'quantity', e.target.value)} className={`col-span-1 p-1 border rounded text-right disabled:bg-gray-100 disabled:cursor-not-allowed text-sm ${isCredit ? 'text-red-600 font-bold' : ''}`} disabled={isOrderedOrLater} />
                 
-                <div className="col-span-1 relative">
+                <div className="col-span-2 relative">
                     <input 
                         type="number" 
                         step="1" 
                         value={item.receivedQuantity ?? ''} 
                         onChange={e => onLineItemChange(item.id, 'receivedQuantity', e.target.value)} 
                         placeholder="0" 
-                        className={`w-full p-1 border rounded text-right disabled:bg-gray-100 ${!isReceivingDisabled && remaining > 0 ? 'border-blue-400 ring-1 ring-blue-100 font-bold' : ''}`} 
+                        className={`w-full p-1 border rounded text-right disabled:bg-gray-100 text-sm ${!isReceivingDisabled && remaining > 0 ? 'border-blue-400 ring-1 ring-blue-100 font-bold' : ''}`} 
                         disabled={isReceivingDisabled} 
                         title={`Ordered: ${ordered}`}
                     />
-                    {!isReceivingDisabled && remaining > 0 && !isCredit && (
-                         <div className="absolute -top-2 -right-1 w-2 h-2 bg-blue-500 rounded-full"></div>
-                    )}
                 </div>
 
-                <input type="number" step="0.01" value={item.unitPrice} onChange={e => onLineItemChange(item.id, 'unitPrice', e.target.value)} className="col-span-2 p-1 border rounded text-right" placeholder="Unit Cost"/>
-                
-                <div className="col-span-2 flex items-center gap-1">
-                     <select value={item.taxCodeId || ''} onChange={e => onLineItemChange(item.id, 'taxCodeId', e.target.value)} className="w-full p-1 border rounded text-xs disabled:bg-gray-100 disabled:cursor-not-allowed" disabled={isOrderedOrLater}>
-                        <option value="">-- Tax --</option>{taxRates.map(t => <option key={t.id} value={t.id}>{t.code}</option>)}
-                    </select>
-                </div>
+                <input type="number" step="0.01" value={item.unitPrice ?? 0} onChange={e => onLineItemChange(item.id, 'unitPrice', e.target.value)} className="col-span-2 p-1 border rounded text-right text-sm" placeholder="Unit Cost"/>
                 
                 <div className="col-span-1 flex justify-center">
                     {!isReceivingDisabled && !isCredit ? (
@@ -67,7 +83,6 @@ const MemoizedEditableLineItemRow = React.memo(({ item, taxRates, onLineItemChan
                             type="button"
                             onClick={() => onLineItemChange(item.id, 'returnStatus', isPendingReturn ? 'None' : 'Pending')}
                             className={`p-1 rounded ${isPendingReturn ? 'bg-amber-100 text-amber-600' : 'text-gray-300 hover:text-amber-500'}`}
-                            title={isPendingReturn ? "Cancel Return" : "Mark for Return"}
                         >
                             <AlertTriangle size={16} fill={isPendingReturn ? "currentColor" : "none"}/>
                         </button>
@@ -76,11 +91,6 @@ const MemoizedEditableLineItemRow = React.memo(({ item, taxRates, onLineItemChan
                     )}
                 </div>
             </div>
-             {isPendingReturn && (
-                <div className="text-xs text-amber-700 bg-amber-50 px-2 pb-1 mx-2 rounded-b border-x border-b border-amber-200 -mt-1 mb-1 flex items-center gap-1">
-                    <CornerDownRight size={12}/> Pending Return
-                </div>
-            )}
             {isCostPriceChanged && (
                 <div className="grid grid-cols-12 gap-2 items-center p-2 rounded-b-lg border-x border-b bg-blue-50 border-blue-200">
                     <div className="col-start-6 col-span-3 text-right text-sm font-semibold text-blue-800">
@@ -90,10 +100,9 @@ const MemoizedEditableLineItemRow = React.memo(({ item, taxRates, onLineItemChan
                         <input
                             type="number"
                             step="0.01"
-                            value={newSalePrice}
+                            value={newSalePrice || ''}
                             onChange={(e) => onNewSalePriceChange(e.target.value)}
                             className="w-full p-1 border rounded text-right border-blue-300 focus:ring-blue-500"
-                            placeholder="New Sale Price"
                         />
                     </div>
                 </div>
@@ -118,33 +127,51 @@ interface PurchaseOrderFormModalProps {
 }
 
 const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen, onClose, onSave, purchaseOrder, suppliers, taxRates, businessEntities, allPurchaseOrders, selectedEntityId, parts, setParts, onViewPurchaseOrder }) => {
-    const [formData, setFormData] = useState<Partial<PurchaseOrder>>({ lineItems: [] });
+    const [formData, setFormData] = useState<Partial<PurchaseOrder>>({ 
+        lineItems: [],
+        supplierId: '',
+        vehicleRegistrationRef: '',
+        supplierReference: '',
+        secondarySupplierReference: '',
+        notes: '',
+        status: 'Draft',
+        type: 'Standard',
+        orderDate: formatDate(new Date())
+    });
     const [newSalePrices, setNewSalePrices] = useState<Record<string, string>>({});
     
     const partsMap = useMemo(() => new Map(parts.map(p => [p.partNumber, p])), [parts]);
-    const taxRatesMap = useMemo(() => new Map(taxRates.map(t => [t.id, t])), [taxRates]);
-    const standardTaxRateId = useMemo(() => taxRates.find(t => t.code === 'T1')?.id, [taxRates]);
+    const standardTaxRate = useMemo(() => taxRates.find(t => t.code === 'T1') || taxRates[0], [taxRates]);
 
     const title = useMemo(() => {
         if (!formData?.id) return 'Create New Purchase Order';
         if (formData.type === 'Credit') return `Credit Note Request #${formData.id}`;
-        if (formData.status === 'Ordered' || formData.status === 'Partially Received') {
-            return `Receive Goods for PO #${formData.id}`;
-        }
         return `Edit Purchase Order #${formData.id}`;
-    }, [formData.id, formData.status, formData.type]);
+    }, [formData.id, formData.type]);
 
     useEffect(() => {
         if (!isOpen) return;
-        
         setNewSalePrices({});
-        
+
         if (purchaseOrder) {
-             // Deep copy to avoid direct mutation
-             setFormData(JSON.parse(JSON.stringify(purchaseOrder)));
+            const data = JSON.parse(JSON.stringify(purchaseOrder));
+            const rawId = data.supplierId || data.supplier?.id || data.SupplierId || "";
+            
+            setFormData({
+                ...data,
+                supplierId: String(rawId), 
+                vehicleRegistrationRef: data.vehicleRegistrationRef || '',
+                supplierReference: data.supplierReference || '',
+                secondarySupplierReference: data.secondarySupplierReference || '',
+                notes: data.notes || '',
+                status: data.status || 'Draft',
+                type: data.type || 'Standard',
+                lineItems: data.lineItems || []
+            });
         } else {
-             setFormData({
+            setFormData({
                 entityId: selectedEntityId,
+                supplierId: '',
                 orderDate: formatDate(new Date()),
                 status: 'Draft',
                 lineItems: [],
@@ -157,14 +184,8 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
         }
     }, [purchaseOrder, isOpen, selectedEntityId]);
     
-    const isReceivingDisabled = useMemo(() => {
-        return formData.status === 'Draft';
-    }, [formData.status]);
-
-    const isOrderedOrLater = useMemo(() => {
-        if (!formData.status) return false;
-        return ['Ordered', 'Partially Received', 'Received'].includes(formData.status);
-    }, [formData.status]);
+    const isReceivingDisabled = useMemo(() => formData.status === 'Draft', [formData.status]);
+    const isOrderedOrLater = useMemo(() => ['Ordered', 'Partially Received', 'Received'].includes(formData.status || ''), [formData.status]);
     
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
@@ -179,7 +200,7 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
                     let processedValue = value;
                     if (numericFields.includes(field as string)) {
                         const num = parseFloat(value);
-                        processedValue = isNaN(num) ? undefined : num;
+                        processedValue = isNaN(num) ? 0 : num;
                     }
                     return { ...item, [field]: processedValue };
                 }
@@ -189,52 +210,70 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
     }, []);
     
     const addLineItem = () => {
-        const newItem: PurchaseOrderLineItem = { id: crypto.randomUUID(), description: '', quantity: 1, unitPrice: 0, taxCodeId: standardTaxRateId };
+        const newItem: PurchaseOrderLineItem = { 
+            id: crypto.randomUUID(), 
+            description: '', 
+            quantity: 1, 
+            unitPrice: 0, 
+            taxCodeId: standardTaxRate?.id 
+        };
         setFormData(prev => ({ ...prev, lineItems: [...(prev.lineItems || []), newItem] }));
     };
 
     const removeLineItem = useCallback((id: string) => {
-        setFormData(prev => ({
-            ...prev,
-            lineItems: (prev.lineItems || []).filter(item => item.id !== id)
-        }));
+        setFormData(prev => ({ ...prev, lineItems: (prev.lineItems || []).filter(item => item.id !== id) }));
     }, []);
     
     const handleFillBalance = () => {
         setFormData(prev => ({
             ...prev,
-            lineItems: (prev.lineItems || []).map(item => ({
-                ...item,
-                receivedQuantity: item.quantity // Auto-fill received to match ordered
-            }))
+            lineItems: (prev.lineItems || []).map(item => ({ ...item, receivedQuantity: item.quantity }))
         }));
+    };
+
+    const handleCreateCreditNote = () => {
+        if (!purchaseOrder) return;
+        const entity = businessEntities.find(e => e.id === formData.entityId);
+        const entityShortCode = entity?.shortCode || 'UNK';
+        
+        const creditNote: Partial<PurchaseOrder> = {
+            ...formData,
+            id: generatePurchaseOrderId(allPurchaseOrders, entityShortCode) + "-CR",
+            type: 'Credit',
+            status: 'Draft',
+            orderDate: formatDate(new Date()),
+            supplierReference: `CR to ${formData.id}`,
+            lineItems: (formData.lineItems || []).map(item => ({
+                ...item,
+                id: crypto.randomUUID(),
+                quantity: -Math.abs(item.quantity),
+                receivedQuantity: 0,
+                returnStatus: undefined
+            })),
+            notes: `Credit Note for PO #${formData.id}. ${formData.notes || ''}`
+        };
+        setFormData(creditNote);
     };
 
     const getPartUpdates = useCallback((): Part[] => {
         const updatedParts: Part[] = [];
         (formData.lineItems || []).forEach(item => {
             const originalItem = (purchaseOrder?.lineItems || []).find(li => li.id === item.id);
-            const isCostPriceChanged = originalItem !== undefined && item.unitPrice !== originalItem.unitPrice;
-            
-            if (isCostPriceChanged && item.partNumber) {
+            if (originalItem && item.unitPrice !== originalItem.unitPrice && item.partNumber) {
                 const partToUpdate = parts.find(p => p.partNumber === item.partNumber);
                 if (partToUpdate) {
-                    const newCostPrice = item.unitPrice;
                     let newSalePrice = partToUpdate.salePrice;
-                    
-                    if (newSalePrices[item.id] !== undefined) {
-                        const parsedSalePrice = parseFloat(newSalePrices[item.id]);
-                        if (!isNaN(parsedSalePrice)) {
-                            newSalePrice = parsedSalePrice;
-                        }
+                    if (newSalePrices[item.id]) {
+                        const parsed = parseFloat(newSalePrices[item.id]);
+                        if (!isNaN(parsed)) newSalePrice = parsed;
                     }
-                    updatedParts.push({ ...partToUpdate, costPrice: newCostPrice, salePrice: newSalePrice });
+                    updatedParts.push({ ...partToUpdate, costPrice: item.unitPrice, salePrice: newSalePrice });
                 }
             }
         });
         return updatedParts;
     }, [formData.lineItems, purchaseOrder, parts, newSalePrices]);
-    
+
     const handleSave = () => {
         if (!formData.supplierId || !formData.vehicleRegistrationRef) {
             alert('Supplier and Internal Reference are required.');
@@ -245,45 +284,19 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
         const lineItems = formData.lineItems || [];
 
         if (lineItems.length > 0 && formData.status !== 'Draft' && formData.status !== 'Cancelled') {
-            // For credit notes (negative qty), received logic is flipped or simplified (received = done)
-            const isCredit = formData.type === 'Credit';
-            
-            const allReceived = lineItems.every(item => Math.abs((item.receivedQuantity || 0)) >= Math.abs(item.quantity));
-            const anyReceived = lineItems.some(item => Math.abs((item.receivedQuantity || 0)) > 0);
+            const allReceived = lineItems.every(item => Math.abs(Number(item.receivedQuantity || 0)) >= Math.abs(Number(item.quantity || 0)));
+            const anyReceived = lineItems.some(item => Math.abs(Number(item.receivedQuantity || 0)) > 0);
+            if (allReceived) newStatus = 'Received';
+            else if (anyReceived) newStatus = 'Partially Received';
+        }
 
-            if (allReceived) {
-                newStatus = 'Received';
-            } else if (anyReceived) {
-                newStatus = 'Partially Received';
-            }
-        }
-        
-        // Validation: Mandatory Supplier Reference when Receiving
-        if ((newStatus === 'Received' || newStatus === 'Partially Received') && !formData.supplierReference) {
-            alert('Supplier Reference / Invoice No. is mandatory when marking goods as Received or Partially Received.');
-            return;
-        }
-        
         const entity = businessEntities.find(e => e.id === formData.entityId);
         const entityShortCode = entity?.shortCode || 'UNK';
-        const finalId = purchaseOrder?.id || formData.id || generatePurchaseOrderId(allPurchaseOrders, entityShortCode);
-
-        // Sanitize line items to ensure numbers (NaN safety)
-        const cleanedLineItems = (formData.lineItems || []).map(item => ({
-            ...item,
-            quantity: Number(item.quantity) || 0,
-            unitPrice: Number(item.unitPrice) || 0,
-            receivedQuantity: Number(item.receivedQuantity) || 0,
-            // Ensure returnStatus is either a valid string or undefined, not null
-            returnStatus: item.returnStatus || undefined
-        }));
-
-        const payload: any = {
+        
+        const payload = {
             ...formData,
-            id: finalId,
+            id: formData.id || generatePurchaseOrderId(allPurchaseOrders, entityShortCode),
             status: newStatus,
-            type: formData.type || 'Standard',
-            lineItems: cleanedLineItems,
             partUpdates: getPartUpdates(),
         };
         
@@ -296,7 +309,6 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
             alert('Supplier and Internal Reference are required.');
             return;
         }
-        
         if (!formData.supplierReference) {
              alert('Supplier Reference / Invoice No. is mandatory when marking goods as Received.');
              return;
@@ -304,99 +316,73 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
 
         const entity = businessEntities.find(e => e.id === formData.entityId);
         const entityShortCode = entity?.shortCode || 'UNK';
-        const finalId = purchaseOrder?.id || formData.id || generatePurchaseOrderId(allPurchaseOrders, entityShortCode);
+        const finalId = formData.id || generatePurchaseOrderId(allPurchaseOrders, entityShortCode);
     
-        const cleanedLineItems = (formData.lineItems || []).map(item => ({
-            ...item,
-            quantity: Number(item.quantity) || 0,
-            unitPrice: Number(item.unitPrice) || 0,
-            receivedQuantity: Number(item.quantity) || 0,
-            returnStatus: item.returnStatus || undefined
-        }));
-
-        const updatedPO: any = {
+        const updatedPO = {
             ...formData,
             id: finalId,
-            lineItems: cleanedLineItems,
+            lineItems: (formData.lineItems || []).map(item => ({
+                ...item,
+                receivedQuantity: item.quantity 
+            })),
             status: 'Received',
-            type: formData.type || 'Standard',
             partUpdates: getPartUpdates(),
         };
         
         onSave(updatedPO as PurchaseOrder);
         onClose();
     };
-    
 
-    const { totalNet, grandTotal, vatBreakdown } = useMemo(() => {
-        const breakdown: { [key: string]: { net: number; vat: number; rate: number; name: string; } } = {};
-        if (!formData || !formData.lineItems) return { totalNet: 0, grandTotal: 0, vatBreakdown: [] };
-
-        let currentTotalNet = 0;
-
-        formData.lineItems.forEach(item => {
-            const taxCodeId = item.taxCodeId || standardTaxRateId;
-            if (!taxCodeId) return;
-            const taxRate = taxRatesMap.get(taxCodeId);
-            if (!taxRate) return;
-
-            if (!breakdown[taxCodeId]) {
-                breakdown[taxCodeId] = { net: 0, vat: 0, rate: taxRate.rate, name: taxRate.name };
-            }
-            const itemTotal = Number(item.quantity || 0) * Number(item.unitPrice || 0);
-            breakdown[taxCodeId].net += itemTotal;
-            currentTotalNet += itemTotal;
+    const { totalNet, totalTax, grandTotal } = useMemo(() => {
+        let net = 0;
+        (formData.lineItems || []).forEach(item => {
+            net += (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0);
         });
-
-        Object.values(breakdown).forEach(summary => {
-            summary.vat = summary.net * (summary.rate / 100);
-        });
-        const finalVatBreakdown = Object.values(breakdown).filter(b => Math.abs(b.net) > 0 && b.rate > 0);
-        const totalVat = finalVatBreakdown.reduce((sum, b) => sum + b.vat, 0);
         
-        return { totalNet: currentTotalNet, grandTotal: currentTotalNet + totalVat, vatBreakdown: finalVatBreakdown };
-    }, [formData.lineItems, taxRatesMap, standardTaxRateId]);
+        const taxRatePercent = standardTaxRate?.rate || 20;
+        const tax = net * (taxRatePercent / 100);
+        
+        return { totalNet: net, totalTax: tax, grandTotal: net + tax };
+    }, [formData.lineItems, standardTaxRate]);
 
     if (!isOpen) return null;
 
     return (
         <div className="fixed inset-0 bg-gray-900 bg-opacity-75 z-[70] flex justify-center items-center p-4">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl flex flex-col max-h-[90vh] animate-fade-in-up">
-                <div className="flex justify-between items-center border-b p-4 flex-shrink-0">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl flex flex-col max-h-[90vh]">
+                <div className="flex justify-between items-center border-b p-4">
                     <h2 className="text-xl font-bold text-indigo-700">{title}</h2>
                     <button onClick={onClose}><X size={24} className="text-gray-500 hover:text-gray-800" /></button>
                 </div>
+                
                 <div className="flex-grow overflow-y-auto p-6 bg-gray-50">
-                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <label className="font-semibold text-sm">Supplier*</label>
-                            <SearchableSelect
-                                options={suppliers.map(s => ({ id: s.id, label: s.name }))}
-                                value={formData.supplierId || null}
-                                onChange={(value) => setFormData(prev => ({ ...prev, supplierId: value }))}
-                                placeholder="Search suppliers..."
+                            <label className="font-semibold text-sm block text-gray-700">Supplier*</label>
+                            <select 
+                                name="supplierId"
+                                value={formData.supplierId || ''} 
+                                onChange={handleChange}
+                                className="w-full p-2 border rounded mt-1 bg-white disabled:bg-gray-100"
                                 disabled={isOrderedOrLater}
-                            />
+                            >
+                                <option value="">-- Select Supplier --</option>
+                                {suppliers.map(s => (
+                                    <option key={s.id} value={String(s.id)}>{s.name}</option>
+                                ))}
+                            </select>
                         </div>
                         <div>
-                            <label className="font-semibold text-sm">Internal Reference*</label>
-                            <input name="vehicleRegistrationRef" value={formData.vehicleRegistrationRef || ''} onChange={handleChange} placeholder="e.g., Vehicle Reg, Stock, Workshop Supplies" className="w-full p-2 border rounded mt-1 disabled:bg-gray-100 disabled:cursor-not-allowed" required disabled={isOrderedOrLater} />
-                        </div>
-                         <div>
-                            <label className="font-semibold text-sm">Supplier Reference / Invoice No.</label>
-                            <input name="supplierReference" value={formData.supplierReference || ''} onChange={handleChange} className="w-full p-2 border rounded mt-1 border-indigo-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" placeholder="Required when receiving" />
+                            <label className="font-semibold text-sm text-gray-700">Internal Reference (Reg/Job)*</label>
+                            <input name="vehicleRegistrationRef" value={formData.vehicleRegistrationRef || ''} onChange={handleChange} className="w-full p-2 border rounded mt-1" disabled={isOrderedOrLater} />
                         </div>
                         <div>
-                             <label className="font-semibold text-sm">Secondary Ref (Balance)</label>
-                             <input name="secondarySupplierReference" value={formData.secondarySupplierReference || ''} onChange={handleChange} className="w-full p-2 border rounded mt-1" placeholder="e.g. Invoice # for remaining items" />
+                            <label className="font-semibold text-sm text-gray-700">Supplier Reference (Invoice #)</label>
+                            <input name="supplierReference" value={formData.supplierReference || ''} onChange={handleChange} className="w-full p-2 border rounded mt-1" />
                         </div>
                         <div>
-                            <label className="font-semibold text-sm">Order Date</label>
-                            <input name="orderDate" type="date" value={formData.orderDate} onChange={handleChange} className="w-full p-2 border rounded mt-1 disabled:bg-gray-100 disabled:cursor-not-allowed" disabled={isOrderedOrLater} />
-                        </div>
-                        <div>
-                            <label className="font-semibold text-sm">Status</label>
-                            <select name="status" value={formData.status} onChange={handleChange} className="w-full p-2 border rounded bg-white mt-1">
+                            <label className="font-semibold text-sm text-gray-700">Status</label>
+                            <select name="status" value={formData.status || 'Draft'} onChange={handleChange} className="w-full p-2 border rounded bg-white mt-1">
                                 <option>Draft</option>
                                 <option>Ordered</option>
                                 <option>Partially Received</option>
@@ -404,98 +390,85 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
                                 <option>Cancelled</option>
                             </select>
                         </div>
-                        <div className="md:col-span-2">
-                            <label className="font-semibold text-sm">Notes</label>
-                            <textarea name="notes" value={formData.notes || ''} onChange={handleChange} rows={2} className="w-full p-2 border rounded mt-1" />
-                        </div>
                     </div>
 
-                    <div className="mt-6">
-                        <div className="flex justify-between items-center mb-2">
-                            <h3 className="font-bold">Line Items</h3>
-                            {!isReceivingDisabled && formData.type !== 'Credit' && (
-                                <div className="text-xs text-amber-800 bg-amber-100 px-2 py-1 rounded border border-amber-200">
-                                    Tip: Use the warning icon to flag incorrectly supplied items for return.
-                                </div>
-                            )}
-                            {(formData.status === 'Ordered' || formData.status === 'Partially Received') && (
-                                <button 
-                                    onClick={handleFillBalance} 
-                                    className="flex items-center gap-1.5 text-xs py-1.5 px-3 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 font-semibold"
-                                >
-                                    <ArrowDownCircle size={14} /> Receive Balance
+                    <div className="mt-6 space-y-2">
+                        <div className="flex justify-between items-center">
+                            <h3 className="font-bold text-gray-800">Line Items</h3>
+                            {isOrderedOrLater && !isReceivingDisabled && (
+                                <button onClick={handleFillBalance} className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded flex items-center gap-1 hover:bg-blue-200 font-semibold">
+                                    <ArrowDownCircle size={14}/> Receive All Items
                                 </button>
                             )}
                         </div>
-                        <div className="space-y-2">
-                            <div className="hidden lg:grid grid-cols-12 gap-2 text-xs text-gray-500 font-medium px-2">
-                                <div className="col-span-2">Part Number</div>
-                                <div className="col-span-3">Description</div>
-                                <div className="col-span-1 text-right">Qty</div>
-                                <div className="col-span-1 text-right">Total Rcvd</div>
-                                <div className="col-span-2 text-right">Unit Cost (Net)</div>
-                                <div className="col-span-2 text-center">Tax</div>
-                                <div className="col-span-1"></div>
-                            </div>
-                            {(formData.lineItems || []).map(item => {
-                                // Safely access original items, handling null purchaseOrder
-                                const originalItem = (purchaseOrder?.lineItems || []).find(li => li.id === item.id);
-                                const isCostPriceChanged = originalItem !== undefined && item.unitPrice !== originalItem.unitPrice;
-                                const part = item.partNumber ? partsMap.get(item.partNumber) : undefined;
-
-                                return (
-                                    <MemoizedEditableLineItemRow 
-                                        key={item.id} 
-                                        item={item} 
-                                        taxRates={taxRates} 
-                                        onLineItemChange={handleLineItemChange} 
-                                        onRemoveLineItem={removeLineItem} 
-                                        isReceivingDisabled={isReceivingDisabled}
-                                        isOrderedOrLater={isOrderedOrLater}
-                                        isCostPriceChanged={isCostPriceChanged && !!part}
-                                        newSalePrice={newSalePrices[item.id] !== undefined ? newSalePrices[item.id] : (part?.salePrice?.toString() ?? '')}
-                                        onNewSalePriceChange={(value) => setNewSalePrices(prev => ({...prev, [item.id]: value}))}
-                                        isCredit={formData.type === 'Credit'}
-                                    />
-                                );
-                            })}
+                        
+                        {/* Column Headers */}
+                        <div className="grid grid-cols-12 gap-2 px-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                            <div className="col-span-2">Part Number</div>
+                            <div className="col-span-4">Description</div>
+                            <div className="col-span-1 text-right">Qty</div>
+                            <div className="col-span-2 text-right">Rec'd</div>
+                            <div className="col-span-2 text-right">Unit Cost</div>
+                            <div className="col-span-1"></div>
                         </div>
+
+                        {(formData.lineItems || []).map(item => (
+                            <MemoizedEditableLineItemRow 
+                                key={item.id} 
+                                item={item} 
+                                parts={parts}
+                                onLineItemChange={handleLineItemChange} 
+                                onRemoveLineItem={removeLineItem} 
+                                isReceivingDisabled={isReceivingDisabled}
+                                isOrderedOrLater={isOrderedOrLater}
+                                isCostPriceChanged={!!(item.partNumber && partsMap.get(item.partNumber) && item.unitPrice !== (purchaseOrder?.lineItems?.find(li => li.id === item.id)?.unitPrice))}
+                                newSalePrice={newSalePrices[item.id] || ''}
+                                onNewSalePriceChange={(v) => setNewSalePrices(p => ({...p, [item.id]: v}))}
+                                isCredit={formData.type === 'Credit'}
+                            />
+                        ))}
                         {!isOrderedOrLater && (
-                            <button onClick={addLineItem} className="flex items-center text-sm text-indigo-600 font-semibold hover:text-indigo-800 mt-2 disabled:opacity-50 disabled:cursor-not-allowed">
-                                <PlusCircle size={16} className="mr-1" /> Add Item
+                            <button onClick={addLineItem} className="text-indigo-600 font-semibold flex items-center gap-1 mt-2 hover:text-indigo-800">
+                                <PlusCircle size={16}/> Add New Line
                             </button>
                         )}
                     </div>
 
                     <div className="mt-6 pt-4 border-t flex justify-end">
-                        <div className="w-64 text-sm">
-                            <div className="flex justify-between"><span>Net Total</span><span className="font-semibold">{formatCurrency(totalNet)}</span></div>
-                            {vatBreakdown.map(b => (<div key={b.name} className="flex justify-between text-gray-600"><span>VAT @ {b.rate}%</span><span>{formatCurrency(b.vat)}</span></div>))}
-                            <div className="flex justify-between font-bold text-lg mt-2 pt-2 border-t"><span>Grand Total</span><span>{formatCurrency(grandTotal)}</span></div>
+                        <div className="w-64 space-y-1">
+                            <div className="flex justify-between text-sm text-gray-600">
+                                <span>Net Total</span>
+                                <span>{formatCurrency(totalNet)}</span>
+                            </div>
+                            <div className="flex justify-between text-xs text-gray-500 italic">
+                                <span>VAT ({standardTaxRate?.rate || 20}%)</span>
+                                <span>{formatCurrency(totalTax)}</span>
+                            </div>
+                            <div className="flex justify-between font-bold text-xl mt-2 pt-2 border-t text-indigo-900">
+                                <span>Grand Total</span>
+                                <span>{formatCurrency(grandTotal)}</span>
+                            </div>
                         </div>
                     </div>
                 </div>
-                <footer className="flex justify-between items-center p-4 border-t bg-gray-50 flex-shrink-0">
-                    <div className="flex items-center gap-2">
-                        {formData.id && onViewPurchaseOrder && (
-                             <button
-                                type="button"
-                                onClick={() => onViewPurchaseOrder(formData as PurchaseOrder)}
-                                className="flex items-center gap-2 text-sm py-2 px-4 bg-gray-600 text-white font-semibold rounded-lg hover:bg-gray-700"
-                            >
-                                <Eye size={16}/> View &amp; Send
-                            </button>
-                        )}
-                        {!isReceivingDisabled && (
-                             <button type="button" onClick={handleMarkAndSaveAsReceived} className="flex items-center gap-2 text-sm py-2 px-4 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed">
+
+                <footer className="p-4 border-t flex justify-between bg-gray-50">
+                    <div className="flex gap-2">
+                        {!isReceivingDisabled && formData.type !== 'Credit' && (
+                            <button onClick={handleMarkAndSaveAsReceived} className="px-4 py-2 bg-green-600 text-white rounded-lg flex items-center gap-2 hover:bg-green-700 font-bold shadow-sm">
                                 <CheckSquare size={16}/> Mark All Received & Save
                             </button>
-                         )}
+                        )}
+                        {purchaseOrder && formData.type !== 'Credit' && (
+                            <button onClick={handleCreateCreditNote} className="px-4 py-2 bg-amber-100 text-amber-700 rounded-lg flex items-center gap-2 hover:bg-amber-200 font-bold">
+                                <RotateCcw size={16}/> Create Credit Note
+                            </button>
+                        )}
                     </div>
                     <div className="flex gap-2">
-                        <button onClick={onClose} className="py-2 px-4 bg-gray-200 text-gray-800 font-semibold rounded-lg hover:bg-gray-300 transition">Cancel</button>
-                        <button onClick={handleSave} className="flex items-center py-2 px-4 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition">
-                            <Save size={16} className="mr-2"/> Save Changes
+                        <button onClick={onClose} className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg font-bold hover:bg-gray-50">Cancel</button>
+                        <button onClick={handleSave} className="px-4 py-2 bg-indigo-600 text-white rounded-lg flex items-center gap-2 hover:bg-indigo-700 font-bold shadow-sm">
+                            <Save size={16}/> Save Changes
                         </button>
                     </div>
                 </footer>
