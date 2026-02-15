@@ -683,6 +683,24 @@ export interface TimelineViewProps {
     onOpenAssistant: (id: string) => void;
 }
 
+export interface UnbillableTimeEvent {
+    id: string;
+    jobId: string;
+    userId: string;
+    minutes: number;
+    reason: string;
+    timestamp: string;
+}
+
+export interface EngineerChangeEvent {
+    id: string;
+    jobId: string;
+    previousEngineerId: string | null;
+    newEngineerId: string;
+    changedByUserId: string;
+    timestamp: string;
+}
+
 // --- Global Context States ---
 
 export interface AppState {

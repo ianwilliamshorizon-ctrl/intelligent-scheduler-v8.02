@@ -1,9 +1,9 @@
-
 import React, { useMemo, useState } from 'react';
 import { EstimateLineItem, TaxRate, Part, PurchaseOrder, ServicePackage, Estimate, Vehicle } from '../../../types';
-import { Trash2, PlusCircle, FileText, CheckCircle, AlertTriangle, Image as ImageIcon, ChevronDown, ChevronUp, Plus, Clock } from 'lucide-react';
+import { Trash2, PlusCircle, FileText, Clock, ChevronDown, ChevronUp, Plus, Image as ImageIcon, Search } from 'lucide-react';
 import { formatCurrency } from '../../../utils/formatUtils';
 import SearchableSelect from '../../SearchableSelect';
+import { getScoredServicePackages } from '../../../utils/servicePackageScoring';
 
 // Reusable Row Component within the tab
 interface EditableLineItemRowProps {
@@ -98,7 +98,6 @@ const MemoizedEditableLineItemRow = React.memo(({ item, taxRates, onLineItemChan
     );
 });
 
-// Component to render a read-only list of items for supplementary estimates
 const ReadOnlyEstimateList: React.FC<{ items: EstimateLineItem[] }> = ({ items }) => (
     <div className="mt-2 text-xs bg-gray-50 rounded border p-2 space-y-1">
         <div className="grid grid-cols-12 font-bold text-gray-500 pb-1 border-b mb-1">
@@ -115,7 +114,6 @@ const ReadOnlyEstimateList: React.FC<{ items: EstimateLineItem[] }> = ({ items }
         ))}
     </div>
 );
-
 
 interface JobEstimateTabProps {
     partsStatus: string;
@@ -159,7 +157,6 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
     onAddLineItem, onAddPackage, onLineItemChange, onRemoveLineItem, onPartSearchChange, onSetActivePartSearch, onSelectPart, onManageMedia,
     vehicle, onAddNewPart
 }) => {
-    // State to track expanded supplementary estimates
     const [expandedSuppEstIds, setExpandedSuppEstIds] = useState<Set<string>>(new Set());
 
     const toggleExpandSuppEst = (id: string) => {
@@ -171,56 +168,15 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
         });
     };
     
-    // Sort and Filter Packages based on Vehicle Hierarchy
+    // Updated to use the external scoring utility
     const sortedPackages = useMemo(() => {
-        if (!vehicle) {
-            return servicePackages
-                .filter(p => !p.applicableMake)
-                .map(p => ({ id: p.id, label: p.name }));
-        }
-
-        const vMake = (vehicle.make || '').toLowerCase().trim();
-        const vModel = (vehicle.model || '').toLowerCase().trim();
-
-        const scored = servicePackages.map(pkg => {
-            const pMake = (pkg.applicableMake || '').toLowerCase().trim();
-            const pModel = (pkg.applicableModel || '').toLowerCase().trim();
-            const pVariant = (pkg.applicableVariant || '').toLowerCase().trim();
-            
-            let score = -1;
-
-            if (!pMake) {
-                score = 0; 
-            } else if (vMake === pMake || vMake.includes(pMake) || pMake.includes(vMake)) {
-                if (!pModel) {
-                    score = 1; 
-                } else if (vModel.includes(pModel)) {
-                    if (!pVariant) {
-                        score = 2; 
-                    } else if (vModel.includes(pVariant)) {
-                        score = 3; 
-                    } else {
-                        score = -1; 
-                    }
-                } else {
-                    score = -1; 
-                }
-            }
-            return { pkg, score };
-        });
-
-        return scored
-            .filter(item => item.score >= 0)
-            .sort((a, b) => b.score - a.score || a.pkg.name.localeCompare(b.pkg.name))
-            .map(item => {
-                let label = item.pkg.name;
-                if (item.score === 3) label = `★ ${label} (Exact Match)`;
-                else if (item.score === 2) label = `★ ${label} (Model Match)`;
-                else if (item.score === 1) label = `${label} (Make Match)`;
-                
-                return { id: item.pkg.id, label };
-            });
-
+        const results = getScoredServicePackages(servicePackages, vehicle);
+        
+        return results.map(({ pkg, matchType, color }) => ({
+            id: pkg.id,
+            label: pkg.name,
+            badge: { text: matchType, className: color }
+        }));
     }, [servicePackages, vehicle]);
 
     return (
@@ -292,7 +248,7 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
                                     <button onClick={() => onAddLineItem(true)} className="flex items-center text-xs py-1 px-2 bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200"><PlusCircle size={14} className="mr-1" /> Add Labor</button>
                                     <button onClick={() => onAddLineItem(false)} className="flex items-center text-xs py-1 px-2 bg-green-100 text-green-700 rounded-md hover:bg-green-200"><PlusCircle size={14} className="mr-1" /> Add Part</button>
                                 </div>
-                                <div className="flex items-center gap-2 w-64">
+                                <div className="flex items-center gap-2 w-80">
                                     <SearchableSelect
                                         options={sortedPackages}
                                         value={null} onChange={(packageId) => { if (packageId) onAddPackage(packageId); }}

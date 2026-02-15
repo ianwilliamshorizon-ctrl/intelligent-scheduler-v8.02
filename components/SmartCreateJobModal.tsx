@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { X, Loader2, Wand2, Check, Car, Plus, Trash2, Calendar, AlertTriangle, Calculator, FileText, User, Phone, Mail, Edit, DollarSign, Wallet, TrendingUp } from 'lucide-react';
 import { parseJobRequest } from '../core/services/geminiService';
@@ -127,6 +126,75 @@ const SmartCreateJobModal: React.FC<SmartCreateJobModalProps> = ({
         
         return { net, vat, gross, cost, profit, margin };
     }, [lineItems]);
+    
+    // Sort and Filter Packages based on Vehicle Hierarchy
+    const sortedPackages = useMemo(() => {
+        if (!foundVehicle) {
+            return servicePackages
+                .filter(p => p.entityId === selectedEntity.id)
+                .map(p => ({ 
+                    id: p.id, 
+                    label: p.name,
+                    badge: { text: 'Generic', className: 'bg-gray-100 text-gray-600' }
+                }));
+        }
+
+        const vMake = (foundVehicle.make || '').toLowerCase().trim();
+        const vModel = (foundVehicle.model || '').toLowerCase().trim();
+
+        const scored = servicePackages
+            .filter(p => p.entityId === selectedEntity.id)
+            .map(pkg => {
+                const pMake = (pkg.applicableMake || '').toLowerCase().trim();
+                const pModel = (pkg.applicableModel || '').toLowerCase().trim();
+                const pVariant = (pkg.applicableVariant || '').toLowerCase().trim();
+                
+                let score = -1;
+                let matchType = 'Mismatch';
+                let color = 'bg-gray-100 text-gray-400';
+
+                if (!pMake) {
+                    score = 0;
+                    matchType = 'Generic';
+                    color = 'bg-gray-100 text-gray-600';
+                } else if (vMake === pMake || vMake.includes(pMake) || pMake.includes(vMake)) {
+                    if (!pModel) {
+                        score = 1;
+                        matchType = 'Make Match';
+                        color = 'bg-amber-100 text-amber-800';
+                    } else if (vModel.includes(pModel)) {
+                        if (!pVariant) {
+                            score = 2;
+                            matchType = 'Model Match';
+                            color = 'bg-amber-100 text-amber-800';
+                        } else if (vModel.includes(pVariant)) {
+                            score = 3;
+                            matchType = 'Exact Match';
+                            color = 'bg-green-100 text-green-800';
+                        } else {
+                            score = 1.5;
+                            matchType = 'Model Match';
+                            color = 'bg-amber-100 text-amber-800';
+                        }
+                    } else {
+                        score = 0.5;
+                        matchType = 'Make Only';
+                        color = 'bg-gray-100 text-gray-600';
+                    }
+                }
+                return { pkg, score, matchType, color };
+            });
+
+        return scored
+            .filter(item => item.score >= 0)
+            .sort((a, b) => b.score - a.score || a.pkg.name.localeCompare(b.pkg.name))
+            .map(item => ({
+                id: item.pkg.id,
+                label: item.pkg.name,
+                badge: { text: item.matchType, className: item.color }
+            }));
+
+    }, [servicePackages, foundVehicle, selectedEntity]);
 
     const handleParseRequest = async (promptOverride?: string) => {
         const currentPrompt = promptOverride || prompt;
@@ -585,12 +653,13 @@ const SmartCreateJobModal: React.FC<SmartCreateJobModalProps> = ({
                              <h3 className="font-bold text-gray-700 mb-3 flex items-center gap-2"><DollarSign size={18}/> Work Items & Costs</h3>
                              <div className="flex gap-2 mb-2">
                                 <div className="flex-grow">
-                                    <SearchableSelect
-                                        options={servicePackages.map(p => ({ id: p.id, label: `${p.name} (£${p.totalPrice})` }))}
-                                        value={null}
-                                        onChange={(id) => id && handleSelectPackage(id)}
-                                        placeholder="+ Add Service Package..."
-                                    />
+                                <SearchableSelect 
+    collectionName="brooks_servicepackages" // Added for data consistency
+    searchField="name"                      // Ensure search targets the name field
+    options={sortedPackages}                // Uses the scored/color-coded array
+    onSelect={(item) => handleSelectPackage(item.id)} // Changed from onChange to onSelect to match SearchableSelect API
+    placeholder="+ Add Service Package..." 
+/>
                                 </div>
                                 <button onClick={handleAddLabor} className="px-3 py-2 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 text-sm font-semibold flex items-center gap-1"><Plus size={14}/> Labor</button>
                                 <button onClick={handleAddPart} className="px-3 py-2 bg-green-100 text-green-700 rounded hover:bg-green-200 text-sm font-semibold flex items-center gap-1"><Plus size={14}/> Part</button>
@@ -655,25 +724,28 @@ const SmartCreateJobModal: React.FC<SmartCreateJobModalProps> = ({
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 bg-gray-900 bg-opacity-75 z-50 flex justify-center items-center p-4">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl flex flex-col h-[90vh] transform transition-all">
-                <div className="flex-shrink-0 flex justify-between items-center border-b p-4 bg-gray-50 rounded-t-xl">
-                    <h2 className="text-xl font-bold text-indigo-700 flex items-center gap-2">
-                        {isEstimateMode ? <Calculator size={24}/> : <Wand2 size={24}/>} 
-                        {isEstimateMode ? 'Smart Estimate Builder' : 'Smart Job Creator'}
-                    </h2>
-                    <button onClick={handleClose}><X size={24} className="text-gray-500 hover:text-gray-800" /></button>
+        <div className="fixed inset-0 bg-gray-900 bg-opacity-75 z-[80] flex justify-center items-center p-4">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl h-[90vh] flex flex-col overflow-hidden animate-fade-in-up">
+                {/* Header */}
+                <div className="flex justify-between items-center p-4 border-b bg-gray-50 flex-shrink-0">
+                    <div className="flex items-center gap-3">
+                        <div className={`p-2 rounded-lg ${isEstimateMode ? 'bg-purple-100 text-purple-700' : 'bg-indigo-100 text-indigo-700'}`}>
+                            <Wand2 size={24} />
+                        </div>
+                        <div>
+                            <h2 className="text-xl font-bold text-gray-800">Smart {isEstimateMode ? 'Estimate' : 'Job'} Creator</h2>
+                            <p className="text-sm text-gray-500">Describe the work, and AI will build it for you.</p>
+                        </div>
+                    </div>
+                    <button onClick={onClose}><X size={24} className="text-gray-500 hover:text-gray-800" /></button>
                 </div>
-                <div className="flex-grow overflow-hidden p-6 bg-gray-50">
-                    {error && <div className="p-3 bg-red-100 text-red-700 rounded-lg text-sm mb-4 border border-red-200">{error}</div>}
-                    
-                    {isLoading ? (
-                         <div className="flex flex-col items-center justify-center h-full">
-                             <Loader2 size={48} className="animate-spin text-indigo-600 mb-4"/>
-                             <p className="text-gray-600 font-semibold">Analyzing request...</p>
-                         </div>
-                    ) : !parsedData ? (
-                        renderInitialPrompt()
+
+                {/* Content */}
+                <div className="flex-grow overflow-hidden p-6">
+                    {!parsedData ? (
+                         <div className="h-full flex flex-col justify-center items-center max-w-2xl mx-auto">
+                            {renderInitialPrompt()}
+                        </div>
                     ) : (
                         renderBuilder()
                     )}

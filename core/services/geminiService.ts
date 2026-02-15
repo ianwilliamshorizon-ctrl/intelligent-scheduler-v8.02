@@ -1,10 +1,20 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { ServicePackage, EstimateLineItem, Part } from '../../types';
 
-const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+// Determine Environment
+const ENV_MODE = import.meta.env.VITE_APP_ENV || (import.meta.env.PROD ? 'production' : 'development');
+
+let apiKey: string | undefined;
+
+if (ENV_MODE === 'production') {
+    apiKey = import.meta.env.VITE_GEMINI_API_KEY_PROD;
+} else {
+    // Fallback for development or other environments
+    apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+}
 
 if (!apiKey) {
-    console.warn("VITE_GEMINI_API_KEY environment variable not set. Gemini features will not work.");
+    console.warn(`VITE_GEMINI_API_KEY or relevant _PROD key not set for ${ENV_MODE} environment. Gemini features will not work.`);
 }
 
 const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
@@ -458,7 +468,7 @@ export const parseServicePackageFromContent = async (content: string): Promise<P
                     properties: {
                         description: { type: Type.STRING, description: "Description of the labor or part." },
                         quantity: { type: Type.NUMBER, description: "Quantity required." },
-                        isLabor: { type: TERN, description: "True if it's a labor item, false if it's a part." },
+                        isLabor: { type: Type, description: "True if it's a labor item, false if it's a part." },
                         unitCost: { type: Type.NUMBER, description: "Estimated unit cost price (optional, default to 0)." },
                         unitPrice: { type: Type.NUMBER, description: "Estimated unit sale price (optional, default to 0)." },
                         partNumber: { type: Type.STRING, description: "Part number if available." }

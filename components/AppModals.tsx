@@ -188,32 +188,62 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions }) => {
                 />
             )}
 
-            {modals.invoiceFormModal.isOpen && (
-                <InvoiceFormModal 
-                    isOpen={modals.invoiceFormModal.isOpen}
-                    onClose={() => setters.setInvoiceFormModal({isOpen: false, invoice: null})}
-                    onSave={(inv) => {
-                        const finalInvoice = { ...inv, createdByUserId: inv.createdByUserId || currentUser.id };
-                        handleSaveItem(setInvoices, finalInvoice, 'brooks_invoices');
-                        if (finalInvoice.jobId) {
-                            setJobs(prev => prev.map(j => j.id === finalInvoice.jobId ? { ...j, invoiceId: finalInvoice.id, status: 'Invoiced' } : j));
-                        }
-                        setters.setInvoiceFormModal({isOpen: false, invoice: null});
-                        setters.setViewInvoiceModal({isOpen: true, invoice: finalInvoice});
-                    }}
-                    invoice={modals.invoiceFormModal.invoice}
-                    customers={customers}
-                    onSaveCustomer={(c) => handleSaveItem(actions.setCustomers, c, 'brooks_customers')}
-                    vehicles={vehicles}
-                    onSaveVehicle={(v) => handleSaveItem(actions.setVehicles, v, 'brooks_vehicles')}
-                    businessEntities={businessEntities}
-                    taxRates={taxRates}
-                    servicePackages={servicePackages}
-                    parts={parts}
-                    invoices={invoices}
-                />
-            )}
-
+{modals.invoiceFormModal.isOpen && (
+    <InvoiceFormModal 
+        isOpen={modals.invoiceFormModal.isOpen}
+        onClose={() => setters.setInvoiceFormModal({isOpen: false, invoice: null})}
+        onSave={(inv) => {
+            const finalInvoice = { ...inv, createdByUserId: inv.createdByUserId || currentUser.id };
+            handleSaveItem(setInvoices, finalInvoice, 'brooks_invoices');
+            
+            if (finalInvoice.jobId) {
+                const job = jobs.find(j => j.id === finalInvoice.jobId);
+                if (job) {
+                    const updatedJob = { ...job, invoiceId: finalInvoice.id, status: 'Invoiced' as const };
+                    handleSaveItem(setJobs, updatedJob, 'brooks_jobs');
+                }
+            }
+            
+            setters.setInvoiceFormModal({isOpen: false, invoice: null});
+            setters.setViewInvoiceModal({isOpen: true, invoice: finalInvoice});
+        }}
+        invoice={(() => {
+            const currentInv = modals.invoiceFormModal.invoice;
+            
+            // DEBUG LOGS - Open your browser console (F12) to see these
+            console.log('DEBUG: Current Invoice State:', currentInv);
+            
+            if (currentInv?.jobId) {
+                const sourceJob = jobs.find(j => j.id === currentInv.jobId);
+                console.log('DEBUG: Found Source Job:', sourceJob);
+        
+                if (sourceJob) {
+                    const mappedInvoice = {
+                        ...currentInv,
+                        customerId: sourceJob.customerId,
+                        vehicleId: sourceJob.vehicleId,
+                        entityId: sourceJob.entityId
+                    };
+                    console.log('DEBUG: Mapped Invoice Result:', mappedInvoice);
+                    return mappedInvoice;
+                } else {
+                    console.warn('DEBUG: No job found in "jobs" array matching ID:', currentInv.jobId);
+                }
+            }
+            return currentInv;
+        })()}
+        
+        customers={customers}
+        onSaveCustomer={(c) => handleSaveItem(actions.setCustomers, c, 'brooks_customers')}
+        vehicles={vehicles}
+        onSaveVehicle={(v) => handleSaveItem(actions.setVehicles, v, 'brooks_vehicles')}
+        businessEntities={businessEntities}
+        taxRates={taxRates}
+        servicePackages={servicePackages}
+        parts={parts}
+        invoices={invoices}
+    />
+)}
             {modals.viewInvoiceModal.isOpen && modals.viewInvoiceModal.invoice && (
                 <InvoiceModal
                     isOpen={modals.viewInvoiceModal.isOpen}

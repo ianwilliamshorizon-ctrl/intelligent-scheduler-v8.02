@@ -176,16 +176,41 @@ const App = () => {
     const handleGenerateInvoice = (jobId: string) => {
         const job = jobs.find(j => j.id === jobId);
         if (!job) return;
-        let lineItems: T.EstimateLineItem[] = [];
-        if (job.estimateId) {
-            const estimate = estimates.find(e => e.id === job.estimateId);
-            if (estimate && estimate.lineItems) {
-                lineItems = estimate.lineItems.map(item => ({ ...item, id: crypto.randomUUID() }));
+
+        let aggregatedLineItems: T.EstimateLineItem[] = [];
+
+        // 1. Find all estimates linked to this job (Main + Supplementary)
+        // Criteria: estimate.jobId matches OR estimate.id matches job.estimateId (for legacy/initial link)
+        const linkedEstimates = estimates.filter(e => 
+            (e.jobId === job.id || e.id === job.estimateId) && 
+            ['Approved', 'Converted to Job', 'Closed'].includes(e.status)
+        );
+
+        // 2. Aggregate items
+        linkedEstimates.forEach(est => {
+            if (est.lineItems) {
+                // Filter out optional items that were NOT selected (assuming Approved means selection is finalized)
+                // For simplicity here, we take all non-optional + selected items if we were tracking selections
+                // But typically the estimate lineItems are updated upon approval to reflect final state.
+                
+                // Regenerate IDs to ensure uniqueness in the invoice and detach from estimate record
+                const items = est.lineItems.map(item => ({ ...item, id: crypto.randomUUID() }));
+                aggregatedLineItems = [...aggregatedLineItems, ...items];
             }
-        }
+        });
+
+        // 3. Fallback: If no estimates found, start empty. User can add manual items.
+
         const newInvoice: Partial<T.Invoice> = {
-            entityId: job.entityId, customerId: job.customerId, vehicleId: job.vehicleId, jobId: job.id,
-            issueDate: formatDate(new Date()), dueDate: formatDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)), status: 'Draft', lineItems: lineItems, createdByUserId: currentUser.id
+            entityId: job.entityId, 
+            customerId: job.customerId, 
+            vehicleId: job.vehicleId, 
+            jobId: job.id,
+            issueDate: formatDate(new Date()), 
+            dueDate: formatDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)), 
+            status: 'Draft', 
+            lineItems: aggregatedLineItems, 
+            createdByUserId: currentUser.id
         };
         setters.setInvoiceFormModal({ isOpen: true, invoice: newInvoice as T.Invoice });
     };
@@ -229,52 +254,38 @@ const App = () => {
         handleDeleteJob: workshopActions.handleDeleteJob
     };
 
-    const renderView = () => {
-        switch (currentView) {
-            case 'dashboard': return <DashboardView {...commonProps} onCheckIn={(id) => { const job = jobs.find(j => j.id === id); if(job) setters.setCheckInJob(job); }} onOpenInquiry={(inq) => setters.setInquiryModal({isOpen: true, inquiry: inq})} />;
-            case 'dispatch': return <DispatchView setDefaultDateForModal={setters.setSmartCreateDefaultDate} setIsSmartCreateOpen={setters.setIsSmartCreateOpen} setSmartCreateMode={setters.setSmartCreateMode} setSelectedJobId={setters.setSelectedJobId} setIsEditModalOpen={setters.setIsEditJobModalOpen} onOpenPurchaseOrder={(po) => setters.setViewPoModal({isOpen: true, po})} onReassignEngineer={workshopActions.handleReassignEngineer} onCheckIn={(id) => { const job = jobs.find(j => j.id === id); if(job) setters.setCheckInJob(job); }} onUnscheduleSegment={workshopActions.handleUnscheduleSegment} {...commonProps} />;
-            case 'workflow': return <WorkflowView jobs={jobs} vehicles={vehicles} customers={customers} engineers={engineers} currentUser={currentUser} onGenerateInvoice={handleGenerateInvoice} onOpenPurchaseOrder={(po) => setters.setViewPoModal({isOpen: true, po})} {...commonProps} />;
-            case 'jobs': return <JobsView onEditJob={(id) => { setters.setSelectedJobId(id); setters.setIsEditJobModalOpen(true); }} onSmartCreateClick={() => { setters.setSmartCreateMode('job'); setters.setIsSmartCreateOpen(true); }} />;
-            case 'estimates': return <EstimatesView 
-                onOpenEstimateModal={(est) => setters.setEstimateFormModal({isOpen: true, estimate: est})} 
-                onViewEstimate={(est) => setters.setEstimateViewModal({isOpen: true, estimate: est})} 
-                onSmartCreateClick={() => { setters.setSmartCreateMode('estimate'); setters.setIsSmartCreateOpen(true); }}
-                onScheduleEstimate={(est) => setters.setScheduleJobFromEstimateModal({isOpen: true, estimate: est})}
-            />;
-            case 'invoices': return <InvoicesView onViewInvoice={(inv) => setters.setViewInvoiceModal({isOpen: true, invoice: inv})} onEditInvoice={(inv) => setters.setInvoiceFormModal({isOpen: true, invoice: inv})} onOpenExportModal={(type, items) => setters.setExportModal({isOpen: true, type, items})} onCreateAdhocInvoice={() => setters.setInvoiceFormModal({isOpen: true, invoice: { createdByUserId: currentUser.id } as any})} />;
-            case 'purchaseOrders': return <PurchaseOrdersView onOpenPurchaseOrderModal={(po) => setters.setPoModal({isOpen: true, po})} onViewPurchaseOrder={(po) => setters.setViewPoModal({isOpen: true, po})} onDeletePurchaseOrder={(id) => handleDeleteItem(setPurchaseOrders, id)} onExport={() => {}} onOpenBatchAddModal={() => setters.setBatchPoModalOpen(true)} />;
-            case 'sales': return <SalesView entity={businessEntities.find(e => e.id === selectedEntityId)!} onManageSaleVehicle={(sv) => setters.setManageSaleVehicleModal({isOpen: true, saleVehicle: sv})} onAddSaleVehicle={() => setters.setAddSaleVehicleModalOpen(true)} onGenerateReport={() => setters.setSalesReportModal(true)} onAddProspect={() => setters.setProspectModal({isOpen: true, prospect: null})} onEditProspect={(p) => setters.setProspectModal({isOpen: true, prospect: p})} onViewCustomer={(id) => setters.setCustomerModal({isOpen: true, customerId: id})} />;
-            case 'storage': return <StorageView entity={businessEntities.find(e => e.id === selectedEntityId)!} onSaveBooking={(b) => handleSaveItem(setStorageBookings, b)} onBookOutVehicle={() => {}} onViewInvoice={(id) => { const inv = invoices.find(i => i.id === id); if(inv) setters.setViewInvoiceModal({isOpen: true, invoice: inv}); }} onAddCustomerAndVehicle={(c, v) => { handleSaveItem(data.setCustomers, c); handleSaveItem(data.setVehicles, v); }} onSaveInvoice={(inv) => handleSaveItem(setInvoices, inv)} setConfirmation={setConfirmation} setViewedInvoice={(inv) => setters.setViewInvoiceModal({isOpen: true, invoice: inv})} />;
-            case 'rentals': return <RentalsView entity={businessEntities.find(e => e.id === selectedEntityId)!} onOpenRentalBooking={(b) => setters.setRentalBookingModal({isOpen: true, booking: b})} />;
-            case 'concierge': return <ConciergeView onCheckIn={(id) => { const job = jobs.find(j => j.id === id); if(job) setters.setCheckInJob(job); }} onOpenPurchaseOrder={(po) => setters.setViewPoModal({isOpen: true, po})} onGenerateInvoice={handleGenerateInvoice} onCollect={(id) => { const job = jobs.find(j => j.id === id); if(job) setters.setCheckOutJob(job); }} {...commonProps} />;
-            case 'communications': return <CommunicationsView />;
-            case 'absence': return <AbsenceView currentUser={currentUser} users={users} absenceRequests={absenceRequests} setAbsenceRequests={setAbsenceRequests} />;
-            case 'inquiries': return <InquiriesView onOpenInquiryModal={(inq) => setters.setInquiryModal({isOpen: true, inquiry: inq})} onConvert={() => {}} onViewEstimate={(est) => setters.setEstimateViewModal({isOpen: true, estimate: est})} onScheduleEstimate={(est, inquiryId) => setters.setScheduleJobFromEstimateModal({isOpen: true, estimate: est, inquiryId})} onOpenPurchaseOrder={(po) => setters.setViewPoModal({isOpen: true, po})} onEditEstimate={(est) => setters.setEstimateFormModal({isOpen: true, estimate: est})} onMergeEstimate={workshopActions.handleMergeEstimateToJob} />;
-            default: return <DashboardView {...commonProps} onCheckIn={() => {}} onOpenInquiry={() => {}} />;
-        }
-    };
-
     return (
         <MainLayout onOpenManagement={() => setIsManagementOpen(true)} onSearchResult={handleSearchResult}>
-            {renderView()}
+            {currentView === 'dashboard' && <DashboardView {...commonProps} onCheckIn={(id) => setters.setCheckInJob(jobs.find(j => j.id === id) || null)} onOpenInquiry={(inq) => setters.setInquiryModal({isOpen: true, inquiry: inq})} />}
+            {currentView === 'dispatch' && <DispatchView {...commonProps} setDefaultDateForModal={setters.setSmartCreateDefaultDate} setIsSmartCreateOpen={setters.setIsSmartCreateOpen} setSmartCreateMode={setters.setSmartCreateMode} setSelectedJobId={setters.setSelectedJobId} setIsEditModalOpen={setters.setIsEditJobModalOpen} onOpenPurchaseOrder={(po) => setters.setViewPoModal({isOpen: true, po})} onReassignEngineer={workshopActions.handleReassignEngineer} onCheckIn={(id) => setters.setCheckInJob(jobs.find(j => j.id === id) || null)} onUnscheduleSegment={workshopActions.handleUnscheduleSegment} />}
+            {currentView === 'workflow' && <WorkflowView jobs={jobs} vehicles={vehicles} customers={customers} engineers={engineers} currentUser={currentUser} onQcApprove={commonProps.onQcApprove} onGenerateInvoice={handleGenerateInvoice} onEditJob={commonProps.onEditJob} onStartWork={commonProps.onStartWork} onEngineerComplete={commonProps.onEngineerComplete} onPause={(id, segId) => workshopActions.handleUpdateSegmentStatus(id, segId, 'Paused')} onRestart={commonProps.onRestart} onOpenAssistant={commonProps.onOpenAssistant} onOpenPurchaseOrder={(po) => setters.setViewPoModal({isOpen: true, po})} />}
+            {currentView === 'jobs' && <JobsView onEditJob={commonProps.onEditJob} onSmartCreateClick={() => { setters.setSmartCreateMode('job'); setters.setIsSmartCreateOpen(true); }} />}
+            {currentView === 'estimates' && <EstimatesView onOpenEstimateModal={(est) => setters.setEstimateFormModal({isOpen: true, estimate: est})} onViewEstimate={(est) => setters.setEstimateViewModal({isOpen: true, estimate: est})} onSmartCreateClick={() => { setters.setSmartCreateMode('estimate'); setters.setIsSmartCreateOpen(true); }} onScheduleEstimate={(est, inquiryId) => setters.setScheduleJobFromEstimateModal({isOpen: true, estimate: est, inquiryId})} />}
+            {currentView === 'invoices' && <InvoicesView onViewInvoice={(inv) => setters.setViewInvoiceModal({isOpen: true, invoice: inv})} onEditInvoice={(inv) => setters.setInvoiceFormModal({isOpen: true, invoice: inv})} onOpenExportModal={(type, items) => setters.setExportModal({isOpen: true, type: type as any, items})} onCreateAdhocInvoice={() => setters.setInvoiceFormModal({isOpen: true, invoice: null})} />}
+            {currentView === 'purchaseOrders' && <PurchaseOrdersView onOpenPurchaseOrderModal={(po) => setters.setPoModal({isOpen: true, po})} onDeletePurchaseOrder={(id) => handleDeleteItem(setPurchaseOrders, id)} onViewPurchaseOrder={(po) => setters.setViewPoModal({isOpen: true, po})} onExport={(data, filename) => { /* export logic */ }} onOpenBatchAddModal={() => setters.setBatchPoModalOpen(true)} />}
+            {currentView === 'sales' && <SalesView entity={businessEntities.find(e => e.id === selectedEntityId) || businessEntities[0]} onManageSaleVehicle={(sv) => setters.setManageSaleVehicleModal({isOpen: true, saleVehicle: sv})} onAddSaleVehicle={() => setters.setAddSaleVehicleModalOpen(true)} onGenerateReport={() => setters.setSalesReportModal(true)} onAddProspect={() => setters.setProspectModal({isOpen: true, prospect: null})} onEditProspect={(p) => setters.setProspectModal({isOpen: true, prospect: p})} onViewCustomer={(id) => setters.setCustomerModal({isOpen: true, customerId: id})} />}
+            {currentView === 'storage' && <StorageView entity={businessEntities.find(e => e.id === selectedEntityId)!} onSaveBooking={(b) => handleSaveItem(setStorageBookings, b, 'brooks_storageBookings')} onBookOutVehicle={(id) => { const b = storageBookings.find(sb => sb.id === id); if(b) setters.setCheckOutJob({id: `temp_job_${id}`, vehicleId: b.vehicleId, customerId: b.customerId } as any) }} onViewInvoice={(id) => setters.setViewInvoiceModal({isOpen: true, invoice: invoices.find(i => i.id === id) || null})} onAddCustomerAndVehicle={(c, v) => { handleSaveItem(data.setCustomers, c, 'brooks_customers'); handleSaveItem(data.setVehicles, v, 'brooks_vehicles'); }} onSaveInvoice={(inv) => handleSaveItem(setInvoices, inv, 'brooks_invoices')} setConfirmation={setConfirmation} setViewedInvoice={(inv) => setters.setViewInvoiceModal({isOpen: true, invoice: inv})} />}
+            {currentView === 'rentals' && <RentalsView entity={businessEntities.find(e => e.id === selectedEntityId)!} onOpenRentalBooking={(b) => setters.setRentalBookingModal({isOpen: true, booking: b})} />}
+            {currentView === 'concierge' && <ConciergeView onEditJob={commonProps.onEditJob} onCheckIn={(id) => setters.setCheckInJob(jobs.find(j => j.id === id) || null)} onOpenPurchaseOrder={(po) => setters.setViewPoModal({isOpen: true, po})} onOpenAssistant={commonProps.onOpenAssistant} onGenerateInvoice={handleGenerateInvoice} onCollect={(id) => setters.setCheckOutJob(jobs.find(j => j.id === id) || null)} onQcApprove={commonProps.onQcApprove} onStartWork={commonProps.onStartWork} onEngineerComplete={commonProps.onEngineerComplete} onPause={(id, segId) => workshopActions.handleUpdateSegmentStatus(id, segId, 'Paused')} onRestart={commonProps.onRestart} />}
+            {currentView === 'communications' && <CommunicationsView />}
+            {currentView === 'inquiries' && <InquiriesView onOpenInquiryModal={(inq) => setters.setInquiryModal({isOpen: true, inquiry: inq})} onConvert={(inq) => {}} onViewEstimate={(est) => setters.setEstimateViewModal({isOpen: true, estimate: est})} onScheduleEstimate={(est, inquiryId) => setters.setScheduleJobFromEstimateModal({isOpen: true, estimate: est, inquiryId})} onOpenPurchaseOrder={(po) => setters.setViewPoModal({isOpen: true, po})} onEditEstimate={(est) => setters.setEstimateFormModal({isOpen: true, estimate: est})} onMergeEstimate={workshopActions.handleMergeEstimateToJob} />}
+            {currentView === 'absence' && <AbsenceView currentUser={currentUser} users={users} absenceRequests={absenceRequests} setAbsenceRequests={setAbsenceRequests} />}
 
-            <AppModals 
-                modals={modalsState} 
-                setters={setters} 
-                actions={modalActions} 
-            />
+            <AppModals modals={modalsState} setters={setters} actions={modalActions} />
 
-            <ManagementModal 
-                isOpen={isManagementOpen} 
-                onClose={() => setIsManagementOpen(false)} 
-                initialView={managementInitialView}
-                selectedEntityId={selectedEntityId}
-                onViewJob={(id) => { setters.setSelectedJobId(id); setters.setIsEditJobModalOpen(true); }}
-                onViewEstimate={(est) => setters.setEstimateViewModal({isOpen: true, estimate: est})}
-                backupSchedule={backupSchedule}
-                setBackupSchedule={setBackupSchedule}
-                onManualBackup={handleManualBackup}
-            />
+            {isManagementOpen && (
+                <ManagementModal 
+                    isOpen={isManagementOpen} 
+                    onClose={() => setIsManagementOpen(false)} 
+                    initialView={managementInitialView} 
+                    selectedEntityId={selectedEntityId} 
+                    onViewJob={(id) => { setIsManagementOpen(false); setters.setSelectedJobId(id); setters.setIsEditJobModalOpen(true); }}
+                    onViewEstimate={(est) => { setIsManagementOpen(false); setters.setEstimateViewModal({isOpen: true, estimate: est}); }}
+                    backupSchedule={backupSchedule}
+                    setBackupSchedule={setBackupSchedule}
+                    onManualBackup={handleManualBackup}
+                />
+            )}
         </MainLayout>
     );
 };

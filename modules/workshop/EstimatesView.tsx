@@ -17,7 +17,7 @@ interface EstimatesViewProps {
     onOpenEstimateModal: (estimate: Partial<Estimate> | null) => void;
     onViewEstimate: (estimate: Estimate) => void;
     onSmartCreateClick: () => void;
-    onScheduleEstimate?: (estimate: Estimate) => void;
+    onScheduleEstimate?: (estimate: Estimate, inquiryId?: string) => void;
 }
 
 const EstimatesView: React.FC<EstimatesViewProps> = ({ onOpenEstimateModal, onViewEstimate, onSmartCreateClick, onScheduleEstimate }) => {
