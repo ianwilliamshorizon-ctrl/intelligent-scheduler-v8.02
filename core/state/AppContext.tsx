@@ -3,6 +3,17 @@ import * as T from '../../types';
 import { getAll } from '../../core/db';
 import { initialData } from '../data/initialData';
 import { COLLECTION_NAME, currentEnvironment } from '../../core/config/firebaseConfig'; 
+// NEW: Import Firebase Auth
+import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
+
+// Define local interfaces for the missing type exports to fix TS errors
+interface ConfirmationState {
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm?: () => void;
+    type: 'info' | 'success' | 'warning' | 'danger';
+}
 
 interface AppState {
     currentUser: T.User | null;
@@ -14,12 +25,12 @@ interface AppState {
     isAuthenticated: boolean;
     currentView: string;
     setCurrentView: (view: string) => void;
-    login: (userId: string, pin: string) => Promise<boolean>;
+    login: (email: string, password: string) => Promise<boolean>;
     logout: () => void;
     selectedEntityId: string;
     setSelectedEntityId: (id: string) => void;
-    confirmation: T.ConfirmationState;
-    setConfirmation: (state: T.ConfirmationState) => void;
+    confirmation: ConfirmationState;
+    setConfirmation: (state: ConfirmationState) => void;
     backupSchedule: T.BackupSchedule;
     setBackupSchedule: (schedule: T.BackupSchedule) => void;
     appEnvironment: T.AppEnvironment;
@@ -31,8 +42,9 @@ interface AppState {
 const AppContext = createContext<AppState | undefined>(undefined);
 
 export const AppProvider = ({ children }: { children: React.ReactNode }) => {
+    const auth = getAuth(); // Initialize Firebase Auth
     const [currentUser, setCurrentUser] = useState<T.User | null>(null);
-    const [users, setUsers] = useState<T.User[]>(initialData.users);
+    const [users, setUsers] = useState<T.User[]>([]); // Start empty to prevent seeding
     const [roles, setRoles] = useState<T.Role[]>(initialData.roles);
     const [businessEntities, setBusinessEntities] = useState<T.BusinessEntity[]>(initialData.businessEntities);
     const [jobs, setJobs] = useState<T.Job[]>(initialData.jobs);
@@ -42,8 +54,8 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [currentView, setCurrentView] = useState('dashboard');
     const [selectedEntityId, setSelectedEntityId] = useState<string>(''); 
-    const [confirmation, setConfirmation] = useState<T.ConfirmationState>({ 
-        isOpen: false, title: '', message: '', onConfirm: () => {}, type: 'info'
+    const [confirmation, setConfirmation] = useState<ConfirmationState>({ 
+        isOpen: false, title: '', message: '', type: 'info'
     });
     const [backupSchedule, setBackupSchedule] = useState<T.BackupSchedule>({ enabled: false, times: ['02:00', '14:00'] });
 
@@ -53,6 +65,24 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
     const allWorkshops = useMemo(() => {
         return businessEntities.filter(e => e.type === "Workshop");
     }, [businessEntities]);
+
+    // Track Firebase Auth State
+    useEffect(() => {
+        const unsubscribe = onAuthStateChanged(auth, (user) => {
+            if (user) {
+                // Link Firebase User to Firestore Profile
+                const profile = users.find(u => u.email === user.email);
+                if (profile) {
+                    setCurrentUser(profile);
+                    setIsAuthenticated(true);
+                }
+            } else {
+                setIsAuthenticated(false);
+                setCurrentUser(null);
+            }
+        });
+        return () => unsubscribe();
+    }, [users, auth]);
 
     useEffect(() => {
         if (allWorkshops.length > 0 && !selectedEntityId) {
@@ -95,25 +125,31 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
         hasInitialized.current = true;
     }, []);
 
-    const login = async (userId: string, pin: string): Promise<boolean> => {
-        const userToLogin = users.find(u => u.id === userId || u.email === userId);
-        const isCorrectPassword = userToLogin && userToLogin.password === pin;
-        const isMasterPinAllowed = pin === '1234' && appEnvironment !== 'Production';
+    const login = async (email: string, pin: string): Promise<boolean> => {
+        try {
+            // AUTH FIX: Sign in through Firebase service
+            const userCredential = await signInWithEmailAndPassword(auth, email, pin);
+            const fbUser = userCredential.user;
 
-        if (userToLogin && (isCorrectPassword || isMasterPinAllowed)) {
-            setCurrentUser(userToLogin);
-            setIsAuthenticated(true);
-            if (userToLogin.defaultEntityId) {
-                setSelectedEntityId(userToLogin.defaultEntityId);
-            } else if (allWorkshops.length > 0) {
-                setSelectedEntityId(allWorkshops[0].id);
+            const userProfile = users.find(u => u.email === fbUser.email);
+            
+            if (userProfile) {
+                setCurrentUser(userProfile);
+                setIsAuthenticated(true);
+                if (userProfile.defaultEntityId) {
+                    setSelectedEntityId(userProfile.defaultEntityId);
+                }
+                return true;
             }
-            return true;
-        } 
-        return false;
+            return false;
+        } catch (error) {
+            console.error("Login failed:", error);
+            return false;
+        }
     };
 
-    const logout = () => {
+    const logout = async () => {
+        await signOut(auth);
         setCurrentUser(null);
         setIsAuthenticated(false);
         setSelectedEntityId('');

@@ -14,16 +14,30 @@ const getEnv = (key: string) => {
 }
   
 export const isDev = () => {
-    return false;
+    // In Vite, import.meta.env.DEV is true during local development
+    // @ts-ignore
+    return !!(import.meta.env && import.meta.env.DEV);
 };
   
 // Determine the active environment
-// Priority: 1. LocalStorage (User Selection) 2. Env Var (Build) 3. Automatic Detection
+// Priority: 1. Domain Check (Hard Lockdown) 2. LocalStorage (User Selection) 3. Env Var (Build)
 const getActiveEnvironment = (): 'Production' | 'UAT' | 'Development' => {
+    // SAFETY CHECK: If we are on the production URL, force Production mode.
+    // This prevents LocalStorage from "hijacking" a production session with dev credentials.
+    const isProductionHostname = window.location.hostname === 'App-Brookspeed.com';
+    
+    if (isProductionHostname) {
+        return 'Production';
+    }
+
     try {
         const stored = window.localStorage.getItem('brooks_environment');
         if (stored) {
-            return JSON.parse(stored);
+            // Remove quotes if they exist from JSON.parse/stringify
+            const parsed = JSON.parse(stored);
+            if (parsed === 'UAT' || parsed === 'Production' || parsed === 'Development') {
+                return parsed;
+            }
         }
     } catch (e) {
         console.warn("Error reading environment from storage", e);
@@ -40,7 +54,7 @@ const getActiveEnvironment = (): 'Production' | 'UAT' | 'Development' => {
 export const currentEnvironment = getActiveEnvironment();
   
 // Helper to select the correct key based on environment
-// Looks for specific suffix (_UAT, _DEV) first, then falls back to standard keys
+// Looks for specific suffix (_UAT, _DEV, _PROD) first
 const getEnvKey = (baseKey: string) => {
     let key = '';
     if (currentEnvironment === 'UAT') {
@@ -51,7 +65,9 @@ const getEnvKey = (baseKey: string) => {
         key = getEnv(`${baseKey}_PROD`);
     }
     
-    // Fallback: If the environment-specific key is missing, use the base key
+    // Fallback logic: 
+    // If the environment-specific key is missing, use the base key.
+    // WARNING: Ensure your Production Env Vars are set in your hosting provider (Vercel/Netlify/Firebase)
     return key || getEnv(baseKey);
 };
   
