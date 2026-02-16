@@ -248,11 +248,13 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
                                     <button onClick={() => onAddLineItem(true)} className="flex items-center text-xs py-1 px-2 bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200"><PlusCircle size={14} className="mr-1" /> Add Labor</button>
                                     <button onClick={() => onAddLineItem(false)} className="flex items-center text-xs py-1 px-2 bg-green-100 text-green-700 rounded-md hover:bg-green-200"><PlusCircle size={14} className="mr-1" /> Add Part</button>
                                 </div>
-                                <div className="flex items-center gap-2 w-80">
+                                <div className="flex items-center gap-2 w-64">
                                     <SearchableSelect
                                         options={sortedPackages}
-                                        value={null} onChange={(packageId) => { if (packageId) onAddPackage(packageId); }}
+                                        value={null} 
+                                        onChange={(packageId) => { if (packageId) onAddPackage(packageId); }}
                                         placeholder="Add Package..."
+                                        dropdownClassName="min-w-[450px] right-0"
                                     />
                                 </div>
                             </div>
@@ -269,7 +271,45 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
                         </div>
                         
                         {estimateBreakdown.packages.length > 0 && <h5 className="font-bold text-gray-800 text-xs uppercase pt-2">Service Packages</h5>}
-                        {estimateBreakdown.packages.map(({ header, children }: any) => (<div key={header.id}><MemoizedEditableLineItemRow canViewPricing={canViewPricing} isReadOnly={isReadOnly} item={header} taxRates={taxRates} onLineItemChange={onLineItemChange} onRemoveLineItem={onRemoveLineItem} filteredParts={[]} activePartSearch={null} onPartSearchChange={()=>{}} onSetActivePartSearch={()=>{}} onSelectPart={()=>{}} onManageMedia={onManageMedia} onAddNewPart={()=>{}} /><div className="pl-6 border-l-2 ml-2 space-y-1 mt-1">{children.map((child: any) => (<MemoizedEditableLineItemRow key={child.id} canViewPricing={canViewPricing} isReadOnly={isReadOnly} item={child} taxRates={taxRates} onLineItemChange={onLineItemChange} onRemoveLineItem={onRemoveLineItem} filteredParts={[]} activePartSearch={null} onPartSearchChange={()=>{}} onSetActivePartSearch={()=>{}} onSelectPart={()=>{}} onManageMedia={onManageMedia} onAddNewPart={()=>{}} />))}</div></div>))}
+                        {estimateBreakdown.packages.map(({ header, children }: any) => (
+                            <div key={header.id}>
+                                <MemoizedEditableLineItemRow 
+                                    canViewPricing={canViewPricing} 
+                                    isReadOnly={isReadOnly} 
+                                    item={header} 
+                                    taxRates={taxRates} 
+                                    onLineItemChange={onLineItemChange} 
+                                    onRemoveLineItem={onRemoveLineItem} 
+                                    filteredParts={filteredParts} 
+                                    activePartSearch={activePartSearch} 
+                                    onPartSearchChange={onPartSearchChange} 
+                                    onSetActivePartSearch={onSetActivePartSearch} 
+                                    onSelectPart={onSelectPart} 
+                                    onManageMedia={onManageMedia} 
+                                    onAddNewPart={onAddNewPart} 
+                                />
+                                <div className="pl-6 border-l-2 ml-2 space-y-1 mt-1">
+                                    {children.map((child: any) => (
+                                        <MemoizedEditableLineItemRow 
+                                            key={child.id} 
+                                            canViewPricing={canViewPricing} 
+                                            isReadOnly={isReadOnly} 
+                                            item={child} 
+                                            taxRates={taxRates} 
+                                            onLineItemChange={onLineItemChange} 
+                                            onRemoveLineItem={onRemoveLineItem} 
+                                            filteredParts={filteredParts} 
+                                            activePartSearch={activePartSearch} 
+                                            onPartSearchChange={onPartSearchChange} 
+                                            onSetActivePartSearch={onSetActivePartSearch} 
+                                            onSelectPart={onSelectPart} 
+                                            onManageMedia={onManageMedia} 
+                                            onAddNewPart={onAddNewPart} 
+                                        />
+                                    ))}
+                                </div>
+                            </div>
+                        ))}
                         
                         {estimateBreakdown.standaloneLabor.length > 0 && <h5 className="font-bold text-gray-800 text-xs uppercase pt-2">Labor</h5>}
                         {estimateBreakdown.standaloneLabor.map((item: any) => <MemoizedEditableLineItemRow key={item.id} canViewPricing={canViewPricing} isReadOnly={isReadOnly} item={item} taxRates={taxRates} onLineItemChange={onLineItemChange} onRemoveLineItem={onRemoveLineItem} filteredParts={filteredParts} activePartSearch={activePartSearch} onPartSearchChange={onPartSearchChange} onSetActivePartSearch={onSetActivePartSearch} onSelectPart={onSelectPart} onManageMedia={onManageMedia} onAddNewPart={onAddNewPart} />)}
