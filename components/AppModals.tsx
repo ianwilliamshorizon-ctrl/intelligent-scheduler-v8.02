@@ -70,7 +70,7 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions }) => {
         saleVehicles, prospects, absenceRequests, setPurchaseOrders, setJobs, 
         setEstimates, setInvoices, setStorageBookings, setRentalBookings, 
         setSaleVehicles, setProspects, setInquiries, setParts,
-        saleOverheadPackages, inquiries, batteryChargers
+        saleOverheadPackages, inquiries, batteryChargers, lifts
     } = useData();
     
     const { currentUser, selectedEntityId, confirmation, setConfirmation, users } = useApp();
@@ -451,6 +451,8 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions }) => {
                     currentUser={currentUser}
                     onCreateInquiry={(est) => setters.setInquiryModal({isOpen: true, inquiry: { linkedEstimateId: est.id, linkedCustomerId: est.customerId, linkedVehicleId: est.vehicleId, message: `Question regarding Estimate #${est.estimateNumber}` }})}
                     onScheduleEstimate={(est, inquiryId) => setters.setScheduleJobFromEstimateModal({isOpen: true, estimate: est, inquiryId})}
+                    jobs={jobs}
+                    lifts={lifts}
                 />
             )}
 
@@ -584,6 +586,7 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions }) => {
                     customer={customers.find(c => c.id === modals.scheduleJobFromEstimateModal.estimate!.customerId)}
                     vehicle={vehicles.find(v => v.id === modals.scheduleJobFromEstimateModal.estimate!.vehicleId)}
                     jobs={jobs}
+                    lifts={lifts}
                     vehicles={vehicles}
                     maxDailyCapacityHours={businessEntities.find(e => e.id === modals.scheduleJobFromEstimateModal.estimate!.entityId)?.dailyCapacityHours || 40}
                     businessEntities={businessEntities}

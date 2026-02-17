@@ -222,7 +222,7 @@ const EstimatesView: React.FC<EstimatesViewProps> = ({ onOpenEstimateModal, onVi
                                         <td className="p-3 text-right font-semibold">{formatCurrency(calculateTotal(estimate.lineItems))}</td>
                                         <td className="p-3">
                                             <div className="flex gap-1 items-center" onClick={e => e.stopPropagation()}>
-                                                {estimate.status === 'Approved' && !estimate.jobId && onScheduleEstimate && (
+                                                {estimate.status === 'Approved' && !estimate.jobId && onScheduleEstimate ? (
                                                     <button 
                                                         onClick={() => onScheduleEstimate(estimate)} 
                                                         className="p-1.5 bg-green-100 text-green-700 hover:bg-green-200 rounded-full" 
@@ -230,8 +230,9 @@ const EstimatesView: React.FC<EstimatesViewProps> = ({ onOpenEstimateModal, onVi
                                                     >
                                                         <CalendarCheck size={16} />
                                                     </button>
+                                                ) : (
+                                                    <button onClick={() => onViewEstimate(estimate)} className="p-1.5 text-gray-600 hover:bg-gray-100 rounded-full" title="View"><Eye size={16} /></button>
                                                 )}
-                                                <button onClick={() => onViewEstimate(estimate)} className="p-1.5 text-gray-600 hover:bg-gray-100 rounded-full" title="View"><Eye size={16} /></button>
                                                 <button onClick={() => onOpenEstimateModal(estimate)} className="p-1.5 text-indigo-600 hover:bg-indigo-100 rounded-full" title="Edit"><Edit size={16} /></button>
                                                 {estimate.status !== 'Closed' && estimate.status !== 'Converted to Job' && (
                                                     <button onClick={(e) => handleQuickClose(e, estimate)} className="p-1.5 text-red-500 hover:bg-red-100 rounded-full" title="Close Estimate (Declined/Error)">
