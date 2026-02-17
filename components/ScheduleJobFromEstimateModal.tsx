@@ -169,10 +169,6 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
 
             // 2. Create separate MOT Job if booked
             if (motBooking) {
-                 // Important: Use a slightly modified ID or the next sequence. 
-                 // Since generateJobId relies on existing list, we need to mock it or just append a suffix for now 
-                 // or accept that sequential might be tricky in pure client-side without refetching.
-                 // A safer way is to use a timestamp suffix to ensure uniqueness locally before DB sync.
                  const motJobId = `${mainJobId}-MOT`; 
 
                  const motJob: Job = {
@@ -187,7 +183,7 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
                      createdAt: formatDate(new Date()),
                      createdByUserId: '',
                      segments: [],
-                     vehicleStatus: 'Awaiting Arrival', // Will likely update when main job arrives
+                     vehicleStatus: 'Awaiting Arrival',
                      notes: `Linked to Master Job #${mainJobId}`,
                      partsStatus: 'Not Required'
                  };
@@ -206,8 +202,6 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
                  }
 
                  extraJobs.push(motJob);
-
-                 // Link Main Job to MOT in notes
                  mainJob.notes += `\n\nLinked MOT Job: #${motJobId} at ${motBooking.time}`;
             }
 
