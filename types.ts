@@ -1,8 +1,12 @@
 import React from 'react';
 
+// --- Global Types & Enums ---
+
 export type ViewType = 'dashboard' | 'dispatch' | 'workflow' | 'concierge' | 'inquiries' | 'communications' | 'estimates' | 'invoices' | 'purchaseOrders' | 'jobs' | 'sales' | 'storage' | 'rentals' | 'absence';
 export type UserRole = 'Admin' | 'Dispatcher' | 'Engineer' | 'Sales' | 'Garage Concierge';
 export type AppEnvironment = 'Production' | 'UAT' | 'Development';
+
+// --- Core Interfaces ---
 
 export interface User {
     id: string;
@@ -15,9 +19,7 @@ export interface User {
     email?: string;
     allowedViews?: ViewType[];
     defaultEntityId?: string;
-    
-    // Paste these lines here:
-    status?: 'active' | 'pending' | 'inactive'; 
+    status?: 'active' | 'pending' | 'inactive';
     updatedAt?: string;
     createdAt?: string;
 }
@@ -25,9 +27,9 @@ export interface User {
 export interface Role {
     id: string;
     name: string;
-    description?: string; 
     baseRole: UserRole;
     defaultAllowedViews: ViewType[];
+    description?: string;
 }
 
 export interface WorkingHoursConfig {
@@ -98,7 +100,7 @@ export interface Customer {
     marketingConsent: boolean;
     serviceReminderConsent: boolean;
     communicationPreference?: 'Email' | 'SMS' | 'WhatsApp' | 'Phone' | 'None';
-    searchField?: string; // High-performance search field preserved
+    searchField?: string;
 }
 
 export interface PreviousRegistration {
@@ -134,7 +136,7 @@ export interface Vehicle {
     covid19MotExemption?: boolean;
     previousRegistrations?: PreviousRegistration[];
     images?: VehicleImage[];
-    searchField?: string; // High-performance search field preserved
+    searchField?: string;
 }
 
 export type VehicleStatus = 'On Site' | 'Off-Site (Partner)' | 'Awaiting Arrival' | 'Awaiting Collection' | 'Collected';
@@ -168,7 +170,6 @@ export interface ChecklistSection {
 }
 
 export type TyreLocation = 'frontLeft' | 'frontRight' | 'rearLeft' | 'rearRight' | 'spare';
-
 export interface TyreData {
     outer?: number;
     middle?: number;
@@ -183,7 +184,7 @@ export type TyreCheckData = Record<TyreLocation, TyreData>;
 export interface JobSegment {
     segmentId: string;
     date: string | null;
-    duration: number; 
+    duration: number;
     status: 'Unallocated' | 'Allocated' | 'In Progress' | 'Paused' | 'Engineer Complete' | 'QC Complete' | 'Cancelled';
     allocatedLift: string | null;
     scheduledStartSegment: number | null;
@@ -258,6 +259,8 @@ export interface Estimate {
     createdByUserId?: string;
     media?: CheckInPhoto[];
     updatedAt?: string;
+    motDate?: string;
+    motTime?: string;
 }
 
 export interface Invoice {
@@ -284,14 +287,14 @@ export interface PurchaseOrderLineItem {
     receivedQuantity?: number;
     unitPrice: number; 
     taxCodeId?: string;
-    returnStatus?: 'None' | 'Pending' | 'Returned' | 'Credited'; // Integrated from PO version
+    returnStatus?: 'None' | 'Pending' | 'Returned' | 'Credited';
 }
 
 export interface Part {
     id: string;
     partNumber: string;
     description: string;
-    partName?: string; 
+    partName?: string;
     salePrice: number;
     costPrice: number;
     stockQuantity: number;
@@ -299,7 +302,7 @@ export interface Part {
     defaultSupplierId?: string;
     alternateSupplierIds?: string[];
     taxCodeId?: string;
-    searchField?: string; // High-performance search field preserved
+    searchField?: string;
 }
 
 export interface PurchaseOrder {
@@ -311,13 +314,13 @@ export interface PurchaseOrder {
     secondarySupplierReference?: string;
     orderDate: string;
     status: 'Draft' | 'Ordered' | 'Partially Received' | 'Received' | 'Cancelled';
-    type?: 'Standard' | 'Credit'; // Integrated from PO version
+    type?: 'Standard' | 'Credit';
     jobId?: string | null;
     lineItems: PurchaseOrderLineItem[];
     notes?: string;
     createdByUserId?: string;
     partUpdates?: Part[];
-    linkedPurchaseOrderId?: string; // Integrated from PO version
+    linkedPurchaseOrderId?: string;
 }
 
 export interface Purchase {
@@ -362,7 +365,7 @@ export interface ServicePackage {
     taxCodeId?: string;
     applicableMake?: string;
     applicableModel?: string;
-    applicableVarient?: string; 
+    applicableVarient?: string; // Corrected to match initialData.ts
 }
 
 export interface Lift {
@@ -550,7 +553,6 @@ export interface NominalCode {
 }
 
 export type NominalCodeItemType = 'Labor' | 'Part' | 'MOT' | 'Purchase' | 'CourtesyCar' | 'Storage';
-
 export interface NominalCodeRule {
     id: string;
     priority: number;
@@ -599,6 +601,9 @@ export interface Inquiry {
     linkedPurchaseOrderIds?: string[];
 }
 
+export type ReminderType = 'MOT' | 'Service' | 'Winter Check' | 'Marketing';
+export type ReminderStatus = 'Pending' | 'Sent' | 'Dismissed';
+
 export interface Reminder {
     id: string;
     customerId: string;
@@ -608,11 +613,8 @@ export interface Reminder {
     status: ReminderStatus;
     createdAt: string;
     actionedAt?: string;
-    eventName?: string; 
+    eventName?: string;
 }
-
-export type ReminderType = 'MOT' | 'Service' | 'Winter Check' | 'Marketing';
-export type ReminderStatus = 'Pending' | 'Sent' | 'Dismissed';
 
 export type AuditAction = 'CREATE' | 'UPDATE' | 'DELETE' | 'LOGIN' | 'LOGOUT' | 'APPROVE' | 'DECLINE';
 
@@ -709,7 +711,7 @@ export interface EngineerChangeEvent {
 // --- Global Context States ---
 
 export interface AppState {
-    currentUser: User;
+    currentUser: User | null;
     setCurrentUser: (user: User) => void;
     users: User[];
     setUsers: React.Dispatch<React.SetStateAction<User[]>>;
@@ -754,7 +756,7 @@ export interface DataContextType {
     roles: Role[];
     inspectionDiagrams: InspectionDiagram[];
     inspectionTemplates: InspectionTemplate[];
-    refreshActiveData: () => Promise<void>; // High-performance refresh method
+    refreshActiveData: () => Promise<void>;
     loading: boolean;
     error: string | null;
 }

@@ -3,7 +3,12 @@ import ReactDOM from 'react-dom/client';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { Estimate, Customer, Vehicle, EstimateLineItem, TaxRate, BusinessEntity, Part, User } from '../types';
-import { X, CheckSquare, Mail, Download, Loader2, Printer, CheckCircle, MessageSquare, Monitor, Image as ImageIcon, Gauge, AlertTriangle, ChevronLeft, ChevronRight, AlertCircle, CalendarCheck, Package } from 'lucide-react';
+import { 
+    X, CheckSquare, Mail, Download, Loader2, Printer, CheckCircle, 
+    MessageSquare, Monitor, Image as ImageIcon, Gauge, AlertTriangle, 
+    ChevronLeft, ChevronRight, AlertCircle, CalendarCheck, Package,
+    ArrowRight, Calendar 
+} from 'lucide-react';
 import EmailEstimateModal from './EmailEstimateModal';
 import { formatCurrency } from '../utils/formatUtils';
 import { formatDate, getRelativeDate, dateStringToDate, addDays } from '../core/utils/dateUtils';
@@ -32,11 +37,8 @@ interface EstimateViewModalProps {
     users: User[];
     currentUser: User;
     onCreateInquiry?: (estimate: Estimate) => void;
-    /**
-     * FIX: Added to resolve TS2322 error where property 
-     * 'onScheduleEstimate' was missing from the interface.
-     */
-    onScheduleEstimate?: (estimate: any) => any;
+    // New feature: Schedule callback
+    onScheduleEstimate?: (estimate: Estimate, inquiryId?: string) => void;
 }
 
 const EstimateViewModal: React.FC<EstimateViewModalProps> = ({ 
@@ -69,7 +71,7 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
     const [approvalNotes, setApprovalNotes] = useState('');
     const [approvalDate, setApprovalDate] = useState(formatDate(new Date()));
     
-    // Default to today
+    // Default to today for calendar view (OLD FEATURE restored)
     const [currentMonthDate, setCurrentMonthDate] = useState(() => dateStringToDate(formatDate(new Date())));
 
     const print = usePrint();
@@ -78,7 +80,6 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
     /**
      * SUBMISSION GUARD
      * Prevents multiple rapid triggers of approval functions
-     * that often cause infinite loops in development environments.
      */
     const isSubmitting = useRef(false);
     
@@ -90,6 +91,8 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
     const [capacityWarning, setCapacityWarning] = useState<string | null>(null);
 
     const isCustomerMode = localViewMode === 'customer';
+    const isSupplementary = !!estimate.jobId;
+    const isAlreadyApproved = estimate.status === 'Approved';
 
     // Auto-scroll when confirmation starts
     useEffect(() => {
@@ -103,9 +106,6 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
     const isInteractive = isCustomerMode 
         ? (!['Converted to Job', 'Closed', 'Declined', 'Approved'].includes(estimate.status))
         : (estimate.status === 'Draft' || estimate.status === 'Sent');
-    
-    const isSupplementary = !!estimate.jobId;
-    const isAlreadyApproved = estimate.status === 'Approved';
 
     const canViewPricing = useMemo(() => {
         if (isCustomerMode) return true;
@@ -136,24 +136,24 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
         return undefined;
     }, [entityDetails, estimate.entityId, businessEntities]);
 
+    // --- OLD FEATURE: ABSENCE TRACKING ---
     const absencesByDate = useMemo(() => {
         const map = new Map<string, number>();
         absenceRequests.forEach(req => {
             if (req.status === 'Approved' || req.status === 'Pending') {
                  let currentDate = dateStringToDate(req.startDate);
                  const endDate = dateStringToDate(req.endDate);
-            
                  while(currentDate <= endDate) {
                     const dateStr = formatDate(currentDate);
                     map.set(dateStr, (map.get(dateStr) || 0) + 8);
                     currentDate = addDays(currentDate, 1);
-                }
+                 }
             }
         });
         return map;
     }, [absenceRequests]);
 
-    // Calculate capacity for manual approval date
+    // --- OLD FEATURE: MANUAL CAPACITY LOGIC ---
     const manualApprovalCapacity = useMemo(() => {
         if (!approvalDate || !resolvedEntity) return null;
 
@@ -368,7 +368,6 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
     };
     
     const handleSubmitApproval = () => {
-        // FIX: Added submission guard to prevent infinite loops
         if (isSubmitting.current) return;
         isSubmitting.current = true;
 
@@ -419,7 +418,7 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                         <div>
                             <h2 className="text-xl font-bold text-gray-800">{isSupplementary ? 'Supplementary ' : ''}Estimate #{estimate.estimateNumber}</h2>
                              {isCustomerMode ? (
-                               <div className="flex items-center gap-2 mt-1">
+                                <div className="flex items-center gap-2 mt-1">
                                     <span className="text-xs bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">Customer View</span>
                                     <p className="text-xs text-gray-500">Interactive Approval Mode</p>
                                  </div>
@@ -502,7 +501,7 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                                         </p>
                                         <div className="space-y-4">
                                              {optionalGroups.packages.map(pkg => (
-                                                <CustomerServicePackage key={pkg.header.id} header={pkg.header} childrenItems={pkg.children} isSelected={selectedOptionalItems.has(pkg.header.id)} onToggle={() => handleToggleOptional(pkg.header.id)} canViewPricing={canViewPricing} isInteractive={isInteractive || isApproving}/>
+                                                 <CustomerServicePackage key={pkg.header.id} header={pkg.header} childrenItems={pkg.children} isSelected={selectedOptionalItems.has(pkg.header.id)} onToggle={() => handleToggleOptional(pkg.header.id)} canViewPricing={canViewPricing} isInteractive={isInteractive || isApproving}/>
                                             ))}
                                             {optionalGroups.standalone.length > 0 && (
                                                 <div className="border border-indigo-200 rounded-lg overflow-hidden bg-white shadow-sm">
@@ -516,7 +515,7 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                                 )}
 
                                 <div className="flex justify-end pt-6 border-t-2 border-gray-100">
-                                    <div className="w-72 bg-gray-50 p-4 rounded-lg">
+                                     <div className="w-72 bg-gray-50 p-4 rounded-lg">
                                         <div className="flex justify-between text-sm mb-2"><span className="text-gray-600">Subtotal</span><span className="font-semibold">{formatCurrency(dynamicTotals.totalNet)}</span></div>
                                         {dynamicTotals.vatBreakdown.map((b: any) => (<div key={b.name} className="flex justify-between text-sm text-gray-500 mb-1"><span>VAT @ {b.rate}%</span><span>{formatCurrency(b.vat)}</span></div>))}
                                         <div className="flex justify-between font-bold text-xl mt-3 pt-3 border-t border-gray-200 text-indigo-900"><span>Total</span><span>{formatCurrency(dynamicTotals.grandTotal)}</span></div>
@@ -584,7 +583,7 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                                     )}
                                     <div className="flex bg-gray-100 rounded-lg p-1">
                                         <button onClick={() => handlePrint(false)} className="flex items-center py-1.5 px-3 rounded text-sm font-semibold hover:bg-white hover:shadow transition">
-                                             <Printer size={16} className="mr-2"/> Customer Print
+                                            <Printer size={16} className="mr-2"/> Customer Print
                                         </button>
                                         <div className="w-px bg-gray-300 my-1 mx-1"></div>
                                         <button onClick={() => handlePrint(true)} className="flex items-center py-1.5 px-3 rounded text-sm font-semibold hover:bg-white hover:shadow transition">Internal Print</button>
@@ -598,6 +597,7 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                                     {isAlreadyApproved && !estimate.jobId ? (
                                         <button 
                                             onClick={() => { setIsApproving(true); setApprovalNotes(''); }} 
+                                            // OLD FEATURE: Schedule button triggers the large modal
                                             className="flex items-center py-2 px-4 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 shadow-md transition"
                                         >
                                             <CalendarCheck size={16} className="mr-2"/> Schedule Job
@@ -612,7 +612,7 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                                 <div className="text-xs text-gray-500">* This total is an estimate and subject to final inspection.</div>
                                 {!isConfirmingApproval && isInteractive && (
                                      <div className="flex gap-3">
-                                        {onDecline && <button onClick={() => onDecline(estimate)} className="px-5 py-2.5 bg-red-50 text-red-600 font-bold rounded-lg hover:bg-red-100 transition">Decline Estimate</button>}
+                                         {onDecline && <button onClick={() => onDecline(estimate)} className="px-5 py-2.5 bg-red-50 text-red-600 font-bold rounded-lg hover:bg-red-100 transition">Decline Estimate</button>}
                                          <button onClick={() => setIsConfirmingApproval(true)} className="flex items-center py-2.5 px-6 bg-indigo-600 text-white font-bold rounded-lg shadow-lg hover:bg-indigo-700 transition transform hover:-translate-y-0.5"><CheckSquare size={18} className="mr-2"/>{isSupplementary ? 'Approve Additional Work' : 'Approve & Request Booking'}</button>
                                      </div>
                                 )}
@@ -623,6 +623,10 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
             </div>
             {isEmailing && <EmailEstimateModal isOpen={isEmailing} onClose={() => setIsEmailing(false)} onSend={handleEmailSuccess} onViewAsCustomer={() => { setIsEmailing(false); setLocalViewMode('customer'); }} estimate={estimate} customer={customer} vehicle={vehicle} taxRates={taxRates}/>}
             
+            {/* CRITICAL MERGE SECTION:
+               This modal uses the OLD file's 'max-w-7xl' and grid layout (including BookingCalendarView).
+               But it now includes the NEW file's buttons in the footer.
+            */}
             {isApproving && (
                 <div className="fixed inset-0 bg-gray-900 bg-opacity-75 z-[70] flex justify-center items-center p-4">
                     <div className="bg-white rounded-xl shadow-2xl w-full max-w-7xl h-[90vh] flex flex-col p-6">
@@ -631,6 +635,7 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                              <button onClick={() => setIsApproving(false)}><X size={24} className="text-gray-500"/></button>
                         </div>
                         <div className={`flex-grow overflow-hidden grid grid-cols-1 ${isSupplementary ? '' : 'lg:grid-cols-3'} gap-6 min-h-0`}>
+                            {/* Column 1: Options & Notes */}
                             <div className={`flex flex-col gap-4 overflow-y-auto pr-2 ${isSupplementary ? 'max-w-2xl mx-auto w-full' : ''}`}>
                                 <div className="bg-gray-50 p-4 rounded-lg border">
                                     <h4 className="font-bold text-sm mb-2">Optional Items</h4>
@@ -670,6 +675,7 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                                 
                                 {!isSupplementary && (
                                     <>
+                                        {/* OLD FEATURE: Detailed Capacity Card */}
                                         <div className={`p-4 rounded-lg border ${manualApprovalCapacity?.statusColor}`}>
                                             <h4 className="font-bold text-sm mb-2 flex items-center gap-2"><Gauge size={16}/> Capacity Impact</h4>
                                             {manualApprovalCapacity ? (
@@ -703,7 +709,7 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                                                 <div>
                                                     <label className="block text-xs font-semibold text-indigo-700">Selected Date</label>
                                                     <input type="date" value={approvalDate} onChange={(e) => setApprovalDate(e.target.value)} className="w-full p-2 border rounded-md"/>
-                                                 </div>
+                                                </div>
                                             </div>
                                         </div>
                                     </>
@@ -728,6 +734,8 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                                     <textarea value={approvalNotes} onChange={(e) => setApprovalNotes(e.target.value)} rows={3} className="w-full p-2 border rounded-lg text-sm" placeholder="Any specific instructions..." />
                                 </div>
                             </div>
+                            
+                            {/* Column 2 & 3: Calendar View (OLD FEATURE) */}
                             {!isSupplementary && (
                                 <div className="lg:col-span-2 flex flex-col h-full min-h-0 bg-gray-50 rounded-lg border p-4">
                                      <div className="flex justify-between items-center mb-4 flex-shrink-0">
@@ -744,20 +752,40 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                                 </div>
                             )}
                         </div>
+                        
                         <div className="flex justify-end gap-2 mt-4 pt-4 border-t flex-shrink-0">
                             <button onClick={() => setIsApproving(false)} className="px-4 py-2 bg-gray-200 rounded-lg font-semibold hover:bg-gray-300">Cancel</button>
-                            <button 
-                                onClick={() => { 
-                                    if (isSubmitting.current) return;
-                                    isSubmitting.current = true;
-                                    onApprove(estimate, Array.from(selectedOptionalItems), approvalNotes, isSupplementary ? undefined : approvalDate);
-                                    setIsApproving(false); 
-                                    onClose(); 
-                                }} 
-                                className="px-6 py-2 bg-green-600 text-white rounded-lg font-bold hover:bg-green-700 shadow-md"
-                            >
-                                {isAlreadyApproved ? 'Schedule Job' : 'Confirm Approval'}
+                            
+                            {/* NEW FEATURE: Approve Only Button */}
+                            <button onClick={() => { 
+                                if (isSubmitting.current) return;
+                                isSubmitting.current = true;
+                                onApprove(estimate, Array.from(selectedOptionalItems), approvalNotes, undefined);
+                                setIsApproving(false); 
+                                onClose();
+                            }} className="px-4 py-2 bg-blue-100 text-blue-800 rounded-lg font-bold hover:bg-blue-200">
+                                Approve Only
                             </button>
+
+                            {/* NEW FEATURE: Approve & Schedule Button with Timeout Logic */}
+                            {onScheduleEstimate && (
+                                <button 
+                                    onClick={() => { 
+                                        if (isSubmitting.current) return;
+                                        isSubmitting.current = true;
+                                        // 1. Approve (Update state)
+                                        onApprove(estimate, Array.from(selectedOptionalItems), approvalNotes, undefined); 
+                                        // 2. Open Scheduler (Passes current estimate reference)
+                                        setIsApproving(false);
+                                        onClose(); 
+                                        // 3. Trigger Scheduler Callback with delay
+                                        setTimeout(() => onScheduleEstimate?.(estimate), 50);
+                                    }} 
+                                    className="px-6 py-2 bg-green-600 text-white rounded-lg font-bold hover:bg-green-700 shadow-md flex items-center gap-2"
+                                >
+                                    Approve & Schedule <ArrowRight size={16}/>
+                                </button>
+                            )}
                         </div>
                     </div>
                 </div>

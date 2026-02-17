@@ -168,13 +168,14 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
         });
     };
     
-    // Updated to use the external scoring utility
     const sortedPackages = useMemo(() => {
         const results = getScoredServicePackages(servicePackages, vehicle);
         
         return results.map(({ pkg, matchType, color }) => ({
             id: pkg.id,
-            label: pkg.name,
+            value: pkg.id,
+            label: pkg.name || 'Unnamed Package',
+            description: pkg.description || 'Service Package',
             badge: { text: matchType, className: color }
         }));
     }, [servicePackages, vehicle]);
@@ -251,8 +252,7 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
                                 <div className="flex items-center gap-2 w-64">
                                     <SearchableSelect
                                         options={sortedPackages}
-                                        value={null} 
-                                        onChange={(packageId) => { if (packageId) onAddPackage(packageId); }}
+                                        onSelect={(packageId) => { if (packageId) onAddPackage(packageId); }}
                                         placeholder="Add Package..."
                                         dropdownClassName="min-w-[450px] right-0"
                                     />

@@ -188,62 +188,40 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions }) => {
                 />
             )}
 
-{modals.invoiceFormModal.isOpen && (
-    <InvoiceFormModal 
-        isOpen={modals.invoiceFormModal.isOpen}
-        onClose={() => setters.setInvoiceFormModal({isOpen: false, invoice: null})}
-        onSave={(inv) => {
-            const finalInvoice = { ...inv, createdByUserId: inv.createdByUserId || currentUser.id };
-            handleSaveItem(setInvoices, finalInvoice, 'brooks_invoices');
-            
-            if (finalInvoice.jobId) {
-                const job = jobs.find(j => j.id === finalInvoice.jobId);
-                if (job) {
-                    const updatedJob = { ...job, invoiceId: finalInvoice.id, status: 'Invoiced' as const };
-                    handleSaveItem(setJobs, updatedJob, 'brooks_jobs');
-                }
-            }
-            
-            setters.setInvoiceFormModal({isOpen: false, invoice: null});
-            setters.setViewInvoiceModal({isOpen: true, invoice: finalInvoice});
-        }}
-        invoice={(() => {
-            const currentInv = modals.invoiceFormModal.invoice;
-            
-            // DEBUG LOGS - Open your browser console (F12) to see these
-            console.log('DEBUG: Current Invoice State:', currentInv);
-            
-            if (currentInv?.jobId) {
-                const sourceJob = jobs.find(j => j.id === currentInv.jobId);
-                console.log('DEBUG: Found Source Job:', sourceJob);
-        
-                if (sourceJob) {
-                    const mappedInvoice = {
-                        ...currentInv,
-                        customerId: sourceJob.customerId,
-                        vehicleId: sourceJob.vehicleId,
-                        entityId: sourceJob.entityId
-                    };
-                    console.log('DEBUG: Mapped Invoice Result:', mappedInvoice);
-                    return mappedInvoice;
-                } else {
-                    console.warn('DEBUG: No job found in "jobs" array matching ID:', currentInv.jobId);
-                }
-            }
-            return currentInv;
-        })()}
-        
-        customers={customers}
-        onSaveCustomer={(c) => handleSaveItem(actions.setCustomers, c, 'brooks_customers')}
-        vehicles={vehicles}
-        onSaveVehicle={(v) => handleSaveItem(actions.setVehicles, v, 'brooks_vehicles')}
-        businessEntities={businessEntities}
-        taxRates={taxRates}
-        servicePackages={servicePackages}
-        parts={parts}
-        invoices={invoices}
-    />
-)}
+            {modals.invoiceFormModal.isOpen && (
+                <InvoiceFormModal 
+                    isOpen={modals.invoiceFormModal.isOpen}
+                    onClose={() => setters.setInvoiceFormModal({isOpen: false, invoice: null})}
+                    onSave={(inv) => {
+                        const finalInvoice = { ...inv, createdByUserId: inv.createdByUserId || currentUser.id };
+                        // 1. Save Invoice
+                        handleSaveItem(setInvoices, finalInvoice, 'brooks_invoices');
+                        
+                        // 2. Update Job Status and Link Invoice
+                        if (finalInvoice.jobId) {
+                            const job = jobs.find(j => j.id === finalInvoice.jobId);
+                            if (job) {
+                                const updatedJob = { ...job, invoiceId: finalInvoice.id, status: 'Invoiced' as const };
+                                handleSaveItem(setJobs, updatedJob, 'brooks_jobs');
+                            }
+                        }
+                        
+                        setters.setInvoiceFormModal({isOpen: false, invoice: null});
+                        setters.setViewInvoiceModal({isOpen: true, invoice: finalInvoice});
+                    }}
+                    invoice={modals.invoiceFormModal.invoice}
+                    customers={customers}
+                    onSaveCustomer={(c) => handleSaveItem(actions.setCustomers, c, 'brooks_customers')}
+                    vehicles={vehicles}
+                    onSaveVehicle={(v) => handleSaveItem(actions.setVehicles, v, 'brooks_vehicles')}
+                    businessEntities={businessEntities}
+                    taxRates={taxRates}
+                    servicePackages={servicePackages}
+                    parts={parts}
+                    invoices={invoices}
+                />
+            )}
+
             {modals.viewInvoiceModal.isOpen && modals.viewInvoiceModal.invoice && (
                 <InvoiceModal
                     isOpen={modals.viewInvoiceModal.isOpen}
@@ -472,6 +450,7 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions }) => {
                     users={users}
                     currentUser={currentUser}
                     onCreateInquiry={(est) => setters.setInquiryModal({isOpen: true, inquiry: { linkedEstimateId: est.id, linkedCustomerId: est.customerId, linkedVehicleId: est.vehicleId, message: `Question regarding Estimate #${est.estimateNumber}` }})}
+                    onScheduleEstimate={(est, inquiryId) => setters.setScheduleJobFromEstimateModal({isOpen: true, estimate: est, inquiryId})}
                 />
             )}
 
@@ -479,7 +458,7 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions }) => {
                 <ScheduleJobFromEstimateModal 
                     isOpen={modals.scheduleJobFromEstimateModal.isOpen}
                     onClose={() => setters.setScheduleJobFromEstimateModal({isOpen: false, estimate: null})}
-                    onConfirm={(job, est, options) => {
+                    onConfirm={(job, est, options, extraJobs) => {
                         const originalEstimate = modals.scheduleJobFromEstimateModal.estimate;
                         
                         const targetInquiryId = modals.scheduleJobFromEstimateModal.inquiryId || inquiries.find(i => i.linkedEstimateId === originalEstimate?.id)?.id;
@@ -567,6 +546,14 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions }) => {
                         };
 
                         handleSaveItem(setJobs, jobToSave, 'brooks_jobs');
+                        
+                        // Handle any extra jobs (like separate MOT booking)
+                        if (extraJobs && extraJobs.length > 0) {
+                            extraJobs.forEach(extraJob => {
+                                handleSaveItem(setJobs, { ...extraJob, createdByUserId: currentUser.id }, 'brooks_jobs');
+                            });
+                        }
+                        
                         handleSaveItem(setEstimates, est, 'brooks_estimates');
                         
                         if (inquiry) {
@@ -584,10 +571,12 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions }) => {
                         }
 
                         setters.setScheduleJobFromEstimateModal({isOpen: false, estimate: null});
+                        
+                        const extraJobMsg = extraJobs && extraJobs.length > 0 ? ` plus ${extraJobs.length} linked job(s)` : '';
                         setConfirmation({
                             isOpen: true, 
                             title: 'Job Scheduled', 
-                            message: `Job #${jobToSave.id} has been scheduled for ${jobToSave.scheduledDate}.`, 
+                            message: `Job #${jobToSave.id} has been scheduled for ${jobToSave.scheduledDate}${extraJobMsg}.`, 
                             type: 'success'
                         });
                     }}

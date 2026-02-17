@@ -1,14 +1,17 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { Estimate, Customer, Vehicle, Job, BusinessEntity, AbsenceRequest } from '../types';
-import { X, Calendar, CheckCircle, ChevronLeft, ChevronRight, AlertTriangle, Gauge } from 'lucide-react';
+import { X, Calendar, CheckCircle, ChevronLeft, ChevronRight, AlertTriangle, Gauge, Clock } from 'lucide-react';
 import { formatDate, dateStringToDate, getRelativeDate, splitJobIntoSegments, addDays, findNextAvailableDate, formatReadableDate } from '../core/utils/dateUtils';
 import { generateJobId } from '../core/utils/numberGenerators';
 import { BookingCalendarView } from './BookingCalendarView';
+import { MOTBookingModal } from './MOTBookingModal';
+import { TIME_SEGMENTS } from '../constants';
 
 interface ScheduleJobFromEstimateModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onConfirm: (job: Job, estimate: Estimate, options: { isAlternative: boolean; originalDate: string }) => void;
+    onConfirm: (job: Job, estimate: Estimate, options: { isAlternative: boolean; originalDate: string }, extraJobs?: Job[]) => void;
     estimate: Estimate;
     customer?: Customer;
     vehicle?: Vehicle;
@@ -21,81 +24,64 @@ interface ScheduleJobFromEstimateModalProps {
     onEditJob: (jobId: string) => void;
 }
 
-const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> = ({ 
-    isOpen, 
-    onClose, 
-    onConfirm, 
-    estimate, 
-    customer, 
-    vehicle, 
-    jobs, 
-    vehicles, 
-    maxDailyCapacityHours, 
-    businessEntities, 
-    customers, 
-    absenceRequests, 
-    onEditJob 
-}) => {
-    const [scheduledDate, setScheduledDate] = useState(() => estimate?.jobId ? getRelativeDate(0) : (estimate as any)?.requestedDate || getRelativeDate(0));
+const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> = ({ isOpen, onClose, onConfirm, estimate, customer, vehicle, jobs, vehicles, maxDailyCapacityHours, businessEntities, customers, absenceRequests, onEditJob }) => {
+    const [scheduledDate, setScheduledDate] = useState(() => estimate.jobId ? getRelativeDate(0) : (estimate as any).requestedDate || getRelativeDate(0));
     const [suggestion, setSuggestion] = useState<{ suggestedDate: string; originalDate: string } | null>(null);
     const [currentMonth, setCurrentMonth] = useState(() => dateStringToDate(scheduledDate));
+    
+    // MOT State
+    const [isMotBookingOpen, setIsMotBookingOpen] = useState(false);
+    const [motBooking, setMotBooking] = useState<{ date: string; time: string; liftId: string } | null>(null);
 
     useEffect(() => {
-        if (isOpen && estimate) {
+        if (isOpen) {
             const initialDate = estimate.jobId ? getRelativeDate(0) : (estimate as any).requestedDate || getRelativeDate(0);
             setScheduledDate(initialDate);
             setCurrentMonth(dateStringToDate(initialDate));
             setSuggestion(null);
+            setMotBooking(null);
         }
     }, [isOpen, estimate]);
     
     const laborHours = useMemo(() => {
-        const items = estimate?.lineItems || [];
-        const hours = items
-            .filter(item => item && item.isLabor && !item.isOptional)
-            .reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+        // Calculate hours from labor items. If 0 (e.g. only parts or optional items), default to 1 to ensure a segment is created.
+        const hours = (estimate?.lineItems || [])
+            .filter(item => item.isLabor && !item.isOptional)
+            .reduce((sum, item) => sum + item.quantity, 0);
         return Math.max(hours, 1);
     }, [estimate]);
     
-    const entityForEstimate = useMemo(() => 
-        (businessEntities || []).find(e => e.id === estimate?.entityId), 
-    [businessEntities, estimate?.entityId]);
+    const entityForEstimate = useMemo(() => businessEntities.find(e => e.id === estimate.entityId), [businessEntities, estimate]);
 
     const jobsForEntity = useMemo(() => {
-        const allJobs = jobs || [];
-        if (!entityForEstimate) return allJobs;
-        return allJobs.filter(j => j && j.entityId === entityForEstimate.id);
+        if (!entityForEstimate) return jobs;
+        return jobs.filter(j => j.entityId === entityForEstimate.id);
     }, [jobs, entityForEstimate]);
 
     const absencesByDate = useMemo(() => {
         const map = new Map<string, number>();
-        (absenceRequests || []).forEach(req => {
-            if (req && (req.status === 'Approved' || req.status === 'Pending')) {
-                 try {
-                    let currentDate = dateStringToDate(req.startDate);
-                    const endDate = dateStringToDate(req.endDate);
-                    while(currentDate <= endDate) {
-                        const dateStr = formatDate(currentDate);
-                        map.set(dateStr, (map.get(dateStr) || 0) + 8);
-                        currentDate = addDays(currentDate, 1);
-                    }
-                 } catch (e) {
-                    console.error("Error parsing absence dates", e);
-                 }
+        absenceRequests.forEach(req => {
+            if (req.status === 'Approved' || req.status === 'Pending') {
+                 let currentDate = dateStringToDate(req.startDate);
+                 const endDate = dateStringToDate(req.endDate);
+                 while(currentDate <= endDate) {
+                    const dateStr = formatDate(currentDate);
+                    map.set(dateStr, (map.get(dateStr) || 0) + 8); // Assuming 8 hours per day
+                    currentDate = addDays(currentDate, 1);
+                }
             }
         });
         return map;
     }, [absenceRequests]);
 
     const dailyStats = useMemo(() => {
-        const maxCapacity = entityForEstimate?.dailyCapacityHours || maxDailyCapacityHours || 8;
+        const maxCapacity = entityForEstimate?.dailyCapacityHours || maxDailyCapacityHours;
         const absenceHours = absencesByDate.get(scheduledDate) || 0;
         const effectiveCapacity = Math.max(0, maxCapacity - absenceHours);
 
-        const currentLoad = (jobsForEntity || [])
-            .flatMap(j => (j && Array.isArray(j.segments)) ? j.segments : [])
-            .filter(s => s && s.date === scheduledDate && s.status !== 'Cancelled')
-            .reduce((sum, s) => sum + (Number(s.duration) || 0), 0);
+        const currentLoad = (jobsForEntity.flatMap(j => j.segments) || [])
+            .filter(s => s.date === scheduledDate && s.status !== 'Cancelled')
+            .reduce((sum, s) => sum + s.duration, 0);
         
         const newTotalLoad = currentLoad + laborHours;
         const remainingCapacity = effectiveCapacity - newTotalLoad;
@@ -132,67 +118,121 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
         setCurrentMonth(today);
     };
 
-    const createJobObject = (date: string): Job => {
-        const jobId = generateJobId(jobs || [], entityForEstimate?.shortCode || 'UNK');
-        const newJob: Job = {
-            id: jobId,
-            entityId: estimate.entityId, 
-            vehicleId: estimate.vehicleId, 
-            customerId: estimate.customerId,
-            description: `Work from Estimate #${estimate.estimateNumber}`, 
-            estimatedHours: laborHours, 
-            scheduledDate: date,
-            status: 'Unallocated', 
-            createdAt: formatDate(new Date()), 
-            segments: [], 
-            estimateId: estimate.id, 
-            notes: estimate.notes || '',
-            vehicleStatus: 'Awaiting Arrival',
-        };
-        newJob.segments = splitJobIntoSegments(newJob);
-        return newJob;
+    const handleMotSelect = (date: string, time: string, liftId: string) => {
+        setMotBooking({ date, time, liftId });
+        setScheduledDate(date);
+        setCurrentMonth(dateStringToDate(date));
+        setIsMotBookingOpen(false);
     };
 
+    if (!isOpen) return null;
+
     const handleConfirmClick = () => {
-        const dailyHours = (jobsForEntity || [])
-            .flatMap(j => Array.isArray(j.segments) ? j.segments : [])
+        const dailyHours = (jobsForEntity.flatMap(j => j.segments) || [])
             .filter(s => s.date === scheduledDate && s.status !== 'Cancelled')
-            .reduce((sum, s) => sum + (Number(s.duration) || 0), 0);
+            .reduce((sum, s) => sum + s.duration, 0);
             
-        const baseCapacity = entityForEstimate?.dailyCapacityHours || maxDailyCapacityHours || 8;
+        const baseCapacity = entityForEstimate?.dailyCapacityHours || maxDailyCapacityHours;
         const absenceHours = absencesByDate.get(scheduledDate) || 0;
         const effectiveCapacity = Math.max(0, baseCapacity - absenceHours);
 
-        if (dailyHours + laborHours > effectiveCapacity) {
+        if (dailyHours + laborHours > effectiveCapacity && !motBooking) {
+            // Suggest next date based on base capacity for simplicity, or complex logic could check future absences
             const alternativeDate = findNextAvailableDate(scheduledDate, laborHours, jobsForEntity, baseCapacity);
             setSuggestion({ suggestedDate: alternativeDate, originalDate: scheduledDate });
         } else {
-            const newJob = createJobObject(scheduledDate);
-            const updatedEstimate: Estimate = { 
-                ...estimate, 
-                status: 'Converted to Job', 
-                jobId: newJob.id,
-                updatedAt: new Date().toISOString()
+            const entityShortCode = entityForEstimate?.shortCode || 'UNK';
+            
+            // 1. Create Main Job
+            const mainJobId = generateJobId(jobs, entityShortCode);
+            const mainJob: Job = {
+                id: mainJobId,
+                entityId: estimate.entityId, 
+                vehicleId: estimate.vehicleId, 
+                customerId: estimate.customerId,
+                description: `Work from Estimate #${estimate.estimateNumber}`, 
+                estimatedHours: laborHours, 
+                scheduledDate: scheduledDate,
+                status: 'Unallocated', 
+                createdAt: formatDate(new Date()), 
+                segments: [], 
+                estimateId: estimate.id, 
+                notes: estimate.notes || '',
+                vehicleStatus: 'Awaiting Arrival',
+                createdByUserId: '', // Will be overwritten
             };
-            onConfirm(newJob, updatedEstimate, { isAlternative: false, originalDate: scheduledDate });
+            
+            // Generate segments based on job type/duration
+            mainJob.segments = splitJobIntoSegments(mainJob);
+            
+            const extraJobs: Job[] = [];
+
+            // 2. Create separate MOT Job if booked
+            if (motBooking) {
+                 // Important: Use a slightly modified ID or the next sequence. 
+                 // Since generateJobId relies on existing list, we need to mock it or just append a suffix for now 
+                 // or accept that sequential might be tricky in pure client-side without refetching.
+                 // A safer way is to use a timestamp suffix to ensure uniqueness locally before DB sync.
+                 const motJobId = `${mainJobId}-MOT`; 
+
+                 const motJob: Job = {
+                     id: motJobId,
+                     entityId: estimate.entityId,
+                     vehicleId: estimate.vehicleId,
+                     customerId: estimate.customerId,
+                     description: `MOT Test`,
+                     estimatedHours: 1, // Standard MOT length
+                     scheduledDate: motBooking.date,
+                     status: 'Allocated',
+                     createdAt: formatDate(new Date()),
+                     createdByUserId: '',
+                     segments: [],
+                     vehicleStatus: 'Awaiting Arrival', // Will likely update when main job arrives
+                     notes: `Linked to Master Job #${mainJobId}`,
+                     partsStatus: 'Not Required'
+                 };
+
+                 const timeIndex = TIME_SEGMENTS.indexOf(motBooking.time);
+                 if (timeIndex !== -1) {
+                     motJob.segments = [{
+                         segmentId: crypto.randomUUID(),
+                         date: motBooking.date,
+                         duration: 1,
+                         status: 'Allocated',
+                         allocatedLift: motBooking.liftId,
+                         scheduledStartSegment: timeIndex,
+                         engineerId: null // Can be assigned later
+                     }];
+                 }
+
+                 extraJobs.push(motJob);
+
+                 // Link Main Job to MOT in notes
+                 mainJob.notes += `\n\nLinked MOT Job: #${motJobId} at ${motBooking.time}`;
+            }
+
+            const updatedEstimate: Estimate = { ...estimate, status: 'Converted to Job', jobId: mainJob.id };
+            onConfirm(mainJob, updatedEstimate, { isAlternative: false, originalDate: scheduledDate }, extraJobs);
         }
     };
 
     const handleAcceptSuggestion = () => {
         if (!suggestion) return;
-        const newJob = createJobObject(suggestion.suggestedDate);
-        const updatedEstimate: Estimate = { 
-            ...estimate, 
-            status: 'Converted to Job', 
-            jobId: newJob.id,
-            updatedAt: new Date().toISOString()
+        const newJob: Job = {
+            id: generateJobId(jobs, entityForEstimate?.shortCode || 'UNK'),
+            entityId: estimate.entityId, vehicleId: estimate.vehicleId, customerId: estimate.customerId,
+            description: `Work from Estimate #${estimate.estimateNumber}`, estimatedHours: laborHours, scheduledDate: suggestion.suggestedDate,
+            status: 'Unallocated', createdAt: formatDate(new Date()), segments: [], estimateId: estimate.id, notes: estimate.notes,
+            vehicleStatus: 'Awaiting Arrival',
+            createdByUserId: '', // Will be overwritten by AppModals with correct user ID
         };
+        newJob.segments = splitJobIntoSegments(newJob);
+        const updatedEstimate: Estimate = { ...estimate, status: 'Converted to Job', jobId: newJob.id };
         onConfirm(newJob, updatedEstimate, { isAlternative: true, originalDate: suggestion.originalDate });
     };
 
-    if (!isOpen || !estimate) return null;
-
     const monthYearString = currentMonth.toLocaleString('default', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+
 
     return (
         <div className="fixed inset-0 bg-gray-900 bg-opacity-75 z-[80] flex justify-center items-center p-4">
@@ -203,7 +243,7 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
                             <Calendar size={20} className="mr-2"/>
                             Schedule Job from Estimate
                         </h2>
-                        <p className="text-sm text-gray-500 mt-1">Select a day from the calendar to book this job for <span className="font-semibold">{entityForEstimate?.name || 'Loading...'}</span>.</p>
+                        <p className="text-sm text-gray-500 mt-1">Select a day from the calendar to book this job for <span className="font-semibold">{entityForEstimate?.name}</span>.</p>
                     </div>
                     <button type="button" onClick={onClose}><X size={24} className="text-gray-500 hover:text-gray-800" /></button>
                 </div>
@@ -225,7 +265,7 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
                                 <div className="p-3 bg-gray-50 rounded-lg border space-y-1 text-sm">
                                     <p><strong>Estimate:</strong> <span className="font-mono bg-gray-200 px-1 rounded">#{estimate.estimateNumber}</span></p>
                                     <p><strong>Customer:</strong> {customer?.forename} {customer?.surname}</p>
-                                    <p><strong>Vehicle:</strong> {vehicle?.registration || 'N/A'}</p>
+                                    <p><strong>Vehicle:</strong> {vehicle?.registration}</p>
                                     <p><strong>Labor Hours:</strong> {laborHours.toFixed(1)} hrs</p>
                                 </div>
                                 
@@ -255,33 +295,49 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
                                     )}
                                 </div>
 
-                                <div>
+                                <div className="border-t pt-4">
                                     <label htmlFor="scheduledDate" className="block text-sm font-medium text-gray-700 mb-1">
                                         Selected Start Date
                                     </label>
-                                    <input type="date" id="scheduledDate" value={scheduledDate} onChange={(e) => setScheduledDate(e.target.value)} className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" required />
+                                    <input type="date" id="scheduledDate" value={scheduledDate} onChange={(e) => { setScheduledDate(e.target.value); setMotBooking(null); }} className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" required />
+                                </div>
+
+                                <div className="pt-2">
+                                     <button 
+                                        type="button" 
+                                        onClick={() => setIsMotBookingOpen(true)}
+                                        className={`w-full flex items-center justify-center gap-1.5 text-sm px-3 py-2 rounded border transition-colors ${motBooking ? 'bg-green-100 border-green-200 text-green-800' : 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100'}`}
+                                        title="Book specific slot on MOT Ramp"
+                                    >
+                                        <Clock size={16}/>
+                                        {motBooking ? (
+                                            <span className="font-semibold">MOT: {motBooking.time}</span>
+                                        ) : (
+                                            "Book Specific MOT Slot"
+                                        )}
+                                    </button>
                                 </div>
                             </div>
 
                             <div className="lg:col-span-9 flex flex-col h-full">
                                <div className="flex justify-between items-center mb-2 flex-shrink-0">
                                     <div className="flex items-center gap-1 bg-gray-200 rounded-lg p-1">
-                                        <button type="button" onClick={() => handleMonthChange(-1)} className="p-2 rounded-md hover:bg-gray-300"><ChevronLeft /></button>
-                                        <button type="button" onClick={handleToday} className="p-2 rounded-md hover:bg-gray-300 text-sm font-semibold">Today</button>
-                                        <button type="button" onClick={() => handleMonthChange(1)} className="p-2 rounded-md hover:bg-gray-300"><ChevronRight /></button>
+                                        <button onClick={() => handleMonthChange(-1)} className="p-2 rounded-md hover:bg-gray-300"><ChevronLeft /></button>
+                                        <button onClick={handleToday} className="p-2 rounded-md hover:bg-gray-300 text-sm font-semibold">Today</button>
+                                        <button onClick={() => handleMonthChange(1)} className="p-2 rounded-md hover:bg-gray-300"><ChevronRight /></button>
                                     </div>
                                     <h3 className="font-semibold text-gray-800 text-lg">{monthYearString}</h3>
                                </div>
                                <div className="flex-grow min-h-0">
                                     <BookingCalendarView
                                         jobs={jobsForEntity}
-                                        vehicles={vehicles || []}
-                                        customers={customers || []}
+                                        vehicles={vehicles}
+                                        customers={customers}
                                         onAddJob={() => {}}
                                         onDragStart={() => {}}
-                                        maxDailyCapacityHours={entityForEstimate?.dailyCapacityHours || maxDailyCapacityHours || 8}
+                                        maxDailyCapacityHours={entityForEstimate?.dailyCapacityHours || maxDailyCapacityHours}
                                         absencesByDate={absencesByDate}
-                                        onDayClick={(date) => setScheduledDate(date)}
+                                        onDayClick={(date) => { setScheduledDate(date); setMotBooking(null); }}
                                         onEditJob={onEditJob}
                                         currentMonthDate={currentMonth}
                                         selectedDate={scheduledDate}
@@ -305,6 +361,16 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
                     )}
                 </div>
             </div>
+
+            {isMotBookingOpen && (
+                <MOTBookingModal 
+                    isOpen={isMotBookingOpen}
+                    onClose={() => setIsMotBookingOpen(false)}
+                    onSelect={handleMotSelect}
+                    entityId={estimate.entityId}
+                    initialDate={scheduledDate}
+                />
+            )}
         </div>
     );
 };
