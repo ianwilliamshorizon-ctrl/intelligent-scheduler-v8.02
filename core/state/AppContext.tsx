@@ -9,7 +9,9 @@ import {
     signOut, 
     onAuthStateChanged, 
     sendPasswordResetEmail,
-    createUserWithEmailAndPassword
+    createUserWithEmailAndPassword,
+    setPersistence,           // Added for session control
+    browserSessionPersistence // Added for session control
 } from 'firebase/auth';
 
 interface AppState {
@@ -70,6 +72,15 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
         if (!selectedEntityId || selectedEntityId === '' || selectedEntityId === 'all') return allWorkshops;
         return allWorkshops.filter(e => e.id === selectedEntityId);
     }, [allWorkshops, selectedEntityId]);
+
+    /**
+     * ENFORCE SESSION PERSISTENCE
+     * This forces Firebase to clear the login when the tab/browser is closed.
+     */
+    useEffect(() => {
+        setPersistence(auth, browserSessionPersistence)
+            .catch((err) => console.error("Auth Persistence Error:", err));
+    }, [auth]);
 
     /**
      * SYNC DATA FROM FIRESTORE
@@ -193,7 +204,6 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
      * REGISTER AUTHORIZED USER (The "Bridge" for new staff)
      */
     const registerAuthorizedUser = async (email: string, pass: string): Promise<void> => {
-        // 1. Check if the admin has added them to the Staff list first
         const isAuthorized = users.some(u => u.email?.toLowerCase() === email.toLowerCase());
         
         if (!isAuthorized) {

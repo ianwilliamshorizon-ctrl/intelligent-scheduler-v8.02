@@ -9,7 +9,7 @@ import { formatDate } from './core/utils/dateUtils';
 import { useWorkshopActions } from './core/hooks/useWorkshopActions';
 import { useModalState } from './core/hooks/useModalState';
 
-// Layout & Views (omitted for brevity, keep your imports)
+// Layout & Views
 import MainLayout from './components/MainLayout';
 import AppModals from './components/AppModals';
 import DashboardView from './components/DashboardView';
@@ -58,11 +58,10 @@ const App = () => {
         currentView, currentUser, 
         selectedEntityId, setSelectedEntityId,
         confirmation, setConfirmation,
-        users, isAuthenticated, login, logout, // Ensure logout is pulled from context
+        users, isAuthenticated, login, logout, 
         backupSchedule, setBackupSchedule, appEnvironment
     } = useApp();
 
-    // SUGGESTION: Enable the 30-minute auto-logout
     useInactivityLogout(logout, isAuthenticated, 30 * 60 * 1000);
 
     const data = useData();
@@ -84,7 +83,6 @@ const App = () => {
     const workshopActions = useWorkshopActions();
     const lastBackupTimeRef = useRef<string | null>(null);
 
-    // Initial Data Load / Entity Selection
     useEffect(() => {
         if (isAuthenticated && businessEntities.length > 0) {
             if (!selectedEntityId || selectedEntityId === 'all') {
@@ -215,6 +213,8 @@ const App = () => {
     };
 
     const commonProps = {
+        onViewCustomer: (id: string) => setters.setCustomerModal({ isOpen: true, customerId: id }),
+        onViewVehicle: (id: string) => setters.setVehicleModal({ isOpen: true, vehicleId: id }),
         onStartWork: (jobId: string, segmentId: string) => workshopActions.handleUpdateSegmentStatus(jobId, segmentId, 'In Progress'),
         onPause: (id: string, segId: string) => workshopActions.handleUpdateSegmentStatus(id, segId, 'Paused'),
         onRestartWork: (jobId: string, segmentId: string) => workshopActions.handleUpdateSegmentStatus(jobId, segmentId, 'In Progress'),
@@ -253,7 +253,7 @@ const App = () => {
             {currentView === 'inquiries' && <InquiriesView onOpenInquiryModal={(inq) => setters.setInquiryModal({isOpen: true, inquiry: inq})} onConvert={(inq) => {}} onViewEstimate={(est) => setters.setEstimateViewModal({isOpen: true, estimate: est})} onScheduleEstimate={(est, inquiryId) => setters.setScheduleJobFromEstimateModal({isOpen: true, estimate: est, inquiryId})} onOpenPurchaseOrder={(po) => setters.setViewPoModal({isOpen: true, po})} onEditEstimate={(est) => setters.setEstimateFormModal({isOpen: true, estimate: est})} onMergeEstimate={workshopActions.handleMergeEstimateToJob} />}
             {currentView === 'absence' && <AbsenceView currentUser={currentUser} users={users} absenceRequests={absenceRequests} setAbsenceRequests={setAbsenceRequests} />}
 
-            <AppModals modals={modalsState} setters={setters} actions={modalActions} />
+            <AppModals modals={modalsState} setters={setters} actions={modalActions} commonProps={commonProps} />
 
             {isManagementOpen && (
                 <ManagementModal 

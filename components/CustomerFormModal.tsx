@@ -24,8 +24,8 @@ interface CustomerFormModalProps {
     isOpen: boolean;
     onClose: () => void;
     onSave: (customer: Customer) => void;
-    customerId: string | null;
-    customers: Customer[];
+    customer: Customer | null;
+    existingCustomers: Customer[];
     jobs: Job[];
     vehicles: Vehicle[];
     estimates: Estimate[];
@@ -34,70 +34,37 @@ interface CustomerFormModalProps {
 }
 
 const CustomerFormModal: React.FC<CustomerFormModalProps> = ({ 
-    isOpen, onClose, onSave, customerId, customers = [], vehicles = [], onViewVehicle 
+    isOpen, onClose, onSave, customer, existingCustomers = [], vehicles = [], onViewVehicle 
 }) => {
     const [formData, setFormData] = useState<Partial<Customer>>({});
     const [isLookingUpAddress, setIsLookingUpAddress] = useState(false);
     const { logEvent } = useAuditLogger();
-    const lastProcessedId = useRef<string | null>(null);
+    const lastProcessedId = useRef<string | null | 'NEW'>(null);
 
-    // DEBUG INSPECTOR
-    useEffect(() => {
-        if (isOpen) {
-            console.log("--- MODAL DATA INSPECTOR ---");
-            console.log("Target ID from Prop:", customerId);
-            console.log("Total Customers in List:", customers.length);
-            if (customers.length > 0) {
-                console.log("Sample of first 3 records in list:", customers.slice(0, 3).map(c => ({ id: c.id, name: `${c.forename} ${c.surname}` })));
-            }
-            console.log("----------------------------");
-        }
-    }, [isOpen, customerId, customers]);
-
-    // 1. ROBUST LOOKUP (Case insensitive + whitespace trimming)
-    const activeCustomer = useMemo(() => {
-        if (!customerId || !customers.length) return undefined;
-        
-        const target = customerId.trim().toUpperCase();
-        return customers.find(c => {
-            const currentId = (c.id || '').toString().trim().toUpperCase();
-            return currentId === target;
-        });
-    }, [customers, customerId]);
-
-    // 2. INITIALIZE FORM
     useEffect(() => {
         if (!isOpen) {
             lastProcessedId.current = null;
             return;
         }
 
-        // Check if we found a match
-        if (activeCustomer) {
-            if (lastProcessedId.current !== activeCustomer.id) {
-                console.log("SUCCESS: Match found. Loading data for:", activeCustomer.id);
-                setFormData({ ...activeCustomer });
-                lastProcessedId.current = activeCustomer.id;
+        if (customer) {
+            if (lastProcessedId.current !== customer.id) {
+                setFormData({ ...customer });
+                lastProcessedId.current = customer.id;
             }
-        } 
-        // If we have an ID but NO match was found
-        else if (customerId) {
-            console.error("FAIL: customerId exists but no match in customers array. Initializing empty fallback.");
-            setFormData({ id: customerId }); // At least preserve the ID
-            lastProcessedId.current = customerId;
+        } else {
+            if (lastProcessedId.current !== 'NEW') {
+                setFormData({
+                    title: '', forename: '', surname: '', phone: '', mobile: '', email: '',
+                    addressLine1: '', addressLine2: '', city: '', county: '', postcode: '',
+                    category: 'Retail', isCashCustomer: false, marketingConsent: false,
+                    serviceReminderConsent: false, communicationPreference: 'None',
+                    isBusinessCustomer: false, companyName: ''
+                });
+                lastProcessedId.current = 'NEW';
+            }
         }
-        // Truly a new customer
-        else if (!customerId && lastProcessedId.current !== 'NEW') {
-            setFormData({
-                title: '', forename: '', surname: '', phone: '', mobile: '', email: '',
-                addressLine1: '', addressLine2: '', city: '', county: '', postcode: '',
-                category: 'Retail', isCashCustomer: false, marketingConsent: false,
-                serviceReminderConsent: false, communicationPreference: 'None',
-                isBusinessCustomer: false, companyName: ''
-            });
-            lastProcessedId.current = 'NEW';
-        }
-    }, [isOpen, activeCustomer, customerId]);
+    }, [isOpen, customer]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value, type } = e.target;
@@ -124,27 +91,27 @@ const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
         if (!formData.forename || !formData.surname) { alert("Name required"); return; }
         const finalCustomer: Customer = {
             ...formData,
-            id: formData.id || generateCustomerId(formData.surname!, customers),
+            id: formData.id || generateCustomerId(formData.surname!, existingCustomers),
             createdDate: formData.createdDate || formatDate(new Date()),
         } as Customer;
         onSave(finalCustomer);
     };
 
     const customerVehicles = useMemo(() => 
-        (vehicles || []).filter(v => v.customerId === customerId), 
-    [vehicles, customerId]);
+        (vehicles || []).filter(v => v.customerId === customer?.id), 
+    [vehicles, customer]);
 
     if (!isOpen) return null;
 
     return (
-        <FormModal isOpen={isOpen} onClose={onClose} onSave={handleSave} title={customerId ? 'Customer 360° Profile' : 'Add New Customer'} maxWidth="max-w-5xl">
+        <FormModal isOpen={isOpen} onClose={onClose} onSave={handleSave} title={customer ? 'Customer 360° Profile' : 'Add New Customer'} maxWidth="max-w-5xl">
             <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
                 <div className="md:col-span-3 space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         
                         <div className="md:col-span-3">
                             <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Customer Account Reference</label>
-                            <input value={formData.id || customerId || ''} readOnly className="w-full p-2 border rounded bg-gray-50 font-mono text-gray-500 text-sm" />
+                            <input value={formData.id || customer?.id || ''} readOnly className="w-full p-2 border rounded bg-gray-50 font-mono text-gray-500 text-sm" />
                         </div>
                         
                         <div className="md:col-span-3 flex items-center bg-indigo-50 p-3 rounded-lg border border-indigo-100">

@@ -47,12 +47,17 @@ const EditJobModal: React.FC<{
     onSavePart?: (part: Part) => void;
     onDelete?: (jobId: string) => void;
 }> = ({ isOpen, onClose, selectedJobId, onOpenPurchaseOrder, rentalBookings, onOpenRentalBooking, onOpenConditionReport, onRaiseSupplementaryEstimate, onViewEstimate, onViewCustomer, onViewVehicle, onCheckIn, onCheckOut, onSavePart, onDelete }) => {
-    const {
-        jobs, setJobs, vehicles, customers, engineers, estimates, setEstimates, purchaseOrders, setPurchaseOrders, suppliers, parts, servicePackages, taxRates, businessEntities, inspectionTemplates
-    } = useData();
+    
+    const data = useData();
     const { currentUser } = useApp();
 
-    const job = useMemo(() => (jobs || []).find(j => j.id === selectedJobId), [jobs, selectedJobId]);
+    const {
+        jobs, setJobs, vehicles, customers, engineers, estimates, setEstimates, purchaseOrders, setPurchaseOrders, suppliers, parts, servicePackages, taxRates, businessEntities, inspectionTemplates
+    } = data;
+
+    // Core Data Hooks with enhanced array safety
+    const job = useMemo(() => Array.isArray(jobs) ? jobs.find(j => j.id === selectedJobId) : undefined, [jobs, selectedJobId]);
+    
     const [editableJob, setEditableJob] = useState<Job | null>(null);
     const [editableEstimate, setEditableEstimate] = useState<Estimate | null>(null);
     const [newObservation, setNewObservation] = useState('');
@@ -72,14 +77,15 @@ const EditJobModal: React.FC<{
         return ['Admin', 'Dispatcher', 'Sales', 'Garage Concierge'].includes(currentUser.role);
     }, [currentUser]);
 
-    const vehicle = useMemo(() => job ? (vehicles || []).find(v => v.id === job.vehicleId) : undefined, [job, vehicles]);
-    const customer = useMemo(() => job ? (customers || []).find(c => c.id === job.customerId) : undefined, [job, customers]);
-    const diagramImageId = useMemo(() => vehicle?.images?.find(img => img.isPrimaryDiagram)?.id ?? null, [vehicle]);
-    const taxRatesMap = useMemo(() => new Map((taxRates || []).map(t => [t.id, t])), [taxRates]);
-    const standardTaxRateId = useMemo(() => (taxRates || []).find(t => t.code === 'T1')?.id, [taxRates]);
+    const vehicle = useMemo(() => (job && Array.isArray(vehicles)) ? vehicles.find(v => v.id === job.vehicleId) : undefined, [job, vehicles]);
+    const customer = useMemo(() => (job && Array.isArray(customers)) ? customers.find(c => c.id === job.customerId) : undefined, [job, customers]);
+    const diagramImageId = useMemo(() => (Array.isArray(vehicle?.images)) ? vehicle?.images?.find(img => img.isPrimaryDiagram)?.id ?? null : null, [vehicle]);
+    const taxRatesMap = useMemo(() => new Map((Array.isArray(taxRates) ? taxRates : []).map(t => [t.id, t])), [taxRates]);
+    const standardTaxRateId = useMemo(() => (Array.isArray(taxRates) ? taxRates : []).find(t => t.code === 'T1')?.id, [taxRates]);
+    
     const mainEstimate = useMemo(() => {
-        if (!job) return null;
-        const currentEstimates = estimates || [];
+        if (!job || !Array.isArray(estimates)) return null;
+        const currentEstimates = estimates;
         if (job.estimateId) {
             const byId = currentEstimates.find(e => e.id === job.estimateId);
             if (byId) return byId;
@@ -96,16 +102,16 @@ const EditJobModal: React.FC<{
     }, [job, estimates]);
 
     const supplementaryEstimates = useMemo(() => {
-        if (!job) return [];
+        if (!job || !Array.isArray(estimates)) return [];
         const mainId = mainEstimate?.id;
-        return (estimates || []).filter(e => e.jobId === job.id && e.id !== mainId);
+        return estimates.filter(e => e.jobId === job.id && e.id !== mainId);
     }, [estimates, job, mainEstimate]);
 
     useEffect(() => {
         if (job) {
             const jobCopy = JSON.parse(JSON.stringify(job));
             if (!jobCopy.inspectionChecklist || jobCopy.inspectionChecklist.length === 0) {
-                 const defaultTemplate = (inspectionTemplates || []).find(t => t.isDefault);
+                 const defaultTemplate = Array.isArray(inspectionTemplates) ? inspectionTemplates.find(t => t.isDefault) : undefined;
                  if (defaultTemplate) {
                     jobCopy.inspectionChecklist = defaultTemplate.sections.map(s => ({
                         id: s.id,
@@ -158,11 +164,11 @@ const EditJobModal: React.FC<{
 
     const handleCreateEstimateIfNeeded = useCallback(() => {
         if (!editableEstimate && editableJob && currentUser) {
-            const entity = (businessEntities || []).find(e => e.id === editableJob.entityId);
+            const entity = Array.isArray(businessEntities) ? businessEntities.find(e => e.id === editableJob.entityId) : undefined;
             const entityShortCode = entity?.shortCode || 'UNK';
             const newEstimate: Estimate = {
                 id: `est_${Date.now()}_temp`,
-                estimateNumber: generateEstimateNumber(estimates || [], entityShortCode),
+                estimateNumber: generateEstimateNumber(Array.isArray(estimates) ? estimates : [], entityShortCode),
                 entityId: editableJob.entityId,
                 customerId: editableJob.customerId,
                 vehicleId: editableJob.vehicleId,
@@ -204,7 +210,7 @@ const EditJobModal: React.FC<{
 
     const addPackage = (selection: any) => {
         const packageId = selection?.value || selection?.id || selection;
-        const pkg = (servicePackages || []).find(p => p.id === packageId);
+        const pkg = Array.isArray(servicePackages) ? servicePackages.find(p => p.id === packageId) : undefined;
         if (!pkg) return;
 
         const currentEstimate = handleCreateEstimateIfNeeded();
@@ -284,7 +290,7 @@ const EditJobModal: React.FC<{
     const addLineItem = (isLabor: boolean) => {
         const currentEstimate = handleCreateEstimateIfNeeded();
         if (!currentEstimate) return;
-        const entity = (businessEntities || []).find(e => e.id === editableJob.entityId);
+        const entity = Array.isArray(businessEntities) ? businessEntities.find(e => e.id === editableJob.entityId) : undefined;
         const newItem: EstimateLineItem = {
             id: crypto.randomUUID(),
             description: isLabor ? 'Labor' : '',
@@ -310,9 +316,9 @@ const EditJobModal: React.FC<{
     }, []);
 
     const filteredParts = useMemo(() => {
-        if (!partSearchTerm) return [];
+        if (!partSearchTerm || !Array.isArray(parts)) return [];
         const lowerSearch = partSearchTerm.toLowerCase();
-        return (parts || []).filter(p => p.partNumber.toLowerCase().includes(lowerSearch) || p.description.toLowerCase().includes(lowerSearch)).slice(0, 10);
+        return parts.filter(p => p.partNumber.toLowerCase().includes(lowerSearch) || p.description.toLowerCase().includes(lowerSearch)).slice(0, 10);
     }, [partSearchTerm, parts]);
 
     const handleSelectPart = (lineItemId: string, part: Part) => {
@@ -378,11 +384,10 @@ const EditJobModal: React.FC<{
         return { totalNet: currentTotalNet, grandTotal: currentTotalNet + totalVat, vatBreakdown: finalVatBreakdown };
     }, [editableEstimate, taxRatesMap, standardTaxRateId]);
 
-    const linkedBooking = useMemo(() => (rentalBookings || []).find(b => b.jobId === job?.id), [rentalBookings, job]);
-
-    // MOVE THESE MAPS ABOVE THE CONDITIONAL RETURN TO PREVENT HOOK ORDER ERRORS 
-    const engineerMap = useMemo(() => new Map((engineers || []).map(e => [e.id, e.name])), [engineers]);
-    const supplierMap = useMemo(() => new Map((suppliers || []).map(s => [s.id, s.name])), [suppliers]);
+    const linkedBooking = useMemo(() => Array.isArray(rentalBookings) ? rentalBookings.find(b => b.jobId === job?.id) : undefined, [rentalBookings, job]);
+    
+    const engineerMap = useMemo(() => new Map((Array.isArray(engineers) ? engineers : []).map(e => [e.id, e.name])), [engineers]);
+    const supplierMap = useMemo(() => new Map((Array.isArray(suppliers) ? suppliers : []).map(s => [s.id, s.name])), [suppliers]);
 
     const handleBookCourtesyCar = () => { 
         if (!editableJob) return;
@@ -423,7 +428,6 @@ const EditJobModal: React.FC<{
         }
     };
 
-    // CONDITIONAL RETURN GUARD PLACED AFTER ALL HOOKS [cite: 272]
     if (!isOpen || !editableJob) return null;
 
     const renderTabs = () => {
@@ -433,14 +437,14 @@ const EditJobModal: React.FC<{
                     <JobEstimateTab
                         partsStatus={editableJob.partsStatus || 'Not Required'}
                         purchaseOrderIds={editableJob.purchaseOrderIds || []}
-                        purchaseOrders={purchaseOrders || []}
+                        purchaseOrders={Array.isArray(purchaseOrders) ? purchaseOrders : []}
                         supplierMap={supplierMap}
                         editableEstimate={editableEstimate}
                         supplementaryEstimates={supplementaryEstimates}
                         estimateBreakdown={estimateBreakdown}
                         isReadOnly={isReadOnly}
                         canViewPricing={canViewPricing}
-                        taxRates={taxRates || []}
+                        taxRates={Array.isArray(taxRates) ? taxRates : []}
                         filteredParts={filteredParts}
                         activePartSearch={activePartSearch}
                         servicePackages={sortedPackages as any}
@@ -539,7 +543,7 @@ const EditJobModal: React.FC<{
                             customer={customer}
                             isReadOnly={isReadOnly}
                             linkedBooking={linkedBooking}
-                            rentalVehicleRegistration={linkedBooking ? (vehicles || []).find(v => v.id === linkedBooking.rentalVehicleId)?.registration : undefined}
+                            rentalVehicleRegistration={linkedBooking ? (Array.isArray(vehicles) ? vehicles.find(v => v.id === linkedBooking.rentalVehicleId)?.registration : undefined) : undefined}
                             onBookCourtesyCar={handleBookCourtesyCar}
                             onOpenRentalBooking={onOpenRentalBooking}
                             onOpenConditionReport={onOpenConditionReport}
@@ -600,7 +604,7 @@ const EditJobModal: React.FC<{
                     onSave={handleSaveNewPart}
                     part={{ description: newPartDescription }}
                     suppliers={[]} 
-                    taxRates={taxRates || []}
+                    taxRates={Array.isArray(taxRates) ? taxRates : []}
                 />
             )}
         </div>
