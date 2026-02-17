@@ -2,13 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { useApp } from '../../../core/state/AppContext';
 import { useData } from '../../../core/state/DataContext';
 import { User as UserType } from '../../../types';
-import { PlusCircle, User, Mail, ShieldCheck, Edit3, Trash2, Users } from 'lucide-react';
+import { PlusCircle, User, Mail, ShieldCheck, Edit3, Trash2, Users, ShieldAlert } from 'lucide-react';
 import UserFormModal from '../../UserFormModal';
 import { useManagementTable } from '../hooks/useManagementTable';
 import { saveDocument } from '../../../core/db/index';
 
 export const ManagementStaffTab = () => {
-    const { users = [], setUsers } = useApp();
+    // 1. Destructure the new adminResetPassword from useApp
+    const { users = [], setUsers, adminResetPassword } = useApp();
     const { roles = [], refreshActiveData } = useData();
     
     const [localUsers, setLocalUsers] = useState<UserType[]>(Array.isArray(users) ? users : []);
@@ -23,7 +24,13 @@ export const ManagementStaffTab = () => {
     const [selectedUser, setSelectedUser] = useState<UserType | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
 
+    /**
+     * HANDLE SAVE
+     * Saves the profile to Firestore. If new, instructs the user to "Claim" their account.
+     */
     const handleSave = async (updatedUser: UserType) => {
+        const isNewUser = !localUsers.find(u => u.id === updatedUser.id);
+
         const updateLogic = (prev: UserType[]) => {
             const current = Array.isArray(prev) ? prev : [];
             const exists = current.find(u => u.id === updatedUser.id);
@@ -40,7 +47,19 @@ export const ManagementStaffTab = () => {
         setSelectedUser(null);
 
         try {
-            await saveDocument('brooks_users', updatedUser);
+            // 2. Save the Profile to Firestore
+            await saveDocument('brooks_users', {
+                ...updatedUser,
+                status: isNewUser ? 'pending' : (updatedUser.status || 'active'),
+                updatedAt: new Date().toISOString()
+            });
+
+            // 3. If new, we don't send a reset (as they don't have an account yet). 
+            // We let them use the "First Time Setup" on the login page.
+            if (isNewUser) {
+                console.log(`✅ ${updatedUser.email} authorized. Staff can now use "First Time Setup".`);
+            }
+
             if (refreshActiveData) {
                 setTimeout(async () => {
                     await refreshActiveData(true);
@@ -107,17 +126,33 @@ export const ManagementStaffTab = () => {
                                     </td>
                                     <td className="px-6 py-5 text-right">
                                         <div className="flex justify-end gap-1">
+                                            {/* NEW: ADMIN RESET PASSWORD BUTTON */}
+                                            <button 
+                                                onClick={() => {
+                                                    if(window.confirm(`Send a password reset link to ${u.email}?`)) {
+                                                        adminResetPassword(u.email);
+                                                    }
+                                                }} 
+                                                className="p-2 text-slate-400 hover:text-orange-600 hover:bg-orange-50 rounded-xl transition-all"
+                                                title="Reset Password"
+                                            >
+                                                <ShieldAlert size={18} />
+                                            </button>
+
                                             <button 
                                                 onClick={() => { setSelectedUser(u); setIsModalOpen(true); }} 
                                                 className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all"
+                                                title="Edit Profile"
                                             >
                                                 <Edit3 size={18} />
                                             </button>
+                                            
                                             <button 
                                                 onClick={() => {
-                                                    if(window.confirm(`Remove ${u.name}?`)) deleteItem(u.id);
+                                                    if(window.confirm(`Remove ${u.name}? This will revoke their database access.`)) deleteItem(u.id);
                                                 }} 
                                                 className="p-2 text-slate-200 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all"
+                                                title="Remove Access"
                                             >
                                                 <Trash2 size={18} />
                                             </button>

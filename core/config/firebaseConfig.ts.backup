@@ -1,0 +1,108 @@
+// Helper to read VITE env vars across different environments
+const getEnv = (key: string) => {
+    // @ts-ignore
+    if (typeof import.meta !== 'undefined' && import.meta.env) {
+        // @ts-ignore
+        return import.meta.env[key];
+    }
+    // @ts-ignore
+    if (typeof process !== 'undefined' && process.env) {
+         // @ts-ignore
+         return process.env[key];
+    }
+    return '';
+}
+  
+export const isDev = () => {
+    // @ts-ignore
+    return !!(import.meta.env && import.meta.env.DEV);
+};
+  
+const getActiveEnvironment = (): 'Production' | 'UAT' | 'Development' => {
+    const host = window.location.hostname.toLowerCase();
+    
+    // Check for production domains first
+    const isProductionHostname = host.includes('brookspeed.com') || host.includes('brookspeed-v802');
+    
+    if (isProductionHostname) return 'Production';
+
+    // Check for manual overrides in local storage
+    try {
+        const stored = window.localStorage.getItem('brooks_environment');
+        if (stored) {
+            const parsed = JSON.parse(stored);
+            if (parsed === 'UAT' || parsed === 'Production' || parsed === 'Development') {
+                return parsed;
+            }
+        }
+    } catch (e) {
+        // Silent catch for storage errors
+    }
+    
+    // Check environment variables
+    const envVar = getEnv('VITE_APP_ENV');
+    if (envVar === 'UAT') return 'UAT';
+    if (envVar === 'Production') return 'Production';
+    
+    // Default fallback
+    return isDev() ? 'Development' : 'Production';
+};
+  
+export const currentEnvironment = getActiveEnvironment();
+
+// Function to pull the correct key based on the detected environment
+const getEnvKey = (baseKey: string) => {
+    let specificKey = '';
+    if (currentEnvironment === 'UAT') {
+        specificKey = getEnv(`${baseKey}_UAT`);
+    } else if (currentEnvironment === 'Development') {
+        specificKey = getEnv(`${baseKey}_DEV`);
+    } else {
+        specificKey = getEnv(`${baseKey}_PROD`);
+    }
+    
+    // Fallback to the base key if the environment-specific one is missing
+    return specificKey || getEnv(baseKey) || '';
+};
+  
+// The Core Firebase Configuration object
+export const firebaseConfig = {
+    apiKey: getEnvKey('VITE_FIREBASE_API_KEY'),
+    authDomain: getEnvKey('VITE_FIREBASE_AUTH_DOMAIN'),
+    projectId: 'intelligent-scheduling-v801', // Explicitly set as per your project
+    storageBucket: getEnvKey('VITE_FIREBASE_STORAGE_BUCKET'),
+    messagingSenderId: getEnvKey('VITE_FIREBASE_MESSAGING_SENDER_ID'),
+    appId: getEnvKey('VITE_FIREBASE_APP_ID')
+};
+
+// Main collection prefix for the app
+export const COLLECTION_NAME = 'brooks';
+
+/**
+ * DATABASE ID LOGIC
+ * Correcting the 'default' vs '(default)' mismatch.
+ * Production must use the primary database string with parentheses.
+ */
+export const FIREBASE_DATABASE_ID = currentEnvironment === 'Development' 
+    ? 'isdevdb' 
+    : '(default)'; 
+
+// Gemini AI API Key
+export const GEMINI_API_KEY = getEnvKey('VITE_GEMINI_API_KEY');
+
+// Application Environment used for UI indicators
+export const getInitialAppEnvironment = (): 'Production' | 'UAT' | 'Development' => {
+    return currentEnvironment;
+};
+
+// Production Boot Logs (Visible in Browser Console)
+if (!isDev()) {
+    console.log("🔥 [SYSTEM] BROOKSPEED PRODUCTION ONLINE");
+    console.log("📡 PROJECT:", firebaseConfig.projectId);
+    console.log("🎯 DATABASE:", FIREBASE_DATABASE_ID);
+    console.log("🌍 ENV:", currentEnvironment);
+    
+    if (!firebaseConfig.apiKey) {
+        console.error("❌ CRITICAL: Firebase API Key is missing. Auth will fail.");
+    }
+}

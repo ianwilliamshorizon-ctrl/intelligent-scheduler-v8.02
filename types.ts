@@ -14,7 +14,12 @@ export interface User {
     holidayEntitlement?: number;
     email?: string;
     allowedViews?: ViewType[];
-    defaultEntityId?: string; // Integrated from PO version
+    defaultEntityId?: string;
+    
+    // Paste these lines here:
+    status?: 'active' | 'pending' | 'inactive'; 
+    updatedAt?: string;
+    createdAt?: string;
 }
 
 export interface Role {

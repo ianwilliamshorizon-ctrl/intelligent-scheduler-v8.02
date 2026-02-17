@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Loader } from 'lucide-react';
+import { X, Loader, ShieldCheck, Mail, User } from 'lucide-react';
 import * as T from '../types';
 
 interface UserFormModalProps {
@@ -22,12 +22,12 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, 
                 setFormData({
                     name: '',
                     email: '',
-                    password: '',
-                    role: roles.length > 0 ? (roles[0].name as T.UserRole) : undefined
+                    role: roles.length > 0 ? (roles[0].name as T.UserRole) : undefined,
+                    status: 'pending' // Default new users to pending
                 });
             }
         }
-    }, [isOpen, user?.id]);
+    }, [isOpen, user?.id, roles]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -43,7 +43,7 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, 
         try {
             await onSave(finalUser);
         } catch (error) {
-            // Error is handled by the parent component
+            console.error("Save failed:", error);
         } finally {
             setIsSaving(false);
         }
@@ -52,94 +52,110 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, 
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-[60] flex items-center justify-center p-4">
-            <div className="bg-white rounded-lg shadow-xl w-full max-w-md overflow-hidden">
-                <div className="flex justify-between items-center p-4 border-b bg-gray-50">
-                    <h3 className="font-bold text-gray-800">
-                        {user ? 'Edit Staff Member' : 'Add New Staff Member'}
-                    </h3>
-                    <button onClick={onClose} className="text-gray-500 hover:text-gray-700" disabled={isSaving}>
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
+                {/* Header */}
+                <div className="flex justify-between items-center p-6 border-b border-slate-100 bg-slate-50/50">
+                    <div>
+                        <h3 className="font-black text-slate-900 uppercase tracking-tighter text-lg">
+                            {user ? 'Edit Staff Profile' : 'Authorize New Staff'}
+                        </h3>
+                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">
+                            System Access Management
+                        </p>
+                    </div>
+                    <button 
+                        onClick={onClose} 
+                        className="h-8 w-8 flex items-center justify-center rounded-full hover:bg-slate-200 text-slate-400 transition-colors" 
+                        disabled={isSaving}
+                    >
                         <X size={20} />
                     </button>
                 </div>
 
-                <form onSubmit={handleSubmit} className="p-4 space-y-4">
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
-                        <input
-                            type="text"
-                            required
-                            className="w-full border rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                            value={formData.name || ''}
-                            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                            placeholder="e.g. Simon Brook"
-                            disabled={isSaving}
-                        />
+                <form onSubmit={handleSubmit} className="p-6 space-y-5">
+                    {/* Name Field */}
+                    <div className="space-y-1">
+                        <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Full Name</label>
+                        <div className="relative">
+                            <User size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" />
+                            <input
+                                type="text"
+                                required
+                                className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-3 text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-medium"
+                                value={formData.name || ''}
+                                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                placeholder="e.g. Jack Brook"
+                                disabled={isSaving}
+                            />
+                        </div>
                     </div>
 
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
-                        <input
-                            type="email"
-                            required
-                            className="w-full border rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                            value={formData.email || ''}
-                            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                            placeholder="simon@brookspeed.com"
-                            disabled={isSaving}
-                        />
+                    {/* Email Field */}
+                    <div className="space-y-1">
+                        <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Email Address</label>
+                        <div className="relative">
+                            <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" />
+                            <input
+                                type="email"
+                                required
+                                className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-3 text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-medium"
+                                value={formData.email || ''}
+                                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                                placeholder="jack@brookspeed.com"
+                                disabled={isSaving}
+                            />
+                        </div>
                     </div>
 
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-                        <input
-                            type="password"
-                            required={!user}
-                            className="w-full border rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                            value={formData.password || ''}
-                            onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                            placeholder={user ? "Leave blank to keep current" : "Enter password"}
-                            disabled={isSaving}
-                        />
+                    {/* Role Selection */}
+                    <div className="space-y-1">
+                        <label className="text-[10px] font-black uppercase text-slate-400 ml-1">System Role</label>
+                        <div className="relative">
+                            <ShieldCheck size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" />
+                            <select
+                                className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-3 text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-bold appearance-none cursor-pointer"
+                                value={formData.role || ''}
+                                onChange={(e) => setFormData({ ...formData, role: e.target.value as T.UserRole })}
+                                required
+                                disabled={isSaving}
+                            >
+                                <option value="" disabled>Select Permissions</option>
+                                {roles.map(r => (
+                                    <option key={r.id} value={r.name}>{r.name}</option>
+                                ))}
+                            </select>
+                        </div>
                     </div>
 
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">System Role</label>
-                        <select
-                            className="w-full border rounded-md px-3 py-2 text-sm bg-white"
-                            value={formData.role || ''}
-                            onChange={(e) => setFormData({ ...formData, role: e.target.value as T.UserRole })}
-                            required
-                            disabled={isSaving}
-                        >
-                            <option value="" disabled>Select a role</option>
-                            {roles.map(r => (
-                                <option key={r.id} value={r.name}>{r.name}</option>
-                            ))}
-                        </select>
-                    </div>
+                    {/* Info Note */}
+                    {!user && (
+                        <div className="bg-indigo-50 p-4 rounded-2xl border border-indigo-100">
+                            <p className="text-[11px] text-indigo-700 leading-relaxed font-medium">
+                                <strong>Note:</strong> Creating this profile authorizes the email address. The staff member must then use the <strong>"First Time Setup"</strong> option on the login screen to create their own password.
+                            </p>
+                        </div>
+                    )}
 
-                    <div className="pt-4 flex gap-3">
+                    {/* Actions */}
+                    <div className="pt-2 flex gap-3">
                         <button
                             type="button"
                             onClick={onClose}
-                            className="flex-1 px-4 py-2 border rounded-md text-gray-700 hover:bg-gray-50 text-sm font-medium"
+                            className="flex-1 px-4 py-3 rounded-xl text-slate-500 hover:bg-slate-100 text-xs font-black uppercase tracking-widest transition-colors"
                             disabled={isSaving}
                         >
                             Cancel
                         </button>
                         <button
                             type="submit"
-                            className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 text-sm font-medium shadow-sm flex items-center justify-center"
+                            className="flex-1 px-4 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 text-xs font-black uppercase tracking-widest shadow-lg shadow-indigo-100 flex items-center justify-center transition-all active:scale-[0.98]"
                             disabled={isSaving}
                         >
                             {isSaving ? (
-                                <>
-                                    <Loader className="animate-spin mr-2" size={16} />
-                                    Saving...
-                                </>
+                                <Loader className="animate-spin" size={18} />
                             ) : (
-                                user ? 'Update Staff' : 'Create Staff'
+                                user ? 'Update Profile' : 'Authorize Staff'
                             )}
                         </button>
                     </div>

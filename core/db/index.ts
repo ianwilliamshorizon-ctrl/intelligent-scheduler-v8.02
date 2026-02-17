@@ -1,109 +1,50 @@
-
 export * from '../../types';
 
-import { initializeApp, getApp, getApps } from 'firebase/app';
 import { 
-    getFirestore, doc, getDoc, setDoc, deleteDoc, collection, getDocs,
-    onSnapshot, Firestore, runTransaction,
-    query, WithFieldValue,
-    initializeFirestore,
-    CACHE_SIZE_UNLIMITED,
-    persistentLocalCache
+    doc, 
+    getDoc, 
+    setDoc, 
+    deleteDoc, 
+    collection, 
+    getDocs,
+    onSnapshot, 
+    runTransaction,
+    query, 
+    WithFieldValue
 } from 'firebase/firestore';
-import { getAuth, Auth } from 'firebase/auth';
-import { firebaseConfig } from '../config/firebaseConfig';
+
+// We import the single source of truth for 'auth' and 'db' 
+// which is now correctly configured to use (default)
+import { auth, db } from '../config/firebaseConfig';
 
 /**
- * ENVIRONMENT LOADER
- * This logic ensures that even in a production build, we can force 
- * the app to use UAT or DEV keys via VITE_APP_ENV in .env.local.
+ * COLLECTION NAMES
  */
-
-// 1. Check for an explicit override (e.g., VITE_APP_ENV="uat")
-// 2. Otherwise, check if Vite is in production build mode
-const ENV_MODE = import.meta.env.VITE_APP_ENV || (import.meta.env.PROD ? 'production' : 'development');
-
-let PROJECT_ID: string;
-let DATABASE_ID: string;
-let API_KEY: string;
-
-if (ENV_MODE === 'uat') {
-    // UAT CONFIG
-    PROJECT_ID = import.meta.env.VITE_FIREBASE_PROJECT_ID_UAT;
-    DATABASE_ID = import.meta.env.VITE_FIREBASE_DATABASE_ID_UAT || 'uat-db';
-    API_KEY = import.meta.env.VITE_FIREBASE_API_KEY_UAT;
-} else if (ENV_MODE === 'production' && !import.meta.env.VITE_APP_ENV) {
-    // STRICT PRODUCTION (Only if no override is set)
-    PROJECT_ID = import.meta.env.VITE_FIREBASE_PROJECT_ID_PROD;
-    DATABASE_ID = import.meta.env.VITE_FIREBASE_DATABASE_ID_PROD || '(default)';
-    API_KEY = import.meta.env.VITE_FIREBASE_API_KEY_PROD;
-} else {
-    // DEVELOPMENT CONFIG (Default fallback)
-    PROJECT_ID = import.meta.env.VITE_FIREBASE_PROJECT_ID_DEV || import.meta.env.VITE_FIREBASE_PROJECT_ID;
-    DATABASE_ID = import.meta.env.VITE_FIREBASE_DATABASE_ID_DEV || 'isdevdb';
-    API_KEY = import.meta.env.VITE_FIREBASE_API_KEY_DEV || firebaseConfig.apiKey;
-}
-
-let db: Firestore;
-let auth: Auth | undefined;
-
 export const COLLECTIONS = {
     PACKAGES: 'brooks_servicePackages',
     SETTINGS: 'brooks_settings',
     COUNTERS: 'brooks_counters'
 };
 
-// INITIALIZATION BLOCK
-if (PROJECT_ID && API_KEY) {
-    const activeConfig = {
-        ...firebaseConfig,
-        apiKey: API_KEY.replace(/['"]+/g, ''),
-        projectId: PROJECT_ID.replace(/['"]+/g, '')
-    };
-
-    const app = !getApps().length ? initializeApp(activeConfig) : getApp();
-    
-    try {
-        const cleanDbId = DATABASE_ID.replace(/['"]+/g, '');
-        
-        db = initializeFirestore(app, {
-            experimentalForceLongPolling: true,
-            localCache: persistentLocalCache({
-                cacheSizeBytes: CACHE_SIZE_UNLIMITED
-            })
-        }, cleanDbId);
-        
-        console.log(`🔥 [DB] ${ENV_MODE.toUpperCase()} Mode Online`);
-        console.log(`📡 Project: ${activeConfig.projectId}`);
-        console.log(`🎯 Database: ${cleanDbId}`);
-        
-        (window as any).db = db;
-    } catch (e) {
-        db = getFirestore(app, DATABASE_ID);
-        console.warn(`⚠️ [DB] Fallback used for ${DATABASE_ID}`);
-    }
-
-    auth = getAuth(app);
-} else {
-    console.error(`❌ [DB] Firebase config missing for ${ENV_MODE} environment. Ensure VITE_FIREBASE_... variables are set in your environment file (e.g., .env.production).`);
-    const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
-    db = getFirestore(app);
-    auth = getAuth(app);
-}
-
 /**
- * FULL UTILITY SUITE
+ * STORAGE TYPE HELPERS
  */
-
 export const getStorageType = () => 'firestore';
 export const getStorageTypeString = () => 'firestore';
 
+/**
+ * DATA CLEANING
+ * Ensures undefined values don't crash Firestore
+ */
 const cleanDataForFirestore = (data: any) => {
     return JSON.parse(JSON.stringify(data, (key, value) => 
         value === undefined ? null : value
     ));
 };
 
+/**
+ * REAL-TIME SUBSCRIPTION
+ */
 export const subscribeToCollection = <T>(
     collectionName: string, 
     callback: (data: T[]) => void
@@ -118,6 +59,7 @@ export const subscribeToCollection = <T>(
             id: doc.id
         })) as unknown as T[];
         
+        // Alphabetical sorting logic from your original file
         const sortedItems = items.sort((a: any, b: any) => {
             const valA = (a.name || a.label || a.id || '').toLowerCase();
             const valB = (b.name || b.label || b.id || '').toLowerCase();
@@ -130,6 +72,9 @@ export const subscribeToCollection = <T>(
     });
 };
 
+/**
+ * FETCH ALL DOCUMENTS
+ */
 export const getAll = async <T>(collectionName: string): Promise<T[]> => {
     if (!db) return [];
     try {
@@ -141,6 +86,9 @@ export const getAll = async <T>(collectionName: string): Promise<T[]> => {
     }
 };
 
+/**
+ * SAVE/UPDATE DOCUMENT
+ */
 export const saveDocument = async <T extends { id: string }> (
     collectionName: string, 
     data: WithFieldValue<T>
@@ -158,6 +106,9 @@ export const saveDocument = async <T extends { id: string }> (
     }
 };
 
+/**
+ * DELETE DOCUMENT
+ */
 export const deleteDocument = async (collectionName: string, docId: string): Promise<void> => {
     if (!db) return;
     try {
@@ -168,13 +119,17 @@ export const deleteDocument = async (collectionName: string, docId: string): Pro
     }
 };
 
+/**
+ * SEQUENCE GENERATOR (TRANSACTIONAL)
+ * Used for Job IDs and other incrementing numbers
+ */
 export const generateSequenceId = async (prefix: string, entityShortCode: string): Promise<string> => {
     if (!db) return `${entityShortCode}${prefix}${Math.floor(100000 + Math.random() * 900000)}`;
     const counterRef = doc(db, COLLECTIONS.COUNTERS, `${entityShortCode}_${prefix}`);
     try {
         const newId = await runTransaction(db, async (transaction) => {
             const counterDoc = await transaction.get(counterRef);
-            let currentCount = counterDoc.exists() ? counterDoc.data().count || 0 : 0;
+            let currentCount = counterDoc.exists() ? (counterDoc.data() as any).count || 0 : 0;
             const nextCount = currentCount + 1;
             transaction.set(counterRef, { count: nextCount }, { merge: true });
             return nextCount;
@@ -182,10 +137,14 @@ export const generateSequenceId = async (prefix: string, entityShortCode: string
         return `${entityShortCode}${prefix}${String(newId).padStart(6, '0')}`;
     } catch (e) {
         console.error("Sequence Error:", e);
+        // Fallback to random ID if transaction fails
         return `${entityShortCode}${prefix}${Math.floor(100000 + Math.random() * 900000)}`;
     }
 };
 
+/**
+ * SIMPLE KEY/VALUE STORAGE (SETTINGS)
+ */
 export const setItem = async (key: string, value: any) => {
     if (!db) return;
     const docRef = doc(db, COLLECTIONS.SETTINGS, key);
@@ -195,6 +154,9 @@ export const setItem = async (key: string, value: any) => {
     await setDoc(docRef, payload, { merge: true });
 };
 
+/**
+ * GET SETTING
+ */
 export const getItem = async <T>(key: string): Promise<T | null> => {
     if (!db) return null;
     try {
@@ -209,8 +171,12 @@ export const getItem = async <T>(key: string): Promise<T | null> => {
     return null;
 };
 
+/**
+ * CLEAR STORE
+ */
 export const clearStore = async () => {
-    console.warn("Manual clear required in Firebase Console.");
+    console.warn("Manual clear required in Firebase Console for Firestore storage.");
 };
 
+// Re-exporting auth and db to maintain compatibility with other files
 export { auth, db };

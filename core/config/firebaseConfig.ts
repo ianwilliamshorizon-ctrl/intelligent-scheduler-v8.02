@@ -1,93 +1,68 @@
-// Helper to read VITE env vars (standard for Vite apps)
+import { initializeApp } from 'firebase/app';
+import { getFirestore } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
+
+// 1. Environment Helper
 const getEnv = (key: string) => {
     // @ts-ignore
-    if (typeof import.meta !== 'undefined' && import.meta.env) {
-        // @ts-ignore
-        return import.meta.env[key];
-    }
+    if (typeof import.meta !== 'undefined' && import.meta.env) return import.meta.env[key];
     // @ts-ignore
-    if (typeof process !== 'undefined' && process.env) {
-         // @ts-ignore
-         return process.env[key];
-    }
+    if (typeof process !== 'undefined' && process.env) return process.env[key];
     return '';
 }
-  
+
 export const isDev = () => {
-    // In Vite, import.meta.env.DEV is true during local development
     // @ts-ignore
     return !!(import.meta.env && import.meta.env.DEV);
 };
-  
-// Determine the active environment
-// Priority: 1. Domain Check (Hard Lockdown) 2. LocalStorage (User Selection) 3. Env Var (Build)
-const getActiveEnvironment = (): 'Production' | 'UAT' | 'Development' => {
-    // SAFETY CHECK: If we are on the production URL, force Production mode.
-    // This prevents LocalStorage from "hijacking" a production session with dev credentials.
-    const isProductionHostname = window.location.hostname === 'App-Brookspeed.com';
-    
-    if (isProductionHostname) {
-        return 'Production';
-    }
 
-    try {
-        const stored = window.localStorage.getItem('brooks_environment');
-        if (stored) {
-            // Remove quotes if they exist from JSON.parse/stringify
-            const parsed = JSON.parse(stored);
-            if (parsed === 'UAT' || parsed === 'Production' || parsed === 'Development') {
-                return parsed;
-            }
-        }
-    } catch (e) {
-        console.warn("Error reading environment from storage", e);
-    }
-    
-    const envVar = getEnv('VITE_APP_ENV');
-    if (envVar === 'UAT') return 'UAT';
-    if (envVar === 'Production') return 'Production';
-    if (envVar === 'Development') return 'Development';
+// 2. Simplified Environment Detection
+// We strictly use Vite's internal mode. 
+// Development if running 'npm run dev', Production if 'npm run build'
+export const currentEnvironment: 'Production' | 'Development' = isDev() ? 'Development' : 'Production';
 
-    return isDev() ? 'Development' : 'Production';
-};
-  
-export const currentEnvironment = getActiveEnvironment();
-  
-// Helper to select the correct key based on environment
-// Looks for specific suffix (_UAT, _DEV, _PROD) first
+// 3. Key Selection
+// Tries suffixed keys first (e.g. VITE_KEY_DEV), then falls back to standard key
 const getEnvKey = (baseKey: string) => {
-    let key = '';
-    if (currentEnvironment === 'UAT') {
-        key = getEnv(`${baseKey}_UAT`);
-    } else if (currentEnvironment === 'Development') {
-        key = getEnv(`${baseKey}_DEV`);
-    } else {
-        key = getEnv(`${baseKey}_PROD`);
-    }
-    
-    // Fallback logic: 
-    // If the environment-specific key is missing, use the base key.
-    // WARNING: Ensure your Production Env Vars are set in your hosting provider (Vercel/Netlify/Firebase)
-    return key || getEnv(baseKey);
+    const suffix = currentEnvironment === 'Development' ? '_DEV' : '_PROD';
+    return getEnv(`${baseKey}${suffix}`) || getEnv(baseKey) || '';
 };
-  
+
+// 4. Config Object
 export const firebaseConfig = {
     apiKey: getEnvKey('VITE_FIREBASE_API_KEY'),
     authDomain: getEnvKey('VITE_FIREBASE_AUTH_DOMAIN'),
-    projectId: getEnvKey('VITE_FIREBASE_PROJECT_ID'),
+    // Now dynamic based on your .env files
+    projectId: getEnvKey('VITE_FIREBASE_PROJECT_ID') || 'intelligent-scheduling-v801',
     storageBucket: getEnvKey('VITE_FIREBASE_STORAGE_BUCKET'),
     messagingSenderId: getEnvKey('VITE_FIREBASE_MESSAGING_SENDER_ID'),
     appId: getEnvKey('VITE_FIREBASE_APP_ID')
 };
-  
-// --- SETTINGS ---
-// The collection prefix is always 'brooks'.
+
 export const COLLECTION_NAME = 'brooks';
 
-// Determine the Database ID based on environment
-// Dev uses 'isdevdb', UAT/Prod uses '(default)'
-export const FIREBASE_DATABASE_ID = currentEnvironment === 'Development' ? 'isdevdb' : '(default)';
-  
-export const getInitialAppEnvironment = (): 'Production' | 'UAT' | 'Development' => {
-    return currentEnvironment;
-};
+// 5. DATABASE ID
+// Stripped UAT check to resolve the TS2367 error
+export const FIREBASE_DATABASE_ID = currentEnvironment === 'Development' 
+    ? 'isdevdb' 
+    : '(default)'; 
+
+// 6. INITIALIZE FIREBASE
+const app = initializeApp(firebaseConfig);
+
+/**
+ * THE COMPATIBILITY FIX
+ */
+export const db = FIREBASE_DATABASE_ID === '(default)' 
+    ? getFirestore(app) 
+    : getFirestore(app, FIREBASE_DATABASE_ID);
+
+export const auth = getAuth(app);
+export const GEMINI_API_KEY = getEnvKey('VITE_GEMINI_API_KEY');
+
+if (currentEnvironment === 'Production') {
+    console.log("🚀 [SYSTEM] BROOKSPEED PRODUCTION INITIALIZED");
+} else {
+    console.log("🛠️ [SYSTEM] BROOKSPEED DEVELOPMENT INITIALIZED");
+    console.log("🎯 TARGET DATABASE:", FIREBASE_DATABASE_ID);
+}

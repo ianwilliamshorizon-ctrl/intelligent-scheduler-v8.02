@@ -4,76 +4,68 @@ export interface ScoredPackage {
     pkg: ServicePackage;
     score: number;
     matchType: string;
-    color: string;
+    status: 'exact' | 'model' | 'make' | 'generic' | 'other';
+    color?: string; 
 }
 
 export const getScoredServicePackages = (
     servicePackages: ServicePackage[], 
     vehicle?: Partial<Vehicle> | null
 ): ScoredPackage[] => {
+    // If no vehicle is selected, treat all as Generic [cite: 48, 49]
     if (!vehicle) {
         return servicePackages.map(pkg => ({ 
             pkg, 
-            score: 0, 
+            score: 1, // Generic base score
             matchType: 'Generic', 
-            color: 'bg-gray-100 text-gray-600 border-gray-300' 
+            status: 'generic' as const,
+            color: 'bg-gray-100 text-gray-800'
         }));
     }
 
-    // Clean strings aggressively: lowercase, trim, and remove double spaces
-    const clean = (str: string | undefined | null) => (str || '').toLowerCase().replace(/\s+/g, ' ').trim();
+    // Normalization: "PORSCHE" -> "porsche", "911 CARRERA 2S" -> "911 carrera 2s"
+    const clean = (str: string | undefined | null) => 
+        (str || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
 
     const vMake = clean(vehicle.make);
     const vModel = clean(vehicle.model);
+    const vehicleFullString = `${vMake} ${vModel}`.trim();
 
-    const scored = servicePackages.map(pkg => {
-        const pMake = clean(pkg.applicableMake);
-        const pModel = clean(pkg.applicableModel);
-        const pVariant = clean(pkg.applicableVarient);
+    const scored: ScoredPackage[] = servicePackages.map(pkg => {
+        const pMake = clean(pkg.applicableMake);     
+        const pModel = clean(pkg.applicableModel);   
         
-        let score = -1; 
+        let score = 0; 
         let matchType = 'Other';
-        let color = 'bg-gray-50 text-gray-400 border-gray-100 opacity-60';
+        let status: ScoredPackage['status'] = 'other';
+        let color = 'bg-gray-50 text-gray-400';
 
-        // 1. GENERIC CHECK (MOTs etc - no make/model defined)
+        // 1. Generic Check (No specific make/model defined for the package)
         if (!pMake && !pModel) {
-            score = 0.8;
+            score = 1;
             matchType = 'Generic';
-            color = 'bg-slate-100 text-slate-700 border-slate-300 font-bold';
+            status = 'generic';
+            color = 'bg-slate-100 text-slate-700';
         } 
-        // 2. MAKE MATCH (Check if either contains the other to catch "Porsche" vs "Porsche AG")
-        else if (pMake && (vMake.includes(pMake) || pMake.includes(vMake))) {
-            if (!pModel) {
-                score = 1;
-                matchType = 'Make Match';
-                color = 'bg-amber-100 text-amber-800 border-amber-300';
-            } 
-            // 3. MODEL MATCH (Check if model strings overlap)
-            else if (vModel.includes(pModel) || pModel.includes(vModel)) {
-                if (!pVariant) {
-                    score = 2;
-                    matchType = 'Model Match';
-                    color = 'bg-blue-100 text-blue-800 border-blue-300';
-                } 
-                // 4. EXACT MATCH (Variant overlap)
-                else if (vModel.includes(pVariant) || pVariant.includes(vModel)) {
-                    score = 3;
-                    matchType = 'Exact Match';
-                    color = 'bg-green-100 text-green-900 border-green-400 ring-1 ring-green-500';
-                } else {
-                    score = 1.5;
-                    matchType = 'Model Match';
-                    color = 'bg-blue-100 text-blue-800 border-blue-300';
-                }
-            } else {
-                score = 0.5;
-                matchType = 'Make Only';
-                color = 'bg-gray-200 text-gray-700 border-gray-300'; 
+        // 2. Fuzzy Match Logic: Check if vehicle string contains package keywords
+        else if (pMake && vehicleFullString.includes(pMake)) {
+            score = 2; // Make Match
+            matchType = 'Make Match';
+            status = 'make';
+            color = 'bg-amber-100 text-amber-800 border-amber-300';
+
+            // Check for Model within the full string (e.g., "911" inside "911 CARRERA 2S")
+            if (pModel && vehicleFullString.includes(pModel)) {
+                score = 3; // Model Match (Higher Priority)
+                matchType = 'Model Match';
+                status = 'model';
+                color = 'bg-green-100 text-green-900 border-green-400 ring-1 ring-green-500';
             }
         }
         
-        return { pkg, score, matchType, color };
+        return { pkg, score, matchType, status, color };
     });
 
+    // CRITICAL: Sort by score DESCENDING so best matches (3) are at the top
     return [...scored].sort((a, b) => b.score - a.score);
 };

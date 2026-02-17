@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import * as T from './types';
 import { useData } from './core/state/DataContext';
@@ -37,14 +36,13 @@ import LoginView from './components/LoginView';
 const App = () => {
     const { 
         currentView, currentUser, 
-        selectedEntityId, 
+        selectedEntityId, setSelectedEntityId, // Ensure your context provides this setter
         confirmation, setConfirmation,
         users, isAuthenticated, login,
         backupSchedule, setBackupSchedule, appEnvironment
     } = useApp();
 
     const data = useData();
-    // Destructure everything needed for backup
     const { 
         jobs, vehicles, customers, estimates, invoices, purchaseOrders, 
         purchases, parts, servicePackages, suppliers, engineers, lifts,
@@ -53,7 +51,8 @@ const App = () => {
         nominalCodes, nominalCodeRules, absenceRequests, inquiries, 
         reminders, auditLog, businessEntities, taxRates, roles, inspectionDiagrams,
         setJobs, setEstimates, setInvoices, setPurchaseOrders, setRentalBookings,
-        setStorageBookings, setProspects, setInquiries, setAbsenceRequests, setParts
+        setStorageBookings, setProspects, setInquiries, setAbsenceRequests, setParts,
+        setCustomers, setVehicles
     } = data;
 
     // --- Modal State Management ---
@@ -66,6 +65,20 @@ const App = () => {
 
     // --- Automated Backup Logic ---
     const lastBackupTimeRef = useRef<string | null>(null);
+
+    // --- DATA INITIALIZATION FIX ---
+    // This effect ensures that on first load, if no entity is selected, 
+    // it automatically picks the first available one so the dashboard isn't blank.
+    useEffect(() => {
+        if (isAuthenticated && businessEntities.length > 0) {
+            if (!selectedEntityId || selectedEntityId === 'all') {
+                // If your useApp hook provides a setter, we use it to initialize the app state
+                if (typeof setSelectedEntityId === 'function') {
+                    setSelectedEntityId(businessEntities[0].id);
+                }
+            }
+        }
+    }, [isAuthenticated, businessEntities, selectedEntityId, setSelectedEntityId]);
 
     const getFullStateData = useCallback(() => {
         return {
@@ -123,7 +136,6 @@ const App = () => {
         return () => clearInterval(interval);
     }, [backupSchedule, handleAutoBackup]);
 
-    // Listener for custom vehicle history print event from VehicleFormModal
     useEffect(() => {
         const handlePrintRequest = (e: Event) => {
             const customEvent = e as CustomEvent<{ vehicleId: string }>;
@@ -136,7 +148,6 @@ const App = () => {
         return () => window.removeEventListener('open-vehicle-history-report', handlePrintRequest);
     }, [setters]);
 
-    // --- Authentication Guard ---
     if (!isAuthenticated) {
         return <LoginView users={users} onLogin={login} environment={appEnvironment} />;
     }
@@ -178,28 +189,17 @@ const App = () => {
         if (!job) return;
 
         let aggregatedLineItems: T.EstimateLineItem[] = [];
-
-        // 1. Find all estimates linked to this job (Main + Supplementary)
-        // Criteria: estimate.jobId matches OR estimate.id matches job.estimateId (for legacy/initial link)
         const linkedEstimates = estimates.filter(e => 
             (e.jobId === job.id || e.id === job.estimateId) && 
             ['Approved', 'Converted to Job', 'Closed'].includes(e.status)
         );
 
-        // 2. Aggregate items
         linkedEstimates.forEach(est => {
             if (est.lineItems) {
-                // Filter out optional items that were NOT selected (assuming Approved means selection is finalized)
-                // For simplicity here, we take all non-optional + selected items if we were tracking selections
-                // But typically the estimate lineItems are updated upon approval to reflect final state.
-                
-                // Regenerate IDs to ensure uniqueness in the invoice and detach from estimate record
                 const items = est.lineItems.map(item => ({ ...item, id: crypto.randomUUID() }));
                 aggregatedLineItems = [...aggregatedLineItems, ...items];
             }
         });
-
-        // 3. Fallback: If no estimates found, start empty. User can add manual items.
 
         const newInvoice: Partial<T.Invoice> = {
             entityId: job.entityId, 
@@ -227,7 +227,6 @@ const App = () => {
         }
     };
 
-    // Actions passed to views/components
     const commonProps = {
         onStartWork: (jobId: string, segmentId: string) => workshopActions.handleUpdateSegmentStatus(jobId, segmentId, 'In Progress'),
         onPause: (id: string, segId: string) => workshopActions.handleUpdateSegmentStatus(id, segId, 'Paused'),
@@ -239,11 +238,10 @@ const App = () => {
         onEditJob: (id: string) => { setters.setSelectedJobId(id); setters.setIsEditJobModalOpen(true); },
     };
 
-    // Actions passed to AppModals to handle saves
     const modalActions = {
         handleSaveItem,
-        setCustomers: data.setCustomers,
-        setVehicles: data.setVehicles,
+        setCustomers,
+        setVehicles,
         handleSavePurchaseOrder: workshopActions.handleSavePurchaseOrder,
         handleSaveEstimate: workshopActions.handleSaveEstimate,
         handleApproveEstimate: workshopActions.handleApproveEstimate,
