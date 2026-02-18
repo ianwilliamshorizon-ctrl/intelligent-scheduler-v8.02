@@ -128,6 +128,7 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
     if (!isOpen) return null;
 
     const handleConfirmClick = () => {
+        const entityShortCode = entityForEstimate?.shortCode || 'UNK';
         const dailyHours = (jobsForEntity.flatMap(j => j.segments) || [])
             .filter(s => s.date === scheduledDate && s.status !== 'Cancelled')
             .reduce((sum, s) => sum + s.duration, 0);
@@ -136,83 +137,149 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
         const absenceHours = absencesByDate.get(scheduledDate) || 0;
         const effectiveCapacity = Math.max(0, baseCapacity - absenceHours);
 
+        // Logic check: Is this purely an MOT job, or a Service + MOT?
+        const isMotOnlyEstimate = motBooking && laborHours <= 1.5;
+
         if (dailyHours + laborHours > effectiveCapacity && !motBooking) {
-            // Suggest next date based on base capacity for simplicity, or complex logic could check future absences
             const alternativeDate = findNextAvailableDate(scheduledDate, laborHours, jobsForEntity, baseCapacity);
             setSuggestion({ suggestedDate: alternativeDate, originalDate: scheduledDate });
         } else {
-            const entityShortCode = entityForEstimate?.shortCode || 'UNK';
             
-            // 1. Create Main Job
-            const mainJobId = generateJobId(jobs, entityShortCode);
-            const mainJob: Job = {
-                id: mainJobId,
-                entityId: estimate.entityId, 
-                vehicleId: estimate.vehicleId, 
-                customerId: estimate.customerId,
-                description: `Work from Estimate #${estimate.estimateNumber}`, 
-                estimatedHours: laborHours, 
-                scheduledDate: scheduledDate,
-                status: 'Unallocated', 
-                createdAt: formatDate(new Date()), 
-                segments: [], 
-                estimateId: estimate.id, 
-                notes: estimate.notes || '',
-                vehicleStatus: 'Awaiting Arrival',
-                createdByUserId: '', // Will be overwritten
-            };
-            
-            // Generate segments based on job type/duration
-            mainJob.segments = splitJobIntoSegments(mainJob);
-            
-            const extraJobs: Job[] = [];
-
-            // 2. Create separate MOT Job if booked
+            // SCENARIO 1: MOT BOOKING DETECTED
             if (motBooking) {
-                 // Important: Use a slightly modified ID or the next sequence. 
-                 // Since generateJobId relies on existing list, we need to mock it or just append a suffix for now 
-                 // or accept that sequential might be tricky in pure client-side without refetching.
-                 // A safer way is to use a timestamp suffix to ensure uniqueness locally before DB sync.
-                 const motJobId = `${mainJobId}-MOT`; 
+                const timeIndex = TIME_SEGMENTS.indexOf(motBooking.time);
+                
+                if (isMotOnlyEstimate) {
+                    // --- SCENARIO 1A: JUST AN MOT ---
+                    // Create ONE Allocated job. It IS the MOT job. It holds the estimate link for invoicing.
+                    const motJobId = generateJobId(jobs, entityShortCode);
+                    
+                    const motJob: Job = {
+                        id: motJobId,
+                        entityId: estimate.entityId,
+                        vehicleId: estimate.vehicleId,
+                        customerId: estimate.customerId,
+                        description: `MOT Test`,
+                        estimatedHours: 1, // Standard MOT
+                        scheduledDate: motBooking.date,
+                        status: 'Allocated', // Explicitly Allocated
+                        createdAt: formatDate(new Date()),
+                        createdByUserId: '',
+                        estimateId: estimate.id, // Holds the invoice link
+                        vehicleStatus: 'Awaiting Arrival',
+                        partsStatus: 'Not Required',
+                        notes: estimate.notes || '',
+                        segments: [] // Will be populated below
+                    };
+                    
+                    if (timeIndex !== -1) {
+                        motJob.segments = [{
+                            segmentId: crypto.randomUUID(),
+                            date: motBooking.date,
+                            duration: 1,
+                            status: 'Allocated',
+                            allocatedLift: motBooking.liftId,
+                            scheduledStartSegment: timeIndex,
+                            engineerId: null // Engineer assigned later
+                        }];
+                    } else {
+                        // Fallback if time index not found (shouldn't happen with valid UI)
+                        motJob.segments = splitJobIntoSegments(motJob);
+                        motJob.status = 'Unallocated';
+                    }
 
-                 const motJob: Job = {
-                     id: motJobId,
-                     entityId: estimate.entityId,
-                     vehicleId: estimate.vehicleId,
-                     customerId: estimate.customerId,
-                     description: `MOT Test`,
-                     estimatedHours: 1, // Standard MOT length
-                     scheduledDate: motBooking.date,
-                     status: 'Allocated',
-                     createdAt: formatDate(new Date()),
-                     createdByUserId: '',
-                     segments: [],
-                     vehicleStatus: 'Awaiting Arrival', // Will likely update when main job arrives
-                     notes: `Linked to Master Job #${mainJobId}`,
-                     partsStatus: 'Not Required'
-                 };
+                    const updatedEstimate: Estimate = { ...estimate, status: 'Converted to Job', jobId: motJob.id };
+                    // No extra jobs, just the allocated MOT job
+                    onConfirm(motJob, updatedEstimate, { isAlternative: false, originalDate: scheduledDate });
 
-                 const timeIndex = TIME_SEGMENTS.indexOf(motBooking.time);
-                 if (timeIndex !== -1) {
-                     motJob.segments = [{
-                         segmentId: crypto.randomUUID(),
-                         date: motBooking.date,
-                         duration: 1,
-                         status: 'Allocated',
-                         allocatedLift: motBooking.liftId,
-                         scheduledStartSegment: timeIndex,
-                         engineerId: null // Can be assigned later
-                     }];
-                 }
+                } else {
+                    // --- SCENARIO 1B: SERVICE + MOT ---
+                    // Create MASTER job (Unallocated, Full Duration) + LINKED MOT Job (Allocated, 1hr)
+                    
+                    // 1. Master Job (Holds Estimate & Invoice)
+                    const mainJobId = generateJobId(jobs, entityShortCode);
+                    const mainJob: Job = {
+                        id: mainJobId,
+                        entityId: estimate.entityId, 
+                        vehicleId: estimate.vehicleId, 
+                        customerId: estimate.customerId,
+                        description: `Work from Estimate #${estimate.estimateNumber}`, 
+                        estimatedHours: laborHours, // Full duration
+                        scheduledDate: scheduledDate,
+                        status: 'Unallocated', 
+                        createdAt: formatDate(new Date()), 
+                        segments: [], 
+                        estimateId: estimate.id, // CRITICAL: Master job holds the financial link
+                        notes: estimate.notes || '',
+                        vehicleStatus: 'Awaiting Arrival',
+                        createdByUserId: '',
+                    };
+                    mainJob.segments = splitJobIntoSegments(mainJob); // Create unallocated segments for mechanic assignment
 
-                 extraJobs.push(motJob);
+                    // 2. Linked MOT Job (The booking slot)
+                    const motJobId = `${mainJobId}-MOT`;
+                    const motJob: Job = {
+                        id: motJobId,
+                        entityId: estimate.entityId,
+                        vehicleId: estimate.vehicleId,
+                        customerId: estimate.customerId,
+                        description: `MOT Test (Linked to ${mainJobId})`,
+                        estimatedHours: 1,
+                        scheduledDate: motBooking.date,
+                        status: 'Allocated',
+                        createdAt: formatDate(new Date()),
+                        createdByUserId: '',
+                        segments: [],
+                        estimateId: undefined, // CRITICAL: No financial link, prevents double invoicing
+                        vehicleStatus: 'Awaiting Arrival', 
+                        notes: `Linked to Master Job #${mainJobId}. Do not invoice separately.`,
+                        partsStatus: 'Not Required'
+                    };
 
-                 // Link Main Job to MOT in notes
-                 mainJob.notes += `\n\nLinked MOT Job: #${motJobId} at ${motBooking.time}`;
+                    if (timeIndex !== -1) {
+                        motJob.segments = [{
+                            segmentId: crypto.randomUUID(),
+                            date: motBooking.date,
+                            duration: 1,
+                            status: 'Allocated',
+                            allocatedLift: motBooking.liftId,
+                            scheduledStartSegment: timeIndex,
+                            engineerId: null
+                        }];
+                    }
+                    
+                    // Link notes
+                    mainJob.notes += `\n\nLinked MOT Booking: #${motJobId} @ ${motBooking.time}`;
+
+                    const updatedEstimate: Estimate = { ...estimate, status: 'Converted to Job', jobId: mainJob.id };
+                    // Create both jobs
+                    onConfirm(mainJob, updatedEstimate, { isAlternative: false, originalDate: scheduledDate }, [motJob]);
+                }
+            } else {
+                // --- SCENARIO 2: STANDARD JOB (NO MOT SLOT) ---
+                const mainJobId = generateJobId(jobs, entityShortCode);
+                const mainJob: Job = {
+                    id: mainJobId,
+                    entityId: estimate.entityId, 
+                    vehicleId: estimate.vehicleId, 
+                    customerId: estimate.customerId,
+                    description: `Work from Estimate #${estimate.estimateNumber}`, 
+                    estimatedHours: laborHours, 
+                    scheduledDate: scheduledDate,
+                    status: 'Unallocated', 
+                    createdAt: formatDate(new Date()), 
+                    segments: [], 
+                    estimateId: estimate.id, 
+                    notes: estimate.notes || '',
+                    vehicleStatus: 'Awaiting Arrival',
+                    createdByUserId: '', 
+                };
+                
+                mainJob.segments = splitJobIntoSegments(mainJob);
+                
+                const updatedEstimate: Estimate = { ...estimate, status: 'Converted to Job', jobId: mainJob.id };
+                onConfirm(mainJob, updatedEstimate, { isAlternative: false, originalDate: scheduledDate });
             }
-
-            const updatedEstimate: Estimate = { ...estimate, status: 'Converted to Job', jobId: mainJob.id };
-            onConfirm(mainJob, updatedEstimate, { isAlternative: false, originalDate: scheduledDate }, extraJobs);
         }
     };
 

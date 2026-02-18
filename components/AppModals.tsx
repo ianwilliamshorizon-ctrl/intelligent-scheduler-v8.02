@@ -60,9 +60,10 @@ interface AppModalsProps {
     modals: ModalState;
     setters: ModalSetters;
     actions: AppModalActions;
+    commonProps: any;
 }
 
-const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions }) => {
+const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonProps }) => {
     const { 
         jobs, vehicles, customers, estimates, invoices, purchaseOrders, 
         parts, servicePackages, suppliers, businessEntities, taxRates, 
@@ -189,15 +190,13 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions }) => {
             )}
 
             {modals.invoiceFormModal.isOpen && (
-                <InvoiceFormModal 
+                 <InvoiceFormModal
+                    key={modals.invoiceFormModal.invoice?.id || modals.invoiceFormModal.job?.id || 'new'}
                     isOpen={modals.invoiceFormModal.isOpen}
-                    onClose={() => setters.setInvoiceFormModal({isOpen: false, invoice: null})}
+                    onClose={() => setters.setInvoiceFormModal({ isOpen: false, invoice: null, job: null })}
                     onSave={(inv) => {
                         const finalInvoice = { ...inv, createdByUserId: inv.createdByUserId || currentUser.id };
-                        // 1. Save Invoice
                         handleSaveItem(setInvoices, finalInvoice, 'brooks_invoices');
-                        
-                        // 2. Update Job Status and Link Invoice
                         if (finalInvoice.jobId) {
                             const job = jobs.find(j => j.id === finalInvoice.jobId);
                             if (job) {
@@ -205,11 +204,11 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions }) => {
                                 handleSaveItem(setJobs, updatedJob, 'brooks_jobs');
                             }
                         }
-                        
-                        setters.setInvoiceFormModal({isOpen: false, invoice: null});
-                        setters.setViewInvoiceModal({isOpen: true, invoice: finalInvoice});
+                        setters.setInvoiceFormModal({ isOpen: false, invoice: null, job: null });
+                        setters.setViewInvoiceModal({ isOpen: true, invoice: finalInvoice });
                     }}
                     invoice={modals.invoiceFormModal.invoice}
+                    job={modals.invoiceFormModal.job || null}
                     customers={customers}
                     onSaveCustomer={(c) => handleSaveItem(actions.setCustomers, c, 'brooks_customers')}
                     vehicles={vehicles}
@@ -471,7 +470,8 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions }) => {
                         if (originalEstimate && originalEstimate.jobId) {
                             const originJob = jobs.find(j => j.id === originalEstimate.jobId);
                             if (originJob) {
-                                const updateNote = `\n[System]: Supplementary Estimate #${originalEstimate.estimateNumber} was converted to a separate Job #${job.id} scheduled for ${job.scheduledDate}.`;
+                                const updateNote = `
+[System]: Supplementary Estimate #${originalEstimate.estimateNumber} was converted to a separate Job #${job.id} scheduled for ${job.scheduledDate}.`;
                                 const updatedOriginJob = {
                                     ...originJob,
                                     notes: (originJob.notes || '') + updateNote
@@ -564,10 +564,12 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions }) => {
                              const hasParts = allLinkedIds.length > 0;
 
                              if (!hasParts) {
-                                 const closedInquiry: T.Inquiry = { ...inquiry, status: 'Closed', actionNotes: (inquiry.actionNotes || '') + '\n[System]: Job Scheduled (No Parts Required). Inquiry Closed.' };
+                                 const closedInquiry: T.Inquiry = { ...inquiry, status: 'Closed', actionNotes: (inquiry.actionNotes || '') + `
+[System]: Job Scheduled (No Parts Required). Inquiry Closed.` };
                                  handleSaveItem(setInquiries, closedInquiry, 'brooks_inquiries');
                              } else {
-                                 const updatedInquiry: T.Inquiry = { ...inquiry, status: 'In Progress', linkedPurchaseOrderIds: allLinkedIds, actionNotes: (inquiry.actionNotes || '') + `\n[System]: Job Scheduled. Parts status updated.` };
+                                 const updatedInquiry: T.Inquiry = { ...inquiry, status: 'In Progress', linkedPurchaseOrderIds: allLinkedIds, actionNotes: (inquiry.actionNotes || '') + `
+[System]: Job Scheduled. Parts status updated.` };
                                  handleSaveItem(setInquiries, updatedInquiry, 'brooks_inquiries');
                              }
                         }

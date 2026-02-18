@@ -19,6 +19,14 @@ export const MOTBookingModal: React.FC<MOTBookingModalProps> = ({ isOpen, onClos
     const [selectedDate, setSelectedDate] = useState(initialDate || getRelativeDate(1));
     const [selectedSlot, setSelectedSlot] = useState<{ date: string, time: string, liftId: string } | null>(null);
 
+    // Sync state with prop when modal opens
+    useEffect(() => {
+        if (isOpen && initialDate) {
+            setSelectedDate(initialDate);
+            setSelectedSlot(null); // Reset selection on open/date change
+        }
+    }, [isOpen, initialDate]);
+
     // 1. Find MOT Lift(s) for this entity
     const motLifts = useMemo(() => {
         return lifts.filter(l => l.entityId === entityId && l.type === 'MOT');

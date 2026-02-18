@@ -1,7 +1,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { Job, Vehicle, Customer, Engineer, User, PurchaseOrder } from '../types';
-import { ClipboardCheck, FileText, CheckCircle, Car, User as UserIcon, MessageSquare, Clock, Wrench, PlayCircle, Search, X, PauseCircle, Wand2, Package as PackageIcon } from 'lucide-react';
+import { ClipboardCheck, FileText, CheckCircle, Car, User as UserIcon, MessageSquare, Clock, Wrench, PlayCircle, Search, X, PauseCircle, Wand2, Package as PackageIcon, UserPlus } from 'lucide-react';
 import { formatReadableDate, getRelativeDate } from '../core/utils/dateUtils';
 import { TIME_SEGMENTS, SEGMENT_DURATION_MINUTES, END_HOUR, END_MINUTE } from '../constants';
 import { useData } from '../core/state/DataContext';
@@ -31,7 +31,7 @@ const WorkflowJobCard: React.FC<{
         }
     };
 
-    const associatedPOs = (job.purchaseOrderIds || []).map(id => purchaseOrders.find(po => po.id === id)).filter(Boolean) as PurchaseOrder[];
+    const associatedPOs = (job.purchaseOrderIds || []).map(id => (purchaseOrders || []).find(po => po.id === id)).filter(Boolean) as PurchaseOrder[];
     
     return (
         <div 
@@ -94,7 +94,6 @@ const WorkflowView: React.FC<WorkflowViewProps> = ({ jobs, vehicles, customers, 
     const { purchaseOrders } = useData();
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedEngineerId, setSelectedEngineerId] = useState<string>('all');
-    // Default to '7days' as per user request
     const [selectedDateFilter, setSelectedDateFilter] = useState<'today' | '7days' | '14days'>('7days');
 
     const vehiclesById = useMemo(() => new Map(vehicles.map(v => [v.id, v])), [vehicles]);
@@ -139,16 +138,13 @@ const WorkflowView: React.FC<WorkflowViewProps> = ({ jobs, vehicles, customers, 
             const engineerFilterId = isEngineerView ? currentUser.engineerId : (selectedEngineerId !== 'all' ? selectedEngineerId : null);
             
             return (job.segments || []).some(s => {
-                // Must have a date in the selected range
                 const dateMatch = s.date && s.date >= today && s.date <= filterEndDate;
                 if (!dateMatch) return false;
 
-                // If filtering by engineer, must match the engineer ID
                 if (engineerFilterId) {
                     return s.engineerId === engineerFilterId;
                 }
 
-                // If not filtering by engineer ('all' view), date match is sufficient
                 return true;
             });
         });
@@ -188,9 +184,7 @@ const WorkflowView: React.FC<WorkflowViewProps> = ({ jobs, vehicles, customers, 
 
     const canControlJob = (engineerId?: string | null) => {
         if (!engineerId) return false;
-        // Engineers can only control their own jobs
         if (currentUser.role === 'Engineer') return engineerId === currentUser.engineerId;
-        // Admins and Dispatchers can control all jobs
         return currentUser.role === 'Admin' || currentUser.role === 'Dispatcher';
     };
 
@@ -264,7 +258,7 @@ const WorkflowView: React.FC<WorkflowViewProps> = ({ jobs, vehicles, customers, 
                                         onEdit={onEditJob}
                                         onOpenAssistant={onOpenAssistant}
                                         onOpenPurchaseOrder={onOpenPurchaseOrder}
-                                        purchaseOrders={purchaseOrders}
+                                        purchaseOrders={purchaseOrders || []}
                                     >
                                         <div className="mt-2 text-xs space-y-1">
                                             {(job.segments || []).filter(s => s.date && s.date >= today && s.date <= filterEndDate && s.allocatedLift).map(seg => {
@@ -280,10 +274,20 @@ const WorkflowView: React.FC<WorkflowViewProps> = ({ jobs, vehicles, customers, 
                                                     }
                                                     timeString = `${startTime} - ${endTime}`;
                                                 }
+                                                
+                                                const engineerName = engineersById.get(seg.engineerId!)?.name;
+
                                                 return (
                                                      <div key={seg.segmentId} className="p-1.5 bg-gray-100 rounded-md">
                                                          <div className="flex justify-between items-center">
-                                                             <span className="font-semibold">{engineersById.get(seg.engineerId!)?.name} on {seg.allocatedLift}</span>
+                                                            <div className="flex items-center gap-2">
+                                                                {engineerName ? (
+                                                                    <span className="font-semibold flex items-center gap-1.5"><UserIcon size={12}/>{engineerName}</span>
+                                                                ) : (
+                                                                    <span className="font-semibold flex items-center gap-1.5 text-red-600"><UserPlus size={12}/>Unassigned</span>
+                                                                )}
+                                                                <span className="text-gray-500">on {seg.allocatedLift}</span>
+                                                            </div>
                                                              <span className={`font-semibold ${seg.status === 'Paused' ? 'text-orange-600 animate-pulse' : 'text-indigo-700'}`}>{seg.status === 'Paused' ? 'PAUSED' : timeString}</span>
                                                          </div>
                                                          {seg.date !== today && <div className="text-xs text-gray-600 font-semibold pt-1">{formatReadableDate(seg.date)}</div>}

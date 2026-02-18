@@ -37,7 +37,6 @@ interface EstimateViewModalProps {
     users: User[];
     currentUser: User;
     onCreateInquiry?: (estimate: Estimate) => void;
-    // New feature: Schedule callback
     onScheduleEstimate?: (estimate: Estimate, inquiryId?: string) => void;
 }
 
@@ -65,25 +64,18 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
     const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
     const [localViewMode, setLocalViewMode] = useState<'internal' | 'customer'>(viewMode);
     
-    // Track optional items selected
     const [selectedOptionalItems, setSelectedOptionalItems] = useState<Set<string>>(new Set());
     const [isApproving, setIsApproving] = useState(false);
     const [approvalNotes, setApprovalNotes] = useState('');
     const [approvalDate, setApprovalDate] = useState(formatDate(new Date()));
     
-    // Default to today for calendar view (OLD FEATURE restored)
     const [currentMonthDate, setCurrentMonthDate] = useState(() => dateStringToDate(formatDate(new Date())));
 
     const print = usePrint();
     const mainRef = useRef<HTMLDivElement>(null);
     
-    /**
-     * SUBMISSION GUARD
-     * Prevents multiple rapid triggers of approval functions
-     */
     const isSubmitting = useRef(false);
     
-    // Customer Approval State
     const [isConfirmingApproval, setIsConfirmingApproval] = useState(false);
     const [preferredStartDate, setPreferredStartDate] = useState(formatDate(new Date()));
     const [preferredEndDate, setPreferredEndDate] = useState(formatDate(new Date()));
@@ -94,7 +86,6 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
     const isSupplementary = !!estimate.jobId;
     const isAlreadyApproved = estimate.status === 'Approved';
 
-    // Auto-scroll when confirmation starts
     useEffect(() => {
         if (isConfirmingApproval && mainRef.current) {
             setTimeout(() => {
@@ -136,7 +127,6 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
         return undefined;
     }, [entityDetails, estimate.entityId, businessEntities]);
 
-    // --- OLD FEATURE: ABSENCE TRACKING ---
     const absencesByDate = useMemo(() => {
         const map = new Map<string, number>();
         absenceRequests.forEach(req => {
@@ -153,7 +143,6 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
         return map;
     }, [absenceRequests]);
 
-    // --- OLD FEATURE: MANUAL CAPACITY LOGIC ---
     const manualApprovalCapacity = useMemo(() => {
         if (!approvalDate || !resolvedEntity) return null;
 
@@ -233,7 +222,6 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
         }
     }, [preferredStartDate, isConfirmingApproval, jobs, resolvedEntity, laborHours, minBookingDate, preferredEndDate]);
 
-    // Unified memo for calculating items and totals
     const { essentialItems, optionalItems, dynamicTotals } = useMemo(() => {
         const allItems = estimate.lineItems || [];
         const essentials: EstimateLineItem[] = [];
@@ -411,7 +399,6 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
 
     return (
         <>
-            {/* Z-Index lowered to 60 to sit behind Email Modal (Z-90) */}
             <div className="fixed inset-0 bg-gray-900 bg-opacity-75 z-[60] flex justify-center items-center p-4">
                 <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
                     <header className="flex-shrink-0 flex justify-between items-center p-4 border-b bg-gray-50 rounded-t-xl">
@@ -594,17 +581,9 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                                 </div>
                                 <div className="flex gap-2">
                                     {onCreateInquiry && <button onClick={() => onCreateInquiry(estimate)} className="flex items-center py-2 px-4 bg-purple-100 text-purple-700 font-semibold rounded-lg hover:bg-purple-200 transition"><MessageSquare size={16} className="mr-2"/> Raise Inquiry</button>}
-                                    {isAlreadyApproved && !estimate.jobId ? (
-                                        <button 
-                                            onClick={() => { setIsApproving(true); setApprovalNotes(''); }} 
-                                            // OLD FEATURE: Schedule button triggers the large modal
-                                            className="flex items-center py-2 px-4 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 shadow-md transition"
-                                        >
-                                            <CalendarCheck size={16} className="mr-2"/> Schedule Job
-                                        </button>
-                                    ) : (
-                                        <button onClick={() => { setIsApproving(true); setApprovalNotes(''); }} className="flex items-center py-2 px-4 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 shadow-md transition"><CheckSquare size={16} className="mr-2"/> Manual Approve</button>
-                                    )}
+                                    <button onClick={() => { onScheduleEstimate?.(estimate); onClose(); }} className="flex items-center py-2 px-4 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 shadow-md transition">
+                                        <CalendarCheck size={16} className="mr-2"/> Schedule Job
+                                    </button>
                                 </div>
                             </>
                         ) : (
@@ -622,174 +601,6 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                 </div>
             </div>
             {isEmailing && <EmailEstimateModal isOpen={isEmailing} onClose={() => setIsEmailing(false)} onSend={handleEmailSuccess} onViewAsCustomer={() => { setIsEmailing(false); setLocalViewMode('customer'); }} estimate={estimate} customer={customer} vehicle={vehicle} taxRates={taxRates}/>}
-            
-            {/* CRITICAL MERGE SECTION:
-               This modal uses the OLD file's 'max-w-7xl' and grid layout (including BookingCalendarView).
-               But it now includes the NEW file's buttons in the footer.
-            */}
-            {isApproving && (
-                <div className="fixed inset-0 bg-gray-900 bg-opacity-75 z-[70] flex justify-center items-center p-4">
-                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-7xl h-[90vh] flex flex-col p-6">
-                        <div className="flex justify-between items-center mb-4 border-b pb-4 flex-shrink-0">
-                             <h3 className="text-xl font-bold">{isAlreadyApproved ? 'Schedule Approved Estimate' : 'Approve & Schedule Estimate'}</h3>
-                             <button onClick={() => setIsApproving(false)}><X size={24} className="text-gray-500"/></button>
-                        </div>
-                        <div className={`flex-grow overflow-hidden grid grid-cols-1 ${isSupplementary ? '' : 'lg:grid-cols-3'} gap-6 min-h-0`}>
-                            {/* Column 1: Options & Notes */}
-                            <div className={`flex flex-col gap-4 overflow-y-auto pr-2 ${isSupplementary ? 'max-w-2xl mx-auto w-full' : ''}`}>
-                                <div className="bg-gray-50 p-4 rounded-lg border">
-                                    <h4 className="font-bold text-sm mb-2">Optional Items</h4>
-                                    {optionalItems.length > 0 ? (
-                                        <div className="space-y-2">
-                                            {optionalGroups.packages.map(pkg => (
-                                                <div key={pkg.header.id} className="flex items-center gap-3 p-2 bg-white border rounded cursor-pointer hover:border-indigo-300" onClick={() => handleToggleOptional(pkg.header.id)}>
-                                                    <div className="flex justify-center flex-shrink-0">
-                                                         <div className={`h-5 w-5 rounded border flex items-center justify-center ${selectedOptionalItems.has(pkg.header.id) ? 'bg-indigo-600 border-indigo-600' : 'bg-white border-gray-300'}`}>
-                                                            {selectedOptionalItems.has(pkg.header.id) && <CheckSquare size={14} className="text-white" />}
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex-grow">
-                                                        <div className="flex items-center gap-2">
-                                                            <Package size={14} className="text-indigo-600"/>
-                                                            <span className="text-sm font-semibold">{pkg.header.description}</span>
-                                                        </div>
-                                                        <div className="text-xs text-gray-500 pl-6">{pkg.children.length} item(s) included</div>
-                                                    </div>
-                                                    <span className="text-sm font-bold">{formatCurrency(pkg.header.unitPrice * pkg.header.quantity)}</span>
-                                                </div>
-                                            ))}
-                                            {optionalGroups.standalone.map(item => (
-                                                <div key={item.id} className="flex items-center gap-3 p-2 bg-white border rounded cursor-pointer hover:border-indigo-300" onClick={() => handleToggleOptional(item.id)}>
-                                                    <div className="flex justify-center flex-shrink-0">
-                                                        <div className={`h-5 w-5 rounded border flex items-center justify-center ${selectedOptionalItems.has(item.id) ? 'bg-indigo-600 border-indigo-600' : 'bg-white border-gray-300'} cursor-pointer`}>
-                                                             {selectedOptionalItems.has(item.id) && <CheckSquare size={14} className="text-white" />}
-                                                        </div>
-                                                    </div>
-                                                    <span className="text-sm flex-grow">{item.description}</span>
-                                                    <span className="text-sm font-semibold">{formatCurrency(item.unitPrice * item.quantity)}</span>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    ) : <p className="text-xs text-gray-500">No optional items.</p>}
-                                </div>
-                                
-                                {!isSupplementary && (
-                                    <>
-                                        {/* OLD FEATURE: Detailed Capacity Card */}
-                                        <div className={`p-4 rounded-lg border ${manualApprovalCapacity?.statusColor}`}>
-                                            <h4 className="font-bold text-sm mb-2 flex items-center gap-2"><Gauge size={16}/> Capacity Impact</h4>
-                                            {manualApprovalCapacity ? (
-                                                <div className="space-y-1 text-sm">
-                                                    <div className="flex justify-between"><span>Total Capacity:</span> <span>{manualApprovalCapacity.max} hrs</span></div>
-                                                    {manualApprovalCapacity.absence > 0 && (
-                                                        <div className="flex justify-between text-red-600 font-medium">
-                                                            <span>Staff Absence:</span> 
-                                                            <span>- {manualApprovalCapacity.absence} hrs</span>
-                                                        </div>
-                                                    )}
-                                                    <div className="flex justify-between font-semibold border-b border-black/10 pb-1 mb-1">
-                                                        <span>Net Availability:</span> 
-                                                        <span>{manualApprovalCapacity.effective.toFixed(1)} hrs</span>
-                                                    </div>
-                                                    <div className="flex justify-between"><span>Current Load:</span> <span>{manualApprovalCapacity.allocated.toFixed(1)} hrs</span></div>
-                                                    <div className="flex justify-between font-semibold border-t border-black/10 pt-1 mt-1"><span>New Job:</span> <span>+ {projectedLaborHours.toFixed(1)} hrs</span></div>
-                                                    <div className="flex justify-between font-bold text-base mt-1"><span>Remaining:</span> <span>{manualApprovalCapacity.remaining.toFixed(1)} hrs</span></div>
-                                                    {manualApprovalCapacity.isOverCapacity && (
-                                                        <p className="mt-2 text-xs font-bold text-red-700 flex items-center"><AlertTriangle size={12} className="mr-1"/> Over Capacity!</p>
-                                                    )}
-                                                 </div>
-                                            ) : (
-                                                <p className="text-xs text-gray-500">Select a date to view capacity.</p>
-                                            )}
-                                        </div>
-
-                                        <div className="bg-indigo-50 p-4 rounded-lg border border-indigo-100">
-                                            <h4 className="font-bold text-sm text-indigo-900 mb-2">Schedule Job</h4>
-                                            <div className="space-y-2">
-                                                <div>
-                                                    <label className="block text-xs font-semibold text-indigo-700">Selected Date</label>
-                                                    <input type="date" value={approvalDate} onChange={(e) => setApprovalDate(e.target.value)} className="w-full p-2 border rounded-md"/>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </>
-                                )}
-
-                                {isSupplementary && (
-                                    <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                                        <h4 className="font-bold text-blue-900 mb-2 flex items-center gap-2"><CheckCircle size={18}/> Add to Active Job</h4>
-                                        <p className="text-sm text-blue-800">
-                                            Approving this supplementary estimate will immediately add these items to the job in progress.
-                                        </p>
-                                        <ul className="list-disc list-inside text-sm text-blue-800 mt-2 ml-1">
-                                            <li>Purchase Orders will be raised automatically.</li>
-                                            <li>Labor hours will be added to the job.</li>
-                                            <li>This estimate will be marked as Closed.</li>
-                                        </ul>
-                                    </div>
-                                )}
-                                
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Approval Notes</label>
-                                    <textarea value={approvalNotes} onChange={(e) => setApprovalNotes(e.target.value)} rows={3} className="w-full p-2 border rounded-lg text-sm" placeholder="Any specific instructions..." />
-                                </div>
-                            </div>
-                            
-                            {/* Column 2 & 3: Calendar View (OLD FEATURE) */}
-                            {!isSupplementary && (
-                                <div className="lg:col-span-2 flex flex-col h-full min-h-0 bg-gray-50 rounded-lg border p-4">
-                                     <div className="flex justify-between items-center mb-4 flex-shrink-0">
-                                         <h4 className="font-bold text-gray-700">Calendar Availability</h4>
-                                         <div className="flex items-center gap-2">
-                                            <button onClick={() => handleMonthChange(-1)} className="p-1 rounded hover:bg-gray-200"><ChevronLeft/></button>
-                                            <span className="font-semibold text-sm w-32 text-center">{currentMonthDate.toLocaleString('default', { month: 'long', year: 'numeric', timeZone: 'UTC' })}</span>
-                                            <button onClick={() => handleMonthChange(1)} className="p-1 rounded hover:bg-gray-200"><ChevronRight/></button>
-                                         </div>
-                                     </div>
-                                     <div className="flex-grow min-h-0 overflow-hidden">
-                                          <BookingCalendarView jobs={entityJobs} vehicles={vehicles} customers={customers} onAddJob={() => {}} onDragStart={() => {}} maxDailyCapacityHours={resolvedEntity?.dailyCapacityHours || 40} absencesByDate={absencesByDate} onDayClick={(date) => setApprovalDate(date)} onEditJob={() => {}} currentMonthDate={currentMonthDate} selectedDate={approvalDate}/>
-                                     </div>
-                                </div>
-                            )}
-                        </div>
-                        
-                        <div className="flex justify-end gap-2 mt-4 pt-4 border-t flex-shrink-0">
-                            <button onClick={() => setIsApproving(false)} className="px-4 py-2 bg-gray-200 rounded-lg font-semibold hover:bg-gray-300">Cancel</button>
-                            
-                            {/* NEW FEATURE: Approve Only Button */}
-                            <button onClick={() => { 
-                                if (isSubmitting.current) return;
-                                isSubmitting.current = true;
-                                onApprove(estimate, Array.from(selectedOptionalItems), approvalNotes, undefined);
-                                setIsApproving(false); 
-                                onClose();
-                            }} className="px-4 py-2 bg-blue-100 text-blue-800 rounded-lg font-bold hover:bg-blue-200">
-                                Approve Only
-                            </button>
-
-                            {/* NEW FEATURE: Approve & Schedule Button with Timeout Logic */}
-                            {onScheduleEstimate && (
-                                <button 
-                                    onClick={() => { 
-                                        if (isSubmitting.current) return;
-                                        isSubmitting.current = true;
-                                        // 1. Approve (Update state)
-                                        onApprove(estimate, Array.from(selectedOptionalItems), approvalNotes, undefined); 
-                                        // 2. Open Scheduler (Passes current estimate reference)
-                                        setIsApproving(false);
-                                        onClose(); 
-                                        // 3. Trigger Scheduler Callback with delay
-                                        setTimeout(() => onScheduleEstimate?.(estimate), 50);
-                                    }} 
-                                    className="px-6 py-2 bg-green-600 text-white rounded-lg font-bold hover:bg-green-700 shadow-md flex items-center gap-2"
-                                >
-                                    Approve & Schedule <ArrowRight size={16}/>
-                                </button>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            )}
         </>
     );
 };

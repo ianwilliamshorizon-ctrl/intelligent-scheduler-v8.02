@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import * as T from './types';
 import { useData } from './core/state/DataContext';
@@ -6,8 +7,8 @@ import { createBackup, downloadBackup } from './core/utils/backupUtils';
 import { setItem } from './core/db';
 import { getCustomerDisplayName } from './core/utils/customerUtils';
 import { formatDate } from './core/utils/dateUtils';
+import useModalState from './core/hooks/useModalState';
 import { useWorkshopActions } from './core/hooks/useWorkshopActions';
-import { useModalState } from './core/hooks/useModalState';
 
 // Layout & Views
 import MainLayout from './components/MainLayout';
@@ -80,8 +81,15 @@ const App = () => {
     const [modalsState, setters] = useModalState();
     const [isManagementOpen, setIsManagementOpen] = useState(false);
     const [managementInitialView, setManagementInitialView] = useState<{ tab: string; id: string } | null>(null);
-    const workshopActions = useWorkshopActions();
     const lastBackupTimeRef = useRef<string | null>(null);
+
+    const handleGenerateInvoice = (jobId: string) => {
+        const job = (jobs || []).find(j => j.id === jobId);
+        if (!job) return;
+        setters.setInvoiceFormModal({ isOpen: true, job });
+    };
+
+    const workshopActions = useWorkshopActions(handleGenerateInvoice);
 
     useEffect(() => {
         if (isAuthenticated && businessEntities.length > 0) {
@@ -145,7 +153,7 @@ const App = () => {
         const handlePrintRequest = (e: Event) => {
             const customEvent = e as CustomEvent<{ vehicleId: string }>;
             if (customEvent.detail?.vehicleId) {
-                setters.setVehicleHistoryModal({ isOpen: true, vehicleId: customEvent.detail.vehicleId });
+                setters.setVehicleHistoryReportModal({ isOpen: true, vehicleId: customEvent.detail.vehicleId });
             }
         };
         window.addEventListener('open-vehicle-history-report', handlePrintRequest);
@@ -188,21 +196,6 @@ const App = () => {
         setConfirmation({ isOpen: true, title: 'Estimate Declined', message: 'You have declined this estimate. We have been notified.', type: 'warning' });
     };
 
-    const handleGenerateInvoice = (jobId: string) => {
-        const job = (jobs || []).find(j => j.id === jobId);
-        if (!job) return;
-        let aggregatedLineItems: T.EstimateLineItem[] = [];
-        const linkedEstimates = (estimates || []).filter(e => (e.jobId === job.id || e.id === job.estimateId) && ['Approved', 'Converted to Job', 'Closed'].includes(e.status));
-        linkedEstimates.forEach(est => {
-            if (est.lineItems) {
-                const items = est.lineItems.map(item => ({ ...item, id: crypto.randomUUID() }));
-                aggregatedLineItems = [...aggregatedLineItems, ...items];
-            }
-        });
-        const newInvoice: Partial<T.Invoice> = { entityId: job.entityId, customerId: job.customerId, vehicleId: job.vehicleId, jobId: job.id, issueDate: formatDate(new Date()), dueDate: formatDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)), status: 'Draft', lineItems: aggregatedLineItems, createdByUserId: currentUser.id };
-        setters.setInvoiceFormModal({ isOpen: true, invoice: newInvoice as T.Invoice });
-    };
-
     const handleMarkJobAsAwaitingCollection = (jobId: string) => {
         setJobs(prev => (prev || []).map(j => j.id === jobId ? { ...j, vehicleStatus: 'Awaiting Collection' } : j));
     };
@@ -243,10 +236,10 @@ const App = () => {
             {currentView === 'workflow' && <WorkflowView jobs={jobs || []} vehicles={vehicles || []} customers={customers || []} engineers={engineers || []} currentUser={currentUser} onQcApprove={commonProps.onQcApprove} onGenerateInvoice={handleGenerateInvoice} onEditJob={commonProps.onEditJob} onStartWork={commonProps.onStartWork} onEngineerComplete={commonProps.onEngineerComplete} onPause={(id, segId) => workshopActions.handleUpdateSegmentStatus(id, segId, 'Paused')} onRestart={commonProps.onRestart} onOpenAssistant={commonProps.onOpenAssistant} onOpenPurchaseOrder={(po) => setters.setViewPoModal({isOpen: true, po})} />}
             {currentView === 'jobs' && <JobsView onEditJob={commonProps.onEditJob} onSmartCreateClick={() => { setters.setSmartCreateMode('job'); setters.setIsSmartCreateOpen(true); }} />}
             {currentView === 'estimates' && <EstimatesView onOpenEstimateModal={(est) => setters.setEstimateFormModal({isOpen: true, estimate: est})} onViewEstimate={(est) => setters.setEstimateViewModal({isOpen: true, estimate: est})} onSmartCreateClick={() => { setters.setSmartCreateMode('estimate'); setters.setIsSmartCreateOpen(true); }} onScheduleEstimate={(est, inquiryId) => setters.setScheduleJobFromEstimateModal({isOpen: true, estimate: est, inquiryId})} />}
-            {currentView === 'invoices' && <InvoicesView onViewInvoice={(inv) => setters.setViewInvoiceModal({isOpen: true, invoice: inv})} onEditInvoice={(inv) => setters.setInvoiceFormModal({isOpen: true, invoice: inv})} onOpenExportModal={(type, items) => setters.setExportModal({isOpen: true, type: type as any, items})} onCreateAdhocInvoice={() => setters.setInvoiceFormModal({isOpen: true, invoice: null})} />}
+            {currentView === 'invoices' && <InvoicesView onViewInvoice={(inv) => setters.setViewInvoiceModal({isOpen: true, invoice: inv})} onEditInvoice={(inv) => setters.setInvoiceFormModal({isOpen: true, invoice: inv})} onOpenExportModal={(type, items) => setters.setExportModal({isOpen: true, type: type as any, items})} onCreateAdhocInvoice={() => setters.setInvoiceFormModal({isOpen: true, job: null, invoice: null })} />}
             {currentView === 'purchaseOrders' && <PurchaseOrdersView onOpenPurchaseOrderModal={(po) => setters.setPoModal({isOpen: true, po})} onDeletePurchaseOrder={(id) => handleDeleteItem(setPurchaseOrders, id)} onViewPurchaseOrder={(po) => setters.setViewPoModal({isOpen: true, po})} onExport={(data, filename) => { /* export logic */ }} onOpenBatchAddModal={() => setters.setBatchPoModalOpen(true)} />}
             {currentView === 'sales' && <SalesView entity={businessEntities.find(e => e.id === selectedEntityId) || businessEntities[0]} onManageSaleVehicle={(sv) => setters.setManageSaleVehicleModal({isOpen: true, saleVehicle: sv})} onAddSaleVehicle={() => setters.setAddSaleVehicleModalOpen(true)} onGenerateReport={() => setters.setSalesReportModal(true)} onAddProspect={() => setters.setProspectModal({isOpen: true, prospect: null})} onEditProspect={(p) => setters.setProspectModal({isOpen: true, prospect: p})} onViewCustomer={(id) => setters.setCustomerModal({isOpen: true, customerId: id})} />}
-            {currentView === 'storage' && <StorageView entity={businessEntities.find(e => e.id === selectedEntityId)!} onSaveBooking={(b) => handleSaveItem(setStorageBookings, b, 'brooks_storageBookings')} onBookOutVehicle={(id) => { const b = (storageBookings || []).find(sb => sb.id === id); if(b) setters.setCheckOutJob({id: `temp_job_${id}`, vehicleId: b.vehicleId, customerId: b.customerId } as any) }} onViewInvoice={(id) => setters.setViewInvoiceModal({isOpen: true, invoice: (invoices || []).find(i => i.id === id) || null})} onAddCustomerAndVehicle={(c, v) => { handleSaveItem(data.setCustomers, c, 'brooks_customers'); handleSaveItem(data.setVehicles, v, 'brooks_vehicles'); }} onSaveInvoice={(inv) => handleSaveItem(setInvoices, inv, 'brooks_invoices')} setConfirmation={setConfirmation} setViewedInvoice={(inv) => setters.setViewInvoiceModal({isOpen: true, invoice: inv})} />}
+            {currentView === 'storage' && <StorageView entity={businessEntities.find(e => e.id === selectedEntityId)!} onSaveBooking={(b) => handleSaveItem(setStorageBookings, b, 'brooks_storageBookings')} onBookOutVehicle={(id) => { const b = (storageBookings || []).find(sb => sb.id === id); if(b) setters.setCheckOutJob({id: `temp_job_${id}`, vehicleId: b.vehicleId, customerId: b.customerId } as any) }} onViewInvoice={(inv) => setters.setViewInvoiceModal({isOpen: true, invoice: (invoices || []).find(i => i.id === inv.id) || null})} onAddCustomerAndVehicle={(c, v) => { handleSaveItem(setCustomers, c, 'brooks_customers'); handleSaveItem(setVehicles, v, 'brooks_vehicles'); }} onSaveInvoice={(inv) => handleSaveItem(setInvoices, inv, 'brooks_invoices')} setConfirmation={setConfirmation} setViewedInvoice={(inv) => setters.setViewInvoiceModal({isOpen: true, invoice: inv})} />}
             {currentView === 'rentals' && <RentalsView entity={businessEntities.find(e => e.id === selectedEntityId)!} onOpenRentalBooking={(b) => setters.setRentalBookingModal({isOpen: true, booking: b})} />}
             {currentView === 'concierge' && <ConciergeView onEditJob={commonProps.onEditJob} onCheckIn={(id) => setters.setCheckInJob((jobs || []).find(j => j.id === id) || null)} onOpenPurchaseOrder={(po) => setters.setViewPoModal({isOpen: true, po})} onOpenAssistant={commonProps.onOpenAssistant} onGenerateInvoice={handleGenerateInvoice} onCollect={(id) => setters.setCheckOutJob((jobs || []).find(j => j.id === id) || null)} onQcApprove={commonProps.onQcApprove} onStartWork={commonProps.onStartWork} onEngineerComplete={commonProps.onEngineerComplete} onPause={(id, segId) => workshopActions.handleUpdateSegmentStatus(id, segId, 'Paused')} onRestart={commonProps.onRestart} />}
             {currentView === 'communications' && <CommunicationsView />}

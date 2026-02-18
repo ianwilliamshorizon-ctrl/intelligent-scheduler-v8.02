@@ -222,6 +222,7 @@ export interface Job {
     damagePoints?: VehicleDamagePoint[];
     collectedBy?: string;
     tyreDepths?: { osf?: number; nsf?: number; osr?: number; nsr?: number };
+    isStandalone?: boolean;
 }
 
 export interface EstimateLineItem {
@@ -277,6 +278,7 @@ export interface Invoice {
     lineItems: EstimateLineItem[];
     notes?: string;
     createdByUserId?: string;
+    grandTotal: number;
 }
 
 export interface PurchaseOrderLineItem {

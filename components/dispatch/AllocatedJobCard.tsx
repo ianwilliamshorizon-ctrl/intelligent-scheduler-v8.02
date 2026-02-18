@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Job, JobSegment, Vehicle, Customer, Engineer, PurchaseOrder, User } from '../../types';
-import { Package as PackageIcon, KeyRound, PauseCircle, PlayCircle, UserCog, Trash2, Wand2, Edit } from 'lucide-react';
+import { Package as PackageIcon, KeyRound, PauseCircle, PlayCircle, UserCog, Trash2, Wand2, Edit, User as UserIcon, UserPlus } from 'lucide-react';
 import { getCustomerDisplayName } from '../../core/utils/customerUtils';
 import { getPoStatusColor } from '../../core/utils/statusUtils';
 import { TIME_SEGMENTS, SEGMENT_DURATION_MINUTES } from '../../constants';
@@ -25,17 +25,13 @@ export const AllocatedJobCard: React.FC<{
     onOpenAssistant: (jobId: string) => void;
 }> = ({ job, segment, vehicle, customer, engineer, purchaseOrders, onDragStart, onDragEnd, onEdit, onStartWork, onPause, onRestart, onReassign, onOpenPurchaseOrder, onUnscheduleSegment, currentUser, onOpenAssistant }) => {
     
-    // Calculate precise height percentage based on grid size
     const segments = segment.duration * (60 / SEGMENT_DURATION_MINUTES);
-    
-    // Visual Clamping: Ensure the card doesn't visually overflow the bottom of the grid
     const maxSegmentsAvailable = TIME_SEGMENTS.length - (segment.scheduledStartSegment || 0);
     const segmentsToRender = Math.min(segments, maxSegmentsAvailable);
     
     const topPercent = (segment.scheduledStartSegment || 0) * (100 / Math.max(1, TIME_SEGMENTS.length));
     const heightPercent = segmentsToRender * (100 / Math.max(1, TIME_SEGMENTS.length));
 
-    // Safe access to purchase orders
     const associatedPOs = (job.purchaseOrderIds || []).map(id => (purchaseOrders || []).find(po => po.id === id)).filter(Boolean) as PurchaseOrder[];
     
     const [isPoMenuOpen, setIsPoMenuOpen] = useState(false);
@@ -127,7 +123,17 @@ export const AllocatedJobCard: React.FC<{
             </div>
             
             <div className="flex justify-between items-end text-xs mt-auto pt-1 border-t border-white/20 flex-shrink-0">
-                <span className="font-semibold truncate max-w-[60px]">{engineer?.name || (segment.engineerId ? 'Unknown' : 'Unassigned')}</span>
+                 {engineer ? (
+                    <span className="font-semibold truncate max-w-[60px] flex items-center gap-1">
+                        <UserIcon size={12} />
+                        {engineer.name}
+                    </span>
+                 ) : (
+                     <span className="font-semibold truncate max-w-[60px] flex items-center gap-1 text-red-200">
+                         <UserPlus size={12} />
+                         Unassigned
+                     </span>
+                 )}
                  <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                     {canStartOrPause && segment.status === 'Allocated' && <button onClick={(e) => handleAction(e, () => onStartWork(job.id, segment.segmentId))} title="Start Job" className="p-1 rounded bg-white/20 hover:bg-white/40 text-white"><PlayCircle size={14} /></button>}
                     {canStartOrPause && segment.status === 'In Progress' && <button onClick={(e) => handleAction(e, () => onPause(job.id, segment.segmentId))} title="Pause Job" className="p-1 rounded bg-white/20 hover:bg-white/40 text-white"><PauseCircle size={14} /></button>}

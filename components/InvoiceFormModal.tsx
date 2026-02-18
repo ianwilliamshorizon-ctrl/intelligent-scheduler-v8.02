@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Invoice, Customer, Vehicle, BusinessEntity, TaxRate, ServicePackage, Part, EstimateLineItem as InvoiceLineItem } from '../types';
+import { Invoice, Customer, Vehicle, BusinessEntity, TaxRate, ServicePackage, Part, EstimateLineItem as InvoiceLineItem, Job } from '../types';
 import { Save, PlusCircle, Gauge, Info, FileText, ChevronUp, ChevronDown, Trash2, X, TrendingUp, Plus } from 'lucide-react';
 import { formatDate, addDays } from '../core/utils/dateUtils';
 import { generateInvoiceId } from '../core/utils/numberGenerators';
@@ -8,6 +9,7 @@ import CustomerFormModal from './CustomerFormModal';
 import VehicleFormModal from './VehicleFormModal';
 import SearchableSelect from './SearchableSelect';
 import FormModal from './FormModal';
+import { useData } from '../core/state/DataContext';
 
 interface EditableLineItemRowProps {
     item: InvoiceLineItem;
@@ -63,7 +65,7 @@ const MemoizedEditableLineItemRow = React.memo(({ item, taxRates, onLineItemChan
                 disabled={isPackageHeader}
             >
                 <option value="">-- Tax --</option>
-                {taxRates.map(t => <option key={t.id} value={t.id}>{t.code}</option>)}
+                {(taxRates || []).map(t => <option key={t.id} value={t.id}>{t.code}</option>)}
             </select>
             <button 
                 onClick={() => onRemoveLineItem(item.id)} 
@@ -93,7 +95,8 @@ interface InvoiceFormModalProps {
     isOpen: boolean;
     onClose: () => void;
     onSave: (invoice: Invoice) => void;
-    invoice: Partial<Invoice> | null;
+    invoice?: Partial<Invoice> | null;
+    job?: Job | null;
     customers: Customer[];
     onSaveCustomer: (customer: Customer) => void;
     vehicles: Vehicle[];
@@ -106,46 +109,68 @@ interface InvoiceFormModalProps {
 }
 
 const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({ 
-    isOpen, onClose, onSave, invoice, customers, onSaveCustomer, 
+    isOpen, onClose, onSave, invoice, job, customers, onSaveCustomer, 
     vehicles, onSaveVehicle, businessEntities, taxRates, servicePackages, parts, invoices 
 }) => {
-    const [formData, setFormData] = useState<Partial<Invoice>>({ 
-        customerId: '', 
-        vehicleId: '', 
-        entityId: '',
-        lineItems: [],
-        notes: ''
-    });
+    const { estimates } = useData();
+    const [formData, setFormData] = useState<Partial<Invoice>>({});
 
     const [isAddingCustomer, setIsAddingCustomer] = useState(false);
     const [isAddingVehicle, setIsAddingVehicle] = useState(false);
     
-    const taxRatesMap = useMemo(() => new Map(taxRates.map(t => [t.id, t])), [taxRates]);
-    const standardTaxRateId = useMemo(() => taxRates.find(t => t.code === 'T1')?.id, [taxRates]);
+    const taxRatesMap = useMemo(() => new Map((taxRates || []).map(t => [t.id, t])), [taxRates]);
+    const standardTaxRateId = useMemo(() => (taxRates || []).find(t => t.code === 'T1')?.id, [taxRates]);
+
+    const mainEstimate = useMemo(() => {
+        if (!job || !Array.isArray(estimates)) return null;
+        if (job.estimateId) {
+            const byId = estimates.find(e => e.id === job.estimateId);
+            if (byId) return byId;
+        }
+        const linked = estimates.filter(e => e.jobId === job.id);
+        if (linked.length === 1) return linked[0];
+        const converted = linked.find(e => e.status === 'Converted to Job');
+        if (converted) return converted;
+        const approved = linked.find(e => e.status === 'Approved');
+        if (approved) return approved;
+        const draft = linked.find(e => e.status === 'Draft');
+        if (draft) return draft;
+        return null;
+    }, [job, estimates]);
 
     useEffect(() => { 
         if (isOpen) {
-            setFormData(invoice && Object.keys(invoice).length > 0 
-                ? { 
-                    ...invoice,
-                    customerId: invoice.customerId ?? '',
-                    vehicleId: invoice.vehicleId ?? '',
-                    entityId: invoice.entityId || businessEntities[0]?.id || '',
-                    lineItems: invoice.lineItems || [],
-                    notes: invoice.notes ?? ''
-                  } 
-                : { 
+            let initialData: Partial<Invoice>;
+            if (invoice) {
+                initialData = { ...invoice };
+            } else if (job) {
+                const linkedEstimate = mainEstimate;
+                initialData = {
+                    jobId: job.id,
+                    customerId: linkedEstimate?.customerId || job.customerId,
+                    vehicleId: linkedEstimate?.vehicleId || job.vehicleId,
+                    entityId: job.entityId,
+                    lineItems: linkedEstimate ? (linkedEstimate.lineItems || []).filter(li => !li.isOptional) : [],
+                    status: 'Draft',
+                    issueDate: formatDate(new Date()), 
+                    dueDate: formatDate(addDays(new Date(), 30)),
+                    notes: linkedEstimate?.notes || job.notes || ''
+                };
+            } else {
+                initialData = { 
                     customerId: '', 
                     vehicleId: '', 
-                    entityId: businessEntities[0]?.id || '', 
+                    entityId: (businessEntities || [])[0]?.id || '', 
                     issueDate: formatDate(new Date()), 
                     dueDate: formatDate(addDays(new Date(), 30)),
                     status: 'Draft', 
                     lineItems: [], 
                     notes: '' 
-                });
+                };
+            }
+            setFormData(initialData);
         }
-    }, [invoice, isOpen, businessEntities]);
+    }, [invoice, job, isOpen, businessEntities, mainEstimate]);
     
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => 
         setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
@@ -162,8 +187,8 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
         })); 
     }, []);
     
-    const entityLaborRate = useMemo(() => businessEntities.find(e => e.id === formData.entityId)?.laborRate, [businessEntities, formData.entityId]);
-    const entityLaborCostRate = useMemo(() => businessEntities.find(e => e.id === formData.entityId)?.laborCostRate, [businessEntities, formData.entityId]);
+    const entityLaborRate = useMemo(() => (businessEntities || []).find(e => e.id === formData.entityId)?.laborRate, [businessEntities, formData.entityId]);
+    const entityLaborCostRate = useMemo(() => (businessEntities || []).find(e => e.id === formData.entityId)?.laborCostRate, [businessEntities, formData.entityId]);
     
     const addLineItem = (isLabor: boolean) => {
         const newItem: InvoiceLineItem = { 
@@ -179,7 +204,7 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
     };
 
     const addPackage = (packageId: string) => {
-        const pkg = servicePackages.find(p => p.id === packageId);
+        const pkg = (servicePackages || []).find(p => p.id === packageId);
         if (!pkg) return;
     
         const newItems: InvoiceLineItem[] = [];
@@ -231,32 +256,46 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
     const handleSave = () => {
         if (!formData.customerId || !formData.entityId) return alert('Customer and Business Entity are required.');
         
-        const entity = businessEntities.find(e => e.id === formData.entityId);
+        const entity = (businessEntities || []).find(e => e.id === formData.entityId);
         const entityShortCode = entity?.shortCode || 'UNK';
         
         onSave({ 
-            id: formData.id || generateInvoiceId(invoices, entityShortCode), 
+            id: formData.id || generateInvoiceId(invoices || [], entityShortCode), 
             ...formData 
         } as Invoice);
         onClose();
     };
 
+    const customerOptions = useMemo(() => (customers || []).map(c => ({
+        label: c.businessName ? c.businessName : `${c.forename || ''} ${c.surname || ''}`.trim(),
+        value: c.id,
+        description: c.phone || 'No phone',
+        searchField: `${c.businessName || ''} ${c.forename || ''} ${c.surname || ''} ${c.phone || ''} ${c.address?.postcode || ''}`.toLowerCase()
+    })), [customers]);
+
     const filteredVehicles = useMemo(() => 
-        vehicles.filter(v => v.customerId === formData.customerId), 
+        (vehicles || []).filter(v => v.customerId === formData.customerId), 
     [vehicles, formData.customerId]);
+
+    const vehicleOptions = useMemo(() => filteredVehicles.map(v => ({
+        label: v.registration,
+        value: v.id,
+        description: `${v.make} ${v.model}`,
+        searchField: `${v.registration} ${v.make} ${v.model}`.toLowerCase()
+    })), [filteredVehicles]);
 
     const invoiceBreakdown = useMemo(() => {
         const packages: { header: InvoiceLineItem, children: InvoiceLineItem[] }[] = [];
         const customLabor: InvoiceLineItem[] = [];
         const customParts: InvoiceLineItem[] = [];
-        const packageHeaders = (formData.lineItems || []).filter(item => item.servicePackageId && !item.isPackageComponent);
         const allItems = formData.lineItems || [];
+        const packageHeaders = allItems.filter(item => item.servicePackageId && !item.isPackageComponent);
     
         packageHeaders.forEach(header => {
             packages.push({ header: header, children: allItems.filter(item => item.isPackageComponent && item.servicePackageId === header.servicePackageId) });
         });
     
-        (formData.lineItems || []).forEach(item => {
+        allItems.forEach(item => {
             if (!item.servicePackageId) {
                 if (item.isLabor) customLabor.push(item);
                 else customParts.push(item);
@@ -270,7 +309,7 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
         if (!formData || !formData.lineItems) return { totalNet: 0, grandTotal: 0, vatBreakdown: [], totalProfit: 0, profitMargin: 0 };
         let totalCost = 0;
         let currentTotalNet = 0;
-        formData.lineItems.forEach(item => {
+        (formData.lineItems || []).forEach(item => {
             const taxCodeId = item.taxCodeId || standardTaxRateId;
             if (!taxCodeId) return;
             const taxRate = taxRatesMap.get(taxCodeId);
@@ -289,6 +328,20 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
         return { totalNet: currentTotalNet, grandTotal: currentTotalNet + totalVat, vatBreakdown: finalVatBreakdown, totalProfit: profit, profitMargin: margin };
     }, [formData.lineItems, taxRatesMap, standardTaxRateId]);
 
+    const handleCustomerSelect = (selection: any) => {
+        const customerId = selection?.value || selection?.id;
+        if (!customerId) return;
+        setFormData(prev => {
+            const customerVehicles = (vehicles || []).filter(v => v.customerId === customerId);
+            const isCurrentVehicleOwned = customerVehicles.some(v => v.id === prev.vehicleId);
+            return {
+                ...prev,
+                customerId: customerId,
+                vehicleId: isCurrentVehicleOwned ? prev.vehicleId : (customerVehicles.length === 1 ? customerVehicles[0].id : '')
+            };
+        });
+    };
+
     return (
         <FormModal 
             isOpen={isOpen} 
@@ -305,9 +358,9 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
                                 <label className="font-semibold text-gray-700">Customer</label>
                                 <div className="flex items-center gap-2 mt-1">
                                     <SearchableSelect
-                                        collectionName="brooks_customers"
-                                        initialValue={formData.customerId ?? ""}
-                                        onSelect={(item) => setFormData(prev => ({ ...prev, customerId: item.id || '', vehicleId: '' }))}
+                                        options={customerOptions}
+                                        initialValue={formData.customerId}
+                                        onSelect={handleCustomerSelect}
                                         placeholder="Search customers..."
                                     />
                                     <button 
@@ -324,12 +377,11 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
                                 <label className="font-semibold text-gray-700">Vehicle (Optional)</label>
                                 <div className="flex items-center gap-2 mt-1">
                                     <SearchableSelect
-                                        collectionName="brooks_vehicles"
-                                        initialValue={formData.vehicleId ?? ""}
-                                        onSelect={(item) => setFormData(prev => ({ ...prev, vehicleId: item.id || '' }))}
+                                        options={vehicleOptions}
+                                        initialValue={formData.vehicleId}
+                                        onSelect={(selection) => setFormData(prev => ({ ...prev, vehicleId: selection?.value || '' }))}
                                         placeholder="Search vehicles..."
                                         disabled={!formData.customerId}
-                                        items={filteredVehicles}
                                     />
                                     <button 
                                         type="button" 
@@ -348,12 +400,12 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
                                 <label className="font-semibold text-gray-700">Business Entity</label>
                                 <select 
                                     name="entityId" 
-                                    value={formData.entityId}
+                                    value={formData.entityId || ''}
                                     onChange={handleChange} 
                                     className="w-full p-2 border rounded bg-white mt-1"
                                 >
                                     <option value="">-- Select Entity --</option>
-                                    {businessEntities.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                                    {(businessEntities || []).map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
                                 </select>
                             </div>
 
@@ -384,7 +436,7 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
                                 <label className="font-semibold text-gray-700">Status</label>
                                 <select 
                                     name="status" 
-                                    value={formData.status}
+                                    value={formData.status || 'Draft'}
                                     onChange={handleChange}
                                     className="w-full p-2 border rounded bg-white mt-1"
                                 >
@@ -507,7 +559,7 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
                                         className="p-1 border rounded bg-white text-sm"
                                     >
                                         <option value="">-- Add Package --</option>
-                                        {servicePackages
+                                        {(servicePackages || [])
                                             .filter(p => p.entityId === formData.entityId)
                                             .map(p => <option key={p.id} value={p.id}>{p.name}</option>)
                                         }
@@ -559,7 +611,7 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
                     onClose={() => setIsAddingCustomer(false)}
                     onSave={(newCustomer) => {
                         onSaveCustomer(newCustomer);
-                        setFormData(prev => ({ ...prev, customerId: newCustomer.id, vehicleId: '' }));
+                        handleCustomerSelect(newCustomer);
                         setIsAddingCustomer(false);
                     }}
                     customer={null}
