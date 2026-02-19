@@ -15,9 +15,10 @@ interface LiveAssistantProps {
     jobId: string | null;
     onAddNote: (note: string) => void;
     onReviewPackage?: (estimate: Partial<Estimate>) => void;
+    apiKey: string;
 }
 
-const LiveAssistant: React.FC<LiveAssistantProps> = ({ isOpen, onClose, jobId, onAddNote }) => {
+const LiveAssistant: React.FC<LiveAssistantProps> = ({ isOpen, onClose, jobId, onAddNote, apiKey }) => {
     const [messages, setMessages] = useState<Message[]>([]);
     const [textInput, setTextInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -55,8 +56,6 @@ const LiveAssistant: React.FC<LiveAssistantProps> = ({ isOpen, onClose, jobId, o
         setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'user', text: currentText }]);
         setTextInput('');
         setIsLoading(true);
-
-        const apiKey = import.meta.env.VITE_API_KEY;
         
         try {
             const ai = new (GoogleGenAI as any)({ apiKey }); 

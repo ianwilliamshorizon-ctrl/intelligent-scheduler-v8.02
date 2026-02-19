@@ -634,6 +634,7 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                     jobId={modals.assistantContextJobId}
                     onAddNote={() => {}}
                     onReviewPackage={() => {}}
+                    apiKey={import.meta.env.VITE_API_KEY}
                 />
             )}
 
