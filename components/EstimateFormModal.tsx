@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { Estimate, Customer, Vehicle, BusinessEntity, TaxRate, ServicePackage, Part, EstimateLineItem, Job, User, CheckInPhoto } from '../types';
+import { Estimate, Customer, Vehicle, BusinessEntity, TaxRate, ServicePackage, Part, EstimateLineItem, Job, User, CheckInPhoto, Supplier } from '../types';
 import { Save, PlusCircle, Gauge, Info, FileText, ChevronUp, ChevronDown, Trash2, X, TrendingUp, Plus, Image as ImageIcon, History, Car, Wand2 } from 'lucide-react';
 import { formatDate, getTodayISOString, getFutureDateISOString } from '../core/utils/dateUtils';
 import { generateEstimateNumber } from '../core/utils/numberGenerators';
@@ -125,12 +125,13 @@ interface EstimateFormModalProps {
     businessEntities: BusinessEntity[]; taxRates: TaxRate[]; servicePackages: ServicePackage[];
     parts: Part[]; estimates: Estimate[]; currentUser: User; selectedEntityId: string;
     onSavePart?: (part: Part) => void;
+    suppliers: Supplier[];
 }
 
 const EstimateFormModal: React.FC<EstimateFormModalProps> = ({ 
     isOpen, onClose, onSave, estimate, jobContext, customers, onSaveCustomer, 
     vehicles, onSaveVehicle, businessEntities, taxRates, servicePackages, parts, 
-    estimates, currentUser, selectedEntityId, onSavePart
+    estimates, currentUser, selectedEntityId, onSavePart, suppliers
 }) => {
     const [formData, setFormData] = useState<Partial<Estimate>>({ 
         lineItems: [], customerId: '', vehicleId: '', entityId: '', issueDate: '', expiryDate: '', status: 'Draft', notes: '', media: []
@@ -643,8 +644,8 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                     isOpen={isAddingPart}
                     onClose={() => setIsAddingPart(false)}
                     onSave={handleSaveNewPart}
-                    initialData={{ description: newPartDescription }}
-                    parts={parts}
+                    part={{ description: newPartDescription }}
+                    suppliers={suppliers}
                     taxRates={taxRates}
                 />
             )}

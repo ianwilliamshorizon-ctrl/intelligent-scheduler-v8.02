@@ -425,6 +425,7 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                     currentUser={currentUser}
                     selectedEntityId={selectedEntityId}
                     onSavePart={(part) => handleSaveItem(setParts, part, 'brooks_parts')}
+                    suppliers={suppliers}
                 />
             )}
 
