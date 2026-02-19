@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Estimate, Customer, Vehicle, BusinessEntity, TaxRate, ServicePackage, Part, EstimateLineItem, Job, User, CheckInPhoto } from '../types';
 import { Save, PlusCircle, Gauge, Info, FileText, ChevronUp, ChevronDown, Trash2, X, TrendingUp, Plus, Image as ImageIcon, History, Car, Wand2 } from 'lucide-react';
@@ -148,7 +149,6 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
     const taxRatesMap = useMemo(() => new Map(taxRates.map(t => [t.id, t])), [taxRates]);
     const standardTaxRateId = useMemo(() => taxRates.find(t => t.code === 'T1')?.id, [taxRates]);
 
-    // FIX: Dashboard first-load initialization
     useEffect(() => { 
         if (estimate && Object.keys(estimate).length > 0) {
             setFormData(JSON.parse(JSON.stringify(estimate)));
@@ -171,15 +171,15 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
     [vehicles, formData.vehicleId]);
 
     const customerOptions = useMemo(() => customers.map(c => {
-        const fullName = c.businessName 
-            ? c.businessName 
+        const fullName = c.companyName
+            ? c.companyName 
             : `${c.forename || ''} ${c.surname || ''}`.trim() || 'Unnamed Customer';
     
         return {
             label: fullName,
             value: c.id,
-            description: c.phone || 'No phone',
-            searchField: `${fullName} ${c.forename || ''} ${c.surname || ''} ${c.businessName || ''} ${c.phone || ''} ${c.address?.postcode || ''}`.toLowerCase()
+            description: c.postcode || 'No postcode',
+            searchField: `${fullName} ${c.forename || ''} ${c.surname || ''} ${c.companyName || ''} ${c.phone || ''} ${c.postcode || ''}`.toLowerCase()
         };
     }), [customers]);
 
@@ -190,7 +190,6 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
         searchField: `${v.registration} ${v.make} ${v.model}`.toLowerCase()
     })), [vehicles]);
 
-    // FIX: Sorting priority for fuzzy matches
     const sortedPackages = useMemo(() => {
         const allAvailable = Array.isArray(servicePackages) ? servicePackages : [];
         const entityPackages = allAvailable; 
@@ -229,7 +228,7 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
         setFormData(prev => ({ 
             ...prev, 
             customerId: customer.id, 
-            vehicleId: customersCars.length === 1 ? customersCars[0].id : prev.vehicleId || '' 
+            vehicleId: customersCars.length === 1 ? customersCars[0].id : '' 
         }));
     };
 
@@ -243,9 +242,22 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
             vehicleId: vehicle.id, 
             customerId: ownerId || prev.customerId 
         }));
-        if (ownerId) {
+        if (ownerId && ownerId !== formData.customerId) {
             setRecentCustomerIds(prev => [ownerId, ...prev.filter(id => id !== ownerId)].slice(0, 3));
         }
+    };
+    
+    const handleSaveCustomerAndVehicle = (customer: Customer, vehicle: Vehicle) => {
+        if (!customers.some(c => c.id === customer.id)) {
+            onSaveCustomer(customer);
+        }
+        onSaveVehicle(vehicle);
+        setFormData(prev => ({
+            ...prev,
+            customerId: customer.id,
+            vehicleId: vehicle.id,
+        }));
+        setIsAddingVehicle(false);
     };
 
     const handleLineItemChange = useCallback((id: string, field: keyof EstimateLineItem, value: any) => {
@@ -393,14 +405,17 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
         if (!formData || !formData.lineItems) return { totalNet: 0, grandTotal: 0, vatBreakdown: [], totalCost: 0, totalProfit: 0, profitMargin: 0 };
         let cost = 0; let currentTotalNet = 0;
         formData.lineItems.forEach(item => {
+            if (item.isPackageComponent) return; 
             const taxCodeId = item.taxCodeId || standardTaxRateId;
             if (!taxCodeId) return;
             const taxRate = taxRatesMap.get(taxCodeId);
             if (!taxRate) return;
             if (!breakdown[taxCodeId]) breakdown[taxCodeId] = { net: 0, vat: 0, rate: taxRate.rate, name: taxRate.name };
             const itemTotal = Number(item.quantity || 0) * Number(item.unitPrice || 0);
-            breakdown[taxCodeId].net += itemTotal; currentTotalNet += itemTotal;
-            cost += (Number(item.quantity) || 0) * (Number(item.unitCost) || 0);
+            if (!item.isOptional) {
+                 breakdown[taxCodeId].net += itemTotal; currentTotalNet += itemTotal;
+                cost += (Number(item.quantity) || 0) * (Number(item.unitCost) || 0);
+            }
         });
         Object.values(breakdown).forEach(summary => { summary.vat = summary.net * (summary.rate / 100); });
         const finalVatBreakdown = Object.values(breakdown).filter(b => b.net > 0 && b.rate > 0);
@@ -445,7 +460,7 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                                     <SearchableSelect
                                         options={customerOptions}
                                         onSelect={handleCustomerSelect}
-                                        initialValue={formData.customerId}
+                                        defaultValue={formData.customerId}
                                         placeholder="Search name, phone or postcode..."
                                     />
                                     <button type="button" onClick={() => setIsAddingCustomer(true)} className="p-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 flex-shrink-0"><Plus size={20} /></button>
@@ -462,7 +477,7 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                                                 onClick={() => handleCustomerSelect(c)} 
                                                 className="text-[10px] bg-white border border-gray-200 px-2 py-1 rounded hover:bg-indigo-50"
                                             >
-                                                {c.businessName || `${c.forename || ''} ${c.surname || ''}`.trim() || 'Unnamed'}
+                                                {c.companyName || `${c.forename || ''} ${c.surname || ''}`.trim() || 'Unnamed'}
                                             </button>
                                         ))}
                                     </div>
@@ -475,7 +490,7 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                                         <SearchableSelect
                                             options={vehicleOptions}
                                             onSelect={handleVehicleSelect}
-                                            initialValue={formData.vehicleId}
+                                            defaultValue={formData.vehicleId}
                                             placeholder="Search registration or make..."
                                         />
                                         <button type="button" onClick={() => setIsAddingVehicle(true)} className="p-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 flex-shrink-0"><Plus size={20} /></button>
@@ -638,12 +653,12 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                 <VehicleFormModal
                     isOpen={isAddingVehicle}
                     onClose={() => setIsAddingVehicle(false)}
-                    onSave={(newVehicle) => {
+                    onSave={(newVehicle) => { // This is for edit mode, which is not used here
                         onSaveVehicle(newVehicle);
-                        handleVehicleSelect(newVehicle);
                         setIsAddingVehicle(false);
                     }}
-                    vehicleId={null}
+                    onSaveWithCustomer={handleSaveCustomerAndVehicle}
+                    vehicle={null}
                     customers={customers}
                     initialCustomerId={formData.customerId} 
                 />

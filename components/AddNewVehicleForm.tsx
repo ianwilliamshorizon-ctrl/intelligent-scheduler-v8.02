@@ -1,12 +1,12 @@
 
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Customer, Vehicle } from '../types';
 import { User, Car, Save, Search, Loader2 } from 'lucide-react';
 import { formatDate } from '../core/utils/dateUtils';
 import { generateCustomerId } from '../core/utils/customerUtils';
 import { lookupVehicleByVRM } from '../services/vehicleLookupService';
 import { lookupAddressByPostcode } from '../services/postcodeLookupService';
+import SearchableSelect from './SearchableSelect';
 
 interface AddNewVehicleFormProps {
     initialRegistration: string;
@@ -31,6 +31,7 @@ const FormSelect = ({ label, children, ...props }: any) => (
 );
 
 const AddNewVehicleForm: React.FC<AddNewVehicleFormProps> = ({ initialRegistration, onSave, onCancel, customers, saveButtonText = "Save & Continue" }) => {
+    const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
     const [customerData, setCustomerData] = useState({
         title: '',
         forename: '',
@@ -55,6 +56,7 @@ const AddNewVehicleForm: React.FC<AddNewVehicleFormProps> = ({ initialRegistrati
         registration: initialRegistration,
         make: '',
         model: '',
+        type: 'Car',
         vin: '',
         nextServiceDate: '',
         nextMotDate: '',
@@ -70,6 +72,44 @@ const AddNewVehicleForm: React.FC<AddNewVehicleFormProps> = ({ initialRegistrati
     const [lookupError, setLookupError] = useState('');
     const [isLookingUpAddress, setIsLookingUpAddress] = useState(false);
     const [addressLookupError, setAddressLookupError] = useState('');
+
+    useEffect(() => {
+        if (selectedCustomerId) {
+            const customer = customers.find(c => c.id === selectedCustomerId);
+            if (customer) {
+                setCustomerData({
+                    title: customer.title || '',
+                    forename: customer.forename,
+                    surname: customer.surname,
+                    phone: customer.phone || '',
+                    mobile: customer.mobile || '',
+                    email: customer.email || '',
+                    addressLine1: customer.addressLine1 || '',
+                    addressLine2: customer.addressLine2 || '',
+                    city: customer.city || '',
+                    county: customer.county || '',
+                    postcode: customer.postcode || '',
+                    category: customer.category || 'Retail',
+                    isCashCustomer: customer.isCashCustomer || false,
+                    marketingConsent: customer.marketingConsent || false,
+                    isBusinessCustomer: customer.isBusinessCustomer || false,
+                    companyName: customer.companyName || '',
+                    serviceReminderConsent: customer.serviceReminderConsent || true,
+                    communicationPreference: customer.communicationPreference || 'Email',
+                });
+            }
+        } else {
+            // Reset form if no customer is selected
+            setCustomerData({
+                title: '', forename: '', surname: '', phone: '', mobile: '', email: '',
+                addressLine1: '', addressLine2: '', city: '', county: '', postcode: '',
+                category: 'Retail', isCashCustomer: false, marketingConsent: false,
+                isBusinessCustomer: false, companyName: '', serviceReminderConsent: true,
+                communicationPreference: 'Email',
+            });
+        }
+    }, [selectedCustomerId, customers]);
+
 
     const handleCustomerChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value, type } = e.target;
@@ -136,48 +176,58 @@ const AddNewVehicleForm: React.FC<AddNewVehicleFormProps> = ({ initialRegistrati
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (customerData.isBusinessCustomer && !customerData.companyName) {
-            alert("Company Name is required for business customers.");
-            return;
-        }
+        
         if (!vehicleData.registration || !vehicleData.make || !vehicleData.model) {
             alert("Please fill in all vehicle details (Registration, Make, Model).");
             return;
         }
-        if (!customerData.forename || !customerData.surname || (!customerData.phone && !customerData.mobile && !customerData.email)) {
-             alert("Please enter the customer's forename, surname, and at least one contact method (Telephone, Mobile, or Email).");
-            return;
+
+        let customerToSave: Customer;
+
+        if (selectedCustomerId) {
+            customerToSave = customers.find(c => c.id === selectedCustomerId)!;
+        } else {
+             if (customerData.isBusinessCustomer && !customerData.companyName) {
+                alert("Company Name is required for business customers.");
+                return;
+            }
+            if (!customerData.forename || !customerData.surname || (!customerData.phone && !customerData.mobile && !customerData.email)) {
+                alert("Please enter the customer's forename, surname, and at least one contact method (Telephone, Mobile, or Email).");
+                return;
+            }
+
+            const newId = generateCustomerId(customerData.surname, customers);
+            customerToSave = { 
+                id: newId, 
+                isBusinessCustomer: customerData.isBusinessCustomer,
+                companyName: customerData.companyName || undefined,
+                title: customerData.title || undefined,
+                forename: customerData.forename,
+                surname: customerData.surname,
+                phone: customerData.phone,
+                mobile: customerData.mobile || undefined,
+                email: customerData.email || undefined,
+                addressLine1: customerData.addressLine1 || undefined,
+                addressLine2: customerData.addressLine2 || undefined,
+                city: customerData.city || undefined,
+                county: customerData.county || undefined,
+                postcode: customerData.postcode || undefined,
+                category: customerData.category as 'Retail' | 'Trade',
+                isCashCustomer: customerData.isCashCustomer,
+                marketingConsent: customerData.marketingConsent,
+                serviceReminderConsent: customerData.serviceReminderConsent,
+                communicationPreference: customerData.communicationPreference as 'Email' | 'SMS' | 'WhatsApp' | 'None' | undefined,
+                createdDate: formatDate(new Date()),
+            };
         }
 
-        const newId = generateCustomerId(customerData.surname, customers);
-        const newCustomer: Customer = { 
-            id: newId, 
-            isBusinessCustomer: customerData.isBusinessCustomer,
-            companyName: customerData.companyName || undefined,
-            title: customerData.title || undefined,
-            forename: customerData.forename,
-            surname: customerData.surname,
-            phone: customerData.phone,
-            mobile: customerData.mobile || undefined,
-            email: customerData.email || undefined,
-            addressLine1: customerData.addressLine1 || undefined,
-            addressLine2: customerData.addressLine2 || undefined,
-            city: customerData.city || undefined,
-            county: customerData.county || undefined,
-            postcode: customerData.postcode || undefined,
-            category: customerData.category as 'Retail' | 'Trade',
-            isCashCustomer: customerData.isCashCustomer,
-            marketingConsent: customerData.marketingConsent,
-            serviceReminderConsent: customerData.serviceReminderConsent,
-            communicationPreference: customerData.communicationPreference as 'Email' | 'SMS' | 'WhatsApp' | 'None' | undefined,
-            createdDate: formatDate(new Date()),
-        };
         const newVehicle: Vehicle = { 
             id: crypto.randomUUID(), 
-            customerId: newCustomer.id, 
+            customerId: customerToSave.id, 
             registration: vehicleData.registration.toUpperCase().replace(/\s/g, ''), 
             make: vehicleData.make, 
             model: vehicleData.model,
+            type: vehicleData.type,
             vin: vehicleData.vin || undefined,
             nextServiceDate: vehicleData.nextServiceDate || undefined,
             nextMotDate: vehicleData.nextMotDate || undefined,
@@ -190,8 +240,16 @@ const AddNewVehicleForm: React.FC<AddNewVehicleFormProps> = ({ initialRegistrati
             colour: vehicleData.colour || undefined,
         };
 
-        onSave(newCustomer, newVehicle);
+        onSave(customerToSave, newVehicle);
     };
+    
+    const customerOptions = [
+        { value: "CREATE_NEW", label: "--- Create a new customer ---" },
+        ...customers.map(c => ({
+            value: c.id,
+            label: `${c.forename} ${c.surname} ${c.companyName ? `(${c.companyName})` : ''} - ${c.postcode}`
+        }))
+    ];
 
     return (
         <div className="space-y-6">
@@ -222,6 +280,7 @@ const AddNewVehicleForm: React.FC<AddNewVehicleFormProps> = ({ initialRegistrati
                     </div>
                     <FormInput label="Make*" name="make" value={vehicleData.make} onChange={handleVehicleChange} required />
                     <FormInput label="Model*" name="model" value={vehicleData.model} onChange={handleVehicleChange} required />
+                    <FormInput label="Type" name="type" value={vehicleData.type} onChange={handleVehicleChange} />
                     <FormInput label="Colour" name="colour" value={vehicleData.colour} onChange={handleVehicleChange} />
                     <FormInput label="Engine CC" name="engineCapacity" value={vehicleData.engineCapacity} onChange={handleVehicleChange} type="number"/>
                     <FormInput label="Fuel Type" name="fuelType" value={vehicleData.fuelType} onChange={handleVehicleChange} />
@@ -255,7 +314,24 @@ const AddNewVehicleForm: React.FC<AddNewVehicleFormProps> = ({ initialRegistrati
 
             <div className="p-4 border rounded-lg bg-gray-50">
                 <h3 className="font-semibold text-lg text-gray-800 flex items-center mb-4"><User size={20} className="mr-2 text-indigo-600"/> Customer Details</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                
+                <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Link to Existing Customer</label>
+                     <SearchableSelect
+                        options={customerOptions}
+                        onSelect={(value) => {
+                            if (value === 'CREATE_NEW') {
+                                setSelectedCustomerId(null);
+                            } else {
+                                setSelectedCustomerId(value);
+                            }
+                        }}
+                        defaultValue={selectedCustomerId || 'CREATE_NEW'}
+                        placeholder="Search for customer or create new..."
+                    />
+                </div>
+
+                <div className={`grid grid-cols-1 md:grid-cols-3 gap-4 ${selectedCustomerId ? 'opacity-50 pointer-events-none' : ''}`}>
                     <div className="md:col-span-3">
                          <input type="checkbox" id="isBusinessCustomer" name="isBusinessCustomer" checked={customerData.isBusinessCustomer} onChange={handleCustomerChange} className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
                          <label htmlFor="isBusinessCustomer" className="ml-2 text-sm font-medium text-gray-700">This is a business customer</label>
@@ -300,7 +376,7 @@ const AddNewVehicleForm: React.FC<AddNewVehicleFormProps> = ({ initialRegistrati
                     </div>
                 </div>
                 
-                 <div className="mt-4 pt-4 border-t flex items-start justify-between">
+                 <div className={`mt-4 pt-4 border-t flex items-start justify-between ${selectedCustomerId ? 'opacity-50 pointer-events-none' : ''}`}>
                     <FormSelect label="Category" name="category" value={customerData.category} onChange={handleCustomerChange}>
                         <option>Retail</option>
                         <option>Trade</option>

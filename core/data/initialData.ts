@@ -180,7 +180,7 @@ export const getInitialJobs = (): Job[] => {
 };
 
 export const getInitialInvoices = (): Invoice[] => ([
-    { id: 'BPP91100001', entityId: 'ent_porsche', jobId: 'BPP99200001', customerId: 'OCON0001', issueDate: getRelativeDate(-5), dueDate: getRelativeDate(25), status: 'Sent', lineItems: [], vehicleId: 'veh_1' }
+    { id: 'BPP91100001', entityId: 'ent_porsche', jobId: 'BPP99200001', customerId: 'OCON0001', issueDate: getRelativeDate(-5), dueDate: getRelativeDate(25), status: 'Sent', lineItems: [], vehicleId: 'veh_1', grandTotal: 0 }
 ]);
 
 export const getInitialEstimates = (): Estimate[] => ([

@@ -187,8 +187,20 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
         })); 
     }, []);
     
-    const entityLaborRate = useMemo(() => (businessEntities || []).find(e => e.id === formData.entityId)?.laborRate, [businessEntities, formData.entityId]);
-    const entityLaborCostRate = useMemo(() => (businessEntities || []).find(e => e.id === formData.entityId)?.laborCostRate, [businessEntities, formData.entityId]);
+    const entityLaborRate = useMemo(() => {
+        // 1. Array safety: Ensure we have a list to search in
+        const safeEntities = Array.isArray(businessEntities) ? businessEntities : [];
+        // 2. Find the entity matched to this invoice
+        const entity = safeEntities.find(e => e.id === formData.entityId);
+        // 3. Default to 0: Prevents crashes in print/formatting if data is missing
+        return entity?.laborRate ?? 0;
+    }, [businessEntities, formData.entityId]);
+
+    const entityLaborCostRate = useMemo(() => {
+        const safeEntities = Array.isArray(businessEntities) ? businessEntities : [];
+        const entity = safeEntities.find(e => e.id === formData.entityId);
+        return entity?.laborCostRate ?? 0;
+    }, [businessEntities, formData.entityId]);
     
     const addLineItem = (isLabor: boolean) => {
         const newItem: InvoiceLineItem = { 
@@ -253,6 +265,30 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
         });
     }, []);
     
+    const { totalNet, grandTotal, vatBreakdown, totalProfit, profitMargin } = useMemo(() => {
+        const breakdown: { [key: string]: { net: number; vat: number; rate: number; name: string; } } = {};
+        if (!formData || !formData.lineItems) return { totalNet: 0, grandTotal: 0, vatBreakdown: [], totalProfit: 0, profitMargin: 0 };
+        let totalCost = 0;
+        let currentTotalNet = 0;
+        (formData.lineItems || []).forEach(item => {
+            const taxCodeId = item.taxCodeId || standardTaxRateId;
+            if (!taxCodeId) return;
+            const taxRate = taxRatesMap.get(taxCodeId);
+            if (!taxRate) return;
+            if (!breakdown[taxCodeId]) breakdown[taxCodeId] = { net: 0, vat: 0, rate: taxRate.rate, name: taxRate.name };
+            const itemTotal = Number(item.quantity || 0) * Number(item.unitPrice || 0);
+            breakdown[taxCodeId].net += itemTotal;
+            currentTotalNet += itemTotal;
+            totalCost += (Number(item.quantity) || 0) * (Number(item.unitCost) || 0);
+        });
+        Object.values(breakdown).forEach(summary => { summary.vat = summary.net * (summary.rate / 100); });
+        const finalVatBreakdown = Object.values(breakdown).filter(b => b.net > 0 && b.rate > 0);
+        const totalVat = finalVatBreakdown.reduce((sum, b) => sum + b.vat, 0);
+        const profit = currentTotalNet - totalCost;
+        const margin = currentTotalNet > 0 ? (profit / currentTotalNet) * 100 : 0;
+        return { totalNet: currentTotalNet, grandTotal: currentTotalNet + totalVat, vatBreakdown: finalVatBreakdown, totalProfit: profit, profitMargin: margin };
+    }, [formData.lineItems, taxRatesMap, standardTaxRateId]);
+
     const handleSave = () => {
         if (!formData.customerId || !formData.entityId) return alert('Customer and Business Entity are required.');
         
@@ -261,7 +297,8 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
         
         onSave({ 
             id: formData.id || generateInvoiceId(invoices || [], entityShortCode), 
-            ...formData 
+            ...formData,
+            grandTotal,
         } as Invoice);
         onClose();
     };
@@ -304,30 +341,6 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
         return { packages, customLabor, customParts };
     }, [formData.lineItems]);
     
-    const { totalNet, grandTotal, vatBreakdown, totalProfit, profitMargin } = useMemo(() => {
-        const breakdown: { [key: string]: { net: number; vat: number; rate: number; name: string; } } = {};
-        if (!formData || !formData.lineItems) return { totalNet: 0, grandTotal: 0, vatBreakdown: [], totalProfit: 0, profitMargin: 0 };
-        let totalCost = 0;
-        let currentTotalNet = 0;
-        (formData.lineItems || []).forEach(item => {
-            const taxCodeId = item.taxCodeId || standardTaxRateId;
-            if (!taxCodeId) return;
-            const taxRate = taxRatesMap.get(taxCodeId);
-            if (!taxRate) return;
-            if (!breakdown[taxCodeId]) breakdown[taxCodeId] = { net: 0, vat: 0, rate: taxRate.rate, name: taxRate.name };
-            const itemTotal = Number(item.quantity || 0) * Number(item.unitPrice || 0);
-            breakdown[taxCodeId].net += itemTotal;
-            currentTotalNet += itemTotal;
-            totalCost += (Number(item.quantity) || 0) * (Number(item.unitCost) || 0);
-        });
-        Object.values(breakdown).forEach(summary => { summary.vat = summary.net * (summary.rate / 100); });
-        const finalVatBreakdown = Object.values(breakdown).filter(b => b.net > 0 && b.rate > 0);
-        const totalVat = finalVatBreakdown.reduce((sum, b) => sum + b.vat, 0);
-        const profit = currentTotalNet - totalCost;
-        const margin = currentTotalNet > 0 ? (profit / currentTotalNet) * 100 : 0;
-        return { totalNet: currentTotalNet, grandTotal: currentTotalNet + totalVat, vatBreakdown: finalVatBreakdown, totalProfit: profit, profitMargin: margin };
-    }, [formData.lineItems, taxRatesMap, standardTaxRateId]);
-
     const handleCustomerSelect = (selection: any) => {
         const customerId = selection?.value || selection?.id;
         if (!customerId) return;

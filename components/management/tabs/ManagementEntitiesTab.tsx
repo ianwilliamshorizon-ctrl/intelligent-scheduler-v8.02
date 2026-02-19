@@ -122,7 +122,8 @@ export const ManagementEntitiesTab = ({ onShowStatus }: { onShowStatus: (text: s
                 const invoice: Invoice = {
                     id: newInvoiceId, entityId: entityId, customerId: customer?.id || 'unknown_customer', vehicleId: vehicle?.id,
                     issueDate: row.issueDate || formatDate(new Date()), dueDate: row.dueDate || formatDate(new Date()), status: row.status || 'Draft',
-                    lineItems: [{ id: crypto.randomUUID(), description: 'Imported Balance', quantity: 1, unitPrice: net, isLabor: false, taxCodeId: (taxRates || []).find(t=>t.code==='T1')?.id }]
+                    lineItems: [{ id: crypto.randomUUID(), description: 'Imported Balance', quantity: 1, unitPrice: net, isLabor: false, taxCodeId: (taxRates || []).find(t=>t.code==='T1')?.id }],
+                    grandTotal: total
                 };
                 return invoice;
             });

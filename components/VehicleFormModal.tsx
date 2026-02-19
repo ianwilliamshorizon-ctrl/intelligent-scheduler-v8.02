@@ -12,6 +12,8 @@ import * as T from '../types';
 import { formatCurrency } from '../utils/formatUtils';
 import { formatDate, dateStringToDate } from '../core/utils/dateUtils';
 import { useData } from '../core/state/DataContext';
+import AddNewVehicleForm from './AddNewVehicleForm';
+
 
 const Section = ({ title, icon: Icon, children, defaultOpen = true }: { title: string, icon: React.ElementType, children?: React.ReactNode, defaultOpen?: boolean }) => {
     const [isOpen, setIsOpen] = useState(defaultOpen);
@@ -29,6 +31,7 @@ interface VehicleFormModalProps {
     isOpen: boolean;
     onClose: () => void;
     onSave: (vehicle: Vehicle) => void;
+    onSaveWithCustomer?: (customer: Customer, vehicle: Vehicle) => void;
     vehicle: Partial<Vehicle> | null;
     customers: Customer[];
     jobs?: Job[];
@@ -37,9 +40,14 @@ interface VehicleFormModalProps {
     onViewJob?: (jobId: string) => void;
     onViewEstimate?: (estimate: Estimate) => void;
     onViewInvoice?: (invoice: Invoice) => void;
+    initialCustomerId?: string;
+    initialRegistration?: string;
 }
 
-const VehicleFormModal: React.FC<VehicleFormModalProps> = ({ isOpen, onClose, onSave, vehicle, customers, jobs, estimates, invoices, onViewJob, onViewEstimate, onViewInvoice }) => {
+const VehicleFormModal: React.FC<VehicleFormModalProps> = ({ 
+    isOpen, onClose, onSave, vehicle, customers, jobs, estimates, invoices, 
+    onViewJob, onViewEstimate, onViewInvoice, initialCustomerId, onSaveWithCustomer, initialRegistration
+}) => {
     const [formData, setFormData] = useState<Partial<Vehicle>>({});
     const [isLookingUp, setIsLookingUp] = useState(false);
     const [lookupError, setLookupError] = useState('');
@@ -49,15 +57,35 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({ isOpen, onClose, on
     
     useEffect(() => {
         const initialData = vehicle || {
-            customerId: '',
-            registration: '',
+            customerId: initialCustomerId || '',
+            registration: initialRegistration || '',
             make: '',
             model: '',
             transmissionType: 'Manual',
         };
         setFormData(initialData);
         setIsTransferMode(!vehicle?.id);
-    }, [vehicle, isOpen]);
+    }, [vehicle, isOpen, initialCustomerId, initialRegistration]);
+    
+    // If we're adding a new vehicle (not editing), show the AddNewVehicleForm
+    if (!vehicle) {
+        return (
+             <FormModal isOpen={isOpen} onClose={onClose} onSave={() => {}} title="Add New Vehicle & Customer" showSave={false} maxWidth="max-w-4xl">
+                <AddNewVehicleForm
+                    initialRegistration={initialRegistration || ''}
+                    onSave={(customer, vehicle) => {
+                        if (onSaveWithCustomer) {
+                             onSaveWithCustomer(customer, vehicle);
+                        }
+                        onClose();
+                    }}
+                    onCancel={onClose}
+                    customers={customers}
+                />
+            </FormModal>
+        );
+    }
+
 
     // Calculate totals helpers
     const getInvoiceTotal = (inv: Invoice) => inv.lineItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
@@ -162,6 +190,11 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({ isOpen, onClose, on
             window.dispatchEvent(event);
         }
     };
+    
+    const customerOptions = customers.map(c => ({
+        value: c.id,
+        label: `${c.forename} ${c.surname} ${c.companyName ? `(${c.companyName})` : ''} - ${c.postcode}`
+    }));
 
     return (
         <FormModal isOpen={isOpen} onClose={onClose} onSave={handleSave} title={vehicle?.id ? 'Edit Vehicle' : 'Add Vehicle'} maxWidth="max-w-6xl">
@@ -172,9 +205,9 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({ isOpen, onClose, on
                         <div className="md:col-span-3">
                             <label className="block text-sm font-medium text-gray-700 mb-1">Owner*</label>
                             <SearchableSelect
-                                options={customers.map(c => ({ id: c.id, label: `${c.forename} ${c.surname} (${c.postcode || 'No postcode'})` }))}
-                                value={formData.customerId || null}
-                                onChange={(value) => setFormData(prev => ({...prev, customerId: value || ''}))}
+                                options={customerOptions}
+                                onSelect={(value) => setFormData(prev => ({...prev, customerId: value || ''}))}
+                                defaultValue={formData.customerId}
                                 placeholder="Search customers..."
                             />
                         </div>

@@ -28,7 +28,8 @@ interface InvoiceModalProps {
 const PrintableInvoice: React.FC<any> = ({ invoice, customer, vehicle, entity, job, taxRates, totals }) => {
     const groupedItems = useMemo(() => {
         const rows: { header?: EstimateLineItem, children?: EstimateLineItem[], standalone?: EstimateLineItem }[] = [];
-        const allItems = invoice.lineItems || [];
+        // Hardened array check
+        const allItems = Array.isArray(invoice?.lineItems) ? invoice.lineItems : [];
         
         const packageHeaders = allItems.filter((item: EstimateLineItem) => item.servicePackageId && !item.isPackageComponent);
         
@@ -44,43 +45,40 @@ const PrintableInvoice: React.FC<any> = ({ invoice, customer, vehicle, entity, j
         });
         
         return rows;
-    }, [invoice.lineItems]);
+    }, [invoice?.lineItems]);
 
     const diagramImageId = useMemo(() => {
-        return vehicle?.images?.find((img: any) => img.isPrimaryDiagram)?.id ?? null;
+        const images = Array.isArray(vehicle?.images) ? vehicle.images : [];
+        return images.find((img: any) => img.isPrimaryDiagram)?.id ?? null;
     }, [vehicle]);
 
-    const hasTechnicianNotes = job && job.technicianObservations && job.technicianObservations.length > 0;
+    const hasTechnicianNotes = job && Array.isArray(job.technicianObservations) && job.technicianObservations.length > 0;
     
     const inspectionGroups = useMemo(() => {
-        if (!job?.inspectionChecklist) return { part1: [], part2: [], part3: [], part4: [] };
+        const checklist = Array.isArray(job?.inspectionChecklist) ? job.inspectionChecklist : [];
+        const result = { part1: [] as ChecklistSection[], part2: [] as ChecklistSection[], part3: [] as ChecklistSection[], part4: [] as ChecklistSection[] };
         
-        const part1: ChecklistSection[] = []; 
-        const part2: ChecklistSection[] = []; 
-        const part3: ChecklistSection[] = []; 
-        const part4: ChecklistSection[] = []; 
-        
-        job.inspectionChecklist.forEach((s: ChecklistSection) => {
-            if (['section_interior_electrics', 'section_exterior'].includes(s.id)) part1.push(s);
-            else if (s.id === 'section_engine_compartment') part2.push(s);
-            else if (s.id === 'section_vehicle_below') part3.push(s);
-            else part4.push(s);
+        checklist.forEach((s: ChecklistSection) => {
+            if (['section_interior_electrics', 'section_exterior'].includes(s.id)) result.part1.push(s);
+            else if (s.id === 'section_engine_compartment') result.part2.push(s);
+            else if (s.id === 'section_vehicle_below') result.part3.push(s);
+            else result.part4.push(s);
         });
         
-        return { part1, part2, part3, part4 };
+        return result;
     }, [job?.inspectionChecklist]);
 
     const hasAnyInspectionData = job && (
-        (job.inspectionChecklist && job.inspectionChecklist.some((s: any) => s.items.some((i: any) => i.status !== 'na'))) ||
+        (Array.isArray(job.inspectionChecklist) && job.inspectionChecklist.some((s: any) => s.items?.some((i: any) => i.status !== 'na'))) ||
         (job.tyreCheck && Object.values(job.tyreCheck).some((t: any) => t.indicator !== 'na')) ||
-        (job.damagePoints && job.damagePoints.length > 0)
+        (Array.isArray(job.damagePoints) && job.damagePoints.length > 0)
     );
 
     const hasPart1 = inspectionGroups.part1.length > 0;
     const hasPart2 = inspectionGroups.part2.length > 0;
     const hasPart3 = inspectionGroups.part3.length > 0;
     const hasPart4 = inspectionGroups.part4.length > 0 || (job && job.tyreCheck);
-    const hasDamageReport = job && job.damagePoints && job.damagePoints.length > 0;
+    const hasDamageReport = job && Array.isArray(job.damagePoints) && job.damagePoints.length > 0;
 
     const pageStyle = {
         width: '210mm',
@@ -161,7 +159,7 @@ const PrintableInvoice: React.FC<any> = ({ invoice, customer, vehicle, entity, j
                             {groupedItems.map((row, index) => {
                                 if (row.standalone) {
                                     const item = row.standalone;
-                                    const net = item.quantity * item.unitPrice;
+                                    const net = (item.quantity || 0) * (item.unitPrice || 0);
                                     return (
                                         <div key={`standalone-${item.id}`} className="grid grid-cols-12 gap-2 items-center px-1.5 py-1.5 text-sm">
                                             <div className="col-span-7">{item.description}</div>
@@ -172,7 +170,7 @@ const PrintableInvoice: React.FC<any> = ({ invoice, customer, vehicle, entity, j
                                     );
                                 } else if (row.header && row.children) {
                                     const header = row.header;
-                                    const net = header.quantity * header.unitPrice;
+                                    const net = (header.quantity || 0) * (header.unitPrice || 0);
                                     return (
                                         <React.Fragment key={`pkg-${header.id}`}>
                                             <div className="h-2"></div>
@@ -210,7 +208,7 @@ const PrintableInvoice: React.FC<any> = ({ invoice, customer, vehicle, entity, j
                             </div>
                             <div className="w-64 text-sm">
                                 <div className="flex justify-between"><span>Subtotal</span><span className="font-semibold">{formatCurrency(totals?.subtotal)}</span></div>
-                                {totals?.vatBreakdown?.map((b: any) => (<div key={b.name} className="flex justify-between text-gray-600"><span>VAT @ {b.rate}%</span><span>{formatCurrency(b.vat)}</span></div>))}
+                                {Array.isArray(totals?.vatBreakdown) && totals.vatBreakdown.map((b: any) => (<div key={b.name} className="flex justify-between text-gray-600"><span>VAT @ {b.rate}%</span><span>{formatCurrency(b.vat)}</span></div>))}
                                 <div className="flex justify-between font-bold text-lg mt-2 pt-2 border-t"><span>Total Due</span><span>{formatCurrency(totals?.grandTotal)}</span></div>
                             </div>
                         </div>
@@ -302,21 +300,28 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ isOpen, onClose, invoice, c
 
     const totals = useMemo(() => {
         if (!invoice) return { subtotal: 0, total: 0, grandTotal: 0, vatBreakdown: [] };
-        const standardTaxRateId = taxRates.find(t => t.code === 'T1')?.id;
-        const taxRatesMap = new Map(taxRates.map(t => [t.id, t]));
+        
+        // REPAIR: Hardened safety check for taxRates (Production "O" variable)
+        const safeTaxRates = Array.isArray(taxRates) ? taxRates : [];
+        const standardTaxRateId = safeTaxRates.find(t => t.code === 'T1')?.id;
+        const taxRatesMap = new Map(safeTaxRates.map(t => [t.id, t]));
+        
         const vatBreakdown: { [key: string]: { net: number; vat: number; rate: number; name: string; } } = {};
         let subtotal = 0;
         
-        (invoice.lineItems || []).forEach(item => {
+        const lineItems = Array.isArray(invoice.lineItems) ? invoice.lineItems : [];
+        
+        lineItems.forEach(item => {
             if (item.isPackageComponent) return;
 
-            const itemNet = item.quantity * item.unitPrice;
+            const itemNet = (item.quantity || 0) * (item.unitPrice || 0);
             subtotal += itemNet;
 
             const taxCodeId = item.taxCodeId || standardTaxRateId;
             if (!taxCodeId) return;
-            const taxRate = taxRatesMap.get(taxCodeId) as TaxRate | undefined;
+            const taxRate = taxRatesMap.get(taxCodeId);
             if (!taxRate || taxRate.rate === 0) return;
+            
             if (!vatBreakdown[taxCodeId]) {
                 vatBreakdown[taxCodeId] = { net: 0, vat: 0, rate: taxRate.rate, name: taxRate.name };
             }
@@ -383,7 +388,9 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ isOpen, onClose, invoice, c
             alert("Failed to generate PDF.");
         } finally {
             root.unmount();
-            document.body.removeChild(printMountPoint);
+            if (document.body.contains(printMountPoint)) {
+                document.body.removeChild(printMountPoint);
+            }
             setIsGeneratingPdf(false);
         }
     };
@@ -395,7 +402,6 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ isOpen, onClose, invoice, c
         print(<PrintableInvoice {...{ invoice, customer, vehicle, entity, job, taxRates, totals }} />);
     };
     
-    // UPDATED: Logic to update status, trigger job move, and close modal
     const handleMarkAsPaid = () => {
         if (invoice) {
             onUpdateInvoice({ ...invoice, status: 'Paid' });
