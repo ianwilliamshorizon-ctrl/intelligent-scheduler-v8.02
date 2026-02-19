@@ -9,8 +9,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@google/genai": "^1.22.0",
+    "@google/genai": "^1.42.0",
     "firebase": "latest",
+    "firebase-admin": "^13.6.1",
+    "firebase-functions": "^7.0.5",
     "html2canvas": "^1.4.1",
     "jspdf": "^4.1.0",
     "lodash": "^4.17.23",
