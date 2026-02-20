@@ -1,240 +1,163 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { ServicePackage, EstimateLineItem, Part } from '../../types';
 
-// Determine Environment
-const ENV_MODE = import.meta.env.VITE_APP_ENV || (import.meta.env.PROD ? 'production' : 'development');
+/**
+ * 1. API KEY RESOLUTION
+ */
+const isProd = import.meta.env.PROD;
+const rawKey = isProd 
+    ? (import.meta.env.VITE_GEMINI_API_KEY_PROD || import.meta.env.VITE_GEMINI_API_KEY)
+    : (import.meta.env.VITE_GEMINI_API_KEY_DEV || import.meta.env.VITE_GEMINI_API_KEY);
 
-let apiKey: string | undefined;
-
-if (ENV_MODE === 'production') {
-    apiKey = import.meta.env.VITE_GEMINI_API_KEY_PROD;
-} else {
-    apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-}
-
-if (!apiKey) {
-    console.warn(`VITE_GEMINI_API_KEY or relevant _PROD key not set for ${ENV_MODE} environment. Gemini features will not work.`);
-}
-
-// Initializing the client
-const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
+const apiKey = rawKey?.trim();
 
 /**
- * FIXED: In the 2026 SDK, chats are created via the 'chats' namespace.
- * It is an asynchronous call.
+ * 2. INITIALIZATION
+ */
+const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
+
+// Debugging: Expose to window so you can test in the console
+if (typeof window !== 'undefined') {
+    (window as any).genAI = genAI;
+}
+
+console.log(`%c 🤖 [GEMINI SERVICE] Active Mode: Gemini 3 Series | Feb 2026`, "color: #4db33d; font-weight: bold;");
+
+/**
+ * 3. HELPER: CONTENT GENERATION
+ */
+async function generateWithRetry(modelName: string, prompt: string, retries = 2) {
+    if (!genAI) throw new Error("Gemini AI not initialized. Check your API key.");
+    
+    // Using the explicit "models/" prefix ensures the v1beta endpoint routes correctly
+    const model = genAI.getGenerativeModel({ model: modelName });
+    
+    for (let i = 0; i <= retries; i++) {
+        try {
+            const result = await model.generateContent(prompt);
+            const response = await result.response;
+            return response.text();
+        } catch (error: any) {
+            if (i === retries) throw error;
+            console.warn(`AI Attempt ${i + 1} failed for ${modelName}, retrying...`, error);
+            await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
+        }
+    }
+}
+
+/**
+ * 4. CHAT INITIALIZATION
  */
 export const createAssistantChat = async () => {
-    if (!ai) {
-        throw new Error("Gemini API is not configured.");
-    }
-
-    // Correct method for the 2026 SDK is ai.chats.create
-    return await ai.chats.create({
-        model: 'gemini-3-flash-preview',
-        config: {
-            systemInstruction: `You are an expert automotive technician assistant at Brookspeed, a high-performance garage specializing in Porsche, Audi, and other performance vehicles.
-            
-            Your role is to assist Service Advisors and Technicians with:
-            1. Technical data (e.g., torque settings, fluid capacities, service intervals).
-            2. Drafting customer communications.
-            3. Diagnosing symptoms based on descriptions.
-            
-            IMPORTANT SAFETY NOTICE: When providing specific technical figures like torque settings or clearances, ALWAYS add a disclaimer: "Please verify with the official manufacturer workshop manual before application."
-            
-            Format your responses clearly using Markdown (bolding key figures, using lists). Keep responses concise and professional.`
-        }
+    if (!genAI) throw new Error("Gemini AI not initialized.");
+    const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
+    return model.startChat({
+        history: [],
+        generationConfig: { maxOutputTokens: 2000 }
     });
 };
 
-export const parseJobRequest = async (prompt: string, servicePackages: ServicePackage[], contextDate: string, vehicleInfo?: { make: string; model: string; }): Promise<any> => {
-    if (!ai) throw new Error("Gemini API is not configured.");
-    
-    const knownPackages = servicePackages.map(p => `- ${p.name}: ${p.description || p.name}`).join('\n');
-
-    let vehicleContextPrompt = '';
-    if (vehicleInfo) {
-        vehicleContextPrompt = `
-      IMPORTANT VEHICLE CONTEXT: The request is for a ${vehicleInfo.make} ${vehicleInfo.model}.
-      Use this information to select the most appropriate service package.
-      `;
-    }
-
-    const fullPrompt = `
-      Parse the following user request to create a garage job card.
-      The context date for this request is ${contextDate}. Final date MUST be in YYYY-MM-DD format.
-      ${vehicleContextPrompt}
-
-      Known Service Packages:
-      ${knownPackages}
-      
-      User Request: "${prompt}"
-
-      Return valid JSON: { "vehicleRegistration": string, "description": string, "scheduledDate": string, "servicePackageNames": string[], "estimatedHours": number }
-    `;
+/**
+ * 5. JOB REQUEST PARSING
+ */
+export const parseJobRequest = async (
+    prompt: string, 
+    servicePackages: ServicePackage[], 
+    contextDate: string, 
+    vehicleInfo?: { make: string; model: string; }
+): Promise<any> => {
+    const knownPackages = servicePackages.map(p => `- ${p.name}`).join('\n');
+    const fullPrompt = `Date: ${contextDate}\nVehicle: ${vehicleInfo?.make || 'Unknown'}\nPackages: ${knownPackages}\nRequest: "${prompt}"\nReturn JSON only.`;
 
     try {
-        const result = await ai.models.generateContent({
-            model: 'gemini-3-pro-preview',
-            contents: fullPrompt
-        });
-        
-        const jsonText = result.text?.trim() ?? "{}";
-        const parsedData = JSON.parse(jsonText.replace(/```json/g, '').replace(/```/g, '').trim());
-        if (!parsedData.servicePackageNames) parsedData.servicePackageNames = [];
-        return parsedData;
-
-    } catch (error: any) {
-        console.error("Error parsing job request:", error);
-        throw new Error("Failed to understand the job request.");
-    }
-};
-
-export const parseSearchQuery = async (query: string): Promise<{ searchTerm: string, searchType: 'customer' | 'vehicle' | 'unknown' }> => {
-    if (!ai) {
-         const isReg = /[A-Z0-9]{1,7}/.test(query.toUpperCase());
-         return { searchTerm: query, searchType: isReg ? 'vehicle' : 'customer' };
-    }
-
-    const fullPrompt = `
-      Analyze search query: "${query}"
-      Return valid JSON with 'searchTerm' and 'searchType' ('customer', 'vehicle', or 'unknown').
-    `;
-
-    try {
-        const result = await ai.models.generateContent({
-            model: 'gemini-3-flash-preview',
-            contents: fullPrompt
-        });
-        
-        const jsonText = result.text?.trim() ?? '{"searchTerm": "", "searchType": "unknown"}';
-        return JSON.parse(jsonText.replace(/```json/g, '').replace(/```/g, '').trim());
-
+        const text = await generateWithRetry("gemini-3.1-pro-preview", fullPrompt);
+        const cleaned = text?.replace(/```json/g, '').replace(/```/g, '').trim() || "{}";
+        return JSON.parse(cleaned);
     } catch (error) {
-        console.error("Error parsing search query:", error);
-        return { searchTerm: query, searchType: 'unknown' };
+        console.error("AI Error (Job Request):", error);
+        throw error;
     }
 };
 
+/**
+ * 6. GENERATE SERVICE PACKAGE NAME
+ */
 export const generateServicePackageName = async (
     lineItems: EstimateLineItem[],
     vehicleMake: string,
     vehicleModel: string
 ): Promise<{ name: string; description: string }> => {
-    if (!ai) throw new Error("Gemini API is not configured.");
-
-    const itemsDescription = (lineItems || [])
-        .map(item => `- ${item.description} (Qty: ${item.quantity})`)
-        .join('\n');
-
-    const fullPrompt = `
-      Generate a concise 'name' and 'description' for:
-      Vehicle: ${vehicleMake} ${vehicleModel}
-      Items: ${itemsDescription}
-      Return valid JSON with 'name' and 'description'.
-    `;
+    const itemsDescription = (lineItems || []).map(item => `- ${item.description}`).join('\n');
+    const fullPrompt = `Generate a concise service name and description for a ${vehicleMake} ${vehicleModel} based on these items:\n${itemsDescription}\nReturn JSON: { "name": string, "description": string }`;
 
     try {
-        const result = await ai.models.generateContent({
-            model: 'gemini-3-flash-preview',
-            contents: fullPrompt
-        });
-        
-        const jsonText = result.text?.trim() ?? '{"name": "New Service", "description": ""}';
-        return JSON.parse(jsonText.replace(/```json/g, '').replace(/```/g, '').trim());
-
+        const text = await generateWithRetry("gemini-3-flash-preview", fullPrompt);
+        const jsonText = text?.replace(/```json/g, '').replace(/```/g, '').trim() || '{"name": "Service", "description": ""}';
+        return JSON.parse(jsonText);
     } catch (error) {
-        console.error("Error generating package name:", error);
-        throw new Error("Failed to generate service package name.");
+        return { name: "General Service", description: "Automotive service and repair." };
     }
 };
 
+/**
+ * 7. ESTIMATE GENERATION
+ */
 export const generateEstimateFromDescription = async (
     description: string,
     vehicleInfo: { make: string; model: string; },
     availableParts: Part[],
-    availablePackages: ServicePackage[],
     laborRate: number,
-): Promise<{ mainItems: Partial<EstimateLineItem>[], optionalExtras: Partial<EstimateLineItem>[], suggestedNotes: string }> => {
-    if (!ai) throw new Error("Gemini API is not configured.");
-   
-    const partsList = availableParts.map(p => `- ${p.partNumber}: ${p.description}`).join('\n');
-    const packagesList = availablePackages.map(p => `- ${p.name}: ${p.description || p.name}`).join('\n');
-
-    const fullPrompt = `
-      Create estimate breakdown.
-      Vehicle: ${vehicleInfo.make} ${vehicleInfo.model}
-      Rate: £${laborRate}
-      Packages: ${packagesList}
-      Parts: ${partsList}
-      Request: "${description}"
-
-      Return JSON: { "mainItems": [], "optionalExtras": [], "suggestedNotes": "" }
-    `;
-
+): Promise<any> => {
+    const fullPrompt = `Create estimate for ${vehicleInfo.make} ${vehicleInfo.model}. Job: "${description}". Labor: £${laborRate}. Return JSON.`;
     try {
-        const result = await ai.models.generateContent({
-            model: 'gemini-3-pro-preview',
-            contents: fullPrompt
-        });
-        
-        const jsonText = result.text?.trim() ?? '{"mainItems": []}';
-        const parsedData = JSON.parse(jsonText.replace(/```json/g, '').replace(/```/g, '').trim());
-        
-        return {
-            mainItems: parsedData.mainItems || [],
-            optionalExtras: parsedData.optionalExtras || [],
-            suggestedNotes: parsedData.suggestedNotes || ''
-        };
-
+        const text = await generateWithRetry("gemini-3.1-pro-preview", fullPrompt);
+        const cleaned = text?.replace(/```json/g, '').replace(/```/g, '').trim() || '{"mainItems": []}';
+        return JSON.parse(cleaned);
     } catch (error) {
-        console.error("Error generating estimate:", error);
-        throw new Error("AI failed to generate estimate.");
+        throw error;
     }
 };
 
-export const parseInquiryMessage = async (message: string): Promise<{ fromName: string; fromContact: string; vehicleRegistration: string; summary: string; }> => {
-    if (!ai) return { fromName: '', fromContact: '', vehicleRegistration: '', summary: message };
-
-    const fullPrompt = `
-      Extract details from: "${message}"
-      Return JSON: { "fromName", "fromContact", "vehicleRegistration", "summary" }
-    `;
-
+/**
+ * 8. SEARCH QUERY ANALYSIS
+ */
+export const parseSearchQuery = async (query: string): Promise<{ searchTerm: string, searchType: 'customer' | 'vehicle' | 'unknown' }> => {
+    if (!genAI) {
+        const isReg = /^[A-Z0-9]{1,7}$/i.test(query.trim());
+        return { searchTerm: query, searchType: isReg ? 'vehicle' : 'customer' };
+    }
     try {
-        const result = await ai.models.generateContent({
-            model: 'gemini-3-flash-preview',
-            contents: fullPrompt
-        });
-        
-        const jsonText = result.text?.trim() ?? '{"summary": ""}';
-        return JSON.parse(jsonText.replace(/```json/g, '').replace(/```/g, '').trim());
-
+        const text = await generateWithRetry("gemini-3-flash-preview", `Identify if "${query}" is a 'customer' or 'vehicle'. Return JSON {searchTerm, searchType}.`);
+        const cleaned = text?.replace(/```json/g, '').replace(/```/g, '').trim() || "{}";
+        return JSON.parse(cleaned);
     } catch (error) {
-        console.error("Error parsing inquiry:", error);
+        return { searchTerm: query, searchType: 'unknown' };
+    }
+};
+
+/**
+ * 9. INQUIRY MESSAGE PARSING
+ */
+export const parseInquiryMessage = async (message: string) => {
+    if (!genAI) return { fromName: '', fromContact: '', vehicleRegistration: '', summary: message };
+    try {
+        const text = await generateWithRetry("gemini-3-flash-preview", `Extract Name, Contact, Reg from: "${message}". Return JSON.`);
+        const cleaned = text?.replace(/```json/g, '').replace(/```/g, '').trim() || '{}';
+        return JSON.parse(cleaned);
+    } catch (error) {
         return { fromName: '', fromContact: '', vehicleRegistration: '', summary: message };
     }
 };
 
+/**
+ * 10. EXTRACT SERVICE PACKAGE FROM CONTENT
+ */
 export const parseServicePackageFromContent = async (content: string): Promise<Partial<ServicePackage>> => {
-    if (!ai) throw new Error("Gemini API is not configured.");
-
-    const fullPrompt = `
-      Analyze content and extract Service Package:
-      "${content}"
-      Return JSON: { "name", "description", "costItems": [] }
-    `;
-
     try {
-        const result = await ai.models.generateContent({
-            model: 'gemini-3-pro-preview',
-            contents: fullPrompt
-        });
-        
-        const jsonText = result.text?.trim() ?? "{}";
-        return JSON.parse(jsonText.replace(/```json/g, '').replace(/```/g, '').trim());
-
+        const text = await generateWithRetry("gemini-3.1-pro-preview", `Extract service package details from: "${content}". Return JSON.`);
+        const cleaned = text?.replace(/```json/g, '').replace(/```/g, '').trim() || '{}';
+        return JSON.parse(cleaned);
     } catch (error) {
-        console.error("Error parsing package content:", error);
-        throw new Error("Failed to create service package from content.");
+        throw error;
     }
 };

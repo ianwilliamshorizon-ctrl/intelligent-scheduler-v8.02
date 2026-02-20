@@ -57,7 +57,6 @@ const EditJobModal: React.FC<{
 
     // Core Data Hooks with enhanced array safety
     const job = useMemo(() => Array.isArray(jobs) ? jobs.find(j => j.id === selectedJobId) : undefined, [jobs, selectedJobId]);
-    
     const [editableJob, setEditableJob] = useState<Job | null>(null);
     const [editableEstimate, setEditableEstimate] = useState<Estimate | null>(null);
     const [newObservation, setNewObservation] = useState('');
@@ -82,7 +81,7 @@ const EditJobModal: React.FC<{
     const diagramImageId = useMemo(() => (Array.isArray(vehicle?.images)) ? vehicle?.images?.find(img => img.isPrimaryDiagram)?.id ?? null : null, [vehicle]);
     const taxRatesMap = useMemo(() => new Map((Array.isArray(taxRates) ? taxRates : []).map(t => [t.id, t])), [taxRates]);
     const standardTaxRateId = useMemo(() => (Array.isArray(taxRates) ? taxRates : []).find(t => t.code === 'T1')?.id, [taxRates]);
-    
+
     const mainEstimate = useMemo(() => {
         if (!job || !Array.isArray(estimates)) return null;
         const currentEstimates = estimates;
@@ -137,7 +136,7 @@ const EditJobModal: React.FC<{
     }, [job, isOpen, estimates, inspectionTemplates, mainEstimate]);
 
     const isReadOnly = !!editableJob?.invoiceId;
-    
+
     const sortedPackages = useMemo(() => {
         const allAvailable = Array.isArray(servicePackages) ? servicePackages : [];
         if (!vehicle) {
@@ -192,6 +191,7 @@ const EditJobModal: React.FC<{
             const lineItems = prev.lineItems || [];
             const targetItem = lineItems.find(i => i.id === id);
             let processedValue = value;
+            
             if (['quantity', 'unitPrice', 'unitCost'].includes(field as string)) {
                  processedValue = parseFloat(value) || 0;
             }
@@ -201,7 +201,7 @@ const EditJobModal: React.FC<{
                       if (item.servicePackageId === targetItem.servicePackageId && item.isPackageComponent) {
                         return { ...item, isOptional: processedValue };
                       }
-                     return item;
+                      return item;
                 });
             }
             return { ...prev, lineItems: updatedLineItems };
@@ -212,7 +212,6 @@ const EditJobModal: React.FC<{
         const packageId = selection?.value || selection?.id || selection;
         const pkg = Array.isArray(servicePackages) ? servicePackages.find(p => p.id === packageId) : undefined;
         if (!pkg) return;
-
         const currentEstimate = handleCreateEstimateIfNeeded();
         if (!currentEstimate) return;
 
@@ -354,6 +353,7 @@ const EditJobModal: React.FC<{
                 else standaloneParts.push(item);
             }
         });
+      
         (editableEstimate.lineItems || []).forEach(item => {
             if (item.servicePackageId && item.isPackageComponent) {
                 const pkg = packagesMap.get(item.servicePackageId);
@@ -385,7 +385,6 @@ const EditJobModal: React.FC<{
     }, [editableEstimate, taxRatesMap, standardTaxRateId]);
 
     const linkedBooking = useMemo(() => Array.isArray(rentalBookings) ? rentalBookings.find(b => b.jobId === job?.id) : undefined, [rentalBookings, job]);
-    
     const engineerMap = useMemo(() => new Map((Array.isArray(engineers) ? engineers : []).map(e => [e.id, e.name])), [engineers]);
     const supplierMap = useMemo(() => new Map((Array.isArray(suppliers) ? suppliers : []).map(s => [s.id, s.name])), [suppliers]);
 
@@ -554,7 +553,7 @@ const EditJobModal: React.FC<{
                         <div className="border rounded-lg bg-white shadow-sm p-4">
                             <h3 className="text-md font-bold mb-2 flex items-center gap-2"><DollarSign size={16}/> Billing</h3>
                             <div className="text-sm space-y-2">
-                               <p><strong>Estimate:</strong> {editableEstimate ? `#${editableEstimate.estimateNumber}` : 'N/A'}</p>
+                                <p><strong>Estimate:</strong> {editableEstimate ? `#${editableEstimate.estimateNumber}` : 'N/A'}</p>
                                 <p><strong>Invoice:</strong> {job?.invoiceId ? `#${job.invoiceId}` : 'Not Invoiced'}</p>
                             </div>
                         </div>

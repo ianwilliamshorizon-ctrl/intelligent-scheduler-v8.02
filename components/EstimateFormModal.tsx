@@ -43,8 +43,7 @@ const MemoizedEditableLineItemRow = React.memo(({
     };
 
     return (
-         <div className={`grid grid-cols-12 gap-2 items-center p-2 rounded-lg border ${isPackageComponent ? 'bg-gray-100' : 'bg-white'}`}>
-             <input 
+         <div className={`grid grid-cols-12 gap-2 items-center p-2 rounded-lg border ${isPackageComponent ? 'bg-gray-100' : 'bg-white'}`}>\n             <input 
                 type="text" 
                 placeholder="Part No." 
                 value={item.partNumber || ''} 
@@ -526,7 +525,7 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                                      <label className="font-semibold text-sm">Notes & Media</label>
                                      <button type="button" onClick={handleManageMedia} className="text-xs bg-white border border-gray-300 text-indigo-600 px-2 py-1 rounded flex items-center gap-1 hover:bg-indigo-50 shadow-sm"><ImageIcon size={14}/> Photos & Videos</button>
                                 </div>
-                                <textarea name="notes" value={formData.notes || ''} onChange={handleChange} rows={4} className="w-full p-2 border rounded text-sm" placeholder="Internal notes..." />
+                                <textarea name="notes" value={formData.notes || ''} onChange={handleChange} rows={8} className="w-full p-2 border rounded text-sm" placeholder="Internal notes..." />
                             </div>
                         </div>
                     </Section>
@@ -596,7 +595,7 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                              <div className="flex justify-between text-gray-600"><span>Total Sale Price (Net):</span><span>{formatCurrency(totalNet)}</span></div>
                              <div className={`flex justify-between font-bold ${totalProfit >= 0 ? 'text-green-700' : 'text-red-600'}`}><span>Total Profit:</span><span>{formatCurrency(totalProfit)}</span></div>
                             <div className="flex justify-between text-gray-600 border-b pb-2 mb-2"><span>Profit Margin:</span><span>{profitMargin.toFixed(1)}%</span></div>
-                            {vatBreakdown.map(b => (<div key={b.name} className="flex justify-between text-gray-500 text-xs"><span>VAT @ {b.rate}%</span><span>{formatCurrency(b.vat)}</span></div>))}
+                            {vatBreakdown.map(b => (<div key={b.name} className="flex justify-between text-gray-500 text-xs"><span>VAT @ {b.rate}%</span><span>{formatCurrency(b.vat)}</span></div>))}\
                             <div className="flex justify-between font-bold text-lg mt-2 pt-2 border-t"><span>Grand Total</span><span>{formatCurrency(grandTotal)}</span></div>
                         </div>
                     </Section>

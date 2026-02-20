@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Send, Loader2, Bot, ClipboardCopy } from 'lucide-react';
-import { GoogleGenAI } from "@google/genai";
+import { createAssistantChat } from '../core/services/geminiService';
 import { Estimate } from '../types';
 
 interface Message {
@@ -15,14 +15,14 @@ interface LiveAssistantProps {
     jobId: string | null;
     onAddNote: (note: string) => void;
     onReviewPackage?: (estimate: Partial<Estimate>) => void;
-    apiKey: string;
 }
 
-const LiveAssistant: React.FC<LiveAssistantProps> = ({ isOpen, onClose, jobId, onAddNote, apiKey }) => {
+const LiveAssistant: React.FC<LiveAssistantProps> = ({ isOpen, onClose, jobId, onAddNote }) => {
     const [messages, setMessages] = useState<Message[]>([]);
     const [textInput, setTextInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
+  
 
     // Formats raw markdown into readable UI
     const formatMessage = (text: string) => {
@@ -58,24 +58,22 @@ const LiveAssistant: React.FC<LiveAssistantProps> = ({ isOpen, onClose, jobId, o
         setIsLoading(true);
         
         try {
-            const ai = new (GoogleGenAI as any)({ apiKey }); 
-            const recentHistory = messages.slice(-5).map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.text}`).join('\n');
-            
+            // ✅ Call our new service instead of Firebase Functions
+            const chat = await createAssistantChat();
             const prompt = `You are a technician assistant at Brookspeed. 
-            Job: ${jobId || 'General'}. Provide clear specs and repair data. 
-            User: ${currentText}`;
-
-            const response = await ai.models.generateContent({
-                model: 'gemini-3-flash-preview', 
-                contents: prompt,
-            });
-
-            if (response.text) {
-                 setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'model', text: response.text }]);
+            Job context: ${jobId || 'General'}. Provide clear specs and repair data. 
+            User Question: ${currentText}`;
+    
+            const result = await chat.sendMessage(prompt);
+            const response = await result.response;
+            const responseText = response.text();
+    
+            if (responseText) {
+                 setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'model', text: responseText }]);
             }
         } catch (error: any) {
             console.error("AI Error:", error);
-            setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'model', text: "Error connecting to Gemini 3.0." }]);
+            setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'model', text: "Assistant error. Please check your API key and connection." }]);
         } finally {
             setIsLoading(false);
         }
@@ -92,7 +90,7 @@ const LiveAssistant: React.FC<LiveAssistantProps> = ({ isOpen, onClose, jobId, o
                         <h2 className="text-lg font-bold flex items-center gap-2">
                             <Bot size={22}/> Technician Assistant
                         </h2>
-                        <span className="text-[10px] text-indigo-300 font-mono tracking-tighter">GEMINI 3.0 FLASH</span>
+                        <span className="text-[10px] text-indigo-300 font-mono tracking-tighter">SECURE</span>
                     </div>
                     <button onClick={onClose} className="text-white hover:text-gray-300">
                         <X size={24}/>

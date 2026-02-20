@@ -33,7 +33,7 @@ export const firebaseConfig = {
     apiKey: getEnvKey('VITE_FIREBASE_API_KEY'),
     authDomain: getEnvKey('VITE_FIREBASE_AUTH_DOMAIN'),
     // Now dynamic based on your .env files
-    projectId: getEnvKey('VITE_FIREBASE_PROJECT_ID') || 'intelligent-scheduling-v801',
+    projectId: getEnvKey('VITE_FIREBASE_PROJECT_ID'),
     storageBucket: getEnvKey('VITE_FIREBASE_STORAGE_BUCKET'),
     messagingSenderId: getEnvKey('VITE_FIREBASE_MESSAGING_SENDER_ID'),
     appId: getEnvKey('VITE_FIREBASE_APP_ID')
