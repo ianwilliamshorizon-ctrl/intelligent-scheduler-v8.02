@@ -1,4 +1,3 @@
-
 import React, { useCallback } from 'react';
 import { useData } from '../state/DataContext';
 import { useApp } from '../state/AppContext';
@@ -34,19 +33,36 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
         return 'brooks_items';
     };
 
+    /**
+     * handleSaveItem
+     * Repaired to convert literal "\n" strings into real newline characters.
+     */
     const handleSaveItem = async <Type extends { id: string }>(
         setter: React.Dispatch<React.SetStateAction<Type[]>>,
         item: Type,
         collectionOverride?: string
     ) => {
-        let finalItem: Type = item;
+        const itemToSave = { ...item };
+        const col = collectionOverride || getCollectionName(itemToSave);
+
+        // This fixes the "\n" appearing as literal text in the Estimate Builder
+        if (col === 'brooks_estimates' && Array.isArray((itemToSave as any)['lineItems'])) {
+            (itemToSave as any)['lineItems'] = (itemToSave as any)['lineItems'].map((lineItem: any) => {
+                if (lineItem && typeof lineItem.description === 'string') {
+                    return { ...lineItem, description: lineItem.description.replace(/\\n/g, '\n') };
+                }
+                return lineItem;
+            });
+        }
+
+        let finalItem: Type = itemToSave;
 
         setter(prev => {
-            const index = prev.findIndex(i => i.id === item.id);
+            const index = prev.findIndex(i => i.id === itemToSave.id);
             if (index >= 0) {
                 const existing = prev[index];
                 const cleanUpdate = Object.fromEntries(
-                    Object.entries(item).filter(([_, v]) => v !== undefined && v !== null)
+                    Object.entries(itemToSave).filter(([_, v]) => v !== undefined && v !== null)
                 );
                 
                 finalItem = { ...existing, ...cleanUpdate as Type };
@@ -55,11 +71,11 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
                 newArr[index] = finalItem;
                 return newArr;
             } else {
-                return [...prev, item];
+                finalItem = itemToSave;
+                return [...prev, itemToSave];
             }
         });
 
-        const col = collectionOverride || getCollectionName(item);
         await saveDocument(col, finalItem);
         return finalItem;
     };
@@ -172,8 +188,7 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
                 if (allOrderedOrBetter) {
                     const updatedInquiry = { 
                         ...inq, 
-                        actionNotes: (inq.actionNotes || '') + `
-[System]: All parts ordered.` 
+                        actionNotes: (inq.actionNotes || '') + `\n[System]: All parts ordered.` 
                     };
                     await handleSaveItem(setInquiries, updatedInquiry, 'brooks_inquiries');
                 }
@@ -197,8 +212,7 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
             ...estimate, 
             lineItems: approvedLineItems, 
             status: 'Approved', 
-            notes: notes ? `${estimate.notes || ''}
-${notes}` : estimate.notes 
+            notes: notes ? `${estimate.notes || ''}\n${notes}` : estimate.notes 
         };
 
         const createPOs = async (targetJobId: string, entityCode: string, itemsForPO: T.EstimateLineItem[]) => {
@@ -342,7 +356,7 @@ ${notes}` : estimate.notes
                 updatedEstimate = { ...updatedEstimate, status: 'Converted to Job', jobId: mainJob.id };
                 setConfirmation({ isOpen: true, title: 'Jobs Created', message: `Main Job #${mainJobId} and MOT Job #${motJobId} created.`, type: 'success' });
 
-            } else { // Standard Job Creation (no MOT)
+            } else { 
                 const newJobId = await generateSequenceId('992', entityShortCode);
                 const newPurchaseOrderIds = await createPOs(newJobId, entityShortCode, approvedLineItems);
                 const laborItems = approvedLineItems.filter(li => li.isLabor);
@@ -412,10 +426,7 @@ ${notes}` : estimate.notes
             estimatedHours: (job.estimatedHours || 0) + additionalLaborHours,
             purchaseOrderIds: [...(job.purchaseOrderIds || []), ...linkedPOIds],
             partsStatus: (linkedPOIds.length > 0 || (job.purchaseOrderIds && job.purchaseOrderIds.length > 0)) ? job.partsStatus : 'Not Required',
-            notes: (job.notes || '') + `
-
---- Supplementary (Est #${estimate.estimateNumber}) ---
-` + (estimate.notes || ''),
+            notes: (job.notes || '') + `\n\n--- Supplementary (Est #${estimate.estimateNumber}) ---\n` + (estimate.notes || ''),
             segments: newSegments,
             status: calculateJobStatus(newSegments)
         };
