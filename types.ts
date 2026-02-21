@@ -218,11 +218,13 @@ export interface Job {
     checkInPhotos?: CheckInPhoto[];
     technicianImages?: CheckInPhoto[];
     inspectionChecklist?: ChecklistSection[];
+    inspectionTemplateId?: string;
     tyreCheck?: TyreCheckData;
     damagePoints?: VehicleDamagePoint[];
     collectedBy?: string;
     tyreDepths?: { osf?: number; nsf?: number; osr?: number; nsr?: number };
     isStandalone?: boolean;
+    associatedJobId?: string;
 }
 
 export interface EstimateLineItem {

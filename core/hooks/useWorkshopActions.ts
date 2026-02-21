@@ -30,6 +30,7 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
         if ('forename' in item && 'surname' in item) return 'brooks_customers';
         if ('registration' in item && 'make' in item) return 'brooks_vehicles';
         if ('contactName' in item) return 'brooks_suppliers';
+        if ('sections' in item && 'isDefault' in item) return 'brooks_inspectionTemplates';
         return 'brooks_items';
     };
 
@@ -327,7 +328,8 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
                     notes: `Associated with Job #${mainJobId}`,
                     vehicleStatus: 'Awaiting Arrival',
                     partsStatus: 'Not Required',
-                    isStandalone: false
+                    isStandalone: false,
+                    associatedJobId: mainJobId
                 };
                 await handleSaveItem(setJobs, motJob, 'brooks_jobs');
 
@@ -348,7 +350,8 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
                     notes: `MOT booked separately as Job #${motJobId}.\n${notes || estimate.notes || ''}`,
                     vehicleStatus: 'Awaiting Arrival',
                     partsStatus: mainJobPOIds.length > 0 ? 'Awaiting Order' : 'Not Required',
-                    purchaseOrderIds: mainJobPOIds
+                    purchaseOrderIds: mainJobPOIds,
+                    associatedJobId: motJobId
                 };
                 mainJob.segments = splitJobIntoSegments(mainJob);
                 await handleSaveItem(setJobs, mainJob, 'brooks_jobs');
@@ -460,20 +463,16 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
                 : s
         );
 
-        const isMotJob = job.description === 'MOT';
+        const newStatus = calculateJobStatus(newSegments);
+        const updatedJob = { ...job, segments: newSegments, status: newStatus } as T.Job;
+        await handleSaveItem(setJobs, updatedJob, 'brooks_jobs');
 
-        if (isMotJob && job.isStandalone === false) {
-            await handleSaveItem(setJobs, { ...job, segments: newSegments, status: 'Closed' as const } as T.Job, 'brooks_jobs');
-            setConfirmation({
-                isOpen: true,
-                title: 'MOT Complete',
-                message: 'Linked MOT job has been automatically closed as no separate invoice is needed.',
-                type: 'success'
-            });
-        } else {
-            const newStatus = calculateJobStatus(newSegments);
-            const updatedJob = { ...job, segments: newSegments, status: newStatus } as T.Job;
-            await handleSaveItem(setJobs, updatedJob, 'brooks_jobs');
+        // If this is a main job, find and close the associated MOT job
+        if (job.associatedJobId) {
+            const associatedMOT = jobs.find(j => j.id === job.associatedJobId && j.description === 'MOT');
+            if (associatedMOT) {
+                await handleSaveItem(setJobs, { ...associatedMOT, status: 'Closed' } as T.Job, 'brooks_jobs');
+            }
         }
     };
 
@@ -482,6 +481,15 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
         if (job) {
             const newSegments = job.segments.map(s => s.segmentId === segmentId ? { ...s, engineerId: newEngineerId } : s);
             await handleSaveItem(setJobs, { ...job, segments: newSegments } as T.Job, 'brooks_jobs');
+
+            // If this is a main job, find and assign the unassigned MOT job
+            if (job.associatedJobId) {
+                const associatedMOT = jobs.find(j => j.id === job.associatedJobId && j.description === 'MOT');
+                if (associatedMOT && associatedMOT.segments.every(s => !s.engineerId)) {
+                    const newMotSegments = associatedMOT.segments.map(s => ({ ...s, engineerId: newEngineerId }));
+                    await handleSaveItem(setJobs, { ...associatedMOT, segments: newMotSegments } as T.Job, 'brooks_jobs');
+                }
+            }
         }
     };
 

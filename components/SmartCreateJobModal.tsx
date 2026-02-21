@@ -295,6 +295,10 @@ const SmartCreateJobModal: React.FC<SmartCreateJobModalProps> = ({
             const entityShortCode = selectedEntity.shortCode || 'UNK';
             const newEstimateId = `est_${Date.now()}`;
             
+            // Check for standalone MOT
+            const isStandaloneMOT = lineItems.length > 0 && 
+                                  lineItems.every(li => li.servicePackageName?.toUpperCase().includes('MOT'));
+
             const newEstimate: Estimate = {
                 id: newEstimateId,
                 estimateNumber: generateEstimateNumber(estimates, entityShortCode),
@@ -304,7 +308,7 @@ const SmartCreateJobModal: React.FC<SmartCreateJobModalProps> = ({
                 issueDate: getTodayISOString(),
                 expiryDate: getFutureDateISOString(30),
                 status: isEstimateMode ? 'Draft' : 'Converted to Job',
-                lineItems: lineItems,
+                lineItems: lineItems.map(li => ({ ...li, isCourtesyCar: isStandaloneMOT })),
                 notes: notes,
                 createdByUserId: currentUser.id,
                 jobId: isEstimateMode ? undefined : 'pending_creation' // Will be updated below
@@ -339,7 +343,8 @@ const SmartCreateJobModal: React.FC<SmartCreateJobModalProps> = ({
                 notes: notes,
                 vehicleStatus: 'Awaiting Arrival',
                 partsStatus: lineItems.some(li => !li.isLabor && !li.isPackageComponent) ? 'Awaiting Order' : 'Not Required',
-                purchaseOrderIds: undefined
+                purchaseOrderIds: undefined,
+                isStandalone: isStandaloneMOT
             };
 
             // CRITICAL: Generate segments based on the new job data so it appears on the timeline/unallocated list
@@ -369,6 +374,9 @@ const SmartCreateJobModal: React.FC<SmartCreateJobModalProps> = ({
             const entityShortCode = selectedEntity?.shortCode || 'UNK';
             const newEstimateId = `est_${Date.now()}`;
             
+            const isStandaloneMOT = lineItems.length > 0 && 
+                                  lineItems.every(li => li.servicePackageName?.toUpperCase().includes('MOT'));
+
             const newEstimate: Estimate = {
                 id: newEstimateId,
                 estimateNumber: generateEstimateNumber(estimates, entityShortCode),
@@ -378,7 +386,7 @@ const SmartCreateJobModal: React.FC<SmartCreateJobModalProps> = ({
                 issueDate: getTodayISOString(),
                 expiryDate: getFutureDateISOString(30),
                 status: isEstimateMode ? 'Draft' : 'Converted to Job',
-                lineItems: lineItems,
+                lineItems: lineItems.map(li => ({ ...li, isCourtesyCar: isStandaloneMOT })),
                 notes: notes,
                 createdByUserId: currentUser.id
             };
@@ -405,7 +413,8 @@ const SmartCreateJobModal: React.FC<SmartCreateJobModalProps> = ({
                     estimateId: newEstimate.id,
                     notes: notes,
                     vehicleStatus: 'Awaiting Arrival',
-                    partsStatus: 'Not Required'
+                    partsStatus: 'Not Required',
+                    isStandalone: isStandaloneMOT
                 };
                 
                 newJob.segments = splitJobIntoSegments(newJob);

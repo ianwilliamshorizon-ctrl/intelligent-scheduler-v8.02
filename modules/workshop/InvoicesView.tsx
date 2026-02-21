@@ -10,6 +10,7 @@ import { getCustomerDisplayName } from '../../core/utils/customerUtils';
 import PrintableInvoiceList from '../../components/PrintableInvoiceList';
 import { usePrint } from '../../core/hooks/usePrint';
 import { StatusFilter } from '../../components/shared/StatusFilter';
+import PrintableInvoice from '../../components/PrintableInvoice';
 
 interface InvoicesViewProps {
     onViewInvoice: (invoice: Invoice) => void;
@@ -24,7 +25,6 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({ onViewInvoice, onEditInvoic
     const [filter, setFilter] = useState('');
     const [statusFilter, setStatusFilter] = useState<Invoice['status'][]>([]);
     
-    // Set default start date to Jan 1st of current year to show broader history by default
     const [startDate, setStartDate] = useState(() => formatDate(new Date(new Date().getFullYear(), 0, 1)));
     const [endDate, setEndDate] = useState(() => formatDate(new Date()));
     
@@ -35,7 +35,7 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({ onViewInvoice, onEditInvoic
     const taxRatesMap = useMemo(() => new Map(taxRates.map(t => [t.id, t.rate])), [taxRates]);
     const standardTaxRate = useMemo(() => taxRates.find(t => t.code === 'T1')?.rate || 0, [taxRates]);
     const standardTaxRateId = useMemo(() => taxRates.find(t => t.code === 'T1')?.id, [taxRates]);
-
+    const entityMap = useMemo(() => new Map(businessEntities.map(e => [e.id, e])), [businessEntities]);
 
     const calculateGrossTotal = (lineItems: EstimateLineItem[]) => {
         return (lineItems || []).reduce((sum, item) => {
@@ -51,7 +51,6 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({ onViewInvoice, onEditInvoic
         const selectedEntity = businessEntities.find(e => e.id === selectedEntityId);
 
         return invoices.filter(invoice => {
-            // Business Entity Filter (using shortCode prefix)
             if (selectedEntityId !== 'all' && selectedEntity?.shortCode) {
                 if (!invoice.id.startsWith(selectedEntity.shortCode)) return false;
             } else if (selectedEntityId !== 'all') {
@@ -62,7 +61,6 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({ onViewInvoice, onEditInvoic
             const vehicle = invoice.vehicleId ? vehicleMap.get(invoice.vehicleId) : null;
             const lowerFilter = filter.toLowerCase();
 
-            // Date Range Filter (Inclusive)
             const matchesDate = (!startDate || invoice.issueDate >= startDate) && (!endDate || invoice.issueDate <= endDate);
             if (!matchesDate) return false;
 
@@ -98,6 +96,13 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({ onViewInvoice, onEditInvoic
                 title={`Invoices (${startDate} to ${endDate})`}
             />
         );
+    };
+
+    const handleReprint = (invoice: Invoice) => {
+        const customer = customerMap.get(invoice.customerId);
+        const vehicle = invoice.vehicleId ? vehicleMap.get(invoice.vehicleId) : undefined;
+        const entity = entityMap.get(invoice.entityId);
+        print(<PrintableInvoice invoice={invoice} customer={customer} vehicle={vehicle} entity={entity} taxRates={taxRates} />);
     };
     
     const invoiceStatusOptions: readonly Invoice['status'][] = ['Draft', 'Sent', 'Part Paid', 'Paid', 'Overdue'];
@@ -184,6 +189,7 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({ onViewInvoice, onEditInvoic
                                         <div className="flex gap-1">
                                             <button onClick={() => onViewInvoice(invoice)} className="p-1.5 text-gray-600 hover:bg-gray-100 rounded-full" title="View"><Eye size={16} /></button>
                                             <button onClick={() => onEditInvoice(invoice)} className="p-1.5 text-indigo-600 hover:bg-indigo-100 rounded-full" title="Edit"><Edit size={16} /></button>
+                                            <button onClick={() => handleReprint(invoice)} className="p-1.5 text-gray-600 hover:bg-gray-100 rounded-full" title="Reprint"><Printer size={16} /></button>
                                         </div>
                                     </td>
                                 </tr>

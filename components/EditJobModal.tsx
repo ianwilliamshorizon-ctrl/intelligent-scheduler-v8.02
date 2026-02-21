@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useData } from '../core/state/DataContext';
 import { useApp } from '../core/state/AppContext';
-import { Job, Vehicle, Customer, Engineer, JobSegment, Lift, Estimate, TaxRate, EstimateLineItem, Part, ServicePackage, BusinessEntity, RentalBooking, User as AppUser, PurchaseOrder, Supplier, UnbillableTimeEvent, EngineerChangeEvent, PurchaseOrderLineItem, ChecklistSection, TyreCheckData, VehicleDamagePoint, CheckInPhoto } from '../types';
+import { Job, Vehicle, Customer, Engineer, JobSegment, Lift, Estimate, TaxRate, EstimateLineItem, Part, ServicePackage, BusinessEntity, RentalBooking, User as AppUser, PurchaseOrder, Supplier, UnbillableTimeEvent, EngineerChangeEvent, PurchaseOrderLineItem, ChecklistSection, TyreCheckData, VehicleDamagePoint, CheckInPhoto, InspectionTemplate } from '../types';
 import { X, Save, Car, User, FileText, Wrench, Package, DollarSign, Edit, Plus, Trash2, KeyRound, MessageSquare, ChevronUp, ChevronDown, ListChecks, PlusCircle, ClipboardCheck, CarFront, Image as ImageIcon, Ban } from 'lucide-react';
 import { formatCurrency } from '../utils/formatUtils';
 import { formatDate, addDays } from '../core/utils/dateUtils';
@@ -49,13 +49,12 @@ const EditJobModal: React.FC<{
 }> = ({ isOpen, onClose, selectedJobId, onOpenPurchaseOrder, rentalBookings, onOpenRentalBooking, onOpenConditionReport, onRaiseSupplementaryEstimate, onViewEstimate, onViewCustomer, onViewVehicle, onCheckIn, onCheckOut, onSavePart, onDelete }) => {
     
     const data = useData();
-    const { currentUser } = useApp();
+    const { currentUser, setConfirmation } = useApp();
 
     const {
         jobs, setJobs, vehicles, customers, engineers, estimates, setEstimates, purchaseOrders, setPurchaseOrders, suppliers, parts, servicePackages, taxRates, businessEntities, inspectionTemplates
     } = data;
 
-    // Core Data Hooks with enhanced array safety
     const job = useMemo(() => Array.isArray(jobs) ? jobs.find(j => j.id === selectedJobId) : undefined, [jobs, selectedJobId]);
     const [editableJob, setEditableJob] = useState<Job | null>(null);
     const [editableEstimate, setEditableEstimate] = useState<Estimate | null>(null);
@@ -106,6 +105,37 @@ const EditJobModal: React.FC<{
         return estimates.filter(e => e.jobId === job.id && e.id !== mainId);
     }, [estimates, job, mainEstimate]);
 
+    const handleApplyInspectionTemplate = (template: InspectionTemplate) => {
+        if (!template || !template.sections) return;
+
+        const apply = () => {
+            const newChecklist: ChecklistSection[] = template.sections.map(s => ({
+                id: s.id || crypto.randomUUID(),
+                title: s.title,
+                items: (s.items || []).map(i => ({ 
+                    id: i.id || crypto.randomUUID(), 
+                    label: i.label, 
+                    status: 'na' 
+                })),
+                comments: ''
+            }));
+            setEditableJob(prev => prev ? { ...prev, inspectionChecklist: newChecklist, inspectionTemplateId: template.id } : null);
+            setConfirmation({ isOpen: true, title: 'Template Loaded', message: `Applied ${template.name}.`, type: 'success' });
+        };
+
+        if (editableJob?.inspectionChecklist && editableJob.inspectionChecklist.length > 0) {
+             setConfirmation({
+                isOpen: true,
+                title: 'Overwrite Confirmation',
+                message: 'This will replace the current inspection checklist. Are you sure?',
+                type: 'warning',
+                onConfirm: () => apply(),
+            });
+        } else {
+            apply();
+        }
+    };
+
     useEffect(() => {
         if (job) {
             const jobCopy = JSON.parse(JSON.stringify(job));
@@ -118,7 +148,11 @@ const EditJobModal: React.FC<{
                         items: s.items.map(i => ({ id: crypto.randomUUID(), label: i.label, status: 'na' })),
                         comments: ''
                     }));
-                 } else { jobCopy.inspectionChecklist = []; }
+                    jobCopy.inspectionTemplateId = defaultTemplate.id;
+                 } else { 
+                    jobCopy.inspectionChecklist = []; 
+                    jobCopy.inspectionTemplateId = undefined;
+                 }
             }
             if (!jobCopy.tyreCheck) jobCopy.tyreCheck = JSON.parse(JSON.stringify(initialTyreCheckData));
             if (!jobCopy.damagePoints) jobCopy.damagePoints = [];
@@ -480,6 +514,8 @@ const EditJobModal: React.FC<{
                         isReadOnly={isReadOnly}
                         vehicleModel={vehicle?.model}
                         diagramImageId={diagramImageId}
+                        onApplyTemplate={handleApplyInspectionTemplate}
+                        selectedTemplateId={editableJob.inspectionTemplateId}
                     />
                 );
             case 'notes':

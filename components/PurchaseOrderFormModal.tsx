@@ -16,6 +16,7 @@ interface EditableLineItemRowProps {
     newSalePrice: string;
     onNewSalePriceChange: (value: string) => void;
     isCredit: boolean;
+    isNewItem: boolean;
 }
 
 const MemoizedEditableLineItemRow = React.memo(({ 
@@ -28,9 +29,11 @@ const MemoizedEditableLineItemRow = React.memo(({
     isCostPriceChanged, 
     newSalePrice, 
     onNewSalePriceChange, 
-    isCredit 
+    isCredit,
+    isNewItem
 }: EditableLineItemRowProps) => {
     
+    const fieldsDisabled = isOrderedOrLater && !isNewItem;
     const ordered = item.quantity || 0;
     const received = item.receivedQuantity || 0;
     const remaining = isCredit ? 0 : Math.max(0, ordered - received);
@@ -56,11 +59,11 @@ const MemoizedEditableLineItemRow = React.memo(({
                         value={item.partNumber || ''} 
                         onChange={e => handlePartNumberChange(e.target.value)} 
                         className="w-full p-1 border rounded disabled:bg-gray-100 disabled:cursor-not-allowed text-sm font-medium" 
-                        disabled={isOrderedOrLater} 
+                        disabled={fieldsDisabled} 
                     />
                 </div>
-                <input type="text" placeholder="Description" value={item.description || ''} onChange={e => onLineItemChange(item.id, 'description', e.target.value)} className="col-span-4 p-1 border rounded disabled:bg-gray-100 disabled:cursor-not-allowed text-sm" disabled={isOrderedOrLater} />
-                <input type="number" step="1" value={item.quantity ?? 0} onChange={e => onLineItemChange(item.id, 'quantity', e.target.value)} className={`col-span-1 p-1 border rounded text-right disabled:bg-gray-100 disabled:cursor-not-allowed text-sm ${isCredit ? 'text-red-600 font-bold' : ''}`} disabled={isOrderedOrLater} />
+                <input type="text" placeholder="Description" value={item.description || ''} onChange={e => onLineItemChange(item.id, 'description', e.target.value)} className="col-span-4 p-1 border rounded disabled:bg-gray-100 disabled:cursor-not-allowed text-sm" disabled={fieldsDisabled} />
+                <input type="number" step="1" value={item.quantity ?? 0} onChange={e => onLineItemChange(item.id, 'quantity', e.target.value)} className={`col-span-1 p-1 border rounded text-right disabled:bg-gray-100 disabled:cursor-not-allowed text-sm ${isCredit ? 'text-red-600 font-bold' : ''}`} disabled={fieldsDisabled} />
                 
                 <div className="col-span-2 relative">
                     <input 
@@ -87,7 +90,7 @@ const MemoizedEditableLineItemRow = React.memo(({
                             <AlertTriangle size={16} fill={isPendingReturn ? "currentColor" : "none"}/>
                         </button>
                     ) : (
-                         <button onClick={() => onRemoveLineItem(item.id)} className="text-red-500 hover:text-red-700 disabled:opacity-50 disabled:cursor-not-allowed" disabled={isOrderedOrLater}><Trash2 size={14} /></button>
+                         <button onClick={() => onRemoveLineItem(item.id)} className="text-red-500 hover:text-red-700 disabled:opacity-50 disabled:cursor-not-allowed" disabled={fieldsDisabled}><Trash2 size={14} /></button>
                     )}
                 </div>
             </div>
@@ -142,6 +145,10 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
     
     const partsMap = useMemo(() => new Map(parts.map(p => [p.partNumber, p])), [parts]);
     const standardTaxRate = useMemo(() => taxRates.find(t => t.code === 'T1') || taxRates[0], [taxRates]);
+
+    const originalLineItemIds = useMemo(() =>
+        purchaseOrder ? new Set(purchaseOrder.lineItems.map(item => item.id)) : new Set()
+    , [purchaseOrder]);
 
     const title = useMemo(() => {
         if (!formData?.id) return 'Create New Purchase Order';
@@ -444,9 +451,10 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
                                 newSalePrice={newSalePrices[item.id] || ''}
                                 onNewSalePriceChange={(v) => setNewSalePrices(p => ({...p, [item.id]: v}))}
                                 isCredit={formData.type === 'Credit'}
+                                isNewItem={!originalLineItemIds.has(item.id)}
                             />
                         ))}
-                        {!isOrderedOrLater && (
+                         {['Draft', 'Ordered', 'Partially Received'].includes(formData.status || '') && formData.type !== 'Credit' && (
                             <button onClick={addLineItem} className="text-indigo-600 font-semibold flex items-center gap-1 mt-2 hover:text-indigo-800">
                                 <PlusCircle size={16}/> Add New Line
                             </button>

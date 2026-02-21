@@ -12,7 +12,7 @@ export const getScoredServicePackages = (
     servicePackages: ServicePackage[], 
     vehicle?: Partial<Vehicle> | null
 ): ScoredPackage[] => {
-    // If no vehicle is selected, treat all as Generic [cite: 48, 49]
+    // If no vehicle is selected, treat all as Generic
     if (!vehicle) {
         return servicePackages.map(pkg => ({ 
             pkg, 
@@ -25,7 +25,7 @@ export const getScoredServicePackages = (
 
     // Normalization: "PORSCHE" -> "porsche", "911 CARRERA 2S" -> "911 carrera 2s"
     const clean = (str: string | undefined | null) => 
-        (str || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
+        (str || '').toLowerCase().replace(/[^a-z0-9]/g, ' ').replace(/\s+/g, ' ').trim();
 
     const vMake = clean(vehicle.make);
     const vModel = clean(vehicle.model);
