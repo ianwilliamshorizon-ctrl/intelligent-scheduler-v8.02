@@ -35,24 +35,25 @@ export const useDispatchFilters = ({
         return lifts
             .filter(l => selectedEntityId === 'all' || l.entityId === selectedEntityId)
             .sort((a, b) => {
-                // Remove everything that IS NOT a number, then compare
                 const valA = parseInt((a.name || '').replace(/\D/g, '')) || 0;
                 const valB = parseInt((b.name || '').replace(/\D/g, '')) || 0;
-                
                 return valA - valB;
             });
-    
     }, [lifts, selectedEntityId]);
 
     const { unallocatedJobs, allocatedSegmentsByLift } = useMemo(() => {
         const today = getRelativeDate(0);
         
+        // Filter out Cancelled jobs at the start of the unallocated logic
         const allPotentialUnallocated = jobs.filter(job => 
+            job.vehicleStatus !== 'Cancelled' && 
             (selectedEntityId === 'all' || job.entityId === selectedEntityId) && 
             (job.segments || []).some(s => s.status === 'Unallocated')
         );
         
-        const siteFilteredJobs = showOnSiteOnly ? allPotentialUnallocated.filter(job => job.vehicleStatus === 'On Site') : allPotentialUnallocated;
+        const siteFilteredJobs = showOnSiteOnly 
+            ? allPotentialUnallocated.filter(job => job.vehicleStatus === 'On Site') 
+            : allPotentialUnallocated;
         
         const dateFilteredJobs = siteFilteredJobs.filter(job => {
             if (unallocatedDateFilter === 'all') return true;
@@ -68,7 +69,10 @@ export const useDispatchFilters = ({
 
         const allocated = new Map<string, (JobSegment & { parentJobId: string })[]>();
         jobs.forEach(job => {
+            // Filter out Cancelled jobs and handle entity matching
+            if (job.vehicleStatus === 'Cancelled') return;
             if (selectedEntityId !== 'all' && job.entityId !== selectedEntityId) return;
+
             (job.segments || []).forEach(segment => {
                 if (segment.date === currentDate && segment.allocatedLift && segment.status !== 'Unallocated') {
                     if (!allocated.has(segment.allocatedLift)) allocated.set(segment.allocatedLift, []);

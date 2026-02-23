@@ -139,7 +139,7 @@ export interface Vehicle {
     searchField?: string;
 }
 
-export type VehicleStatus = 'On Site' | 'Off-Site (Partner)' | 'Awaiting Arrival' | 'Awaiting Collection' | 'Collected';
+export type VehicleStatus = 'On Site' | 'Off-Site (Partner)' | 'Awaiting Arrival' | 'Awaiting Collection' | 'Collected'| 'Cancelled';
 
 export interface CheckInPhoto {
     id: string;

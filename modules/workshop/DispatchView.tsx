@@ -78,7 +78,14 @@ const DispatchView: React.FC<DispatchViewProps> = ({
         unallocatedJobs, 
         allocatedSegmentsByLift 
     } = useDispatchFilters({
-        jobs, lifts, engineers, businessEntities, selectedEntityId, currentDate, unallocatedDateFilter, showOnSiteOnly
+        jobs: jobs.filter(job => job.status !== 'Cancelled'), 
+        lifts, 
+        engineers, 
+        businessEntities, 
+        selectedEntityId, 
+        currentDate, 
+        unallocatedDateFilter, 
+        showOnSiteOnly
     });
 
     // -- Drag & Drop Logic via Hook --
@@ -86,10 +93,10 @@ const DispatchView: React.FC<DispatchViewProps> = ({
         handleDragStart,
         handleTimelineDragOver,
         handleTimelineDrop,
+        handleUnallocatedDragOver,
         handleUnallocatedDrop,
         handleDragEnd,
-        confirmJobSchedule,
-        dropResultRef
+        confirmJobSchedule
     } = useDispatchDragDrop({
         jobs, lifts, businessEntities, currentDate, setJobs, setAssignModalData, bankHolidays
     });
@@ -185,9 +192,8 @@ const DispatchView: React.FC<DispatchViewProps> = ({
                     onTimelineDragLeave={(e) => { e.currentTarget.classList.remove('timeline-column-over'); }}
                     onTimelineDragOver={handleTimelineDragOver}
                     onTimelineDrop={handleTimelineDrop}
-                    onDragOverUnallocated={(e) => { e.preventDefault(); dropResultRef.current = { type: 'UNALLOCATED' }; e.currentTarget.classList.add('is-over'); }}
+                    onDragOverUnallocated={handleUnallocatedDragOver}
                     onDropOnUnallocated={handleUnallocatedDrop}
-                    onDragEnterUnallocated={(e) => e.currentTarget.classList.add('is-over')}
                     onDragLeaveUnallocated={(e) => e.currentTarget.classList.remove('is-over')}
                     unallocatedJobs={unallocatedJobs}
                     allocatedSegmentsByLift={allocatedSegmentsByLift}

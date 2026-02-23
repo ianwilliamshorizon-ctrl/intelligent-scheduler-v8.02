@@ -33,7 +33,6 @@ const MemoizedEditableLineItemRow = React.memo(({
     const isPackageComponent = item.isPackageComponent;
     const isPackageHeader = !!item.servicePackageId && !item.isPackageComponent;
 
-    // FIX: Handles conversion of literal \n if typed manually or pasted
     const handleDescriptionChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
         const value = e.target.value;
         onLineItemChange(item.id, 'description', value);
@@ -63,9 +62,6 @@ const MemoizedEditableLineItemRow = React.memo(({
                     />
                 )}
                 <div className="relative w-full">
-                    {/* FIX: Replaced <input> with <textarea> to support multi-line display.
-                        The regex .replace(/\\n/g, '\n') handles literal \n strings in the DB.
-                    */}
                     <textarea 
                         placeholder="Description" 
                         value={(item.description || '').replace(/\\n/g, '\n')} 
@@ -612,7 +608,6 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                 onClose={() => setIsAssistantOpen(false)} 
                 jobId={formData.id || null}
                 onAddNote={(note) => setFormData(prev => ({ ...prev, notes: (prev.notes || '') + '\n' + note }))}
-                apiKey={import.meta.env.VITE_API_KEY}
             />
 
             {isAddingCustomer && (

@@ -8,6 +8,7 @@ import { getCustomerDisplayName } from '../core/utils/customerUtils';
 import { formatDate } from '../core/utils/dateUtils';
 import useModalState from '../core/hooks/useModalState';
 import { useWorkshopActions } from '../core/hooks/useWorkshopActions';
+import { initializeGenerativeAI } from '../core/services/geminiService';
 
 // Layout & Views
 import MainLayout from '../components/MainLayout';
@@ -81,6 +82,15 @@ const App = () => {
     const lastBackupTimeRef = useRef<string | null>(null);
 
     useInactivityLogout(logout, isAuthenticated, 30 * 60 * 1000);
+
+    useEffect(() => {
+        const apiKey = process.env.GEMINI_API_KEY;
+        if (apiKey) {
+            initializeGenerativeAI(apiKey);
+        } else {
+            console.error("Gemini API key not found. Live Assistant will be disabled.");
+        }
+    }, []);
 
     const handleGenerateInvoice = (jobId: string) => {
         const job = (jobs || []).find(j => j.id === jobId);

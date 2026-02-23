@@ -265,6 +265,13 @@ export const useDispatchDragDrop = ({
         draggedItemRef.current = null;
     }, [jobs, lifts, setAssignModalData]);
 
+    const handleUnallocatedDragOver = useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        if (!draggedItemRef.current) return;
+        e.currentTarget.classList.add('is-over');
+        dropResultRef.current = { type: 'UNALLOCATED' };
+    }, []);
+
     const handleUnallocatedDrop = useCallback((e: React.DragEvent) => {
         e.preventDefault();
         const unallocatedZone = e.currentTarget;
@@ -322,6 +329,7 @@ export const useDispatchDragDrop = ({
         handleDragStart,
         handleTimelineDragOver,
         handleTimelineDrop,
+        handleUnallocatedDragOver, // Make sure to export this
         handleUnallocatedDrop,
         handleDragEnd,
         checkCollisionOnDate,

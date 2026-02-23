@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { useData } from '../../core/state/DataContext';
 import { useApp } from '../../core/state/AppContext';
@@ -10,7 +9,7 @@ import { getCustomerDisplayName } from '../../core/utils/customerUtils';
 import PrintableInvoiceList from '../../components/PrintableInvoiceList';
 import { usePrint } from '../../core/hooks/usePrint';
 import { StatusFilter } from '../../components/shared/StatusFilter';
-import PrintableInvoice from '../../components/PrintableInvoice';
+import InvoiceModal from '../../components/InvoiceModal';
 
 interface InvoicesViewProps {
     onViewInvoice: (invoice: Invoice) => void;
@@ -102,7 +101,7 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({ onViewInvoice, onEditInvoic
         const customer = customerMap.get(invoice.customerId);
         const vehicle = invoice.vehicleId ? vehicleMap.get(invoice.vehicleId) : undefined;
         const entity = entityMap.get(invoice.entityId);
-        print(<PrintableInvoice invoice={invoice} customer={customer} vehicle={vehicle} entity={entity} taxRates={taxRates} />);
+        print(<InvoiceModal invoice={invoice} customer={customer} vehicle={vehicle} entity={entity} taxRates={taxRates} isOpen={true} onClose={() => {}} />);
     };
     
     const invoiceStatusOptions: readonly Invoice['status'][] = ['Draft', 'Sent', 'Part Paid', 'Paid', 'Overdue'];
@@ -177,9 +176,9 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({ onViewInvoice, onEditInvoic
                                     <td className="p-3">
                                         <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${
                                             invoice.status === 'Paid' ? 'bg-green-100 text-green-800' : 
-                                            invoice.status === 'Overdue' ? 'bg-red-100 text-red-800' :
-                                            invoice.status === 'Part Paid' ? 'bg-amber-100 text-amber-800' :
-                                            invoice.status === 'Sent' ? 'bg-blue-100 text-blue-800' :
+                                            invoice.status === 'Overdue' ? 'bg-red-100 text-red-800' : 
+                                            invoice.status === 'Part Paid' ? 'bg-amber-100 text-amber-800' : 
+                                            invoice.status === 'Sent' ? 'bg-blue-100 text-blue-800' : 
                                             'bg-gray-100'}`}>{invoice.status}</span>
                                     </td>
                                     <td className="p-3 text-right font-semibold">

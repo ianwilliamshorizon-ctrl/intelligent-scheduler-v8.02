@@ -17,8 +17,6 @@ export const usePersistentState = <T,>(
     const isCollection = Array.isArray(initialVal);
 
     if (isCollection) {
-        // These are the "heavy" tables. We use getAll() to fetch once.
-        // This stops the 15-30s "long-polling" lag.
         const heavyCollections = ['brooks_parts', 'brooks_customers', 'brooks_vehicles', 'brooks_auditLog'];
         
         if (heavyCollections.includes(storageKey)) {
@@ -28,19 +26,16 @@ export const usePersistentState = <T,>(
                 }
             }).catch(err => console.error(`Failed to fetch ${storageKey}`, err));
         } else {
-            // Light collections (Jobs, etc.) stay live
             unsubscribe = subscribeToCollection(storageKey, (data) => {
                 if (!isMounted.current || (window as any).isSyncing) return;
                 
                 const incomingData = data as unknown as any[];
-                // Only update if we have data (prevents flicker on slow loads)
                 if (incomingData && incomingData.length >= (initialVal as any[]).length) {
                     setState(data as unknown as T);
                 } 
             });
         }
     } else {
-        // Single document settings
         getItem<T>(storageKey).then((data) => {
             if (isMounted.current && data !== null) setState(data);
         });
@@ -54,11 +49,14 @@ export const usePersistentState = <T,>(
 
   const setPersistentState: React.Dispatch<React.SetStateAction<T>> = (value) => {
     setState((prevState) => {
-      const newState = typeof value === 'function' ? (value as any)(prevState) : value;
+      const valueResult = typeof value === 'function' ? (value as (prevState: T) => T)(prevState) : value;
       
+      const newState = (
+        !Array.isArray(prevState) && typeof prevState === 'object' && prevState !== null &&
+        !Array.isArray(valueResult) && typeof valueResult === 'object' && valueResult !== null
+      ) ? { ...prevState, ...valueResult } : valueResult;
+
       if (Array.isArray(newState)) {
-        // Warning: This saves every item in the array to Firestore.
-        // For 1,000+ parts, this is slow. 
         newState.forEach(item => { 
             if (item.id) saveDocument(storageKey, item); 
         });
