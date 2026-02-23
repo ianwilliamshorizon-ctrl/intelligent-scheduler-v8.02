@@ -9,10 +9,12 @@ import { useApp } from '../../core/state/AppContext';
 import { usePrint } from '../../core/hooks/usePrint';
 import PrintablePurchaseOrderList from '../../components/PrintablePurchaseOrderList';
 import { StatusFilter } from '../../components/shared/StatusFilter';
+import useToaster from '../../hooks/useToaster';
 
-const PurchaseOrdersView = ({ onOpenPurchaseOrderModal, onViewPurchaseOrder, onDeletePurchaseOrder, onExport, onOpenBatchAddModal }: { onOpenPurchaseOrderModal: (po: PurchaseOrder | null) => void, onDeletePurchaseOrder: (id: string) => void, onViewPurchaseOrder: (po: PurchaseOrder) => void, onExport: (data: any[], filename: string) => void, onOpenBatchAddModal: () => void }) => {
-    const { purchaseOrders, suppliers, businessEntities } = useData();
+const PurchaseOrdersView = ({ onOpenPurchaseOrderModal, onViewPurchaseOrder, onExport, onOpenBatchAddModal }: { onOpenPurchaseOrderModal: (po: PurchaseOrder | null) => void, onViewPurchaseOrder: (po: PurchaseOrder) => void, onExport: (data: any[], filename: string) => void, onOpenBatchAddModal: () => void }) => {
+    const { purchaseOrders, suppliers, businessEntities, setPurchaseOrders } = useData();
     const { selectedEntityId } = useApp();
+    const { showSuccess } = useToaster();
     const print = usePrint();
 
     const [filter, setFilter] = useState('');
@@ -56,6 +58,13 @@ const PurchaseOrdersView = ({ onOpenPurchaseOrderModal, onViewPurchaseOrder, onD
                 : [...prev, status]
         );
     };
+    
+    const handleDeletePurchaseOrder = (id: string) => {
+        if (window.confirm('Are you sure you want to delete this purchase order?')) {
+            setPurchaseOrders(prev => prev.filter(po => po.id !== id));
+            showSuccess('Purchase order deleted successfully.');
+        }
+    };
 
     const poStatusOptions: readonly PurchaseOrder['status'][] = ['Draft', 'Ordered', 'Partially Received', 'Received', 'Cancelled'];
 
@@ -84,7 +93,7 @@ const PurchaseOrdersView = ({ onOpenPurchaseOrderModal, onViewPurchaseOrder, onD
                      <button onClick={handlePrintList} className="flex items-center gap-2 py-2 px-4 bg-gray-600 text-white font-semibold rounded-lg shadow-md hover:bg-gray-700">
                         <Printer size={16}/> Print List
                     </button>
-                    <button onClick={onOpenBatchAddModal} className="flex items-center gap-2 py-2 px-4 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700">
+                    <button onClick={() => onOpenPurchaseOrderModal(null)} className="flex items-center gap-2 py-2 px-4 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700">
                         <PlusCircle size={16}/> New Purchase Order
                     </button>
                 </div>
@@ -147,7 +156,7 @@ const PurchaseOrdersView = ({ onOpenPurchaseOrderModal, onViewPurchaseOrder, onD
                                          <div className="flex gap-1 justify-end">
                                             <button onClick={() => onViewPurchaseOrder(po)} className="p-1.5 text-gray-600 hover:bg-gray-100 rounded-full" title="View"><Eye size={16} /></button>
                                             <button onClick={() => onOpenPurchaseOrderModal(po)} className="p-1.5 text-indigo-600 hover:bg-indigo-100 rounded-full" title="Edit"><Edit size={16} /></button>
-                                            <button onClick={() => onDeletePurchaseOrder(po.id)} className="p-1.5 text-red-600 hover:bg-red-100 rounded-full" title="Delete"><Trash2 size={16} /></button>
+                                            <button onClick={() => handleDeletePurchaseOrder(po.id)} className="p-1.5 text-red-600 hover:bg-red-100 rounded-full" title="Delete"><Trash2 size={16} /></button>
                                         </div>
                                     </td>
                                 </tr>

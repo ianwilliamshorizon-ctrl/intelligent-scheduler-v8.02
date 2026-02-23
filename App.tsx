@@ -1,5 +1,7 @@
 
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 import * as T from './types';
 import { useData } from './core/state/DataContext';
 import { useApp } from './core/state/AppContext';
@@ -233,7 +235,7 @@ const App = () => {
         <MainLayout onOpenManagement={() => setIsManagementOpen(true)} onSearchResult={handleSearchResult}>
             {currentView === 'dashboard' && <DashboardView {...commonProps} onCheckIn={(id) => setters.setCheckInJob((jobs || []).find(j => j.id === id) || null)} onOpenInquiry={(inq) => setters.setInquiryModal({isOpen: true, inquiry: inq})} />}
             {currentView === 'dispatch' && <DispatchView {...commonProps} setDefaultDateForModal={setters.setSmartCreateDefaultDate} setIsSmartCreateOpen={setters.setIsSmartCreateOpen} setSmartCreateMode={setters.setSmartCreateMode} setSelectedJobId={setters.setSelectedJobId} setIsEditModalOpen={setters.setIsEditJobModalOpen} onOpenPurchaseOrder={(po) => setters.setViewPoModal({isOpen: true, po})} onReassignEngineer={workshopActions.handleReassignEngineer} onCheckIn={(id) => setters.setCheckInJob((jobs || []).find(j => j.id === id) || null)} onUnscheduleSegment={workshopActions.handleUnscheduleSegment} />}
-            {currentView === 'workflow' && <WorkflowView jobs={jobs || []} vehicles={vehicles || []} customers={customers || []} engineers={engineers || []} currentUser={currentUser} onQcApprove={commonProps.onQcApprove} onGenerateInvoice={handleGenerateInvoice} onEditJob={commonProps.onEditJob} onStartWork={commonProps.onStartWork} onEngineerComplete={commonProps.onEngineerComplete} onPause={(id, segId) => workshopActions.handleUpdateSegmentStatus(id, segId, 'Paused')} onRestart={commonProps.onRestart} onOpenAssistant={commonProps.onOpenAssistant} onOpenPurchaseOrder={(po) => setters.setViewPoModal({isOpen: true, po})} />}
+            {currentView === 'workflow' && <WorkflowView jobs={jobs || []} vehicles={vehicles || []} customers={customers || []} engineers={engineers || []} currentUser={currentUser} onQcApprove={commonProps.onQcApprove} onGenerateInvoice={handleGenerateInvoice} onEditJob={common_props.onEditJob} onStartWork={commonProps.onStartWork} onEngineerComplete={commonProps.onEngineerComplete} onPause={(id, segId) => workshopActions.handleUpdateSegmentStatus(id, segId, 'Paused')} onRestart={commonProps.onRestart} onOpenAssistant={commonProps.onOpenAssistant} onOpenPurchaseOrder={(po) => setters.setViewPoModal({isOpen: true, po})} />}
             {currentView === 'jobs' && <JobsView onEditJob={commonProps.onEditJob} onSmartCreateClick={() => { setters.setSmartCreateMode('job'); setters.setIsSmartCreateOpen(true); }} />}
             {currentView === 'estimates' && <EstimatesView onOpenEstimateModal={(est) => setters.setEstimateFormModal({isOpen: true, estimate: est})} onViewEstimate={(est) => setters.setEstimateViewModal({isOpen: true, estimate: est})} onSmartCreateClick={() => { setters.setSmartCreateMode('estimate'); setters.setIsSmartCreateOpen(true); }} onScheduleEstimate={(est, inquiryId) => setters.setScheduleJobFromEstimateModal({isOpen: true, estimate: est, inquiryId})} />}
             {currentView === 'invoices' && <InvoicesView onViewInvoice={(inv) => setters.setViewInvoiceModal({isOpen: true, invoice: inv})} onEditInvoice={(inv) => setters.setInvoiceFormModal({isOpen: true, invoice: inv})} onOpenExportModal={(type, items) => setters.setExportModal({isOpen: true, type: type as any, items})} onCreateAdhocInvoice={() => setters.setInvoiceFormModal({isOpen: true, job: null, invoice: null })} />}
@@ -261,6 +263,7 @@ const App = () => {
                     onManualBackup={handleManualBackup}
                 />
             )}
+            <ToastContainer />
         </MainLayout>
     );
 };

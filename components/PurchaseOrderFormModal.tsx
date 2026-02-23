@@ -4,6 +4,7 @@ import { Save, PlusCircle, Trash2, X, CheckSquare, Eye, ArrowDownCircle, AlertTr
 import { formatDate } from '../core/utils/dateUtils';
 import { generatePurchaseOrderId } from '../core/utils/numberGenerators';
 import { formatCurrency } from '../utils/formatUtils';
+import useToaster from '../hooks/useToaster';
 
 interface EditableLineItemRowProps {
     item: PurchaseOrderLineItem;
@@ -142,6 +143,7 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
         orderDate: formatDate(new Date())
     });
     const [newSalePrices, setNewSalePrices] = useState<Record<string, string>>({});
+    const { showError } = useToaster();
     
     const partsMap = useMemo(() => new Map(parts.map(p => [p.partNumber, p])), [parts]);
     const standardTaxRate = useMemo(() => taxRates.find(t => t.code === 'T1') || taxRates[0], [taxRates]);
@@ -193,7 +195,8 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
     
     const isReceivingDisabled = useMemo(() => formData.status === 'Draft', [formData.status]);
     const isOrderedOrLater = useMemo(() => ['Ordered', 'Partially Received', 'Received'].includes(formData.status || ''), [formData.status]);
-    
+    const isOriginalStatusReceived = useMemo(() => purchaseOrder?.status === 'Received', [purchaseOrder]);
+
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
     };
@@ -297,8 +300,13 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
     };
 
     const handleSave = () => {
+        if (isOriginalStatusReceived) {
+            showError('This purchase order has been received and cannot be modified.');
+            return;
+        }
+
         if (!formData.supplierId || !formData.vehicleRegistrationRef) {
-            alert('Supplier and Internal Reference are required.');
+            showError('Supplier and Internal Reference are required.');
             return;
         }
 
@@ -324,14 +332,18 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
     };
 
     const handleFinalizeReceipt = () => {
+        if (isOriginalStatusReceived) {
+            showError('This purchase order has already been finalized.');
+            return;
+        }
+
         if (!formData.supplierId || !formData.vehicleRegistrationRef) {
-            alert('Supplier and Internal Reference are required.');
+            showError('Supplier and Internal Reference are required.');
             return;
         }
         
-        // Ensure we have a reference number if we are receiving anything
         if (!formData.supplierReference) {
-             alert('Please enter a Supplier Reference / Invoice No. to finalize this receipt.');
+             showError('Please enter a Supplier Reference / Invoice No. to finalize this receipt.');
              return;
         }
 
@@ -498,7 +510,11 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
                     </div>
                     <div className="flex gap-2">
                         <button onClick={onClose} className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg font-bold hover:bg-gray-50">Cancel</button>
-                        <button onClick={handleSave} className="px-4 py-2 bg-indigo-600 text-white rounded-lg flex items-center gap-2 hover:bg-indigo-700 font-bold shadow-sm">
+                        <button 
+                            onClick={handleSave} 
+                            className="px-4 py-2 bg-indigo-600 text-white rounded-lg flex items-center gap-2 hover:bg-indigo-700 font-bold shadow-sm disabled:bg-indigo-300 disabled:cursor-not-allowed"
+                            disabled={isOriginalStatusReceived}
+                        >
                             <Save size={16}/> Save Changes
                         </button>
                     </div>
