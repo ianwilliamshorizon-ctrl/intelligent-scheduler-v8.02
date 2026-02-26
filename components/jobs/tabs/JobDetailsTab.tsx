@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import * as T from '../../../types';
-import { Car, User, KeyRound, Calendar, Clock, Edit, Phone, Mail, MapPin, Building, Briefcase, Expand, ImageIcon, X } from 'lucide-react';
+import { Car, User, KeyRound, Calendar, Clock, Edit, Phone, Mail, MapPin, Building, Briefcase, Expand, ImageIcon, X, Gauge, Info } from 'lucide-react';
+import { HoverInfo } from '../../shared/HoverInfo';
 
 interface TabSectionProps {
     title: string;
@@ -53,27 +54,18 @@ const JobDetailsTab: React.FC<JobDetailsTabProps> = ({
         <div className="space-y-4">
              <TabSection title="Key Details" icon={KeyRound}>
                 <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                    <div className="flex items-center gap-2"><Calendar size={14} className="text-gray-500"/><strong>Scheduled:</strong> <span>{editableJob.scheduledDate}</span></div>
-                    <div className="flex items-center gap-2"><Clock size={14} className="text-gray-500"/><strong>Est. Hours:</strong> <span>{editableJob.estimatedHours || 'N/A'}</span></div>
-                    <div className="flex items-center gap-2"><User size={14} className="text-gray-500"/><strong>Assigned To:</strong>
+                    <div className="flex items-center gap-2"><KeyRound size={14} className="text-gray-500"/><strong>Key Number:</strong> 
                         {isReadOnly ? (
-                            <span>{engineers.find(e => e.id === editableJob.engineerId)?.name || 'N/A'}</span>
+                            <span>{editableJob.keyNumber || 'N/A'}</span>
                         ) : (
-                            <select name="engineerId" value={editableJob.engineerId || ''} onChange={onChange} className="p-1 border rounded bg-white text-sm w-full">
-                                <option value="">Unassigned</option>
-                                {engineers.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
-                            </select>
+                            <input type="number" name="keyNumber" value={editableJob.keyNumber || ''} onChange={onChange} className="p-1 border rounded bg-white text-sm w-full" />
                         )}
                     </div>
-                    <div className="flex items-center gap-2"><Briefcase size={14} className="text-gray-500"/><strong>Type:</strong> 
+                    <div className="flex items-center gap-2"><Gauge size={14} className="text-gray-500"/><strong>Mileage:</strong> 
                         {isReadOnly ? (
-                            <span>{editableJob.jobType}</span>
+                            <span>{editableJob.mileage || 'N/A'}</span>
                         ) : (
-                            <select name="jobType" value={editableJob.jobType} onChange={onChange} className="p-1 border rounded bg-white text-sm w-full">
-                                <option>Standard</option>
-                                <option>Internal</option>
-                                <option>Warranty</option>
-                            </select>
+                            <input type="number" name="mileage" value={editableJob.mileage || ''} onChange={onChange} className="p-1 border rounded bg-white text-sm w-full" />
                         )}
                     </div>
                 </div>
@@ -81,19 +73,42 @@ const JobDetailsTab: React.FC<JobDetailsTabProps> = ({
 
             {customer && (
                 <TabSection title="Customer Details" icon={User} actions={<button type="button" onClick={() => onViewCustomer(customer.id)} className="text-xs bg-white border border-gray-300 px-2 py-1 rounded hover:bg-gray-100">View Full</button>}>
-                    <p className="font-bold text-base">{customer.forename} {customer.surname}</p>
-                    {customer.companyName && <p className="flex items-center gap-2 text-gray-600"><Building size={14}/> {customer.companyName}</p>}
-                    <p className="flex items-center gap-2"><Mail size={14} className="text-gray-500"/> {customer.email}</p>
-                    <p className="flex items-center gap-2"><Phone size={14} className="text-gray-500"/> {customer.mobile || customer.phone}</p>
-                    <p className="flex items-center gap-2"><MapPin size={14} className="text-gray-500"/> {`${customer.addressLine1}, ${customer.city}, ${customer.postcode}`}</p>
+                     <div className="flex items-center justify-between">
+                        <p className="font-bold text-base">{customer.forename} {customer.surname}</p>
+                        <HoverInfo
+                            title="Customer Details"
+                            data={{
+                                Email: customer.email,
+                                Phone: customer.mobile || customer.phone,
+                                Address: `${customer.addressLine1}, ${customer.city}, ${customer.postcode}`,
+                                Company: customer.companyName,
+                            }}
+                        >
+                            <Info size={16} className="text-gray-400 cursor-pointer"/>
+                        </HoverInfo>
+                    </div>
                 </TabSection>
             )}
             
             {vehicle && (
                 <TabSection title="Vehicle Details" icon={Car} actions={<button type="button" onClick={() => onViewVehicle(vehicle.id)} className="text-xs bg-white border border-gray-300 px-2 py-1 rounded hover:bg-gray-100">View Full</button>}>
-                    <p className="font-bold text-base">{vehicle.registration}</p>
-                    <p className="text-gray-600">{vehicle.make} {vehicle.model} ({vehicle.year})</p>
-                    <p className="text-xs font-mono bg-gray-100 p-1 rounded inline-block">VIN: {vehicle.vin}</p>
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="font-bold text-base">{vehicle.registration}</p>
+                            <p className="text-gray-600 text-xs">{vehicle.make} {vehicle.model}</p>
+                        </div>
+                        <HoverInfo
+                            title="Vehicle Details"
+                            data={{
+                                Year: vehicle.year,
+                                VIN: vehicle.vin,
+                                Mileage: editableJob.mileage,
+                                MOT: vehicle.motExpiryDate
+                            }}
+                        >
+                            <Info size={16} className="text-gray-400 cursor-pointer"/>
+                        </HoverInfo>
+                    </div>
                 </TabSection>
             )}
 

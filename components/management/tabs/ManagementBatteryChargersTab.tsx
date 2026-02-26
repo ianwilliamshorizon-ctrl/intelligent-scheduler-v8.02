@@ -11,7 +11,6 @@ export const ManagementBatteryChargersTab = ({ searchTerm = '', onShowStatus }: 
         batteryChargers = [], 
         setBatteryChargers, 
         businessEntities = [], 
-        refreshActiveData 
     } = useData();
     
     // Local state for immediate UI feedback
@@ -53,13 +52,6 @@ export const ManagementBatteryChargersTab = ({ searchTerm = '', onShowStatus }: 
             
             setIsModalOpen(false);
             setSelectedCharger(null);
-
-            // Buffer for cloud propagation before data refresh
-            if (refreshActiveData) {
-                setTimeout(async () => {
-                    await refreshActiveData(true);
-                }, 800);
-            }
             
             onShowStatus('Charger configuration saved.', 'success');
         } catch (error: any) {

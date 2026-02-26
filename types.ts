@@ -215,7 +215,7 @@ export interface Job {
     estimateId?: string;
     invoiceId?: string;
     vehicleStatus?: VehicleStatus;
-    partsStatus?: 'Awaiting Order' | 'Ordered' | 'Partially Received' | 'Fully Received' | 'Not Required';
+    partsStatus?: 'Awaiting Order' | 'Ordered' | 'Partially Received' | 'Fully Received' | 'Not Required' | 'Awaiting Parts';
     purchaseOrderIds?: string[];
     notes?: string;
     checkInPhotos?: CheckInPhoto[];
@@ -228,6 +228,10 @@ export interface Job {
     tyreDepths?: { osf?: number; nsf?: number; osr?: number; nsr?: number };
     isStandalone?: boolean;
     associatedJobId?: string;
+    engineerId?: string;
+    jobType?: string;
+    checkInTimestamp?: string;
+    checkOutTimestamp?: string;
 }
 
 export interface EstimateLineItem {
@@ -320,7 +324,7 @@ export interface PurchaseOrder {
     supplierReference?: string;
     secondarySupplierReference?: string;
     orderDate: string;
-    status: 'Draft' | 'Ordered' | 'Partially Received' | 'Received' | 'Cancelled';
+    status: 'Draft' | 'Ordered' | 'Partially Received' | 'Received' | 'Cancelled' | 'Awaiting Supplier Action' | 'Finalized';
     type?: 'Standard' | 'Credit';
     jobId?: string | null;
     lineItems: PurchaseOrderLineItem[];
@@ -328,6 +332,8 @@ export interface PurchaseOrder {
     createdByUserId?: string;
     partUpdates?: Part[];
     linkedPurchaseOrderId?: string;
+    vehicleId?: string;
+    customerId?: string;
 }
 
 export interface Purchase {
@@ -696,12 +702,12 @@ export interface CustomerFormModalProps {
     onClose: () => void;
     onSave: (customer: Customer) => void;
     customer?: Customer | null;
-    customerId?: string | null; // Ensure this matches exactly
+    customerId?: string | null; // FIX: Add this optional field
     customers: Customer[];
-    jobs: any[];
-    vehicles: any[];
-    estimates: any[];
-    invoices: any[];
+    vehicles: Vehicle[];
+    jobs: Job[];
+    estimates: Estimate[];
+    invoices: Invoice[];
 }
 
 export interface MediaManagerModalProps {
@@ -795,7 +801,6 @@ export interface DataContextType {
     roles: Role[];
     inspectionDiagrams: InspectionDiagram[];
     inspectionTemplates: InspectionTemplate[];
-    // Added 'refreshActiveData' to fix multiple Management Tab errors
     refreshActiveData: () => Promise<void>; 
     loading: boolean;
     error: string | null;

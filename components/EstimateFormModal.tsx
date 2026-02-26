@@ -104,7 +104,7 @@ const MemoizedEditableLineItemRow = React.memo(({
             <div className="col-span-1 flex justify-center gap-1">
                 <button onClick={() => onRemoveLineItem(item.id)} className="text-red-500 hover:text-red-700 disabled:opacity-50 p-1" disabled={!!isPackageComponent}><Trash2 size={14} /></button>
             </div>
-         </div>
+       </div>
     );
 });
 
@@ -135,18 +135,15 @@ interface NotesModalProps {
 
 const NotesModal: React.FC<NotesModalProps> = ({ isOpen, onClose, notes, onSave }) => {
     const [localNotes, setLocalNotes] = useState(notes);
-
     useEffect(() => {
         setLocalNotes(notes);
     }, [notes, isOpen]);
-
     const handleSave = () => {
         onSave(localNotes);
         onClose();
     };
 
     if (!isOpen) return null;
-
     return (
         <div className="fixed inset-0 bg-gray-900 bg-opacity-75 z-[100] flex justify-center items-center p-4">
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl h-[80vh] flex flex-col">
@@ -170,7 +167,6 @@ const NotesModal: React.FC<NotesModalProps> = ({ isOpen, onClose, notes, onSave 
         </div>
     );
 };
-
 
 interface EstimateFormModalProps {
     isOpen: boolean; onClose: () => void; onSave: (estimate: Estimate) => void;
@@ -463,9 +459,10 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
             const taxRate = taxRatesMap.get(taxCodeId);
             if (!taxRate) return;
             if (!breakdown[taxCodeId]) breakdown[taxCodeId] = { net: 0, vat: 0, rate: taxRate.rate, name: taxRate.name };
+            
             const itemTotal = Number(item.quantity || 0) * Number(item.unitPrice || 0);
             if (!item.isOptional) {
-                 breakdown[taxCodeId].net += itemTotal;
+                breakdown[taxCodeId].net += itemTotal;
                 currentTotalNet += itemTotal;
                 cost += (Number(item.quantity) || 0) * (Number(item.unitCost) || 0);
             }
@@ -505,7 +502,7 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-1 space-y-4">
-                     <Section title="Estimate Details" icon={Info}>
+                    <Section title="Estimate Details" icon={Info}>
                         <div className="space-y-3 text-sm">
                             <div>
                                 <label className="font-semibold">Customer</label>
@@ -539,7 +536,7 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                             <div>
                                 <label className="font-semibold">Vehicle (Optional)</label>
                                 <div className="flex flex-col gap-2 mt-1">
-                                    <div className="flex items-center gap-2">
+                                     <div className="flex items-center gap-2">
                                         <SearchableSelect
                                             options={vehicleOptions}
                                             onSelect={handleVehicleSelect}
@@ -553,8 +550,7 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                                             <p className="text-[10px] font-bold text-blue-600 uppercase mb-1 flex items-center gap-1"><Car size={10}/> Customer's Cars:</p>
                                             <div className="flex flex-wrap gap-1">
                                                 {linkedVehicles.map(v => (
-                                                <button key={v.id} type="button" 
-                                                    onClick={() => setFormData(prev => ({ ...prev, vehicleId: v.id }))} className={`text-xs px-2 py-1 rounded font-medium border ${formData.vehicleId === v.id ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-blue-200 text-blue-700 hover:bg-blue-100'}`}>{v.registration}</button>
+                                                <button key={v.id} type="button" onClick={() => setFormData(prev => ({ ...prev, vehicleId: v.id }))} className={`text-xs px-2 py-1 rounded font-medium border ${formData.vehicleId === v.id ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-blue-200 text-blue-700 hover:bg-blue-100'}`}>{v.registration}</button>
                                                 ))}
                                             </div>
                                          </div>
@@ -596,35 +592,35 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                                 <div className="col-span-2 text-right">Sell Price</div> <div className="col-span-1"></div>
                             </div>
                             {estimateBreakdown.packages.length > 0 && (
-                                <div>
+                                 <div>
                                     <h4 className="font-bold text-gray-800 mb-2 text-sm">Service Packages</h4>
                                     <div className="space-y-2">
                                         {estimateBreakdown.packages.map(({ header, children }) => (
                                             <div key={header.id}>
-                                                <MemoizedEditableLineItemRow 
+                                                 <MemoizedEditableLineItemRow 
                                                     item={header} taxRates={taxRates} onLineItemChange={handleLineItemChange} onRemoveLineItem={removeLineItem} filteredParts={[]} activePartSearch={null} onPartSearchChange={()=>{}} onSetActivePartSearch={()=>{}} onSelectPart={()=>{}} onAddNewPart={()=>{}} 
                                                 />
                                                 <div className="pl-6 border-l-2 ml-2 space-y-1 mt-1">
-                                                      {children.map(child => (
+                                                       {children.map(child => (
                                                         <MemoizedEditableLineItemRow 
                                                             key={child.id} item={child} taxRates={taxRates} onLineItemChange={handleLineItemChange} onRemoveLineItem={removeLineItem} filteredParts={[]} activePartSearch={null} onPartSearchChange={()=>{}} onSetActivePartSearch={()=>{}} onSelectPart={()=>{}} onAddNewPart={()=>{}} 
                                                         />
                                                     ))}
-                                                </div>
+                                                 </div>
                                             </div>
-                                        ))}
+                                         ))}
                                     </div>
                                 </div>
-                            )}
+                             )}
                             {estimateBreakdown.customLabor.length > 0 && (
                                 <div className="p-2 border rounded-lg bg-gray-50/50">
                                     <h4 className="font-bold text-gray-800 mb-2 text-sm">Labor</h4>
                                     <div className="space-y-2">{estimateBreakdown.customLabor.map(item => <MemoizedEditableLineItemRow key={item.id} item={item} taxRates={taxRates} onLineItemChange={handleLineItemChange} onRemoveLineItem={removeLineItem} filteredParts={filteredPartsList} activePartSearch={activePartSearch} onPartSearchChange={setPartSearchTerm} onSetActivePartSearch={setActivePartSearch} onSelectPart={handleSelectPart} onAddNewPart={handleAddNewPartClick} />)}</div>
                                 </div>
-                            )}
+                             )}
                              {estimateBreakdown.customParts.length > 0 && (
                                  <div className="p-2 border rounded-lg bg-gray-50/50">
-                                  <h4 className="font-bold text-gray-800 mb-2 text-sm">Parts</h4>
+                                    <h4 className="font-bold text-gray-800 mb-2 text-sm">Parts</h4>
                                     <div className="space-y-2">{estimateBreakdown.customParts.map(item => <MemoizedEditableLineItemRow key={item.id} item={item} taxRates={taxRates} onLineItemChange={handleLineItemChange} onRemoveLineItem={removeLineItem} filteredParts={filteredPartsList} activePartSearch={activePartSearch} onPartSearchChange={setPartSearchTerm} onSetActivePartSearch={setActivePartSearch} onSelectPart={handleSelectPart} onAddNewPart={handleAddNewPartClick} />)}</div>
                                  </div>
                              )}
@@ -634,19 +630,19 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                                     <button onClick={() => addLineItem(false)} className="flex items-center text-sm text-indigo-600 font-semibold hover:text-indigo-800"><PlusCircle size={16} className="mr-1" /> Add Part</button>
                                  </div>
                                  <div className="w-64">
-                                  <SearchableSelect 
+                                   <SearchableSelect 
                                         options={sortedPackages}
                                         onSelect={(val) => addPackage(val)} 
                                         placeholder="Search & Add Package..." 
                                         dropdownClassName="min-w-[450px] right-0" 
-                                    />
+                                   />
                                 </div>
                             </div>
                         </div>
                     </Section>
                                   
                     <Section title="Totals Summary" icon={Gauge}>
-                         <div className="w-full text-sm space-y-1">
+                        <div className="w-full text-sm space-y-1">
                              <div className="flex justify-between text-gray-600"><span>Total Cost Price:</span><span>{formatCurrency(totalCost)}</span></div>
                              <div className="flex justify-between text-gray-600"><span>Total Sale Price (Net):</span><span>{formatCurrency(totalNet)}</span></div>
                              <div className={`flex justify-between font-bold ${totalProfit >= 0 ? 'text-green-700' : 'text-red-600'}`}><span>Total Profit:</span><span>{formatCurrency(totalProfit)}</span></div>
@@ -681,8 +677,8 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                         handleCustomerSelect(newCustomer); 
                         setIsAddingCustomer(false); 
                     }} 
-                    customerId={null}
-                    customers={customers}
+                    customer={null}
+                    existingCustomers={customers}
                     jobs={[]}
                     vehicles={[]}
                     estimates={[]}
@@ -690,15 +686,16 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                 />
             )}
 
-            {isMediaModalOpen && (
-                <MediaManagerModal
-                    isOpen={isMediaModalOpen}
-                    onClose={() => setIsMediaModalOpen(false)}
-                    onSave={handleSaveMedia}
-                    media={formData.media || []}
-                    jobId={formData.id || ''}
-                />
-            )}
+{isMediaModalOpen && (
+    <MediaManagerModal
+        isOpen={isMediaModalOpen}
+        onClose={() => setIsMediaModalOpen(false)}
+        onSave={handleSaveMedia}
+        initialMedia={formData.media || []} 
+        title="Estimate Photos & Videos"
+        // Remove the jobId={formData.id || ''} line from here
+    />
+)}
 
             {isAddingPart && (
                 <PartFormModal

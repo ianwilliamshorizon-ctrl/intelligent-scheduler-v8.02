@@ -166,23 +166,48 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
 
     const saveAndLinkPo = useCallback((poToSave: PurchaseOrder) => {
         onSave(poToSave);
-
-        if (poToSave.jobId && setJobs) {
+    
+        if (poToSave.jobId && setJobs && allPurchaseOrders) {
+            const updatedPOsList = [...allPurchaseOrders.filter(p => p.id !== poToSave.id), poToSave];
+            const poMap = new Map(updatedPOsList.map(p => [p.id, p]));
+    
             setJobs(prevJobs => prevJobs.map(job => {
                 if (job.id === poToSave.jobId) {
-                    if (!job.purchaseOrderIds?.includes(poToSave.id)) {
-                        return {
-                            ...job,
-                            purchaseOrderIds: [...(job.purchaseOrderIds || []), poToSave.id],
-                        };
+                    const currentPoIds = job.purchaseOrderIds || [];
+                    const newPurchaseOrderIds = Array.from(new Set([...currentPoIds, poToSave.id]));
+                    
+                    const jobPOs = newPurchaseOrderIds
+                        .map(id => poMap.get(id))
+                        .filter((p): p is PurchaseOrder => !!p && p.type !== 'Credit');
+    
+                    let newPartsStatus: Job['partsStatus'] = 'Not Required';
+    
+                    if (jobPOs.length > 0) {
+                        const allReceived = jobPOs.every(p => p.status === 'Received');
+                        const anyReceived = jobPOs.some(p => p.status === 'Received' || p.status === 'Partially Received');
+                        const anyOrdered = jobPOs.some(p => p.status === 'Ordered');
+    
+                        if (allReceived) {
+                            newPartsStatus = 'Fully Received';
+                        } else if (anyReceived) {
+                            newPartsStatus = 'Partially Received';
+                        } else if (anyOrdered) {
+                            newPartsStatus = 'Ordered';
+                        }
                     }
+    
+                    return {
+                        ...job,
+                        purchaseOrderIds: newPurchaseOrderIds,
+                        partsStatus: newPartsStatus,
+                    };
                 }
                 return job;
             }));
         }
-    }, [onSave, setJobs]);
+    }, [onSave, setJobs, allPurchaseOrders]);
     
-    const partsMap = useMemo(() => new Map(parts.map(p => [p.partNumber, p])), [parts]);
+    const partsMap = useMemo(() => new Map(parts.map(p => [p.partNumber.toLowerCase(), p])), [parts]);
     const standardTaxRate = useMemo(() => taxRates.find(t => t.code === 'T1') || taxRates[0], [taxRates]);
 
     const originalLineItemIds = useMemo(() =>
@@ -201,8 +226,11 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
                 customer = customers.find(c => c.id === job.customerId);
             }
         } else if (purchaseOrder && vehicles && customers) {
-            vehicle = vehicles.find(v => v.id === purchaseOrder.vehicleId);
-            customer = customers.find(c => c.id === purchaseOrder.customerId);
+            const job = jobs.find(j => j.id === purchaseOrder.jobId);
+            if (job) {
+                 vehicle = vehicles.find(v => v.id === job.vehicleId);
+                 customer = customers.find(c => c.id === job.customerId);
+            }
         }
         
         return { associatedVehicle: vehicle, associatedCustomer: customer };
@@ -228,6 +256,17 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
         if (purchaseOrder) {
             const data = JSON.parse(JSON.stringify(purchaseOrder));
             const rawId = data.supplierId || data.supplier?.id || data.SupplierId || "";
+
+            const isNewlyGenerated = !data.id && (data.lineItems || []).length > 0;
+            let lineItemsToSet = data.lineItems || [];
+
+            if (isNewlyGenerated) {
+                lineItemsToSet = lineItemsToSet.filter((item: PurchaseOrderLineItem) => {
+                    if (!item.partNumber) return true;
+                    const part = partsMap.get(item.partNumber.toLowerCase());
+                    return !part || !part.isStockItem;
+                });
+            }
             
             setFormData({
                 ...data,
@@ -238,7 +277,7 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
                 notes: data.notes || '',
                 status: data.status || 'Draft',
                 type: data.type || 'Standard',
-                lineItems: data.lineItems || [],
+                lineItems: lineItemsToSet,
                 jobId: data.jobId || ''
             });
         } else {
@@ -256,7 +295,7 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
                 jobId: jobId || '',
             });
         }
-    }, [purchaseOrder, isOpen, selectedEntityId, jobId]);
+    }, [purchaseOrder, isOpen, selectedEntityId, jobId, partsMap]);
     
     const isReceivingDisabled = useMemo(() => formData.status === 'Draft', [formData.status]);
     const isOrderedOrLater = useMemo(() => ['Ordered', 'Partially Received', 'Received'].includes(formData.status || ''), [formData.status]);
@@ -326,8 +365,8 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
         return updatedParts;
     }, [formData.lineItems, purchaseOrder, parts, newSalePrices]);
 
-    const calculateFinalStatus = (lineItems: PurchaseOrderLineItem[]): string => {
-        if (lineItems.length === 0) return formData.status || 'Draft';
+    const calculateFinalStatus = (lineItems: PurchaseOrderLineItem[]): PurchaseOrder['status'] => {
+        if (lineItems.length === 0) return formData.status as PurchaseOrder['status'] || 'Draft';
         
         const allReceived = lineItems.every(item => 
             Math.abs(Number(item.receivedQuantity || 0)) >= Math.abs(Number(item.quantity || 0))
@@ -353,7 +392,7 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
         }
 
         const lineItems = formData.lineItems || [];
-        let newStatus = formData.status || 'Draft';
+        let newStatus = formData.status as PurchaseOrder['status'] || 'Draft';
 
         if (newStatus !== 'Draft' && newStatus !== 'Cancelled') {
             newStatus = calculateFinalStatus(lineItems);
@@ -560,7 +599,7 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
                                 onRemoveLineItem={removeLineItem} 
                                 isReceivingDisabled={isReceivingDisabled}
                                 isOrderedOrLater={isOrderedOrLater}
-                                isCostPriceChanged={!!(item.partNumber && partsMap.get(item.partNumber) && item.unitPrice !== (purchaseOrder?.lineItems?.find(li => li.id === item.id)?.unitPrice))}
+                                isCostPriceChanged={!!(item.partNumber && partsMap.get(item.partNumber.toLowerCase()) && item.unitPrice !== (purchaseOrder?.lineItems?.find(li => li.id === item.id)?.unitPrice))}
                                 newSalePrice={newSalePrices[item.id] || ''}
                                 onNewSalePriceChange={(v) => setNewSalePrices(p => ({...p, [item.id]: v}))}
                                 isCredit={formData.type === 'Credit'}

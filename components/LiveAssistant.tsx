@@ -60,7 +60,7 @@ const LiveAssistant: React.FC<LiveAssistantProps> = ({ isOpen, onClose, jobId, o
         setIsLoading(true);
         
         try {
-            const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-preview" });
+            const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
             
             const prompt = `You are a technician assistant at Brookspeed. 
             Job context: ${jobId || 'General'}. Provide clear specs and repair data. 
@@ -78,7 +78,7 @@ const LiveAssistant: React.FC<LiveAssistantProps> = ({ isOpen, onClose, jobId, o
             setMessages(prev => [...prev, { 
                 id: crypto.randomUUID(), 
                 role: 'model', 
-                text: "Assistant error. Please check that your API key is valid and you are using the gemini-1.5 series model." 
+                text: "Assistant error. Please check that your API key is valid and you are using the <gemini-3.0-flash-latest." 
             }]);
         } finally {
             setIsLoading(false);

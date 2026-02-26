@@ -18,7 +18,6 @@ export const ManagementEntitiesTab = ({ onShowStatus }: { onShowStatus: (text: s
         customers = [], 
         invoices = [], 
         taxRates = [],
-        refreshActiveData 
     } = useData();
 
     // 2. Local State for UI Stability
@@ -47,12 +46,6 @@ export const ManagementEntitiesTab = ({ onShowStatus }: { onShowStatus: (text: s
             setIsModalOpen(false);
             setSelectedEntity(null);
 
-            // Cloud settle buffer
-            if (refreshActiveData) {
-                setTimeout(async () => {
-                    await refreshActiveData(true);
-                }, 800);
-            }
             onShowStatus('Business entity updated.', 'success');
         } catch (error) {
             onShowStatus('Failed to save entity changes.', 'error');
@@ -92,7 +85,6 @@ export const ManagementEntitiesTab = ({ onShowStatus }: { onShowStatus: (text: s
                 await saveDocument('brooks_jobs', job);
             }
             
-            if (refreshActiveData) await refreshActiveData(true);
             onShowStatus(`Imported ${uniqueNew.length} new jobs successfully.`, 'success');
         } catch (err) { 
             console.error(err); 
@@ -134,7 +126,6 @@ export const ManagementEntitiesTab = ({ onShowStatus }: { onShowStatus: (text: s
                 await saveDocument('brooks_invoices', inv);
             }
             
-            if (refreshActiveData) await refreshActiveData(true);
             onShowStatus(`Imported ${uniqueNew.length} new invoices successfully.`, 'success');
         } catch (err) { 
             console.error(err); 
@@ -193,7 +184,8 @@ export const ManagementEntitiesTab = ({ onShowStatus }: { onShowStatus: (text: s
                                     <FileText size={16} className="text-gray-400 group-hover:text-green-600 mb-1" />
                                     <span className="text-[10px] font-black uppercase text-gray-500 group-hover:text-green-700">Invoices</span>
                                     <input type="file" accept=".csv" className="hidden" onClick={() => setImportTargetEntityId(e.id)} onChange={handleImportInvoices} />
-                                </label>
+                                </label
+                        >
                             </div>
                         </div>
 

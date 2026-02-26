@@ -12,7 +12,6 @@ export const ManagementDiagramsTab = ({ searchTerm = '', onShowStatus }: { searc
     const { 
         inspectionDiagrams = [], 
         setInspectionDiagrams, 
-        refreshActiveData 
     } = useData();
     
     // 1. Local state for instant grid updates
@@ -53,12 +52,6 @@ export const ManagementDiagramsTab = ({ searchTerm = '', onShowStatus }: { searc
             setIsModalOpen(false);
             setSelectedDiagram(null);
 
-            // Cloud settle buffer
-            if (refreshActiveData) {
-                setTimeout(async () => {
-                    await refreshActiveData(true);
-                }, 800);
-            }
             onShowStatus("Diagram saved successfully.", "success");
         } catch (error) {
             console.error("Save failed:", error);
@@ -135,13 +128,7 @@ export const ManagementDiagramsTab = ({ searchTerm = '', onShowStatus }: { searc
             }
 
             onShowStatus(`Successfully imported ${successCount} diagrams.`, 'success');
-            
-            // Single cloud refresh after the whole batch is finished
-            if (refreshActiveData) {
-                setTimeout(async () => {
-                    await refreshActiveData(true);
-                }, 1000); // Slightly longer for bulk
-            }
+
         } catch (e) { 
             console.error("Bulk upload failed", e); 
             onShowStatus("An error occurred during bulk upload.", 'error'); 

@@ -4,6 +4,7 @@ import { Package as PackageIcon, KeyRound, PauseCircle, PlayCircle, UserCog, Tra
 import { getCustomerDisplayName } from '../../core/utils/customerUtils';
 import { getPoStatusColor } from '../../core/utils/statusUtils';
 import { TIME_SEGMENTS, SEGMENT_DURATION_MINUTES } from '../../constants';
+import { HoverInfo } from '../shared/HoverInfo';
 
 export const AllocatedJobCard: React.FC<{
     job: Job;
@@ -81,11 +82,21 @@ export const AllocatedJobCard: React.FC<{
                 height: `${heightPercent}%`,
                 minHeight: '40px', 
             }}
-            title={`${job.description}\nAssigned to: ${engineer?.name || (segment.engineerId ? 'Unknown' : 'Unassigned')}`}
         >
             <div className="flex justify-between items-start text-xs flex-shrink-0">
                 <div className="flex flex-col min-w-0 pr-1">
-                    <span className="font-bold truncate">{vehicle?.registration || 'Unknown Vehicle'}</span>
+                     <HoverInfo
+                        title="Vehicle Details"
+                        data={{
+                            Make: vehicle?.make,
+                            Model: vehicle?.model,
+                            Year: vehicle?.year,
+                            VIN: vehicle?.vin,
+                            'MOT Expires': vehicle?.motExpiryDate
+                        }}
+                    >
+                        <span className="font-bold truncate">{vehicle?.registration || 'Unknown Vehicle'}</span>
+                    </HoverInfo>
                     <span className="text-[9px] font-mono opacity-90 truncate">#{job.id}</span>
                 </div>
                 <div className="flex items-center gap-1 flex-shrink-0">
@@ -121,9 +132,19 @@ export const AllocatedJobCard: React.FC<{
                 </div>
             </div>
             
-            <div className="flex-grow overflow-hidden my-0.5 min-h-0">
+            <div className="flex-grow my-0.5 min-h-0">
                  <p className="text-xs font-semibold truncate leading-tight">{job.description}</p>
-                 <p className="text-[10px] truncate leading-tight opacity-80" title={getCustomerDisplayName(customer)}>{getCustomerDisplayName(customer)}</p>
+                 <HoverInfo
+                    title="Customer Details"
+                    data={{
+                        Name: getCustomerDisplayName(customer),
+                        Mobile: customer?.mobile,
+                        Phone: customer?.phone,
+                        Email: customer?.email
+                    }}
+                 >
+                    <p className="text-[10px] truncate leading-tight opacity-80">{getCustomerDisplayName(customer)}</p>
+                 </HoverInfo>
             </div>
             
             <div className="flex justify-between items-end text-xs mt-auto pt-1 border-t border-white/20 flex-shrink-0">

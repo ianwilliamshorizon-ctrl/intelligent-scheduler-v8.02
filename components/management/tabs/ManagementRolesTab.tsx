@@ -6,7 +6,7 @@ import RoleFormModal from '../../RoleFormModal';
 import { saveDocument } from '../../../core/db/index';
 
 export const ManagementRolesTab = ({ searchTerm = '', onShowStatus }: { searchTerm: string, onShowStatus: (text: string, type: 'info' | 'success' | 'error') => void }) => {
-    const { roles = [], setRoles, refreshActiveData } = useData();
+    const { roles = [], setRoles } = useData();
     
     // 1. Local state for instant UI updates
     const [localRoles, setLocalRoles] = useState<Role[]>(Array.isArray(roles) ? roles : []);
@@ -45,13 +45,6 @@ export const ManagementRolesTab = ({ searchTerm = '', onShowStatus }: { searchTe
 
             setIsModalOpen(false);
             setSelectedRole(null);
-
-            // 2. Cloud Settle Buffer
-            if (refreshActiveData) {
-                setTimeout(async () => {
-                    await refreshActiveData(true);
-                }, 800);
-            }
 
             onShowStatus('System permissions updated.', 'success');
         } catch (error: any) {

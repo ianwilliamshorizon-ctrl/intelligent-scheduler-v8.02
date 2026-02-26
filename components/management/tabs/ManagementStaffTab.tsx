@@ -10,7 +10,7 @@ import { saveDocument } from '../../../core/db/index';
 export const ManagementStaffTab = () => {
     // 1. Destructure the new adminResetPassword from useApp
     const { users = [], setUsers, adminResetPassword } = useApp();
-    const { roles = [], refreshActiveData } = useData();
+    const { roles = [], useData } = useData();
     
     const [localUsers, setLocalUsers] = useState<UserType[]>(Array.isArray(users) ? users : []);
 

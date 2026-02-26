@@ -148,7 +148,7 @@ const SmartCreateJobModal: React.FC<SmartCreateJobModalProps> = ({
             .map(pkg => {
                 const pMake = (pkg.applicableMake || '').toLowerCase().trim();
                 const pModel = (pkg.applicableModel || '').toLowerCase().trim();
-                const pVariant = (pkg.applicableVariant || '').toLowerCase().trim();
+                const pVariant = (pkg.applicableVarient || '').toLowerCase().trim();
                 
                 let score = -1;
                 let matchType = 'Mismatch';
@@ -548,8 +548,8 @@ const SmartCreateJobModal: React.FC<SmartCreateJobModalProps> = ({
                              </div>
                              <SearchableSelect 
                                 options={customers.map(c => ({ id: c.id, label: getCustomerDisplayName(c), value: c.id }))}
-                                value={null}
-                                onChange={(val) => val && handleCustomerSelect(val)}
+                                initialValue={null}
+                                onSelect={(val) => val && handleCustomerSelect(val)}
                                 placeholder="Search existing customer..."
                              />
                              <div className="text-center text-xs text-gray-500">- OR -</div>
@@ -666,13 +666,11 @@ const SmartCreateJobModal: React.FC<SmartCreateJobModalProps> = ({
                                 <div className="flex-grow">
                                 <SearchableSelect 
                                     options={sortedPackages}
-                                    value={null}
-                                    onChange={(val) => val && handleSelectPackage(val)}
+                                    initialValue={null}
+                                    onSelect={(val) => val && handleSelectPackage(val)}
                                     placeholder="+ Add Service Package..."
                                 />
                                 </div>
-                                <button onClick={handleAddLabor} className="px-3 py-2 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 text-sm font-semibold flex items-center gap-1"><Plus size={14}/> Labor</button>
-                                <button onClick={handleAddPart} className="px-3 py-2 bg-green-100 text-green-700 rounded hover:bg-green-200 text-sm font-semibold flex items-center gap-1"><Plus size={14}/> Part</button>
                              </div>
                         </div>
 
@@ -709,6 +707,10 @@ const SmartCreateJobModal: React.FC<SmartCreateJobModalProps> = ({
 
                         {/* Financial Summary Footer */}
                         <div className="p-4 bg-white border-t flex-shrink-0 space-y-3">
+                             <div className="flex gap-2">
+                                <button onClick={handleAddLabor} className="px-3 py-2 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 text-sm font-semibold flex items-center gap-1"><Plus size={14}/> Labor</button>
+                                <button onClick={handleAddPart} className="px-3 py-2 bg-green-100 text-green-700 rounded hover:bg-green-200 text-sm font-semibold flex items-center gap-1"><Plus size={14}/> Part</button>
+                            </div>
                             <div className="flex justify-between items-center font-bold text-lg text-gray-800">
                                 <span>Total Estimated Cost:</span>
                                 <span className="text-indigo-700">{formatCurrency(totals.gross)}</span>
