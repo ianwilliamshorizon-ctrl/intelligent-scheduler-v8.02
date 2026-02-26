@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Estimate, Customer, Vehicle, BusinessEntity, TaxRate, ServicePackage, Part, EstimateLineItem, Job, User, CheckInPhoto, Supplier } from '../types';
-import { Save, PlusCircle, Gauge, Info, FileText, ChevronUp, ChevronDown, Trash2, X, TrendingUp, Plus, Image as ImageIcon, History, Car, Wand2 } from 'lucide-react';
+import { Save, PlusCircle, Gauge, Info, FileText, ChevronUp, ChevronDown, Trash2, X, TrendingUp, Plus, Image as ImageIcon, History, Car, Wand2, Expand } from 'lucide-react';
 import { formatDate, getTodayISOString, getFutureDateISOString } from '../core/utils/dateUtils';
 import { generateEstimateNumber } from '../core/utils/numberGenerators';
 import { formatCurrency } from '../utils/formatUtils';
@@ -108,18 +108,69 @@ const MemoizedEditableLineItemRow = React.memo(({
     );
 });
 
-const Section = ({ title, icon: Icon, children, defaultOpen = true }: { title: string, icon: React.ElementType, children?: React.ReactNode, defaultOpen?: boolean }) => {
+const Section = ({ title, icon: Icon, children, defaultOpen = true, actions }: { title: string, icon: React.ElementType, children?: React.ReactNode, defaultOpen?: boolean, actions?: React.ReactNode }) => {
     const [isOpen, setIsOpen] = useState(defaultOpen);
     return (
         <div className="border rounded-lg bg-white shadow-sm">
             <h3 onClick={() => setIsOpen(!isOpen)} className="text-md font-bold p-3 flex justify-between items-center cursor-pointer bg-gray-50 rounded-t-lg">
                 <span className="flex items-center gap-2">{Icon && <Icon size={16}/>} {title}</span>
-                {isOpen ? <ChevronUp size={20}/> : <ChevronDown size={20}/>}
+                <div className="flex items-center gap-2">
+                    {actions}
+                    <button type="button">
+                        {isOpen ? <ChevronUp size={20}/> : <ChevronDown size={20}/>}
+                    </button>
+                </div>
             </h3>
             {isOpen && <div className="p-3">{children}</div>}
         </div>
     );
 };
+
+interface NotesModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+    notes: string;
+    onSave: (notes: string) => void;
+}
+
+const NotesModal: React.FC<NotesModalProps> = ({ isOpen, onClose, notes, onSave }) => {
+    const [localNotes, setLocalNotes] = useState(notes);
+
+    useEffect(() => {
+        setLocalNotes(notes);
+    }, [notes, isOpen]);
+
+    const handleSave = () => {
+        onSave(localNotes);
+        onClose();
+    };
+
+    if (!isOpen) return null;
+
+    return (
+        <div className="fixed inset-0 bg-gray-900 bg-opacity-75 z-[100] flex justify-center items-center p-4">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl h-[80vh] flex flex-col">
+                <header className="flex justify-between items-center p-4 border-b">
+                    <h2 className="text-lg font-bold">Edit Notes</h2>
+                    <button onClick={onClose}><X size={24} /></button>
+                </header>
+                <div className="flex-grow p-4">
+                    <textarea
+                        value={localNotes}
+                        onChange={(e) => setLocalNotes(e.target.value)}
+                        className="w-full h-full p-2 border rounded resize-none text-sm"
+                        placeholder="Enter notes..."
+                    />
+                </div>
+                <footer className="p-4 border-t flex justify-end gap-2">
+                    <button onClick={onClose} className="px-4 py-2 bg-gray-200 rounded-lg">Cancel</button>
+                    <button onClick={handleSave} className="px-4 py-2 bg-indigo-600 text-white rounded-lg">Save</button>
+                </footer>
+            </div>
+        </div>
+    );
+};
+
 
 interface EstimateFormModalProps {
     isOpen: boolean; onClose: () => void; onSave: (estimate: Estimate) => void;
@@ -144,6 +195,7 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
     const [isAddingVehicle, setIsAddingVehicle] = useState(false);
     const [isAddingPart, setIsAddingPart] = useState(false);
     const [isAssistantOpen, setIsAssistantOpen] = useState(false);
+    const [isNotesModalOpen, setIsNotesModalOpen] = useState(false);
     const [targetLineItemId, setTargetLineItemId] = useState<string | null>(null);
     const [newPartDescription, setNewPartDescription] = useState('');
     const [partSearchTerm, setPartSearchTerm] = useState('');
@@ -453,7 +505,7 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-1 space-y-4">
-                    <Section title="Estimate Details" icon={Info}>
+                     <Section title="Estimate Details" icon={Info}>
                         <div className="space-y-3 text-sm">
                             <div>
                                 <label className="font-semibold">Customer</label>
@@ -524,7 +576,10 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                             <div className="bg-gray-50 p-2 rounded-lg border mt-2">
                                 <div className="flex justify-between items-center mb-2">
                                     <label className="font-semibold text-sm">Notes & Media</label>
-                                     <button type="button" onClick={handleManageMedia} className="text-xs bg-white border border-gray-300 text-indigo-600 px-2 py-1 rounded flex items-center gap-1 hover:bg-indigo-50 shadow-sm"><ImageIcon size={14}/> Photos & Videos</button>
+                                    <div className="flex items-center gap-2">
+                                        <button type="button" onClick={() => setIsNotesModalOpen(true)} className="text-xs bg-white border border-gray-300 text-indigo-600 px-2 py-1 rounded flex items-center gap-1 hover:bg-indigo-50 shadow-sm"><Expand size={14}/> Expand</button>
+                                        <button type="button" onClick={handleManageMedia} className="text-xs bg-white border border-gray-300 text-indigo-600 px-2 py-1 rounded flex items-center gap-1 hover:bg-indigo-50 shadow-sm"><ImageIcon size={14}/> Photos & Videos</button>
+                                    </div>
                                 </div>
                                 <textarea name="notes" value={formData.notes || ''} onChange={handleChange} rows={8} className="w-full p-2 border rounded text-sm" placeholder="Internal notes..." />
                             </div>
@@ -608,6 +663,13 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                 onClose={() => setIsAssistantOpen(false)} 
                 jobId={formData.id || null}
                 onAddNote={(note) => setFormData(prev => ({ ...prev, notes: (prev.notes || '') + '\n' + note }))}
+            />
+
+            <NotesModal 
+                isOpen={isNotesModalOpen} 
+                onClose={() => setIsNotesModalOpen(false)} 
+                notes={formData.notes || ''} 
+                onSave={(newNotes) => setFormData(prev => ({...prev, notes: newNotes}))}
             />
 
             {isAddingCustomer && (

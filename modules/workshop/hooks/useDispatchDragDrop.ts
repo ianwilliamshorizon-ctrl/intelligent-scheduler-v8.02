@@ -1,10 +1,11 @@
 
 import React, { useRef, useCallback } from 'react';
-import { DraggedSegmentData, Job, JobSegment, Lift, BusinessEntity } from '../../../types';
+import { DraggedSegmentData, Job, JobSegment, Lift, BusinessEntity, Estimate, EstimateLineItem, PurchaseOrder, Part, Vehicle, User } from '../../../types';
 import { calculateJobStatus } from '../../../core/utils/jobUtils';
 import { getNextValidWorkingDate, dateStringToDate, formatDate } from '../../../core/utils/dateUtils';
 import { TIME_SEGMENTS, SEGMENT_DURATION_MINUTES } from '../../../constants';
 import { getHolidaysForRegion } from '../../../services/bankHolidayService';
+import { generateSequenceId } from '../../../core/db';
 
 interface UseDispatchDragDropProps {
     jobs: Job[];
@@ -14,6 +15,11 @@ interface UseDispatchDragDropProps {
     setJobs: React.Dispatch<React.SetStateAction<Job[]>>;
     setAssignModalData: (data: { job: Job, segment: JobSegment, lift: Lift, startSegmentIndex: number, currentEngineerId?: string | null } | null) => void;
     bankHolidays: Map<string, string[]>;
+    parts: Part[];
+    vehicles: Vehicle[];
+    currentUser: User;
+    handleSavePurchaseOrder: (po: PurchaseOrder) => Promise<void>;
+    estimates: Estimate[];
 }
 
 export const useDispatchDragDrop = ({
@@ -23,7 +29,12 @@ export const useDispatchDragDrop = ({
     currentDate,
     setJobs,
     setAssignModalData,
-    bankHolidays
+    bankHolidays,
+    parts,
+    vehicles,
+    currentUser,
+    handleSavePurchaseOrder,
+    estimates
 }: UseDispatchDragDropProps) => {
     
     const draggedItemRef = useRef<DraggedSegmentData | null>(null);
@@ -31,12 +42,10 @@ export const useDispatchDragDrop = ({
     const dragImageRef = useRef<HTMLElement | null>(null);
     const lastActiveLiftIdRef = useRef<string | null>(null);
 
-    // Helper: Get Entity Config
     const getEntityConfig = useCallback((liftId: string) => {
         const lift = lifts.find(l => l.id === liftId);
         const entity = businessEntities.find(e => e.id === lift?.entityId);
         
-        // Default to standard UK hours if no config
         return entity?.workingHours || {
             startHour: 8.5,
             endHour: 17.5,
@@ -48,33 +57,28 @@ export const useDispatchDragDrop = ({
         };
     }, [lifts, businessEntities]);
 
-    // Helper: Calculate Max Slots for a specific date and entity
-    // Returns the number of segments available (from 8:30 onwards)
     const getMaxSlotsForDate = useCallback((dateStr: string, config: any) => {
         const dateObj = dateStringToDate(dateStr);
-        const dayOfWeek = dateObj.getUTCDay(); // 0=Sun, 6=Sat
+        const dayOfWeek = dateObj.getUTCDay();
         const holidays = getHolidaysForRegion(config.region, bankHolidays);
 
-        if (holidays.includes(dateStr)) return 0; // Closed on Bank Holiday
+        if (holidays.includes(dateStr)) return 0;
 
-        if (dayOfWeek === 0) { // Sunday
+        if (dayOfWeek === 0) {
             return config.isOpenSunday ? Math.floor((config.endHour - config.startHour) * (60/SEGMENT_DURATION_MINUTES)) : 0;
         }
-        if (dayOfWeek === 6) { // Saturday
+        if (dayOfWeek === 6) {
             if (!config.isOpenSaturday) return 0;
             const start = config.saturdayStartHour || config.startHour;
             const end = config.saturdayEndHour || config.endHour;
-            // Map actual hours to 0-based grid index relative to standard grid start (08:30 = 8.5)
             const gridStart = 8.5; 
             const endIndex = (end - gridStart) * 2; 
             return Math.max(0, Math.floor(endIndex));
         }
 
-        // Weekday
         const gridStart = 8.5; 
         const end = config.endHour;
         const endIndex = (end - gridStart) * 2;
-        // Clamp to grid size
         return Math.min(TIME_SEGMENTS.length, Math.floor(endIndex));
 
     }, [bankHolidays]);
@@ -87,7 +91,6 @@ export const useDispatchDragDrop = ({
         const config = getEntityConfig(liftId);
         const maxSlotsForDate = getMaxSlotsForDate(date, config);
 
-        // Check if job extends past working hours for THIS specific day
         if (startSegmentIndex < 0 || startSegmentIndex + durationInSegments > maxSlotsForDate) {
             return true;
         }
@@ -104,47 +107,75 @@ export const useDispatchDragDrop = ({
         return false;
     }, [jobs, getEntityConfig, getMaxSlotsForDate]);
 
-    // NEW: Logic separated from drop handler to allow modal confirmation
-    const confirmJobSchedule = useCallback((jobId: string, segmentId: string, liftId: string, engineerId: string, startSegmentIndex: number) => {
+    const createPOs = async (job: Job, entityCode: string, itemsForPO: EstimateLineItem[]) => {
+        const partItems = itemsForPO.filter(li => !li.isLabor && li.partId);
+        const poIds: string[] = [];
+        if (partItems.length > 0) {
+            const partsBySupplier: Record<string, EstimateLineItem[]> = {};
+            partItems.forEach(item => {
+                const partDef = parts.find(p => p.id === item.partId);
+                const sId = partDef?.defaultSupplierId || 'PENDING_SUPPLIER';
+                if (!partsBySupplier[sId]) partsBySupplier[sId] = [];
+                partsBySupplier[sId].push(item);
+            });
+
+            for (const [supplierId, items] of Object.entries(partsBySupplier)) {
+                const newPOId = await generateSequenceId('944', entityCode);
+                const vehicle = vehicles.find(v => v.id === job.vehicleId);
+                const newPO: PurchaseOrder = {
+                    id: newPOId, 
+                    entityId: job.entityId, 
+                    supplierId: supplierId === 'PENDING_SUPPLIER' ? '' : supplierId, 
+                    vehicleRegistrationRef: vehicle?.registration || 'N/A',
+                    orderDate: formatDate(new Date()), 
+                    status: 'Draft', 
+                    jobId: job.id,
+                    createdByUserId: currentUser.id,
+                    lineItems: items.map(item => ({ 
+                        id: crypto.randomUUID(), 
+                        partNumber: item.partNumber || '', 
+                        description: item.description || '', 
+                        quantity: item.quantity, 
+                        receivedQuantity: 0, 
+                        unitPrice: item.unitCost || 0, 
+                        taxCodeId: item.taxCodeId || '' 
+                    }))
+                };
+                await handleSavePurchaseOrder(newPO);
+                poIds.push(newPOId);
+            }
+        }
+        return poIds;
+    };
+
+    const confirmJobSchedule = useCallback(async (jobId: string, segmentId: string, liftId: string, engineerId: string, startSegmentIndex: number) => {
         const job = jobs.find(j => j.id === jobId);
         const originalSegment = job?.segments.find(s => s.segmentId === segmentId);
         const lift = lifts.find(l => l.id === liftId);
 
         if (!job || !originalSegment || !lift) return;
         
-        // 1. Calculate Total Job Requirements
         const estHours = Number(job.estimatedHours) || 1;
         const totalDurationInSegments = Math.ceil(estHours * (60 / SEGMENT_DURATION_MINUTES));
         const entityConfig = getEntityConfig(liftId);
         const regionHolidays = getHolidaysForRegion(entityConfig.region as any, bankHolidays);
 
-        // 2. Logic to flow segments across days, respecting weekends and holidays
         const newSegments: JobSegment[] = [];
         let remainingSegmentsToBook = totalDurationInSegments;
-        
         let currentBookingDate = currentDate;
         let currentStartIndex = startSegmentIndex;
-
-        // Safety break to prevent infinite loops
         let loopCount = 0;
         const MAX_LOOPS = 50; 
 
         while (remainingSegmentsToBook > 0 && loopCount < MAX_LOOPS) {
             loopCount++;
 
-            // Get dynamic capacity for this specific day based on entity config & holidays
             const maxSlotsToday = getMaxSlotsForDate(currentBookingDate, entityConfig);
-            
-            // Calculate space remaining on this specific day
             const safeStartIndex = Math.max(0, Math.min(currentStartIndex, maxSlotsToday));
             const slotsAvailableToday = Math.max(0, maxSlotsToday - safeStartIndex);
-            
-            // Determine how much of the job fits today
             const segmentsForThisDay = Math.min(remainingSegmentsToBook, slotsAvailableToday);
 
             if (segmentsForThisDay > 0) {
-                // Check collision for this specific chunk
-                // Only check strictly on the *first* day where user explicitly dropped/confirmed it.
                 if (loopCount === 1 && checkCollisionOnDate(currentBookingDate, liftId, safeStartIndex, segmentsForThisDay, segmentId)) {
                     alert("Collision detected on start day. Please choose a clear time slot.");
                     return; 
@@ -153,7 +184,7 @@ export const useDispatchDragDrop = ({
                 const hoursForThisDay = segmentsForThisDay * (SEGMENT_DURATION_MINUTES / 60);
 
                 newSegments.push({
-                    segmentId: loopCount === 1 ? segmentId : crypto.randomUUID(), // Keep original ID for first segment
+                    segmentId: loopCount === 1 ? segmentId : crypto.randomUUID(),
                     date: currentBookingDate,
                     scheduledStartSegment: safeStartIndex,
                     duration: hoursForThisDay,
@@ -165,10 +196,9 @@ export const useDispatchDragDrop = ({
                 remainingSegmentsToBook -= segmentsForThisDay;
             }
 
-            // If we still have time left, move to the next valid working day
             if (remainingSegmentsToBook > 0) {
                 currentBookingDate = getNextValidWorkingDate(currentBookingDate, regionHolidays);
-                currentStartIndex = 0; // Always start at 08:30 on subsequent days
+                currentStartIndex = 0;
             }
         }
 
@@ -176,21 +206,30 @@ export const useDispatchDragDrop = ({
             alert("Could not schedule full duration within a reasonable timeframe (30 days).");
             return;
         }
+        
+        let poIds: string[] = [];
+        if (job.estimateId) {
+            const estimate = estimates.find(e => e.id === job.estimateId);
+            if (estimate) {
+                const entity = businessEntities.find(e => e.id === job.entityId);
+                poIds = await createPOs(job, entity?.shortCode || 'UNK', estimate.lineItems);
+            }
+        }
 
-        // 3. Update Job State
         setJobs(prev => prev.map(j => {
             if (j.id === jobId) {
                 return { 
                     ...j, 
                     scheduledDate: newSegments[0]?.date || j.scheduledDate, 
                     segments: newSegments, 
-                    status: calculateJobStatus(newSegments) 
+                    status: calculateJobStatus(newSegments), 
+                    purchaseOrderIds: [...(j.purchaseOrderIds || []), ...poIds]
                 };
             }
             return j;
         }));
 
-    }, [jobs, lifts, currentDate, bankHolidays, getEntityConfig, getMaxSlotsForDate, checkCollisionOnDate, setJobs]);
+    }, [jobs, lifts, currentDate, bankHolidays, getEntityConfig, getMaxSlotsForDate, checkCollisionOnDate, setJobs, createPOs, estimates]);
 
     const handleDragStart = useCallback((e: React.DragEvent, parentJobId: string, segmentId: string) => {
         const job = jobs.find(j => j.id === parentJobId);
@@ -205,9 +244,11 @@ export const useDispatchDragDrop = ({
         
         const sourceElement = e.currentTarget as HTMLElement;
         sourceElement.classList.add('is-dragging-source');
-        document.body.classList.add('dragging-active'); // ENABLE POINTER EVENT BLOCKING
+        document.body.classList.add('dragging-active');
         
-        if (dragImageRef.current) document.body.removeChild(dragImageRef.current);
+        if (dragImageRef.current && document.body.contains(dragImageRef.current)) {
+            document.body.removeChild(dragImageRef.current);
+        }
         const clone = sourceElement.cloneNode(true) as HTMLElement;
         clone.style.position = 'absolute';
         clone.style.top = '-9999px';
@@ -222,8 +263,6 @@ export const useDispatchDragDrop = ({
         e.preventDefault();
         if (!draggedItemRef.current) return;
         
-        // OPTIMIZATION: Only update DOM classes if the active column changes.
-        // This prevents massive layout thrashing and forced reflows during mouse movement.
         if (lastActiveLiftIdRef.current !== liftId) {
              document.querySelectorAll('.timeline-column-over').forEach(el => el.classList.remove('timeline-column-over'));
              e.currentTarget.classList.add('timeline-column-over');
@@ -253,7 +292,6 @@ export const useDispatchDragDrop = ({
 
             if (!job || !originalSegment || !lift) return;
             
-            // Pop the modal instead of scheduling immediately
             setAssignModalData({
                 job,
                 segment: originalSegment,
@@ -262,7 +300,6 @@ export const useDispatchDragDrop = ({
                 currentEngineerId: originalSegment.engineerId
             });
         }
-        draggedItemRef.current = null;
     }, [jobs, lifts, setAssignModalData]);
 
     const handleUnallocatedDragOver = useCallback((e: React.DragEvent) => {
@@ -270,6 +307,13 @@ export const useDispatchDragDrop = ({
         if (!draggedItemRef.current) return;
         e.currentTarget.classList.add('is-over');
         dropResultRef.current = { type: 'UNALLOCATED' };
+    }, []);
+    
+    const handleUnallocatedDragLeave = useCallback((e: React.DragEvent) => {
+        if (e.relatedTarget && e.currentTarget.contains(e.relatedTarget as Node)) {
+            return;
+        }
+        e.currentTarget.classList.remove('is-over');
     }, []);
 
     const handleUnallocatedDrop = useCallback((e: React.DragEvent) => {
@@ -282,8 +326,6 @@ export const useDispatchDragDrop = ({
             
              setJobs(prev => prev.map(job => {
                 if (job.id === parentJobId) {
-                    // Reset to a clean unallocated state
-                    // We consolidate multi-day segments back into one block for the unallocated list
                     const newSegments: JobSegment[] = [{
                          segmentId: crypto.randomUUID(),
                          date: null,
@@ -291,7 +333,7 @@ export const useDispatchDragDrop = ({
                          status: 'Unallocated',
                          allocatedLift: null,
                          scheduledStartSegment: null,
-                         engineerId: null // Clear engineer when moving back to unallocated pool
+                         engineerId: null
                     }];
 
                     return { 
@@ -304,32 +346,33 @@ export const useDispatchDragDrop = ({
                 return job;
             }));
         }
-        draggedItemRef.current = null;
     }, [setJobs]);
     
     const handleDragEnd = useCallback((e: React.DragEvent) => {
         const sourceElement = e.currentTarget as HTMLElement;
         sourceElement.classList.remove('is-dragging-source');
-        document.body.classList.remove('dragging-active'); // DISABLE POINTER EVENT BLOCKING
+        document.body.classList.remove('dragging-active');
         
         if (dragImageRef.current && document.body.contains(dragImageRef.current)) {
             document.body.removeChild(dragImageRef.current);
         }
+        dragImageRef.current = null;
         draggedItemRef.current = null;
         dropResultRef.current = null;
         
-        // Cleanup highlighting if drag ends outside
-        if (lastActiveLiftIdRef.current) {
-             document.querySelectorAll('.timeline-column-over').forEach(el => el.classList.remove('timeline-column-over'));
-             lastActiveLiftIdRef.current = null;
-        }
+        document.querySelectorAll('.timeline-column-over, .is-over').forEach(el => {
+            el.classList.remove('timeline-column-over');
+            el.classList.remove('is-over');
+        });
+        lastActiveLiftIdRef.current = null;
     }, []);
 
     return {
         handleDragStart,
         handleTimelineDragOver,
         handleTimelineDrop,
-        handleUnallocatedDragOver, // Make sure to export this
+        handleUnallocatedDragOver,
+        handleUnallocatedDragLeave,
         handleUnallocatedDrop,
         handleDragEnd,
         checkCollisionOnDate,

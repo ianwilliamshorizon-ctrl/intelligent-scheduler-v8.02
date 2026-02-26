@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { useData } from '../../core/state/DataContext';
 import { useApp } from '../../core/state/AppContext';
@@ -12,6 +11,7 @@ import { usePrint } from '../../core/hooks/usePrint';
 import ServicePackageFormModal from '../../components/ServicePackageFormModal';
 import { useWorkshopActions } from '../../core/hooks/useWorkshopActions';
 import { StatusFilter } from '../../components/shared/StatusFilter';
+import { HoverInfo } from '../../components/shared/HoverInfo';
 
 interface EstimatesViewProps {
     onOpenEstimateModal: (estimate: Partial<Estimate> | null) => void;
@@ -35,13 +35,13 @@ const EstimatesView: React.FC<EstimatesViewProps> = ({ onOpenEstimateModal, onVi
     const [isPackageModalOpen, setIsPackageModalOpen] = useState(false);
     const [suggestedPackage, setSuggestedPackage] = useState<Partial<ServicePackage> | null>(null);
 
-    const customerMap = useMemo(() => new Map(customers.map(c => [c.id, `${String(c.forename)} ${String(c.surname)}`])), [customers]);
+    const customerMap = useMemo(() => new Map(customers.map(c => [c.id, c])), [customers]);
     const vehicleMap = useMemo(() => new Map(vehicles.map(v => [v.id, v])), [vehicles]);
     const userMap = useMemo(() => new Map(users.map(u => [u.id, u.name])), [users]);
     const taxRatesMap = useMemo(() => new Map(taxRates.map(t => [t.id, t.rate])), [taxRates]);
     const standardTaxRateId = useMemo(() => taxRates.find(t => t.code === 'T1')?.id, [taxRates]);
     
-    const estimateStatusOptions: readonly Estimate['status'][] = ['Draft', 'Sent', 'Approved', 'Declined', 'Converted to Job', 'Closed'];
+    const estimateStatusOptions: readonly Estimate['status'][] = ['Draft', 'Sent', 'Approved', 'Rejected', 'Converted to Job', 'Closed'];
 
     const filteredEstimates = useMemo(() => {
         const thirtyDaysAgo = getRelativeDate(-30);
@@ -61,7 +61,7 @@ const EstimatesView: React.FC<EstimatesViewProps> = ({ onOpenEstimateModal, onVi
 
             const matchesSearch = filter === '' ||
                 estimate.estimateNumber.toLowerCase().includes(lowerFilter) ||
-                (customer && customer.toLowerCase().includes(lowerFilter)) ||
+                (customer && `${customer.forename} ${customer.surname}`.toLowerCase().includes(lowerFilter)) ||
                 (vehicle && (
                     vehicle.registration.toLowerCase().replace(/\s/g, '').includes(lowerFilter.replace(/\s/g, '')) ||
                     (vehicle.previousRegistrations || []).some(pr => pr.registration.toLowerCase().replace(/\s/g, '').includes(lowerFilter.replace(/\s/g, '')))
@@ -98,7 +98,6 @@ const EstimatesView: React.FC<EstimatesViewProps> = ({ onOpenEstimateModal, onVi
             const { name, description } = await generateServicePackageName(estimate.lineItems, vehicle.make, vehicle.model);
             const totalNet = (estimate.lineItems || []).filter(item => !item.isPackageComponent).reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
 
-            // Flatten items: Take all non-header items (standalone or children), reset their IDs/links
             const costItems = (estimate.lineItems || [])
                 .filter(item => !item.servicePackageId || item.isPackageComponent)
                 .map(li => ({
@@ -106,7 +105,7 @@ const EstimatesView: React.FC<EstimatesViewProps> = ({ onOpenEstimateModal, onVi
                     id: crypto.randomUUID(),
                     servicePackageId: undefined,
                     servicePackageName: undefined,
-                    isPackageComponent: false, // In a new package definition, everything is a flat cost item
+                    isPackageComponent: false,
                     isOptional: false
                 }));
 
@@ -135,10 +134,9 @@ const EstimatesView: React.FC<EstimatesViewProps> = ({ onOpenEstimateModal, onVi
         print(
             <PrintableEstimateList 
                 estimates={filteredEstimates} 
-                customers={customerMap as unknown as Map<string, any>} 
+                customers={new Map()} 
                 vehicles={vehicleMap}
-                taxRates={taxRates}
-                title="Estimates Report (Last 30 Days)"
+                entities={new Map(businessEntities.map(e => [e.id, e]))}
             />
         );
     };
@@ -148,11 +146,11 @@ const EstimatesView: React.FC<EstimatesViewProps> = ({ onOpenEstimateModal, onVi
         setConfirmation({
             isOpen: true,
             title: 'Close Estimate',
-            message: 'Mark this estimate as Closed/Declined? It will be moved to the Closed status but kept in history.',
+            message: 'Mark this estimate as Closed/Rejected? It will be moved to the Closed status but kept in history.',
             type: 'warning',
             onConfirm: async () => {
                 await handleSaveItem(setEstimates, { ...estimate, status: 'Closed' }, 'brooks_estimates');
-                await updateLinkedInquiryStatus(estimate.id, 'Rejected');
+                await updateLinkedInquiryStatus(estimate.id, 'Closed');
                 setConfirmation({ isOpen: false, title: '', message: '' });
             }
         });
@@ -183,8 +181,8 @@ const EstimatesView: React.FC<EstimatesViewProps> = ({ onOpenEstimateModal, onVi
                 </div>
             </div>
             
-             <main className="flex-grow overflow-y-auto">
-                <div className="border rounded-lg overflow-hidden bg-white shadow">
+             <main className="flex-grow">
+                <div className="border rounded-lg bg-white shadow">
                     <table className="min-w-full text-sm">
                         <thead className="bg-gray-100">
                             <tr>
@@ -199,7 +197,10 @@ const EstimatesView: React.FC<EstimatesViewProps> = ({ onOpenEstimateModal, onVi
                             </tr>
                         </thead>
                          <tbody className="divide-y divide-gray-200">
-                            {filteredEstimates.map(estimate => (
+                            {filteredEstimates.map(estimate => {
+                                const customer = customerMap.get(estimate.customerId);
+                                const vehicle = vehicleMap.get(estimate.vehicleId);
+                                return (
                                 <React.Fragment key={estimate.id}>
                                     <tr className="hover:bg-indigo-50 cursor-pointer" onClick={() => setExpandedRowId(expandedRowId === estimate.id ? null : estimate.id)}>
                                         <td className="p-3 text-center">
@@ -208,13 +209,42 @@ const EstimatesView: React.FC<EstimatesViewProps> = ({ onOpenEstimateModal, onVi
                                             </button>
                                         </td>
                                         <td className="p-3 font-mono">{estimate.estimateNumber}</td>
-                                        <td className="p-3">{customerMap.get(estimate.customerId)}</td>
-                                        <td className="p-3 font-mono">{vehicleMap.get(estimate.vehicleId)?.registration}</td>
+                                        <td className="p-3">
+                                            {customer && (
+                                                <HoverInfo
+                                                    title="Customer Details"
+                                                    data={{
+                                                        name: `${customer.forename} ${customer.surname}`,
+                                                        email: customer.email,
+                                                        phone: customer.mobile || customer.phone,
+                                                        address: `${customer.addressLine1}, ${customer.city}, ${customer.postcode}`
+                                                    }}
+                                                >
+                                                    {customer.forename} {customer.surname}
+                                                </HoverInfo>
+                                            )}
+                                        </td>
+                                        <td className="p-3 font-mono">
+                                            {vehicle && (
+                                                <HoverInfo
+                                                    title="Vehicle Details"
+                                                    data={{ 
+                                                        make: vehicle.make, 
+                                                        model: vehicle.model, 
+                                                        year: vehicle.year, 
+                                                        vin: vehicle.vin, 
+                                                        motExpiry: vehicle.motExpiryDate 
+                                                    }}
+                                                >
+                                                    {vehicle.registration}
+                                                </HoverInfo>
+                                            )}
+                                        </td>
                                         <td className="p-3">{estimate.issueDate}</td>
                                         <td className="p-3">
                                             <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${
                                                 estimate.status === 'Approved' ? 'bg-green-100 text-green-800' : 
-                                                estimate.status === 'Declined' ? 'bg-red-100 text-red-800' :
+                                                estimate.status === 'Rejected' ? 'bg-red-100 text-red-800' :
                                                 estimate.status === 'Converted to Job' ? 'bg-purple-100 text-purple-800' :
                                                 estimate.status === 'Closed' ? 'bg-gray-300 text-gray-800' :
                                                 'bg-gray-100'}`}>{estimate.status}</span>
@@ -271,7 +301,8 @@ const EstimatesView: React.FC<EstimatesViewProps> = ({ onOpenEstimateModal, onVi
                                         </tr>
                                     )}
                                 </React.Fragment>
-                            ))}
+                            )})
+                            }
                          </tbody>
                     </table>
                 </div>

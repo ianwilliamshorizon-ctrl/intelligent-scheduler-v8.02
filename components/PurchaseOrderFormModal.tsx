@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { PurchaseOrder, PurchaseOrderLineItem, Supplier, BusinessEntity, TaxRate, Part } from '../types';
-import { Save, PlusCircle, Trash2, X, CheckSquare, Eye, ArrowDownCircle, AlertTriangle, CornerDownRight, RotateCcw } from 'lucide-react';
+import { PurchaseOrder, PurchaseOrderLineItem, Supplier, BusinessEntity, TaxRate, Part, Vehicle, Customer, Job } from '../types';
+import { Save, PlusCircle, Trash2, X, CheckSquare, ArrowDownCircle, AlertTriangle, Info } from 'lucide-react';
 import { formatDate } from '../core/utils/dateUtils';
 import { generatePurchaseOrderId } from '../core/utils/numberGenerators';
 import { formatCurrency } from '../utils/formatUtils';
 import useToaster from '../hooks/useToaster';
+import { HoverInfo } from './shared/HoverInfo';
+
 
 interface EditableLineItemRowProps {
     item: PurchaseOrderLineItem;
@@ -49,6 +51,9 @@ const MemoizedEditableLineItemRow = React.memo(({
             onLineItemChange(item.id, 'unitPrice', foundPart.costPrice || 0);
         }
     };
+
+    const canReceive = !isReceivingDisabled && !isCredit;
+    const hasBeenReceived = (item.receivedQuantity || 0) > 0;
     
     return (
         <>
@@ -82,16 +87,24 @@ const MemoizedEditableLineItemRow = React.memo(({
                 <input type="number" step="0.01" value={item.unitPrice ?? 0} onChange={e => onLineItemChange(item.id, 'unitPrice', e.target.value)} className="col-span-2 p-1 border rounded text-right text-sm" placeholder="Unit Cost"/>
                 
                 <div className="col-span-1 flex justify-center">
-                    {!isReceivingDisabled && !isCredit ? (
-                         <button 
+                    {canReceive && hasBeenReceived ? (
+                        <button 
                             type="button"
                             onClick={() => onLineItemChange(item.id, 'returnStatus', isPendingReturn ? 'None' : 'Pending')}
                             className={`p-1 rounded ${isPendingReturn ? 'bg-amber-100 text-amber-600' : 'text-gray-300 hover:text-amber-500'}`}
+                            title={isPendingReturn ? 'Cancel Return Request' : 'Mark Item for Return'}
                         >
                             <AlertTriangle size={16} fill={isPendingReturn ? "currentColor" : "none"}/>
                         </button>
                     ) : (
-                         <button onClick={() => onRemoveLineItem(item.id)} className="text-red-500 hover:text-red-700 disabled:opacity-50 disabled:cursor-not-allowed" disabled={fieldsDisabled}><Trash2 size={14} /></button>
+                        <button 
+                            onClick={() => onRemoveLineItem(item.id)} 
+                            className="text-red-500 hover:text-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Delete Line Item"
+                            disabled={isOrderedOrLater && hasBeenReceived}
+                        >
+                            <Trash2 size={14} />
+                        </button>
                     )}
                 </div>
             </div>
@@ -128,9 +141,14 @@ interface PurchaseOrderFormModalProps {
     parts: Part[];
     setParts: React.Dispatch<React.SetStateAction<Part[]>>;
     onViewPurchaseOrder?: (po: PurchaseOrder) => void;
+    jobId?: string; 
+    jobs: Job[];
+    vehicles: Vehicle[];
+    customers: Customer[];
+    setJobs: React.Dispatch<React.SetStateAction<Job[]>>;
 }
 
-const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen, onClose, onSave, purchaseOrder, suppliers, taxRates, businessEntities, allPurchaseOrders, selectedEntityId, parts, setParts, onViewPurchaseOrder }) => {
+const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen, onClose, onSave, purchaseOrder, suppliers, taxRates, businessEntities, allPurchaseOrders, selectedEntityId, parts, setParts, onViewPurchaseOrder, jobId, jobs, vehicles, customers, setJobs }) => {
     const [formData, setFormData] = useState<Partial<PurchaseOrder>>({ 
         lineItems: [],
         supplierId: '',
@@ -140,10 +158,29 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
         notes: '',
         status: 'Draft',
         type: 'Standard',
-        orderDate: formatDate(new Date())
+        orderDate: formatDate(new Date()),
+        jobId: '',
     });
     const [newSalePrices, setNewSalePrices] = useState<Record<string, string>>({});
-    const { showError } = useToaster();
+    const { showError, showSuccess } = useToaster();
+
+    const saveAndLinkPo = useCallback((poToSave: PurchaseOrder) => {
+        onSave(poToSave);
+
+        if (poToSave.jobId && setJobs) {
+            setJobs(prevJobs => prevJobs.map(job => {
+                if (job.id === poToSave.jobId) {
+                    if (!job.purchaseOrderIds?.includes(poToSave.id)) {
+                        return {
+                            ...job,
+                            purchaseOrderIds: [...(job.purchaseOrderIds || []), poToSave.id],
+                        };
+                    }
+                }
+                return job;
+            }));
+        }
+    }, [onSave, setJobs]);
     
     const partsMap = useMemo(() => new Map(parts.map(p => [p.partNumber, p])), [parts]);
     const standardTaxRate = useMemo(() => taxRates.find(t => t.code === 'T1') || taxRates[0], [taxRates]);
@@ -152,11 +189,37 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
         purchaseOrder ? new Set(purchaseOrder.lineItems.map(item => item.id)) : new Set()
     , [purchaseOrder]);
 
+    const { associatedVehicle, associatedCustomer } = useMemo(() => {
+        let vehicle: Vehicle | null | undefined = null;
+        let customer: Customer | null | undefined = null;
+        const targetJobId = formData.jobId;
+
+        if (targetJobId && jobs && vehicles && customers) {
+            const job = jobs.find(j => j.id === targetJobId);
+            if (job) {
+                vehicle = vehicles.find(v => v.id === job.vehicleId);
+                customer = customers.find(c => c.id === job.customerId);
+            }
+        } else if (purchaseOrder && vehicles && customers) {
+            vehicle = vehicles.find(v => v.id === purchaseOrder.vehicleId);
+            customer = customers.find(c => c.id === purchaseOrder.customerId);
+        }
+        
+        return { associatedVehicle: vehicle, associatedCustomer: customer };
+    }, [formData.jobId, purchaseOrder, jobs, vehicles, customers]);
+    
     const title = useMemo(() => {
         if (!formData?.id) return 'Create New Purchase Order';
         if (formData.type === 'Credit') return `Credit Note Request #${formData.id}`;
         return `Edit Purchase Order #${formData.id}`;
     }, [formData.id, formData.type]);
+
+    const statusOptions = useMemo(() => {
+        if (formData.type === 'Credit') {
+            return ['Draft', 'Awaiting Supplier Action', 'Finalized', 'Cancelled'];
+        }
+        return ['Draft', 'Ordered', 'Partially Received', 'Received', 'Cancelled'];
+    }, [formData.type]);
 
     useEffect(() => {
         if (!isOpen) return;
@@ -175,7 +238,8 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
                 notes: data.notes || '',
                 status: data.status || 'Draft',
                 type: data.type || 'Standard',
-                lineItems: data.lineItems || []
+                lineItems: data.lineItems || [],
+                jobId: data.jobId || ''
             });
         } else {
             setFormData({
@@ -188,10 +252,11 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
                 vehicleRegistrationRef: '',
                 supplierReference: '',
                 secondarySupplierReference: '',
-                type: 'Standard'
+                type: 'Standard',
+                jobId: jobId || '',
             });
         }
-    }, [purchaseOrder, isOpen, selectedEntityId]);
+    }, [purchaseOrder, isOpen, selectedEntityId, jobId]);
     
     const isReceivingDisabled = useMemo(() => formData.status === 'Draft', [formData.status]);
     const isOrderedOrLater = useMemo(() => ['Ordered', 'Partially Received', 'Received'].includes(formData.status || ''), [formData.status]);
@@ -222,10 +287,11 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
     const addLineItem = () => {
         const newItem: PurchaseOrderLineItem = { 
             id: crypto.randomUUID(), 
+            partNumber: '',
             description: '', 
             quantity: 1, 
             unitPrice: 0, 
-            taxCodeId: standardTaxRate?.id 
+            taxCodeId: standardTaxRate?.id || ''
         };
         setFormData(prev => ({ ...prev, lineItems: [...(prev.lineItems || []), newItem] }));
     };
@@ -239,30 +305,6 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
             ...prev,
             lineItems: (prev.lineItems || []).map(item => ({ ...item, receivedQuantity: item.quantity }))
         }));
-    };
-
-    const handleCreateCreditNote = () => {
-        if (!purchaseOrder) return;
-        const entity = businessEntities.find(e => e.id === formData.entityId);
-        const entityShortCode = entity?.shortCode || 'UNK';
-        
-        const creditNote: Partial<PurchaseOrder> = {
-            ...formData,
-            id: generatePurchaseOrderId(allPurchaseOrders, entityShortCode) + "-CR",
-            type: 'Credit',
-            status: 'Draft',
-            orderDate: formatDate(new Date()),
-            supplierReference: `CR to ${formData.id}`,
-            lineItems: (formData.lineItems || []).map(item => ({
-                ...item,
-                id: crypto.randomUUID(),
-                quantity: -Math.abs(item.quantity),
-                receivedQuantity: 0,
-                returnStatus: undefined
-            })),
-            notes: `Credit Note for PO #${formData.id}. ${formData.notes || ''}`
-        };
-        setFormData(creditNote);
     };
 
     const getPartUpdates = useCallback((): Part[] => {
@@ -325,9 +367,10 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
             id: formData.id || generatePurchaseOrderId(allPurchaseOrders, entityShortCode),
             status: newStatus,
             partUpdates: getPartUpdates(),
+            jobId: formData.jobId,
         };
         
-        onSave(payload as PurchaseOrder);
+        saveAndLinkPo(payload as PurchaseOrder);
         onClose();
     };
 
@@ -358,9 +401,36 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
             id: formData.id || generatePurchaseOrderId(allPurchaseOrders, entityShortCode),
             status: newStatus,
             partUpdates: getPartUpdates(),
+            jobId: formData.jobId,
         };
+
+        const itemsToReturn = (formData.lineItems || []).filter(item => item.returnStatus === 'Pending');
+
+        if (itemsToReturn.length > 0) {
+            const creditNote: Partial<PurchaseOrder> = {
+                ...formData,
+                id: generatePurchaseOrderId(allPurchaseOrders, entityShortCode) + "-CR",
+                type: 'Credit',
+                status: 'Awaiting Supplier Action',
+                orderDate: formatDate(new Date()),
+                supplierReference: `CR for ${formData.id}`,
+                vehicleRegistrationRef: formData.vehicleRegistrationRef,
+                lineItems: itemsToReturn.map(item => ({
+                    ...item,
+                    id: crypto.randomUUID(),
+                    quantity: -Math.abs(item.receivedQuantity || 0),
+                    receivedQuantity: 0,
+                    returnStatus: undefined
+                })),
+                notes: `Credit Note for PO #${formData.id}. Covers returned items.`
+            };
+            saveAndLinkPo(creditNote as PurchaseOrder);
+            showSuccess(`Receipt finalized. Credit note for ${itemsToReturn.length} item(s) has been raised.`);
+        } else {
+            showSuccess('Receipt finalized successfully.');
+        }
         
-        onSave(updatedPO as PurchaseOrder);
+        saveAndLinkPo(updatedPO as PurchaseOrder);
         onClose();
     };
 
@@ -387,7 +457,7 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
                 </div>
                 
                 <div className="flex-grow overflow-y-auto p-6 bg-gray-50">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                         <div className="md:col-span-1">
                             <label className="font-semibold text-sm block text-gray-700">Supplier*</label>
                             <select 
@@ -404,17 +474,48 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
                             </select>
                         </div>
                         <div>
-                            <label className="font-semibold text-sm text-gray-700">Internal Ref (Reg/Job)*</label>
+                             <label className="font-semibold text-sm block text-gray-700">
+                                Internal Ref (Reg/Job)*
+                                {associatedVehicle && (
+                                    <HoverInfo
+                                        title="Vehicle Details"
+                                        data={{
+                                            registration: associatedVehicle.registration,
+                                            make: associatedVehicle.make,
+                                            model: associatedVehicle.model,
+                                            vin: associatedVehicle.vin
+                                        }}
+                                    >
+                                        <Info size={14} className="text-gray-400 cursor-help ml-1.5" />
+                                    </HoverInfo>
+                                )}
+                            </label>
                             <input name="vehicleRegistrationRef" value={formData.vehicleRegistrationRef || ''} onChange={handleChange} className="w-full p-2 border rounded mt-1" disabled={isOrderedOrLater} />
+                        </div>
+                        <div>
+                             <label className="font-semibold text-sm block text-gray-700">
+                                Job ID
+                                {associatedCustomer && (
+                                    <HoverInfo
+                                        title="Customer Details"
+                                        data={{
+                                            name: `${associatedCustomer.forename} ${associatedCustomer.surname}`,
+                                            address: associatedCustomer.addressLine1,
+                                            city: associatedCustomer.city,
+                                            postcode: associatedCustomer.postcode,
+                                            contact: associatedCustomer.mobile || associatedCustomer.phone
+                                        }}
+                                    >
+                                        <Info size={14} className="text-gray-400 cursor-help ml-1.5" />
+                                    </HoverInfo>
+                                )}
+                            </label>
+                            <input name="jobId" value={formData.jobId || ''} onChange={handleChange} className="w-full p-2 border rounded mt-1" disabled={!!formData.jobId} />
                         </div>
                         <div>
                             <label className="font-semibold text-sm text-gray-700">Status</label>
                             <select name="status" value={formData.status || 'Draft'} onChange={handleChange} className="w-full p-2 border rounded bg-white mt-1">
-                                <option>Draft</option>
-                                <option>Ordered</option>
-                                <option>Partially Received</option>
-                                <option>Received</option>
-                                <option>Cancelled</option>
+                                {statusOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                             </select>
                         </div>
                         <div>
@@ -500,11 +601,6 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
                         {!isReceivingDisabled && formData.type !== 'Credit' && (
                             <button onClick={handleFinalizeReceipt} className="px-4 py-2 bg-green-600 text-white rounded-lg flex items-center gap-2 hover:bg-green-700 font-bold shadow-sm">
                                 <CheckSquare size={16}/> Save & Finalize Receipt
-                            </button>
-                        )}
-                        {purchaseOrder && formData.type !== 'Credit' && (
-                            <button onClick={handleCreateCreditNote} className="px-4 py-2 bg-amber-100 text-amber-700 rounded-lg flex items-center gap-2 hover:bg-amber-200 font-bold">
-                                <RotateCcw size={16}/> Create Credit Note
                             </button>
                         )}
                     </div>

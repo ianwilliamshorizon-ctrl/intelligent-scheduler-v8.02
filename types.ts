@@ -122,6 +122,7 @@ export interface Vehicle {
     make: string;
     model: string;
     type: string;
+    year?: number;
     vin?: string;
     engineNumber?: string;
     colour?: string;
@@ -130,6 +131,7 @@ export interface Vehicle {
     cc?: number;
     manufactureDate?: string;
     nextMotDate?: string;
+    motExpiryDate?: string;
     nextServiceDate?: string;
     winterCheckDate?: string;
     fleetNumber?: string;
@@ -144,6 +146,7 @@ export type VehicleStatus = 'On Site' | 'Off-Site (Partner)' | 'Awaiting Arrival
 export interface CheckInPhoto {
     id: string;
     notes?: string;
+    url?: string;
 }
 
 export interface VehicleDamagePoint {
@@ -255,7 +258,7 @@ export interface Estimate {
     vehicleId: string;
     issueDate: string;
     expiryDate: string;
-    status: 'Draft' | 'Sent' | 'Approved' | 'Declined' | 'Converted to Job' | 'Closed';
+    status: 'Draft' | 'Sent' | 'Approved' | 'Declined' | 'Converted to Job' | 'Closed' | 'Rejected';
     lineItems: EstimateLineItem[];
     notes?: string;
     jobId?: string;
@@ -369,7 +372,9 @@ export interface ServicePackage {
     taxCodeId?: string;
     applicableMake?: string;
     applicableModel?: string;
-    applicableVarient?: string; // Corrected to match initialData.ts
+    // The error in initialData.ts suggests 'applicableVarient' is being used.
+    // To resolve it, use the spelling the data expects:
+    applicableVarient?: string; 
 }
 
 export interface Lift {
@@ -680,18 +685,48 @@ export interface LiveAssistantProps {
 }
 
 export interface SearchableSelectProps {
-    options: { id: string; label: string; }[];
-    value: any;
+    options: { id: string; label: string; value: string; badge?: { text: string; className: string } }[];
+    value: any; // Fixes SmartCreateJobModal.tsx error
     onChange: (val: any) => void;
     placeholder: string;
 }
 
-export interface TimelineViewProps {
-    lifts: Lift[];
-    jobs: Job[];
-    onDragStart: (e: React.DragEvent, parentJobId: string, segmentId: string) => void;
-    onDragEnd: (e: React.DragEvent) => void;
-    onOpenAssistant: (id: string) => void;
+export interface CustomerFormModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+    onSave: (customer: Customer) => void;
+    customer?: Customer | null;
+    customerId?: string | null; // Ensure this matches exactly
+    customers: Customer[];
+    jobs: any[];
+    vehicles: any[];
+    estimates: any[];
+    invoices: any[];
+}
+
+export interface MediaManagerModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+    jobId: string;
+    media?: CheckInPhoto[]; // Ensure this is plural 'media'
+    onSave?: (media: CheckInPhoto[]) => void;
+}
+
+export interface FormModalProps {
+    children: React.ReactNode;
+    isOpen: boolean;
+    onClose: () => void;
+    onSave: () => void;
+    title: string;
+    showSave?: boolean; // Fixes VehicleFormModal.tsx error
+    maxWidth?: string;
+}
+
+export interface PrintableEstimateListProps {
+    estimates: Estimate[];
+    customers: Map<string, Customer> | Record<string, Customer>;
+    vehicles: Map<string, Vehicle> | Record<string, Vehicle>;
+    entities: Map<string, BusinessEntity> | Record<string, BusinessEntity>; // Fixes EstimatesView.tsx error
 }
 
 export interface UnbillableTimeEvent {
@@ -725,8 +760,8 @@ export interface AppState {
     setSelectedEntityId: (id: string) => void;
     allWorkshops: BusinessEntity[];
     logout: () => void;
-    appEnvironment: 'production' | 'development';
-    setAppEnvironment: (env: 'production' | 'development') => void;
+    appEnvironment: AppEnvironment; 
+    setAppEnvironment: (env: AppEnvironment) => void;
 }
 
 export interface DataContextType {
@@ -760,7 +795,8 @@ export interface DataContextType {
     roles: Role[];
     inspectionDiagrams: InspectionDiagram[];
     inspectionTemplates: InspectionTemplate[];
-    refreshActiveData: () => Promise<void>;
+    // Added 'refreshActiveData' to fix multiple Management Tab errors
+    refreshActiveData: () => Promise<void>; 
     loading: boolean;
     error: string | null;
 }

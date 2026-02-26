@@ -37,9 +37,14 @@ interface AppState {
     backupSchedule: T.BackupSchedule;
     setBackupSchedule: (schedule: T.BackupSchedule) => void;
     appEnvironment: T.AppEnvironment;
+    businessEntities: T.BusinessEntity[];
     filteredBusinessEntities: T.BusinessEntity[];
     allWorkshops: T.BusinessEntity[];
     refreshData: () => Promise<void>;
+    isSidebarOpen: boolean;
+    setSidebarOpen: (isOpen: boolean) => void;
+    onSwitchEntity: () => void;
+    onLogout: () => void;
 }
 
 const AppContext = createContext<AppState | undefined>(undefined);
@@ -51,6 +56,7 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
     const [isAppReady, setIsAppReady] = useState(false);
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [currentView, setCurrentView] = useState('dashboard');
+    const [isSidebarOpen, setSidebarOpen] = useState(true);
     
     // Data States
     const [currentUser, setCurrentUser] = useState<T.User | null>(null);
@@ -234,14 +240,23 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
         setCurrentView('dashboard');
     };
     
+    const onSwitchEntity = () => {
+
+    }
+
+    const onLogout = () => {
+        
+    }
+
     return (
         <AppContext.Provider value={{
             currentUser, users, setUsers, roles, jobs, customers, vehicles,
             isAuthenticated, currentView, setCurrentView,
             login, logout, resetPassword, adminResetPassword, registerAuthorizedUser,
             selectedEntityId, setSelectedEntityId, confirmation, 
-            setConfirmation, backupSchedule, setBackupSchedule, appEnvironment: currentEnvironment,
-            filteredBusinessEntities, allWorkshops, refreshData
+            setConfirmation, backupSchedule, setBackupSchedule, appEnvironment: currentEnvironment.toLowerCase() as T.AppEnvironment,
+            businessEntities, filteredBusinessEntities, allWorkshops, refreshData,
+            isSidebarOpen, setSidebarOpen, onSwitchEntity, onLogout
         }}>
             {!isAppReady ? (
                 <div style={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center', background: '#000', color: '#fff', flexDirection: 'column' }}>

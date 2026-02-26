@@ -5,10 +5,12 @@ import * as T from '../../types';
 import { generateSequenceId, saveDocument, deleteDocument } from '../db';
 import { formatDate, splitJobIntoSegments } from '../utils/dateUtils';
 import { calculateJobStatus } from '../utils/jobUtils';
+import useToaster from '../../hooks/useToaster';
 
 export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => void) => {
     const data = useData();
     const { currentUser, setConfirmation } = useApp();
+    const { showSuccess } = useToaster();
     
     const { 
         jobs, setJobs,
@@ -17,7 +19,8 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
         inquiries, setInquiries,
         parts, setParts,
         businessEntities, 
-        vehicles, setVehicles
+        vehicles, setVehicles,
+        customers
     } = data;
 
     const getCollectionName = (item: any): string => {
@@ -34,51 +37,98 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
         return 'brooks_items';
     };
 
-    /**
-     * handleSaveItem
-     * Repaired to convert literal "\n" strings into real newline characters.
-     */
     const handleSaveItem = async <Type extends { id: string }>(
         setter: React.Dispatch<React.SetStateAction<Type[]>>,
         item: Type,
         collectionOverride?: string
     ) => {
-        const itemToSave = { ...item };
-        const col = collectionOverride || getCollectionName(itemToSave);
+        const col = collectionOverride || getCollectionName(item);
 
-        // This fixes the "\n" appearing as literal text in the Estimate Builder
-        if (col === 'brooks_estimates' && Array.isArray((itemToSave as any)['lineItems'])) {
-            (itemToSave as any)['lineItems'] = (itemToSave as any)['lineItems'].map((lineItem: any) => {
-                if (lineItem && typeof lineItem.description === 'string') {
-                    return { ...lineItem, description: lineItem.description.replace(/\\n/g, '\n') };
+        if (col === 'brooks_jobs') {
+            const jobData = item as unknown as T.Job;
+            const existingJobInState = jobs.find(j => j.id === jobData.id);
+            let jobToSave = { ...jobData };
+
+            if (existingJobInState) {
+                const existingPartIds = new Set((existingJobInState.parts || []).map(p => p.id));
+                const newParts = (jobData.parts || []).filter(p => p.partId && !existingPartIds.has(p.id));
+
+                if (newParts.length > 0) {
+                    const partsBySupplier: Record<string, T.JobPart[]> = {};
+                    newParts.forEach(part => {
+                        const partDef = parts.find(p => p.id === part.partId);
+                        const supplierId = partDef?.defaultSupplierId || 'PENDING_SUPPLIER';
+                        if (!partsBySupplier[supplierId]) partsBySupplier[supplierId] = [];
+                        partsBySupplier[supplierId].push(part);
+                    });
+
+                    const entity = businessEntities.find(e => e.id === jobData.entityId);
+                    const entityShortCode = entity?.shortCode || 'UNK';
+                    const vehicle = vehicles.find(v => v.id === jobData.vehicleId);
+                    const newPurchaseOrderIds: string[] = [];
+
+                    for (const [supplierId, items] of Object.entries(partsBySupplier)) {
+                        const newPOId = await generateSequenceId('944', entityShortCode);
+                        newPurchaseOrderIds.push(newPOId);
+                        const newPO: T.PurchaseOrder = {
+                            id: newPOId, entityId: jobData.entityId, supplierId: supplierId === 'PENDING_SUPPLIER' ? '' : supplierId,
+                            vehicleRegistrationRef: vehicle?.registration || 'N/A', orderDate: formatDate(new Date()), status: 'Draft',
+                            jobId: jobData.id, createdByUserId: currentUser.id,
+                            lineItems: items.map(jobPart => {
+                                const partDef = parts.find(p => p.id === jobPart.partId);
+                                return { id: crypto.randomUUID(), partNumber: partDef?.partNumber || '', description: jobPart.description, quantity: jobPart.quantity, receivedQuantity: 0, unitPrice: partDef?.costPrice || 0, taxCodeId: partDef?.taxCodeId || '' };
+                            })
+                        };
+                        await handleSaveItem(setPurchaseOrders, newPO);
+                    }
+
+                    if (newPurchaseOrderIds.length > 0) {
+                        const currentPOIds = new Set(jobData.purchaseOrderIds || []);
+                        newPurchaseOrderIds.forEach(id => currentPOIds.add(id));
+                        jobToSave = {
+                            ...jobToSave,
+                            purchaseOrderIds: Array.from(currentPOIds),
+                            partsStatus: jobData.partsStatus === 'Not Required' ? 'Not Ordered' : jobData.partsStatus,
+                        };
+                        showSuccess(`${newPurchaseOrderIds.length} new purchase order(s) created.`);
+                    }
                 }
-                return lineItem;
-            });
-        }
-
-        let finalItem: Type = itemToSave;
-
-        setter(prev => {
-            const index = prev.findIndex(i => i.id === itemToSave.id);
-            if (index >= 0) {
-                const existing = prev[index];
-                const cleanUpdate = Object.fromEntries(
-                    Object.entries(itemToSave).filter(([_, v]) => v !== undefined && v !== null)
-                );
-                
-                finalItem = { ...existing, ...cleanUpdate as Type };
-
-                const newArr = [...prev];
-                newArr[index] = finalItem;
-                return newArr;
-            } else {
-                finalItem = itemToSave;
-                return [...prev, itemToSave];
             }
-        });
 
-        await saveDocument(col, finalItem);
-        return finalItem;
+            setter(prev => {
+                const index = prev.findIndex(i => i.id === jobToSave.id);
+                if (index > -1) {
+                    const newArr = [...prev];
+                    newArr[index] = jobToSave as unknown as Type;
+                    return newArr;
+                } else {
+                    return [...prev, jobToSave as unknown as Type];
+                }
+            });
+            await saveDocument(col, jobToSave);
+            return jobToSave as unknown as Type;
+        } else {
+            // Generic save for other types
+            let itemToSave: Type | null = null;
+             setter(prev => {
+                const index = prev.findIndex(i => i.id === item.id);
+                if (index >= 0) {
+                    const newArr = [...prev];
+                    const mergedItem = { ...newArr[index], ...item };
+                    newArr[index] = mergedItem;
+                    itemToSave = mergedItem;
+                    return newArr;
+                } else {
+                    itemToSave = item;
+                    return [...prev, item];
+                }
+            });
+            if (itemToSave) {
+                await saveDocument(col, itemToSave);
+                return itemToSave;
+            }
+        }
+        return item;
     };
 
     const handleDeleteJob = async (jobId: string) => {
@@ -137,53 +187,42 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
 
     const handleSavePurchaseOrder = async (po: T.PurchaseOrder) => {
         const existingPO = purchaseOrders.find(p => p.id === po.id);
-        
-        const poToSave: T.PurchaseOrder = {
-            ...existingPO,
-            ...po,
-            supplierId: po.supplierId || existingPO?.supplierId || '',
-            createdByUserId: po.createdByUserId || existingPO?.createdByUserId || currentUser.id
-        } as T.PurchaseOrder;
 
-        await handleSaveItem(setPurchaseOrders, poToSave, 'brooks_purchaseOrders');
+        if (existingPO && existingPO.jobId && existingPO.status === 'Draft' && po.status === 'Draft' && existingPO.supplierId !== po.supplierId) {
+            const targetPO = purchaseOrders.find(p =>
+                p.jobId === existingPO.jobId &&
+                p.id !== existingPO.id &&
+                p.status === 'Draft' &&
+                p.supplierId === po.supplierId
+            );
+
+            if (targetPO) {
+                const mergedPO: T.PurchaseOrder = {
+                    ...targetPO,
+                    lineItems: [...targetPO.lineItems, ...existingPO.lineItems],
+                };
+                await handleSaveItem(setPurchaseOrders, mergedPO, 'brooks_purchaseOrders');
+
+                await deleteDocument('brooks_purchaseOrders', existingPO.id);
+                setPurchaseOrders(prev => prev.filter(p => p.id !== existingPO.id));
+                
+                return; 
+            }
+        }
+        
+        await handleSaveItem(setPurchaseOrders, po, 'brooks_purchaseOrders');
 
         if (po.partUpdates && po.partUpdates.length > 0) {
             for (const part of po.partUpdates) {
                 await handleSaveItem(setParts, part, 'brooks_parts');
             }
         }
-
-        if (poToSave.jobId) {
-            const job = jobs.find(j => j.id === poToSave.jobId);
-            if (job) {
-                const otherJobPOs = purchaseOrders.filter(p => p.jobId === job.id && p.id !== poToSave.id);
-                const allJobPOs = [...otherJobPOs, poToSave];
-                
-                let newPartsStatus: T.Job['partsStatus'] = job.partsStatus;
-                if (allJobPOs.length > 0) {
-                     if (allJobPOs.every(p => p.status === 'Received')) newPartsStatus = 'Fully Received';
-                     else if (allJobPOs.some(p => p.status === 'Partially Received' || p.status === 'Received')) newPartsStatus = 'Partially Received';
-                     else if (allJobPOs.some(p => p.status === 'Ordered')) newPartsStatus = 'Ordered';
-                     else newPartsStatus = 'Awaiting Order';
-                }
-                
-                const needsIdLink = !job.purchaseOrderIds?.includes(poToSave.id);
-                if (newPartsStatus !== job.partsStatus || needsIdLink) {
-                    const updatedJob = { 
-                        ...job, 
-                        partsStatus: newPartsStatus, 
-                        purchaseOrderIds: needsIdLink ? [...(job.purchaseOrderIds || []), poToSave.id] : job.purchaseOrderIds 
-                    };
-                    await handleSaveItem(setJobs, updatedJob, 'brooks_jobs');
-                }
-            }
-        }
         
         for (const inq of inquiries) {
-            const isLinkedToPO = inq.linkedPurchaseOrderIds?.includes(poToSave.id);
+            const isLinkedToPO = inq.linkedPurchaseOrderIds?.includes(po.id);
             if (isLinkedToPO) {
-                const otherInqPos = purchaseOrders.filter(p => inq.linkedPurchaseOrderIds?.includes(p.id) && p.id !== poToSave.id);
-                const allInqPos = [...otherInqPos, poToSave];
+                const otherInqPos = purchaseOrders.filter(p => inq.linkedPurchaseOrderIds?.includes(p.id) && p.id !== po.id);
+                const allInqPos = [...otherInqPos, po];
                 const allOrderedOrBetter = allInqPos.every(p => ['Ordered', 'Partially Received', 'Received'].includes(p.status));
                 
                 if (allOrderedOrBetter) {
@@ -216,7 +255,7 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
             notes: notes ? `${estimate.notes || ''}\n${notes}` : estimate.notes 
         };
 
-        const createPOs = async (targetJobId: string, entityCode: string, itemsForPO: T.EstimateLineItem[]) => {
+        const createPOs = async (targetJobId: string, entityShortCode: string, itemsForPO: T.EstimateLineItem[]) => {
             const partItems = itemsForPO.filter(li => !li.isLabor && li.partId);
             const poIds: string[] = [];
             if (partItems.length > 0) {
@@ -229,7 +268,7 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
                 });
 
                 for (const [supplierId, items] of Object.entries(partsBySupplier)) {
-                    const newPOId = await generateSequenceId('944', entityCode);
+                    const newPOId = await generateSequenceId('944', entityShortCode);
                     const vehicle = vehicles.find(v => v.id === estimate.vehicleId);
                     const newPO: T.PurchaseOrder = {
                         id: newPOId, 
@@ -263,6 +302,29 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
                  const entity = businessEntities.find(e => e.id === existingJob.entityId);
                  const newPurchaseOrderIds = await createPOs(existingJob.id, entity?.shortCode || 'UNK', approvedLineItems);
 
+                if (newPurchaseOrderIds.length > 0) {
+                    let jobToSave: T.Job | null = null;
+                    setJobs(prevJobs => {
+                        const jobIndex = prevJobs.findIndex(j => j.id === existingJob.id);
+                        if (jobIndex === -1) return prevJobs;
+
+                        const job = prevJobs[jobIndex];
+                        const currentPOIds = new Set(job.purchaseOrderIds || []);
+                        newPurchaseOrderIds.forEach(id => currentPOIds.add(id));
+
+                        const updatedJob = { ...job, purchaseOrderIds: Array.from(currentPOIds), partsStatus: 'Not Ordered' as const };
+                        jobToSave = updatedJob;
+                        
+                        const newJobs = [...prevJobs];
+                        newJobs[jobIndex] = updatedJob;
+                        return newJobs;
+                    });
+
+                    if (jobToSave) {
+                        await saveDocument('brooks_jobs', jobToSave);
+                    }
+                }
+
                  const existingInquiry = inquiries.find(i => i.linkedEstimateId === estimate.id);
                  if (existingInquiry) {
                      const updatedInquiry = { 
@@ -273,13 +335,15 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
                      };
                      await handleSaveItem(setInquiries, updatedInquiry, 'brooks_inquiries');
                  }
-                 setConfirmation({ isOpen: true, title: 'Estimate Approved', message: `Draft POs created.`, type: 'success' });
+                 setConfirmation({ isOpen: true, title: 'Estimate Approved', message: `Draft POs created for Job #${existingJob.id}.`, type: 'success' });
              }
         } else if (scheduledDate) {
             const isMotOnly = approvedLineItems.every(li => li.description === 'MOT');
             const includesMot = approvedLineItems.some(li => li.description === 'MOT');
             const entity = businessEntities.find(e => e.id === estimate.entityId);
             const entityShortCode = entity?.shortCode || 'UNK';
+            const customer = customers.find(c => c.id === estimate.customerId);
+            const vehicle = vehicles.find(v => v.id === estimate.vehicleId);
 
             if (isMotOnly) {
                 const newJobId = await generateSequenceId('992', entityShortCode);
@@ -299,7 +363,17 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
                     notes: `MOT Only job created from Estimate #${estimate.estimateNumber}`,
                     vehicleStatus: 'Awaiting Arrival', 
                     partsStatus: 'Not Required',
-                    isStandalone: true
+                    isStandalone: true,
+                    jobDate: formatDate(new Date()),
+                    customerName: customer?.name || '',
+                    vehicleRegistration: vehicle?.registration || '',
+                    isPrebooked: false,
+                    jobType: 'MOT',
+                    labourRate: 0,
+                    labourCost: 0,
+                    partsCost: 0,
+                    totalCost: 0,
+                    isChargeable: true,
                 };
                 await handleSaveItem(setJobs, newJob, 'brooks_jobs');
                 updatedEstimate = { ...updatedEstimate, status: 'Converted to Job', jobId: newJob.id };
@@ -329,7 +403,17 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
                     vehicleStatus: 'Awaiting Arrival',
                     partsStatus: 'Not Required',
                     isStandalone: false,
-                    associatedJobId: mainJobId
+                    associatedJobId: mainJobId,
+                    jobDate: formatDate(new Date()),
+                    customerName: customer?.name || '',
+                    vehicleRegistration: vehicle?.registration || '',
+                    isPrebooked: false,
+                    jobType: 'MOT',
+                    labourRate: 0,
+                    labourCost: 0,
+                    partsCost: 0,
+                    totalCost: 0,
+                    isChargeable: true,
                 };
                 await handleSaveItem(setJobs, motJob, 'brooks_jobs');
 
@@ -349,9 +433,19 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
                     estimateId: estimate.id,
                     notes: `MOT booked separately as Job #${motJobId}.\n${notes || estimate.notes || ''}`,
                     vehicleStatus: 'Awaiting Arrival',
-                    partsStatus: mainJobPOIds.length > 0 ? 'Awaiting Order' : 'Not Required',
+                    partsStatus: mainJobPOIds.length > 0 ? 'Not Ordered' : 'Not Required',
                     purchaseOrderIds: mainJobPOIds,
-                    associatedJobId: motJobId
+                    associatedJobId: motJobId,
+                    jobDate: formatDate(new Date()),
+                    customerName: customer?.name || '',
+                    vehicleRegistration: vehicle?.registration || '',
+                    isPrebooked: false,
+                    jobType: 'Standard',
+                    labourRate: 0,
+                    labourCost: 0,
+                    partsCost: 0,
+                    totalCost: 0,
+                    isChargeable: true,
                 };
                 mainJob.segments = splitJobIntoSegments(mainJob);
                 await handleSaveItem(setJobs, mainJob, 'brooks_jobs');
@@ -379,8 +473,18 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
                     estimateId: estimate.id, 
                     notes: notes || estimate.notes, 
                     vehicleStatus: 'Awaiting Arrival', 
-                    partsStatus: newPurchaseOrderIds.length > 0 ? 'Awaiting Order' : 'Not Required', 
-                    purchaseOrderIds: newPurchaseOrderIds 
+                    partsStatus: newPurchaseOrderIds.length > 0 ? 'Not Ordered' : 'Not Required', 
+                    purchaseOrderIds: newPurchaseOrderIds,                    
+                    jobDate: formatDate(new Date()),
+                    customerName: customer?.name || '',
+                    vehicleRegistration: vehicle?.registration || '',
+                    isPrebooked: false,
+                    jobType: 'Standard',
+                    labourRate: 0,
+                    labourCost: 0,
+                    partsCost: 0,
+                    totalCost: 0,
+                    isChargeable: true,
                 };
                 newJob.segments = splitJobIntoSegments(newJob);
                 await handleSaveItem(setJobs, newJob, 'brooks_jobs');
@@ -467,7 +571,6 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
         const updatedJob = { ...job, segments: newSegments, status: newStatus } as T.Job;
         await handleSaveItem(setJobs, updatedJob, 'brooks_jobs');
 
-        // If this is a main job, find and close the associated MOT job
         if (job.associatedJobId) {
             const associatedMOT = jobs.find(j => j.id === job.associatedJobId && j.description === 'MOT');
             if (associatedMOT) {
@@ -482,7 +585,6 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
             const newSegments = job.segments.map(s => s.segmentId === segmentId ? { ...s, engineerId: newEngineerId } : s);
             await handleSaveItem(setJobs, { ...job, segments: newSegments } as T.Job, 'brooks_jobs');
 
-            // If this is a main job, find and assign the unassigned MOT job
             if (job.associatedJobId) {
                 const associatedMOT = jobs.find(j => j.id === job.associatedJobId && j.description === 'MOT');
                 if (associatedMOT && associatedMOT.segments.every(s => !s.engineerId)) {

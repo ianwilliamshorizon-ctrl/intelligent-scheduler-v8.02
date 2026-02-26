@@ -135,6 +135,7 @@ const SmartCreateJobModal: React.FC<SmartCreateJobModalProps> = ({
                 .map(p => ({ 
                     id: p.id, 
                     label: p.name,
+                    value: p.id,
                     badge: { text: 'Generic', className: 'bg-gray-100 text-gray-600' }
                 }));
         }
@@ -191,6 +192,7 @@ const SmartCreateJobModal: React.FC<SmartCreateJobModalProps> = ({
             .map(item => ({
                 id: item.pkg.id,
                 label: item.pkg.name,
+                value: item.pkg.id,
                 badge: { text: item.matchType, className: item.color }
             }));
 
@@ -545,7 +547,7 @@ const SmartCreateJobModal: React.FC<SmartCreateJobModalProps> = ({
                                  {parsedData?.customerName ? `AI Suggested: "${parsedData.customerName}"` : 'Customer not identified.'}
                              </div>
                              <SearchableSelect 
-                                options={customers.map(c => ({ id: c.id, label: getCustomerDisplayName(c) }))}
+                                options={customers.map(c => ({ id: c.id, label: getCustomerDisplayName(c), value: c.id }))}
                                 value={null}
                                 onChange={(val) => val && handleCustomerSelect(val)}
                                 placeholder="Search existing customer..."
@@ -663,12 +665,11 @@ const SmartCreateJobModal: React.FC<SmartCreateJobModalProps> = ({
                              <div className="flex gap-2 mb-2">
                                 <div className="flex-grow">
                                 <SearchableSelect 
-    collectionName="brooks_servicepackages" // Added for data consistency
-    searchField="name"                      // Ensure search targets the name field
-    options={sortedPackages}                // Uses the scored/color-coded array
-    onSelect={(item) => handleSelectPackage(item.id)} // Changed from onChange to onSelect to match SearchableSelect API
-    placeholder="+ Add Service Package..." 
-/>
+                                    options={sortedPackages}
+                                    value={null}
+                                    onChange={(val) => val && handleSelectPackage(val)}
+                                    placeholder="+ Add Service Package..."
+                                />
                                 </div>
                                 <button onClick={handleAddLabor} className="px-3 py-2 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 text-sm font-semibold flex items-center gap-1"><Plus size={14}/> Labor</button>
                                 <button onClick={handleAddPart} className="px-3 py-2 bg-green-100 text-green-700 rounded hover:bg-green-200 text-sm font-semibold flex items-center gap-1"><Plus size={14}/> Part</button>

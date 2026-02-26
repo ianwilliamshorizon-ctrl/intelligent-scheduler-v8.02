@@ -16,7 +16,7 @@ interface DispatchHeaderProps {
     setIsDatePickerOpen: (isOpen: boolean) => void;
     setIsSmartCreateOpen: (isOpen: boolean) => void;
     setSmartCreateMode: (mode: 'job' | 'estimate') => void;
-    setDefaultDateForModal: (date: string | null) => void;
+    setDefaultDateForModal: (date: Date | null) => void;
 }
 
 export const DispatchHeader: React.FC<DispatchHeaderProps> = ({

@@ -1,6 +1,34 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { subscribeToCollection, getItem, saveDocument, setItem, getAll, db } from '../db';
 import { collection, getDocs } from 'firebase/firestore';
+import { isEqual } from 'lodash';
+
+const getChangedDocuments = (oldState: any[], newState: any[]) => {
+    const changed: any[] = [];
+    const oldMap = new Map(oldState.map(i => [i.id, i]));
+    const newMap = new Map(newState.map(i => [i.id, i]));
+
+    // Check for new or updated items
+    for (const [id, newItem] of newMap.entries()) {
+        const oldItem = oldMap.get(id);
+        if (!oldItem || !isEqual(oldItem, newItem)) {
+            // Prevent duplicate MOT jobs
+            if (newItem.id.includes('-MOT') && oldState.some(job => job.id === newItem.id)) {
+                continue;
+            }
+            changed.push(newItem);
+        }
+    }
+
+    // Check for deleted items (optional, depending on desired behavior)
+    // for (const [id, oldItem] of oldMap.entries()) {
+    //     if (!newMap.has(id)) {
+    //         // Handle deletion if necessary
+    //     }
+    // }
+
+    return changed;
+};
 
 export const usePersistentState = <T,>(
   storageKey: string, 
@@ -49,18 +77,14 @@ export const usePersistentState = <T,>(
 
   const setPersistentState: React.Dispatch<React.SetStateAction<T>> = (value) => {
     setState((prevState) => {
-      const valueResult = typeof value === 'function' ? (value as (prevState: T) => T)(prevState) : value;
-      
-      const newState = (
-        !Array.isArray(prevState) && typeof prevState === 'object' && prevState !== null &&
-        !Array.isArray(valueResult) && typeof valueResult === 'object' && valueResult !== null
-      ) ? { ...prevState, ...valueResult } : valueResult;
+      const newState = typeof value === 'function' ? (value as (prevState: T) => T)(prevState) : value;
 
-      if (Array.isArray(newState)) {
-        newState.forEach(item => { 
+      if (Array.isArray(prevState) && Array.isArray(newState)) {
+        const changedDocs = getChangedDocuments(prevState, newState);
+        changedDocs.forEach(item => { 
             if (item.id) saveDocument(storageKey, item); 
         });
-      } else {
+      } else if (JSON.stringify(prevState) !== JSON.stringify(newState)) {
         setItem(storageKey, newState);
       }
       return newState;

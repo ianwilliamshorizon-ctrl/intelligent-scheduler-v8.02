@@ -15,7 +15,7 @@ export const AllocatedJobCard: React.FC<{
     onDragStart: (e: React.DragEvent, parentJobId: string, segmentId: string) => void;
     onDragEnd: (e: React.DragEvent) => void;
     onEdit: (jobId: string) => void;
-    onStartWork: (jobId: string, segmentId: string) => void;
+    onStartWork?: (jobId: string, segmentId: string) => void;
     onPause: (jobId: string, segmentId: string) => void;
     onRestart: (jobId: string, segmentId: string) => void;
     onReassign: (jobId: string, segmentId: string) => void;
@@ -69,7 +69,11 @@ export const AllocatedJobCard: React.FC<{
     return (
         <div
             draggable={canDrag}
-            onDragStart={(e) => canDrag && onDragStart(e, job.id, segment.segmentId)}
+            onDragStart={(e) => {
+                if (!canDrag) return;
+                e.stopPropagation();
+                onDragStart(e, job.id, segment.segmentId);
+            }}
             onDragEnd={onDragEnd}
             className={`absolute left-2 right-2 p-1.5 rounded-lg text-white shadow-lg flex flex-col group ${canDrag ? 'cursor-grab' : 'cursor-default'} ${statusColor} allocated-job-container z-10 hover:z-50 hover:shadow-xl transition-all duration-200`}
             style={{
@@ -135,7 +139,7 @@ export const AllocatedJobCard: React.FC<{
                      </span>
                  )}
                  <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                    {canStartOrPause && segment.status === 'Allocated' && <button onClick={(e) => handleAction(e, () => onStartWork(job.id, segment.segmentId))} title="Start Job" className="p-1 rounded bg-white/20 hover:bg-white/40 text-white"><PlayCircle size={14} /></button>}
+                    {canStartOrPause && segment.status === 'Allocated' && <button onClick={(e) => handleAction(e, () => onStartWork && onStartWork(job.id, segment.segmentId))} title="Start Job" className="p-1 rounded bg-white/20 hover:bg-white/40 text-white"><PlayCircle size={14} /></button>}
                     {canStartOrPause && segment.status === 'In Progress' && <button onClick={(e) => handleAction(e, () => onPause(job.id, segment.segmentId))} title="Pause Job" className="p-1 rounded bg-white/20 hover:bg-white/40 text-white"><PauseCircle size={14} /></button>}
                     {canStartOrPause && segment.status === 'Paused' && <button onClick={(e) => handleAction(e, () => onRestart(job.id, segment.segmentId))} title="Restart Job" className="p-1 rounded bg-white/20 hover:bg-white/40 text-white"><PlayCircle size={14} /></button>}
                     

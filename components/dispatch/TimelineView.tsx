@@ -19,15 +19,13 @@ const liftColorClasses: Record<string, string> = {
 };
 
 interface TimelineViewProps {
+    lifts: any[];
     onDragStart: (e: React.DragEvent, parentJobId: string, segmentId: string) => void;
     onDragEnd: (e: React.DragEvent) => void;
-    onTimelineDragEnter: (e: React.DragEvent<HTMLDivElement>) => void;
-    onTimelineDragLeave: (e: React.DragEvent<HTMLDivElement>) => void;
     onTimelineDragOver: (e: React.DragEvent<HTMLDivElement>, liftId: string) => void;
     onTimelineDrop: (e: React.DragEvent<HTMLDivElement>, liftId: string) => void;
     onDragOverUnallocated: (e: React.DragEvent) => void;
     onDropOnUnallocated: (e: React.DragEvent) => void;
-    onDragEnterUnallocated: (e: React.DragEvent) => void;
     onDragLeaveUnallocated: (e: React.DragEvent) => void;
     unallocatedJobs: Job[];
     allocatedSegmentsByLift: Map<string, (JobSegment & { parentJobId: string; })[]>;
@@ -38,6 +36,7 @@ interface TimelineViewProps {
     onEditJob: (jobId: string) => void;
     onCheckIn: (jobId: string) => void;
     onOpenPurchaseOrder: (po: PurchaseOrder) => void;
+    onStartWork: (jobId: string, segmentId: string) => void;
     onPause: (jobId: string, segmentId: string) => void;
     onRestart: (jobId: string, segmentId: string) => void;
     onReassign: (jobId: string, segmentId: string) => void;
@@ -47,42 +46,34 @@ interface TimelineViewProps {
 
 export const TimelineView: React.FC<TimelineViewProps> = (props) => {
     const { 
-        onDragStart, onDragEnd, onTimelineDragEnter, onTimelineDragLeave, onTimelineDragOver, onTimelineDrop,
-        onDragOverUnallocated, onDropOnUnallocated, onDragEnterUnallocated, onDragLeaveUnallocated,
-        unallocatedJobs, allocatedSegmentsByLift, unallocatedDateFilter, setUnallocatedDateFilter, showOnSiteOnly,
-        setShowOnSiteOnly, onEditJob, onCheckIn, onOpenPurchaseOrder, onPause, onRestart, onReassign, 
-        onUnscheduleSegment, onOpenAssistant
+        lifts: entityLifts, onDragStart, onDragEnd, onTimelineDragOver, onTimelineDrop,
+        onDragOverUnallocated, onDropOnUnallocated, onDragLeaveUnallocated,
+        unallocatedJobs, allocatedSegmentsByLift, unallocatedDateFilter, setUnallocatedDateFilter, 
+        showOnSiteOnly, setShowOnSiteOnly, onEditJob, onCheckIn, onOpenPurchaseOrder, 
+        onStartWork, onPause, onRestart, onReassign, onUnscheduleSegment, onOpenAssistant
     } = props;
-    
-    const { jobs, lifts, engineers, customers, vehicles, purchaseOrders } = useData();
-    const { currentUser, selectedEntityId } = useApp();
 
-    const entityLifts = useMemo(() => {
-        return lifts
-            .filter(l => selectedEntityId === 'all' || l.entityId === selectedEntityId)
-            .sort((a, b) => {
-                const nameA = (a.name || '').substring(0, 7).trim();
-                const nameB = (b.name || '').substring(0, 7).trim();
-                return nameA.localeCompare(nameB, undefined, { numeric: true, sensitivity: 'base' });
-            });
-    }, [lifts, selectedEntityId]);
+    const { jobs, engineers, customers, vehicles, purchaseOrders } = useData();
+    const { currentUser } = useApp();
 
     const vehiclesById = useMemo(() => new Map(vehicles.map(v => [v.id, v])), [vehicles]);
     const customersById = useMemo(() => new Map(customers.map(c => [c.id, c])), [customers]);
     const engineersById = useMemo(() => new Map(engineers.map(e => [e.id, e])), [engineers]);
 
     const totalUnallocatedHours = useMemo(() => {
-        return unallocatedJobs.reduce((sum, job) => sum + job.estimatedHours, 0);
+        return unallocatedJobs.reduce((sum, job) => sum + (job.estimatedHours || 0), 0);
     }, [unallocatedJobs]);
-    
+
     return (
         <div className="flex-grow flex p-4 gap-4 min-h-0">
             {/* UNALLOCATED COLUMN */}
              <div
                 className="w-80 flex-shrink-0 flex flex-col bg-gray-100 rounded-lg shadow-inner unallocated-drop-zone min-h-0"
-                onDragOver={onDragOverUnallocated}
+                onDragOver={(e) => {
+                    e.preventDefault(); // Critical for drag-back functionality
+                    onDragOverUnallocated(e);
+                }}
                 onDrop={onDropOnUnallocated}
-                onDragEnter={onDragEnterUnallocated}
                 onDragLeave={onDragLeaveUnallocated}
             >
                  <div className="p-3 border-b">
@@ -143,48 +134,53 @@ export const TimelineView: React.FC<TimelineViewProps> = (props) => {
                     <h4 className="flex items-center justify-center font-bold p-2 border-b sticky top-0 bg-white z-30 text-transparent select-none h-16">&nbsp;</h4>
                     {TIME_SEGMENTS.map(time => <div key={time} className="flex-1 text-xs text-right pr-2 text-gray-500 border-b flex items-center justify-end">{time}</div>)}
                 </div>
+             
                 <div className="flex-grow flex">
                     {entityLifts.map(lift => {
                         const allocatedSegments = allocatedSegmentsByLift.get(lift.id);
                         return (
-                        <div key={lift.id} className="min-w-[140px] flex-1 border-r flex flex-col">
-                            <h4 className={`flex items-center justify-center text-center font-bold p-2 border-b sticky top-0 z-10 h-16 ${liftColorClasses[lift.color || 'gray']}`}>{lift.name}</h4>
-                            <div 
-                                className="flex-grow relative flex flex-col"
-                                onDragEnter={onTimelineDragEnter}
-                                onDragLeave={onTimelineDragLeave}
-                                onDragOver={(e) => onTimelineDragOver(e, lift.id)}
-                                onDrop={(e) => onTimelineDrop(e, lift.id)}
-                            >
-                                {TIME_SEGMENTS.map((_, index) => <div key={index} className="flex-1 border-b border-gray-200"></div>)}
-                                {allocatedSegments?.map(segment => {
-                                    const job = jobs.find(j => j.id === segment.parentJobId);
-                                    if (!job) return null;
-                                    
-                                    return <AllocatedJobCard 
-                                        key={segment.segmentId}
-                                        job={job}
-                                        segment={segment}
-                                        vehicle={vehiclesById.get(job.vehicleId)}
-                                        customer={customersById.get(job.customerId)}
-                                        engineer={segment.engineerId ? engineersById.get(segment.engineerId) : undefined}
-                                        purchaseOrders={purchaseOrders}
-                                        onDragStart={onDragStart}
-                                        onDragEnd={onDragEnd}
-                                        onEdit={onEditJob}
-                                        onPause={onPause}
-                                        onRestart={onRestart}
-                                        onReassign={onReassign}
-                                        onOpenPurchaseOrder={onOpenPurchaseOrder}
-                                        onUnscheduleSegment={onUnscheduleSegment}
-                                        currentUser={currentUser}
-                                        onOpenAssistant={onOpenAssistant}
-                                        onCheckIn={onCheckIn}
-                                    />;
-                                })}
+                            <div key={lift.id} className="min-w-[140px] flex-1 border-r flex flex-col">
+                                <h4 className={`flex items-center justify-center text-center font-bold p-2 border-b sticky top-0 z-10 h-16 ${liftColorClasses[lift.color || 'gray']}`}>{lift.name}</h4>
+                                <div 
+                                    className="flex-grow relative flex flex-col"
+                                    onDragOver={(e) => {
+                                        e.preventDefault(); // Critical for moving between lifts
+                                        onTimelineDragOver(e, lift.id);
+                                    }}
+                                    onDrop={(e) => onTimelineDrop(e, lift.id)}
+                                >
+                                    {TIME_SEGMENTS.map((_, index) => <div key={index} className="flex-1 border-b border-gray-200"></div>)}
+                          
+                                    {allocatedSegments?.map(segment => {
+                                        const job = jobs.find(j => j.id === segment.parentJobId);
+                                        if (!job) return null;
+                                        return (
+                                            <AllocatedJobCard 
+                                                key={segment.segmentId}
+                                                job={job}
+                                                segment={segment}
+                                                vehicle={vehiclesById.get(job.vehicleId)}
+                                                customer={customersById.get(job.customerId)}
+                                                engineer={segment.engineerId ? engineersById.get(segment.engineerId) : undefined}
+                                                purchaseOrders={purchaseOrders}
+                                                onDragStart={onDragStart}
+                                                onDragEnd={onDragEnd}
+                                                onEdit={onEditJob}
+                                                onStartWork={onStartWork}
+                                                onPause={onPause}
+                                                onRestart={onRestart}
+                                                onReassign={onReassign}
+                                                onOpenPurchaseOrder={onOpenPurchaseOrder}
+                                                onUnscheduleSegment={onUnscheduleSegment}
+                                                currentUser={currentUser}
+                                                onOpenAssistant={onOpenAssistant}
+                                            />
+                                        );
+                                    })}
+                                </div>
                             </div>
-                        </div>
-                    )})}
+                        )
+                    })}
                 </div>
             </div>
         </div>

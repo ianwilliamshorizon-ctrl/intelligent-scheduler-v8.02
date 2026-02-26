@@ -194,7 +194,7 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
                 <label className="font-semibold">Parts Status</label>
                 <select name="partsStatus" value={partsStatus || 'Not Required'} onChange={onChange} className="w-full p-2 border rounded bg-white mt-1" disabled={isReadOnly}>
                     <option>Not Required</option>
-                    <option>Awaiting Order</option>
+                    <option>Not Ordered</option>
                     <option>Ordered</option>
                     <option>Partially Received</option>
                     <option>Fully Received</option>
@@ -233,7 +233,7 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
             
             <div>
                 <div className="flex justify-between items-end mb-2">
-                    <h4 className="font-semibold">Main Job Package & Items</h4>
+                    <h4 className="font-semibold">Main Job Estimate & Items</h4>
                     <button onClick={onRaiseSupplementaryEstimate} className="text-xs flex items-center gap-1 bg-amber-100 text-amber-800 px-2 py-1 rounded font-semibold hover:bg-amber-200 border border-amber-300">
                          <PlusCircle size={12}/> Raise Supplementary Estimate
                     </button>

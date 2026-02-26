@@ -44,21 +44,28 @@ export const useDispatchFilters = ({
     const { unallocatedJobs, allocatedSegmentsByLift } = useMemo(() => {
         const today = getRelativeDate(0);
         
-        // Filter out Cancelled jobs at the start of the unallocated logic
+        // 1. Find all potential unallocated jobs
         const allPotentialUnallocated = jobs.filter(job => 
-            job.vehicleStatus !== 'Cancelled' && 
+            job.status !== 'Cancelled' && 
             (selectedEntityId === 'all' || job.entityId === selectedEntityId) && 
             (job.segments || []).some(s => s.status === 'Unallocated')
         );
         
+        // 2. Filter by On Site status if toggled
         const siteFilteredJobs = showOnSiteOnly 
             ? allPotentialUnallocated.filter(job => job.vehicleStatus === 'On Site') 
             : allPotentialUnallocated;
         
+        // 3. Filter by Date
         const dateFilteredJobs = siteFilteredJobs.filter(job => {
+            // If the filter is 'all', show everything that has an unallocated segment
             if (unallocatedDateFilter === 'all') return true;
+
             const firstUnallocatedSegment = (job.segments || []).find(s => s.status === 'Unallocated');
+            
+            // If there's no date and we aren't viewing 'all', we can't match today/7days/etc.
             if (!firstUnallocatedSegment?.date) return false;
+            
             const jobDate = firstUnallocatedSegment.date;
             
             if (unallocatedDateFilter === 'today') return jobDate === today;
@@ -67,10 +74,10 @@ export const useDispatchFilters = ({
             return false;
         });
 
+        // 4. Map Allocated Segments for the Timeline
         const allocated = new Map<string, (JobSegment & { parentJobId: string })[]>();
         jobs.forEach(job => {
-            // Filter out Cancelled jobs and handle entity matching
-            if (job.vehicleStatus === 'Cancelled') return;
+            if (job.status === 'Cancelled') return;
             if (selectedEntityId !== 'all' && job.entityId !== selectedEntityId) return;
 
             (job.segments || []).forEach(segment => {

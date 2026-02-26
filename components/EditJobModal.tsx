@@ -1,74 +1,108 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useData } from '../core/state/DataContext';
 import { useApp } from '../core/state/AppContext';
-import { Job, Vehicle, Customer, Engineer, JobSegment, Lift, Estimate, TaxRate, EstimateLineItem, Part, ServicePackage, BusinessEntity, RentalBooking, User as AppUser, PurchaseOrder, Supplier, UnbillableTimeEvent, EngineerChangeEvent, PurchaseOrderLineItem, ChecklistSection, TyreCheckData, VehicleDamagePoint, CheckInPhoto, InspectionTemplate } from '../types';
-import { X, Save, Car, User, FileText, Wrench, Package, DollarSign, Edit, Plus, Trash2, KeyRound, MessageSquare, ChevronUp, ChevronDown, ListChecks, PlusCircle, ClipboardCheck, CarFront, Image as ImageIcon, Ban } from 'lucide-react';
+import * as T from '../types';
+import { X, Save, Car, User, FileText, Wrench, Package, DollarSign, Edit, Plus, Trash2, KeyRound, MessageSquare, ChevronUp, ChevronDown, ListChecks, PlusCircle, ClipboardCheck, CarFront, Image as ImageIcon, Ban, Expand } from 'lucide-react';
 import { formatCurrency } from '../utils/formatUtils';
 import { formatDate, addDays } from '../core/utils/dateUtils';
-import { generateEstimateNumber, generatePurchaseOrderId } from '../core/utils/numberGenerators';
+import { generateEstimateNumber } from '../core/utils/numberGenerators';
 import SearchableSelect from './SearchableSelect';
-import { calculateJobStatus } from '../utils/jobUtils';
 import { JobInspectionTab } from './jobs/tabs/JobInspectionTab';
 import { JobEstimateTab } from './jobs/tabs/JobEstimateTab';
-import { JobDetailsTab } from './jobs/tabs/JobDetailsTab';
+import JobDetailsTab from './jobs/tabs/JobDetailsTab';
 import { initialTyreCheckData } from '../core/data/initialChecklistData';
 import MediaManagerModal from './MediaManagerModal';
-import AsyncImage from './AsyncImage';
 import PartFormModal from './PartFormModal';
+import { useWorkshopActions } from '../core/hooks/useWorkshopActions';
 import { getScoredServicePackages } from '../utils/servicePackageScoring';
 
-const Section = ({ title, icon: Icon, children, defaultOpen = true }: { title: string, icon: React.ElementType, children?: React.ReactNode, defaultOpen?: boolean }) => {
-    const [isOpen, setIsOpen] = useState(defaultOpen);
+const NotesModal: React.FC<{
+    isOpen: boolean;
+    onClose: () => void;
+    notes: string;
+    onSave: (notes: string) => void;
+    title?: string;
+    isReadOnly?: boolean;
+}> = ({ isOpen, onClose, notes, onSave, title = "Edit Notes", isReadOnly = false }) => {
+    const [localNotes, setLocalNotes] = useState(notes);
+
+    useEffect(() => {
+        setLocalNotes(notes);
+    }, [notes, isOpen]);
+
+    const handleSave = () => {
+        onSave(localNotes);
+        onClose();
+    };
+
+    if (!isOpen) return null;
+
     return (
-        <div className="border rounded-lg bg-white shadow-sm">
-            <h3 onClick={() => setIsOpen(!isOpen)} className="text-md font-bold p-3 flex justify-between items-center cursor-pointer bg-gray-50/70 rounded-t-lg">
-                <span className="flex items-center gap-2">{Icon && <Icon size={16}/>} {title}</span>
-                {isOpen ? <ChevronUp size={20} className="text-gray-600"/> : <ChevronDown size={20} className="text-gray-600"/>}
-            </h3>
-            {isOpen && <div className="p-4">{children}</div>}
+        <div className="fixed inset-0 bg-gray-900 bg-opacity-75 z-[100] flex justify-center items-center p-4">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl h-[80vh] flex flex-col">
+                <header className="flex justify-between items-center p-4 border-b">
+                    <h2 className="text-lg font-bold">{title}</h2>
+                    <button onClick={onClose}><X size={24} /></button>
+                </header>
+                <div className="flex-grow p-4">
+                    <textarea
+                        value={localNotes}
+                        onChange={(e) => setLocalNotes(e.target.value)}
+                        className="w-full h-full p-2 border rounded resize-none text-sm"
+                        placeholder="Enter notes..."
+                        readOnly={isReadOnly}
+                    />
+                </div>
+                <footer className="p-4 border-t flex justify-end gap-2">
+                    <button onClick={onClose} className="px-4 py-2 bg-gray-200 rounded-lg">Close</button>
+                    {!isReadOnly && <button onClick={handleSave} className="px-4 py-2 bg-indigo-600 text-white rounded-lg">Save</button>}
+                </footer>
+            </div>
         </div>
     );
 };
+
 
 const EditJobModal: React.FC<{
     isOpen: boolean;
     onClose: () => void;
     selectedJobId: string;
-    onOpenPurchaseOrder: (po: PurchaseOrder) => void;
-    rentalBookings: RentalBooking[];
-    onOpenRentalBooking: (booking: Partial<RentalBooking> | null) => void;
-    onOpenConditionReport: (booking: RentalBooking, mode: 'checkOut' | 'checkIn') => void;
-    onRaiseSupplementaryEstimate: (job: Job) => void;
-    onViewEstimate: (estimate: Estimate) => void;
+    onOpenPurchaseOrder: (po: T.PurchaseOrder) => void;
+    rentalBookings: T.RentalBooking[];
+    onOpenRentalBooking: (booking: Partial<T.RentalBooking> | null) => void;
+    onOpenConditionReport: (booking: T.RentalBooking, mode: 'checkOut' | 'checkIn') => void;
+    onRaiseSupplementaryEstimate: (job: T.Job) => void;
+    onViewEstimate: (estimate: T.Estimate) => void;
     onViewCustomer: (customerId: string) => void;
     onViewVehicle: (vehicleId: string) => void;
-    onCheckIn: (job: Job) => void;
-    onCheckOut: (job: Job) => void;
-    onSavePart?: (part: Part) => void;
+    onCheckIn: (job: T.Job) => void;
+    onCheckOut: (job: T.Job) => void;
     onDelete?: (jobId: string) => void;
-}> = ({ isOpen, onClose, selectedJobId, onOpenPurchaseOrder, rentalBookings, onOpenRentalBooking, onOpenConditionReport, onRaiseSupplementaryEstimate, onViewEstimate, onViewCustomer, onViewVehicle, onCheckIn, onCheckOut, onSavePart, onDelete }) => {
+}> = ({ isOpen, onClose, selectedJobId, onOpenPurchaseOrder, rentalBookings, onOpenRentalBooking, onOpenConditionReport, onRaiseSupplementaryEstimate, onViewEstimate, onViewCustomer, onViewVehicle, onCheckIn, onCheckOut, onDelete }) => {
     
     const data = useData();
     const { currentUser, setConfirmation } = useApp();
+    const { handleSaveItem, handleDeleteJob } = useWorkshopActions();
 
     const {
-        jobs, setJobs, vehicles, customers, engineers, estimates, setEstimates, purchaseOrders, setPurchaseOrders, suppliers, parts, servicePackages, taxRates, businessEntities, inspectionTemplates
+        jobs, setJobs, vehicles, customers, engineers, estimates, setEstimates, purchaseOrders, suppliers, parts, setParts, servicePackages, taxRates, businessEntities, inspectionTemplates
     } = data;
 
     const job = useMemo(() => Array.isArray(jobs) ? jobs.find(j => j.id === selectedJobId) : undefined, [jobs, selectedJobId]);
-    const [editableJob, setEditableJob] = useState<Job | null>(null);
-    const [editableEstimate, setEditableEstimate] = useState<Estimate | null>(null);
+    const [editableJob, setEditableJob] = useState<T.Job | null>(null);
+    const [editableEstimate, setEditableEstimate] = useState<T.Estimate | null>(null);
     const [newObservation, setNewObservation] = useState('');
     const [activeTab, setActiveTab] = useState<'estimate' | 'inspection' | 'notes' | 'segments'>('estimate');
     const [partSearchTerm, setPartSearchTerm] = useState('');
     const [activePartSearch, setActivePartSearch] = useState<string | null>(null);
     const [isMediaModalOpen, setIsMediaModalOpen] = useState(false);
     const [mediaModalTitle, setMediaModalTitle] = useState('');
-    const [mediaModalData, setMediaModalData] = useState<CheckInPhoto[]>([]);
-    const [onMediaSaveCallback, setOnMediaSaveCallback] = useState<((media: CheckInPhoto[]) => void) | null>(null);
+    const [mediaModalData, setMediaModalData] = useState<T.CheckInPhoto[]>([]);
+    const [onMediaSaveCallback, setOnMediaSaveCallback] = useState<((media: T.CheckInPhoto[]) => void) | null>(null);
     const [isAddingPart, setIsAddingPart] = useState(false);
     const [targetLineItemId, setTargetLineItemId] = useState<string | null>(null);
     const [newPartDescription, setNewPartDescription] = useState('');
+    const [isNotesModalOpen, setIsNotesModalOpen] = useState(false);
 
     const canViewPricing = useMemo(() => {
         if (!currentUser) return false;
@@ -83,20 +117,7 @@ const EditJobModal: React.FC<{
 
     const mainEstimate = useMemo(() => {
         if (!job || !Array.isArray(estimates)) return null;
-        const currentEstimates = estimates;
-        if (job.estimateId) {
-            const byId = currentEstimates.find(e => e.id === job.estimateId);
-            if (byId) return byId;
-            const byNumber = currentEstimates.find(e => e.estimateNumber === job.estimateId);
-            if (byNumber) return byNumber;
-        }
-        const linked = currentEstimates.filter(e => e.jobId === job.id);
-        if (linked.length === 1) return linked[0];
-        const converted = linked.find(e => e.status === 'Converted to Job');
-        if (converted) return converted;
-        const approved = linked.find(e => e.status === 'Approved');
-        if (approved) return approved;
-        return null;
+        return estimates.find(e => e.id === job.estimateId) || null;
     }, [job, estimates]);
 
     const supplementaryEstimates = useMemo(() => {
@@ -105,11 +126,11 @@ const EditJobModal: React.FC<{
         return estimates.filter(e => e.jobId === job.id && e.id !== mainId);
     }, [estimates, job, mainEstimate]);
 
-    const handleApplyInspectionTemplate = (template: InspectionTemplate) => {
+    const handleApplyInspectionTemplate = (template: T.InspectionTemplate) => {
         if (!template || !template.sections) return;
 
         const apply = () => {
-            const newChecklist: ChecklistSection[] = template.sections.map(s => ({
+            const newChecklist: T.ChecklistSection[] = template.sections.map(s => ({
                 id: s.id || crypto.randomUUID(),
                 title: s.title,
                 items: (s.items || []).map(i => ({ 
@@ -139,35 +160,19 @@ const EditJobModal: React.FC<{
     useEffect(() => {
         if (job) {
             const jobCopy = JSON.parse(JSON.stringify(job));
-            if (!jobCopy.inspectionChecklist || jobCopy.inspectionChecklist.length === 0) {
-                 const defaultTemplate = Array.isArray(inspectionTemplates) ? inspectionTemplates.find(t => t.isDefault) : undefined;
-                 if (defaultTemplate) {
-                    jobCopy.inspectionChecklist = defaultTemplate.sections.map(s => ({
-                        id: s.id,
-                        title: s.title,
-                        items: s.items.map(i => ({ id: crypto.randomUUID(), label: i.label, status: 'na' })),
-                        comments: ''
-                    }));
-                    jobCopy.inspectionTemplateId = defaultTemplate.id;
-                 } else { 
-                    jobCopy.inspectionChecklist = []; 
-                    jobCopy.inspectionTemplateId = undefined;
-                 }
-            }
+            if (!jobCopy.inspectionChecklist) jobCopy.inspectionChecklist = [];
             if (!jobCopy.tyreCheck) jobCopy.tyreCheck = JSON.parse(JSON.stringify(initialTyreCheckData));
             if (!jobCopy.damagePoints) jobCopy.damagePoints = [];
             setEditableJob(jobCopy);
-            if (mainEstimate) {
-                setEditableEstimate(JSON.parse(JSON.stringify(mainEstimate)));
-            } else {
-                setEditableEstimate(null);
-            }
+            
+            const currentEstimate = mainEstimate ? JSON.parse(JSON.stringify(mainEstimate)) : null;
+            setEditableEstimate(currentEstimate);
             setActiveTab('estimate');
         } else {
             setEditableJob(null);
             setEditableEstimate(null);
         }
-    }, [job, isOpen, estimates, inspectionTemplates, mainEstimate]);
+    }, [job, isOpen, mainEstimate]);
 
     const isReadOnly = !!editableJob?.invoiceId;
 
@@ -193,13 +198,13 @@ const EditJobModal: React.FC<{
             description: pkg.description || 'Service Package',
             badge: { text: matchType, className: color }
         }));
-    }, [servicePackages, vehicle, editableJob?.entityId]);
+    }, [servicePackages, vehicle]);
 
     const handleCreateEstimateIfNeeded = useCallback(() => {
         if (!editableEstimate && editableJob && currentUser) {
             const entity = Array.isArray(businessEntities) ? businessEntities.find(e => e.id === editableJob.entityId) : undefined;
             const entityShortCode = entity?.shortCode || 'UNK';
-            const newEstimate: Estimate = {
+            const newEstimate: T.Estimate = {
                 id: `est_${Date.now()}_temp`,
                 estimateNumber: generateEstimateNumber(Array.isArray(estimates) ? estimates : [], entityShortCode),
                 entityId: editableJob.entityId,
@@ -219,25 +224,14 @@ const EditJobModal: React.FC<{
         return editableEstimate;
     }, [editableEstimate, editableJob, businessEntities, estimates, currentUser]);
 
-    const handleLineItemChange = useCallback((id: string, field: keyof EstimateLineItem, value: any) => { 
+    const handleLineItemChange = useCallback((id: string, field: keyof T.EstimateLineItem, value: any) => { 
         setEditableEstimate(prev => {
             if (!prev) return null;
-            const lineItems = prev.lineItems || [];
-            const targetItem = lineItems.find(i => i.id === id);
             let processedValue = value;
-            
             if (['quantity', 'unitPrice', 'unitCost'].includes(field as string)) {
                  processedValue = parseFloat(value) || 0;
             }
-            let updatedLineItems = lineItems.map(item => item.id === id ? { ...item, [field]: processedValue } : item);
-            if (targetItem && field === 'isOptional' && targetItem.servicePackageId && !targetItem.isPackageComponent) {
-                 updatedLineItems = updatedLineItems.map(item => {
-                      if (item.servicePackageId === targetItem.servicePackageId && item.isPackageComponent) {
-                        return { ...item, isOptional: processedValue };
-                      }
-                      return item;
-                });
-            }
+            let updatedLineItems = (prev.lineItems || []).map(item => item.id === id ? { ...item, [field]: processedValue } : item);
             return { ...prev, lineItems: updatedLineItems };
         });
     }, []);
@@ -246,27 +240,26 @@ const EditJobModal: React.FC<{
         const packageId = selection?.value || selection?.id || selection;
         const pkg = Array.isArray(servicePackages) ? servicePackages.find(p => p.id === packageId) : undefined;
         if (!pkg) return;
-        const currentEstimate = handleCreateEstimateIfNeeded();
-        if (!currentEstimate) return;
+        handleCreateEstimateIfNeeded();
 
-        const isOptional = !!editableJob?.id; 
-        const newItems: EstimateLineItem[] = [];
-        const mainPackageItem: EstimateLineItem = {
-            id: crypto.randomUUID(),
-            description: pkg.name || (pkg as any).description || '',
-            quantity: 1,
-            unitPrice: pkg.totalPrice,
-            unitCost: 0,
-            isLabor: false, 
-            taxCodeId: pkg.taxCodeId || standardTaxRateId,
-            servicePackageId: pkg.id,
-            servicePackageName: pkg.name,
-            isPackageComponent: false,
-            isOptional: isOptional
-        };
-        newItems.push(mainPackageItem);
-        if (pkg.costItems) {
-            pkg.costItems.forEach(costItem => {
+        setEditableEstimate(prev => {
+            if (!prev) return null;
+            const newItems: T.EstimateLineItem[] = [];
+            const mainPackageItem: T.EstimateLineItem = {
+                id: crypto.randomUUID(),
+                description: pkg.name || '',
+                quantity: 1,
+                unitPrice: pkg.totalPrice,
+                unitCost: 0,
+                isLabor: false, 
+                taxCodeId: pkg.taxCodeId || standardTaxRateId,
+                servicePackageId: pkg.id,
+                servicePackageName: pkg.name,
+                isPackageComponent: false,
+                isOptional: true
+            };
+            newItems.push(mainPackageItem);
+            (pkg.costItems || []).forEach(costItem => {
                 newItems.push({ 
                     ...costItem, 
                     id: crypto.randomUUID(), 
@@ -274,11 +267,11 @@ const EditJobModal: React.FC<{
                     servicePackageId: pkg.id, 
                     servicePackageName: pkg.name, 
                     isPackageComponent: true,
-                    isOptional: isOptional
+                    isOptional: true
                 });
             });
-        }
-        setEditableEstimate(prev => prev ? ({ ...prev, lineItems: [...(prev.lineItems || []), ...newItems] }) : null);
+            return { ...prev, lineItems: [...(prev.lineItems || []), ...newItems] };
+        });
     };
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -287,19 +280,23 @@ const EditJobModal: React.FC<{
     };
 
     const handleAddObservation = () => {
-        if (!newObservation.trim()) return;
-        setEditableJob(prev => prev ? { ...prev, technicianObservations: [...(prev.technicianObservations || []), newObservation] } : null);
+        if (!newObservation.trim() || !editableJob) return;
+        const updatedObservations = [...(editableJob.technicianObservations || []), newObservation];
+        setEditableJob({ ...editableJob, technicianObservations: updatedObservations });
         setNewObservation('');
     };
 
     const handleRemoveObservation = (index: number) => {
-         setEditableJob(prev => prev ? { ...prev, technicianObservations: (prev.technicianObservations || []).filter((_, i) => i !== index) } : null);
+        if (!editableJob) return;
+        const updatedObservations = (editableJob.technicianObservations || []).filter((_, i) => i !== index);
+        setEditableJob({ ...editableJob, technicianObservations: updatedObservations });
     };
     
     const handleOpenTechnicianMedia = () => {
+        if (!editableJob) return;
         setMediaModalTitle('Manage Technical Photos/Videos');
-        setMediaModalData(editableJob?.technicianImages || []);
-        setOnMediaSaveCallback(() => (newMedia: CheckInPhoto[]) => {
+        setMediaModalData(editableJob.technicianImages || []);
+        setOnMediaSaveCallback(() => (newMedia: T.CheckInPhoto[]) => {
             setEditableJob(prev => prev ? { ...prev, technicianImages: newMedia } : null);
         });
         setIsMediaModalOpen(true);
@@ -310,31 +307,29 @@ const EditJobModal: React.FC<{
         if (!item) return;
         setMediaModalTitle(`Media for: ${item.description || 'Line Item'}`);
         setMediaModalData(item.media || []);
-        setOnMediaSaveCallback(() => (newMedia: CheckInPhoto[]) => {
-            setEditableEstimate(prev => {
-                if (!prev) return null;
-                const newItems = (prev.lineItems || []).map(li => li.id === itemId ? { ...li, media: newMedia } : li);
-                return { ...prev, lineItems: newItems };
-            });
+        setOnMediaSaveCallback(() => (newMedia: T.CheckInPhoto[]) => {
+            handleLineItemChange(itemId, 'media', newMedia);
         });
         setIsMediaModalOpen(true);
     };
 
     const addLineItem = (isLabor: boolean) => {
-        const currentEstimate = handleCreateEstimateIfNeeded();
-        if (!currentEstimate) return;
-        const entity = Array.isArray(businessEntities) ? businessEntities.find(e => e.id === editableJob.entityId) : undefined;
-        const newItem: EstimateLineItem = {
-            id: crypto.randomUUID(),
-            description: isLabor ? 'Labor' : '',
-            quantity: 1,
-            unitPrice: isLabor ? (entity?.laborRate || 0) : 0,
-            unitCost: isLabor ? (entity?.laborCostRate || 0) : 0,
-            isLabor,
-            taxCodeId: standardTaxRateId,
-            isOptional: true
-        };
-        setEditableEstimate(prev => prev ? ({ ...prev, lineItems: [...(prev.lineItems || []), newItem] }) : null);
+        handleCreateEstimateIfNeeded();
+        setEditableEstimate(prev => {
+            if (!prev) return null;
+            const entity = Array.isArray(businessEntities) ? businessEntities.find(e => e.id === editableJob?.entityId) : undefined;
+            const newItem: T.EstimateLineItem = {
+                id: crypto.randomUUID(),
+                description: isLabor ? 'Labor' : '',
+                quantity: 1,
+                unitPrice: isLabor ? (entity?.laborRate || 0) : 0,
+                unitCost: isLabor ? (entity?.laborCostRate || 0) : 0,
+                isLabor,
+                taxCodeId: standardTaxRateId,
+                isOptional: true
+            };
+            return { ...prev, lineItems: [...(prev.lineItems || []), newItem] };
+        });
     };
 
     const removeLineItem = useCallback((id: string) => {
@@ -354,8 +349,14 @@ const EditJobModal: React.FC<{
         return parts.filter(p => p.partNumber.toLowerCase().includes(lowerSearch) || p.description.toLowerCase().includes(lowerSearch)).slice(0, 10);
     }, [partSearchTerm, parts]);
 
-    const handleSelectPart = (lineItemId: string, part: Part) => {
-        setEditableEstimate(prev => prev ? ({ ...prev, lineItems: (prev.lineItems || []).map(item => item.id === lineItemId ? { ...item, partNumber: part.partNumber, description: part.description, unitPrice: part.salePrice, unitCost: part.costPrice, partId: part.id, taxCodeId: part.taxCodeId || item.taxCodeId, fromStock: part.stockQuantity > 0 } : item) }) : null);
+    const handleSelectPart = (lineItemId: string, part: T.Part) => {
+        handleLineItemChange(lineItemId, 'partNumber', part.partNumber);
+        handleLineItemChange(lineItemId, 'description', part.description);
+        handleLineItemChange(lineItemId, 'unitPrice', part.salePrice);
+        handleLineItemChange(lineItemId, 'unitCost', part.costPrice);
+        handleLineItemChange(lineItemId, 'partId', part.id);
+        handleLineItemChange(lineItemId, 'taxCodeId', part.taxCodeId || standardTaxRateId);
+        handleLineItemChange(lineItemId, 'fromStock', part.stockQuantity > 0);
         setActivePartSearch(null);
         setPartSearchTerm('');
     };
@@ -367,27 +368,28 @@ const EditJobModal: React.FC<{
         setActivePartSearch(null);
     };
 
-    const handleSaveNewPart = (part: Part) => {
-        if (onSavePart) onSavePart(part);
-        if (targetLineItemId) handleSelectPart(targetLineItemId, part);
+    const handleSaveNewPart = async (part: T.Part) => {
+        const savedPart = await handleSaveItem(setParts, part, 'brooks_parts');
+        if (targetLineItemId) handleSelectPart(targetLineItemId, savedPart);
         setIsAddingPart(false);
         setTargetLineItemId(null);
     };
 
     const estimateBreakdown = useMemo(() => {
         if (!editableEstimate) return { packages: [], standaloneLabor: [], standaloneParts: [] };
-        const packagesMap = new Map<string, { header: EstimateLineItem, children: EstimateLineItem[] }>();
-        const standaloneLabor: EstimateLineItem[] = [];
-        const standaloneParts: EstimateLineItem[] = [];
+        const packagesMap = new Map<string, { header: T.EstimateLineItem, children: T.EstimateLineItem[] }>();
+        const standaloneLabor: T.EstimateLineItem[] = [];
+        const standaloneParts: T.EstimateLineItem[] = [];
         (editableEstimate.lineItems || []).forEach(item => {
-            if (item.servicePackageId && !item.isPackageComponent) {
-                 packagesMap.set(item.servicePackageId, { header: item, children: [] });
-            } else if (!item.servicePackageId) {
+            if (item.servicePackageId) {
+                if (!item.isPackageComponent) {
+                    packagesMap.set(item.servicePackageId, { header: item, children: [] });
+                } 
+            } else {
                 if (item.isLabor) standaloneLabor.push(item);
                 else standaloneParts.push(item);
             }
         });
-      
         (editableEstimate.lineItems || []).forEach(item => {
             if (item.servicePackageId && item.isPackageComponent) {
                 const pkg = packagesMap.get(item.servicePackageId);
@@ -419,49 +421,63 @@ const EditJobModal: React.FC<{
     }, [editableEstimate, taxRatesMap, standardTaxRateId]);
 
     const linkedBooking = useMemo(() => Array.isArray(rentalBookings) ? rentalBookings.find(b => b.jobId === job?.id) : undefined, [rentalBookings, job]);
-    const engineerMap = useMemo(() => new Map((Array.isArray(engineers) ? engineers : []).map(e => [e.id, e.name])), [engineers]);
     const supplierMap = useMemo(() => new Map((Array.isArray(suppliers) ? suppliers : []).map(s => [s.id, s.name])), [suppliers]);
+    const engineerMap = useMemo(() => new Map((Array.isArray(engineers) ? engineers : []).map(e => [e.id, e.name])), [engineers]);
 
-    const handleBookCourtesyCar = () => { 
-        if (!editableJob) return;
-        const booking: Partial<RentalBooking> = { 
-            jobId: editableJob.id, 
-            customerId: editableJob.customerId, 
-            bookingType: 'Courtesy Car', 
-            startDate: `${editableJob.scheduledDate || formatDate(new Date())}T09:00`, 
-            endDate: `${editableJob.scheduledDate || formatDate(new Date())}T17:00` 
-        }; 
-        onOpenRentalBooking(booking); 
-    };
-
-    const handleSaveMain = () => {
-        if (!editableJob) { onClose(); return; }
+    const handleSaveMain = async () => {
+        if (!editableJob) { 
+            onClose(); 
+            return; 
+        }
+    
         let jobToSave = { ...editableJob };
+    
         if (editableEstimate) {
             if (editableEstimate.id.endsWith('_temp')) {
-                 const realEstimate = { ...editableEstimate, id: `est_${Date.now()}` };
-                 setEstimates(prev => [...(prev || []), realEstimate]);
-                 jobToSave.estimateId = realEstimate.id;
+                const realEstimate = { ...editableEstimate, id: `est_${Date.now()}` };
+                await handleSaveItem(setEstimates, realEstimate);
+                jobToSave.estimateId = realEstimate.id;
             } else {
-                 setEstimates(prev => (prev || []).map(e => e.id === editableEstimate.id ? editableEstimate : e));
+                await handleSaveItem(setEstimates, editableEstimate);
             }
             const totalLaborHours = (editableEstimate.lineItems || []).filter(li => li.isLabor).reduce((sum, li) => sum + li.quantity, 0);
             jobToSave.estimatedHours = totalLaborHours;
+
+            const originalLineItemIds = new Set((mainEstimate?.lineItems || []).map(li => li.id));
+            const newLineItems = (editableEstimate.lineItems || []).filter(li => !originalLineItemIds.has(li.id));
+            
+            const newPartsForPO = newLineItems.filter(li => !li.isLabor && li.partId && !li.fromStock);
+    
+            if (newPartsForPO.length > 0) {
+                const jobParts: T.JobPart[] = newPartsForPO.map(li => ({
+                    id: li.id,
+                    partId: li.partId!,
+                    description: li.description,
+                    quantity: li.quantity
+                }));
+                jobToSave.parts = [...(jobToSave.parts || []), ...jobParts];
+            }
         }
-        setJobs(prevJobs => (prevJobs || []).map(j => (j.id === jobToSave.id ? jobToSave : j)));
+        
+        await handleSaveItem(setJobs, jobToSave);
+    
         onClose();
     };
     
     const handleCancelJob = () => {
-        if (editableJob && onDelete) {
-            if (confirm("Are you sure you want to cancel this job? It will be moved to the Cancelled status but retained in history.")) {
-                onDelete(editableJob.id);
-                onClose();
-            }
+        if (editableJob) {
+            setConfirmation({
+                isOpen: true,
+                title: 'Confirm Cancellation',
+                message: 'Are you sure you want to cancel this job? It will be moved to the Cancelled status but retained in history.',
+                type: 'warning',
+                onConfirm: async () => {
+                    if(onDelete) onDelete(editableJob.id);
+                    onClose();
+                }
+            });
         }
     };
-
-    if (!isOpen || !editableJob) return null;
 
     const renderTabs = () => {
         switch (activeTab) {
@@ -488,7 +504,7 @@ const EditJobModal: React.FC<{
                         onChange={handleChange}
                         onOpenPurchaseOrder={onOpenPurchaseOrder}
                         onCreateEstimate={handleCreateEstimateIfNeeded}
-                        onRaiseSupplementaryEstimate={() => onRaiseSupplementaryEstimate(editableJob)}
+                        onRaiseSupplementaryEstimate={() => editableJob && onRaiseSupplementaryEstimate(editableJob)}
                         onViewEstimate={onViewEstimate}
                         onAddLineItem={addLineItem}
                         onAddPackage={addPackage}
@@ -516,6 +532,7 @@ const EditJobModal: React.FC<{
                         diagramImageId={diagramImageId}
                         onApplyTemplate={handleApplyInspectionTemplate}
                         selectedTemplateId={editableJob.inspectionTemplateId}
+                        inspectionTemplates={inspectionTemplates || []}
                     />
                 );
             case 'notes':
@@ -523,14 +540,19 @@ const EditJobModal: React.FC<{
                     <div className="space-y-3">
                         <div className="flex justify-between items-center mb-2">
                              <h4 className="font-bold text-gray-700">Technician Observations</h4>
-                             <button onClick={handleOpenTechnicianMedia} className="text-xs bg-indigo-50 text-indigo-600 px-2 py-1 rounded flex items-center gap-1 hover:bg-indigo-100 border border-indigo-200">
-                                <ImageIcon size={14}/> Photos & Videos
-                             </button>
+                             <div className="flex items-center gap-2">
+                                 <button onClick={() => setIsNotesModalOpen(true)} className="text-xs bg-white border border-gray-300 text-indigo-600 px-2 py-1 rounded flex items-center gap-1 hover:bg-indigo-50 shadow-sm">
+                                     <Expand size={14}/> Expand
+                                 </button>
+                                 <button onClick={handleOpenTechnicianMedia} className="text-xs bg-indigo-50 text-indigo-600 px-2 py-1 rounded flex items-center gap-1 hover:bg-indigo-100 border border-indigo-200">
+                                    <ImageIcon size={14}/> Photos & Videos
+                                 </button>
+                             </div>
                         </div>
                         {(editableJob.technicianObservations || []).map((obs, index) => (
                             <div key={index} className="flex justify-between items-center text-sm p-2 bg-gray-50 rounded-md">
                                 <span>{obs}</span>
-                                <button onClick={() => handleRemoveObservation(index)} disabled={isReadOnly}><Trash2 size={14} className="text-red-500"/></button>
+                                {!isReadOnly && <button onClick={() => handleRemoveObservation(index)}><Trash2 size={14} className="text-red-500"/></button>}
                             </div>
                         ))}
                          <div className="flex items-center gap-2 pt-2 border-t">
@@ -551,10 +573,13 @@ const EditJobModal: React.FC<{
                                 <p><strong>Engineer:</strong> {segment.engineerId ? engineerMap.get(segment.engineerId) : 'N/A'}</p>
                             </div>
                         ))}
+                         {editableJob.segments.length === 0 && <p className="text-xs text-gray-500">No segments allocated.</p>}
                     </div>
                 );
         }
     };
+
+    if (!isOpen || !editableJob) return null;
 
     return (
         <div className="fixed inset-0 bg-gray-900 bg-opacity-75 z-[60] flex justify-center items-center p-4">
@@ -579,12 +604,25 @@ const EditJobModal: React.FC<{
                             isReadOnly={isReadOnly}
                             linkedBooking={linkedBooking}
                             rentalVehicleRegistration={linkedBooking ? (Array.isArray(vehicles) ? vehicles.find(v => v.id === linkedBooking.rentalVehicleId)?.registration : undefined) : undefined}
-                            onBookCourtesyCar={handleBookCourtesyCar}
+                            onBookCourtesyCar={() => {
+                                if (!editableJob) return;
+                                const booking: Partial<T.RentalBooking> = { 
+                                    jobId: editableJob.id, 
+                                    customerId: editableJob.customerId, 
+                                    bookingType: 'Courtesy Car', 
+                                    startDate: `${editableJob.scheduledDate || formatDate(new Date())}T09:00`, 
+                                    endDate: `${editableJob.scheduledDate || formatDate(new Date())}T17:00` 
+                                }; 
+                                onOpenRentalBooking(booking); 
+                            }}
                             onOpenRentalBooking={onOpenRentalBooking}
                             onOpenConditionReport={onOpenConditionReport}
                             onChange={handleChange}
                             onViewCustomer={onViewCustomer}
                             onViewVehicle={onViewVehicle}
+                            engineers={engineers || []}
+                            onCheckIn={() => editableJob && onCheckIn(editableJob)}
+                            onCheckOut={() => editableJob && onCheckOut(editableJob)}
                         />
                         <div className="border rounded-lg bg-white shadow-sm p-4">
                             <h3 className="text-md font-bold mb-2 flex items-center gap-2"><DollarSign size={16}/> Billing</h3>
@@ -609,7 +647,7 @@ const EditJobModal: React.FC<{
                 </main>
 
                 <footer className="flex-shrink-0 flex justify-end gap-2 p-4 border-t bg-gray-50 items-center">
-                    {currentUser.role === 'Admin' && job?.status !== 'Cancelled' && (
+                    {currentUser?.role === 'Admin' && job?.status !== 'Cancelled' && (
                         <button type="button" onClick={handleCancelJob} className="flex items-center gap-2 py-2 px-4 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 mr-auto text-sm font-semibold">
                             <Ban size={14}/> Cancel Job
                         </button>
@@ -618,6 +656,15 @@ const EditJobModal: React.FC<{
                     <button type="button" onClick={handleSaveMain} className="flex items-center gap-2 py-2 px-4 bg-indigo-600 text-white font-semibold rounded-lg disabled:opacity-50" disabled={isReadOnly}><Save size={14}/> Save Changes</button>
                 </footer>
             </div>
+
+            <NotesModal 
+                isOpen={isNotesModalOpen} 
+                onClose={() => setIsNotesModalOpen(false)} 
+                notes={(editableJob.technicianObservations || []).join('\n')} 
+                onSave={(newNotes) => setEditableJob(prev => ({...prev, technicianObservations: newNotes.split('\n')}))} 
+                title="Technician Observations" 
+                isReadOnly={isReadOnly} 
+            />
             
             {isMediaModalOpen && (
                 <MediaManagerModal
@@ -626,7 +673,10 @@ const EditJobModal: React.FC<{
                     title={mediaModalTitle}
                     initialMedia={mediaModalData}
                     onSave={(newMedia) => {
-                        if (onMediaSaveCallback) onMediaSaveCallback(newMedia);
+                        if (onMediaSaveCallback) {
+                            const callback = onMediaSaveCallback;
+                            callback(newMedia);
+                        }
                         setIsMediaModalOpen(false);
                     }}
                 />
@@ -637,9 +687,9 @@ const EditJobModal: React.FC<{
                     isOpen={isAddingPart}
                     onClose={() => { setIsAddingPart(false); setTargetLineItemId(null); }}
                     onSave={handleSaveNewPart}
-                    part={{ description: newPartDescription }}
-                    suppliers={[]} 
-                    taxRates={Array.isArray(taxRates) ? taxRates : []}
+                    part={{ description: newPartDescription } as Partial<T.Part>}
+                    suppliers={suppliers || []} 
+                    taxRates={taxRates || []}
                 />
             )}
         </div>

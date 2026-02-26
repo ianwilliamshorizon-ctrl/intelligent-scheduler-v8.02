@@ -11,6 +11,7 @@ import AssignEngineerModal from '../../components/AssignEngineerModal';
 import { TimelineView } from '../../components/dispatch/TimelineView';
 import { WeeklyView } from '../../components/dispatch/WeeklyView';
 import { fetchBankHolidays } from '../../services/bankHolidayService';
+import { useWorkshopActions } from '../../core/hooks/useWorkshopActions';
 
 // New Refactored Hooks & Components
 import { useDispatchFilters } from './hooks/useDispatchFilters';
@@ -18,7 +19,7 @@ import { useDispatchDragDrop } from './hooks/useDispatchDragDrop';
 import { DispatchHeader } from './components/DispatchHeader';
 
 interface DispatchViewProps {
-    setDefaultDateForModal: (date: string | null) => void;
+    setDefaultDateForModal: (date: Date | null) => void;
     setIsSmartCreateOpen: (isOpen: boolean) => void;
     setSmartCreateMode: (mode: 'job' | 'estimate') => void;
     setSelectedJobId: (id: string | null) => void;
@@ -30,6 +31,7 @@ interface DispatchViewProps {
     onCheckIn: (jobId: string) => void;
     onOpenAssistant: (jobId: string) => void;
     onUnscheduleSegment: (jobId: string, segmentId: string) => void;
+    onStartWork: (jobId: string, segmentId: string) => void;
 }
 
 const DispatchView: React.FC<DispatchViewProps> = ({ 
@@ -44,10 +46,11 @@ const DispatchView: React.FC<DispatchViewProps> = ({
     onReassignEngineer, 
     onCheckIn, 
     onOpenAssistant, 
-    onUnscheduleSegment 
+    onUnscheduleSegment, 
+    onStartWork 
 }) => {
-    const { jobs, setJobs, lifts, engineers, customers, vehicles, purchaseOrders, absenceRequests, businessEntities } = useData();
-    const { selectedEntityId } = useApp();
+    const { jobs, setJobs, lifts, engineers, customers, vehicles, purchaseOrders, absenceRequests, businessEntities, estimates, parts } = useData();
+    const { selectedEntityId, currentUser } = useApp();
     
     // -- View State --
     const [viewMode, setViewMode] = useState<'timeline' | 'week' | 'calendar'>('timeline');
@@ -88,17 +91,20 @@ const DispatchView: React.FC<DispatchViewProps> = ({
         showOnSiteOnly
     });
 
+    const { handleSavePurchaseOrder } = useWorkshopActions();
+
     // -- Drag & Drop Logic via Hook --
     const {
         handleDragStart,
         handleTimelineDragOver,
         handleTimelineDrop,
         handleUnallocatedDragOver,
+        handleUnallocatedDragLeave,
         handleUnallocatedDrop,
         handleDragEnd,
         confirmJobSchedule
     } = useDispatchDragDrop({
-        jobs, lifts, businessEntities, currentDate, setJobs, setAssignModalData, bankHolidays
+        jobs, lifts, businessEntities, currentDate, setJobs, setAssignModalData, bankHolidays, estimates, parts, vehicles, currentUser, handleSavePurchaseOrder
     });
 
     const handleAssignConfirm = (engineerId: string, startSegmentIndex: number) => {
@@ -171,7 +177,7 @@ const DispatchView: React.FC<DispatchViewProps> = ({
                 viewMode={viewMode}
                 setViewMode={setViewMode}
                 currentDate={currentDate}
-                setCurrentDate={setCurrentDate}
+                setCurrentDate={(date) => setCurrentDate(date)}
                 weekStart={weekStart}
                 setWeekStart={setWeekStart}
                 currentMonthDate={currentMonthDate}
@@ -188,13 +194,11 @@ const DispatchView: React.FC<DispatchViewProps> = ({
                     lifts={entityLifts}
                     onDragStart={handleDragStart}
                     onDragEnd={handleDragEnd}
-                    onTimelineDragEnter={(e) => { e.preventDefault(); }}
-                    onTimelineDragLeave={(e) => { e.currentTarget.classList.remove('timeline-column-over'); }}
                     onTimelineDragOver={handleTimelineDragOver}
                     onTimelineDrop={handleTimelineDrop}
                     onDragOverUnallocated={handleUnallocatedDragOver}
                     onDropOnUnallocated={handleUnallocatedDrop}
-                    onDragLeaveUnallocated={(e) => e.currentTarget.classList.remove('is-over')}
+                    onDragLeaveUnallocated={handleUnallocatedDragLeave}
                     unallocatedJobs={unallocatedJobs}
                     allocatedSegmentsByLift={allocatedSegmentsByLift}
                     unallocatedDateFilter={unallocatedDateFilter}
@@ -204,6 +208,7 @@ const DispatchView: React.FC<DispatchViewProps> = ({
                     onEditJob={(id) => { setSelectedJobId(id); setIsEditModalOpen(true); }}
                     onCheckIn={(id) => { setSelectedJobId(id); onCheckIn(id); }}
                     onOpenPurchaseOrder={onOpenPurchaseOrder}
+                    onStartWork={onStartWork}
                     onPause={onPause}
                     onRestart={onRestart}
                     onReassign={handleReassignClick}
@@ -218,7 +223,7 @@ const DispatchView: React.FC<DispatchViewProps> = ({
                         jobs={jobs.filter(j => selectedEntityId === 'all' || j.entityId === selectedEntityId)}
                         vehicles={vehicles}
                         customers={customers}
-                        onAddJob={(date) => { setDefaultDateForModal(date); setIsSmartCreateOpen(true); setSmartCreateMode('job'); }}
+                        onAddJob={(date) => { setDefaultDateForModal(dateStringToDate(date)); setIsSmartCreateOpen(true); setSmartCreateMode('job'); }}
                         onDragStart={() => {}} 
                         maxDailyCapacityHours={dailyCapacity}
                         absencesByDate={absencesByDate}

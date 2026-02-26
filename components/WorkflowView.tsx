@@ -1,4 +1,3 @@
-
 import React, { useMemo, useState } from 'react';
 import { Job, Vehicle, Customer, Engineer, User, PurchaseOrder } from '../types';
 import { ClipboardCheck, FileText, CheckCircle, Car, User as UserIcon, MessageSquare, Clock, Wrench, PlayCircle, Search, X, PauseCircle, Wand2, Package as PackageIcon, UserPlus } from 'lucide-react';
@@ -6,8 +5,8 @@ import { formatReadableDate, getRelativeDate } from '../core/utils/dateUtils';
 import { TIME_SEGMENTS, SEGMENT_DURATION_MINUTES, END_HOUR, END_MINUTE } from '../constants';
 import { useData } from '../core/state/DataContext';
 import { getPoStatusColor } from '../core/utils/statusUtils';
+import { HoverInfo } from '../components/shared/HoverInfo';
 
-// A generic, reusable card for displaying job info in the workflow columns.
 const WorkflowJobCard: React.FC<{
     job: Job;
     vehicle?: Vehicle;
@@ -42,8 +41,16 @@ const WorkflowJobCard: React.FC<{
                 <div>
                     <h3 className="font-bold text-gray-800 text-sm">{job.description}</h3>
                     <div className="flex items-center gap-3 text-xs text-gray-500 mt-1">
-                        <span className="flex items-center gap-1"><Car size={12}/> {vehicle?.registration}</span>
-                        <span className="flex items-center gap-1"><UserIcon size={12}/> {customer?.forename} {customer?.surname}</span>
+                        {vehicle && (
+                             <HoverInfo title="Vehicle Details" data={{ make: vehicle.make, model: vehicle.model, year: vehicle.year, vin: vehicle.vin }}>
+                                <span className="flex items-center gap-1"><Car size={12}/> {vehicle.registration}</span>
+                            </HoverInfo>
+                        )}
+                       {customer && (
+                            <HoverInfo title="Customer Details" data={{ name: `${customer.forename} ${customer.surname}`, phone: customer.mobile || customer.phone }}>
+                                <span className="flex items-center gap-1"><UserIcon size={12}/> {customer.forename} {customer.surname}</span>
+                           </HoverInfo>
+                       )}
                     </div>
                 </div>
                 <div className="flex flex-col items-end gap-2">
@@ -240,14 +247,14 @@ const WorkflowView: React.FC<WorkflowViewProps> = ({ jobs, vehicles, customers, 
                     </div>
                 </div>
             </header>
-            <main className="flex-grow min-h-0">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 h-full">
+            <main className="flex-grow">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     {statusColumns.map(({ title, jobs, color, icon: Icon }) => (
-                        <div key={title} className="bg-gray-200 rounded-lg flex flex-col h-full">
+                        <div key={title} className="bg-gray-200 rounded-lg flex flex-col">
                             <h3 className={`flex items-center gap-2 font-bold text-gray-700 p-3 border-b-2 ${color}`}>
                                 <Icon size={16}/> {title} ({jobs.length})
                             </h3>
-                            <div className="p-3 space-y-3 overflow-y-auto flex-grow">
+                            <div className="p-3 space-y-3">
                                 {jobs.map(job => (
                                     <WorkflowJobCard
                                         key={job.id}
