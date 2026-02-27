@@ -57,6 +57,7 @@ export const AllocatedJobCard: React.FC<{
     if (segment.status === 'Paused') statusColor = 'bg-red-500';
 
     const canStartOrPause = (currentUser.role === 'Engineer' && engineer?.id === currentUser.engineerId) || currentUser.role === 'Admin' || currentUser.role === 'Dispatcher';
+    const canPerformActions = currentUser.role === 'Admin' || currentUser.role === 'Dispatcher';
 
     const handleAction = (e: React.MouseEvent, action: () => void) => {
         e.stopPropagation();
@@ -159,36 +160,39 @@ export const AllocatedJobCard: React.FC<{
                          Unassigned
                      </span>
                  )}
-                 <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                 <div className="flex items-center gap-0.5">
                     {canStartOrPause && segment.status === 'Allocated' && <button onClick={(e) => handleAction(e, () => onStartWork && onStartWork(job.id, segment.segmentId))} title="Start Job" className="p-1 rounded bg-white/20 hover:bg-white/40 text-white"><PlayCircle size={14} /></button>}
                     {canStartOrPause && segment.status === 'In Progress' && <button onClick={(e) => handleAction(e, () => onPause(job.id, segment.segmentId))} title="Pause Job" className="p-1 rounded bg-white/20 hover:bg-white/40 text-white"><PauseCircle size={14} /></button>}
                     {canStartOrPause && segment.status === 'Paused' && <button onClick={(e) => handleAction(e, () => onRestart(job.id, segment.segmentId))} title="Restart Job" className="p-1 rounded bg-white/20 hover:bg-white/40 text-white"><PlayCircle size={14} /></button>}
                     
-                    <button 
-                        onClick={(e) => handleAction(e, () => onEdit(job.id))} 
-                        title="Edit Job" 
-                        className="p-1 rounded bg-white/20 hover:bg-white/40 text-white"
-                    >
-                        <Edit size={14} />
-                    </button>
+                    {canPerformActions && (
+                        <>
+                            <button 
+                                onClick={(e) => handleAction(e, () => onEdit(job.id))} 
+                                title="Edit Job" 
+                                className="p-1 rounded bg-white/20 hover:bg-white/40 text-white"
+                            >
+                                <Edit size={14} />
+                            </button>
 
-                    {canDrag && (
-                        <button 
-                            onClick={(e) => handleAction(e, () => onReassign(job.id, segment.segmentId))} 
-                            title="Re-assign Engineer" 
-                            className="p-1 rounded bg-white/20 hover:bg-white/40 text-white"
-                        >
-                            <UserCog size={14} />
-                        </button>
-                    )}
-                    {canUnschedule && (
-                        <button 
-                            onClick={(e) => handleAction(e, () => onUnscheduleSegment(job.id, segment.segmentId))} 
-                            title="Unschedule (Move back to Unallocated)" 
-                            className="p-1 rounded bg-white/20 hover:bg-white/40 text-white hover:text-red-300"
-                        >
-                            <Trash2 size={14} />
-                        </button>
+                            <button 
+                                onClick={(e) => handleAction(e, () => onReassign(job.id, segment.segmentId))} 
+                                title="Re-assign Engineer" 
+                                className="p-1 rounded bg-white/20 hover:bg-white/40 text-white"
+                            >
+                                <UserCog size={14} />
+                            </button>
+
+                            {canUnschedule && (
+                                <button 
+                                    onClick={(e) => handleAction(e, () => onUnscheduleSegment(job.id, segment.segmentId))} 
+                                    title="Unschedule (Move back to Unallocated)" 
+                                    className="p-1 rounded bg-white/20 hover:bg-white/40 text-white hover:text-red-300"
+                                >
+                                    <Trash2 size={14} />
+                                </button>
+                            )}
+                        </>
                     )}
                 </div>
             </div>

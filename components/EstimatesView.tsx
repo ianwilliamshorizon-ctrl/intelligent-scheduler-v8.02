@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { useData } from '../core/state/DataContext';
 import { useApp } from '../core/state/AppContext';
@@ -76,12 +75,22 @@ const EstimatesView = ({ onOpenEstimateModal, onViewEstimate, onSmartCreateClick
         }).sort((a, b) => b.issueDate.localeCompare(a.issueDate) || b.estimateNumber.localeCompare(a.estimateNumber));
     }, [estimates, filter, statusFilter, customerMap, vehicleMap, selectedEntityId, businessEntities]);
 
+    // UPDATED TOTAL CALCULATION LOGIC
     const calculateTotal = (lineItems: EstimateLineItem[]) => {
-        return (lineItems || []).filter(item => !item.isPackageComponent).reduce((sum, item) => {
+        return (lineItems || []).reduce((sum, item) => {
+            // Only add to Total Net if it's NOT a package component to avoid double counting the sale price
+            if (item.isPackageComponent) return sum;
+
             const itemNet = (item.quantity || 0) * (item.unitPrice || 0);
-            const taxCodeId = item.taxCodeId || standardTaxRateId;
-            const rate = taxCodeId ? (taxRatesMap.get(taxCodeId) || 0) / 100 : 0;
+            
+            // Handle legacy tax codes
+            const effectiveTaxCodeId = (item.taxCodeId === 'Taxstd' || !item.taxCodeId) 
+                ? standardTaxRateId 
+                : item.taxCodeId;
+
+            const rate = effectiveTaxCodeId ? (taxRatesMap.get(effectiveTaxCodeId) || 0) / 100 : 0;
             const itemVat = itemNet * rate;
+            
             return sum + itemNet + itemVat;
         }, 0);
     };
@@ -107,7 +116,7 @@ const EstimatesView = ({ onOpenEstimateModal, onViewEstimate, onSmartCreateClick
                 entityId: estimate.entityId,
                 name,
                 description,
-                totalPrice: totalNet, // Using net price for simplicity
+                totalPrice: totalNet,
                 costItems: estimate.lineItems.map(li => ({...li, id: crypto.randomUUID()})),
                 applicableMake: vehicle.make,
                 applicableModel: vehicle.model,

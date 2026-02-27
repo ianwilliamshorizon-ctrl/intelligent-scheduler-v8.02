@@ -70,7 +70,6 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
     const [approvalDate, setApprovalDate] = useState(formatDate(new Date()));
     
     const [currentMonthDate, setCurrentMonthDate] = useState(() => dateStringToDate(formatDate(new Date())));
-
     const print = usePrint();
     const mainRef = useRef<HTMLDivElement>(null);
     
@@ -109,14 +108,14 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
     const laborHours = useMemo(() => {
         return (estimate.lineItems || [])
             .filter(item => item.isLabor && !item.isOptional)
-            .reduce((sum, item) => sum + item.quantity, 0);
+            .reduce((sum, item) => sum + (item.quantity || 0), 0);
     }, [estimate.lineItems]);
 
     const projectedLaborHours = useMemo(() => {
         return (estimate.lineItems || [])
             .filter(item => item.isLabor)
             .filter(item => !item.isOptional || selectedOptionalItems.has(item.id))
-            .reduce((sum, item) => sum + item.quantity, 0);
+            .reduce((sum, item) => sum + (item.quantity || 0), 0);
     }, [estimate.lineItems, selectedOptionalItems]);
 
     const resolvedEntity = useMemo(() => {
@@ -145,9 +144,7 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
 
     const manualApprovalCapacity = useMemo(() => {
         if (!approvalDate || !resolvedEntity) return null;
-
         const entityJobs = jobs.filter(j => j.entityId === estimate.entityId);
-        
         const allocatedHours = entityJobs
             .flatMap(j => j.segments || [])
             .filter(s => s.date === approvalDate && s.status !== 'Cancelled')
@@ -156,7 +153,6 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
         const absenceHours = absencesByDate.get(approvalDate) || 0;
         const maxHours = resolvedEntity.dailyCapacityHours || 0;
         const effectiveCapacity = Math.max(0, maxHours - absenceHours);
-        
         const newTotalLoad = allocatedHours + projectedLaborHours;
         const remainingHours = effectiveCapacity - newTotalLoad;
         const loadPercentage = effectiveCapacity > 0 ? newTotalLoad / effectiveCapacity : (newTotalLoad > 0 ? 1.1 : 0);
@@ -178,11 +174,6 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
             isOverCapacity: remainingHours < 0
         };
     }, [approvalDate, jobs, resolvedEntity, estimate.entityId, projectedLaborHours, absencesByDate]);
-
-    const entityJobs = useMemo(() => {
-        const targetEntityId = estimate.entityId;
-        return jobs.filter(j => j.entityId === targetEntityId);
-    }, [jobs, estimate.entityId]);
 
     const handleMonthChange = (offset: number) => {
         setCurrentMonthDate(prev => {
@@ -222,6 +213,7 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
         }
     }, [preferredStartDate, isConfirmingApproval, jobs, resolvedEntity, laborHours, minBookingDate, preferredEndDate]);
 
+    // UPDATED TOTALS LOGIC FOR PRODUCTION 
     const { essentialItems, optionalItems, dynamicTotals } = useMemo(() => {
         const allItems = estimate.lineItems || [];
         const essentials: EstimateLineItem[] = [];
@@ -231,36 +223,45 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
             if (item.isOptional) optionals.push(item);
             else essentials.push(item);
         });
-        
-        const itemsToTotal = [
-            ...essentials.filter(item => !item.isPackageComponent),
-            ...optionals.filter(item => {
-                if (item.isPackageComponent) return false;
-                return selectedOptionalItems.has(item.id);
-            })
-        ];
-        
+
         const breakdown: { [key: string]: { net: number; vat: number; rate: number; name: string; } } = {};
         let totalNet = 0;
 
-        itemsToTotal.forEach(item => {
+        allItems.forEach(item => {
+            // Skip unselected optional items
+            if (item.isOptional && !selectedOptionalItems.has(item.id)) return;
+
             const itemNet = (item.quantity || 0) * (item.unitPrice || 0);
-            totalNet += itemNet;
-            const taxCodeId = item.taxCodeId || standardTaxRateId;
-            if (!taxCodeId) return;
-            const taxRateInfo = taxRates.find(t => t.id === taxCodeId);
-            if (taxRateInfo && taxRateInfo.rate > 0) {
-                if (!breakdown[taxCodeId]) {
-                    breakdown[taxCodeId] = { net: 0, vat: 0, rate: taxRateInfo.rate, name: taxRateInfo.name };
+            
+            // Only add to Total Net if it's NOT a package component to avoid double counting
+            if (!item.isPackageComponent) {
+                totalNet += itemNet;
+            }
+
+            // Map legacy tax code or missing tax code to standard 
+            const effectiveTaxCodeId = (item.taxCodeId === 'Taxstd' || !item.taxCodeId) 
+                ? standardTaxRateId 
+                : item.taxCodeId;
+
+            if (effectiveTaxCodeId) {
+                const taxRateInfo = taxRates.find(t => t.id === effectiveTaxCodeId);
+                if (taxRateInfo && taxRateInfo.rate > 0) {
+                    if (!breakdown[effectiveTaxCodeId]) {
+                        breakdown[effectiveTaxCodeId] = { net: 0, vat: 0, rate: taxRateInfo.rate, name: taxRateInfo.name };
+                    }
+                    // Only add the sale price to the tax-based net if it's the package header or a standalone item
+                    if (!item.isPackageComponent) {
+                        breakdown[effectiveTaxCodeId].net += itemNet;
+                        breakdown[effectiveTaxCodeId].vat += itemNet * (taxRateInfo.rate / 100);
+                    }
                 }
-                breakdown[taxCodeId].net += itemNet;
-                breakdown[taxCodeId].vat += itemNet * (taxRateInfo.rate / 100);
             }
         });
 
         const finalVatBreakdown = Object.values(breakdown);
         const totalVat = finalVatBreakdown.reduce((sum, b) => sum + b.vat, 0);
         const totals = { totalNet, grandTotal: totalNet + totalVat, vatBreakdown: finalVatBreakdown };
+        
         return { essentialItems: essentials, optionalItems: optionals, dynamicTotals: totals };
     }, [estimate.lineItems, selectedOptionalItems, taxRates, standardTaxRateId]);
 
@@ -268,11 +269,8 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
         if (!isInteractive && !isApproving) return;
         setSelectedOptionalItems(prev => {
             const newSet = new Set(prev);
-            if (newSet.has(itemId)) {
-                newSet.delete(itemId);
-            } else {
-                newSet.add(itemId);
-            }
+            if (newSet.has(itemId)) newSet.delete(itemId);
+            else newSet.add(itemId);
             return newSet;
         });
     };
@@ -318,6 +316,7 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                 />
             </React.StrictMode>
         );
+        
         await new Promise(resolve => setTimeout(resolve, 800));
     
         try {
@@ -329,6 +328,7 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
             const canvasHeightOnPdf = pdfWidth * (canvas.height / canvas.width);
             let heightLeft = canvasHeightOnPdf;
             let position = 0;
+
             pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, canvasHeightOnPdf);
             heightLeft -= pdfHeight;
 
@@ -408,12 +408,12 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                                 <div className="flex items-center gap-2 mt-1">
                                     <span className="text-xs bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">Customer View</span>
                                     <p className="text-xs text-gray-500">Interactive Approval Mode</p>
-                                 </div>
+                                </div>
                              ) : (
                                 <div className="flex items-center gap-2 mt-1">
                                     <span className="text-xs bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">Internal Preview</span>
                                     <p className="text-xs text-gray-500">Staff View (Print Preview)</p>
-                                 </div>
+                                </div>
                              )}
                         </div>
                         <div className="flex items-center gap-3">
@@ -432,14 +432,14 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                                     <div>
                                         <h1 className="text-2xl font-extrabold text-gray-900">{resolvedEntity?.name || 'Brookspeed'}</h1>
                                         <p className="text-sm text-gray-600 mt-1">{resolvedEntity?.addressLine1}, {resolvedEntity?.postcode}</p>
-                                    </div>
+                                   </div>
                                     <div className="text-right">
                                         <h2 className="text-xl font-semibold text-gray-800">{isSupplementary ? 'Supplementary ' : ''}Estimate</h2>
                                         <p className="text-lg font-mono text-indigo-600">#{estimate.estimateNumber}</p>
                                         <p className="text-sm text-gray-500">{getDisplayDate(estimate.issueDate)}</p>
                                     </div>
                                 </div>
-                                
+    
                                 {estimate.media && estimate.media.length > 0 && (
                                     <div className="bg-white p-4 rounded-xl border-2 border-gray-100">
                                         <h3 className="text-lg font-bold text-gray-800 mb-4 pb-2 border-b border-gray-100 flex items-center gap-2">
@@ -452,7 +452,7 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                                                         <AsyncImage imageId={m.id} className="w-full h-full object-cover" />
                                                     </div>
                                                     {m.notes && <p className="text-xs text-gray-600 italic bg-gray-50 p-1 rounded">{m.notes}</p>}
-                                                </div>
+                                               </div>
                                             ))}
                                         </div>
                                     </div>
@@ -469,8 +469,8 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                                             ))}
                                             {essentialGroups.standalone.length > 0 && (
                                                 <div className="border rounded-lg overflow-hidden bg-white shadow-sm">
-                                                    {essentialGroups.standalone.map(item => (
-                                                        <SelectableEstimateItemRow key={item.id} item={item} isSelected={false} onToggle={() => {}} canInteract={false} canViewPricing={canViewPricing} isOptional={false}/>
+                                                  {essentialGroups.standalone.map(item => (
+                                                    <SelectableEstimateItemRow key={item.id} item={item} isSelected={false} onToggle={() => {}} canInteract={false} canViewPricing={canViewPricing} isOptional={false}/>
                                                     ))}
                                                 </div>
                                             )}
@@ -488,7 +488,7 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                                         </p>
                                         <div className="space-y-4">
                                              {optionalGroups.packages.map(pkg => (
-                                                 <CustomerServicePackage key={pkg.header.id} header={pkg.header} childrenItems={pkg.children} isSelected={selectedOptionalItems.has(pkg.header.id)} onToggle={() => handleToggleOptional(pkg.header.id)} canViewPricing={canViewPricing} isInteractive={isInteractive || isApproving}/>
+                                                <CustomerServicePackage key={pkg.header.id} header={pkg.header} childrenItems={pkg.children} isSelected={selectedOptionalItems.has(pkg.header.id)} onToggle={() => handleToggleOptional(pkg.header.id)} canViewPricing={canViewPricing} isInteractive={isInteractive || isApproving}/>
                                             ))}
                                             {optionalGroups.standalone.length > 0 && (
                                                 <div className="border border-indigo-200 rounded-lg overflow-hidden bg-white shadow-sm">
@@ -498,11 +498,11 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                                                 </div>
                                             )}
                                         </div>
-                                    </div>
+                                     </div>
                                 )}
 
                                 <div className="flex justify-end pt-6 border-t-2 border-gray-100">
-                                     <div className="w-72 bg-gray-50 p-4 rounded-lg">
+                                      <div className="w-72 bg-gray-50 p-4 rounded-lg">
                                         <div className="flex justify-between text-sm mb-2"><span className="text-gray-600">Subtotal</span><span className="font-semibold">{formatCurrency(dynamicTotals.totalNet)}</span></div>
                                         {dynamicTotals.vatBreakdown.map((b: any) => (<div key={b.name} className="flex justify-between text-sm text-gray-500 mb-1"><span>VAT @ {b.rate}%</span><span>{formatCurrency(b.vat)}</span></div>))}
                                         <div className="flex justify-between font-bold text-xl mt-3 pt-3 border-t border-gray-200 text-indigo-900"><span>Total</span><span>{formatCurrency(dynamicTotals.grandTotal)}</span></div>
@@ -539,11 +539,11 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                                         </div>
                                         {capacityWarning && (
                                             <div className="p-3 bg-orange-100 text-orange-800 text-sm rounded-lg border border-orange-200 mb-4 animate-fade-in">
-                                                <p className="font-semibold flex items-center gap-2"><AlertCircle size={16}/> High Demand Date</p>
+                                                 <p className="font-semibold flex items-center gap-2"><AlertCircle size={16}/> High Demand Date</p>
                                                 <p className="mt-1">{capacityWarning}</p>
                                             </div>
                                         )}
-                                    </>
+                                   </>
                                 )}
                                 
                                 <div className="mb-6">
@@ -557,7 +557,7 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                                         {isSupplementary ? 'Confirm Approval' : 'Submit Booking Request'}
                                     </button>
                                 </div>
-                            </div>
+                           </div>
                         )}
                     </main>
                     
@@ -566,11 +566,11 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                             <>
                                 <div className="flex gap-2">
                                     {currentUser.role !== 'Engineer' && (
-                                    <button onClick={() => setIsEmailing(true)} className="flex items-center py-2 px-4 bg-gray-800 text-white font-semibold rounded-lg hover:bg-gray-900 transition"><Mail size={16} className="mr-2"/> Email Link</button>
+                                        <button onClick={() => setIsEmailing(true)} className="flex items-center py-2 px-4 bg-gray-800 text-white font-semibold rounded-lg hover:bg-gray-900 transition"><Mail size={16} className="mr-2"/> Email Link</button>
                                     )}
                                     <div className="flex bg-gray-100 rounded-lg p-1">
                                         <button onClick={() => handlePrint(false)} className="flex items-center py-1.5 px-3 rounded text-sm font-semibold hover:bg-white hover:shadow transition">
-                                            <Printer size={16} className="mr-2"/> Customer Print
+                                             <Printer size={16} className="mr-2"/> Customer Print
                                         </button>
                                         <div className="w-px bg-gray-300 my-1 mx-1"></div>
                                         <button onClick={() => handlePrint(true)} className="flex items-center py-1.5 px-3 rounded text-sm font-semibold hover:bg-white hover:shadow transition">Internal Print</button>
