@@ -190,6 +190,7 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
     const [isAddingCustomer, setIsAddingCustomer] = useState(false);
     const [isAddingVehicle, setIsAddingVehicle] = useState(false);
     const [isAddingPart, setIsAddingPart] = useState(false);
+    const [newPart, setNewPart] = useState<Part | null>(null);
     const [isAssistantOpen, setIsAssistantOpen] = useState(false);
     const [isNotesModalOpen, setIsNotesModalOpen] = useState(false);
     const [targetLineItemId, setTargetLineItemId] = useState<string | null>(null);
@@ -333,7 +334,7 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
     const entityLaborCostRate = useMemo(() => businessEntities.find(e => e.id === formData.entityId)?.laborCostRate, [businessEntities, formData.entityId]);
 
     const addLineItem = (isLabor: boolean) => {
-        const isOptional = !!formData.jobId;
+        const isOptional = false; // Always default to false
         const newItem: EstimateLineItem = { 
             id: crypto.randomUUID(), description: '', quantity: 1, 
             unitPrice: isLabor ? (entityLaborRate || 0) : 0, 
@@ -347,7 +348,7 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
         const packageId = selection?.id || selection;
         const pkg = servicePackages.find(p => p.id === packageId);
         if (!pkg) return;
-        const isOptional = !!formData.jobId;
+        const isOptional = false; // Always default to false
         const newItems: EstimateLineItem[] = [];
         const mainPackageItem: EstimateLineItem = {
             id: crypto.randomUUID(), 
@@ -405,14 +406,28 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
 
     const handleAddNewPartClick = (lineItemId: string, searchTerm: string) => {
         setTargetLineItemId(lineItemId);
-        setNewPartDescription(searchTerm);
-        setIsAddingPart(true); setActivePartSearch(null);
+        const newPart: Part = {
+            id: `part_${Date.now()}`,
+            partNumber: '',
+            description: searchTerm,
+            salePrice: 0,
+            costPrice: 0,
+            stockQuantity: 0,
+            isStockItem: true,
+            defaultSupplierId: '',
+            taxCodeId: standardTaxRateId || '',
+        };
+        setNewPart(newPart);
+        setIsAddingPart(true);
+        setActivePartSearch(null);
     };
 
     const handleSaveNewPart = (part: Part) => {
         if (onSavePart) onSavePart(part);
         if (targetLineItemId) handleSelectPart(targetLineItemId, part);
-        setIsAddingPart(false); setTargetLineItemId(null);
+        setIsAddingPart(false); 
+        setTargetLineItemId(null);
+        setNewPart(null);
     };
 
     const handleSave = () => {
@@ -702,7 +717,7 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                     isOpen={isAddingPart}
                     onClose={() => setIsAddingPart(false)}
                     onSave={handleSaveNewPart}
-                    part={{ description: newPartDescription }}
+                    part={newPart}
                     suppliers={suppliers}
                     taxRates={taxRates}
                 />

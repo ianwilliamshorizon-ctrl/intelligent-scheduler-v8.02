@@ -70,7 +70,7 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
     // If we're adding a new vehicle (not editing), show the AddNewVehicleForm
     if (!vehicle) {
         return (
-             <FormModal isOpen={isOpen} onClose={onClose} onSave={() => {}} title="Add New Vehicle & Customer" showSave={false} maxWidth="max-w-4xl">
+             <FormModal isOpen={isOpen} onClose={onClose} onSave={() => {}} title="Add New Vehicle & Customer" maxWidth="max-w-4xl">
                 <AddNewVehicleForm
                     initialRegistration={initialRegistration || ''}
                     onSave={(customer, vehicle) => {

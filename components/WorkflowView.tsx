@@ -142,6 +142,12 @@ const WorkflowView: React.FC<WorkflowViewProps> = ({ jobs, vehicles, customers, 
         }
 
         const relevantJobs = filteredJobs.filter(job => {
+            // A job is relevant if it's currently in progress OR its segments fall within the date range.
+            const isJobInProgress = job.status === 'In Progress' || (job.segments || []).some(s => s.status === 'Paused');
+            if (isJobInProgress) {
+                return true; // Always include in-progress jobs
+            }
+            
             const engineerFilterId = isEngineerView ? currentUser.engineerId : (selectedEngineerId !== 'all' ? selectedEngineerId : null);
             
             return (job.segments || []).some(s => {
