@@ -8,7 +8,11 @@ import {
 } from 'lucide-react';
 import * as T from '../types';
 
-const MainLayout: React.FC<{ children: React.ReactNode, onOpenManagement: () => void }> = ({ children, onOpenManagement }) => {
+const MainLayout: React.FC<{ 
+    children: React.ReactNode, 
+    onOpenManagement: () => void, 
+    onSearchResult: (type: string, id: string) => void 
+}> = ({ children, onOpenManagement, onSearchResult }) => {
     const { 
         currentView, setCurrentView, 
         currentUser, selectedEntityId, setSelectedEntityId, 
@@ -178,6 +182,7 @@ const MainLayout: React.FC<{ children: React.ReactNode, onOpenManagement: () => 
                                             key={`${result.type}-${result.id}-${idx}`}
                                             className="w-full flex items-center gap-3 px-4 py-3 hover:bg-indigo-50 border-b border-gray-50 last:border-none transition-colors text-left"
                                             onClick={() => {
+                                                onSearchResult(result.type.toLowerCase(), result.id);
                                                 setSearchQuery('');
                                             }}
                                         >

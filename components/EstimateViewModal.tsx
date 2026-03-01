@@ -213,57 +213,68 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
         }
     }, [preferredStartDate, isConfirmingApproval, jobs, resolvedEntity, laborHours, minBookingDate, preferredEndDate]);
 
-    // UPDATED TOTALS LOGIC FOR PRODUCTION 
     const { essentialItems, optionalItems, dynamicTotals } = useMemo(() => {
-        const allItems = estimate.lineItems || [];
-        const essentials: EstimateLineItem[] = [];
-        const optionals: EstimateLineItem[] = [];
+    const allItems = estimate.lineItems || [];
+    const essentials: EstimateLineItem[] = [];
+    const optionals: EstimateLineItem[] = [];
+
+    allItems.forEach(item => {
+        if (item.isOptional) optionals.push(item);
+        else essentials.push(item);
+    });
+
+    const breakdown: { [key: string]: { net: number; vat: number; rate: number; name: string; } } = {};
+    const taxRatesMap = new Map(taxRates.map(t => [t.id, t]));
+
+    (allItems || []).forEach(item => {
+        if (item.isOptional && !selectedOptionalItems.has(item.id)) return;
+        if (item.isPackageComponent) return;
+
+        const qty = Number(item.quantity) || 0;
+        const price = Number(item.unitPrice) || 0;
+        const itemNet = qty * price;
+
+        const effectiveTaxId = item.taxCodeId || standardTaxRateId;
         
-        allItems.forEach(item => {
-            if (item.isOptional) optionals.push(item);
-            else essentials.push(item);
-        });
-
-        const breakdown: { [key: string]: { net: number; vat: number; rate: number; name: string; } } = {};
-        let totalNet = 0;
-
-        allItems.forEach(item => {
-            // Skip unselected optional items
-            if (item.isOptional && !selectedOptionalItems.has(item.id)) return;
-
-            const itemNet = (item.quantity || 0) * (item.unitPrice || 0);
-            
-            // Only add to Total Net if it's NOT a package component to avoid double counting
-            if (!item.isPackageComponent) {
-                totalNet += itemNet;
+        if (!effectiveTaxId) {
+            const noTaxKey = 'no_tax';
+            if (!breakdown[noTaxKey]) {
+                breakdown[noTaxKey] = { net: 0, vat: 0, rate: 0, name: 'No Tax' };
             }
+            breakdown[noTaxKey].net += itemNet;
+            return;
+        }
 
-            // Map legacy tax code or missing tax code to standard 
-            const effectiveTaxCodeId = (item.taxCodeId === 'Taxstd' || !item.taxCodeId) 
-                ? standardTaxRateId 
-                : item.taxCodeId;
+        const taxRate = taxRatesMap.get(effectiveTaxId);
 
-            if (effectiveTaxCodeId) {
-                const taxRateInfo = taxRates.find(t => t.id === effectiveTaxCodeId);
-                if (taxRateInfo && taxRateInfo.rate > 0) {
-                    if (!breakdown[effectiveTaxCodeId]) {
-                        breakdown[effectiveTaxCodeId] = { net: 0, vat: 0, rate: taxRateInfo.rate, name: taxRateInfo.name };
-                    }
-                    // Only add the sale price to the tax-based net if it's the package header or a standalone item
-                    if (!item.isPackageComponent) {
-                        breakdown[effectiveTaxCodeId].net += itemNet;
-                        breakdown[effectiveTaxCodeId].vat += itemNet * (taxRateInfo.rate / 100);
-                    }
-                }
+        if (!taxRate) {
+            const noTaxKey = 'no_tax';
+            if (!breakdown[noTaxKey]) {
+                breakdown[noTaxKey] = { net: 0, vat: 0, rate: 0, name: 'No Tax' };
             }
-        });
+            breakdown[noTaxKey].net += itemNet;
+            return;
+        }
 
-        const finalVatBreakdown = Object.values(breakdown);
-        const totalVat = finalVatBreakdown.reduce((sum, b) => sum + b.vat, 0);
-        const totals = { totalNet, grandTotal: totalNet + totalVat, vatBreakdown: finalVatBreakdown };
-        
-        return { essentialItems: essentials, optionalItems: optionals, dynamicTotals: totals };
-    }, [estimate.lineItems, selectedOptionalItems, taxRates, standardTaxRateId]);
+        if (!breakdown[effectiveTaxId]) {
+            breakdown[effectiveTaxId] = { net: 0, vat: 0, rate: taxRate.rate, name: taxRate.name };
+        }
+
+        breakdown[effectiveTaxId].net += itemNet;
+        if (taxRate.rate > 0) {
+            breakdown[effectiveTaxId].vat += itemNet * (taxRate.rate / 100);
+        }
+    });
+
+    const finalVatBreakdown = Object.values(breakdown);
+    const totalNet = finalVatBreakdown.reduce((sum, b) => sum + b.net, 0);
+    const totalVat = finalVatBreakdown.reduce((sum, b) => sum + b.vat, 0);
+    const grandTotal = totalNet + totalVat;
+
+    const totals = { totalNet, grandTotal, vatBreakdown: finalVatBreakdown.filter(b => b.net > 0 || b.vat > 0) };
+    return { essentialItems, optionalItems, dynamicTotals: totals };
+}, [estimate.lineItems, selectedOptionalItems, taxRates, standardTaxRateId]);
+
 
     const handleToggleOptional = (itemId: string) => {
         if (!isInteractive && !isApproving) return;
@@ -316,7 +327,7 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                 />
             </React.StrictMode>
         );
-        
+
         await new Promise(resolve => setTimeout(resolve, 800));
     
         try {
@@ -432,14 +443,14 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                                     <div>
                                         <h1 className="text-2xl font-extrabold text-gray-900">{resolvedEntity?.name || 'Brookspeed'}</h1>
                                         <p className="text-sm text-gray-600 mt-1">{resolvedEntity?.addressLine1}, {resolvedEntity?.postcode}</p>
-                                   </div>
+                                    </div>
                                     <div className="text-right">
                                         <h2 className="text-xl font-semibold text-gray-800">{isSupplementary ? 'Supplementary ' : ''}Estimate</h2>
                                         <p className="text-lg font-mono text-indigo-600">#{estimate.estimateNumber}</p>
                                         <p className="text-sm text-gray-500">{getDisplayDate(estimate.issueDate)}</p>
                                     </div>
                                 </div>
-    
+
                                 {estimate.media && estimate.media.length > 0 && (
                                     <div className="bg-white p-4 rounded-xl border-2 border-gray-100">
                                         <h3 className="text-lg font-bold text-gray-800 mb-4 pb-2 border-b border-gray-100 flex items-center gap-2">
@@ -452,7 +463,7 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                                                         <AsyncImage imageId={m.id} className="w-full h-full object-cover" />
                                                     </div>
                                                     {m.notes && <p className="text-xs text-gray-600 italic bg-gray-50 p-1 rounded">{m.notes}</p>}
-                                               </div>
+                                                </div>
                                             ))}
                                         </div>
                                     </div>
@@ -469,8 +480,8 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                                             ))}
                                             {essentialGroups.standalone.length > 0 && (
                                                 <div className="border rounded-lg overflow-hidden bg-white shadow-sm">
-                                                  {essentialGroups.standalone.map(item => (
-                                                    <SelectableEstimateItemRow key={item.id} item={item} isSelected={false} onToggle={() => {}} canInteract={false} canViewPricing={canViewPricing} isOptional={false}/>
+                                                    {essentialGroups.standalone.map(item => (
+                                                        <SelectableEstimateItemRow key={item.id} item={item} isSelected={false} onToggle={() => {}} canInteract={false} canViewPricing={canViewPricing} isOptional={false}/>
                                                     ))}
                                                 </div>
                                             )}
@@ -498,11 +509,11 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                                                 </div>
                                             )}
                                         </div>
-                                     </div>
+                                    </div>
                                 )}
 
                                 <div className="flex justify-end pt-6 border-t-2 border-gray-100">
-                                      <div className="w-72 bg-gray-50 p-4 rounded-lg">
+                                    <div className="w-72 bg-gray-50 p-4 rounded-lg">
                                         <div className="flex justify-between text-sm mb-2"><span className="text-gray-600">Subtotal</span><span className="font-semibold">{formatCurrency(dynamicTotals.totalNet)}</span></div>
                                         {dynamicTotals.vatBreakdown.map((b: any) => (<div key={b.name} className="flex justify-between text-sm text-gray-500 mb-1"><span>VAT @ {b.rate}%</span><span>{formatCurrency(b.vat)}</span></div>))}
                                         <div className="flex justify-between font-bold text-xl mt-3 pt-3 border-t border-gray-200 text-indigo-900"><span>Total</span><span>{formatCurrency(dynamicTotals.grandTotal)}</span></div>
@@ -539,11 +550,11 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                                         </div>
                                         {capacityWarning && (
                                             <div className="p-3 bg-orange-100 text-orange-800 text-sm rounded-lg border border-orange-200 mb-4 animate-fade-in">
-                                                 <p className="font-semibold flex items-center gap-2"><AlertCircle size={16}/> High Demand Date</p>
+                                                <p className="font-semibold flex items-center gap-2"><AlertCircle size={16}/> High Demand Date</p>
                                                 <p className="mt-1">{capacityWarning}</p>
                                             </div>
                                         )}
-                                   </>
+                                    </>
                                 )}
                                 
                                 <div className="mb-6">
@@ -570,7 +581,7 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                                     )}
                                     <div className="flex bg-gray-100 rounded-lg p-1">
                                         <button onClick={() => handlePrint(false)} className="flex items-center py-1.5 px-3 rounded text-sm font-semibold hover:bg-white hover:shadow transition">
-                                             <Printer size={16} className="mr-2"/> Customer Print
+                                            <Printer size={16} className="mr-2"/> Customer Print
                                         </button>
                                         <div className="w-px bg-gray-300 my-1 mx-1"></div>
                                         <button onClick={() => handlePrint(true)} className="flex items-center py-1.5 px-3 rounded text-sm font-semibold hover:bg-white hover:shadow transition">Internal Print</button>
@@ -579,6 +590,7 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                                         {isGeneratingPdf ? <Loader2 size={16} className="mr-2 animate-spin"/> : <Download size={16} className="mr-2" />} PDF
                                     </button>
                                 </div>
+                    
                                 <div className="flex gap-2">
                                     {onCreateInquiry && <button onClick={() => onCreateInquiry(estimate)} className="flex items-center py-2 px-4 bg-purple-100 text-purple-700 font-semibold rounded-lg hover:bg-purple-200 transition"><MessageSquare size={16} className="mr-2"/> Raise Inquiry</button>}
                                     <button onClick={() => { onScheduleEstimate?.(estimate); onClose(); }} className="flex items-center py-2 px-4 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 shadow-md transition">

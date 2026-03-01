@@ -1,15 +1,19 @@
 import React, { useState, useMemo, useEffect, memo, useDeferredValue, useCallback, useTransition } from 'react';
 import { VList } from 'virtua';
 import { useData } from '../../../core/state/DataContext';
-import { Customer } from '../../../types';
+import { Customer, Vehicle, Job, Estimate, Invoice } from '../../../types';
 import { PlusCircle, Trash2, Upload, RefreshCw, Search, Mail, Phone, MapPin } from 'lucide-react';
-import { CheckboxCell } from '../shared/CheckboxCell';
 import { useManagementTable } from '../hooks/useManagementTable';
 import { generateCustomerId, generateCustomerSearchField } from '../../../core/utils/customerUtils';
 import { parseCsv } from '../../../utils/csvUtils';
 import CustomerFormModal from '../../CustomerFormModal';
 import { db } from '../../../core/db';
 import { writeBatch, doc, collection } from 'firebase/firestore';
+
+interface ManagementCustomersTabProps {
+    searchTerm: string;
+    onShowStatus: (text: string, type: 'info' | 'success' | 'error') => void;
+}
 
 /**
  * PRODUCTION ROW COMPONENT
@@ -109,7 +113,7 @@ const HighlightText = memo(({ text, highlight }: { text: string; highlight: stri
     );
 });
 
-export const ManagementCustomersTab = ({ searchTerm, onShowStatus }: { searchTerm: string, onShowStatus: (text: string, type: 'info' | 'success' | 'error') => void }) => {
+export const ManagementCustomersTab: React.FC<ManagementCustomersTabProps> = ({ searchTerm, onShowStatus }) => {
     const { customers, vehicles, jobs, estimates, invoices } = useData();
     const { selectedIds, updateItem, deleteItem, toggleSelection, toggleSelectAll, bulkDelete } = useManagementTable(customers, 'brooks_customers');
     
@@ -117,6 +121,11 @@ export const ManagementCustomersTab = ({ searchTerm, onShowStatus }: { searchTer
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isImporting, setIsImporting] = useState(false);
     const [isPending, startTransition] = useTransition();
+
+    const selectedCustomer = useMemo(() => 
+        selectedCustomerId ? customers.find(c => c.id === selectedCustomerId) : null,
+        [customers, selectedCustomerId]
+    );
 
     // 1. Use Deferred Value to prioritize input responsiveness
     const deferredSearch = useDeferredValue(searchTerm);
@@ -284,8 +293,8 @@ export const ManagementCustomersTab = ({ searchTerm, onShowStatus }: { searchTer
                         updateItem(updatedWithSearch); 
                         setIsModalOpen(false); 
                     }} 
-                    customerId={selectedCustomerId} 
-                    customers={customers}
+                    customer={selectedCustomer} 
+                    existingCustomers={customers}
                     vehicles={vehicles}
                     jobs={jobs}
                     estimates={estimates}

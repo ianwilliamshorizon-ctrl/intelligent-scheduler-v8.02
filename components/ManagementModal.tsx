@@ -8,7 +8,7 @@ import {
 import { 
     X, Settings, Database, User as UserIcon, Car, Wrench, Package, Briefcase, 
     ShieldCheck, Users, Truck, AlertTriangle, RefreshCw, CarFront, List, Info, CheckCircle, Server, Save,
-    ArrowUpCircle, BatteryCharging, ClipboardCheck, Search
+    ArrowUpCircle, BatteryCharging, ClipboardCheck, Search, Banknote, Tag
 } from 'lucide-react';
 
 // Extracted Tab Views
@@ -16,8 +16,8 @@ import {
     ManagementCustomersTab, ManagementVehiclesTab, ManagementDiagramsTab,
     ManagementStaffTab, ManagementRolesTab, ManagementEntitiesTab,
     ManagementSuppliersTab, ManagementPartsTab, ManagementPackagesTab,
-    ManagementNominalCodesTab, ManagementLiftsTab, ManagementBatteryChargersTab,
-    ManagementInspectionTemplatesTab
+    ManagementNominalCodesTab, ManagementTaxCodesTab, ManagementLiftsTab, ManagementBatteryChargersTab,
+    ManagementInspectionTemplatesTab,ManagementDiscountCodesTab
 } from './management/ManagementViews';
 import { ManagementBackupTab } from './management/tabs/ManagementBackupTab';
 
@@ -94,6 +94,7 @@ const ManagementModal: React.FC<ManagementModalProps> = ({ isOpen, onClose, init
                 setItem('brooks_roles', dataContext.roles),
                 setItem('brooks_inspectionDiagrams', dataContext.inspectionDiagrams),
                 setItem('brooks_inspectionTemplates', dataContext.inspectionTemplates),
+                setItem('brooks_discountCodes', dataContext.discountCodes),
                 setItem('brooks_users', users),
             ]);
             showStatus('All data successfully forced to Firestore.', 'success');
@@ -123,20 +124,22 @@ const ManagementModal: React.FC<ManagementModalProps> = ({ isOpen, onClose, init
     const sharedTabProps = { searchTerm, onShowStatus: showStatus };
 
     const tabs = [
-        { id: 'customers', label: 'Customers', icon: UserIcon, render: () => <ManagementCustomersTab {...sharedTabProps} /> },
-        { id: 'vehicles', label: 'Vehicles', icon: Car, render: () => <ManagementVehiclesTab {...sharedTabProps} /> },
-        { id: 'diagrams', label: 'Vehicle Diagrams', icon: CarFront, render: () => <ManagementDiagramsTab {...sharedTabProps} /> },
+        { id: 'customers', label: 'Customers', icon: UserIcon, render: () => <ManagementCustomersTab searchTerm={searchTerm} onShowStatus={showStatus} /> },
+        { id: 'vehicles', label: 'Vehicles', icon: Car, render: () => <ManagementVehiclesTab searchTerm={searchTerm} onShowStatus={showStatus} /> },
+        { id: 'diagrams', label: 'Vehicle Diagrams', icon: CarFront, render: () => <ManagementDiagramsTab searchTerm={searchTerm} onShowStatus={showStatus} /> },
         // FIXED ID: Changed from 'templates' to 'inspectionTemplates' to match context key
-        { id: 'inspectionTemplates', label: 'Inspection Templates', icon: ClipboardCheck, render: () => <ManagementInspectionTemplatesTab {...sharedTabProps} /> },
-        { id: 'staff', label: 'Staff (Users)', icon: Users, render: () => <ManagementStaffTab {...sharedTabProps} /> },
-        { id: 'roles', label: 'Roles', icon: ShieldCheck, render: () => <ManagementRolesTab {...sharedTabProps} /> },
-        { id: 'entities', label: 'Business Entities', icon: Briefcase, render: () => <ManagementEntitiesTab {...sharedTabProps} /> },
-        { id: 'lifts', label: 'Lifts & Bays', icon: ArrowUpCircle, render: () => <ManagementLiftsTab {...sharedTabProps} /> },
-        { id: 'batteryChargers', label: 'Battery Chargers', icon: BatteryCharging, render: () => <ManagementBatteryChargersTab {...sharedTabProps} /> },
-        { id: 'suppliers', label: 'Suppliers', icon: Truck, render: () => <ManagementSuppliersTab {...sharedTabProps} /> },
-        { id: 'parts', label: 'Parts', icon: Settings, render: () => <ManagementPartsTab {...sharedTabProps} /> },
-        { id: 'packages', label: 'Service Packages', icon: Package, render: () => <ManagementPackagesTab {...sharedTabProps} /> },
-        { id: 'nominalCodes', label: 'Nominal Codes', icon: List, render: () => <ManagementNominalCodesTab {...sharedTabProps} /> },
+        { id: 'inspectionTemplates', label: 'Inspection Templates', icon: ClipboardCheck, render: () => <ManagementInspectionTemplatesTab searchTerm={searchTerm} onShowStatus={showStatus} /> },
+        { id: 'staff', label: 'Staff (Users)', icon: Users, render: () => <ManagementStaffTab searchTerm={searchTerm} onShowStatus={showStatus} /> },
+        { id: 'roles', label: 'Roles', icon: ShieldCheck, render: () => <ManagementRolesTab searchTerm={searchTerm} onShowStatus={showStatus} /> },
+        { id: 'entities', label: 'Business Entities', icon: Briefcase, render: () => <ManagementEntitiesTab searchTerm={searchTerm} onShowStatus={showStatus} /> },
+        { id: 'lifts', label: 'Lifts & Bays', icon: ArrowUpCircle, render: () => <ManagementLiftsTab searchTerm={searchTerm} onShowStatus={showStatus} /> },
+        { id: 'batteryChargers', label: 'Battery Chargers', icon: BatteryCharging, render: () => <ManagementBatteryChargersTab searchTerm={searchTerm} onShowStatus={showStatus} /> },
+        { id: 'suppliers', label: 'Suppliers', icon: Truck, render: () => <ManagementSuppliersTab searchTerm={searchTerm} onShowStatus={showStatus} /> },
+        { id: 'parts', label: 'Parts', icon: Settings, render: () => <ManagementPartsTab searchTerm={searchTerm} onShowStatus={showStatus} /> },
+        { id: 'packages', label: 'Service Packages', icon: Package, render: () => <ManagementPackagesTab searchTerm={searchTerm} onShowStatus={showStatus} /> },
+        { id: 'nominalCodes', label: 'Nominal Codes', icon: List, render: () => <ManagementNominalCodesTab searchTerm={searchTerm} onShowStatus={showStatus} /> },
+        { id: 'taxCodes', label: 'Tax Codes', icon: Banknote, render: () => <ManagementTaxCodesTab searchTerm={searchTerm} onShowStatus={showStatus} /> },
+        { id: 'discountCodes', label: 'Discount Codes', icon: Tag, render: () => <ManagementDiscountCodesTab /> },
         { id: 'backup', label: 'Backup & Restore', icon: Database, render: () => <ManagementBackupTab backupSchedule={backupSchedule} setBackupSchedule={setBackupSchedule} onManualBackup={onManualBackup} onShowStatus={showStatus} /> },
     ];
 

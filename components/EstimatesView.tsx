@@ -75,24 +75,24 @@ const EstimatesView = ({ onOpenEstimateModal, onViewEstimate, onSmartCreateClick
         }).sort((a, b) => b.issueDate.localeCompare(a.issueDate) || b.estimateNumber.localeCompare(a.estimateNumber));
     }, [estimates, filter, statusFilter, customerMap, vehicleMap, selectedEntityId, businessEntities]);
 
-    // UPDATED TOTAL CALCULATION LOGIC
     const calculateTotal = (lineItems: EstimateLineItem[]) => {
-        return (lineItems || []).reduce((sum, item) => {
-            // Only add to Total Net if it's NOT a package component to avoid double counting the sale price
-            if (item.isPackageComponent) return sum;
-
+        let totalNet = 0;
+        let totalVat = 0;
+        (lineItems || []).forEach(item => {
+            if (item.isOptional) return;
             const itemNet = (item.quantity || 0) * (item.unitPrice || 0);
-            
-            // Handle legacy tax codes
-            const effectiveTaxCodeId = (item.taxCodeId === 'Taxstd' || !item.taxCodeId) 
-                ? standardTaxRateId 
+            // Still only include non-component items in the displayed NET total
+            if (!item.isPackageComponent) {
+                totalNet += itemNet;
+            }
+            // But calculate VAT on ALL items, as £0-price items will add £0 VAT anyway
+            const effectiveTaxCodeId = (item.taxCodeId === 'Taxstd' || !item.taxCodeId)
+                ? standardTaxRateId
                 : item.taxCodeId;
-
             const rate = effectiveTaxCodeId ? (taxRatesMap.get(effectiveTaxCodeId) || 0) / 100 : 0;
-            const itemVat = itemNet * rate;
-            
-            return sum + itemNet + itemVat;
-        }, 0);
+            totalVat += itemNet * rate;
+        });
+        return totalNet + totalVat;
     };
     
     const handleStatusToggle = (status: Estimate['status']) => {

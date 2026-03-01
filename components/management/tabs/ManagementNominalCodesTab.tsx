@@ -7,7 +7,12 @@ import NominalCodeFormModal from '../../NominalCodeFormModal';
 import NominalCodeRuleFormModal from '../../NominalCodeRuleFormModal';
 import { useManagementTable } from '../hooks/useManagementTable';
 
-export const ManagementNominalCodesTab = () => {
+interface ManagementNominalCodesTabProps {
+    searchTerm: string;
+    onShowStatus: (text: string, type: 'info' | 'success' | 'error') => void;
+}
+
+export const ManagementNominalCodesTab: React.FC<ManagementNominalCodesTabProps> = ({ searchTerm, onShowStatus }) => {
     const { nominalCodes, nominalCodeRules, businessEntities } = useData();
     const codesTable = useManagementTable(nominalCodes, 'brooks_nominalCodes');
     const rulesTable = useManagementTable(nominalCodeRules, 'brooks_nominalCodeRules');
@@ -17,6 +22,24 @@ export const ManagementNominalCodesTab = () => {
 
     const [selectedRule, setSelectedRule] = useState<NominalCodeRule | null>(null);
     const [isRuleModalOpen, setIsRuleModalOpen] = useState(false);
+
+    const filteredCodes = nominalCodes.filter(nc => 
+        nc.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+        nc.code.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    const filteredRules = nominalCodeRules.filter(rule => {
+        const code = nominalCodes.find(c => c.id === rule.nominalCodeId);
+        const entity = businessEntities.find(e => e.id === rule.entityId);
+        const searchText = searchTerm.toLowerCase();
+        return (
+            rule.itemType.toLowerCase().includes(searchText) ||
+            (entity?.name || '').toLowerCase().includes(searchText) ||
+            (rule.keywords || '').toLowerCase().includes(searchText) ||
+            (code?.name || '').toLowerCase().includes(searchText) ||
+            (code?.code || '').toLowerCase().includes(searchText)
+        );
+    });
 
     return (
         <div className="space-y-6">
@@ -31,7 +54,7 @@ export const ManagementNominalCodesTab = () => {
                     <table className="w-full text-sm text-left">
                         <thead className="bg-gray-100 sticky top-0"><tr><th className="p-2">Code</th><th className="p-2">Name</th><th className="p-2">Secondary Code</th><th className="p-2">Actions</th></tr></thead>
                         <tbody>
-                            {nominalCodes.map(nc => (
+                            {filteredCodes.map(nc => (
                                 <tr key={nc.id} className="border-b hover:bg-gray-50">
                                     <td className="p-2 font-mono font-bold">{nc.code}</td>
                                     <td className="p-2">{nc.name}</td>
@@ -68,7 +91,7 @@ export const ManagementNominalCodesTab = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {[...nominalCodeRules].sort((a, b) => b.priority - a.priority).map(rule => {
+                            {filteredRules.sort((a, b) => b.priority - a.priority).map(rule => {
                                 const code = nominalCodes.find(c => c.id === rule.nominalCodeId);
                                 const entity = businessEntities.find(e => e.id === rule.entityId);
                                 return (
@@ -95,7 +118,7 @@ export const ManagementNominalCodesTab = () => {
                 <NominalCodeFormModal 
                     isOpen={isCodeModalOpen} 
                     onClose={() => setIsCodeModalOpen(false)} 
-                    onSave={(c) => { codesTable.updateItem(c); setIsCodeModalOpen(false); }} 
+                    onSave={(c) => { codesTable.updateItem(c); setIsCodeModalOpen(false); onShowStatus('Nominal code saved', 'success'); }} 
                     nominalCode={selectedCode} 
                 />
             )}
@@ -104,7 +127,7 @@ export const ManagementNominalCodesTab = () => {
                 <NominalCodeRuleFormModal 
                     isOpen={isRuleModalOpen} 
                     onClose={() => setIsRuleModalOpen(false)} 
-                    onSave={(r) => { rulesTable.updateItem(r); setIsRuleModalOpen(false); }} 
+                    onSave={(r) => { rulesTable.updateItem(r); setIsRuleModalOpen(false); onShowStatus('Assignment rule saved', 'success');}} 
                     rule={selectedRule} 
                     nominalCodes={nominalCodes} 
                     businessEntities={businessEntities} 

@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Invoice, Customer, Vehicle, BusinessEntity, TaxRate, ServicePackage, Part, EstimateLineItem as InvoiceLineItem, Job } from '../types';
-import { Save, PlusCircle, Gauge, Info, FileText, ChevronUp, ChevronDown, Trash2, X, TrendingUp, Plus } from 'lucide-react';
+import { Invoice, Customer, Vehicle, BusinessEntity, TaxRate, ServicePackage, Part, EstimateLineItem as InvoiceLineItem, Job, DiscountCode } from '../types';
+import { Save, PlusCircle, Gauge, Info, FileText, ChevronUp, ChevronDown, Trash2, X, TrendingUp, Plus, Tag } from 'lucide-react';
 import { formatDate, addDays } from '../core/utils/dateUtils';
 import { generateInvoiceId } from '../core/utils/numberGenerators';
 import { formatCurrency } from '../utils/formatUtils';
@@ -106,18 +105,24 @@ interface InvoiceFormModalProps {
     servicePackages: ServicePackage[];
     parts: Part[];
     invoices: Invoice[];
+    discountCodes: DiscountCode[];
 }
 
 const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({ 
     isOpen, onClose, onSave, invoice, job, customers, onSaveCustomer, 
-    vehicles, onSaveVehicle, businessEntities, taxRates, servicePackages, parts, invoices 
+    vehicles, onSaveVehicle, businessEntities, taxRates, servicePackages, parts, invoices, discountCodes 
 }) => {
     const { estimates } = useData();
     const [formData, setFormData] = useState<Partial<Invoice>>({});
 
     const [isAddingCustomer, setIsAddingCustomer] = useState(false);
     const [isAddingVehicle, setIsAddingVehicle] = useState(false);
-    
+
+    // Discount State [cite: 639]
+    const [discountCodeInput, setDiscountCodeInput] = useState('');
+    const [appliedDiscount, setAppliedDiscount] = useState<DiscountCode | null>(null);
+    const [discountError, setDiscountError] = useState<string | null>(null);
+
     const taxRatesMap = useMemo(() => new Map((taxRates || []).map(t => [t.id, t])), [taxRates]);
     const standardTaxRateId = useMemo(() => (taxRates || []).find(t => t.code === 'T1')?.id, [taxRates]);
 
@@ -169,9 +174,13 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
                 };
             }
             setFormData(initialData);
+            // Reset discount states when opening [cite: 644]
+            setAppliedDiscount(null);
+            setDiscountCodeInput('');
+            setDiscountError(null);
         }
     }, [invoice, job, isOpen, businessEntities, mainEstimate]);
-    
+
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => 
         setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
 
@@ -186,13 +195,10 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
             ) 
         })); 
     }, []);
-    
+
     const entityLaborRate = useMemo(() => {
-        // 1. Array safety: Ensure we have a list to search in
         const safeEntities = Array.isArray(businessEntities) ? businessEntities : [];
-        // 2. Find the entity matched to this invoice
         const entity = safeEntities.find(e => e.id === formData.entityId);
-        // 3. Default to 0: Prevents crashes in print/formatting if data is missing
         return entity?.laborRate ?? 0;
     }, [businessEntities, formData.entityId]);
 
@@ -201,7 +207,7 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
         const entity = safeEntities.find(e => e.id === formData.entityId);
         return entity?.laborCostRate ?? 0;
     }, [businessEntities, formData.entityId]);
-    
+
     const addLineItem = (isLabor: boolean) => {
         const newItem: InvoiceLineItem = { 
             id: crypto.randomUUID(), 
@@ -218,7 +224,6 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
     const addPackage = (packageId: string) => {
         const pkg = (servicePackages || []).find(p => p.id === packageId);
         if (!pkg) return;
-    
         const newItems: InvoiceLineItem[] = [];
         const totalCost = (pkg.costItems || []).reduce((sum, item) => sum + ((item.unitCost || 0) * item.quantity), 0);
         const mainPackageItem: InvoiceLineItem = {
@@ -234,7 +239,6 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
             isPackageComponent: false,
         };
         newItems.push(mainPackageItem);
-    
         if (pkg.costItems) {
             pkg.costItems.forEach(costItem => {
                 const detailItem: InvoiceLineItem = { 
@@ -248,26 +252,55 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
                 newItems.push(detailItem);
             });
         }
-    
         setFormData(prev => ({ ...prev, lineItems: [...(prev.lineItems || []), ...newItems] }));
     };
 
     const removeLineItem = useCallback((id: string) => {
         setFormData(prev => {
             const itemToRemove = (prev.lineItems || []).find(i => i.id === id);
-    
             if (itemToRemove && itemToRemove.servicePackageId && !itemToRemove.isPackageComponent) {
                 const packageId = itemToRemove.servicePackageId;
                 return { ...prev, lineItems: (prev.lineItems || []).filter(item => item.servicePackageId !== packageId) };
             }
-    
             return { ...prev, lineItems: (prev.lineItems || []).filter(item => item.id !== id) };
         });
     }, []);
-    
-    const { totalNet, grandTotal, vatBreakdown, totalProfit, profitMargin } = useMemo(() => {
+
+    // Discount Calculation Logic [cite: 671, 674]
+    const handleApplyDiscount = () => {
+        const code = (discountCodes || []).find(d => d.code === discountCodeInput && d.isActive);
+        if (!code) {
+            setDiscountError('Invalid or inactive discount code.');
+            setAppliedDiscount(null);
+            return;
+        }
+        setAppliedDiscount(code);
+        setDiscountError(null);
+    };
+
+    const calculateDiscountAmount = useCallback(() => {
+        if (!appliedDiscount || !formData.lineItems) return 0;
+        let eligibleTotal = 0;
+        formData.lineItems.forEach(item => {
+            if (item.isPackageComponent) return;
+            let isEligible = false;
+            if (appliedDiscount.applicability === 'All') isEligible = true;
+            else if (appliedDiscount.applicability === 'Labor' && item.isLabor) isEligible = true;
+            else if (appliedDiscount.applicability === 'Parts' && !item.isLabor && !item.servicePackageId) isEligible = true;
+            else if (appliedDiscount.applicability === 'Packages' && item.servicePackageId) isEligible = true;
+
+            if (isEligible) {
+                eligibleTotal += (item.quantity || 0) * (item.unitPrice || 0);
+            }
+        });
+        if (appliedDiscount.type === 'Fixed') return Math.min(appliedDiscount.value, eligibleTotal);
+        return eligibleTotal * (appliedDiscount.value / 100);
+    }, [appliedDiscount, formData.lineItems]);
+
+    const { totalNet, grandTotal, vatBreakdown, totalProfit, profitMargin, discountAmount } = useMemo(() => {
         const breakdown: { [key: string]: { net: number; vat: number; rate: number; name: string; } } = {};
-        if (!formData || !formData.lineItems) return { totalNet: 0, grandTotal: 0, vatBreakdown: [], totalProfit: 0, profitMargin: 0 };
+        if (!formData || !formData.lineItems) return { totalNet: 0, grandTotal: 0, vatBreakdown: [], totalProfit: 0, profitMargin: 0, discountAmount: 0 };
+        
         let totalCost = 0;
         let currentTotalNet = 0;
         (formData.lineItems || []).forEach(item => {
@@ -281,23 +314,55 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
             currentTotalNet += itemTotal;
             totalCost += (Number(item.quantity) || 0) * (Number(item.unitCost) || 0);
         });
+
+        // Apply Discount to Totals [cite: 687, 690]
+        const discountVal = calculateDiscountAmount();
+        const netAfterDiscount = currentTotalNet - discountVal;
+
+        // Simplified VAT adjustment for discount
+        if (discountVal > 0 && standardTaxRateId && breakdown[standardTaxRateId]) {
+             breakdown[standardTaxRateId].net -= discountVal;
+        }
+
         Object.values(breakdown).forEach(summary => { summary.vat = summary.net * (summary.rate / 100); });
         const finalVatBreakdown = Object.values(breakdown).filter(b => b.net > 0 && b.rate > 0);
         const totalVat = finalVatBreakdown.reduce((sum, b) => sum + b.vat, 0);
-        const profit = currentTotalNet - totalCost;
-        const margin = currentTotalNet > 0 ? (profit / currentTotalNet) * 100 : 0;
-        return { totalNet: currentTotalNet, grandTotal: currentTotalNet + totalVat, vatBreakdown: finalVatBreakdown, totalProfit: profit, profitMargin: margin };
-    }, [formData.lineItems, taxRatesMap, standardTaxRateId]);
+        const profit = netAfterDiscount - totalCost;
+        const margin = netAfterDiscount > 0 ? (profit / netAfterDiscount) * 100 : 0;
+
+        return { 
+            totalNet: currentTotalNet, 
+            grandTotal: netAfterDiscount + totalVat, 
+            vatBreakdown: finalVatBreakdown, 
+            totalProfit: profit, 
+            profitMargin: margin,
+            discountAmount: discountVal 
+        };
+    }, [formData.lineItems, taxRatesMap, standardTaxRateId, calculateDiscountAmount]);
 
     const handleSave = () => {
         if (!formData.customerId || !formData.entityId) return alert('Customer and Business Entity are required.');
-        
         const entity = (businessEntities || []).find(e => e.id === formData.entityId);
         const entityShortCode = entity?.shortCode || 'UNK';
         
+        // Merge discount as a negative line item on save [cite: 665]
+        let finalLineItems = [...(formData.lineItems || [])];
+        if (appliedDiscount && discountAmount > 0) {
+            finalLineItems.push({
+                id: crypto.randomUUID(),
+                description: `Discount: ${appliedDiscount.code} - ${appliedDiscount.description}`,
+                quantity: 1,
+                unitPrice: -discountAmount,
+                unitCost: 0,
+                isLabor: false,
+                taxCodeId: standardTaxRateId
+            } as InvoiceLineItem);
+        }
+
         onSave({ 
             id: formData.id || generateInvoiceId(invoices || [], entityShortCode), 
             ...formData,
+            lineItems: finalLineItems,
             grandTotal,
         } as Invoice);
         onClose();
@@ -340,17 +405,17 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
         });
         return { packages, customLabor, customParts };
     }, [formData.lineItems]);
-    
+
     const handleCustomerSelect = (selection: any) => {
         const customerId = selection?.value || selection?.id;
         if (!customerId) return;
         setFormData(prev => {
             const customerVehicles = (vehicles || []).filter(v => v.customerId === customerId);
             const isCurrentVehicleOwned = customerVehicles.some(v => v.id === prev.vehicleId);
-            return {
-                ...prev,
-                customerId: customerId,
-                vehicleId: isCurrentVehicleOwned ? prev.vehicleId : (customerVehicles.length === 1 ? customerVehicles[0].id : '')
+            return { 
+                ...prev, 
+                customerId: customerId, 
+                vehicleId: isCurrentVehicleOwned ? prev.vehicleId : (customerVehicles.length === 1 ? customerVehicles[0].id : '') 
             };
         });
     };
@@ -361,98 +426,51 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
             onClose={onClose} 
             onSave={handleSave} 
             title={invoice?.id ? `Edit Invoice #${invoice.id}` : 'Create New Invoice'} 
-            maxWidth="max-w-screen-2xl"
+            maxWidth="max-w-screen-2xl" 
         >
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-1 space-y-4">
-                     <Section title="Invoice Details" icon={Info}>
+                    <Section title="Invoice Details" icon={Info}>
                         <div className="space-y-4 text-sm">
                             <div>
                                 <label className="font-semibold text-gray-700">Customer</label>
                                 <div className="flex items-center gap-2 mt-1">
-                                    <SearchableSelect
-                                        options={customerOptions}
-                                        initialValue={formData.customerId}
-                                        onSelect={handleCustomerSelect}
-                                        placeholder="Search customers..."
-                                    />
-                                    <button 
-                                        type="button" 
-                                        onClick={() => setIsAddingCustomer(true)} 
-                                        className="p-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 flex-shrink-0"
-                                    >
+                                    <SearchableSelect options={customerOptions} initialValue={formData.customerId} onSelect={handleCustomerSelect} placeholder="Search customers..." />
+                                    <button type="button" onClick={() => setIsAddingCustomer(true)} className="p-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 flex-shrink-0">
                                         <Plus size={20} />
                                     </button>
                                 </div>
                             </div>
-
                             <div>
                                 <label className="font-semibold text-gray-700">Vehicle (Optional)</label>
                                 <div className="flex items-center gap-2 mt-1">
-                                    <SearchableSelect
-                                        options={vehicleOptions}
-                                        initialValue={formData.vehicleId}
-                                        onSelect={(selection) => setFormData(prev => ({ ...prev, vehicleId: selection?.value || '' }))}
-                                        placeholder="Search vehicles..."
-                                        disabled={!formData.customerId}
-                                    />
-                                    <button 
-                                        type="button" 
-                                        onClick={() => setIsAddingVehicle(true)} 
-                                        disabled={!formData.customerId}
-                                        className="p-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
-                                    >
+                                    <SearchableSelect options={vehicleOptions} initialValue={formData.vehicleId} onSelect={(selection) => setFormData(prev => ({ ...prev, vehicleId: selection?.value || '' }))} placeholder="Search vehicles..." disabled={!formData.customerId} />
+                                    <button type="button" onClick={() => setIsAddingVehicle(true)} disabled={!formData.customerId} className="p-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0">
                                         <Plus size={20} />
                                     </button>
                                 </div>
                             </div>
-
                             <hr className="my-2" />
-
                             <div>
                                 <label className="font-semibold text-gray-700">Business Entity</label>
-                                <select 
-                                    name="entityId" 
-                                    value={formData.entityId || ''}
-                                    onChange={handleChange} 
-                                    className="w-full p-2 border rounded bg-white mt-1"
-                                >
+                                <select name="entityId" value={formData.entityId || ''} onChange={handleChange} className="w-full p-2 border rounded bg-white mt-1">
                                     <option value="">-- Select Entity --</option>
                                     {(businessEntities || []).map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
                                 </select>
                             </div>
-
                             <div className="grid grid-cols-2 gap-3">
                                 <div>
                                     <label className="font-semibold text-gray-700">Issue Date</label>
-                                    <input 
-                                        name="issueDate" 
-                                        type="date"
-                                        value={formData.issueDate || ''} 
-                                        onChange={handleChange}
-                                        className="w-full p-2 border rounded mt-1" 
-                                    />
+                                    <input name="issueDate" type="date" value={formData.issueDate || ''} onChange={handleChange} className="w-full p-2 border rounded mt-1" />
                                 </div>
                                 <div>
                                     <label className="font-semibold text-gray-700">Due Date</label>
-                                    <input 
-                                        name="dueDate" 
-                                        type="date"
-                                        value={formData.dueDate || ''} 
-                                        onChange={handleChange} 
-                                        className="w-full p-2 border rounded mt-1"
-                                    />
+                                    <input name="dueDate" type="date" value={formData.dueDate || ''} onChange={handleChange} className="w-full p-2 border rounded mt-1" />
                                 </div>
                             </div>
-
                             <div>
                                 <label className="font-semibold text-gray-700">Status</label>
-                                <select 
-                                    name="status" 
-                                    value={formData.status || 'Draft'}
-                                    onChange={handleChange}
-                                    className="w-full p-2 border rounded bg-white mt-1"
-                                >
+                                <select name="status" value={formData.status || 'Draft'} onChange={handleChange} className="w-full p-2 border rounded bg-white mt-1">
                                     <option>Draft</option>
                                     <option>Sent</option>
                                     <option>Part Paid</option>
@@ -460,24 +478,47 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
                                     <option>Overdue</option>
                                 </select>
                             </div>
-
+                            {/* Discount Entry Section [cite: 711] */}
+                            <div className="pt-2 border-t">
+                                <label className="font-semibold text-gray-700 flex items-center gap-2"><Tag size={16}/> Discount Code</label>
+                                <div className="flex gap-2 mt-1">
+                                    <input 
+                                        type="text" 
+                                        value={discountCodeInput} 
+                                        onChange={(e) => setDiscountCodeInput(e.target.value.toUpperCase())} 
+                                        placeholder="Enter code" 
+                                        className="flex-1 p-2 border rounded text-sm uppercase"
+                                    />
+                                    <button 
+                                        type="button" 
+                                        onClick={handleApplyDiscount} 
+                                        className="px-3 py-1 bg-indigo-600 text-white rounded hover:bg-indigo-700 text-sm font-medium"
+                                    >
+                                        Apply
+                                    </button>
+                                </div>
+                                {discountError && <p className="text-red-500 text-xs mt-1">{discountError}</p>}
+                                {appliedDiscount && (
+                                    <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded-lg flex justify-between items-center">
+                                        <div className="text-xs">
+                                            <p className="font-bold text-green-800">{appliedDiscount.code}</p>
+                                            <p className="text-green-600">{appliedDiscount.description}</p>
+                                        </div>
+                                        <button onClick={() => setAppliedDiscount(null)} className="text-green-800 hover:text-green-900"><X size={14}/></button>
+                                    </div>
+                                )}
+                            </div>
                             <div>
                                 <label className="font-semibold text-gray-700">Notes</label>
-                                <textarea 
-                                    name="notes" 
-                                    value={formData.notes || ''}
-                                    onChange={handleChange} 
-                                    rows={4} 
-                                    className="w-full p-2 border rounded mt-1"
-                                />
+                                <textarea name="notes" value={formData.notes || ''} onChange={handleChange} rows={4} className="w-full p-2 border rounded mt-1" />
                             </div>
                         </div>
                     </Section>
                 </div>
 
                 <div className="lg:col-span-2 space-y-4">
-                     <Section title="Line Items" icon={FileText}>
-                         <div className="space-y-4">
+                    <Section title="Line Items" icon={FileText}>
+                        <div className="space-y-4">
                             <div className="hidden lg:grid grid-cols-12 gap-2 text-xs text-gray-500 font-medium px-2">
                                 <div className="col-span-4">Description</div>
                                 <div className="col-span-1 text-right">Qty/Hrs</div>
@@ -486,131 +527,65 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
                                 <div className="col-span-2 text-center">Tax</div>
                                 <div className="col-span-1"></div>
                             </div>
-
-                            {invoiceBreakdown.packages.length > 0 && (
-                                <div className="p-2 border rounded-lg bg-gray-50/50">
-                                    <h4 className="font-bold text-gray-800 mb-2 text-sm">Service Packages</h4>
-                                    <div className="space-y-2">
-                                        {invoiceBreakdown.packages.map(({ header, children }) => (
-                                            <div key={header.id}>
-                                                <MemoizedEditableLineItemRow 
-                                                    item={header}
-                                                    taxRates={taxRates} 
-                                                    onLineItemChange={handleLineItemChange}
-                                                    onRemoveLineItem={removeLineItem} 
-                                                />
-                                                <div className="pl-6 border-l-2 ml-2 space-y-1 mt-1">
-                                                    {children.map(child => (
-                                                        <MemoizedEditableLineItemRow 
-                                                            key={child.id}
-                                                            item={child}
-                                                            taxRates={taxRates} 
-                                                            onLineItemChange={handleLineItemChange}
-                                                            onRemoveLineItem={removeLineItem} 
-                                                        />
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                             {invoiceBreakdown.customLabor.length > 0 && (
-                                <div className="p-2 border rounded-lg bg-gray-50/50">
-                                    <h4 className="font-bold text-gray-800 mb-2 text-sm">Labor</h4>
-                                    <div className="space-y-2">
-                                        {invoiceBreakdown.customLabor.map(item => (
-                                            <MemoizedEditableLineItemRow 
-                                                key={item.id}
-                                                item={item} 
-                                                taxRates={taxRates}
-                                                onLineItemChange={handleLineItemChange} 
-                                                onRemoveLineItem={removeLineItem} 
-                                            />
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                             {invoiceBreakdown.customParts.length > 0 && (
-                                <div className="p-2 border rounded-lg bg-gray-50/50">
-                                    <h4 className="font-bold text-gray-800 mb-2 text-sm">Parts</h4>
-                                    <div className="space-y-2">
-                                        {invoiceBreakdown.customParts.map(item => (
-                                            <MemoizedEditableLineItemRow 
-                                                key={item.id} 
-                                                item={item}
-                                                taxRates={taxRates} 
-                                                onLineItemChange={handleLineItemChange}
-                                                onRemoveLineItem={removeLineItem} 
-                                            />
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                             <div className="flex justify-between items-center pt-2">
-                                <div className="flex gap-2">
-                                    <button 
-                                        onClick={() => addLineItem(true)} 
-                                        className="flex items-center text-sm text-indigo-600 font-semibold hover:text-indigo-800"
-                                    >
-                                        <PlusCircle size={16} className="mr-1" /> Add Labor
-                                    </button>
-                                    <button 
-                                        onClick={() => addLineItem(false)}
-                                        className="flex items-center text-sm text-indigo-600 font-semibold hover:text-indigo-800"
-                                    >
-                                        <PlusCircle size={16} className="mr-1" /> Add Part
-                                    </button>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <select 
-                                        onChange={e => { addPackage(e.target.value); e.target.value = ''; }}
-                                        value="" 
-                                        className="p-1 border rounded bg-white text-sm"
-                                    >
-                                        <option value="">-- Add Package --</option>
-                                        {(servicePackages || [])
-                                            .filter(p => p.entityId === formData.entityId)
-                                            .map(p => <option key={p.id} value={p.id}>{p.name}</option>)
-                                        }
-                                    </select>
-                                </div>
-                            </div>
-                         </div>
-                    </Section>
-
-                    <Section title="Totals Summary" icon={Gauge}>
-                        <div className="w-full text-sm">
-                            <div className="flex justify-between">
-                                <span>Net Total</span>
-                                <span className="font-semibold">{formatCurrency(totalNet)}</span>
-                            </div>
-                            {vatBreakdown.map(b => (
-                                <div key={b.name} className="flex justify-between text-gray-600">
-                                    <span>VAT @ {b.rate}%</span>
-                                    <span>{formatCurrency(b.vat)}</span>
+                            {/* Packages Section */}
+                            {invoiceBreakdown.packages.map(({ header, children }) => (
+                                <div key={header.id} className="space-y-1 border-l-4 border-indigo-400 pl-2">
+                                    <MemoizedEditableLineItemRow item={header} taxRates={taxRates} onLineItemChange={handleLineItemChange} onRemoveLineItem={removeLineItem} />
+                                    {children.map(child => <MemoizedEditableLineItemRow key={child.id} item={child} taxRates={taxRates} onLineItemChange={handleLineItemChange} onRemoveLineItem={removeLineItem} />)}
                                 </div>
                             ))}
-                            <div className="flex justify-between font-bold text-lg mt-2 pt-2 border-t">
-                                <span>Grand Total</span>
-                                <span>{formatCurrency(grandTotal)}</span>
+                            {/* Custom Labor Section */}
+                            {invoiceBreakdown.customLabor.map(item => <MemoizedEditableLineItemRow key={item.id} item={item} taxRates={taxRates} onLineItemChange={handleLineItemChange} onRemoveLineItem={removeLineItem} />)}
+                            {/* Custom Parts Section */}
+                            {invoiceBreakdown.customParts.map(item => <MemoizedEditableLineItemRow key={item.id} item={item} taxRates={taxRates} onLineItemChange={handleLineItemChange} onRemoveLineItem={removeLineItem} />)}
+
+                            <div className="flex flex-wrap gap-2 pt-2 border-t">
+                                <button type="button" onClick={() => addLineItem(true)} className="flex items-center gap-2 px-3 py-1 bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 text-sm font-medium">
+                                    <Plus size={14} /> Add Labor
+                                </button>
+                                <button type="button" onClick={() => addLineItem(false)} className="flex items-center gap-2 px-3 py-1 bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 text-sm font-medium">
+                                    <Plus size={14} /> Add Part
+                                </button>
+                                <select onChange={(e) => { if (e.target.value) { addPackage(e.target.value); e.target.value = ''; } }} className="px-3 py-1 bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 text-sm font-medium border-none outline-none">
+                                    <option value="">+ Add Package</option>
+                                    {(servicePackages || []).map(pkg => <option key={pkg.id} value={pkg.id}>{pkg.name}</option>)}
+                                </select>
                             </div>
                         </div>
-                        <div className="mt-3 pt-3 border-t">
-                            <h4 className="font-semibold text-gray-700 mb-2 flex items-center gap-2">
-                                <TrendingUp size={16}/> Profitability
-                            </h4>
-                            <div className="text-sm space-y-1">
-                                <div className={`flex justify-between font-semibold ${totalProfit < 0 ? 'text-red-600' : 'text-green-700'}`}>
-                                    <span>Est. Profit</span>
-                                    <span>{formatCurrency(totalProfit)}</span>
+                    </Section>
+
+                    <Section title="Totals Summary" icon={TrendingUp}>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="space-y-2">
+                                <div className="flex justify-between text-sm">
+                                    <span className="text-gray-600">Subtotal (Net)</span>
+                                    <span>{formatCurrency(totalNet)}</span>
                                 </div>
-                                <div className="flex justify-between text-gray-600">
-                                    <span>Margin %</span>
-                                    <span>{profitMargin.toFixed(1)}%</span>
+                                {discountAmount > 0 && (
+                                    <div className="flex justify-between text-sm font-medium text-green-600">
+                                        <span className="flex items-center gap-1"><Tag size={12}/> Discount</span>
+                                        <span>-{formatCurrency(discountAmount)}</span>
+                                    </div>
+                                )}
+                                {vatBreakdown.map(v => (
+                                    <div key={v.name} className="flex justify-between text-sm">
+                                        <span className="text-gray-600">VAT ({v.rate}%)</span>
+                                        <span>{formatCurrency(v.vat)}</span>
+                                    </div>
+                                ))}
+                                <div className="flex justify-between text-lg font-bold pt-2 border-t">
+                                    <span>Grand Total</span>
+                                    <span className="text-indigo-600">{formatCurrency(grandTotal)}</span>
+                                </div>
+                            </div>
+                            <div className="bg-gray-50 p-4 rounded-lg space-y-2">
+                                <div className="flex justify-between text-sm">
+                                    <span className="text-gray-600 font-medium">Estimated Profit</span>
+                                    <span className="text-green-600 font-bold">{formatCurrency(totalProfit)}</span>
+                                </div>
+                                <div className="flex justify-between text-sm">
+                                    <span className="text-gray-600 font-medium">Margin</span>
+                                    <span className="font-bold">{profitMargin.toFixed(1)}%</span>
                                 </div>
                             </div>
                         </div>
@@ -618,6 +593,7 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
                 </div>
             </div>
 
+            {/* Modal Components */}
             {isAddingCustomer && (
                 <CustomerFormModal
                     isOpen={isAddingCustomer}

@@ -3,7 +3,7 @@ import {
     Supplier, Estimate, TaxRate, ServicePackage, Part, SaleVehicle, SaleOverheadPackage,
     StorageBooking, RentalVehicle, RentalBooking, StorageLocation, BatteryCharger, EstimateLineItem,
     User, NominalCode, NominalCodeRule, PurchaseOrder, Purchase, AbsenceRequest, Prospect, Inquiry,
-    Reminder, AuditLogEntry, Role, InspectionDiagram, InspectionTemplate
+    Reminder, AuditLogEntry, Role, InspectionDiagram, InspectionTemplate, DiscountCode
 } from '../../types';
 import { getRelativeDate, formatDate, splitJobIntoSegments } from '../utils/dateUtils';
 import { generateCustomerId } from '../utils/customerUtils';
@@ -385,6 +385,8 @@ export const getInitialInspectionTemplates = (): InspectionTemplate[] => {
     return [fullTemplate, shortTemplate];
 };
 
+export const getInitialDiscountCodes = (): DiscountCode[] => ([]);
+
 // --- Consolidated Export ---
 const initialDataValue = {
     roles: getInitialRoles(),
@@ -419,7 +421,8 @@ const initialDataValue = {
     auditLog: getInitialAuditLog(),
     inspectionDiagrams: getInitialInspectionDiagrams(),
     inspectionTemplates: getInitialInspectionTemplates(),
-    inspectionChecklists: initialChecklistData
+    inspectionChecklists: initialChecklistData,
+    discountCodes: getInitialDiscountCodes(),
 };
 
 export const initialData = initialDataValue;

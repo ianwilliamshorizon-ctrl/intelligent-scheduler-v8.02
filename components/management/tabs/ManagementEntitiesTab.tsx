@@ -9,7 +9,12 @@ import { generateJobId, generateInvoiceId } from '../../../core/utils/numberGene
 import { splitJobIntoSegments, formatDate } from '../../../core/utils/dateUtils';
 import { saveDocument } from '../../../core/db';
 
-export const ManagementEntitiesTab = ({ onShowStatus }: { onShowStatus: (text: string, type: 'info' | 'success' | 'error') => void }) => {
+interface ManagementEntitiesTabProps {
+    searchTerm: string;
+    onShowStatus: (text: string, type: 'info' | 'success' | 'error') => void;
+}
+
+export const ManagementEntitiesTab: React.FC<ManagementEntitiesTabProps> = ({ onShowStatus }) => {
     // 1. Data Context with Fallbacks
     const { 
         businessEntities = [], 

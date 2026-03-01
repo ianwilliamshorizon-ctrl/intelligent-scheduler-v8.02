@@ -6,8 +6,8 @@ import { useManagementTable } from '../hooks/useManagementTable';
 import InspectionTemplateFormModal from '../../InspectionTemplateFormModal';
 
 interface ManagementInspectionTemplatesTabProps {
-    searchTerm?: string;
-    onShowStatus?: (text: string, type: 'success' | 'info' | 'error') => void;
+    searchTerm: string;
+    onShowStatus: (text: string, type: 'success' | 'info' | 'error') => void;
 }
 
 export const ManagementInspectionTemplatesTab: React.FC<ManagementInspectionTemplatesTabProps> = ({ 

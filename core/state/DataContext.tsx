@@ -14,7 +14,7 @@ import {
     getInitialNominalCodes, getInitialNominalCodeRules, getInitialPurchases,
     getInitialAbsenceRequests, getInitialProspects, getInitialInquiries,
     getInitialReminders, getInitialAuditLog, getInitialRoles, getInitialInspectionDiagrams,
-    getInitialInspectionTemplates
+    getInitialInspectionTemplates, getInitialDiscountCodes
 } from '../data/initialData'; 
 
 interface DataContextType {
@@ -49,6 +49,7 @@ interface DataContextType {
     roles: T.Role[]; setRoles: React.Dispatch<React.SetStateAction<T.Role[]>>;
     inspectionDiagrams: T.InspectionDiagram[]; setInspectionDiagrams: React.Dispatch<React.SetStateAction<T.InspectionDiagram[]>>;
     inspectionTemplates: T.InspectionTemplate[]; setInspectionTemplates: React.Dispatch<React.SetStateAction<T.InspectionTemplate[]>>;
+    discountCodes: T.DiscountCode[]; setDiscountCodes: React.Dispatch<React.SetStateAction<T.DiscountCode[]>>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -85,7 +86,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [roles, setRoles] = usePersistentState<T.Role[]>('brooks_roles', getInitialRoles);
     const [inspectionDiagrams, setInspectionDiagrams] = usePersistentState<T.InspectionDiagram[]>('brooks_inspectionDiagrams', getInitialInspectionDiagrams);
     const [inspectionTemplates, setInspectionTemplates] = usePersistentState<T.InspectionTemplate[]>('brooks_inspectionTemplates', getInitialInspectionTemplates);
-
+    const [discountCodes, setDiscountCodes] = usePersistentState<T.DiscountCode[]>('brooks_discountCodes', getInitialDiscountCodes);
     const isFirstRun = useRef(true);
 
     useEffect(() => {
@@ -145,7 +146,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         reminders, setReminders, auditLog, setAuditLog,
         businessEntities, setBusinessEntities, taxRates, setTaxRates,
         roles, setRoles, inspectionDiagrams, setInspectionDiagrams,
-        inspectionTemplates, setInspectionTemplates,
+        inspectionTemplates, setInspectionTemplates, discountCodes, setDiscountCodes
     }), [
         jobs, vehicles, customers, estimates, invoices, purchaseOrders,
         purchases, parts, servicePackages, suppliers, engineers, lifts,
@@ -153,7 +154,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         prospects, storageBookings, storageLocations, batteryChargers,
         nominalCodes, nominalCodeRules, absenceRequests, inquiries,
         reminders, auditLog, businessEntities, taxRates, roles, 
-        inspectionDiagrams, inspectionTemplates
+        inspectionDiagrams, inspectionTemplates,
+        discountCodes, setDiscountCodes
     ]);
 
     return <DataContext.Provider value={value as any}>{children}</DataContext.Provider>;

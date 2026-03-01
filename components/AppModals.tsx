@@ -70,7 +70,7 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
         saleVehicles, prospects, absenceRequests, setPurchaseOrders, setJobs, 
         setEstimates, setInvoices, setStorageBookings, setRentalBookings, 
         setSaleVehicles, setProspects, setInquiries, setParts,
-        saleOverheadPackages, inquiries, batteryChargers, lifts
+        saleOverheadPackages, inquiries, batteryChargers, lifts,discountCodes
     } = useData();
     
     const { currentUser, selectedEntityId, confirmation, setConfirmation, users } = useApp();
@@ -93,7 +93,7 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
 
             {modals.isEditJobModalOpen && modals.selectedJobId && (
                 <EditJobModal
-                    isOpen={modals.isEditJobModalOpen}
+                    isOpen={true}
                     onClose={() => setters.setIsEditJobModalOpen(false)}
                     selectedJobId={modals.selectedJobId}
                     onOpenPurchaseOrder={(po) => setters.setViewPoModal({isOpen: true, po})}
@@ -115,14 +115,13 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                     onViewVehicle={(vehicleId) => setters.setVehicleModal({ isOpen: true, vehicleId })}
                     onCheckIn={(job) => setters.setCheckInJob(job)}
                     onCheckOut={(job) => setters.setCheckOutJob(job)}
-                    onSavePart={(part) => handleSaveItem(setParts, part, 'brooks_parts')}
                     onDelete={actions.handleDeleteJob}
                 />
             )}
 
             {modals.isSmartCreateOpen && (
                 <SmartCreateJobModal
-                    isOpen={modals.isSmartCreateOpen}
+                    isOpen={true}
                     onClose={() => setters.setIsSmartCreateOpen(false)}
                     creationMode={modals.smartCreateMode}
                     onJobCreate={(jobData) => { handleSaveItem(setJobs, { ...jobData, createdByUserId: currentUser.id }, 'brooks_jobs'); setters.setIsSmartCreateOpen(false); }}
@@ -132,14 +131,14 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                     vehicles={vehicles}
                     customers={customers}
                     servicePackages={servicePackages}
-                    defaultDate={modals.smartCreateDefaultDate}
+                    defaultDate={formatDate(modals.smartCreateDefaultDate)}
                     initialPrompt={null}
                 />
             )}
 
             {modals.poModal.isOpen && (
                 <PurchaseOrderFormModal
-                    isOpen={modals.poModal.isOpen}
+                    isOpen={true}
                     onClose={() => setters.setPoModal({isOpen: false, po: null})}
                     onSave={(po) => actions.handleSavePurchaseOrder({ ...po, createdByUserId: po.createdByUserId || currentUser.id })}
                     purchaseOrder={modals.poModal.po}
@@ -150,6 +149,10 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                     selectedEntityId={selectedEntityId}
                     parts={parts}
                     setParts={setParts}
+                    jobs={jobs}
+                    vehicles={vehicles}
+                    customers={customers}
+                    setJobs={setJobs}
                     onViewPurchaseOrder={(po) => { setters.setPoModal({isOpen: false, po: null}); setters.setViewPoModal({isOpen: true, po}); }}
                 />
             )}
@@ -217,6 +220,7 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                     servicePackages={servicePackages}
                     parts={parts}
                     invoices={invoices}
+                    discountCodes={discountCodes}
                 />
             )}
 
@@ -430,7 +434,7 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
 
             {modals.estimateViewModal.isOpen && modals.estimateViewModal.estimate && (
                 <EstimateViewModal 
-                    isOpen={modals.estimateViewModal.isOpen}
+                    isOpen={true}
                     onClose={() => setters.setEstimateViewModal({isOpen: false, estimate: null})}
                     estimate={modals.estimateViewModal.estimate}
                     customer={customers.find(c => c.id === modals.estimateViewModal.estimate!.customerId)}
@@ -450,14 +454,12 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                     currentUser={currentUser}
                     onCreateInquiry={(est) => setters.setInquiryModal({isOpen: true, inquiry: { linkedEstimateId: est.id, linkedCustomerId: est.customerId, linkedVehicleId: est.vehicleId, message: `Question regarding Estimate #${est.estimateNumber}` }})}
                     onScheduleEstimate={(est, inquiryId) => setters.setScheduleJobFromEstimateModal({isOpen: true, estimate: est, inquiryId})}
-                    jobs={jobs}
-                    lifts={lifts}
                 />
             )}
 
             {modals.scheduleJobFromEstimateModal.isOpen && modals.scheduleJobFromEstimateModal.estimate && (
                 <ScheduleJobFromEstimateModal 
-                    isOpen={modals.scheduleJobFromEstimateModal.isOpen}
+                    isOpen={true}
                     onClose={() => setters.setScheduleJobFromEstimateModal({isOpen: false, estimate: null})}
                     onConfirm={(job, est, options, extraJobs) => {
                         const originalEstimate = modals.scheduleJobFromEstimateModal.estimate;
@@ -588,7 +590,6 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                     customer={customers.find(c => c.id === modals.scheduleJobFromEstimateModal.estimate!.customerId)}
                     vehicle={vehicles.find(v => v.id === modals.scheduleJobFromEstimateModal.estimate!.vehicleId)}
                     jobs={jobs}
-                    lifts={lifts}
                     vehicles={vehicles}
                     maxDailyCapacityHours={businessEntities.find(e => e.id === modals.scheduleJobFromEstimateModal.estimate!.entityId)?.dailyCapacityHours || 40}
                     businessEntities={businessEntities}
@@ -663,7 +664,7 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                 <NominalCodeExportModal 
                     isOpen={modals.exportModal.isOpen}
                     onClose={() => setters.setExportModal({isOpen: false, type: 'invoices', items: []})}
-                    type={modals.exportModal.type}
+                    type={'purchases'}
                     items={modals.exportModal.items}
                     nominalCodes={nominalCodes}
                     nominalCodeRules={nominalCodeRules}

@@ -7,10 +7,14 @@ import UserFormModal from '../../UserFormModal';
 import { useManagementTable } from '../hooks/useManagementTable';
 import { saveDocument } from '../../../core/db/index';
 
-export const ManagementStaffTab = () => {
-    // 1. Destructure the new adminResetPassword from useApp
+interface ManagementStaffTabProps {
+    searchTerm: string;
+    onShowStatus: (text: string, type: 'info' | 'success' | 'error') => void;
+}
+
+export const ManagementStaffTab: React.FC<ManagementStaffTabProps> = ({ searchTerm, onShowStatus }) => {
     const { users = [], setUsers, adminResetPassword } = useApp();
-    const { roles = [], useData } = useData();
+    const { roles = [] } = useData();
     
     const [localUsers, setLocalUsers] = useState<UserType[]>(Array.isArray(users) ? users : []);
 
@@ -24,10 +28,12 @@ export const ManagementStaffTab = () => {
     const [selectedUser, setSelectedUser] = useState<UserType | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
 
-    /**
-     * HANDLE SAVE
-     * Saves the profile to Firestore. If new, instructs the user to "Claim" their account.
-     */
+    const filteredUsers = localUsers.filter(user =>
+        (user.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (user.email || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (user.role || '').toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
     const handleSave = async (updatedUser: UserType) => {
         const isNewUser = !localUsers.find(u => u.id === updatedUser.id);
 
@@ -47,26 +53,17 @@ export const ManagementStaffTab = () => {
         setSelectedUser(null);
 
         try {
-            // 2. Save the Profile to Firestore
             await saveDocument('brooks_users', {
                 ...updatedUser,
                 status: isNewUser ? 'pending' : (updatedUser.status || 'active'),
                 updatedAt: new Date().toISOString()
             });
 
-            // 3. If new, we don't send a reset (as they don't have an account yet). 
-            // We let them use the "First Time Setup" on the login page.
             if (isNewUser) {
-                console.log(`✅ ${updatedUser.email} authorized. Staff can now use "First Time Setup".`);
-            }
-
-            if (refreshActiveData) {
-                setTimeout(async () => {
-                    await refreshActiveData(true);
-                }, 800);
+                onShowStatus(`✅ ${updatedUser.email} authorized. Staff can now use "First Time Setup".`, 'success');
             }
         } catch (error) {
-            console.error("Failed to save staff member:", error);
+            onShowStatus("Failed to save staff member.", 'error');
         }
     };
 
@@ -100,7 +97,7 @@ export const ManagementStaffTab = () => {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
-                            {localUsers.map(u => (
+                            {filteredUsers.map(u => (
                                 <tr key={u.id} className="group hover:bg-slate-50/50 transition-colors">
                                     <td className="px-6 py-5">
                                         <div className="flex items-center gap-3">
@@ -126,11 +123,10 @@ export const ManagementStaffTab = () => {
                                     </td>
                                     <td className="px-6 py-5 text-right">
                                         <div className="flex justify-end gap-1">
-                                            {/* NEW: ADMIN RESET PASSWORD BUTTON */}
                                             <button 
                                                 onClick={() => {
                                                     if(window.confirm(`Send a password reset link to ${u.email}?`)) {
-                                                        adminResetPassword(u.email);
+                                                        adminResetPassword(u.email).then(() => onShowStatus("Password reset email sent", 'success')).catch(() => onShowStatus("Failed to send reset email", 'error'));
                                                     }
                                                 }} 
                                                 className="p-2 text-slate-400 hover:text-orange-600 hover:bg-orange-50 rounded-xl transition-all"

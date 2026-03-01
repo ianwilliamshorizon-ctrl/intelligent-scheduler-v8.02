@@ -8,13 +8,17 @@ import { saveImage } from '../../../utils/imageStore';
 import InspectionDiagramFormModal from '../../InspectionDiagramFormModal';
 import { saveDocument } from '../../../core/db';
 
-export const ManagementDiagramsTab = ({ searchTerm = '', onShowStatus }: { searchTerm: string, onShowStatus: (text: string, type: 'info' | 'success' | 'error') => void }) => {
+interface ManagementDiagramsTabProps {
+    searchTerm: string;
+    onShowStatus: (text: string, type: 'info' | 'success' | 'error') => void;
+}
+
+export const ManagementDiagramsTab: React.FC<ManagementDiagramsTabProps> = ({ searchTerm = '', onShowStatus }) => {
     const { 
         inspectionDiagrams = [], 
         setInspectionDiagrams, 
     } = useData();
     
-    // 1. Local state for instant grid updates
     const [localDiagrams, setLocalDiagrams] = useState<InspectionDiagram[]>(Array.isArray(inspectionDiagrams) ? inspectionDiagrams : []);
 
     useEffect(() => {
@@ -26,15 +30,11 @@ export const ManagementDiagramsTab = ({ searchTerm = '', onShowStatus }: { searc
     const [selectedDiagram, setSelectedDiagram] = useState<InspectionDiagram | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
 
-    // Defensive filtering
     const filtered = (localDiagrams || []).filter(d => 
         (d.make || '').toLowerCase().includes((searchTerm || '').toLowerCase()) || 
         (d.model || '').toLowerCase().includes((searchTerm || '').toLowerCase())
     );
 
-    /**
-     * handleSave - Optimized for Cloud Sync
-     */
     const handleSave = async (updatedDiagram: InspectionDiagram) => {
         try {
             await saveDocument('brooks_inspectionDiagrams', updatedDiagram);
@@ -45,7 +45,6 @@ export const ManagementDiagramsTab = ({ searchTerm = '', onShowStatus }: { searc
                 return exists ? current.map(d => d.id === updatedDiagram.id ? updatedDiagram : d) : [...current, updatedDiagram];
             };
 
-            // Instant UI update
             setLocalDiagrams(updateFn);
             if (setInspectionDiagrams) setInspectionDiagrams(updateFn);
             
@@ -59,10 +58,6 @@ export const ManagementDiagramsTab = ({ searchTerm = '', onShowStatus }: { searc
         }
     };
 
-    /**
-     * handleBulkUploadDiagrams
-     * Optimized to update UI per item but refresh cloud only once at end
-     */
     const handleBulkUploadDiagrams = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (!e.target.files || e.target.files.length === 0) return;
         
@@ -109,7 +104,6 @@ export const ManagementDiagramsTab = ({ searchTerm = '', onShowStatus }: { searc
                                 newlyAdded.push(newDiagram);
                                 successCount++;
                                 
-                                // Incremental UI update for visual progress
                                 setLocalDiagrams(prev => [...(prev || []), newDiagram]);
                             } catch (err) { 
                                 console.error(`Failed to save image for ${file.name}`, err); 
@@ -122,7 +116,6 @@ export const ManagementDiagramsTab = ({ searchTerm = '', onShowStatus }: { searc
                 });
             }
 
-            // Sync global context once
             if (setInspectionDiagrams) {
                 setInspectionDiagrams(prev => [...(prev || []), ...newlyAdded]);
             }

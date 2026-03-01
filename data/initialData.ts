@@ -3,8 +3,11 @@ import {
     Supplier, Estimate, TaxRate, ServicePackage, Part, SaleVehicle, SaleOverheadPackage,
     StorageBooking, RentalVehicle, RentalBooking, StorageLocation, BatteryCharger, EstimateLineItem,
     User, NominalCode, NominalCodeRule, PurchaseOrder, Purchase, AbsenceRequest, Prospect, Inquiry,
-    Reminder, AuditLogEntry, Role, InspectionDiagram, InspectionTemplate
+    Reminder, AuditLogEntry, Role, InspectionDiagram, InspectionTemplate,DiscountCode
 } from '../types';
+
+
+export const getInitialDiscountCodes = (): DiscountCode[] => ([]);
 import { getRelativeDate, formatDate, splitJobIntoSegments } from '../utils/dateUtils';
 import { generateCustomerId } from '../utils/customerUtils';
 import { calculateJobStatus } from '../utils/jobUtils';

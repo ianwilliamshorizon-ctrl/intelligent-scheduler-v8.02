@@ -16,15 +16,29 @@ const PrintableInvoiceList: React.FC<PrintableInvoiceListProps> = ({ invoices, c
     const standardTaxRateId = taxRates.find(t => t.code === 'T1')?.id;
 
     const calculateTotal = (lineItems: EstimateLineItem[]) => {
-        return lineItems.reduce((sum, item) => {
-            if (item.isPackageComponent) return sum;
-            const net = (item.quantity || 0) * (item.unitPrice || 0);
-            const codeToUse = item.taxCodeId || standardTaxRateId;
-            const rate = (codeToUse ? taxRatesMap.get(codeToUse) : 0) || 0;
-            const vat = net * (rate / 100);
-            return sum + net + vat;
-        }, 0);
+        let totalNet = 0;
+        let totalVat = 0;
+
+        (lineItems || []).forEach(item => {
+            if (item.isOptional) return;
+
+            const itemNet = (item.quantity || 0) * (item.unitPrice || 0);
+
+            if (!item.isPackageComponent) {
+                totalNet += itemNet;
+            }
+
+            const effectiveTaxCodeId = (item.taxCodeId === 'Taxstd' || !item.taxCodeId) 
+                ? standardTaxRateId 
+                : item.taxCodeId;
+
+            const rate = effectiveTaxCodeId ? (taxRatesMap.get(effectiveTaxCodeId) || 0) / 100 : 0;
+            totalVat += itemNet * rate;
+        });
+
+        return totalNet + totalVat;
     };
+
 
     return (
         <div className="bg-white font-sans text-sm text-gray-800 printable-page" style={{ width: '210mm', minHeight: '297mm', padding: '10mm', boxSizing: 'border-box' }}>

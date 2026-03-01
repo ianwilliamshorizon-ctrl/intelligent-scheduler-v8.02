@@ -5,10 +5,14 @@ import { PlusCircle, Shield, ShieldCheck, Edit3, Fingerprint, Lock } from 'lucid
 import RoleFormModal from '../../RoleFormModal';
 import { saveDocument } from '../../../core/db/index';
 
-export const ManagementRolesTab = ({ searchTerm = '', onShowStatus }: { searchTerm: string, onShowStatus: (text: string, type: 'info' | 'success' | 'error') => void }) => {
+interface ManagementRolesTabProps {
+    searchTerm: string;
+    onShowStatus: (text: string, type: 'info' | 'success' | 'error') => void;
+}
+
+export const ManagementRolesTab: React.FC<ManagementRolesTabProps> = ({ searchTerm = '', onShowStatus }) => {
     const { roles = [], setRoles } = useData();
     
-    // 1. Local state for instant UI updates
     const [localRoles, setLocalRoles] = useState<Role[]>(Array.isArray(roles) ? roles : []);
 
     useEffect(() => {
@@ -18,15 +22,11 @@ export const ManagementRolesTab = ({ searchTerm = '', onShowStatus }: { searchTe
     const [selectedRole, setSelectedRole] = useState<Role | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
 
-    // Filter roles based on the management-wide search term
     const filteredRoles = localRoles.filter(r => 
         (r.name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
         (r.description || '').toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    /**
-     * handleSave - Optimized for Cloud Sync
-     */
     const handleSave = async (updatedRole: Role) => {
         try {
             await saveDocument('brooks_roles', updatedRole);
@@ -39,7 +39,6 @@ export const ManagementRolesTab = ({ searchTerm = '', onShowStatus }: { searchTe
                     : [...current, updatedRole];
             };
             
-            // Instant UI Update
             setLocalRoles(updateFn);
             if (setRoles) setRoles(updateFn);
 

@@ -8,13 +8,20 @@ import ServicePackageFormModal from '../../ServicePackageFormModal';
 import { useManagementTable } from '../hooks/useManagementTable';
 import { useApp } from '../../../core/state/AppContext';
 
-export const ManagementPackagesTab = () => {
+interface ManagementPackagesTabProps {
+    searchTerm: string;
+    onShowStatus: (text: string, type: 'info' | 'success' | 'error') => void;
+}
+
+export const ManagementPackagesTab: React.FC<ManagementPackagesTabProps> = ({ searchTerm, onShowStatus }) => {
     const { servicePackages, taxRates, businessEntities, parts } = useData();
     const { selectedEntityId } = useApp();
     const { updateItem, deleteItem } = useManagementTable(servicePackages, 'brooks_servicePackages');
 
     const [selectedPackage, setSelectedPackage] = useState<ServicePackage | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
+
+    const filteredPackages = servicePackages.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
 
     return (
         <div>
@@ -27,7 +34,7 @@ export const ManagementPackagesTab = () => {
                 <table className="w-full text-sm text-left">
                     <thead className="bg-gray-100 sticky top-0"><tr><th className="p-2">Package Name</th><th className="p-2 text-right">Total Price</th><th className="p-2">Actions</th></tr></thead>
                     <tbody>
-                        {servicePackages.map(p => (
+                        {filteredPackages.map(p => (
                             <tr key={p.id} className="border-b hover:bg-gray-50">
                                 <td className="p-2 font-medium">{p.name}</td>
                                 <td className="p-2 text-right">{formatCurrency(p.totalPrice)}</td>
@@ -45,7 +52,7 @@ export const ManagementPackagesTab = () => {
                 <ServicePackageFormModal 
                     isOpen={isModalOpen} 
                     onClose={() => setIsModalOpen(false)} 
-                    onSave={(p) => { updateItem(p); setIsModalOpen(false); }} 
+                    onSave={(p) => { updateItem(p); setIsModalOpen(false); onShowStatus('Service package saved successfully', 'success'); }} 
                     servicePackage={selectedPackage} 
                     taxRates={taxRates} 
                     entityId={selectedEntityId} 

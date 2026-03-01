@@ -6,7 +6,12 @@ import { PlusCircle, Edit, Trash2, ArrowUpCircle } from 'lucide-react';
 import LiftFormModal from '../../LiftFormModal';
 import { useManagementTable } from '../hooks/useManagementTable';
 
-export const ManagementLiftsTab = () => {
+interface ManagementLiftsTabProps {
+    searchTerm: string;
+    onShowStatus: (text: string, type: 'info' | 'success' | 'error') => void;
+}
+
+export const ManagementLiftsTab: React.FC<ManagementLiftsTabProps> = ({ searchTerm, onShowStatus }) => {
     const { lifts, businessEntities } = useData();
     const { updateItem, deleteItem } = useManagementTable(lifts, 'brooks_lifts');
 

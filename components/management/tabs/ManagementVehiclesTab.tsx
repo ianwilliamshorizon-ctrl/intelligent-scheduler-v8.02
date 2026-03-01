@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, memo, useDeferredValue, useCallback, useTransition } from 'react';
 import { VList } from 'virtua';
 import { useData } from '../../../core/state/DataContext';
-import { Vehicle, Customer } from '../../../types';
+import { Vehicle, Customer, Job, Estimate, Invoice } from '../../../types';
 import { PlusCircle, Trash2, Upload, RefreshCw, Search, Car } from 'lucide-react';
 import { useManagementTable } from '../hooks/useManagementTable';
 import { parseCsv } from '../../../utils/csvUtils';
@@ -9,6 +9,11 @@ import { getCustomerDisplayName } from '../../../core/utils/customerUtils';
 import VehicleFormModal from '../../VehicleFormModal';
 import { db } from '../../../core/db';
 import { writeBatch, doc, collection } from 'firebase/firestore';
+
+interface ManagementVehiclesTabProps {
+    searchTerm: string;
+    onShowStatus: (text: string, type: 'info' | 'success' | 'error') => void;
+}
 
 /**
  * PRODUCTION ROW COMPONENT
@@ -97,7 +102,7 @@ const HighlightText = memo(({ text, highlight }: { text: string; highlight: stri
     );
 });
 
-export const ManagementVehiclesTab = ({ searchTerm, onShowStatus }: { searchTerm: string, onShowStatus: (text: string, type: 'info' | 'success' | 'error') => void }) => {
+export const ManagementVehiclesTab: React.FC<ManagementVehiclesTabProps> = ({ searchTerm, onShowStatus }) => {
     const { vehicles, customers, jobs, estimates, invoices } = useData();
     const { selectedIds, updateItem, deleteItem, toggleSelection, toggleSelectAll, bulkDelete } = useManagementTable(vehicles, 'brooks_vehicles');
 

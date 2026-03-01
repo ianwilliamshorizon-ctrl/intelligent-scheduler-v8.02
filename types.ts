@@ -805,3 +805,16 @@ export interface DataContextType {
     loading: boolean;
     error: string | null;
 }
+export type DiscountType = 'Percentage' | 'Fixed';
+export type DiscountApplicability = 'All' | 'Labor' | 'Parts' | 'Packages';
+
+export interface DiscountCode {
+    id: string;
+    code: string;
+    description: string;
+    type: DiscountType;
+    value: number;
+    applicability: DiscountApplicability;
+    isActive: boolean;
+    entityId: string;
+}
