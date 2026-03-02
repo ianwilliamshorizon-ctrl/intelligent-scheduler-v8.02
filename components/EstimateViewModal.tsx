@@ -213,68 +213,71 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
         }
     }, [preferredStartDate, isConfirmingApproval, jobs, resolvedEntity, laborHours, minBookingDate, preferredEndDate]);
 
-    const { essentialItems, optionalItems, dynamicTotals } = useMemo(() => {
-    const allItems = estimate.lineItems || [];
-    const essentials: EstimateLineItem[] = [];
-    const optionals: EstimateLineItem[] = [];
+    const memoizedItemsAndTotals = useMemo(() => {
+        const allItems = estimate.lineItems || [];
+        const essentials: EstimateLineItem[] = [];
+        const optionals: EstimateLineItem[] = [];
 
-    allItems.forEach(item => {
-        if (item.isOptional) optionals.push(item);
-        else essentials.push(item);
-    });
+        allItems.forEach(item => {
+            if (item.isOptional) optionals.push(item);
+            else essentials.push(item);
+        });
 
-    const breakdown: { [key: string]: { net: number; vat: number; rate: number; name: string; } } = {};
-    const taxRatesMap = new Map(taxRates.map(t => [t.id, t]));
+        const breakdown: { [key: string]: { net: number; vat: number; rate: number; name: string; } } = {};
+        const taxRatesMap = new Map(taxRates.map(t => [t.id, t]));
 
-    (allItems || []).forEach(item => {
-        if (item.isOptional && !selectedOptionalItems.has(item.id)) return;
-        if (item.isPackageComponent) return;
+        (allItems || []).forEach(item => {
+            if (item.isOptional && !selectedOptionalItems.has(item.id)) return;
+            if (item.isPackageComponent) return;
 
-        const qty = Number(item.quantity) || 0;
-        const price = Number(item.unitPrice) || 0;
-        const itemNet = qty * price;
+            const qty = Number(item.quantity) || 0;
+            const price = Number(item.unitPrice) || 0;
+            const itemNet = qty * price;
 
-        const effectiveTaxId = item.taxCodeId || standardTaxRateId;
+            const effectiveTaxId = item.taxCodeId || standardTaxRateId;
+            
+            if (!effectiveTaxId) {
+                const noTaxKey = 'no_tax';
+                if (!breakdown[noTaxKey]) {
+                    breakdown[noTaxKey] = { net: 0, vat: 0, rate: 0, name: 'No Tax' };
+                }
+                breakdown[noTaxKey].net += itemNet;
+                return;
+            }
+
+            const taxRate = taxRatesMap.get(effectiveTaxId);
+
+            if (!taxRate) {
+                const noTaxKey = 'no_tax';
+                if (!breakdown[noTaxKey]) {
+                    breakdown[noTaxKey] = { net: 0, vat: 0, rate: 0, name: 'No Tax' };
+                }
+                breakdown[noTaxKey].net += itemNet;
+                return;
+            }
+
+            if (!breakdown[effectiveTaxId]) {
+                breakdown[effectiveTaxId] = { net: 0, vat: 0, rate: taxRate.rate, name: taxRate.name };
+            }
+
+            breakdown[effectiveTaxId].net += itemNet;
+            if (taxRate.rate > 0) {
+                breakdown[effectiveTaxId].vat += itemNet * (taxRate.rate / 100);
+            }
+        });
+
+        const finalVatBreakdown = Object.values(breakdown);
+        const totalNet = finalVatBreakdown.reduce((sum, b) => sum + b.net, 0);
+        const totalVat = finalVatBreakdown.reduce((sum, b) => sum + b.vat, 0);
+        const grandTotal = totalNet + totalVat;
+
+        const totals = { totalNet, grandTotal, vatBreakdown: finalVatBreakdown.filter(b => b.net > 0 || b.vat > 0) };
         
-        if (!effectiveTaxId) {
-            const noTaxKey = 'no_tax';
-            if (!breakdown[noTaxKey]) {
-                breakdown[noTaxKey] = { net: 0, vat: 0, rate: 0, name: 'No Tax' };
-            }
-            breakdown[noTaxKey].net += itemNet;
-            return;
-        }
+        return { essentialItems: essentials, optionalItems: optionals, dynamicTotals: totals };
 
-        const taxRate = taxRatesMap.get(effectiveTaxId);
+    }, [estimate.lineItems, selectedOptionalItems, taxRates, standardTaxRateId]);
 
-        if (!taxRate) {
-            const noTaxKey = 'no_tax';
-            if (!breakdown[noTaxKey]) {
-                breakdown[noTaxKey] = { net: 0, vat: 0, rate: 0, name: 'No Tax' };
-            }
-            breakdown[noTaxKey].net += itemNet;
-            return;
-        }
-
-        if (!breakdown[effectiveTaxId]) {
-            breakdown[effectiveTaxId] = { net: 0, vat: 0, rate: taxRate.rate, name: taxRate.name };
-        }
-
-        breakdown[effectiveTaxId].net += itemNet;
-        if (taxRate.rate > 0) {
-            breakdown[effectiveTaxId].vat += itemNet * (taxRate.rate / 100);
-        }
-    });
-
-    const finalVatBreakdown = Object.values(breakdown);
-    const totalNet = finalVatBreakdown.reduce((sum, b) => sum + b.net, 0);
-    const totalVat = finalVatBreakdown.reduce((sum, b) => sum + b.vat, 0);
-    const grandTotal = totalNet + totalVat;
-
-    const totals = { totalNet, grandTotal, vatBreakdown: finalVatBreakdown.filter(b => b.net > 0 || b.vat > 0) };
-    return { essentialItems, optionalItems, dynamicTotals: totals };
-}, [estimate.lineItems, selectedOptionalItems, taxRates, standardTaxRateId]);
-
+    const { essentialItems, optionalItems, dynamicTotals } = memoizedItemsAndTotals;
 
     const handleToggleOptional = (itemId: string) => {
         if (!isInteractive && !isApproving) return;

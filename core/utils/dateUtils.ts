@@ -2,6 +2,7 @@ import { Job, JobSegment } from '../../types';
 
 /** Formats a Date object to YYYY-MM-DD string using UTC values to avoid timezone issues */
 export const formatDate = (date: Date): string => {
+    if (!date) return '';
     const year = date.getUTCFullYear();
     const month = (date.getUTCMonth() + 1).toString().padStart(2, '0');
     const day = date.getUTCDate().toString().padStart(2, '0');

@@ -67,6 +67,7 @@ const EditJobModal: React.FC<{
     isOpen: boolean;
     onClose: () => void;
     selectedJobId: string;
+    purchaseOrders: T.PurchaseOrder[];
     onOpenPurchaseOrder: (po: T.PurchaseOrder) => void;
     rentalBookings: T.RentalBooking[];
     onOpenRentalBooking: (booking: Partial<T.RentalBooking> | null) => void;
@@ -78,14 +79,15 @@ const EditJobModal: React.FC<{
     onCheckIn: (job: T.Job) => void;
     onCheckOut: (job: T.Job) => void;
     onDelete?: (jobId: string) => void;
-}> = ({ isOpen, onClose, selectedJobId, onOpenPurchaseOrder, rentalBookings, onOpenRentalBooking, onOpenConditionReport, onRaiseSupplementaryEstimate, onViewEstimate, onViewCustomer, onViewVehicle, onCheckIn, onCheckOut, onDelete }) => {
+    generatePurchaseOrderId: (allPurchaseOrders: T.PurchaseOrder[], entityShortCode: string) => string;
+}> = ({ isOpen, onClose, selectedJobId, purchaseOrders, onOpenPurchaseOrder, rentalBookings, onOpenRentalBooking, onOpenConditionReport, onRaiseSupplementaryEstimate, onViewEstimate, onViewCustomer, onViewVehicle, onCheckIn, onCheckOut, onDelete, generatePurchaseOrderId }) => {
     
     const data = useData();
     const { currentUser, setConfirmation } = useApp();
     const { handleSaveItem, handleDeleteJob } = useWorkshopActions();
 
     const {
-        jobs, setJobs, vehicles, customers, engineers, estimates, setEstimates, purchaseOrders, suppliers, parts, setParts, servicePackages, taxRates, businessEntities, inspectionTemplates
+        jobs, setJobs, vehicles, customers, engineers, estimates, setEstimates, suppliers, parts, setParts, servicePackages, taxRates, businessEntities, inspectionTemplates
     } = data;
 
     const job = useMemo(() => Array.isArray(jobs) ? jobs.find(j => j.id === selectedJobId) : undefined, [jobs, selectedJobId]);
@@ -424,42 +426,77 @@ const EditJobModal: React.FC<{
     const supplierMap = useMemo(() => new Map((Array.isArray(suppliers) ? suppliers : []).map(s => [s.id, s.name])), [suppliers]);
     const engineerMap = useMemo(() => new Map((Array.isArray(engineers) ? engineers : []).map(e => [e.id, e.name])), [engineers]);
 
+    const derivedPartsStatus = useMemo(() => {
+        if (!job) return 'Not Required';
+        const poIds = job.purchaseOrderIds || [];
+        const hasPartsOnEstimate = (editableEstimate?.lineItems || []).some(li => !li.isLabor && (li.partId || li.partNumber));
+    
+        if (poIds.length === 0) {
+            return hasPartsOnEstimate ? 'Awaiting Parts' : 'Not Required';
+        }
+    
+        const relatedPOs = purchaseOrders.filter(po => poIds.includes(po.id));
+    
+        if (relatedPOs.length === 0) {
+            return hasPartsOnEstimate ? 'Awaiting Parts' : 'Not Required';
+        }
+        
+        const allCompleted = relatedPOs.every(po => po.status === 'Received' || po.status === 'Finalized');
+        if (allCompleted) {
+            return 'Fully Received';
+        }
+
+        const anyReceived = relatedPOs.some(po => po.status === 'Received' || po.status === 'Finalized' || po.status === 'Partially Received');
+        if (anyReceived) {
+            return 'Partially Received';
+        }
+    
+        const anySent = relatedPOs.some(po => po.status === 'Ordered');
+        if (anySent) {
+            return 'Ordered';
+        }
+        
+        return 'Awaiting Order';
+    }, [job, purchaseOrders, editableEstimate]);
+
+    useEffect(() => {
+        if (editableJob && derivedPartsStatus !== editableJob.partsStatus) {
+            setEditableJob(prev => prev ? { ...prev, partsStatus: derivedPartsStatus } : null);
+        }
+    }, [derivedPartsStatus, editableJob]);
+
+
     const handleSaveMain = async () => {
-        if (!editableJob) { 
-            onClose(); 
-            return; 
+        if (!editableJob) {
+            onClose();
+            return;
         }
     
         let jobToSave = { ...editableJob };
     
         if (editableEstimate) {
-            if (editableEstimate.id.endsWith('_temp')) {
-                const realEstimate = { ...editableEstimate, id: `est_${Date.now()}` };
-                await handleSaveItem(setEstimates, realEstimate);
-                jobToSave.estimateId = realEstimate.id;
-            } else {
-                await handleSaveItem(setEstimates, editableEstimate);
-            }
-            const totalLaborHours = (editableEstimate.lineItems || []).filter(li => li.isLabor).reduce((sum, li) => sum + li.quantity, 0);
-            jobToSave.estimatedHours = totalLaborHours;
-
-            const originalLineItemIds = new Set((mainEstimate?.lineItems || []).map(li => li.id));
-            const newLineItems = (editableEstimate.lineItems || []).filter(li => !originalLineItemIds.has(li.id));
-            
-            const newPartsForPO = newLineItems.filter(li => !li.isLabor && li.partId && !li.fromStock);
+            let estimateToSave = { ...editableEstimate };
+            let newEstimateId: string | null = null;
     
-            if (newPartsForPO.length > 0) {
-                const jobParts: T.JobPart[] = newPartsForPO.map(li => ({
-                    id: li.id,
-                    partId: li.partId!,
-                    description: li.description,
-                    quantity: li.quantity
-                }));
-                jobToSave.parts = [...(jobToSave.parts || []), ...jobParts];
+            if (estimateToSave.id.endsWith('_temp')) {
+                estimateToSave.id = `est_${Date.now()}`;
+                newEstimateId = estimateToSave.id;
             }
+    
+            // Intentionally not awaiting here to allow parallel saving
+            handleSaveItem(setEstimates, estimateToSave, 'brooks_estimates');
+    
+            if (newEstimateId) {
+                jobToSave.estimateId = newEstimateId;
+            }
+    
+            const totalLaborHours = (estimateToSave.lineItems || [])
+                .filter(li => li.isLabor)
+                .reduce((sum, li) => sum + Number(li.quantity || 0), 0);
+            jobToSave.estimatedHours = totalLaborHours;
         }
-        
-        await handleSaveItem(setJobs, jobToSave);
+    
+        await handleSaveItem(setJobs, jobToSave, 'brooks_jobs');
     
         onClose();
     };
@@ -479,11 +516,21 @@ const EditJobModal: React.FC<{
         }
     };
 
+    const jobRelatedPOs = useMemo(() => {
+        const poIds = job?.purchaseOrderIds || [];
+        return purchaseOrders.filter(po => poIds.includes(po.id));
+    }, [job, purchaseOrders]);
+
+    const poStatusKey = useMemo(() => {
+        return jobRelatedPOs.map(po => `${po.id}:${po.status}`).join(',');
+    }, [jobRelatedPOs]);
+
     const renderTabs = () => {
         switch (activeTab) {
             case 'estimate':
                 return (
                     <JobEstimateTab
+                        key={poStatusKey}
                         partsStatus={editableJob.partsStatus || 'Not Required'}
                         purchaseOrderIds={editableJob.purchaseOrderIds || []}
                         purchaseOrders={Array.isArray(purchaseOrders) ? purchaseOrders : []}
@@ -502,7 +549,14 @@ const EditJobModal: React.FC<{
                         grandTotal={grandTotal}
                         currentJobHours={editableJob.estimatedHours || 0}
                         onChange={handleChange}
-                        onOpenPurchaseOrder={onOpenPurchaseOrder}
+                        onOpenPurchaseOrder={(stalePo: T.PurchaseOrder) => {
+                            const freshPo = purchaseOrders.find(p => p.id === stalePo.id);
+                            if (freshPo) {
+                                onOpenPurchaseOrder(freshPo);
+                            } else {
+                                onOpenPurchaseOrder(stalePo);
+                            }
+                        }}
                         onCreateEstimate={handleCreateEstimateIfNeeded}
                         onRaiseSupplementaryEstimate={() => editableJob && onRaiseSupplementaryEstimate(editableJob)}
                         onViewEstimate={onViewEstimate}
@@ -532,7 +586,6 @@ const EditJobModal: React.FC<{
                         diagramImageId={diagramImageId}
                         onApplyTemplate={handleApplyInspectionTemplate}
                         selectedTemplateId={editableJob.inspectionTemplateId}
-                        inspectionTemplates={inspectionTemplates || []}
                     />
                 );
             case 'notes':
@@ -674,8 +727,7 @@ const EditJobModal: React.FC<{
                     initialMedia={mediaModalData}
                     onSave={(newMedia) => {
                         if (onMediaSaveCallback) {
-                            const callback = onMediaSaveCallback;
-                            callback(newMedia);
+                            onMediaSaveCallback(newMedia);
                         }
                         setIsMediaModalOpen(false);
                     }}
@@ -687,7 +739,17 @@ const EditJobModal: React.FC<{
                     isOpen={isAddingPart}
                     onClose={() => { setIsAddingPart(false); setTargetLineItemId(null); }}
                     onSave={handleSaveNewPart}
-                    part={{ description: newPartDescription } as Partial<T.Part>}
+                    part={{
+                        id: `new_${Date.now()}`,
+                        partNumber: '',
+                        description: newPartDescription,
+                        stockQuantity: 0,
+                        costPrice: 0,
+                        salePrice: 0,
+                        taxCodeId: standardTaxRateId || '',
+                        defaultSupplierId: '',
+                        isStockItem: false,
+                    }}
                     suppliers={suppliers || []} 
                     taxRates={taxRates || []}
                 />

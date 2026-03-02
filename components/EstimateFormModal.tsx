@@ -340,13 +340,25 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
         const customerId = selection?.value || selection?.id || selection;
         const customer = customers.find(c => c.id === customerId);
         if (!customer) return;
+
         setRecentCustomerIds(prev => [customer.id, ...prev.filter(id => id !== customer.id)].slice(0, 3));
-        const customersCars = vehicles.filter(v => v.customerId === customer.id);
-        setFormData(prev => ({ 
-            ...prev, 
-            customerId: customer.id, 
-            vehicleId: customersCars.length === 1 ? customersCars[0].id : '' 
-        }));
+
+        setFormData(prev => {
+            const customersCars = vehicles.filter(v => v.customerId === customer.id);
+            let newVehicleId = prev.vehicleId;
+
+            // If there's no vehicle selected, or the selected vehicle does not belong to the new customer
+            if (!newVehicleId || !customersCars.some(car => car.id === newVehicleId)) {
+                // If the new customer has only one car, select it. Otherwise, clear selection.
+                newVehicleId = customersCars.length === 1 ? customersCars[0].id : '';
+            }
+
+            return {
+                ...prev,
+                customerId: customer.id,
+                vehicleId: newVehicleId
+            };
+        });
     };
 
     const handleVehicleSelect = (selection: any) => {

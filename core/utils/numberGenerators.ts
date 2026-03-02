@@ -57,16 +57,6 @@ export const generateInvoiceId = (allInvoices: Invoice[], entityShortCode: strin
 };
 
 /**
- * Generates a unique sequential purchase order ID with an entity prefix.
- * Format: [3-letter entity code]944[6-digit sequence]
- */
-export const generatePurchaseOrderId = (allPurchaseOrders: PurchaseOrder[], entityShortCode: string): string => {
-    const prefix = '944';
-    const sequence = getNextSequence(allPurchaseOrders, entityShortCode, prefix, 'id');
-    return `${entityShortCode}${prefix}${sequence}`;
-};
-
-/**
  * Generates a unique sequential purchase ID with an entity prefix.
  * Format: [3-letter entity code]945[6-digit sequence]
  */

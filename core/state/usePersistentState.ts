@@ -1,95 +1,100 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { subscribeToCollection, getItem, saveDocument, setItem, getAll, db } from '../db';
-import { collection, getDocs } from 'firebase/firestore';
-import { isEqual } from 'lodash';
+import { useState, useEffect, useCallback } from 'react';
+import { getAll } from '../db'; // Firestore fetcher
+import { idbGet, idbSet, idbClear } from '../db/idb'; // Our new IndexedDB utility
 
-const getChangedDocuments = (oldState: any[], newState: any[]) => {
-    const changed: any[] = [];
-    const oldMap = new Map(oldState.map(i => [i.id, i]));
-    const newMap = new Map(newState.map(i => [i.id, i]));
+export type UsePersistentStateTuple<T> = [T, React.Dispatch<React.SetStateAction<T>>, () => Promise<void>, boolean];
 
-    // Check for new or updated items
-    for (const [id, newItem] of newMap.entries()) {
-        const oldItem = oldMap.get(id);
-        if (!oldItem || !isEqual(oldItem, newItem)) {
-            // Prevent duplicate MOT jobs
-            if (newItem.id.includes('-MOT') && oldState.some(job => job.id === newItem.id)) {
-                continue;
-            }
-            changed.push(newItem);
-        }
-    }
-
-    // Check for deleted items (optional, depending on desired behavior)
-    // for (const [id, oldItem] of oldMap.entries()) {
-    //     if (!newMap.has(id)) {
-    //         // Handle deletion if necessary
-    //     }
-    // }
-
-    return changed;
-};
-
-export const usePersistentState = <T,>(
-  storageKey: string, 
-  getInitialValue: () => T
-): [T, React.Dispatch<React.SetStateAction<T>>] => {
-  const [state, setState] = useState<T>(getInitialValue());
-  const isMounted = useRef(true);
-
-  useEffect(() => {
-    isMounted.current = true;
-    let unsubscribe = () => {};
+/**
+ * A hook to manage state that is persisted in IndexedDB and synchronized with Firestore.
+ * It replaces the previous localStorage-based implementation to handle large datasets.
+ */
+export function usePersistentState<T>(
+    key: string,
+    initialValue: T | (() => T)
+): UsePersistentStateTuple<T> {
+    // Initialize state with the provided default initialValue.
+    // The actual state will be loaded asynchronously from IndexedDB and/or Firestore.
+    const [state, setState] = useState<T>(() =>
+        typeof initialValue === 'function' ? (initialValue as () => T)() : initialValue
+    );
     
-    const initialVal = getInitialValue();
-    const isCollection = Array.isArray(initialVal);
+    // Flag to prevent writing to IndexedDB before the initial state has been loaded.
+    const [isInitialized, setIsInitialized] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
 
-    if (isCollection) {
-        const heavyCollections = ['brooks_parts', 'brooks_customers', 'brooks_vehicles', 'brooks_auditLog'];
-        
-        if (heavyCollections.includes(storageKey)) {
-            getAll<any>(storageKey).then(data => {
-                if (isMounted.current && data && data.length > 0) {
-                    setState(data as unknown as T);
-                }
-            }).catch(err => console.error(`Failed to fetch ${storageKey}`, err));
-        } else {
-            unsubscribe = subscribeToCollection(storageKey, (data) => {
-                if (!isMounted.current || (window as any).isSyncing) return;
-                
-                const incomingData = data as unknown as any[];
-                if (incomingData && incomingData.length >= (initialVal as any[]).length) {
-                    setState(data as unknown as T);
-                } 
-            });
+    // Function to refresh data from Firestore, update IndexedDB cache, and update the component state.
+    const refreshStateFromDb = useCallback(async () => {
+        console.log(`[Sync] Refreshing '${key}' from Firestore...`);
+        try {
+            const dbValue = await getAll(key); // Fetches all documents from the Firestore collection.
+            const derivedInitialValue = typeof initialValue === 'function' ? (initialValue as () => T)() : initialValue;
+            
+            const newState = (dbValue && (dbValue as any[]).length > 0) ? dbValue : derivedInitialValue;
+            
+            await idbSet(key, newState); // Update the IndexedDB cache.
+            setState(newState as T);     // Update the React state.
+            console.log(`[Sync] Successfully refreshed '${key}'.`);
+        } catch (error) {
+            console.error(`[Sync] Failed to refresh '${key}' from Firestore:`, error);
         }
-    } else {
-        getItem<T>(storageKey).then((data) => {
-            if (isMounted.current && data !== null) setState(data);
-        });
-    }
+    }, [key, initialValue]);
 
-    return () => {
-        isMounted.current = false;
-        unsubscribe();
-    };
-  }, [storageKey]);
+    // Effect to load initial data on component mount.
+    useEffect(() => {
+        let isMounted = true;
 
-  const setPersistentState: React.Dispatch<React.SetStateAction<T>> = (value) => {
-    setState((prevState) => {
-      const newState = typeof value === 'function' ? (value as (prevState: T) => T)(prevState) : value;
+        const loadInitialState = async () => {
+            setIsLoading(true);
+            // 1. Try to load from IndexedDB cache for a fast initial render.
+            console.log(`[Cache] Loading '${key}' from IndexedDB...`);
+            const cachedState = await idbGet<T>(key);
+            
+            if (isMounted && cachedState !== undefined) {
+                setState(cachedState);
+                console.log(`[Cache] Loaded '${key}' from cache.`);
+            } else {
+                console.log(`[Cache] No cache found for '${key}'.`);
+            }
+            
+            // 2. Mark initialization as complete so that subsequent state changes can be cached.
+            setIsInitialized(true);
 
-      if (Array.isArray(prevState) && Array.isArray(newState)) {
-        const changedDocs = getChangedDocuments(prevState, newState);
-        changedDocs.forEach(item => { 
-            if (item.id) saveDocument(storageKey, item); 
-        });
-      } else if (JSON.stringify(prevState) !== JSON.stringify(newState)) {
-        setItem(storageKey, newState);
-      }
-      return newState;
-    });
-  };
+            // 3. Refresh data from Firestore to ensure it's up-to-date.
+            // This was the original behavior, ensuring data consistency.
+            await refreshStateFromDb();
+            if (isMounted) {
+                setIsLoading(false);
+            }
+        };
 
-  return [state, setPersistentState];
+        loadInitialState();
+
+        return () => {
+            isMounted = false;
+        };
+    }, [key, refreshStateFromDb]); // refreshStateFromDb is memoized with useCallback.
+
+    // Effect to persist local state changes to the IndexedDB cache.
+    // This captures optimistic UI updates (e.g., adding an item to a list before it's saved to the backend).
+    useEffect(() => {
+        // Only run this effect after the initial state has been loaded.
+        if (!isInitialized) {
+            return;
+        }
+
+        const saveStateToCache = async () => {
+            console.log(`[Cache] Saving '${key}' to IndexedDB...`);
+            await idbSet(key, state);
+        };
+        
+        saveStateToCache();
+    }, [key, state, isInitialized]);
+
+    return [state, setState, refreshStateFromDb, isLoading];
+}
+
+// Function to clear the entire IndexedDB cache.
+export const clearAllPersistentData = async () => {
+    await idbClear();
+    console.log('All persistent cache data in IndexedDB has been cleared.');
 };

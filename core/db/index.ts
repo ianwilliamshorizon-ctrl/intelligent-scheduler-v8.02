@@ -63,6 +63,9 @@ export const subscribeToCollection = <T>(
         const sortedItems = items.sort((a: any, b: any) => {
             const valA = (a.name || a.label || a.id || '').toLowerCase();
             const valB = (b.name || b.label || b.id || '').toLowerCase();
+            if (valA instanceof Date && valB instanceof Date) {
+                return valA.getTime() - valB.getTime();
+            }
             return valA.localeCompare(valB);
         });
         

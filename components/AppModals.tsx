@@ -3,7 +3,6 @@ import * as T from '../types';
 import { useData } from '../core/state/DataContext';
 import { useApp } from '../core/state/AppContext';
 import { formatDate } from '../core/utils/dateUtils';
-import { generatePurchaseOrderId } from '../core/utils/numberGenerators';
 import { ModalState, ModalSetters } from '../core/hooks/useModalState';
 
 // Modal Components
@@ -40,6 +39,32 @@ import CustomerFormModal from './CustomerFormModal';
 import VehicleFormModal from './VehicleFormModal';
 import VehicleHistoryReportModal from './VehicleHistoryReportModal';
 
+// HELPER FUNCTIONS MOVED HERE
+const getNextSequence = (items: any[], entityShortCode: string, prefix: string, key: string): string => {
+    if (!entityShortCode) {
+        console.error(`Cannot generate ID with prefix ${prefix} because entityShortCode is missing.`);
+        return 'ERROR';
+    }
+    const fullPrefix = `${entityShortCode.toUpperCase()}${prefix}`;
+    const relevantItems = items.filter(item => item[key] && typeof item[key] === 'string' && item[key].startsWith(fullPrefix));
+    let maxNumber = 0;
+    relevantItems.forEach(item => {
+        const numberPart = parseInt(item[key].substring(fullPrefix.length), 10);
+        if (!isNaN(numberPart) && numberPart > maxNumber) {
+            maxNumber = numberPart;
+        }
+    });
+    const newNumber = maxNumber + 1;
+    return String(newNumber).padStart(6, '0');
+};
+
+const generatePurchaseOrderId = (allPurchaseOrders: T.PurchaseOrder[], entityShortCode: string): string => {
+    const prefix = '944';
+    const sequence = getNextSequence(allPurchaseOrders, entityShortCode, prefix, 'id');
+    return `${entityShortCode}${prefix}${sequence}`;
+};
+
+
 // Define the shape of the actions object passed from App.tsx
 interface AppModalActions {
     handleSaveItem: (setter: React.Dispatch<React.SetStateAction<any[]>>, item: any, collectionOverride?: string) => Promise<void>;
@@ -53,6 +78,7 @@ interface AppModalActions {
     updateLinkedInquiryStatus: (estimateId: string, newStatus: T.Inquiry['status'], extraUpdates?: Partial<T.Inquiry>) => Promise<void>;
     handleMarkJobAsAwaitingCollection: (jobId: string) => void;
     handleDeleteJob: (jobId: string) => Promise<void>;
+    handleRefreshPurchaseOrder: (poId: string) => Promise<T.PurchaseOrder | void>;
 }
 
 interface AppModalsProps {
@@ -70,7 +96,8 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
         saleVehicles, prospects, absenceRequests, setPurchaseOrders, setJobs, 
         setEstimates, setInvoices, setStorageBookings, setRentalBookings, 
         setSaleVehicles, setProspects, setInquiries, setParts,
-        saleOverheadPackages, inquiries, batteryChargers, lifts,discountCodes
+        saleOverheadPackages, inquiries, batteryChargers, lifts,discountCodes,
+        forceRefresh
     } = useData();
     
     const { currentUser, selectedEntityId, confirmation, setConfirmation, users } = useApp();
@@ -96,7 +123,8 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                     isOpen={true}
                     onClose={() => setters.setIsEditJobModalOpen(false)}
                     selectedJobId={modals.selectedJobId}
-                    onOpenPurchaseOrder={(po) => setters.setViewPoModal({isOpen: true, po})}
+                    purchaseOrders={purchaseOrders}
+                    onOpenPurchaseOrder={(po) => setters.setPoModal({isOpen: true, po})}
                     rentalBookings={rentalBookings}
                     onOpenRentalBooking={(b) => setters.setRentalBookingModal({isOpen: true, booking: b})}
                     onOpenConditionReport={(b, mode) => setters.setRentalConditionModal({isOpen: true, booking: b, mode})}
@@ -116,6 +144,7 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                     onCheckIn={(job) => setters.setCheckInJob(job)}
                     onCheckOut={(job) => setters.setCheckOutJob(job)}
                     onDelete={actions.handleDeleteJob}
+                    generatePurchaseOrderId={generatePurchaseOrderId}
                 />
             )}
 
@@ -154,6 +183,8 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                     customers={customers}
                     setJobs={setJobs}
                     onViewPurchaseOrder={(po) => { setters.setPoModal({isOpen: false, po: null}); setters.setViewPoModal({isOpen: true, po}); }}
+                    generatePurchaseOrderId={generatePurchaseOrderId}
+                    forceRefresh={forceRefresh}
                 />
             )}
 
@@ -188,6 +219,7 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                     taxRates={taxRates}
                     onSetStatusToOrdered={(po) => actions.handleSavePurchaseOrder(po)}
                     onOpenForEditing={(po) => { setters.setViewPoModal({isOpen: false, po: null}); setters.setPoModal({isOpen: true, po}); }}
+                    onRefresh={actions.handleRefreshPurchaseOrder}
                 />
             )}
 

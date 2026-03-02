@@ -78,13 +78,16 @@ const App = () => {
         reminders, auditLog, businessEntities, taxRates, roles, inspectionDiagrams,
         setJobs, setEstimates, setInvoices, setPurchaseOrders, setRentalBookings,
         setStorageBookings, setProspects, setInquiries, setAbsenceRequests, setParts,
-        setCustomers, setVehicles
+        setCustomers, setVehicles,
+        forceRefresh
     } = data;
 
     const [modalsState, setters] = useModalState();
     const [isManagementOpen, setIsManagementOpen] = useState(false);
     const [managementInitialView, setManagementInitialView] = useState<{ tab: string; id: string } | null>(null);
     const lastBackupTimeRef = useRef<string | null>(null);
+    const [poToViewId, setPoToViewId] = useState<string | null>(null);
+
 
     const handleGenerateInvoice = (jobId: string) => {
         const job = (jobs || []).find(j => j.id === jobId);
@@ -163,6 +166,21 @@ const App = () => {
         return () => window.removeEventListener('open-vehicle-history-report', handlePrintRequest);
     }, [setters]);
 
+    const handleRefreshPurchaseOrder = async (poId: string) => {
+        setPoToViewId(poId);
+        await forceRefresh('brooks_purchaseOrders');
+    };
+
+    useEffect(() => {
+        if (poToViewId && purchaseOrders && purchaseOrders.length > 0) {
+            const latestPo = purchaseOrders.find(p => p.id === poToViewId);
+            if (latestPo) {
+                setters.setViewPoModal({ isOpen: true, po: latestPo });
+                setPoToViewId(null);
+            }
+        }
+    }, [purchaseOrders, poToViewId, setters]);
+
     if (!isAuthenticated) {
         return <LoginView users={users} onLogin={login} environment={appEnvironment} />;
     }
@@ -230,6 +248,7 @@ const App = () => {
         handleCustomerApproveEstimate, handleCustomerDeclineEstimate,
         updateLinkedInquiryStatus: workshopActions.updateLinkedInquiryStatus,
         handleMarkJobAsAwaitingCollection,
+        handleRefreshPurchaseOrder,
         handleDeleteJob: workshopActions.handleDeleteJob
     };
 

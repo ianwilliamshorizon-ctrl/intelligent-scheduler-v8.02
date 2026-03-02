@@ -2,131 +2,121 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { PurchaseOrder, PurchaseOrderLineItem, Supplier, BusinessEntity, TaxRate, Part, Vehicle, Customer, Job } from '../types';
 import { Save, PlusCircle, Trash2, X, CheckSquare, ArrowDownCircle, AlertTriangle, Info } from 'lucide-react';
 import { formatDate } from '../core/utils/dateUtils';
-import { generatePurchaseOrderId } from '../core/utils/numberGenerators';
 import { formatCurrency } from '../utils/formatUtils';
 import useToaster from '../hooks/useToaster';
 import { HoverInfo } from './shared/HoverInfo';
 
-
-interface EditableLineItemRowProps {
+interface PurchaseOrderLineItemRowProps {
     item: PurchaseOrderLineItem;
     parts: Part[];
     onLineItemChange: (id: string, field: keyof PurchaseOrderLineItem, value: any) => void;
     onRemoveLineItem: (id: string) => void;
     isReceivingDisabled: boolean;
     isOrderedOrLater: boolean;
-    isCostPriceChanged: boolean;
-    newSalePrice: string;
-    onNewSalePriceChange: (value: string) => void;
     isCredit: boolean;
     isNewItem: boolean;
 }
 
-const MemoizedEditableLineItemRow = React.memo(({ 
-    item, 
+const PurchaseOrderLineItemRow: React.FC<PurchaseOrderLineItemRowProps> = ({
+    item,
     parts,
-    onLineItemChange, 
-    onRemoveLineItem, 
-    isReceivingDisabled, 
-    isOrderedOrLater, 
-    isCostPriceChanged, 
-    newSalePrice, 
-    onNewSalePriceChange, 
+    onLineItemChange,
+    onRemoveLineItem,
+    isReceivingDisabled,
+    isOrderedOrLater,
     isCredit,
     isNewItem
-}: EditableLineItemRowProps) => {
-    
+}) => {
+    const [partSearch, setPartSearch] = useState(item.partNumber || '');
+    const [showResults, setShowResults] = useState(false);
+
+    const filteredParts = useMemo(() => {
+        if (partSearch.length < 2) return [];
+        const lowerSearch = partSearch.toLowerCase();
+        return parts.filter(p =>
+            p.partNumber.toLowerCase().includes(lowerSearch) ||
+            p.description.toLowerCase().includes(lowerSearch)
+        ).slice(0, 10);
+    }, [partSearch, parts]);
+
+    const handleSelectPart = (part: Part) => {
+        onLineItemChange(item.id, 'partNumber', part.partNumber);
+        onLineItemChange(item.id, 'description', part.description);
+        onLineItemChange(item.id, 'unitPrice', part.costPrice);
+        setPartSearch(part.partNumber);
+        setShowResults(false);
+    };
+
     const fieldsDisabled = isOrderedOrLater && !isNewItem;
     const ordered = item.quantity || 0;
     const received = item.receivedQuantity || 0;
-    const remaining = isCredit ? 0 : Math.max(0, ordered - received);
     const isFullyReceived = isCredit ? (Math.abs(received) >= Math.abs(ordered)) : (received >= ordered && ordered > 0);
     const isPendingReturn = item.returnStatus === 'Pending';
-
-    const handlePartNumberChange = (val: string) => {
-        onLineItemChange(item.id, 'partNumber', val);
-        const foundPart = parts.find(p => p.partNumber.toLowerCase() === val.toLowerCase());
-        if (foundPart) {
-            onLineItemChange(item.id, 'description', foundPart.description || '');
-            onLineItemChange(item.id, 'unitPrice', foundPart.costPrice || 0);
-        }
-    };
-
     const canReceive = !isReceivingDisabled && !isCredit;
     const hasBeenReceived = (item.receivedQuantity || 0) > 0;
-    
-    return (
-        <>
-            <div className={`grid grid-cols-12 gap-2 items-center p-2 border bg-white ${isCostPriceChanged ? 'rounded-t-lg border-b-0' : 'rounded-lg'} ${isFullyReceived && isOrderedOrLater ? 'bg-green-50/50' : ''} ${isPendingReturn ? 'bg-amber-50 border-amber-200' : ''} ${isCredit ? 'bg-red-50/30' : ''}`}>
-                <div className="col-span-2">
-                    <input 
-                        type="text" 
-                        placeholder="Part Number" 
-                        value={item.partNumber || ''} 
-                        onChange={e => handlePartNumberChange(e.target.value)} 
-                        className="w-full p-1 border rounded disabled:bg-gray-100 disabled:cursor-not-allowed text-sm font-medium" 
-                        disabled={fieldsDisabled} 
-                    />
-                </div>
-                <input type="text" placeholder="Description" value={item.description || ''} onChange={e => onLineItemChange(item.id, 'description', e.target.value)} className="col-span-4 p-1 border rounded disabled:bg-gray-100 disabled:cursor-not-allowed text-sm" disabled={fieldsDisabled} />
-                <input type="number" step="1" value={item.quantity ?? 0} onChange={e => onLineItemChange(item.id, 'quantity', e.target.value)} className={`col-span-1 p-1 border rounded text-right disabled:bg-gray-100 disabled:cursor-not-allowed text-sm ${isCredit ? 'text-red-600 font-bold' : ''}`} disabled={fieldsDisabled} />
-                
-                <div className="col-span-2 relative">
-                    <input 
-                        type="number" 
-                        step="1" 
-                        value={item.receivedQuantity ?? ''} 
-                        onChange={e => onLineItemChange(item.id, 'receivedQuantity', e.target.value)} 
-                        placeholder="0" 
-                        className={`w-full p-1 border rounded text-right disabled:bg-gray-100 text-sm ${!isReceivingDisabled && remaining > 0 ? 'border-blue-400 ring-1 ring-blue-100 font-bold' : ''}`} 
-                        disabled={isReceivingDisabled} 
-                        title={`Ordered: ${ordered}`}
-                    />
-                </div>
 
-                <input type="number" step="0.01" value={item.unitPrice ?? 0} onChange={e => onLineItemChange(item.id, 'unitPrice', e.target.value)} className="col-span-2 p-1 border rounded text-right text-sm" placeholder="Unit Cost"/>
-                
-                <div className="col-span-1 flex justify-center">
-                    {canReceive && hasBeenReceived ? (
-                        <button 
-                            type="button"
-                            onClick={() => onLineItemChange(item.id, 'returnStatus', isPendingReturn ? 'None' : 'Pending')}
-                            className={`p-1 rounded ${isPendingReturn ? 'bg-amber-100 text-amber-600' : 'text-gray-300 hover:text-amber-500'}`}
-                            title={isPendingReturn ? 'Cancel Return Request' : 'Mark Item for Return'}
-                        >
-                            <AlertTriangle size={16} fill={isPendingReturn ? "currentColor" : "none"}/>
-                        </button>
-                    ) : (
-                        <button 
-                            onClick={() => onRemoveLineItem(item.id)} 
-                            className="text-red-500 hover:text-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                            title="Delete Line Item"
-                            disabled={isOrderedOrLater && hasBeenReceived}
-                        >
-                            <Trash2 size={14} />
-                        </button>
-                    )}
-                </div>
+    return (
+        <div className={`grid grid-cols-12 gap-2 items-start p-2 border bg-white rounded-lg ${isFullyReceived && isOrderedOrLater ? 'bg-green-50/50' : ''} ${isPendingReturn ? 'bg-amber-50 border-amber-200' : ''} ${isCredit ? 'bg-red-50/30' : ''}`}>
+            <div className="col-span-2 relative">
+                <input
+                    type="text"
+                    placeholder="Search Part No..."
+                    value={partSearch}
+                    onChange={e => {
+                        setPartSearch(e.target.value);
+                        onLineItemChange(item.id, 'partNumber', e.target.value);
+                        if (!showResults) setShowResults(true);
+                    }}
+                    onFocus={() => setShowResults(true)}
+                    onBlur={() => setTimeout(() => setShowResults(false), 200)}
+                    className="w-full p-1 border rounded disabled:bg-gray-100 disabled:cursor-not-allowed text-sm font-medium"
+                    disabled={fieldsDisabled}
+                />
+                {showResults && filteredParts.length > 0 && (
+                    <div className="absolute z-20 w-full bg-white border rounded-md mt-1 max-h-60 overflow-y-auto shadow-lg">
+                        {filteredParts.map(part => (
+                            <div key={part.id} onMouseDown={() => handleSelectPart(part)} className="p-2 hover:bg-indigo-50 cursor-pointer">
+                                <p className="font-bold text-sm">{part.partNumber}</p>
+                                <p className="text-xs text-gray-500">{part.description}</p>
+                                <p className="text-xs text-gray-500">Stock: {part.stockQuantity}</p>
+                            </div>
+                        ))}
+                    </div>
+                )}
             </div>
-            {isCostPriceChanged && (
-                <div className="grid grid-cols-12 gap-2 items-center p-2 rounded-b-lg border-x border-b bg-blue-50 border-blue-200">
-                    <div className="col-start-6 col-span-3 text-right text-sm font-semibold text-blue-800">
-                        Cost price changed. Update sale price:
-                    </div>
-                    <div className="col-span-2">
-                        <input
-                            type="number"
-                            step="0.01"
-                            value={newSalePrice || ''}
-                            onChange={(e) => onNewSalePriceChange(e.target.value)}
-                            className="w-full p-1 border rounded text-right border-blue-300 focus:ring-blue-500"
-                        />
-                    </div>
-                </div>
-            )}
-        </>
+
+            <input type="text" placeholder="Description" value={item.description || ''} onChange={e => onLineItemChange(item.id, 'description', e.target.value)} className="col-span-4 p-1 border rounded disabled:bg-gray-100 disabled:cursor-not-allowed text-sm" disabled={fieldsDisabled} />
+            <input type="number" step="1" value={item.quantity ?? 0} onChange={e => onLineItemChange(item.id, 'quantity', e.target.value)} className={`col-span-1 p-1 border rounded text-right disabled:bg-gray-100 disabled:cursor-not-allowed text-sm ${isCredit ? 'text-red-600 font-bold' : ''}`} disabled={fieldsDisabled} />
+
+            <div className="col-span-2 relative">
+                <input
+                    type="number"
+                    step="1"
+                    value={item.receivedQuantity ?? ''}
+                    onChange={e => onLineItemChange(item.id, 'receivedQuantity', e.target.value)}
+                    placeholder="0"
+                    className={`w-full p-1 border rounded text-right disabled:bg-gray-100 text-sm`}
+                    disabled={isReceivingDisabled}
+                    title={`Ordered: ${ordered}`}
+                />
+            </div>
+
+            <input type="number" step="0.01" value={item.unitPrice ?? 0} onChange={e => onLineItemChange(item.id, 'unitPrice', e.target.value)} className="col-span-2 p-1 border rounded text-right text-sm" placeholder="Unit Cost"/>
+
+            <div className="col-span-1 flex justify-center items-center">
+                {canReceive && hasBeenReceived ? (
+                    <button type="button" onClick={() => onLineItemChange(item.id, 'returnStatus', isPendingReturn ? 'None' : 'Pending')} className={`p-1 rounded ${isPendingReturn ? 'bg-amber-100 text-amber-600' : 'text-gray-300 hover:text-amber-500'}`} title={isPendingReturn ? 'Cancel Return Request' : 'Mark Item for Return'}>
+                        <AlertTriangle size={16} fill={isPendingReturn ? "currentColor" : "none"}/>
+                    </button>
+                ) : (
+                    <button onClick={() => onRemoveLineItem(item.id)} className="text-red-500 hover:text-red-700 disabled:opacity-50 disabled:cursor-not-allowed" title="Delete Line Item" disabled={isOrderedOrLater && hasBeenReceived}>
+                        <Trash2 size={14} />
+                    </button>
+                )}
+            </div>
+        </div>
     );
-});
+};
 
 interface PurchaseOrderFormModalProps {
     isOpen: boolean;
@@ -146,9 +136,11 @@ interface PurchaseOrderFormModalProps {
     vehicles: Vehicle[];
     customers: Customer[];
     setJobs: React.Dispatch<React.SetStateAction<Job[]>>;
+    generatePurchaseOrderId: (allPurchaseOrders: PurchaseOrder[], entityShortCode: string) => string;
+    forceRefresh: (collectionKey: string) => Promise<void>;
 }
 
-const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen, onClose, onSave, purchaseOrder, suppliers, taxRates, businessEntities, allPurchaseOrders, selectedEntityId, parts, setParts, onViewPurchaseOrder, jobId, jobs, vehicles, customers, setJobs }) => {
+const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen, onClose, onSave, purchaseOrder, suppliers, taxRates, businessEntities, allPurchaseOrders, selectedEntityId, parts, setParts, onViewPurchaseOrder, jobId, jobs, vehicles, customers, setJobs, generatePurchaseOrderId, forceRefresh }) => {
     const [formData, setFormData] = useState<Partial<PurchaseOrder>>({ 
         lineItems: [],
         supplierId: '',
@@ -161,7 +153,6 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
         orderDate: formatDate(new Date()),
         jobId: '',
     });
-    const [newSalePrices, setNewSalePrices] = useState<Record<string, string>>({});
     const { showError, showSuccess } = useToaster();
 
     const saveAndLinkPo = useCallback((poToSave: PurchaseOrder) => {
@@ -251,7 +242,6 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
 
     useEffect(() => {
         if (!isOpen) return;
-        setNewSalePrices({});
 
         if (purchaseOrder) {
             const data = JSON.parse(JSON.stringify(purchaseOrder));
@@ -285,7 +275,7 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
                 entityId: selectedEntityId,
                 supplierId: '',
                 orderDate: formatDate(new Date()),
-                status: 'Draft',
+                status: 'Draft', 
                 lineItems: [],
                 notes: '',
                 vehicleRegistrationRef: '',
@@ -346,25 +336,6 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
         }));
     };
 
-    const getPartUpdates = useCallback((): Part[] => {
-        const updatedParts: Part[] = [];
-        (formData.lineItems || []).forEach(item => {
-            const originalItem = (purchaseOrder?.lineItems || []).find(li => li.id === item.id);
-            if (originalItem && item.unitPrice !== originalItem.unitPrice && item.partNumber) {
-                const partToUpdate = parts.find(p => p.partNumber === item.partNumber);
-                if (partToUpdate) {
-                    let newSalePrice = partToUpdate.salePrice;
-                    if (newSalePrices[item.id]) {
-                        const parsed = parseFloat(newSalePrices[item.id]);
-                        if (!isNaN(parsed)) newSalePrice = parsed;
-                    }
-                    updatedParts.push({ ...partToUpdate, costPrice: item.unitPrice, salePrice: newSalePrice });
-                }
-            }
-        });
-        return updatedParts;
-    }, [formData.lineItems, purchaseOrder, parts, newSalePrices]);
-
     const calculateFinalStatus = (lineItems: PurchaseOrderLineItem[]): PurchaseOrder['status'] => {
         if (lineItems.length === 0) return formData.status as PurchaseOrder['status'] || 'Draft';
         
@@ -380,7 +351,7 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
         return 'Ordered';
     };
 
-    const handleSave = () => {
+    const handleSave = async () => {
         if (isOriginalStatusReceived) {
             showError('This purchase order has been received and cannot be modified.');
             return;
@@ -405,15 +376,16 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
             ...formData,
             id: formData.id || generatePurchaseOrderId(allPurchaseOrders, entityShortCode),
             status: newStatus,
-            partUpdates: getPartUpdates(),
             jobId: formData.jobId,
         };
         
         saveAndLinkPo(payload as PurchaseOrder);
+        await forceRefresh('brooks_purchaseOrders');
+        await forceRefresh('brooks_jobs');
         onClose();
     };
 
-    const handleFinalizeReceipt = () => {
+    const handleFinalizeReceipt = async () => {
         if (isOriginalStatusReceived) {
             showError('This purchase order has already been finalized.');
             return;
@@ -439,7 +411,6 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
             ...formData,
             id: formData.id || generatePurchaseOrderId(allPurchaseOrders, entityShortCode),
             status: newStatus,
-            partUpdates: getPartUpdates(),
             jobId: formData.jobId,
         };
 
@@ -470,6 +441,8 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
         }
         
         saveAndLinkPo(updatedPO as PurchaseOrder);
+        await forceRefresh('brooks_purchaseOrders');
+        await forceRefresh('brooks_jobs');
         onClose();
     };
 
@@ -591,7 +564,7 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
                         </div>
 
                         {(formData.lineItems || []).map(item => (
-                            <MemoizedEditableLineItemRow 
+                            <PurchaseOrderLineItemRow 
                                 key={item.id} 
                                 item={item} 
                                 parts={parts}
@@ -599,9 +572,6 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
                                 onRemoveLineItem={removeLineItem} 
                                 isReceivingDisabled={isReceivingDisabled}
                                 isOrderedOrLater={isOrderedOrLater}
-                                isCostPriceChanged={!!(item.partNumber && partsMap.get(item.partNumber.toLowerCase()) && item.unitPrice !== (purchaseOrder?.lineItems?.find(li => li.id === item.id)?.unitPrice))}
-                                newSalePrice={newSalePrices[item.id] || ''}
-                                onNewSalePriceChange={(v) => setNewSalePrices(p => ({...p, [item.id]: v}))}
                                 isCredit={formData.type === 'Credit'}
                                 isNewItem={!originalLineItemIds.has(item.id)}
                             />

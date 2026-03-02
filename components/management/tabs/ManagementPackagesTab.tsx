@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { useData } from '../../../core/state/DataContext';
 import { ServicePackage } from '../../../types';
-import { PlusCircle } from 'lucide-react';
+import { PlusCircle, Copy } from 'lucide-react';
 import { formatCurrency } from '../../../utils/formatUtils';
 import ServicePackageFormModal from '../../ServicePackageFormModal';
 import { useManagementTable } from '../hooks/useManagementTable';
@@ -23,6 +23,16 @@ export const ManagementPackagesTab: React.FC<ManagementPackagesTabProps> = ({ se
 
     const filteredPackages = servicePackages.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
 
+    const handleClone = (pkg: ServicePackage) => {
+        const newPackage: ServicePackage = {
+            ...pkg,
+            id: `pkg_${Date.now()}`,
+            name: `${pkg.name} (Copy)`,
+        };
+        updateItem(newPackage);
+        onShowStatus(`Cloned "${pkg.name}" successfully.`, 'success');
+    };
+
     return (
         <div>
             <div className="flex justify-end mb-4">
@@ -40,6 +50,7 @@ export const ManagementPackagesTab: React.FC<ManagementPackagesTabProps> = ({ se
                                 <td className="p-2 text-right">{formatCurrency(p.totalPrice)}</td>
                                 <td className="p-2">
                                     <button onClick={() => { setSelectedPackage(p); setIsModalOpen(true); }} className="text-indigo-600 hover:underline mr-2">Edit</button>
+                                    <button onClick={() => handleClone(p)} className="text-blue-600 hover:underline mr-2 flex items-center gap-1"><Copy size={12}/> Clone</button>
                                     <button onClick={() => deleteItem(p.id)} className="text-red-600 hover:underline">Delete</button>
                                 </td>
                             </tr>

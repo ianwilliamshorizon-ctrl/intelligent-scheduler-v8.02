@@ -16,15 +16,12 @@ const PartFormModal: React.FC<PartFormModalProps> = ({ isOpen, onClose, onSave, 
     useEffect(() => {
         if (isOpen) {
             if (part) {
-                // Deep copy to prevent state mutation issues
                 const sanitizedPart = JSON.parse(JSON.stringify(part));
-                // Set isStockItem to false if it's null or undefined
                 if (sanitizedPart.isStockItem == null) {
                     sanitizedPart.isStockItem = false;
                 }
                 setFormData(sanitizedPart);
             } else {
-                // Default for NEW parts
                 setFormData({
                     partNumber: '',
                     description: '',
@@ -43,7 +40,6 @@ const PartFormModal: React.FC<PartFormModalProps> = ({ isOpen, onClose, onSave, 
         const { name, value, type } = e.target;
         if (type === 'checkbox') {
              setFormData(prev => ({ ...prev, [name]: (e.target as HTMLInputElement).checked }));
-             console.log(formData);
         } else {
             setFormData(prev => ({ ...prev, [name]: value }));
         }
@@ -51,8 +47,8 @@ const PartFormModal: React.FC<PartFormModalProps> = ({ isOpen, onClose, onSave, 
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        // Type assertion to satisfy onSave prop
         onSave(formData as T.Part);
+        onClose();
     };
 
     if (!isOpen) return null;

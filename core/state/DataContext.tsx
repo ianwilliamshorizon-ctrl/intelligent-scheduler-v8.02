@@ -1,9 +1,6 @@
-import React, { createContext, useContext, useEffect, useMemo, useRef } from 'react';
+import React, { createContext, useContext, useMemo, useCallback, useRef } from 'react';
 import * as T from '../../types';
-import { usePersistentState } from './usePersistentState';
-import { db } from '../db';
-import { writeBatch, doc } from 'firebase/firestore';
-
+import { usePersistentState, UsePersistentStateTuple } from './usePersistentState';
 import {
     getInitialJobs, getInitialVehicles, getInitialCustomers, getInitialEngineers,
     getInitialEstimates, getInitialInvoices, getInitialPurchaseOrders,
@@ -15,8 +12,9 @@ import {
     getInitialAbsenceRequests, getInitialProspects, getInitialInquiries,
     getInitialReminders, getInitialAuditLog, getInitialRoles, getInitialInspectionDiagrams,
     getInitialInspectionTemplates, getInitialDiscountCodes
-} from '../data/initialData'; 
+} from '../data/initialData';
 
+// Defines the shape of the context, including all data collections and setters.
 interface DataContextType {
     jobs: T.Job[]; setJobs: React.Dispatch<React.SetStateAction<T.Job[]>>;
     vehicles: T.Vehicle[]; setVehicles: React.Dispatch<React.SetStateAction<T.Vehicle[]>>;
@@ -50,122 +48,90 @@ interface DataContextType {
     inspectionDiagrams: T.InspectionDiagram[]; setInspectionDiagrams: React.Dispatch<React.SetStateAction<T.InspectionDiagram[]>>;
     inspectionTemplates: T.InspectionTemplate[]; setInspectionTemplates: React.Dispatch<React.SetStateAction<T.InspectionTemplate[]>>;
     discountCodes: T.DiscountCode[]; setDiscountCodes: React.Dispatch<React.SetStateAction<T.DiscountCode[]>>;
+    forceRefresh: (collectionKey: keyof any) => Promise<void>;
+    isDataLoaded: boolean; // Flag to indicate if all data has been loaded.
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const [jobs, setJobs] = usePersistentState<T.Job[]>('brooks_jobs', getInitialJobs);
-    const [vehicles, setVehicles] = usePersistentState<T.Vehicle[]>('brooks_vehicles', getInitialVehicles);
-    const [customers, setCustomers] = usePersistentState<T.Customer[]>('brooks_customers', getInitialCustomers);
-    const [estimates, setEstimates] = usePersistentState<T.Estimate[]>('brooks_estimates', getInitialEstimates);
-    const [invoices, setInvoices] = usePersistentState<T.Invoice[]>('brooks_invoices', getInitialInvoices);
-    const [purchaseOrders, setPurchaseOrders] = usePersistentState<T.PurchaseOrder[]>('brooks_purchaseOrders', getInitialPurchaseOrders);
-    const [purchases, setPurchases] = usePersistentState<T.Purchase[]>('brooks_purchases', getInitialPurchases);
-    const [parts, setParts] = usePersistentState<T.Part[]>('brooks_parts', getInitialParts);
-    const [servicePackages, setServicePackages] = usePersistentState<T.ServicePackage[]>('brooks_servicePackages', getInitialServicePackages);
-    const [suppliers, setSuppliers] = usePersistentState<T.Supplier[]>('brooks_suppliers', getInitialSuppliers);
-    const [engineers, setEngineers] = usePersistentState<T.Engineer[]>('brooks_engineers', getInitialEngineers);
-    const [lifts, setLifts] = usePersistentState<T.Lift[]>('brooks_lifts', getInitialLifts);
-    const [rentalVehicles, setRentalVehicles] = usePersistentState<T.RentalVehicle[]>('brooks_rentalVehicles', getInitialRentalVehicles);
-    const [rentalBookings, setRentalBookings] = usePersistentState<T.RentalBooking[]>('brooks_rentalBookings', getInitialRentalBookings);
-    const [saleVehicles, setSaleVehicles] = usePersistentState<T.SaleVehicle[]>('brooks_saleVehicles', getInitialSaleVehicles);
-    const [saleOverheadPackages, setSaleOverheadPackages] = usePersistentState<T.SaleOverheadPackage[]>('brooks_saleOverheadPackages', getInitialSaleOverheadPackages);
-    const [prospects, setProspects] = usePersistentState<T.Prospect[]>('brooks_prospects', getInitialProspects);
-    const [storageBookings, setStorageBookings] = usePersistentState<T.StorageBooking[]>('brooks_storageBooking', getInitialStorageBookings);
-    const [storageLocations, setStorageLocations] = usePersistentState<T.StorageLocation[]>('brooks_storageLocations', getInitialStorageLocations);
-    const [batteryChargers, setBatteryChargers] = usePersistentState<T.BatteryCharger[]>('brooks_batteryChargers', getInitialBatteryChargers);
-    const [nominalCodes, setNominalCodes] = usePersistentState<T.NominalCode[]>('brooks_nominalCodes', getInitialNominalCodes);
-    const [nominalCodeRules, setNominalCodeRules] = usePersistentState<T.NominalCodeRule[]>('brooks_nominalCodeRules', getInitialNominalCodeRules);
-    const [absenceRequests, setAbsenceRequests] = usePersistentState<T.AbsenceRequest[]>('brooks_absenceRequests', getInitialAbsenceRequests);
-    const [inquiries, setInquiries] = usePersistentState<T.Inquiry[]>('brooks_inquiries', getInitialInquiries);
-    const [reminders, setReminders] = usePersistentState<T.Reminder[]>('brooks_reminders', getInitialReminders);
-    const [auditLog, setAuditLog] = usePersistentState<T.AuditLogEntry[]>('brooks_auditLog', getInitialAuditLog);
-    const [businessEntities, setBusinessEntities] = usePersistentState<T.BusinessEntity[]>('brooks_businessEntities', getInitialBusinessEntities);
-    const [taxRates, setTaxRates] = usePersistentState<T.TaxRate[]>('brooks_taxRates', getInitialTaxRates);
-    const [roles, setRoles] = usePersistentState<T.Role[]>('brooks_roles', getInitialRoles);
-    const [inspectionDiagrams, setInspectionDiagrams] = usePersistentState<T.InspectionDiagram[]>('brooks_inspectionDiagrams', getInitialInspectionDiagrams);
-    const [inspectionTemplates, setInspectionTemplates] = usePersistentState<T.InspectionTemplate[]>('brooks_inspectionTemplates', getInitialInspectionTemplates);
-    const [discountCodes, setDiscountCodes] = usePersistentState<T.DiscountCode[]>('brooks_discountCodes', getInitialDiscountCodes);
-    const isFirstRun = useRef(true);
 
-    useEffect(() => {
-        if (!isFirstRun.current) return;
-        isFirstRun.current = false;
+    const stateHooks = {
+        brooks_jobs: usePersistentState<T.Job[]>('brooks_jobs', getInitialJobs),
+        brooks_vehicles: usePersistentState<T.Vehicle[]>('brooks_vehicles', getInitialVehicles),
+        brooks_customers: usePersistentState<T.Customer[]>('brooks_customers', getInitialCustomers),
+        brooks_estimates: usePersistentState<T.Estimate[]>('brooks_estimates', getInitialEstimates),
+        brooks_invoices: usePersistentState<T.Invoice[]>('brooks_invoices', getInitialInvoices),
+        brooks_purchaseOrders: usePersistentState<T.PurchaseOrder[]>('brooks_purchaseOrders', getInitialPurchaseOrders),
+        brooks_purchases: usePersistentState<T.Purchase[]>('brooks_purchases', getInitialPurchases),
+        brooks_parts: usePersistentState<T.Part[]>('brooks_parts', getInitialParts),
+        brooks_servicePackages: usePersistentState<T.ServicePackage[]>('brooks_servicePackages', getInitialServicePackages),
+        brooks_suppliers: usePersistentState<T.Supplier[]>('brooks_suppliers', getInitialSuppliers),
+        brooks_engineers: usePersistentState<T.Engineer[]>('brooks_engineers', getInitialEngineers),
+        brooks_lifts: usePersistentState<T.Lift[]>('brooks_lifts', getInitialLifts),
+        brooks_rentalVehicles: usePersistentState<T.RentalVehicle[]>('brooks_rentalVehicles', getInitialRentalVehicles),
+        brooks_rentalBookings: usePersistentState<T.RentalBooking[]>('brooks_rentalBookings', getInitialRentalBookings),
+        brooks_saleVehicles: usePersistentState<T.SaleVehicle[]>('brooks_saleVehicles', getInitialSaleVehicles),
+        brooks_saleOverheadPackages: usePersistentState<T.SaleOverheadPackage[]>('brooks_saleOverheadPackages', getInitialSaleOverheadPackages),
+        brooks_prospects: usePersistentState<T.Prospect[]>('brooks_prospects', getInitialProspects),
+        brooks_storageBookings: usePersistentState<T.StorageBooking[]>('brooks_storageBookings', getInitialStorageBookings),
+        brooks_storageLocations: usePersistentState<T.StorageLocation[]>('brooks_storageLocations', getInitialStorageLocations),
+        brooks_batteryChargers: usePersistentState<T.BatteryCharger[]>('brooks_batteryChargers', getInitialBatteryChargers),
+        brooks_nominalCodes: usePersistentState<T.NominalCode[]>('brooks_nominalCodes', getInitialNominalCodes),
+        brooks_nominalCodeRules: usePersistentState<T.NominalCodeRule[]>('brooks_nominalCodeRules', getInitialNominalCodeRules),
+        brooks_absenceRequests: usePersistentState<T.AbsenceRequest[]>('brooks_absenceRequests', getInitialAbsenceRequests),
+        brooks_inquiries: usePersistentState<T.Inquiry[]>('brooks_inquiries', getInitialInquiries),
+        brooks_reminders: usePersistentState<T.Reminder[]>('brooks_reminders', getInitialReminders),
+        brooks_auditLog: usePersistentState<T.AuditLogEntry[]>('brooks_auditLog', getInitialAuditLog),
+        brooks_businessEntities: usePersistentState<T.BusinessEntity[]>('brooks_businessEntities', getInitialBusinessEntities),
+        brooks_taxRates: usePersistentState<T.TaxRate[]>('brooks_taxRates', getInitialTaxRates),
+        brooks_roles: usePersistentState<T.Role[]>('brooks_roles', getInitialRoles),
+        brooks_inspectionDiagrams: usePersistentState<T.InspectionDiagram[]>('brooks_inspectionDiagrams', getInitialInspectionDiagrams),
+        brooks_inspectionTemplates: usePersistentState<T.InspectionTemplate[]>('brooks_inspectionTemplates', getInitialInspectionTemplates),
+        brooks_discountCodes: usePersistentState<T.DiscountCode[]>('brooks_discountCodes', getInitialDiscountCodes),
+    };
+    
+    const stateHooksRef = useRef(stateHooks);
+    stateHooksRef.current = stateHooks;
 
-        const performCleanInstall = async () => {
-            if (servicePackages.length > 0 || parts.length > 0) return;
+    const forceRefresh = useCallback(async (collectionKey: keyof typeof stateHooks) => {
+        const hook = stateHooksRef.current[collectionKey] as UsePersistentStateTuple<any[]> | undefined;
+        if (hook && typeof hook[2] === 'function') {
+            await hook[2]();
+        }
+    }, []);
 
-            const syncMap = [
-                { col: 'brooks_taxRates', data: getInitialTaxRates() },
-                { col: 'brooks_suppliers', data: getInitialSuppliers() },
-                { col: 'brooks_businessEntities', data: getInitialBusinessEntities() },
-                { col: 'brooks_roles', data: getInitialRoles() },
-                { col: 'brooks_customers', data: getInitialCustomers() },
-                { col: 'brooks_vehicles', data: getInitialVehicles() },
-                { col: 'brooks_parts', data: getInitialParts() },
-                { col: 'brooks_servicePackages', data: getInitialServicePackages() },
-                { col: 'brooks_engineers', data: getInitialEngineers() },
-                { col: 'brooks_inspectionTemplates', data: getInitialInspectionTemplates() }
-            ];
+    const loadingFlags = Object.values(stateHooks).map(([, , , isLoading]) => isLoading);
+    const isDataLoaded = useMemo(() => {
+        return loadingFlags.every(flag => !flag);
+    }, [loadingFlags]);
 
-            let batch = writeBatch(db);
-            let count = 0;
+    const states = Object.values(stateHooks).map(([state]) => state);
+    const value = useMemo(() => {
+        const contextValue: Partial<DataContextType> = { forceRefresh, isDataLoaded };
+        for (const key in stateHooks) {
+            const [state, setState] = stateHooks[key as keyof typeof stateHooks];
+            const plainKey = key.replace('brooks_','') as keyof Omit<DataContextType, 'forceRefresh' | 'isDataLoaded'>;
+            contextValue[plainKey] = state as any;
+            (contextValue as any)[`set${plainKey.charAt(0).toUpperCase() + plainKey.slice(1)}`] = setState;
+        }
+        return contextValue as DataContextType;
+    }, [forceRefresh, isDataLoaded, ...states]);
 
-            for (const task of syncMap) {
-                for (const item of task.data) {
-                    const docRef = doc(db, task.col, item.id);
-                    batch.set(docRef, item);
-                    count++;
-                    if (count >= 450) {
-                        await batch.commit();
-                        batch = writeBatch(db);
-                        count = 0;
-                    }
-                }
-            }
-            if (count > 0) await batch.commit();
-        };
-
-        performCleanInstall();
-    }, [servicePackages.length, parts.length]);
-
-    // FIX: Removed .length dependencies so that edits (status changes) 
-    // trigger a context update and immediate UI re-render.
-    const value = useMemo(() => ({
-        jobs, setJobs, vehicles, setVehicles, customers, setCustomers,
-        estimates, setEstimates, invoices, setInvoices, purchaseOrders, setPurchaseOrders,
-        purchases, setPurchases, parts, setParts, servicePackages, setServicePackages,
-        suppliers, setSuppliers, engineers, setEngineers, lifts, setLifts,
-        rentalVehicles, setRentalVehicles, rentalBookings, setRentalBookings,
-        saleVehicles, setSaleVehicles, saleOverheadPackages, setSaleOverheadPackages,
-        prospects, setProspects, storageBookings, setStorageBookings,
-        storageLocations, setStorageLocations, batteryChargers, setBatteryChargers,
-        nominalCodes, setNominalCodes, nominalCodeRules, setNominalCodeRules,
-        absenceRequests, setAbsenceRequests, inquiries, setInquiries,
-        reminders, setReminders, auditLog, setAuditLog,
-        businessEntities, setBusinessEntities, taxRates, setTaxRates,
-        roles, setRoles, inspectionDiagrams, setInspectionDiagrams,
-        inspectionTemplates, setInspectionTemplates, discountCodes, setDiscountCodes
-    }), [
-        jobs, vehicles, customers, estimates, invoices, purchaseOrders,
-        purchases, parts, servicePackages, suppliers, engineers, lifts,
-        rentalVehicles, rentalBookings, saleVehicles, saleOverheadPackages,
-        prospects, storageBookings, storageLocations, batteryChargers,
-        nominalCodes, nominalCodeRules, absenceRequests, inquiries,
-        reminders, auditLog, businessEntities, taxRates, roles, 
-        inspectionDiagrams, inspectionTemplates,
-        discountCodes, setDiscountCodes
-    ]);
-
-    return <DataContext.Provider value={value as any}>{children}</DataContext.Provider>;
+    return (
+        <DataContext.Provider value={value}>
+            {isDataLoaded ? children : <div>Loading...</div>}
+        </DataContext.Provider>
+    );
 };
 
 export const DataContextProvider = DataProvider;
 
 export const useData = () => {
     const context = useContext(DataContext);
-    if (!context) throw new Error('useData must be used within a DataContextProvider');
+    if (!context) {
+        throw new Error('useData must be used within a DataContextProvider');
+    }
     return context;
 };
 

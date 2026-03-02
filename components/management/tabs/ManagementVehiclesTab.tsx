@@ -103,7 +103,7 @@ const HighlightText = memo(({ text, highlight }: { text: string; highlight: stri
 });
 
 export const ManagementVehiclesTab: React.FC<ManagementVehiclesTabProps> = ({ searchTerm, onShowStatus }) => {
-    const { vehicles, customers, jobs, estimates, invoices } = useData();
+    const { vehicles, customers, jobs, estimates, invoices, forceRefresh } = useData();
     const { selectedIds, updateItem, deleteItem, toggleSelection, toggleSelectAll, bulkDelete } = useManagementTable(vehicles, 'brooks_vehicles');
 
     const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
@@ -184,6 +184,11 @@ export const ManagementVehiclesTab: React.FC<ManagementVehiclesTabProps> = ({ se
             e.target.value = '';
         }
     };
+    const handleSave = async (v: Vehicle) => {
+        await updateItem(v);
+        await forceRefresh('brooks_vehicles');
+        setIsModalOpen(false);
+    };
 
     return (
         <div className="space-y-4 h-full flex flex-col">
@@ -258,9 +263,10 @@ export const ManagementVehiclesTab: React.FC<ManagementVehiclesTabProps> = ({ se
 
             {isModalOpen && (
                 <VehicleFormModal 
+                    key={JSON.stringify(vehicles)}
                     isOpen={isModalOpen} 
                     onClose={() => setIsModalOpen(false)} 
-                    onSave={(v) => { updateItem(v); setIsModalOpen(false); }} 
+                    onSave={handleSave} 
                     vehicle={selectedVehicle} 
                     customers={customers}
                     jobs={jobs}

@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom/client';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { PurchaseOrder, Supplier, BusinessEntity, TaxRate } from '../types';
-import { X, Mail, Download, Loader2, Edit, Printer, Phone, PackageCheck } from 'lucide-react';
+import { X, Mail, Download, Loader2, Edit, Printer, Phone, PackageCheck, RefreshCw } from 'lucide-react';
 import { formatCurrency } from '../utils/formatUtils';
 import EmailPurchaseOrderModal from './EmailPurchaseOrderModal';
 import { usePrint } from '../core/hooks/usePrint';
@@ -108,12 +108,14 @@ const PurchaseOrderViewModal: React.FC<{
     entity?: BusinessEntity; 
     taxRates: TaxRate[]; 
     onSetStatusToOrdered: (po: PurchaseOrder) => Promise<void> | void; 
-    onOpenForEditing?: (po: PurchaseOrder) => void; 
-}> = ({ isOpen, onClose, purchaseOrder, supplier, entity, taxRates, onSetStatusToOrdered, onOpenForEditing }) => {
+    onOpenForEditing?: (po: PurchaseOrder) => void;
+    onRefresh?: (poId: string) => Promise<PurchaseOrder | void>;
+}> = ({ isOpen, onClose, purchaseOrder, supplier, entity, taxRates, onSetStatusToOrdered, onOpenForEditing, onRefresh }) => {
     
     const [isEmailing, setIsEmailing] = useState(false);
     const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
     const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+    const [isRefreshing, setIsRefreshing] = useState(false);
     const print = usePrint();
 
     const totals = useMemo(() => {
@@ -183,7 +185,6 @@ const PurchaseOrderViewModal: React.FC<{
         setIsUpdatingStatus(true);
         try {
             if (purchaseOrder.status === 'Draft') {
-                // Ensure we await the parent state update before proceeding
                 await onSetStatusToOrdered({ ...purchaseOrder, status: 'Ordered' });
             }
             setIsEmailing(false);
@@ -200,7 +201,6 @@ const PurchaseOrderViewModal: React.FC<{
         if (purchaseOrder.status === 'Draft') {
             setIsUpdatingStatus(true);
             try {
-                // Wait for the status change to persist to the central state
                 await onSetStatusToOrdered({ ...purchaseOrder, status: 'Ordered' });
                 onClose();
             } catch (e) {
@@ -211,6 +211,18 @@ const PurchaseOrderViewModal: React.FC<{
             }
         } else {
             onClose();
+        }
+    };
+
+    const handleRefresh = async () => {
+        if (!onRefresh) return;
+        setIsRefreshing(true);
+        try {
+            await onRefresh(purchaseOrder.id);
+        } catch (error) {
+            console.error("Failed to refresh PO:", error);
+        } finally {
+            setIsRefreshing(false);
         }
     };
 
@@ -231,7 +243,13 @@ const PurchaseOrderViewModal: React.FC<{
                     </main>
                     <footer className="flex-shrink-0 flex justify-between items-center p-4 border-t bg-gray-50">
                         <div className="flex gap-2">
-                             {onOpenForEditing && purchaseOrder.status !== 'Received' && purchaseOrder.status !== 'Cancelled' && (
+                            {onRefresh && (
+                                <button onClick={handleRefresh} disabled={isRefreshing} className="flex items-center py-2 px-4 bg-gray-200 text-gray-800 font-semibold rounded-lg hover:bg-gray-300 disabled:opacity-50">
+                                    {isRefreshing ? <Loader2 size={16} className="mr-2 animate-spin"/> : <RefreshCw size={16} className="mr-2" />}
+                                    Refresh
+                                </button>
+                            )}
+                            {onOpenForEditing && purchaseOrder.status !== 'Received' && purchaseOrder.status !== 'Cancelled' && (
                                 <button
                                     onClick={() => onOpenForEditing(purchaseOrder)}
                                     className="flex items-center py-2 px-4 bg-gray-600 text-white font-semibold rounded-lg hover:bg-gray-700"
@@ -239,7 +257,7 @@ const PurchaseOrderViewModal: React.FC<{
                                     <Edit size={16} className="mr-2" /> Edit
                                 </button>
                             )}
-                             {(purchaseOrder.status === 'Ordered' || purchaseOrder.status === 'Partially Received') && onOpenForEditing && (
+                            {(purchaseOrder.status === 'Ordered' || purchaseOrder.status === 'Partially Received') && onOpenForEditing && (
                                 <button
                                     onClick={() => { onOpenForEditing(purchaseOrder); onClose(); }}
                                     className="flex items-center py-2 px-4 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700"
