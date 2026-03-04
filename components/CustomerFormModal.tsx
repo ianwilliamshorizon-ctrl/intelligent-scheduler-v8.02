@@ -24,7 +24,7 @@ interface CustomerFormModalProps {
     isOpen: boolean;
     onClose: () => void;
     onSave: (customer: Customer) => void;
-    customer: Customer | null;
+    customer: Partial<Customer> | null;
     existingCustomers: Customer[];
     jobs: Job[];
     vehicles: Vehicle[];
@@ -146,7 +146,7 @@ const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
                             </button>
                         </div>
 
-                        <div className="md:col-span-3 border-t pt-4 grid grid-cols-2 gap-4">
+                        <div className="md:col-span-3 border-t pt-4 grid grid-cols-2 gap-.4">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
                                 <select name="category" value={formData.category || 'Retail'} onChange={handleChange} className="w-full p-2 border rounded bg-white">

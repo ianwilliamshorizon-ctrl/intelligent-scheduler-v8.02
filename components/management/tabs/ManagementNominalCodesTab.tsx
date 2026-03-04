@@ -13,9 +13,9 @@ interface ManagementNominalCodesTabProps {
 }
 
 export const ManagementNominalCodesTab: React.FC<ManagementNominalCodesTabProps> = ({ searchTerm, onShowStatus }) => {
-    const { nominalCodes, nominalCodeRules, businessEntities } = useData();
-    const codesTable = useManagementTable(nominalCodes, 'brooks_nominalCodes');
-    const rulesTable = useManagementTable(nominalCodeRules, 'brooks_nominalCodeRules');
+    const { nominalCodes, setNominalCodes, nominalCodeRules, setNominalCodeRules, businessEntities } = useData();
+    const codesTable = useManagementTable(nominalCodes, 'brooks_nominalCodes', setNominalCodes);
+    const rulesTable = useManagementTable(nominalCodeRules, 'brooks_nominalCodeRules', setNominalCodeRules);
 
     const [selectedCode, setSelectedCode] = useState<NominalCode | null>(null);
     const [isCodeModalOpen, setIsCodeModalOpen] = useState(false);

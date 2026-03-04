@@ -10,7 +10,7 @@ import EditJobModal from './EditJobModal';
 import ConfirmationModal from './ConfirmationModal';
 import PurchaseOrderFormModal from './PurchaseOrderFormModal';
 import BatchAddPurchasesModal from './BatchAddPurchasesModal';
-import PurchaseOrderViewModal from './PurchaseOrderViewModal';
+import { PurchaseOrderViewModal } from './PurchaseOrderViewModal';
 import InvoiceFormModal from './InvoiceFormModal';
 import InvoiceModal from './InvoiceModal';
 import SalesInvoiceModal from './SalesInvoiceModal';
@@ -182,7 +182,7 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                     vehicles={vehicles}
                     customers={customers}
                     setJobs={setJobs}
-                    onViewPurchaseOrder={(po) => { setters.setPoModal({isOpen: false, po: null}); setters.setViewPoModal({isOpen: true, po}); }}
+                    onViewPurchaseOrder={(po) => { setters.setPoModal({isOpen: false, po: null}); setters.setViewPoModal({isOpen: true, po: po }); }}
                     generatePurchaseOrderId={generatePurchaseOrderId}
                     forceRefresh={forceRefresh}
                 />
@@ -214,12 +214,7 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                     isOpen={modals.viewPoModal.isOpen}
                     onClose={() => setters.setViewPoModal({isOpen: false, po: null})}
                     purchaseOrder={modals.viewPoModal.po}
-                    supplier={suppliers.find(s => s.id === modals.viewPoModal.po!.supplierId)}
-                    entity={businessEntities.find(e => e.id === modals.viewPoModal.po!.entityId)}
-                    taxRates={taxRates}
-                    onSetStatusToOrdered={(po) => actions.handleSavePurchaseOrder(po)}
-                    onOpenForEditing={(po) => { setters.setViewPoModal({isOpen: false, po: null}); setters.setPoModal({isOpen: true, po}); }}
-                    onRefresh={actions.handleRefreshPurchaseOrder}
+                    onUpdatePO={(updatedPO) => actions.handleSavePurchaseOrder(updatedPO)}
                 />
             )}
 
@@ -655,7 +650,7 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                     estimates={estimates}
                     onViewEstimate={(est) => setters.setEstimateViewModal({isOpen: true, estimate: est})}
                     onScheduleEstimate={(est, inquiryId) => setters.setScheduleJobFromEstimateModal({isOpen: true, estimate: est, inquiryId})}
-                    onOpenPurchaseOrder={(po) => setters.setViewPoModal({isOpen: true, po})}
+                    onOpenPurchaseOrder={(po) => setters.setViewPoModal({isOpen: true, po: po})}
                     onEditEstimate={(est) => setters.setEstimateFormModal({isOpen: true, estimate: est})}
                 />
             )}

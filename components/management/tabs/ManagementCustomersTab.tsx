@@ -114,8 +114,8 @@ const HighlightText = memo(({ text, highlight }: { text: string; highlight: stri
 });
 
 export const ManagementCustomersTab: React.FC<ManagementCustomersTabProps> = ({ searchTerm, onShowStatus }) => {
-    const { customers, vehicles, jobs, estimates, invoices } = useData();
-    const { selectedIds, updateItem, deleteItem, toggleSelection, toggleSelectAll, bulkDelete } = useManagementTable(customers, 'brooks_customers');
+    const { customers, setCustomers, vehicles, jobs, estimates, invoices } = useData();
+    const { selectedIds, updateItem, deleteItem, toggleSelection, toggleSelectAll, bulkDelete } = useManagementTable(customers, 'brooks_customers', setCustomers);
     
     const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);

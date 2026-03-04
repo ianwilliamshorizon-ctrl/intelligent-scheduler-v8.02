@@ -1,10 +1,13 @@
+
 import { useState, useCallback } from 'react';
 import { saveDocument, deleteDocument } from '../../../core/db';
 import { COLLECTION_NAME } from '../../../core/config/firebaseConfig';
 
+// The hook now requires a state setter function to manage the data array from the outside.
 export const useManagementTable = <T extends { id: string }>(
     items: T[], 
-    collectionName: string
+    collectionName: string,
+    setItems: (items: T[] | ((prevItems: T[]) => T[])) => void
 ) => {
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -13,18 +16,28 @@ export const useManagementTable = <T extends { id: string }>(
         return `${COLLECTION_NAME}_${cleanName}`;
     };
 
+    // This function now also handles updating the local state.
     const updateItem = useCallback(async (newItem: T) => {
         const path = getPath(collectionName);
         await saveDocument(path, newItem);
-    }, [collectionName]);
+        setItems(prevItems => {
+            const itemIndex = prevItems.findIndex(item => item.id === newItem.id);
+            if (itemIndex > -1) {
+                const newItems = [...prevItems];
+                newItems[itemIndex] = newItem;
+                return newItems;
+            } else {
+                return [newItem, ...prevItems];
+            }
+        });
+    }, [collectionName, setItems]);
 
+    // `deleteItem` no longer uses window.confirm and updates the local state.
     const deleteItem = useCallback(async (id: string) => {
-        // Optimization: Use a non-blocking confirmation or at least move logic out of render cycle
-        if(window.confirm('Are you sure you want to permanently delete this item?')) {
-            const path = getPath(collectionName);
-            await deleteDocument(path, id);
-        }
-    }, [collectionName]);
+        const path = getPath(collectionName);
+        await deleteDocument(path, id);
+        setItems(prevItems => prevItems.filter(item => item.id !== id));
+    }, [collectionName, setItems]);
 
     const toggleSelection = useCallback((id: string) => {
         setSelectedIds(prev => {
@@ -44,19 +57,16 @@ export const useManagementTable = <T extends { id: string }>(
         });
     }, []);
 
+    // `bulkDelete` is simplified to just perform the deletion logic. Confirmation is now handled by the component.
     const bulkDelete = useCallback(async () => {
-        const count = selectedIds.size;
-        if (window.confirm(`Are you sure you want to permanently delete ${count} items?`)) {
-            const path = getPath(collectionName);
-            // Optimization: Promise.all is okay, but Firestore writeBatch is better for bulk.
-            // For now, let's just clear selection immediately to improve perceived speed.
-            const idsToDelete = Array.from(selectedIds);
-            setSelectedIds(new Set()); 
-            
-            const deletePromises = idsToDelete.map(id => deleteDocument(path, id as string));
-            await Promise.all(deletePromises);
-        }
-    }, [collectionName, selectedIds]);
+        const path = getPath(collectionName);
+        const idsToDelete = Array.from(selectedIds);
+        const deletePromises = idsToDelete.map(id => deleteDocument(path, id));
+        await Promise.all(deletePromises);
+        
+        setItems(prevItems => prevItems.filter(item => !idsToDelete.includes(item.id)));
+        setSelectedIds(new Set());
+    }, [collectionName, setItems, selectedIds]);
 
     return {
         selectedIds,

@@ -12,6 +12,8 @@
     "@google/genai": "^1.42.0",
     "@google/generative-ai": "^0.24.1",
     "@types/react-router-dom": "^5.3.3",
+    "@types/recharts": "^1.8.29",
+    "date-fns": "^4.1.0",
     "firebase": "latest",
     "firebase-admin": "^13.6.1",
     "firebase-functions": "^7.0.5",
@@ -25,6 +27,7 @@
     "react-router-dom": "^7.13.1",
     "react-toastify": "^11.0.5",
     "react-window": "^2.2.6",
+    "recharts": "^3.7.0",
     "virtua": "^0.48.5",
     "vite": "^6.2.0"
   },

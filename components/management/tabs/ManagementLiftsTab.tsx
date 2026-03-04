@@ -12,8 +12,8 @@ interface ManagementLiftsTabProps {
 }
 
 export const ManagementLiftsTab: React.FC<ManagementLiftsTabProps> = ({ searchTerm, onShowStatus }) => {
-    const { lifts, businessEntities } = useData();
-    const { updateItem, deleteItem } = useManagementTable(lifts, 'brooks_lifts');
+    const { lifts, setLifts, businessEntities } = useData();
+    const { updateItem, deleteItem } = useManagementTable(lifts, 'brooks_lifts', setLifts);
 
     const [selectedLift, setSelectedLift] = useState<Lift | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);

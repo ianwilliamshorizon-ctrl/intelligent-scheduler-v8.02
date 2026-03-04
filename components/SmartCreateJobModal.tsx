@@ -148,7 +148,7 @@ const SmartCreateJobModal: React.FC<SmartCreateJobModalProps> = ({
             .map(pkg => {
                 const pMake = (pkg.applicableMake || '').toLowerCase().trim();
                 const pModel = (pkg.applicableModel || '').toLowerCase().trim();
-                const pVariant = (pkg.applicableVarient || '').toLowerCase().trim();
+                const pVariant = (pkg.applicableVariant || '').toLowerCase().trim();
                 
                 let score = -1;
                 let matchType = 'Mismatch';

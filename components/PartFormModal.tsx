@@ -5,7 +5,7 @@ interface PartFormModalProps {
     isOpen: boolean;
     onClose: () => void;
     onSave: (part: T.Part) => void;
-    part: T.Part | null;
+    part: Partial<T.Part> | null;
     suppliers: T.Supplier[];
     taxRates: T.TaxRate[];
 }
@@ -56,7 +56,7 @@ const PartFormModal: React.FC<PartFormModalProps> = ({ isOpen, onClose, onSave, 
     return (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
             <div className="relative top-20 mx-auto p-5 border w-full max-w-2xl shadow-lg rounded-md bg-white">
-                <h3 className="text-lg font-bold">{part ? 'Edit Part' : 'Create Part'}</h3>
+                <h3 className="text-lg font-bold">{part?.id ? 'Edit Part' : 'Create Part'}</h3>
                 <form onSubmit={handleSubmit} className="mt-4 space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <input type="text" name="partNumber" value={formData.partNumber || ''} onChange={handleChange} placeholder="Part Number" className="p-2 border rounded" />

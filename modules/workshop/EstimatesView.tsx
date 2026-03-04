@@ -134,9 +134,10 @@ const EstimatesView: React.FC<EstimatesViewProps> = ({ onOpenEstimateModal, onVi
         print(
             <PrintableEstimateList 
                 estimates={filteredEstimates} 
-                customers={new Map()} 
+                customers={customerMap} 
                 vehicles={vehicleMap}
-                entities={new Map(businessEntities.map(e => [e.id, e]))}
+                taxRates={taxRates}
+                title={"Current Filtered View"}
             />
         );
     };
@@ -301,8 +302,7 @@ const EstimatesView: React.FC<EstimatesViewProps> = ({ onOpenEstimateModal, onVi
                                         </tr>
                                     )}
                                 </React.Fragment>
-                            )})
-                            }
+                            )})}
                          </tbody>
                     </table>
                 </div>

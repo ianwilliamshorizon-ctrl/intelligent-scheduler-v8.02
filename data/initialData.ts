@@ -252,7 +252,7 @@ export const getInitialServicePackages = (): ServicePackage[] => ([
         totalPrice: 450, 
         applicableMake: 'Porsche',
         applicableModel: '911',
-        applicableVarient: 'GT3 RS',
+        applicableVariant: 'GT3 RS',
         costItems: [
              { id: 'c12', description: 'Corner Weight & Geometry Setup', isLabor: true, quantity: 4, unitPrice: 0, unitCost: 45 }
         ]

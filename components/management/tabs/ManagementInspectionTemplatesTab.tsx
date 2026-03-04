@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useData } from '../../../core/state/DataContext';
 import { InspectionTemplate } from '../../../types';
-import { PlusCircle, Edit, Trash2, Layout } from 'lucide-react';
+import { PlusCircle, Edit, Trash2, Layout, Copy } from 'lucide-react';
 import { useManagementTable } from '../hooks/useManagementTable';
 import InspectionTemplateFormModal from '../../InspectionTemplateFormModal';
 
@@ -14,8 +14,8 @@ export const ManagementInspectionTemplatesTab: React.FC<ManagementInspectionTemp
     searchTerm = '', 
     onShowStatus 
 }) => {
-    const { inspectionTemplates } = useData();
-    const { updateItem, deleteItem } = useManagementTable(inspectionTemplates || [], 'brooks_inspectionTemplates');
+    const { inspectionTemplates, setInspectionTemplates } = useData();
+    const { updateItem, deleteItem } = useManagementTable(inspectionTemplates || [], 'brooks_inspectionTemplates', setInspectionTemplates);
 
     const [selectedTemplate, setSelectedTemplate] = useState<InspectionTemplate | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -35,6 +35,19 @@ export const ManagementInspectionTemplatesTab: React.FC<ManagementInspectionTemp
             }
         }
     };
+
+    const handleClone = (template: InspectionTemplate) => {
+        const newId = `insp_tmpl_${Date.now()}`;
+        const newTemplate: InspectionTemplate = {
+            ...JSON.parse(JSON.stringify(template)),
+            id: newId,
+            name: `${template.name} (Copy)`,
+            isDefault: false, // Cloned templates cannot be default
+        };
+        setSelectedTemplate(newTemplate);
+        setIsModalOpen(true);
+    };
+
 
     return (
         <div className="space-y-4">
@@ -81,6 +94,13 @@ export const ManagementInspectionTemplatesTab: React.FC<ManagementInspectionTemp
                                     </td>
                                     <td className="p-4 text-right">
                                         <div className="flex justify-end gap-1">
+                                             <button 
+                                                onClick={() => handleClone(template)} 
+                                                className="text-gray-500 hover:bg-gray-100 p-2 rounded-lg transition-colors"
+                                                title="Clone"
+                                            >
+                                                <Copy size={16} />
+                                            </button>
                                             <button 
                                                 onClick={() => { setSelectedTemplate(template); setIsModalOpen(true); }} 
                                                 className="text-indigo-600 hover:bg-indigo-50 p-2 rounded-lg transition-colors"

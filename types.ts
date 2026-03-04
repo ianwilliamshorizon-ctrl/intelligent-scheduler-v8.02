@@ -2,7 +2,7 @@ import React from 'react';
 
 // --- Global Types & Enums ---
 
-export type ViewType = 'dashboard' | 'dispatch' | 'workflow' | 'concierge' | 'inquiries' | 'communications' | 'estimates' | 'invoices' | 'purchaseOrders' | 'jobs' | 'sales' | 'storage' | 'rentals' | 'absence';
+export type ViewType = 'dashboard' | 'dispatch' | 'workflow' | 'concierge' | 'inquiries' | 'communications' | 'estimates' | 'invoices' | 'purchaseOrders' | 'jobs' | 'sales' | 'storage' | 'rentals' | 'absence' | 'management';
 export type UserRole = 'Admin' | 'Dispatcher' | 'Engineer' | 'Sales' | 'Garage Concierge';
 export type AppEnvironment = 'Production' | 'UAT' | 'Development';
 
@@ -62,6 +62,7 @@ export interface BusinessEntity {
     bankAccountNumber?: string;
     invoiceFooterText?: string;
     logoImageId?: string;
+    logoUrl?: string;
     workingHours?: WorkingHoursConfig;
     motReminderEmailTemplate?: string;
     motReminderSmsTemplate?: string;
@@ -316,6 +317,12 @@ export interface Part {
     searchField?: string;
 }
 
+export interface PurchaseOrderHistory {
+    userId: string;
+    timestamp: string;
+    status: string;
+}
+
 export interface PurchaseOrder {
     id: string;
     entityId: string;
@@ -334,6 +341,9 @@ export interface PurchaseOrder {
     linkedPurchaseOrderId?: string;
     vehicleId?: string;
     customerId?: string;
+    pdfUrl?: string;
+    pdfGeneratedAt?: string;
+    history?: PurchaseOrderHistory[];
 }
 
 export interface Purchase {
@@ -357,6 +367,7 @@ export interface Supplier {
     phone?: string;
     email?: string;
     addressLine1?: string;
+    addressLine2?: string;
     city?: string;
     postcode?: string;
 }
@@ -378,9 +389,7 @@ export interface ServicePackage {
     taxCodeId?: string;
     applicableMake?: string;
     applicableModel?: string;
-    // The error in initialData.ts suggests 'applicableVarient' is being used.
-    // To resolve it, use the spelling the data expects:
-    applicableVarient?: string; 
+    applicableVariant?: string;
 }
 
 export interface Lift {
@@ -542,7 +551,7 @@ export interface StorageBooking {
     lastBilledDate?: string;
     invoiceIds?: string[];
     notes?: string;
-    keyNumber?: number;
+    keyNumber?: keyof any;
     chargingHistory?: ChargingEvent[];
 }
 
@@ -687,13 +696,13 @@ export interface LiveAssistantProps {
     onClose: () => void;
     jobId: string | null;
     onAddNote: (note: string) => void;
-    apiKey: any;
+    apiKey: string;
 }
 
 export interface SearchableSelectProps {
     options: { id: string; label: string; value: string; badge?: { text: string; className: string } }[];
-    value: any; // Fixes SmartCreateJobModal.tsx error
-    onChange: (val: any) => void;
+    value: string;
+    onChange: (value: string) => void;
     placeholder: string;
 }
 
@@ -701,8 +710,7 @@ export interface CustomerFormModalProps {
     isOpen: boolean;
     onClose: () => void;
     onSave: (customer: Customer) => void;
-    customer?: Customer | null;
-    customerId?: string | null; // FIX: Add this optional field
+    customer?: Partial<Customer> | null;
     customers: Customer[];
     vehicles: Vehicle[];
     jobs: Job[];
@@ -714,7 +722,7 @@ export interface MediaManagerModalProps {
     isOpen: boolean;
     onClose: () => void;
     jobId: string;
-    media?: CheckInPhoto[]; // Ensure this is plural 'media'
+    media?: CheckInPhoto[];
     onSave?: (media: CheckInPhoto[]) => void;
 }
 
@@ -722,17 +730,17 @@ export interface FormModalProps {
     children: React.ReactNode;
     isOpen: boolean;
     onClose: () => void;
-    onSave: () => void;
+    onSave?: () => void;
     title: string;
-    showSave?: boolean; // Fixes VehicleFormModal.tsx error
+    showSave?: boolean;
     maxWidth?: string;
 }
 
 export interface PrintableEstimateListProps {
     estimates: Estimate[];
-    customers: Map<string, Customer> | Record<string, Customer>;
-    vehicles: Map<string, Vehicle> | Record<string, Vehicle>;
-    entities: Map<string, BusinessEntity> | Record<string, BusinessEntity>; // Fixes EstimatesView.tsx error
+    customers: Record<string, Customer>;
+    vehicles: Record<string, Vehicle>;
+    entities: Record<string, BusinessEntity>;
 }
 
 export interface UnbillableTimeEvent {
@@ -772,39 +780,71 @@ export interface AppState {
 
 export interface DataContextType {
     jobs: Job[];
+    setJobs: React.Dispatch<React.SetStateAction<Job[]>>;
     vehicles: Vehicle[];
+    setVehicles: React.Dispatch<React.SetStateAction<Vehicle[]>>;
     customers: Customer[];
+    setCustomers: React.Dispatch<React.SetStateAction<Customer[]>>;
     estimates: Estimate[];
+    setEstimates: React.Dispatch<React.SetStateAction<Estimate[]>>;
     invoices: Invoice[];
+    setInvoices: React.Dispatch<React.SetStateAction<Invoice[]>>;
     purchaseOrders: PurchaseOrder[];
+    setPurchaseOrders: React.Dispatch<React.SetStateAction<PurchaseOrder[]>>;
     purchases: Purchase[];
+    setPurchases: React.Dispatch<React.SetStateAction<Purchase[]>>;
     parts: Part[];
+    setParts: React.Dispatch<React.SetStateAction<Part[]>>;
     servicePackages: ServicePackage[];
+    setServicePackages: React.Dispatch<React.SetStateAction<ServicePackage[]>>;
     suppliers: Supplier[];
+    setSuppliers: React.Dispatch<React.SetStateAction<Supplier[]>>;
     engineers: Engineer[];
+    setEngineers: React.Dispatch<React.SetStateAction<Engineer[]>>;
     lifts: Lift[];
+    setLifts: React.Dispatch<React.SetStateAction<Lift[]>>;
     rentalVehicles: RentalVehicle[];
+    setRentalVehicles: React.Dispatch<React.SetStateAction<RentalVehicle[]>>;
     rentalBookings: RentalBooking[];
+    setRentalBookings: React.Dispatch<React.SetStateAction<RentalBooking[]>>;
     saleVehicles: SaleVehicle[];
+    setSaleVehicles: React.Dispatch<React.SetStateAction<SaleVehicle[]>>;
     saleOverheadPackages: SaleOverheadPackage[];
+    setSaleOverheadPackages: React.Dispatch<React.SetStateAction<SaleOverheadPackage[]>>;
     prospects: Prospect[];
+    setProspects: React.Dispatch<React.SetStateAction<Prospect[]>>;
     storageBookings: StorageBooking[];
+    setStorageBookings: React.Dispatch<React.SetStateAction<StorageBooking[]>>;
     storageLocations: StorageLocation[];
+    setStorageLocations: React.Dispatch<React.SetStateAction<StorageLocation[]>>;
     batteryChargers: BatteryCharger[];
+    setBatteryChargers: React.Dispatch<React.SetStateAction<BatteryCharger[]>>;
     nominalCodes: NominalCode[];
+    setNominalCodes: React.Dispatch<React.SetStateAction<NominalCode[]>>;
     nominalCodeRules: NominalCodeRule[];
+    setNominalCodeRules: React.Dispatch<React.SetStateAction<NominalCodeRule[]>>;
     absenceRequests: AbsenceRequest[];
+    setAbsenceRequests: React.Dispatch<React.SetStateAction<AbsenceRequest[]>>;
     inquiries: Inquiry[];
+    setInquiries: React.Dispatch<React.SetStateAction<Inquiry[]>>;
     reminders: Reminder[];
+    setReminders: React.Dispatch<React.SetStateAction<Reminder[]>>;
     businessEntities: BusinessEntity[];
+    setBusinessEntities: React.Dispatch<React.SetStateAction<BusinessEntity[]>>;
     taxRates: TaxRate[];
+    setTaxRates: React.Dispatch<React.SetStateAction<TaxRate[]>>;
     roles: Role[];
+    setRoles: React.Dispatch<React.SetStateAction<Role[]>>;
     inspectionDiagrams: InspectionDiagram[];
+    setInspectionDiagrams: React.Dispatch<React.SetStateAction<InspectionDiagram[]>>;
     inspectionTemplates: InspectionTemplate[];
+    setInspectionTemplates: React.Dispatch<React.SetStateAction<InspectionTemplate[]>>;
     refreshActiveData: () => Promise<void>; 
     loading: boolean;
     error: string | null;
+    users: User[];
 }
+
 export type DiscountType = 'Percentage' | 'Fixed';
 export type DiscountApplicability = 'All' | 'Labor' | 'Parts' | 'Packages';
 

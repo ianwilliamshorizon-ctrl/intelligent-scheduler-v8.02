@@ -25,7 +25,7 @@ export const ManagementDiagramsTab: React.FC<ManagementDiagramsTabProps> = ({ se
         setLocalDiagrams(Array.isArray(inspectionDiagrams) ? inspectionDiagrams : []);
     }, [inspectionDiagrams]);
 
-    const { deleteItem } = useManagementTable(inspectionDiagrams || [], 'brooks_inspectionDiagrams');
+    const { deleteItem } = useManagementTable(inspectionDiagrams || [], 'brooks_inspectionDiagrams', setLocalDiagrams);
 
     const [selectedDiagram, setSelectedDiagram] = useState<InspectionDiagram | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);

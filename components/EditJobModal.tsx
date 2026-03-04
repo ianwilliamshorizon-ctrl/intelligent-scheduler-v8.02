@@ -10,7 +10,7 @@ import SearchableSelect from './SearchableSelect';
 import { JobInspectionTab } from './jobs/tabs/JobInspectionTab';
 import { JobEstimateTab } from './jobs/tabs/JobEstimateTab';
 import JobDetailsTab from './jobs/tabs/JobDetailsTab';
-import { initialTyreCheckData } from '../core/data/initialChecklistData';
+import { initialTyreCheckData } from '../data/initialChecklistData';
 import MediaManagerModal from './MediaManagerModal';
 import PartFormModal from './PartFormModal';
 import { useWorkshopActions } from '../core/hooks/useWorkshopActions';
@@ -158,6 +158,18 @@ const EditJobModal: React.FC<{
             apply();
         }
     };
+
+    const handleChecklistUpdate = useCallback((data: T.ChecklistSection[]) => {
+        setEditableJob(prev => prev ? { ...prev, inspectionChecklist: data } : null);
+    }, []);
+
+    const handleTyreUpdate = useCallback((data: T.TyreCheckData) => {
+        setEditableJob(prev => prev ? { ...prev, tyreCheck: data } : null);
+    }, []);
+
+    const handleDamageReportUpdate = useCallback((data: T.VehicleDamagePoint[]) => {
+        setEditableJob(prev => prev ? { ...prev, damagePoints: data } : null);
+    }, []);
 
     useEffect(() => {
         if (job) {
@@ -578,9 +590,9 @@ const EditJobModal: React.FC<{
                         checklistData={editableJob.inspectionChecklist || []}
                         tyreData={editableJob.tyreCheck || initialTyreCheckData}
                         damagePoints={editableJob.damagePoints || []}
-                        onChecklistUpdate={(d) => setEditableJob(prev => prev ? {...prev, inspectionChecklist: d} : null)}
-                        onTyreUpdate={(d) => setEditableJob(prev => prev ? {...prev, tyreCheck: d} : null)}
-                        onDamageReportUpdate={(d) => setEditableJob(prev => prev ? {...prev, damagePoints: d} : null)}
+                        onChecklistUpdate={handleChecklistUpdate}
+                        onTyreUpdate={handleTyreUpdate}
+                        onDamageReportUpdate={handleDamageReportUpdate}
                         isReadOnly={isReadOnly}
                         vehicleModel={vehicle?.model}
                         diagramImageId={diagramImageId}

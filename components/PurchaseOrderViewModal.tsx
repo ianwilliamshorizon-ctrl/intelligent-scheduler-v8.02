@@ -1,156 +1,180 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useContext } from 'react';
 import ReactDOM from 'react-dom/client';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
-import { PurchaseOrder, Supplier, BusinessEntity, TaxRate } from '../types';
-import { X, Mail, Download, Loader2, Edit, Printer, Phone, PackageCheck, RefreshCw } from 'lucide-react';
-import { formatCurrency } from '../utils/formatUtils';
+import { PurchaseOrder, Supplier, User, BusinessEntity } from '../types';
+import { X, Download, Mail, RefreshCw, Loader2, Info } from 'lucide-react';
+import { useData } from '../core/state/DataContext';
+import { AppContext } from '../core/state/AppContext';
 import EmailPurchaseOrderModal from './EmailPurchaseOrderModal';
-import { usePrint } from '../core/hooks/usePrint';
+import { getDoc, doc } from 'firebase/firestore';
+import { db } from '../core/config/firebaseConfig';
+import { PurchaseOrderPrint } from './PurchaseOrderPrint';
 
-const PrintablePurchaseOrder: React.FC<any> = ({ purchaseOrder, supplier, entity, taxRates, totals }) => {
-    const showReceived = ['Partially Received', 'Received'].includes(purchaseOrder.status);
+interface PurchaseOrderViewModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+    purchaseOrder: PurchaseOrder | null;
+    onUpdatePO?: (updatedPO: PurchaseOrder) => void;
+}
 
-    return (
-        <div className="bg-white font-sans text-sm text-gray-800 printable-page" style={{ width: '210mm', padding: '15mm', boxSizing: 'border-box' }}>
-            <header className="pb-6 border-b mb-6">
-                <div style={{ marginBottom: '5mm', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <div>
-                        <h1 className="text-3xl font-bold text-gray-900">{entity?.name}</h1>
-                        <p>{entity?.addressLine1}</p>
-                        <p>{entity?.city}, {entity?.postcode}</p>
-                    </div>
-                    <div className="text-right">
-                        <h2 className="text-2xl font-semibold text-gray-800">PURCHASE ORDER</h2>
-                        <p className="text-lg">#{purchaseOrder?.id}</p>
-                        <p className="mt-1">Date: {purchaseOrder?.orderDate}</p>
-                    </div>
-                </div>
-            </header>
-            
-            <main>
-                <section style={{ marginBottom: '2rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
-                    <div>
-                        <h3 className="text-xs font-bold text-gray-500 uppercase mb-1">Supplier</h3>
-                        <p className="font-bold text-gray-900 text-base">{supplier?.name}</p>
-                        {purchaseOrder.supplierReference && (
-                            <p className="text-xs mt-1">Ref: <span className="font-mono">{purchaseOrder.supplierReference}</span></p>
-                        )}
-                        {supplier?.addressLine1 && <p>{supplier.addressLine1}</p>}
-                    </div>
-                    <div>
-                        <h3 className="text-xs font-bold text-gray-500 uppercase mb-1">Reference</h3>
-                        <p className="font-bold text-gray-900 text-base">{purchaseOrder.vehicleRegistrationRef}</p>
-                        {purchaseOrder.jobId && <p className="text-xs">Job ID: <span className="font-mono">{purchaseOrder.jobId}</span></p>}
-                    </div>
-                </section>
+const PDFViewer: React.FC<{ src: string }> = ({ src }) => (
+    <iframe src={src} className="w-full h-full" title="Purchase Order Preview" />
+);
 
-                <section>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-                        <thead>
-                            <tr style={{ borderBottom: '2px solid #e5e7eb' }}>
-                                <th style={{ textAlign: 'left', padding: '8px', color: '#4b5563' }}>Part Number</th>
-                                <th style={{ textAlign: 'left', padding: '8px', color: '#4b5563', width: '40%' }}>Description</th>
-                                <th style={{ textAlign: 'right', padding: '8px', color: '#4b5563' }}>Qty</th>
-                                {showReceived && <th style={{ textAlign: 'right', padding: '8px', color: '#4b5563' }}>Rec'd</th>}
-                                <th style={{ textAlign: 'right', padding: '8px', color: '#4b5563' }}>Unit Cost</th>
-                                <th style={{ textAlign: 'right', padding: '8px', color: '#4b5563' }}>Total</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {(purchaseOrder?.lineItems || []).map((item: any) => {
-                                const net = item.quantity * item.unitPrice;
-                                return (
-                                    <tr key={item.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                                        <td style={{ padding: '8px', fontFamily: 'monospace' }}>{item.partNumber || 'N/A'}</td>
-                                        <td style={{ padding: '8px' }}>{item.description}</td>
-                                        <td style={{ padding: '8px', textAlign: 'right' }}>{item.quantity}</td>
-                                        {showReceived && <td style={{ padding: '8px', textAlign: 'right' }}>{item.receivedQuantity || 0}</td>}
-                                        <td style={{ padding: '8px', textAlign: 'right' }}>{formatCurrency(item.unitPrice)}</td>
-                                        <td style={{ padding: '8px', textAlign: 'right', fontWeight: '500' }}>{formatCurrency(net)}</td>
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
-                </section>
-            </main>
+const VAT_RATE = 0.20; // 20% VAT
 
-            <footer style={{ marginTop: 'auto', paddingTop: '2rem', borderTop: '1px solid #e5e7eb' }}>
-                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                    <div style={{ width: '250px', fontSize: '14px' }}>
-                         <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
-                             <span>Net Total</span>
-                             <span className="font-semibold">{formatCurrency(totals.totalNet)}</span>
-                         </div>
-                        {totals.vatBreakdown.map((b: any) => (
-                            <div key={b.name} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', color: '#4b5563' }}>
-                                <span>VAT @ {b.rate}%</span>
-                                <span>{formatCurrency(b.vat)}</span>
-                            </div>
-                        ))}
-                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderTop: '1px solid #d1d5db', marginTop: '8px', fontWeight: 'bold', fontSize: '16px' }}>
-                            <span>Total</span>
-                            <span>{formatCurrency(totals.grandTotal)}</span>
-                        </div>
-                    </div>
-                </div>
-            </footer>
-        </div>
-    );
-};
+export const PurchaseOrderViewModal: React.FC<PurchaseOrderViewModalProps> = ({ isOpen, onClose, purchaseOrder, onUpdatePO }) => {
 
-const PurchaseOrderViewModal: React.FC<{ 
-    isOpen: boolean; 
-    onClose: () => void; 
-    purchaseOrder: PurchaseOrder; 
-    supplier?: Supplier; 
-    entity?: BusinessEntity; 
-    taxRates: TaxRate[]; 
-    onSetStatusToOrdered: (po: PurchaseOrder) => Promise<void> | void; 
-    onOpenForEditing?: (po: PurchaseOrder) => void;
-    onRefresh?: (poId: string) => Promise<PurchaseOrder | void>;
-}> = ({ isOpen, onClose, purchaseOrder, supplier, entity, taxRates, onSetStatusToOrdered, onOpenForEditing, onRefresh }) => {
-    
-    const [isEmailing, setIsEmailing] = useState(false);
+    const { setPurchaseOrders, suppliers, businessEntities } = useData();
+    const appContext = useContext(AppContext);
+    const users = appContext?.users ?? [];
+    const [pdfUrl, setPdfUrl] = useState<string | null>(null);
     const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
-    const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
-    const [isRefreshing, setIsRefreshing] = useState(false);
-    const print = usePrint();
+    const [isEmailing, setIsEmailing] = useState(false);
+    const [currentPo, setCurrentPo] = useState<PurchaseOrder | null>(purchaseOrder);
 
-    const totals = useMemo(() => {
-        const breakdown: { [key: string]: { net: number; vat: number; rate: number; name: string; } } = {};
-        const taxRatesMap = new Map(taxRates.map(t => [t.id, t]));
-        let totalNet = 0;
+    const getUsername = (userId: string) => (users.find(u => u.id === userId) as User)?.name || 'Unknown User';
 
-        (purchaseOrder.lineItems || []).forEach(item => {
-            const net = item.quantity * item.unitPrice;
-            totalNet += net;
+    const poTotals = useMemo(() => {
+        if (!currentPo) return { net: 0, vat: 0, grandTotal: 0 };
+        const net = currentPo.lineItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
+        const vat = net * VAT_RATE;
+        const grandTotal = net + vat;
+        return { net, vat, grandTotal };
+    }, [currentPo]);
 
-            const taxRate = taxRatesMap.get(item.taxCodeId || '') as TaxRate | undefined;
-            if (taxRate && taxRate.rate > 0) {
-                if (!breakdown[taxRate.id]) {
-                    breakdown[taxRate.id] = { net: 0, vat: 0, rate: taxRate.rate, name: taxRate.name };
-                }
-                const vatAmount = net * (taxRate.rate / 100);
-                breakdown[taxRate.id].net += net;
-                breakdown[taxRate.id].vat += vatAmount;
-            }
-        });
+    const entityDetails = useMemo(() => 
+        businessEntities.find(e => e.id === currentPo?.entityId)
+    , [businessEntities, currentPo]);
 
-        const finalVatBreakdown = Object.values(breakdown).filter(b => b.net > 0);
-        const totalVat = finalVatBreakdown.reduce((sum, b) => sum + b.vat, 0);
+    const lastUpdatedBy = useMemo(() => {
+        if (!currentPo?.history?.length) return null;
+        const lastEvent = currentPo.history[currentPo.history.length - 1];
+        return {
+            user: getUsername(lastEvent.userId),
+            timestamp: new Date(lastEvent.timestamp).toLocaleString(),
+            status: lastEvent.status
+        };
+    }, [currentPo, users]);
 
-        return { totalNet, grandTotal: totalNet + totalVat, vatBreakdown: finalVatBreakdown };
-    }, [purchaseOrder, taxRates]);
+    const generatePurchaseOrderDataUrl = useCallback(async (po: PurchaseOrder, supplier: Supplier, entity: BusinessEntity, totals: { net: number, vat: number, grandTotal: number }): Promise<string> => {
+        const printMountPoint = document.createElement('div');
+        printMountPoint.style.position = 'absolute';
+        printMountPoint.style.left = '-9999px';
+        document.body.appendChild(printMountPoint);
 
-    const handlePrint = () => {
-        print(
-            <PrintablePurchaseOrder {...{ purchaseOrder, supplier, entity, taxRates, totals }} />
+        const root = ReactDOM.createRoot(printMountPoint);
+        root.render(
+            <React.StrictMode>
+                <PurchaseOrderPrint 
+                    purchaseOrder={po} 
+                    supplier={supplier}
+                    entityDetails={entity}
+                    totals={totals}
+                />
+            </React.StrictMode>
         );
+
+        await new Promise(resolve => setTimeout(resolve, 800));
+
+        try {
+            const canvas = await html2canvas(printMountPoint.children[0] as HTMLElement, { scale: 2, useCORS: true });
+            const imgData = canvas.toDataURL('image/png');
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = pdf.internal.pageSize.getHeight();
+            const canvasHeightOnPdf = pdfWidth * (canvas.height / canvas.width);
+            
+            pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, canvasHeightOnPdf);
+
+            if (canvasHeightOnPdf > pdfHeight) {
+                console.warn("Purchase order content is longer than one page. Consider a multi-page solution if needed.");
+            }
+
+            return pdf.output('datauristring');
+        } finally {
+            root.unmount();
+            document.body.removeChild(printMountPoint);
+        }
+    }, []);
+
+    const handleGeneratePdf = useCallback(async (po: PurchaseOrder) => {
+        const poSupplier = suppliers.find(s => s.id === po.supplierId);
+        const poEntity = businessEntities.find(e => e.id === po.entityId);
+
+        if (!po || !poSupplier || !poEntity) {
+            console.warn("Could not generate PDF, missing data for PO:", po);
+            return;
+        }
+
+        setIsGeneratingPdf(true);
+        try {
+            const url = await generatePurchaseOrderDataUrl(po, poSupplier, poEntity, poTotals);
+            setPdfUrl(url);
+            const updatedPo = { ...po, pdfUrl: url, pdfGeneratedAt: new Date().toISOString() };
+            setCurrentPo(updatedPo);
+            if (onUpdatePO) {
+                onUpdatePO(updatedPo);
+            }
+        } catch (error) {
+            console.error("Error generating PDF:", error);
+        } finally {
+            setIsGeneratingPdf(false);
+        }
+    }, [generatePurchaseOrderDataUrl, onUpdatePO, suppliers, businessEntities, poTotals]);
+
+    const loadFreshPoAndGeneratePdf = useCallback(async (poId: string) => {
+        setIsGeneratingPdf(true);
+        try {
+            const docRef = doc(db, 'brooks_purchaseOrders', poId);
+            const docSnap = await getDoc(docRef);
+
+            if (docSnap.exists()) {
+                const freshPoFromDb = { id: docSnap.id, ...docSnap.data() } as PurchaseOrder;
+                setPurchaseOrders(prev => prev.map(p => p.id === freshPoFromDb.id ? freshPoFromDb : p));
+                setCurrentPo(freshPoFromDb);
+                await handleGeneratePdf(freshPoFromDb);
+            } else if (purchaseOrder) {
+                await handleGeneratePdf(purchaseOrder);
+            }
+        } catch (error) {
+            console.error("Failed to load fresh PO and generate PDF", error);
+            if (purchaseOrder) await handleGeneratePdf(purchaseOrder);
+        } finally {
+            setIsGeneratingPdf(false);
+        }
+    }, [handleGeneratePdf, purchaseOrder, setPurchaseOrders]);
+
+    const handleRefresh = () => {
+        if (currentPo) {
+            loadFreshPoAndGeneratePdf(currentPo.id);
+        }
     };
 
+    useEffect(() => {
+        if (isOpen && purchaseOrder?.id) {
+            loadFreshPoAndGeneratePdf(purchaseOrder.id);
+        }
+
+        if (!isOpen) {
+            setCurrentPo(null);
+            setPdfUrl(null);
+        }
+    }, [isOpen, purchaseOrder?.id]);
+
+    if (!isOpen || !currentPo) return null;
+
+    const handleEmailSuccess = () => {
+        setIsEmailing(false);
+        if (onUpdatePO && currentPo) {
+            onUpdatePO(currentPo);
+        }
+    };
+    
     const handleDownloadPdf = async () => {
+        if (!currentPo || !currentSupplier || !entityDetails) return;
+        
         setIsGeneratingPdf(true);
         const printMountPoint = document.createElement('div');
         printMountPoint.style.position = 'absolute';
@@ -160,151 +184,105 @@ const PurchaseOrderViewModal: React.FC<{
         const root = ReactDOM.createRoot(printMountPoint);
         root.render(
             <React.StrictMode>
-                <PrintablePurchaseOrder {...{ purchaseOrder, supplier, entity, taxRates, totals }} />
+                <PurchaseOrderPrint 
+                    purchaseOrder={currentPo} 
+                    supplier={currentSupplier}
+                    entityDetails={entityDetails}
+                    totals={poTotals}
+                />
             </React.StrictMode>
         );
 
         await new Promise(resolve => setTimeout(resolve, 800));
+    
         try {
-            const canvas = await html2canvas(printMountPoint, { scale: 2 });
+            const canvas = await html2canvas(printMountPoint.children[0] as HTMLElement, { scale: 2, useCORS: true });
             const imgData = canvas.toDataURL('image/png');
             const pdf = new jsPDF('p', 'mm', 'a4');
-            pdf.addImage(imgData, 'PNG', 0, 0, pdf.internal.pageSize.getWidth(), pdf.internal.pageSize.getHeight(), undefined, 'FAST');
-            pdf.save(`PurchaseOrder-${purchaseOrder.id}.pdf`);
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = pdf.internal.pageSize.getHeight();
+            const canvasHeightOnPdf = pdfWidth * (canvas.height / canvas.width);
+
+            pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, canvasHeightOnPdf);
+
+            pdf.save(`PO-${currentPo.id}.pdf`);
         } catch (error) {
-            console.error("Error generating PDF:", error);
-            alert("Failed to generate PDF.");
+            console.error("Error generating PDF for download:", error);
         } finally {
             root.unmount();
             document.body.removeChild(printMountPoint);
             setIsGeneratingPdf(false);
         }
     };
-    
-    const handleEmailSuccess = async () => {
-        setIsUpdatingStatus(true);
-        try {
-            if (purchaseOrder.status === 'Draft') {
-                await onSetStatusToOrdered({ ...purchaseOrder, status: 'Ordered' });
-            }
-            setIsEmailing(false);
-            onClose(); 
-        } catch (e) {
-            console.error("Failed to update status after email", e);
-            alert("Email sent but failed to update order status locally.");
-        } finally {
-            setIsUpdatingStatus(false);
-        }
-    };
 
-    const handlePhoneOrder = async () => {
-        if (purchaseOrder.status === 'Draft') {
-            setIsUpdatingStatus(true);
-            try {
-                await onSetStatusToOrdered({ ...purchaseOrder, status: 'Ordered' });
-                onClose();
-            } catch (e) {
-                console.error("Failed to update status for phone order", e);
-                alert("Failed to update order status.");
-            } finally {
-                setIsUpdatingStatus(false);
-            }
-        } else {
-            onClose();
-        }
-    };
-
-    const handleRefresh = async () => {
-        if (!onRefresh) return;
-        setIsRefreshing(true);
-        try {
-            await onRefresh(purchaseOrder.id);
-        } catch (error) {
-            console.error("Failed to refresh PO:", error);
-        } finally {
-            setIsRefreshing(false);
-        }
-    };
-
-    if (!isOpen) return null;
+    const currentSupplier = suppliers.find(s => s.id === currentPo.supplierId);
 
     return (
         <>
-            <div className="fixed inset-0 bg-gray-900 bg-opacity-75 z-[70] flex justify-center items-center p-4">
-                <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+            <div className="fixed inset-0 bg-gray-900 bg-opacity-75 z-[70] flex justify-center items-center p-4" onClick={onClose}>
+                <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
                     <header className="flex-shrink-0 flex justify-between items-center p-4 border-b">
-                        <h2 className="text-xl font-bold text-indigo-700">Purchase Order #{purchaseOrder.id}</h2>
-                        <button onClick={onClose}><X size={24} className="text-gray-500 hover:text-gray-800" /></button>
+                        <div className="flex items-center gap-4">
+                            <h2 className="text-xl font-bold text-gray-800">Purchase Order: #{currentPo.id}</h2>
+                            <span className={`px-2.5 py-1 text-xs font-semibold rounded-full ${
+                                currentPo.status === 'Draft' ? 'bg-gray-100 text-gray-700' :
+                                    currentPo.status === 'Ordered' ? 'bg-blue-100 text-blue-700' :
+                                        currentPo.status === 'Partially Received' ? 'bg-yellow-100 text-yellow-800' :
+                                            currentPo.status === 'Received' ? 'bg-green-100 text-green-700' :
+                                                'bg-red-100 text-red-700'
+                                }`}>{currentPo.status}</span>
+                        </div>
+                        <button type="button" onClick={onClose}><X size={24} /></button>
                     </header>
-                    <main className="flex-grow overflow-y-auto">
-                        <div className="scale-95 origin-top p-4">
-                            <PrintablePurchaseOrder {...{ purchaseOrder, supplier, entity, taxRates, totals }} />
-                        </div>
+                    <main className="flex-grow bg-gray-100 overflow-hidden">
+                        {isGeneratingPdf && !pdfUrl && (
+                            <div className="w-full h-full flex justify-center items-center">
+                                <Loader2 size={32} className="animate-spin text-indigo-600" />
+                                <p className="ml-4 text-lg">Generating up-to-date PDF...</p>
+                            </div>
+                        )}
+                        {pdfUrl && <PDFViewer src={pdfUrl} />}
+                        {!isGeneratingPdf && !pdfUrl && (
+                            <div className="w-full h-full flex justify-center items-center flex-col">
+                                <Info size={32} className="text-gray-500" />
+                                <p className="mt-4 text-lg text-gray-600">Could not load PDF.</p>
+                                <button onClick={handleRefresh} className="mt-4 flex items-center justify-center py-2 px-4 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700">
+                                    <RefreshCw size={16} className="mr-2" /> Try Again
+                                </button>
+                            </div>
+                        )}
                     </main>
-                    <footer className="flex-shrink-0 flex justify-between items-center p-4 border-t bg-gray-50">
-                        <div className="flex gap-2">
-                            {onRefresh && (
-                                <button onClick={handleRefresh} disabled={isRefreshing} className="flex items-center py-2 px-4 bg-gray-200 text-gray-800 font-semibold rounded-lg hover:bg-gray-300 disabled:opacity-50">
-                                    {isRefreshing ? <Loader2 size={16} className="mr-2 animate-spin"/> : <RefreshCw size={16} className="mr-2" />}
-                                    Refresh
-                                </button>
-                            )}
-                            {onOpenForEditing && purchaseOrder.status !== 'Received' && purchaseOrder.status !== 'Cancelled' && (
-                                <button
-                                    onClick={() => onOpenForEditing(purchaseOrder)}
-                                    className="flex items-center py-2 px-4 bg-gray-600 text-white font-semibold rounded-lg hover:bg-gray-700"
-                                >
-                                    <Edit size={16} className="mr-2" /> Edit
-                                </button>
-                            )}
-                            {(purchaseOrder.status === 'Ordered' || purchaseOrder.status === 'Partially Received') && onOpenForEditing && (
-                                <button
-                                    onClick={() => { onOpenForEditing(purchaseOrder); onClose(); }}
-                                    className="flex items-center py-2 px-4 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700"
-                                >
-                                    <PackageCheck size={16} className="mr-2" /> Receive Goods
-                                </button>
-                            )}
-                            {purchaseOrder.status === 'Draft' && (
-                                <button 
-                                    onClick={handlePhoneOrder}
-                                    disabled={isUpdatingStatus}
-                                    className="flex items-center py-2 px-4 bg-teal-600 text-white font-semibold rounded-lg hover:bg-teal-700 disabled:opacity-50"
-                                >
-                                    {isUpdatingStatus ? <Loader2 size={16} className="mr-2 animate-spin"/> : <Phone size={16} className="mr-2" />} 
-                                    Ordered via Phone
-                                </button>
-                            )}
-                            <button 
-                                onClick={() => setIsEmailing(true)} 
-                                disabled={purchaseOrder.status === 'Received' || purchaseOrder.status === 'Cancelled' || isUpdatingStatus}
-                                className="flex items-center py-2 px-4 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                <Mail size={16} className="mr-2" /> {purchaseOrder.status === 'Draft' ? 'Email & Mark Ordered' : 'Resend Email'}
-                            </button>
-                             <button onClick={handlePrint} className="flex items-center py-2 px-4 bg-gray-600 text-white font-semibold rounded-lg hover:bg-gray-700">
-                                <Printer size={16} className="mr-2" /> Print
-                            </button>
-                            <button onClick={handleDownloadPdf} disabled={isGeneratingPdf} className="flex items-center py-2 px-4 bg-gray-600 text-white font-semibold rounded-lg hover:bg-gray-700 disabled:opacity-50">
-                                {isGeneratingPdf ? <Loader2 size={16} className="mr-2 animate-spin"/> : <Download size={16} className="mr-2" />}
-                                {isGeneratingPdf ? 'Generating...' : 'Download PDF'}
-                            </button>
+                    <footer className="flex-shrink-0 flex justify-between items-center gap-2 p-4 border-t bg-white">
+                        <div className='text-xs text-gray-500'>
+                            {lastUpdatedBy ? `Last status change to '${lastUpdatedBy.status}' by ${lastUpdatedBy.user} at ${lastUpdatedBy.timestamp}` : 'No history'}
                         </div>
-                        <button onClick={onClose} className="py-2 px-4 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700">Close</button>
+                        <div className="flex gap-2">
+                            <button onClick={handleRefresh} className="flex items-center justify-center py-2 px-4 bg-gray-200 text-gray-800 font-semibold rounded-lg hover:bg-gray-300 transition-all" disabled={isGeneratingPdf}>
+                                {isGeneratingPdf ? <Loader2 size={16} className="mr-2 animate-spin" /> : <RefreshCw size={16} className="mr-2" />}
+                                {isGeneratingPdf ? 'Reloading...' : 'Reload'}
+                            </button>
+                            <button onClick={handleDownloadPdf} disabled={isGeneratingPdf} className="flex items-center justify-center py-2 px-4 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:bg-blue-300 transition-all">
+                                <Download size={16} className="mr-2" />
+                                Download PDF
+                            </button>
+                            <button onClick={() => setIsEmailing(true)} disabled={!pdfUrl || isGeneratingPdf} className="flex items-center justify-center py-2 px-4 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 disabled:bg-green-300 transition-all">
+                                <Mail size={16} className="mr-2" />
+                                Email to Supplier
+                            </button>
+                            <button onClick={onClose} className="py-2 px-4 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700">Close</button>
+                        </div>
                     </footer>
                 </div>
             </div>
-            {isEmailing && (
+            {isEmailing && currentSupplier && (
                 <EmailPurchaseOrderModal
                     isOpen={isEmailing}
                     onClose={() => setIsEmailing(false)}
                     onSend={handleEmailSuccess}
-                    purchaseOrder={purchaseOrder}
-                    supplier={supplier}
+                    purchaseOrder={currentPo}
+                    supplier={currentSupplier}
                 />
             )}
         </>
     );
 };
-
-export default PurchaseOrderViewModal;

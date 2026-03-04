@@ -126,8 +126,8 @@ const PurchaseOrdersView = ({ purchaseOrders, suppliers, onOpenPurchaseOrderModa
 
             const matchesSearch = filter === '' ||
                 po.id.toLowerCase().includes(lowerFilter) ||
-                po.vehicleRegistrationRef.toLowerCase().includes(lowerFilter) ||
-                supplier?.toLowerCase().includes(lowerFilter);
+                (po.vehicleRegistrationRef || '').toLowerCase().includes(lowerFilter) ||
+                (supplier || '').toLowerCase().includes(lowerFilter);
 
             const matchesStatus = statusFilter.length === 0 || statusFilter.includes(po.status);
 
@@ -233,11 +233,16 @@ const PurchaseOrdersView = ({ purchaseOrders, suppliers, onOpenPurchaseOrderModa
         }
     };
 
+    const handleViewPo = (po: PurchaseOrder) => {
+        const freshPo = purchaseOrders.find(p => p.id === po.id) || po;
+        onViewPurchaseOrder(freshPo);
+    }
+
     return (
         <div className="w-full h-full flex flex-col p-6">
             <header className="flex justify-between items-center mb-4 flex-shrink-0">
-                <h2 className="text-2xl font-bold text-gray-800">Purchase Orders (Last 30 Days)</h2>
-                <div className="flex gap-2">
+                <h2 className="text-2xl font-bold text-gray-800">Purchase Orders</h2>
+                 <div className="flex gap-2">
                     <button onClick={() => onExport(filteredPurchaseOrders, 'purchase_orders.csv')} className="flex items-center gap-2 py-2 px-4 bg-gray-600 text-white font-semibold rounded-lg shadow-md hover:bg-gray-700">
                         <Download size={16}/> Export CSV
                     </button>
@@ -247,7 +252,7 @@ const PurchaseOrdersView = ({ purchaseOrders, suppliers, onOpenPurchaseOrderModa
                      <button onClick={handlePrintPdf} className="flex items-center gap-2 py-2 px-4 bg-gray-600 text-white font-semibold rounded-lg shadow-md hover:bg-gray-700">
                         <Printer size={16}/> Print Summary
                     </button>
-                    <button onClick={onOpenBatchAddModal} className="flex items-center gap-2 py-2 px-4 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700">
+                    <button onClick={() => onOpenPurchaseOrderModal(null)} className="flex items-center gap-2 py-2 px-4 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700">
                         <PlusCircle size={16}/> New Purchase Order
                     </button>
                 </div>
@@ -294,7 +299,7 @@ const PurchaseOrdersView = ({ purchaseOrders, suppliers, onOpenPurchaseOrderModa
                         <tbody className="divide-y divide-gray-200">
                             {filteredPurchaseOrders.map(po => (
                                 <tr key={po.id} className="hover:bg-indigo-50">
-                                    <td className="p-3 font-mono">{po.id}</td>
+                                    <td className="p-3 font-mono"><a href="#" onClick={(e) => { e.preventDefault(); handleViewPo(po);}} className="text-indigo-600 hover:underline">{po.id}</a></td>
                                     <td className="p-3">{po.orderDate}</td>
                                     <td className="p-3">{po.supplierId ? supplierMap.get(po.supplierId) : 'N/A'}</td>
                                     <td className="p-3">{po.vehicleRegistrationRef}</td>
@@ -308,7 +313,7 @@ const PurchaseOrdersView = ({ purchaseOrders, suppliers, onOpenPurchaseOrderModa
                                     <td className="p-3 text-right font-semibold">{formatCurrency(calculateTotal(po.lineItems))}</td>
                                     <td className="p-3">
                                          <div className="flex gap-1 justify-end">
-                                            <button onClick={() => onViewPurchaseOrder(po)} className="p-1.5 text-gray-600 hover:bg-gray-100 rounded-full" title="View"><Eye size={16} /></button>
+                                            <button onClick={() => handleViewPo(po)} className="p-1.5 text-gray-600 hover:bg-gray-100 rounded-full" title="View"><Eye size={16} /></button>
                                             <button onClick={() => onOpenPurchaseOrderModal(po)} className="p-1.5 text-indigo-600 hover:bg-indigo-100 rounded-full" title="Edit"><Edit size={16} /></button>
                                             <button onClick={() => onDeletePurchaseOrder(po.id)} className="p-1.5 text-red-600 hover:bg-red-100 rounded-full" title="Delete"><Trash2 size={16} /></button>
                                         </div>

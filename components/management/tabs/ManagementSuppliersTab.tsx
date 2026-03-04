@@ -11,7 +11,6 @@ export const ManagementSuppliersTab = ({ searchTerm = '', onShowStatus }: { sear
     const { 
         suppliers = [], 
         setSuppliers, 
-        refreshActiveData 
     } = useData();
     
     // 2. Local State for instant feedback
@@ -22,7 +21,7 @@ export const ManagementSuppliersTab = ({ searchTerm = '', onShowStatus }: { sear
         setLocalSuppliers(Array.isArray(suppliers) ? suppliers : []);
     }, [suppliers]);
 
-    const { deleteItem } = useManagementTable(Array.isArray(suppliers) ? suppliers : [], 'brooks_suppliers');
+    const { deleteItem } = useManagementTable(localSuppliers, 'brooks_suppliers', setLocalSuppliers);
 
     const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -55,13 +54,6 @@ export const ManagementSuppliersTab = ({ searchTerm = '', onShowStatus }: { sear
 
             setIsModalOpen(false);
             setSelectedSupplier(null);
-
-            // Cloud Settle Buffer - Allow DB to index before re-fetching
-            if (refreshActiveData) {
-                setTimeout(async () => {
-                    await refreshActiveData(true);
-                }, 800);
-            }
             
             onShowStatus('Supplier saved successfully.', 'success');
         } catch (error: any) {

@@ -77,8 +77,8 @@ const HighlightText = memo(({ text, highlight }: { text: string; highlight: stri
 });
 
 export const ManagementPartsTab = ({ searchTerm, onShowStatus }: { searchTerm: string, onShowStatus: (text: string, type: 'info' | 'success' | 'error') => void }) => {
-    const { parts, suppliers, taxRates } = useData();
-    const { updateItem, deleteItem } = useManagementTable(parts, 'brooks_parts');
+    const { parts, setParts, suppliers, taxRates } = useData();
+    const { updateItem, deleteItem } = useManagementTable(parts, 'brooks_parts', setParts);
 
     const [selectedPart, setSelectedPart] = useState<Part | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);

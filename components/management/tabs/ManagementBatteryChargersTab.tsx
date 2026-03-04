@@ -20,7 +20,7 @@ export const ManagementBatteryChargersTab = ({ searchTerm = '', onShowStatus }: 
         setLocalChargers(Array.isArray(batteryChargers) ? batteryChargers : []);
     }, [batteryChargers]);
 
-    const { deleteItem } = useManagementTable(localChargers, 'brooks_batteryChargers');
+    const { deleteItem } = useManagementTable(localChargers, 'brooks_batteryChargers', setLocalChargers);
 
     const [selectedCharger, setSelectedCharger] = useState<BatteryCharger | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);

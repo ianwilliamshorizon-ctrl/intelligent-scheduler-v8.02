@@ -1,31 +1,44 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { ServicePackage, EstimateLineItem, TaxRate, BusinessEntity, Part } from '../types';
-import { PlusCircle, Trash2, Filter } from 'lucide-react';
+import { ServicePackage, EstimateLineItem, TaxRate, BusinessEntity, Part, Supplier } from '../types';
+import { PlusCircle, Trash2, Filter, RefreshCw } from 'lucide-react';
 import { formatCurrency } from '../utils/formatUtils';
 import FormModal from './FormModal';
-import SearchableSelect from './SearchableSelect';
+import PartFormModal from './PartFormModal';
+import { useData } from '../core/state/DataContext';
 
 const ServicePackageFormModal = ({ isOpen, onClose, onSave, servicePackage, taxRates, entityId, businessEntities, parts }: { isOpen: boolean, onClose: () => void, onSave: (pkg: ServicePackage) => void, servicePackage: Partial<ServicePackage> | null, taxRates: TaxRate[], entityId: string, businessEntities: BusinessEntity[], parts: Part[] }) => {
     const [formData, setFormData] = useState<Partial<ServicePackage>>({});
+    const { suppliers, setParts } = useData();
     const standardTaxRateId = useMemo(() => taxRates.find(t => t.code === 'T1')?.id, [taxRates]);
     
-    // State for part search
     const [activeSearchRow, setActiveSearchRow] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
+    const [isPartModalOpen, setIsPartModalOpen] = useState(false);
+    const [newPartDraft, setNewPartDraft] = useState<Partial<Part> | null>(null);
+    const [activeLineItemId, setActiveLineItemId] = useState<string | null>(null);
 
     useEffect(() => { 
         if (isOpen) {
-            setFormData(servicePackage 
+            const initialData = servicePackage 
                 ? { ...servicePackage, costItems: servicePackage.costItems || [] }
-                : { entityId, name: '', description: '', totalPrice: 0, costItems: [], taxCodeId: standardTaxRateId }
-            ); 
+                : { entityId, name: '', description: '', totalPrice: 0, costItems: [], taxCodeId: standardTaxRateId };
+            
+            if (!initialData.taxCodeId) {
+                initialData.taxCodeId = standardTaxRateId;
+            }
+
+            if (initialData.costItems) {
+                initialData.costItems = initialData.costItems.map(item => ({
+                    ...item,
+                    taxCodeId: item.taxCodeId || initialData.taxCodeId
+                }));
+            }
+            setFormData(initialData);
         }
     }, [servicePackage, isOpen, entityId, standardTaxRateId]);
-    
-    const partOptions = useMemo(() => parts.map(p => ({id: p.id, label: `${p.partNumber} - ${p.description} (Stock: ${p.stockQuantity})`})), [parts]);
 
     const filteredParts = useMemo(() => {
-        if (!searchTerm) return [];
+        if (!searchTerm || searchTerm.length < 2) return [];
         const lower = searchTerm.toLowerCase();
         return parts.filter(p => 
             p.partNumber.toLowerCase().includes(lower) || 
@@ -33,11 +46,14 @@ const ServicePackageFormModal = ({ isOpen, onClose, onSave, servicePackage, taxR
         ).slice(0, 10);
     }, [parts, searchTerm]);
 
-
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
         const processedValue = name === 'totalPrice' ? parseFloat(value) || 0 : value;
         setFormData(p => ({...p, [name]: processedValue}));
+
+        if (name === 'taxCodeId') {
+             setFormData(p => ({...p, costItems: (p.costItems || []).map(item => ({ ...item, taxCodeId: value }))}));
+        }
     };
 
     const handleLineChange = useCallback((id: string, field: keyof EstimateLineItem, value: any) => { 
@@ -45,7 +61,7 @@ const ServicePackageFormModal = ({ isOpen, onClose, onSave, servicePackage, taxR
             ...p, 
             costItems: (p.costItems||[]).map(li => 
                 li.id === id 
-                    ? {...li, [field]:['quantity', 'unitCost'].includes(field as string) ? parseFloat(value) || 0 : value } 
+                    ? {...li, [field]:['quantity', 'unitCost', 'unitPrice'].includes(field as string) ? parseFloat(value) || 0 : value } 
                     : li
             )
         })); 
@@ -59,7 +75,7 @@ const ServicePackageFormModal = ({ isOpen, onClose, onSave, servicePackage, taxR
     }, [formData.costItems, activeSearchRow]);
     
     const addLine = (isLabor: boolean) => { 
-        const newLine:EstimateLineItem = {id:crypto.randomUUID(), description:'', quantity:1, unitPrice:0, unitCost:0, isLabor, taxCodeId:standardTaxRateId, fromStock: false}; 
+        const newLine:EstimateLineItem = {id:crypto.randomUUID(), description:'', quantity:1, unitPrice:0, unitCost:0, isLabor, taxCodeId:formData.taxCodeId || standardTaxRateId, fromStock: false}; 
         setFormData(p => ({...p, costItems: [...(p.costItems||[]), newLine]})); 
     };
     
@@ -84,156 +100,235 @@ const ServicePackageFormModal = ({ isOpen, onClose, onSave, servicePackage, taxR
         setActiveSearchRow(null);
         setSearchTerm('');
     };
+    
+    const handleCreateNewPart = (lineId: string) => {
+        const draft: Partial<Part> = {
+            partNumber: searchTerm,
+            description: searchTerm,
+        };
+        setNewPartDraft(draft);
+        setActiveLineItemId(lineId);
+        setIsPartModalOpen(true);
+        setActiveSearchRow(null);
+    };
+
+    const handleSaveNewPart = (newPart: Part) => {
+        // This would ideally be handled via a centralized data management system
+        const newPartWithId = { ...newPart, id: `new-${crypto.randomUUID()}`}; 
+        setParts(currentParts => [...currentParts, newPartWithId]);
+        if (activeLineItemId) {
+            handleSelectPart(activeLineItemId, newPartWithId);
+        }
+        setIsPartModalOpen(false);
+        setNewPartDraft(null);
+        setActiveLineItemId(null);
+    };
 
     const packageTotals = useMemo(() => {
         const costItems = formData.costItems || [];
         const totalCost = costItems.reduce((sum, item) => sum + ((item.unitCost || 0) * (item.quantity || 0)), 0);
-        const totalSale = formData.totalPrice || 0;
-        const totalProfit = totalSale - totalCost;
-        const margin = totalSale > 0 ? (totalProfit / totalSale) * 100 : 0;
-        return { totalCost, totalSale, totalProfit, margin };
-    }, [formData.costItems, formData.totalPrice]);
+        
+        const taxRateValue = taxRates.find(t => t.id === formData.taxCodeId)?.rate || 0;
+        const totalSaleGross = formData.totalPrice || 0;
+        const totalSaleNet = totalSaleGross / (1 + (taxRateValue / 100));
+        const totalVat = totalSaleGross - totalSaleNet;
+        
+        const totalProfit = totalSaleNet - totalCost;
+        const margin = totalSaleNet > 0 ? (totalProfit / totalSaleNet) * 100 : 0;
+
+        return { totalCost, totalSaleNet, totalVat, totalSaleGross, totalProfit, margin };
+    }, [formData.costItems, taxRates, formData.totalPrice, formData.taxCodeId]);
+
+    const recalculateTotalPrice = useCallback(() => {
+        const costItems = formData.costItems || [];
+        const totalSaleNet = costItems.reduce((sum, item) => sum + ((item.unitPrice || 0) * (item.quantity || 0)), 0);
+        const totalVat = costItems.reduce((sum, item) => {
+            const taxRate = taxRates.find(t => t.id === item.taxCodeId)?.rate || 0;
+            const itemVat = ((item.unitPrice || 0) * (item.quantity || 0)) * (taxRate / 100);
+            return sum + itemVat;
+        }, 0);
+        const gross = totalSaleNet + totalVat;
+        setFormData(p => ({ ...p, totalPrice: gross }));
+    }, [formData.costItems, taxRates]);
+
+    const handleBlur = () => {
+        setTimeout(() => {
+            setActiveSearchRow(null);
+        }, 150); // Delay to allow clicks on search results
+    };
 
     return (
-        <FormModal isOpen={isOpen} onClose={onClose} onSave={handleSave} title={servicePackage?.id ? "Edit Service Package" : "Add Service Package"} maxWidth="max-w-5xl">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Business Entity</label>
-                    <select name="entityId" value={formData.entityId || ''} onChange={handleChange} className="w-full p-2 border rounded bg-white">
-                        {businessEntities.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
-                    </select>
-                </div>
-                <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Package Name</label>
-                    <input name="name" value={formData.name || ''} onChange={handleChange} placeholder="e.g., Porsche 911 Minor Service" className="w-full p-2 border rounded" />
-                </div>
-                 <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Total Sell Price (£)</label>
-                    <input name="totalPrice" type="number" step="0.01" value={formData.totalPrice || ''} onChange={handleChange} placeholder="e.g., 495.00" className="w-full p-2 border rounded" />
-                </div>
-                <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Default Tax Code</label>
-                    <select name="taxCodeId" value={formData.taxCodeId || ''} onChange={handleChange} className="w-full p-2 border rounded bg-white">
-                        {taxRates.map(t => <option key={t.id} value={t.id}>{t.code} ({t.rate}%)</option>)}
-                    </select>
-                </div>
-            </div>
-            <div className="mt-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                <textarea name="description" value={formData.description || ''} onChange={handleChange} placeholder="Optional details about the package" className="w-full p-2 border rounded" rows={2}/>
-            </div>
-            
-            <div className="mt-4 p-4 bg-gray-50 border rounded-lg">
-                <h4 className="font-bold text-sm text-gray-700 mb-3 flex items-center gap-2"><Filter size={16}/> Vehicle Compatibility (Hierarchical)</h4>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                        <label className="block text-xs font-medium text-gray-600 mb-1">Make (Level 1)</label>
-                        <input name="applicableMake" value={formData.applicableMake || ''} onChange={handleChange} placeholder="e.g. Porsche" className="w-full p-2 border rounded text-sm" />
-                        <p className="text-[10px] text-gray-500 mt-1">Leave blank for all makes.</p>
+        <>
+            <FormModal isOpen={isOpen} onClose={onClose} onSave={handleSave} title={servicePackage?.id ? "Edit Service Package" : "Add Service Package"} maxWidth="max-w-5xl">
+                {/* ... form content ... */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="md:col-span-2">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Business Entity</label>
+                        <select name="entityId" value={formData.entityId || ''} onChange={handleChange} className="w-full p-2 border rounded bg-white">
+                            {businessEntities.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                        </select>
                     </div>
-                    <div>
-                        <label className="block text-xs font-medium text-gray-600 mb-1">Model (Level 2)</label>
-                        <input name="applicableModel" value={formData.applicableModel || ''} onChange={handleChange} placeholder="e.g. Cayman" className="w-full p-2 border rounded text-sm" />
-                         <p className="text-[10px] text-gray-500 mt-1">Leave blank for all models of this make.</p>
+                    <div className="md:col-span-2">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Package Name</label>
+                        <input name="name" value={formData.name || ''} onChange={handleChange} placeholder="e.g., Porsche 911 Minor Service" className="w-full p-2 border rounded" />
                     </div>
-                    <div>
-                        <label className="block text-xs font-medium text-gray-600 mb-1">Variant/Type (Level 3)</label>
-                        <input name="applicableVariant" value={formData.applicableVariant || ''} onChange={handleChange} placeholder="e.g. GT4" className="w-full p-2 border rounded text-sm" />
-                         <p className="text-[10px] text-gray-500 mt-1">Specific trim. Leave blank for all types.</p>
+                     <div className="md:col-span-2">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Default Line Item Tax</label>
+                        <select name="taxCodeId" value={formData.taxCodeId || ''} onChange={handleChange} className="w-full p-2 border rounded bg-white">
+                            {taxRates.map(t => <option key={t.id} value={t.id}>{t.code} ({t.rate}%)</option>)}
+                        </select>
+                    </div>
+                    <div className="md:col-span-2">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Total Price (Inc. VAT)</label>
+                        <div className="flex items-center gap-2">
+                            <input name="totalPrice" type="number" value={formData.totalPrice || ''} onChange={handleChange} className="w-full p-2 border rounded" />
+                            <button onClick={recalculateTotalPrice} className="p-2 bg-gray-200 rounded hover:bg-gray-300" title="Recalculate from line items"><RefreshCw size={16}/></button>
+                        </div>
                     </div>
                 </div>
-            </div>
-            
-            <h4 className="font-bold mb-2 mt-4">Cost Items (Parts & Labor)</h4>
-            <div className="grid grid-cols-12 gap-2 items-center text-xs font-semibold text-gray-500 px-2 pb-1 border-b">
-                <div className="col-span-2">Part No.</div>
-                <div className="col-span-4">Description</div>
-                <div className="col-span-2 text-right">Qty/Hrs</div>
-                <div className="col-span-1 text-center">Type</div>
-                <div className="col-span-2 text-right">Unit Cost (£)</div>
-                <div className="col-span-1"></div>
-            </div>
+                <div className="mt-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                    <textarea name="description" value={formData.description || ''} onChange={handleChange} placeholder="Optional details about the package" className="w-full p-2 border rounded" rows={2}/>
+                </div>
+                
+                <div className="mt-4 p-4 bg-gray-50 border rounded-lg">
+                    <h4 className="font-bold text-sm text-gray-700 mb-3 flex items-center gap-2"><Filter size={16}/> Vehicle Compatibility (Hierarchical)</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Make (Level 1)</label>
+                            <input name="applicableMake" value={formData.applicableMake || ''} onChange={handleChange} placeholder="e.g. Porsche" className="w-full p-2 border rounded text-sm" />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Model (Level 2)</label>
+                            <input name="applicableModel" value={formData.applicableModel || ''} onChange={handleChange} placeholder="e.g. Cayman" className="w-full p-2 border rounded text-sm" />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Variant/Type (Level 3)</label>
+                            <input name="applicableVariant" value={formData.applicableVariant || ''} onChange={handleChange} placeholder="e.g. GT4" className="w-full p-2 border rounded text-sm" />
+                        </div>
+                    </div>
+                </div>
+                
+                <h4 className="font-bold mb-2 mt-4">Cost & Sale Items (Parts & Labor)</h4>
+                <div className="grid grid-cols-12 gap-2 items-center text-xs font-semibold text-gray-500 px-2 pb-1 border-b">
+                    <div className="col-span-2">Part Number</div>
+                    <div className="col-span-3">Description</div>
+                    <div className="col-span-1">Qty</div>
+                    <div className="col-span-1 text-right">Unit Cost</div>
+                    <div className="col-span-1 text-right">Unit Price</div>
+                    <div className="col-span-2">Tax Code</div>
+                    <div className="col-span-1">Type</div>
+                    <div className="col-span-1"></div>
+                </div>
 
-            <div className="space-y-2 mt-2 pr-2">
-                {(formData.costItems || []).map(li => {
-                    return (
-                        <div key={li.id} className="grid grid-cols-12 gap-2 items-start relative">
-                             <div className="col-span-2">
-                                {!li.isLabor && (
+                <div className="space-y-2 mt-2 pr-2">
+                    {(formData.costItems || []).map(li => {
+                        const showSearch = !li.isLabor && activeSearchRow === li.id && searchTerm.length > 1;
+                        return (
+                            <div key={li.id} className="grid grid-cols-12 gap-2 items-start relative">
+                                <div className="col-span-2">
+                                    {!li.isLabor && (
+                                        <input
+                                            value={li.partNumber || ''}
+                                            onFocus={() => { setActiveSearchRow(li.id); setSearchTerm(li.partNumber || ''); }}
+                                            onBlur={handleBlur}
+                                            onChange={e => handleLineChange(li.id, 'partNumber', e.target.value)}
+                                            placeholder="Part Number"
+                                            className="w-full p-1 border rounded text-sm"
+                                            autoComplete="off"
+                                        />
+                                    )}
+                                </div>
+                                <div className="col-span-3">
                                     <input
-                                        value={li.partNumber || ''}
-                                        onChange={(e) => handleLineChange(li.id, 'partNumber', e.target.value)}
-                                        onFocus={() => { setActiveSearchRow(li.id); setSearchTerm(li.partNumber || ''); }}
-                                        onBlur={() => setTimeout(() => setActiveSearchRow(null), 200)}
-                                        placeholder="Part No."
-                                        className="w-full p-1 border rounded text-sm"
-                                    />
-                                )}
-                            </div>
-                            <div className="col-span-4">
-                                {li.isLabor ? (
-                                    <input value={li.description} onChange={e=>handleLineChange(li.id, 'description', e.target.value)} placeholder="Labor Description" className="w-full p-1 border rounded text-sm"/>
-                                ) : (
-                                     <input
                                         value={li.description}
-                                        onChange={(e) => handleLineChange(li.id, 'description', e.target.value)}
-                                        onFocus={() => { setActiveSearchRow(li.id); setSearchTerm(li.description); }}
-                                        onBlur={() => setTimeout(() => setActiveSearchRow(null), 200)}
-                                        placeholder="Search part description..."
+                                        onFocus={() => { if (!li.isLabor) { setActiveSearchRow(li.id); setSearchTerm(li.description); } else { setActiveSearchRow(null) } }}
+                                        onBlur={handleBlur}
+                                        onChange={e => handleLineChange(li.id, 'description', e.target.value)}
+                                        placeholder={li.isLabor ? "Labor Description" : "Part Description"}
                                         className="w-full p-1 border rounded text-sm"
+                                        autoComplete="off"
                                     />
-                                )}
-                                {activeSearchRow === li.id && filteredParts.length > 0 && (
-                                    <div className="absolute z-50 top-full left-0 w-full bg-white border rounded shadow-lg max-h-40 overflow-y-auto mt-1">
-                                        {filteredParts.map(part => (
-                                            <div key={part.id} onMouseDown={() => handleSelectPart(li.id, part)} className="p-2 hover:bg-indigo-100 cursor-pointer text-sm">
-                                                <p className="font-semibold">{part.partNumber} - {part.description}</p>
-                                                <p className="text-xs text-gray-500">Cost: {formatCurrency(part.costPrice)} | Stock: {part.stockQuantity}</p>
+                                    {showSearch && (
+                                        <div className="absolute z-10 w-full bg-white border border-gray-300 rounded-md shadow-lg mt-1 max-h-60 overflow-y-auto">
+                                            {filteredParts.length > 0 ? (
+                                                filteredParts.map(part => (
+                                                    <div
+                                                        key={part.id}
+                                                        className="p-2 cursor-pointer hover:bg-gray-100"
+                                                        onMouseDown={() => handleSelectPart(li.id, part)}
+                                                    >
+                                                        <p className="font-semibold">{part.partNumber} - {part.description}</p>
+                                                        <p className="text-sm text-gray-600">Stock: {part.stockQuantity}, Price: {formatCurrency(part.salePrice)}</p>
+                                                    </div>
+                                                ))
+                                            ) : (
+                                                <div className="p-2 text-gray-500">No matching parts found.</div>
+                                            )}
+                                            <div
+                                                className="p-2 cursor-pointer hover:bg-gray-100 border-t"
+                                                onMouseDown={() => handleCreateNewPart(li.id)}
+                                            >
+                                                <p className="font-semibold text-indigo-600 flex items-center gap-2"><PlusCircle size={14} /> Add as new part</p>
                                             </div>
-                                        ))}
-                                    </div>
-                                )}
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="col-span-1"><input type="number" step="0.1" value={li.quantity} onChange={e=>handleLineChange(li.id, 'quantity', e.target.value)} placeholder="Qty" className="p-1 border rounded text-sm text-right w-full"/></div>
+                                <div className="col-span-1"><input type="number" step="0.01" value={li.unitCost || ''} onChange={e=>handleLineChange(li.id, 'unitCost', e.target.value)} placeholder="Cost" className="w-full p-1 border rounded text-sm text-right"/></div>
+                                <div className="col-span-1"><input type="number" step="0.01" value={li.unitPrice || ''} onChange={e=>handleLineChange(li.id, 'unitPrice', e.target.value)} placeholder="Price" className="w-full p-1 border rounded text-sm text-right"/></div>
+                                <div className="col-span-2">
+                                    <select value={li.taxCodeId || ''} onChange={e => handleLineChange(li.id, 'taxCodeId', e.target.value)} className="w-full p-1 border rounded text-sm bg-white">
+                                        {taxRates.map(t => <option key={t.id} value={t.id}>{t.code} ({t.rate}%)</option>)}
+                                    </select>
+                                </div>
+                                <div className="col-span-1 flex items-center justify-center">
+                                    {li.isLabor ? <span className="text-xs font-semibold">LABOR</span> : <span className="text-xs font-semibold">PART</span>}
+                                </div>
+                                <button onClick={()=>removeLine(li.id)} className="col-span-1 text-red-500 justify-self-center"><Trash2 size={16}/></button>
                             </div>
-                            <input type="number" step="0.1" value={li.quantity} onChange={e=>handleLineChange(li.id, 'quantity', e.target.value)} placeholder="Qty" className="col-span-2 p-1 border rounded text-sm text-right"/>
-                            <div className="col-span-1 text-center flex items-center justify-center">
-                                {li.isLabor ? <span className="text-xs font-semibold">LABOR</span> : (
-                                    <div className="flex items-center gap-1.5" title="Use from stock?">
-                                        <input type="checkbox" checked={!!li.fromStock} onChange={(e) => handleLineChange(li.id, 'fromStock', e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
-                                        <label className="text-xs">Stock</label>
-                                    </div>
-                                )}
+                        );
+                    })}
+                </div>
+                <div className="flex gap-4">
+                    <button onClick={() => addLine(true)} className="text-indigo-600 font-semibold text-sm mt-2 flex items-center gap-1"><PlusCircle size={14}/> Add Labor</button>
+                    <button onClick={() => addLine(false)} className="text-indigo-600 font-semibold text-sm mt-2 flex items-center gap-1"><PlusCircle size={14}/> Add Part</button>
+                </div>
+           
+                <div className="mt-6 pt-6 border-t">
+                    <h4 className="font-bold mb-2">Package Financial Summary</h4>
+                    <div className="grid grid-cols-2 gap-x-8 text-sm bg-gray-50 p-4 rounded-lg border">
+                        <div className="space-y-1">
+                            <div className="flex justify-between"><span>Total Cost Price:</span><span className="font-mono">{formatCurrency(packageTotals.totalCost)}</span></div>
+                            <div className="flex justify-between"><span>Total Sale Price (Net):</span><span className="font-mono">{formatCurrency(packageTotals.totalSaleNet)}</span></div>
+                            <div className="flex justify-between"><span>Total VAT:</span><span className="font-mono">{formatCurrency(packageTotals.totalVat)}</span></div>
+                            <div className="flex justify-between font-bold"><span>Total Sale Price (Gross):</span><span className="font-mono">{formatCurrency(packageTotals.totalSaleGross)}</span></div>
+                        </div>
+                        <div className="space-y-1">
+                            <div className={`flex justify-between font-semibold ${packageTotals.totalProfit < 0 ? 'text-red-600' : 'text-green-700'}`}>
+                                <span>Est. Profit:</span>
+                                <span className="font-mono">{formatCurrency(packageTotals.totalProfit)}</span>
                             </div>
-                            <input type="number" step="0.01" value={li.unitCost || ''} onChange={e=>handleLineChange(li.id, 'unitCost', e.target.value)} placeholder="Cost" className="w-full p-1 border rounded text-sm text-right"/>
-                            <button onClick={()=>removeLine(li.id)} className="col-span-1 text-red-500 justify-self-center"><Trash2 size={16}/></button>
-                        </div>
-                    );
-                })}
-            </div>
-            <div className="flex gap-4">
-                <button onClick={() => addLine(true)} className="text-indigo-600 font-semibold text-sm mt-2 flex items-center gap-1"><PlusCircle size={14}/> Add Labor Cost</button>
-                <button onClick={() => addLine(false)} className="text-indigo-600 font-semibold text-sm mt-2 flex items-center gap-1"><PlusCircle size={14}/> Add Part Cost</button>
-            </div>
-       
-            <div className="mt-6 pt-6 border-t">
-                <h4 className="font-bold mb-2">Package Summary</h4>
-                <div className="grid grid-cols-2 gap-x-8 text-sm bg-gray-50 p-4 rounded-lg border">
-                    <div className="space-y-1">
-                        <div className="flex justify-between"><span>Total Cost Price:</span><span className="font-mono">{formatCurrency(packageTotals.totalCost)}</span></div>
-                        <div className="flex justify-between"><span>Total Sale Price (Net):</span><span className="font-mono">{formatCurrency(packageTotals.totalSale)}</span></div>
-                    </div>
-                    <div className="space-y-1">
-                        <div className={`flex justify-between font-semibold ${packageTotals.totalProfit < 0 ? 'text-red-600' : 'text-green-700'}`}>
-                            <span>Total Profit:</span>
-                            <span className="font-mono">{formatCurrency(packageTotals.totalProfit)}</span>
-                        </div>
-                        <div className="flex justify-between font-semibold">
-                            <span>Profit Margin:</span>
-                            <span className="font-mono">{packageTotals.margin.toFixed(1)}%</span>
+                            <div className="flex justify-between font-semibold">
+                                <span>Est. Margin:</span>
+                                <span className="font-mono">{packageTotals.margin.toFixed(1)}%</span>
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
-        </FormModal>
+            </FormModal>
+
+            {isPartModalOpen && (
+                <PartFormModal 
+                    isOpen={isPartModalOpen} 
+                    onClose={() => setIsPartModalOpen(false)} 
+                    onSave={handleSaveNewPart} 
+                    part={newPartDraft} 
+                    suppliers={suppliers} 
+                    taxRates={taxRates} 
+                />
+            )}
+        </>
     );
 };
 
