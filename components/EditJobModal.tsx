@@ -116,6 +116,7 @@ const EditJobModal: React.FC<{
     const diagramImageId = useMemo(() => (Array.isArray(vehicle?.images)) ? vehicle?.images?.find(img => img.isPrimaryDiagram)?.id ?? null : null, [vehicle]);
     const taxRatesMap = useMemo(() => new Map((Array.isArray(taxRates) ? taxRates : []).map(t => [t.id, t])), [taxRates]);
     const standardTaxRateId = useMemo(() => (Array.isArray(taxRates) ? taxRates : []).find(t => t.code === 'T1')?.id, [taxRates]);
+    const t99RateId = useMemo(() => taxRates.find(t => t.code === 'T99')?.id, [taxRates]);
 
     const mainEstimate = useMemo(() => {
         if (!job || !Array.isArray(estimates)) return null;
@@ -252,7 +253,7 @@ const EditJobModal: React.FC<{
 
     const addPackage = (selection: any) => {
         const packageId = selection?.value || selection?.id || selection;
-        const pkg = Array.isArray(servicePackages) ? servicePackages.find(p => p.id === packageId) : undefined;
+        const pkg = servicePackages.find(p => p.id === packageId);
         if (!pkg) return;
         handleCreateEstimateIfNeeded();
 
@@ -263,27 +264,30 @@ const EditJobModal: React.FC<{
                 id: crypto.randomUUID(),
                 description: pkg.name || '',
                 quantity: 1,
-                unitPrice: pkg.totalPrice,
+                unitPrice: pkg.totalPriceNet || 0,
                 unitCost: 0,
                 isLabor: false, 
                 taxCodeId: pkg.taxCodeId || standardTaxRateId,
                 servicePackageId: pkg.id,
                 servicePackageName: pkg.name,
                 isPackageComponent: false,
-                isOptional: true
+                isOptional: true,
+                preCalculatedVat: pkg.taxCodeId === t99RateId ? pkg.totalPriceVat : undefined,
             };
             newItems.push(mainPackageItem);
+
             (pkg.costItems || []).forEach(costItem => {
                 newItems.push({ 
                     ...costItem, 
                     id: crypto.randomUUID(), 
-                    unitPrice: 0, 
+                    unitPrice: 0,
                     servicePackageId: pkg.id, 
                     servicePackageName: pkg.name, 
                     isPackageComponent: true,
                     isOptional: true
                 });
             });
+
             return { ...prev, lineItems: [...(prev.lineItems || []), ...newItems] };
         });
     };
@@ -414,25 +418,48 @@ const EditJobModal: React.FC<{
     }, [editableEstimate]);
 
     const { totalNet, grandTotal, vatBreakdown } = useMemo(() => {
-        const breakdown: { [key: string]: { net: number; vat: number; rate: number; name: string; } } = {};
+        const breakdown: { [key: string]: { net: number; vat: number; rate: number | string; name: string; } } = {};
         if (!editableEstimate || !editableEstimate.lineItems) return { totalNet: 0, grandTotal: 0, vatBreakdown: [] };
+
         let currentTotalNet = 0;
+
         const billableItems = (editableEstimate.lineItems || []).filter(item => !item.isPackageComponent);
+
         billableItems.forEach(item => {
-            const itemTotal = Number(item.quantity || 0) * Number(item.unitPrice || 0);
-            currentTotalNet += itemTotal;
-            const taxCodeId = item.taxCodeId || standardTaxRateId;
-            if (!taxCodeId) return;
-            const taxRate = taxRatesMap.get(taxCodeId);
-            if (!taxRate || taxRate.rate === 0) return;
-            if (!breakdown[taxCodeId]) breakdown[taxCodeId] = { net: 0, vat: 0, rate: taxRate.rate, name: taxRate.name };
-            breakdown[taxCodeId].net += itemTotal;
+            const itemNet = Number(item.quantity || 0) * Number(item.unitPrice || 0);
+            currentTotalNet += itemNet;
+
+            if (item.taxCodeId === t99RateId) {
+                const taxCodeId = t99RateId;
+                if (!breakdown[taxCodeId]) {
+                    breakdown[taxCodeId] = { net: 0, vat: 0, rate: 'Mixed', name: 'Mixed VAT' };
+                }
+                breakdown[taxCodeId].net += itemNet;
+                breakdown[taxCodeId].vat += (item.preCalculatedVat || 0) * (item.quantity || 1);
+
+            } else {
+                const taxCodeId = item.taxCodeId || standardTaxRateId;
+                if (!taxCodeId) return;
+
+                const taxRate = taxRatesMap.get(taxCodeId);
+                if (!taxRate) return;
+
+                if (!breakdown[taxCodeId]) {
+                    breakdown[taxCodeId] = { net: 0, vat: 0, rate: taxRate.rate, name: taxRate.name };
+                }
+                breakdown[taxCodeId].net += itemNet;
+                if (taxRate.rate > 0) {
+                    breakdown[taxCodeId].vat += itemNet * (taxRate.rate / 100);
+                }
+            }
         });
-        Object.values(breakdown).forEach(summary => { summary.vat = summary.net * (summary.rate / 100); });
-        const finalVatBreakdown = Object.values(breakdown).filter(b => b.net > 0 && b.rate > 0);
+
+        const finalVatBreakdown = Object.values(breakdown).filter(b => b.net !== 0 || b.vat !== 0);
         const totalVat = finalVatBreakdown.reduce((sum, b) => sum + b.vat, 0);
+
         return { totalNet: currentTotalNet, grandTotal: currentTotalNet + totalVat, vatBreakdown: finalVatBreakdown };
-    }, [editableEstimate, taxRatesMap, standardTaxRateId]);
+
+    }, [editableEstimate, taxRatesMap, standardTaxRateId, t99RateId]);
 
     const linkedBooking = useMemo(() => Array.isArray(rentalBookings) ? rentalBookings.find(b => b.jobId === job?.id) : undefined, [rentalBookings, job]);
     const supplierMap = useMemo(() => new Map((Array.isArray(suppliers) ? suppliers : []).map(s => [s.id, s.name])), [suppliers]);
@@ -495,7 +522,6 @@ const EditJobModal: React.FC<{
                 newEstimateId = estimateToSave.id;
             }
     
-            // Intentionally not awaiting here to allow parallel saving
             handleSaveItem(setEstimates, estimateToSave, 'brooks_estimates');
     
             if (newEstimateId) {
@@ -547,6 +573,7 @@ const EditJobModal: React.FC<{
                         purchaseOrderIds={editableJob.purchaseOrderIds || []}
                         purchaseOrders={Array.isArray(purchaseOrders) ? purchaseOrders : []}
                         supplierMap={supplierMap}
+                        suppliers={suppliers || []}
                         editableEstimate={editableEstimate}
                         supplementaryEstimates={supplementaryEstimates}
                         estimateBreakdown={estimateBreakdown}

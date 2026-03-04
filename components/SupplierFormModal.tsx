@@ -16,6 +16,7 @@ const SupplierFormModal: React.FC<SupplierFormModalProps> = ({ isOpen, onClose, 
         if (isOpen) {
             setFormData(supplier || {
                 name: '',
+                shortCode: '',
                 contactName: '',
                 phone: '',
                 email: '',
@@ -28,7 +29,11 @@ const SupplierFormModal: React.FC<SupplierFormModalProps> = ({ isOpen, onClose, 
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
+        if (name === 'shortCode') {
+            setFormData(prev => ({ ...prev, [name]: value.toUpperCase().slice(0, 3) }));
+        } else {
+            setFormData(prev => ({ ...prev, [name]: value }));
+        }
     };
 
     const handleSave = () => {
@@ -36,6 +41,7 @@ const SupplierFormModal: React.FC<SupplierFormModalProps> = ({ isOpen, onClose, 
         onSave({
             id: formData.id || `sup_${Date.now()}`,
             name: formData.name!,
+            shortCode: formData.shortCode || '',
             contactName: formData.contactName || '',
             phone: formData.phone || '',
             email: formData.email || '',
@@ -53,6 +59,10 @@ const SupplierFormModal: React.FC<SupplierFormModalProps> = ({ isOpen, onClose, 
                     <input name="name" value={formData.name || ''} onChange={handleChange} className="w-full p-2 border rounded" required />
                 </div>
                 <div>
+                    <label className="block text-sm font-medium text-gray-700">Short Code (3-digit)</label>
+                    <input name="shortCode" value={formData.shortCode || ''} onChange={handleChange} className="w-full p-2 border rounded" />
+                </div>
+                <div>
                     <label className="block text-sm font-medium text-gray-700">Contact Person</label>
                     <input name="contactName" value={formData.contactName || ''} onChange={handleChange} className="w-full p-2 border rounded" />
                 </div>
@@ -64,14 +74,11 @@ const SupplierFormModal: React.FC<SupplierFormModalProps> = ({ isOpen, onClose, 
                     <label className="block text-sm font-medium text-gray-700">Phone</label>
                     <input name="phone" value={formData.phone || ''} onChange={handleChange} className="w-full p-2 border rounded" />
                 </div>
-                <div>
-                    <label className="block text-sm font-medium text-gray-700">Postcode</label>
-                    <input name="postcode" value={formData.postcode || ''} onChange={handleChange} className="w-full p-2 border rounded" />
-                </div>
                 <div className="md:col-span-2">
                     <label className="block text-sm font-medium text-gray-700">Address</label>
                     <input name="addressLine1" value={formData.addressLine1 || ''} onChange={handleChange} className="w-full p-2 border rounded mb-2" placeholder="Address Line 1" />
                     <input name="city" value={formData.city || ''} onChange={handleChange} className="w-full p-2 border rounded" placeholder="City" />
+                    <input name="postcode" value={formData.postcode || ''} onChange={handleChange} className="w-full p-2 border rounded mt-2" placeholder="Postcode" />
                 </div>
             </div>
         </FormModal>

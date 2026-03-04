@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import ReactDOM from 'react-dom/client';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
-import { Estimate, Customer, Vehicle, EstimateLineItem, TaxRate, BusinessEntity, Part, User } from '../types';
+import { Estimate, Customer, Vehicle, EstimateLineItem, TaxRate, BusinessEntity, Part, User, ServicePackage } from '../types';
 import { 
     X, CheckSquare, Mail, Download, Loader2, Printer, CheckCircle, 
     MessageSquare, Monitor, Image as ImageIcon, Gauge, AlertTriangle, 
@@ -27,6 +27,7 @@ interface EstimateViewModalProps {
     customer?: Customer;
     vehicle?: Vehicle;
     taxRates: TaxRate[];
+    servicePackages: ServicePackage[];
     entityDetails?: BusinessEntity;
     onApprove: (estimate: Estimate, selectedOptionalItemIds: string[], notes?: string, scheduledDate?: string) => void;
     onCustomerApprove?: (estimate: Estimate, selectedOptionalItemIds: string[], dateRange: { start: string, end: string }, notes: string) => void;
@@ -47,6 +48,7 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
     customer, 
     vehicle, 
     taxRates, 
+    servicePackages,
     entityDetails, 
     onApprove, 
     onCustomerApprove, 
@@ -104,6 +106,7 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
     }, [currentUser, isCustomerMode]);
 
     const standardTaxRateId = useMemo(() => taxRates.find(t => t.code === 'T1')?.id, [taxRates]);
+    const t99RateId = useMemo(() => taxRates.find(t => t.code === 'T99')?.id, [taxRates]);
 
     const laborHours = useMemo(() => {
         return (estimate.lineItems || [])
@@ -223,7 +226,7 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
             else essentials.push(item);
         });
 
-        const breakdown: { [key: string]: { net: number; vat: number; rate: number; name: string; } } = {};
+        const breakdown: { [key: string]: { net: number; vat: number; rate: number | string; name: string; } } = {};
         const taxRatesMap = new Map(taxRates.map(t => [t.id, t]));
 
         (allItems || []).forEach(item => {
@@ -234,35 +237,27 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
             const price = Number(item.unitPrice) || 0;
             const itemNet = qty * price;
 
-            const effectiveTaxId = item.taxCodeId || standardTaxRateId;
-            
-            if (!effectiveTaxId) {
-                const noTaxKey = 'no_tax';
-                if (!breakdown[noTaxKey]) {
-                    breakdown[noTaxKey] = { net: 0, vat: 0, rate: 0, name: 'No Tax' };
+            if (item.taxCodeId === t99RateId) {
+                if (!breakdown[t99RateId]) {
+                    breakdown[t99RateId] = { net: 0, vat: 0, rate: 'Mixed', name: 'Mixed VAT' };
                 }
-                breakdown[noTaxKey].net += itemNet;
-                return;
-            }
+                breakdown[t99RateId].net += itemNet;
+                breakdown[t99RateId].vat += (item.preCalculatedVat || 0) * qty;
+            } else {
+                const effectiveTaxId = item.taxCodeId || standardTaxRateId;
+                if (!effectiveTaxId) return;
 
-            const taxRate = taxRatesMap.get(effectiveTaxId);
+                const taxRate = taxRatesMap.get(effectiveTaxId);
+                if (!taxRate) return;
 
-            if (!taxRate) {
-                const noTaxKey = 'no_tax';
-                if (!breakdown[noTaxKey]) {
-                    breakdown[noTaxKey] = { net: 0, vat: 0, rate: 0, name: 'No Tax' };
+                if (!breakdown[effectiveTaxId]) {
+                    breakdown[effectiveTaxId] = { net: 0, vat: 0, rate: taxRate.rate, name: taxRate.name };
                 }
-                breakdown[noTaxKey].net += itemNet;
-                return;
-            }
 
-            if (!breakdown[effectiveTaxId]) {
-                breakdown[effectiveTaxId] = { net: 0, vat: 0, rate: taxRate.rate, name: taxRate.name };
-            }
-
-            breakdown[effectiveTaxId].net += itemNet;
-            if (taxRate.rate > 0) {
-                breakdown[effectiveTaxId].vat += itemNet * (taxRate.rate / 100);
+                breakdown[effectiveTaxId].net += itemNet;
+                if (taxRate.rate > 0) {
+                    breakdown[effectiveTaxId].vat += itemNet * (taxRate.rate / 100);
+                }
             }
         });
 
@@ -275,7 +270,7 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
         
         return { essentialItems: essentials, optionalItems: optionals, dynamicTotals: totals };
 
-    }, [estimate.lineItems, selectedOptionalItems, taxRates, standardTaxRateId]);
+    }, [estimate.lineItems, selectedOptionalItems, taxRates, standardTaxRateId, t99RateId]);
 
     const { essentialItems, optionalItems, dynamicTotals } = memoizedItemsAndTotals;
 
@@ -518,7 +513,7 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                                 <div className="flex justify-end pt-6 border-t-2 border-gray-100">
                                     <div className="w-72 bg-gray-50 p-4 rounded-lg">
                                         <div className="flex justify-between text-sm mb-2"><span className="text-gray-600">Subtotal</span><span className="font-semibold">{formatCurrency(dynamicTotals.totalNet)}</span></div>
-                                        {dynamicTotals.vatBreakdown.map((b: any) => (<div key={b.name} className="flex justify-between text-sm text-gray-500 mb-1"><span>VAT @ {b.rate}%</span><span>{formatCurrency(b.vat)}</span></div>))}
+                                        {dynamicTotals.vatBreakdown.map((b: any) => (<div key={b.name} className="flex justify-between text-sm text-gray-500 mb-1"><span>{b.rate === 'Mixed' ? b.name : `VAT @ ${b.rate}%`}</span><span>{formatCurrency(b.vat)}</span></div>))}
                                         <div className="flex justify-between font-bold text-xl mt-3 pt-3 border-t border-gray-200 text-indigo-900"><span>Total</span><span>{formatCurrency(dynamicTotals.grandTotal)}</span></div>
                                     </div>
                                 </div>

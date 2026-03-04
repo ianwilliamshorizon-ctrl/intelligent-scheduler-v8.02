@@ -12,12 +12,15 @@ import MediaManagerModal from './MediaManagerModal';
 import PartFormModal from './PartFormModal';
 import LiveAssistant from './LiveAssistant';
 import { getScoredServicePackages } from '../utils/servicePackageScoring';
+import SupplierSelectionModal from './SupplierSelectionModal';
 
 interface EditableLineItemRowProps {
     item: EstimateLineItem;
     taxRates: TaxRate[];
+    suppliers: Supplier[];
     onLineItemChange: (id: string, field: keyof EstimateLineItem, value: any) => void;
     onRemoveLineItem: (id: string) => void;
+    onOpenSupplierSelection: (lineItemId: string) => void;
     filteredParts: Part[];
     activePartSearch: string | null;
     onPartSearchChange: (value: string) => void;
@@ -28,10 +31,17 @@ interface EditableLineItemRowProps {
 
 const MemoizedEditableLineItemRow = React.memo(({ 
     item, taxRates, onLineItemChange, onRemoveLineItem, filteredParts, 
-    activePartSearch, onPartSearchChange, onSetActivePartSearch, onSelectPart, onAddNewPart 
+    activePartSearch, onPartSearchChange, onSetActivePartSearch, onSelectPart, onAddNewPart, suppliers, onOpenSupplierSelection 
 }: EditableLineItemRowProps) => {
     const isPackageComponent = item.isPackageComponent;
     const isPackageHeader = !!item.servicePackageId && !item.isPackageComponent;
+
+    const supplierShortCode = useMemo(() => {
+        if (item.isLabor) return 'N/A';
+        if (!item.supplierId) return <span className="text-gray-400">-</span>;
+        const supplier = suppliers.find(s => s.id === item.supplierId);
+        return <span className="font-mono bg-gray-200 px-1 rounded">{supplier?.shortCode || '???'}</span>;
+    }, [item.supplierId, suppliers, item.isLabor]);
 
     const handleDescriptionChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
         const value = e.target.value;
@@ -43,16 +53,8 @@ const MemoizedEditableLineItemRow = React.memo(({
 
     return (
          <div className={`grid grid-cols-12 gap-2 items-start p-2 rounded-lg border ${isPackageComponent ? 'bg-gray-100' : 'bg-white'}`}>
-             <input 
-                type="text" 
-                placeholder="Part No." 
-                value={item.partNumber || ''} 
-                onChange={e => onLineItemChange(item.id, 'partNumber', e.target.value)} 
-                className="col-span-2 p-1 border rounded disabled:bg-gray-200 text-sm" 
-                disabled={isPackageComponent || item.isLabor} 
-            />
-            <div className="col-span-4 flex items-start gap-2 relative">
-                {!isPackageComponent && (
+            <div className="col-span-5 flex items-start gap-2">
+                 {!isPackageComponent && (
                     <input 
                         type="checkbox" 
                         checked={item.isOptional || false} 
@@ -61,47 +63,67 @@ const MemoizedEditableLineItemRow = React.memo(({
                         title="Mark as Optional"
                     />
                 )}
-                <div className="relative w-full">
-                    <textarea 
-                        placeholder="Description" 
-                        value={(item.description || '').replace(/\n/g, '\n')} 
-                        onChange={handleDescriptionChange}
-                        onFocus={() => {
-                            if (!item.isLabor && !item.servicePackageId && !item.isPackageComponent) {
-                                onSetActivePartSearch(item.id);
-                                onPartSearchChange(item.description || '');
-                            }
-                        }}
-                        onBlur={() => setTimeout(() => onSetActivePartSearch(null), 150)}
-                        rows={1}
-                        style={{ whiteSpace: 'pre-wrap', minHeight: '38px' }}
-                        className="w-full p-1 border rounded disabled:bg-gray-200 text-sm resize-none overflow-hidden" 
-                        disabled={!!isPackageComponent} 
-                        onInput={(e) => {
-                            const target = e.target as HTMLTextAreaElement;
-                            target.style.height = 'auto';
-                            target.style.height = `${target.scrollHeight}px`;
-                        }}
+                <div className="w-full space-y-1">
+                    <input 
+                        type="text" 
+                        placeholder="Part No." 
+                        value={item.partNumber || ''} 
+                        onChange={e => onLineItemChange(item.id, 'partNumber', e.target.value)} 
+                        className="w-full p-1 border rounded disabled:bg-gray-200 text-sm" 
+                        disabled={isPackageComponent || item.isLabor} 
                     />
-                     {activePartSearch === item.id && (
-                        <div className="absolute z-20 top-full left-0 w-full bg-white border rounded shadow-lg max-h-60 overflow-y-auto mt-1">
-                            {filteredParts.map(part => (
-                                <div key={part.id} onMouseDown={() => onSelectPart(item.id, part)} className="p-2 hover:bg-indigo-100 cursor-pointer text-sm border-b last:border-0">
-                                    <p className="font-semibold text-indigo-700">{part.partNumber}</p>
-                                    <p className="text-gray-600 truncate">{part.description}</p>
+                    <div className="relative w-full">
+                        <textarea 
+                            placeholder="Description" 
+                            value={(item.description || '').replace(/\n/g, '\n')} 
+                            onChange={handleDescriptionChange}
+                            onFocus={() => {
+                                if (!item.isLabor && !item.servicePackageId && !item.isPackageComponent) {
+                                    onSetActivePartSearch(item.id);
+                                    onPartSearchChange(item.description || '');
+                                }
+                            }}
+                            onBlur={() => setTimeout(() => onSetActivePartSearch(null), 150)}
+                            rows={1}
+                            style={{ whiteSpace: 'pre-wrap', minHeight: '38px' }}
+                            className="w-full p-1 border rounded disabled:bg-gray-200 text-sm resize-none overflow-hidden" 
+                            disabled={!!isPackageComponent} 
+                            onInput={(e) => {
+                                const target = e.target as HTMLTextAreaElement;
+                                target.style.height = 'auto';
+                                target.style.height = `${target.scrollHeight}px`;
+                            }}
+                        />
+                         {activePartSearch === item.id && (
+                            <div className="absolute z-20 top-full left-0 w-full bg-white border rounded shadow-lg max-h-60 overflow-y-auto mt-1">
+                                {filteredParts.map(part => (
+                                    <div key={part.id} onMouseDown={() => onSelectPart(item.id, part)} className="p-2 hover:bg-indigo-100 cursor-pointer text-sm border-b last:border-0">
+                                        <p className="font-semibold text-indigo-700">{part.partNumber}</p>
+                                        <p className="text-gray-600 truncate">{part.description}</p>
+                                    </div>
+                                ))}
+                                <div onMouseDown={() => onAddNewPart(item.id, item.description || '')} className="p-2 bg-indigo-50 hover:bg-indigo-100 cursor-pointer text-sm text-indigo-700 font-semibold border-t flex items-center gap-1">
+                                    <Plus size={14}/> Create New Part
                                 </div>
-                            ))}
-                            <div onMouseDown={() => onAddNewPart(item.id, item.description || '')} className="p-2 bg-indigo-50 hover:bg-indigo-100 cursor-pointer text-sm text-indigo-700 font-semibold border-t flex items-center gap-1">
-                                <Plus size={14}/> Create New Part
                             </div>
-                        </div>
-                    )}
+                        )}
+                    </div>
                 </div>
             </div>
             <input type="number" step="0.1" value={item.quantity} onChange={e => onLineItemChange(item.id, 'quantity', e.target.value)} className="col-span-1 p-1 border rounded text-right text-sm" />
-            <input type="number" step="0.01" value={item.unitCost || ''} onChange={e => onLineItemChange(item.id, 'unitCost', e.target.value)} className="col-span-2 p-1 border rounded text-right text-sm" placeholder="Cost Price" />
-            <input type="number" step="0.01" value={item.unitPrice} onChange={e => onLineItemChange(item.id, 'unitPrice', e.target.value)} className="col-span-2 p-1 border rounded text-right text-sm" placeholder="Sale Price" disabled={!!isPackageComponent}/>
-            <div className="col-span-1 flex justify-center gap-1">
+            <input type="number" step="0.01" value={item.unitCost || ''} onChange={e => onLineItemChange(item.id, 'unitCost', e.target.value)} className="col-span-2 p-1 border rounded text-right text-sm" placeholder="Cost" />
+            <input type="number" step="0.01" value={item.unitPrice} onChange={e => onLineItemChange(item.id, 'unitPrice', e.target.value)} className="col-span-2 p-1 border rounded text-right text-sm" placeholder="Sell" disabled={!!isPackageComponent}/>
+            <div className="col-span-1">
+                <button 
+                    type="button" 
+                    onClick={() => onOpenSupplierSelection(item.id)} 
+                    className="w-full p-1 border rounded text-sm text-center hover:bg-gray-50 disabled:bg-gray-200 disabled:cursor-not-allowed h-full" 
+                    disabled={item.isLabor || isPackageComponent || isPackageHeader}
+                >
+                    {supplierShortCode}
+                </button>
+            </div>
+            <div className="col-span-1 flex justify-center items-center gap-1">
                 <button onClick={() => onRemoveLineItem(item.id)} className="text-red-500 hover:text-red-700 disabled:opacity-50 p-1" disabled={!!isPackageComponent}><Trash2 size={14} /></button>
             </div>
          </div>
@@ -194,12 +216,15 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
     const [isAssistantOpen, setIsAssistantOpen] = useState(false);
     const [isNotesModalOpen, setIsNotesModalOpen] = useState(false);
     const [targetLineItemId, setTargetLineItemId] = useState<string | null>(null);
+    const [lineItemForSupplier, setLineItemForSupplier] = useState<string | null>(null);
     const [newPartDescription, setNewPartDescription] = useState('');
     const [partSearchTerm, setPartSearchTerm] = useState('');
+    const [isSupplierSelectionOpen, setIsSupplierSelectionOpen] = useState(false);
     const [activePartSearch, setActivePartSearch] = useState<string | null>(null);
     const [isMediaModalOpen, setIsMediaModalOpen] = useState(false);
     const [recentCustomerIds, setRecentCustomerIds] = useState<string[]>([]);
     const standardTaxRateId = taxRates.find(t => t.code === 'T1')?.id;
+    const t99RateId = taxRates.find(t => t.code === 'T99')?.id;
 
     useEffect(() => {
         if (estimate && Object.keys(estimate).length > 0) {
@@ -218,7 +243,7 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
     }, [estimate, isOpen, businessEntities, selectedEntityId, currentUser.id]);
 
     const totals = useMemo(() => {
-        const breakdown: { [key: string]: { net: number; vat: number; rate: number; name: string; } } = {};
+        const breakdown: { [key: string]: { net: number; vat: number; rate: number | string; name: string; } } = {};
         const taxRatesMap = new Map(taxRates.map(t => [t.id, t]));
 
         if (!formData || !formData.lineItems) {
@@ -239,36 +264,39 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
             const price = Number(item.unitPrice) || 0;
             const itemNet = qty * price;
 
-            const effectiveTaxId = item.taxCodeId || standardTaxRateId;
-            
-            if (!effectiveTaxId) {
-                const noTaxKey = 'no_tax';
-                if (!breakdown[noTaxKey]) {
-                    breakdown[noTaxKey] = { net: 0, vat: 0, rate: 0, name: 'No Tax' };
+            if (item.taxCodeId === t99RateId) {
+                 if (!breakdown[t99RateId]) {
+                    breakdown[t99RateId] = { net: 0, vat: 0, rate: 'Mixed', name: 'Mixed VAT' };
                 }
-                breakdown[noTaxKey].net += itemNet;
-                return;
-            }
+                breakdown[t99RateId].net += itemNet;
+                breakdown[t99RateId].vat += (item.preCalculatedVat || 0) * qty;
 
-            const taxRate = taxRatesMap.get(effectiveTaxId);
-
-            if (!taxRate) {
-                 const noTaxKey = 'no_tax';
-                if (!breakdown[noTaxKey]) {
-                    breakdown[noTaxKey] = { net: 0, vat: 0, rate: 0, name: 'No Tax' };
+            } else {
+                const effectiveTaxId = item.taxCodeId || standardTaxRateId;
+                
+                if (!effectiveTaxId) {
+                    const noTaxKey = 'no_tax';
+                    if (!breakdown[noTaxKey]) breakdown[noTaxKey] = { net: 0, vat: 0, rate: 0, name: 'No Tax' };
+                    breakdown[noTaxKey].net += itemNet;
+                    return;
                 }
-                breakdown[noTaxKey].net += itemNet;
-                return;
-            }
 
-            if (!breakdown[effectiveTaxId]) {
-                breakdown[effectiveTaxId] = { net: 0, vat: 0, rate: taxRate.rate, name: taxRate.name };
-            }
+                const taxRate = taxRatesMap.get(effectiveTaxId);
+                if (!taxRate) {
+                    const noTaxKey = 'no_tax_rate';
+                    if (!breakdown[noTaxKey]) breakdown[noTaxKey] = { net: 0, vat: 0, rate: 0, name: 'Invalid Tax' };
+                    breakdown[noTaxKey].net += itemNet;
+                    return;
+                }
 
-            breakdown[effectiveTaxId].net += itemNet;
-            
-            if (taxRate.rate > 0) {
-                breakdown[effectiveTaxId].vat += itemNet * (taxRate.rate / 100);
+                if (!breakdown[effectiveTaxId]) {
+                    breakdown[effectiveTaxId] = { net: 0, vat: 0, rate: taxRate.rate, name: taxRate.name };
+                }
+
+                breakdown[effectiveTaxId].net += itemNet;
+                if (taxRate.rate > 0) {
+                    breakdown[effectiveTaxId].vat += itemNet * (taxRate.rate / 100);
+                }
             }
         });
 
@@ -288,7 +316,7 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
             totalProfit: profit,
             profitMargin: margin
         };
-    }, [formData.lineItems, taxRates, standardTaxRateId]);
+    }, [formData.lineItems, taxRates, standardTaxRateId, t99RateId]);
 
     const currentVehicle = vehicles.find(v => v.id === formData.vehicleId);
     const customerOptions = customers.map(c => {
@@ -440,14 +468,15 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
             id: crypto.randomUUID(), 
             description: pkg.name || (pkg as any).description || '', 
             quantity: 1, 
-            unitPrice: pkg.totalPrice, 
+            unitPrice: pkg.totalPriceNet ?? pkg.totalPrice, 
             unitCost: 0, 
             isLabor: false, 
             taxCodeId: pkg.taxCodeId || standardTaxRateId, 
             servicePackageId: pkg.id, 
             servicePackageName: pkg.name, 
             isPackageComponent: false, 
-            isOptional
+            isOptional,
+            preCalculatedVat: pkg.taxCodeId === t99RateId ? pkg.totalPriceVat : undefined
         };
         newItems.push(mainPackageItem);
         if (pkg.costItems) {
@@ -536,6 +565,16 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
     
     const handleManageMedia = () => setIsMediaModalOpen(true);
     const handleSaveMedia = (media: CheckInPhoto[]) => setFormData(prev => ({ ...prev, media }));
+    const openSupplierSelection = (lineItemId: string) => {
+        setLineItemForSupplier(lineItemId);
+        setIsSupplierSelectionOpen(true);
+    };
+    
+    const handleSelectSupplier = (supplierId: string) => {
+        if (lineItemForSupplier) {
+            handleLineItemChange(lineItemForSupplier, 'supplierId', supplierId);
+        }
+    };
 
     const estimateBreakdown = (() => {
         const packages: { header: EstimateLineItem, children: EstimateLineItem[] }[] = [];
@@ -663,9 +702,12 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                      <Section title="Line Items" icon={FileText}>
                          <div className="space-y-4">
                             <div className="hidden lg:grid grid-cols-12 gap-2 text-xs text-gray-500 font-medium px-2">
-                                <div className="col-span-2">Part No.</div> <div className="col-span-4">Description</div>
-                                <div className="col-span-1 text-right">Qty/Hrs</div> <div className="col-span-2 text-right">Cost Price</div>
-                                <div className="col-span-2 text-right">Sell Price</div> <div className="col-span-1"></div>
+                                <div className="col-span-5">Part / Description</div>
+                                <div className="col-span-1 text-right">Qty/Hrs</div>
+                                <div className="col-span-2 text-right">Cost</div>
+                                <div className="col-span-2 text-right">Sell</div>
+                                <div className="col-span-1 text-center">Supplier</div>
+                                <div className="col-span-1"></div>
                             </div>
                             {estimateBreakdown.packages.length > 0 && (
                                 <div>
@@ -674,12 +716,12 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                                         {estimateBreakdown.packages.map(({ header, children }) => (
                                             <div key={header.id}>
                                                 <MemoizedEditableLineItemRow 
-                                                    item={header} taxRates={taxRates} onLineItemChange={handleLineItemChange} onRemoveLineItem={removeLineItem} filteredParts={[]} activePartSearch={null} onPartSearchChange={()=>{}} onSetActivePartSearch={()=>{}} onSelectPart={()=>{}} onAddNewPart={()=>{}} 
+                                                    item={header} taxRates={taxRates} onLineItemChange={handleLineItemChange} onRemoveLineItem={removeLineItem} filteredParts={[]} activePartSearch={null} onPartSearchChange={()=>{}} onSetActivePartSearch={()=>{}} onSelectPart={()=>{}} onAddNewPart={()=>{}} suppliers={suppliers} onOpenSupplierSelection={openSupplierSelection}
                                                 />
                                                 <div className="pl-6 border-l-2 ml-2 space-y-1 mt-1">
                                                       {children.map(child => (
                                                          <MemoizedEditableLineItemRow 
-                                                            key={child.id} item={child} taxRates={taxRates} onLineItemChange={handleLineItemChange} onRemoveLineItem={removeLineItem} filteredParts={[]} activePartSearch={null} onPartSearchChange={()=>{}} onSetActivePartSearch={()=>{}} onSelectPart={()=>{}} onAddNewPart={()=>{}} 
+                                                            key={child.id} item={child} taxRates={taxRates} onLineItemChange={handleLineItemChange} onRemoveLineItem={removeLineItem} filteredParts={[]} activePartSearch={null} onPartSearchChange={()=>{}} onSetActivePartSearch={()=>{}} onSelectPart={()=>{}} onAddNewPart={()=>{}} suppliers={suppliers} onOpenSupplierSelection={openSupplierSelection}
                                                          />
                                                     ))}
                                                 </div>
@@ -691,13 +733,13 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                             {estimateBreakdown.customLabor.length > 0 && (
                                 <div className="p-2 border rounded-lg bg-gray-50/50">
                                     <h4 className="font-bold text-gray-800 mb-2 text-sm">Labor</h4>
-                                    <div className="space-y-2">{estimateBreakdown.customLabor.map(item => <MemoizedEditableLineItemRow key={item.id} item={item} taxRates={taxRates} onLineItemChange={handleLineItemChange} onRemoveLineItem={removeLineItem} filteredParts={filteredPartsList} activePartSearch={activePartSearch} onPartSearchChange={setPartSearchTerm} onSetActivePartSearch={setActivePartSearch} onSelectPart={handleSelectPart} onAddNewPart={handleAddNewPartClick} />)}</div>
+                                    <div className="space-y-2">{estimateBreakdown.customLabor.map(item => <MemoizedEditableLineItemRow key={item.id} item={item} taxRates={taxRates} onLineItemChange={handleLineItemChange} onRemoveLineItem={removeLineItem} filteredParts={filteredPartsList} activePartSearch={activePartSearch} onPartSearchChange={setPartSearchTerm} onSetActivePartSearch={setActivePartSearch} onSelectPart={handleSelectPart} onAddNewPart={handleAddNewPartClick} suppliers={suppliers} onOpenSupplierSelection={openSupplierSelection}/>)}</div>
                                 </div>
                             )}
                              {estimateBreakdown.customParts.length > 0 && (
                                  <div className="p-2 border rounded-lg bg-gray-50/50">
                                     <h4 className="font-bold text-gray-800 mb-2 text-sm">Parts</h4>
-                                    <div className="space-y-2">{estimateBreakdown.customParts.map(item => <MemoizedEditableLineItemRow key={item.id} item={item} taxRates={taxRates} onLineItemChange={handleLineItemChange} onRemoveLineItem={removeLineItem} filteredParts={filteredPartsList} activePartSearch={activePartSearch} onPartSearchChange={setPartSearchTerm} onSetActivePartSearch={setActivePartSearch} onSelectPart={handleSelectPart} onAddNewPart={handleAddNewPartClick} />)}</div>
+                                    <div className="space-y-2">{estimateBreakdown.customParts.map(item => <MemoizedEditableLineItemRow key={item.id} item={item} taxRates={taxRates} onLineItemChange={handleLineItemChange} onRemoveLineItem={removeLineItem} filteredParts={filteredPartsList} activePartSearch={activePartSearch} onPartSearchChange={setPartSearchTerm} onSetActivePartSearch={setActivePartSearch} onSelectPart={handleSelectPart} onAddNewPart={handleAddNewPartClick} suppliers={suppliers} onOpenSupplierSelection={openSupplierSelection}/>)}</div>
                                  </div>
                              )}
                             <div className="flex justify-between items-center pt-2">
@@ -723,7 +765,7 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                              <div className="flex justify-between text-gray-600"><span>Total Sale Price (Net):</span><span>{formatCurrency(totals.totalNet)}</span></div>
                              <div className={`flex justify-between font-bold ${totals.totalProfit >= 0 ? 'text-green-700' : 'text-red-600'}`}><span>Total Profit:</span><span>{formatCurrency(totals.totalProfit)}</span></div>
                             <div className="flex justify-between text-gray-600 border-b pb-2 mb-2"><span>Profit Margin:</span><span>{totals.profitMargin.toFixed(1)}%</span></div>
-                            {totals.vatBreakdown.map(b => (<div key={b.name} className="flex justify-between text-gray-500 text-xs"><span>VAT @ {b.rate}%</span><span>{formatCurrency(b.vat)}</span></div>))}
+                            {totals.vatBreakdown.map(b => (<div key={b.name} className="flex justify-between text-gray-500 text-xs"><span>{b.rate === 'Mixed' ? b.name : `VAT @ ${b.rate}%`}</span><span>{formatCurrency(b.vat)}</span></div>))}
                             <div className="flex justify-between font-bold text-lg mt-2 pt-2 border-t"><span>Grand Total</span><span>{formatCurrency(totals.grandTotal)}</span></div>
                         </div>
                     </Section>
@@ -782,6 +824,15 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                     taxRates={taxRates}
                 />
             )}
+             {isSupplierSelectionOpen && (
+                <SupplierSelectionModal 
+                    isOpen={isSupplierSelectionOpen}
+                    onClose={() => setIsSupplierSelectionOpen(false)}
+                    onSelect={handleSelectSupplier}
+                    suppliers={suppliers}
+                />
+            )}
+
 
             {isAddingVehicle && (
                 <VehicleFormModal

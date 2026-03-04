@@ -253,6 +253,8 @@ export interface EstimateLineItem {
     media?: CheckInPhoto[];
     isCourtesyCar?: boolean;
     isStorageCharge?: boolean;
+    supplierId?: string;
+    preCalculatedVat?: number;
 }
 
 export interface Estimate {
@@ -363,6 +365,7 @@ export interface Purchase {
 export interface Supplier {
     id: string;
     name: string;
+    shortCode?: string;
     contactName?: string;
     phone?: string;
     email?: string;
@@ -385,11 +388,15 @@ export interface ServicePackage {
     name: string;
     description?: string;
     totalPrice: number;
+    totalPriceNet?: number;
+    totalPriceVat?: number;
+    totalCost?: number;
     costItems: EstimateLineItem[];
     taxCodeId?: string;
     applicableMake?: string;
     applicableModel?: string;
     applicableVariant?: string;
+    isMixedVat?: boolean;
 }
 
 export interface Lift {

@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
-import { Invoice, Customer, Vehicle, BusinessEntity, Job, TaxRate, EstimateLineItem, ChecklistSection } from '../types';
+import { Invoice, Customer, Vehicle, BusinessEntity, Job, TaxRate, EstimateLineItem, ChecklistSection, ServicePackage } from '../types';
 import { X, Download, Loader2, Printer, CheckCircle } from 'lucide-react';
 import { formatCurrency } from '../utils/formatUtils';
 import { usePrint } from '../core/hooks/usePrint';
@@ -21,14 +21,14 @@ interface InvoiceModalProps {
     entity?: BusinessEntity | null;
     job?: Job | null;
     taxRates: TaxRate[];
+    servicePackages: ServicePackage[];
     onUpdateInvoice: (invoice: Invoice) => void;
     onInvoiceAction?: (jobId: string) => void;
 }
 
-const PrintableInvoice: React.FC<any> = ({ invoice, customer, vehicle, entity, job, taxRates, totals }) => {
+const PrintableInvoice: React.FC<any> = ({ invoice, customer, vehicle, entity, job, taxRates, servicePackages, totals }) => {
     const groupedItems = useMemo(() => {
         const rows: { header?: EstimateLineItem, children?: EstimateLineItem[], standalone?: EstimateLineItem }[] = [];
-        // Hardened array check
         const allItems = Array.isArray(invoice?.lineItems) ? invoice.lineItems : [];
         
         const packageHeaders = allItems.filter((item: EstimateLineItem) => item.servicePackageId && !item.isPackageComponent);
@@ -208,7 +208,12 @@ const PrintableInvoice: React.FC<any> = ({ invoice, customer, vehicle, entity, j
                             </div>
                             <div className="w-64 text-sm">
                                 <div className="flex justify-between"><span>Subtotal</span><span className="font-semibold">{formatCurrency(totals?.subtotal)}</span></div>
-                                {Array.isArray(totals?.vatBreakdown) && totals.vatBreakdown.map((b: any) => (<div key={b.name} className="flex justify-between text-gray-600"><span>VAT @ {b.rate}%</span><span>{formatCurrency(b.vat)}</span></div>))}
+                                {Array.isArray(totals?.vatBreakdown) && totals.vatBreakdown.map((b: any) => (
+                                    <div key={b.name} className="flex justify-between text-gray-600">
+                                        <span>{b.rate === 'Mixed' ? b.name : `VAT @ ${b.rate}%`}</span>
+                                        <span>{formatCurrency(b.vat)}</span>
+                                    </div>
+                                ))}
                                 <div className="flex justify-between font-bold text-lg mt-2 pt-2 border-t"><span>Total Due</span><span>{formatCurrency(totals?.grandTotal)}</span></div>
                             </div>
                         </div>
@@ -294,46 +299,58 @@ const PrintableInvoice: React.FC<any> = ({ invoice, customer, vehicle, entity, j
     );
 };
 
-const InvoiceModal: React.FC<InvoiceModalProps> = ({ isOpen, onClose, invoice, customer, vehicle, entity, job, taxRates, onUpdateInvoice, onInvoiceAction }) => {
+const InvoiceModal: React.FC<InvoiceModalProps> = ({ isOpen, onClose, invoice, customer, vehicle, entity, job, taxRates, servicePackages, onUpdateInvoice, onInvoiceAction }) => {
     const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
     const print = usePrint();
 
     const totals = useMemo(() => {
-        if (!invoice) return { subtotal: 0, total: 0, grandTotal: 0, vatBreakdown: [] };
-        
-        // REPAIR: Hardened safety check for taxRates (Production "O" variable)
+        if (!invoice) return { subtotal: 0, grandTotal: 0, vatBreakdown: [] };
+
         const safeTaxRates = Array.isArray(taxRates) ? taxRates : [];
         const standardTaxRateId = safeTaxRates.find(t => t.code === 'T1')?.id;
+        const t99RateId = safeTaxRates.find(t => t.code === 'T99')?.id;
         const taxRatesMap = new Map(safeTaxRates.map(t => [t.id, t]));
-        
-        const vatBreakdown: { [key: string]: { net: number; vat: number; rate: number; name: string; } } = {};
+
+        const vatBreakdown: { [key: string]: { net: number; vat: number; rate: number | string; name: string; } } = {};
         let subtotal = 0;
-        
+
         const lineItems = Array.isArray(invoice.lineItems) ? invoice.lineItems : [];
-        
+
         lineItems.forEach(item => {
             if (item.isPackageComponent) return;
 
             const itemNet = (item.quantity || 0) * (item.unitPrice || 0);
             subtotal += itemNet;
 
-            const taxCodeId = item.taxCodeId || standardTaxRateId;
-            if (!taxCodeId) return;
-            const taxRate = taxRatesMap.get(taxCodeId);
-            if (!taxRate || taxRate.rate === 0) return;
-            
-            if (!vatBreakdown[taxCodeId]) {
-                vatBreakdown[taxCodeId] = { net: 0, vat: 0, rate: taxRate.rate, name: taxRate.name };
+            if (item.taxCodeId === t99RateId) {
+                const taxCodeId = t99RateId;
+                if (!vatBreakdown[taxCodeId]) {
+                    vatBreakdown[taxCodeId] = { net: 0, vat: 0, rate: 'Mixed', name: 'Mixed VAT' };
+                }
+                vatBreakdown[taxCodeId].net += itemNet;
+                vatBreakdown[taxCodeId].vat += (item.preCalculatedVat || 0) * (item.quantity || 1);
+            } else {
+                const taxCodeId = item.taxCodeId || standardTaxRateId;
+                if (!taxCodeId) return;
+
+                const taxRate = taxRatesMap.get(taxCodeId);
+                if (!taxRate) return;
+
+                if (!vatBreakdown[taxCodeId]) {
+                    vatBreakdown[taxCodeId] = { net: 0, vat: 0, rate: taxRate.rate, name: taxRate.name };
+                }
+
+                vatBreakdown[taxCodeId].net += itemNet;
+                if (taxRate.rate > 0) {
+                    vatBreakdown[taxCodeId].vat += itemNet * (taxRate.rate / 100);
+                }
             }
-            const itemVat = itemNet * (taxRate.rate / 100);
-            vatBreakdown[taxCodeId].net += itemNet;
-            vatBreakdown[taxCodeId].vat += itemVat;
         });
 
-        const finalVatBreakdown = Object.values(vatBreakdown);
+        const finalVatBreakdown = Object.values(vatBreakdown).filter(b => b.net > 0 || b.vat > 0);
         const totalVat = finalVatBreakdown.reduce((sum, b) => sum + b.vat, 0);
 
-        return { subtotal, total: subtotal + totalVat, grandTotal: subtotal + totalVat, vatBreakdown: finalVatBreakdown };
+        return { subtotal, grandTotal: subtotal + totalVat, vatBreakdown: finalVatBreakdown };
     }, [invoice, taxRates]);
 
     const handleDownloadPdf = async () => {
@@ -350,7 +367,7 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ isOpen, onClose, invoice, c
         const root = ReactDOM.createRoot(printMountPoint);
         root.render(
             <React.StrictMode>
-                <PrintableInvoice {...{ invoice, customer, vehicle, entity, job, taxRates, totals }} />
+                <PrintableInvoice {...{ invoice, customer, vehicle, entity, job, taxRates, servicePackages, totals }} />
             </React.StrictMode>
         );
 
@@ -399,7 +416,7 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ isOpen, onClose, invoice, c
         if (job && onInvoiceAction) {
             onInvoiceAction(job.id);
         }
-        print(<PrintableInvoice {...{ invoice, customer, vehicle, entity, job, taxRates, totals }} />);
+        print(<PrintableInvoice {...{ invoice, customer, vehicle, entity, job, taxRates, servicePackages, totals }} />);
     };
     
     const handleMarkAsPaid = () => {
@@ -423,7 +440,7 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ isOpen, onClose, invoice, c
                 </header>
                 <main className="flex-grow overflow-y-auto">
                     <div className="scale-95 origin-top">
-                        <PrintableInvoice {...{ invoice, customer, vehicle, entity, job, taxRates, totals }} />
+                        <PrintableInvoice {...{ invoice, customer, vehicle, entity, job, taxRates, servicePackages, totals }} />
                     </div>
                 </main>
                 <footer className="flex-shrink-0 flex justify-between items-center p-4 border-t bg-gray-50">

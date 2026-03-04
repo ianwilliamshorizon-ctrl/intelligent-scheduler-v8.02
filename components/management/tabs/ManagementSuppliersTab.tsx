@@ -29,7 +29,8 @@ export const ManagementSuppliersTab = ({ searchTerm = '', onShowStatus }: { sear
     // Filter logic with safety checks
     const filtered = localSuppliers.filter(s => 
         (s.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (s.contactName || '').toLowerCase().includes(searchTerm.toLowerCase())
+        (s.contactName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (s.shortCode || '').toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     /**
@@ -86,6 +87,7 @@ export const ManagementSuppliersTab = ({ searchTerm = '', onShowStatus }: { sear
                         <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
                             <tr>
                                 <th className="px-6 py-4 font-black text-slate-400 uppercase text-[10px] tracking-[0.15em]">Company / Entity</th>
+                                <th className="px-6 py-4 font-black text-slate-400 uppercase text-[10px] tracking-[0.15em]">Short Code</th>
                                 <th className="px-6 py-4 font-black text-slate-400 uppercase text-[10px] tracking-[0.15em]">Contact Point</th>
                                 <th className="px-6 py-4 font-black text-slate-400 uppercase text-[10px] tracking-[0.15em]">Communication</th>
                                 <th className="px-6 py-4 font-black text-slate-400 uppercase text-[10px] tracking-[0.15em] text-right">Actions</th>
@@ -104,6 +106,9 @@ export const ManagementSuppliersTab = ({ searchTerm = '', onShowStatus }: { sear
                                                     {s.name}
                                                 </div>
                                             </div>
+                                        </td>
+                                        <td className="px-6 py-5">
+                                            <span className="font-mono bg-gray-200 px-2 py-1 rounded text-sm">{s.shortCode || 'N/A'}</span>
                                         </td>
                                         <td className="px-6 py-5 text-slate-600 font-bold uppercase text-[11px] tracking-wide">
                                             {s.contactName || '---'}
@@ -140,7 +145,7 @@ export const ManagementSuppliersTab = ({ searchTerm = '', onShowStatus }: { sear
                                 ))
                             ) : (
                                 <tr>
-                                    <td colSpan={4} className="py-24 text-center">
+                                    <td colSpan={5} className="py-24 text-center">
                                         <div className="flex flex-col items-center gap-3 opacity-20">
                                             <SearchX size={64} strokeWidth={1} />
                                             <span className="font-black uppercase tracking-[0.3em] text-xs">No Vendors Logged</span>

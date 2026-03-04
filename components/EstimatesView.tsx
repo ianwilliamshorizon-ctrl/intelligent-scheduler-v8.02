@@ -78,20 +78,27 @@ const EstimatesView = ({ onOpenEstimateModal, onViewEstimate, onSmartCreateClick
     const calculateTotal = (lineItems: EstimateLineItem[]) => {
         let totalNet = 0;
         let totalVat = 0;
-        (lineItems || []).forEach(item => {
-            if (item.isOptional) return;
+        const t99Rate = taxRates.find(t => t.code === 'T99');
+
+        const billableItems = (lineItems || []).filter(item => !item.isOptional && !item.isPackageComponent);
+
+        billableItems.forEach(item => {
             const itemNet = (item.quantity || 0) * (item.unitPrice || 0);
-            // Still only include non-component items in the displayed NET total
-            if (!item.isPackageComponent) {
-                totalNet += itemNet;
+            totalNet += itemNet;
+
+            if (t99Rate && item.taxCodeId === t99Rate.id && item.preCalculatedVat) {
+                totalVat += (item.preCalculatedVat * (item.quantity || 1));
+            } else {
+                const taxCodeId = item.taxCodeId || standardTaxRateId;
+                if (!taxCodeId) return;
+
+                const rate = taxRatesMap.get(taxCodeId);
+                if (rate === undefined) return;
+
+                totalVat += itemNet * (rate / 100);
             }
-            // But calculate VAT on ALL items, as £0-price items will add £0 VAT anyway
-            const effectiveTaxCodeId = (item.taxCodeId === 'Taxstd' || !item.taxCodeId)
-                ? standardTaxRateId
-                : item.taxCodeId;
-            const rate = effectiveTaxCodeId ? (taxRatesMap.get(effectiveTaxCodeId) || 0) / 100 : 0;
-            totalVat += itemNet * rate;
         });
+
         return totalNet + totalVat;
     };
     
@@ -109,15 +116,32 @@ const EstimatesView = ({ onOpenEstimateModal, onViewEstimate, onSmartCreateClick
         setIsCreatingPackage(true);
         try {
             const { name, description } = await generateServicePackageName(estimate.lineItems, vehicle.make, vehicle.model);
-            const totalNet = (estimate.lineItems || []).filter(item => !item.isPackageComponent).reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
+            
+            const itemsToPackage = (estimate.lineItems || []).filter(item => !item.isPackageComponent);
+
+            const totalNet = itemsToPackage.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
+            
+            const totalVat = itemsToPackage.reduce((sum, item) => {
+                const rate = taxRatesMap.get(item.taxCodeId || standardTaxRateId) || 0;
+                const itemVat = (item.quantity * item.unitPrice) * (rate / 100);
+                return sum + itemVat;
+            }, 0);
+
+            const isMixedVat = new Set(itemsToPackage.map(i => i.taxCodeId || standardTaxRateId)).size > 1;
+            const t99Rate = taxRates.find(t => t.code === 'T99');
+            const defaultTaxCode = itemsToPackage.length > 0 ? itemsToPackage[0].taxCodeId : standardTaxRateId;
 
             const newPackage: any = {
                 id: `pkg_${Date.now()}`,
                 entityId: estimate.entityId,
                 name,
                 description,
-                totalPrice: totalNet,
-                costItems: estimate.lineItems.map(li => ({...li, id: crypto.randomUUID()})),
+                totalPrice: totalNet + totalVat,
+                totalPriceNet: totalNet,
+                totalPriceVat: totalVat,
+                isMixedVat: isMixedVat,
+                taxCodeId: isMixedVat && t99Rate ? t99Rate.id : defaultTaxCode,
+                costItems: itemsToPackage.map(li => ({...li, id: crypto.randomUUID()})),
                 applicableMake: vehicle.make,
                 applicableModel: vehicle.model,
             };

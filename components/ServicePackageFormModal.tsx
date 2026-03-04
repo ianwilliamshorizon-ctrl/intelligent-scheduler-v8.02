@@ -9,7 +9,9 @@ import { useData } from '../core/state/DataContext';
 const ServicePackageFormModal = ({ isOpen, onClose, onSave, servicePackage, taxRates, entityId, businessEntities, parts }: { isOpen: boolean, onClose: () => void, onSave: (pkg: ServicePackage) => void, servicePackage: Partial<ServicePackage> | null, taxRates: TaxRate[], entityId: string, businessEntities: BusinessEntity[], parts: Part[] }) => {
     const [formData, setFormData] = useState<Partial<ServicePackage>>({});
     const { suppliers, setParts } = useData();
+    const supplierMap = useMemo(() => new Map(suppliers.map(s => [s.id, s.shortCode])), [suppliers]);
     const standardTaxRateId = useMemo(() => taxRates.find(t => t.code === 'T1')?.id, [taxRates]);
+    const t99RateId = useMemo(() => taxRates.find(t => t.code === 'T99')?.id, [taxRates]);
     
     const [activeSearchRow, setActiveSearchRow] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
@@ -81,9 +83,52 @@ const ServicePackageFormModal = ({ isOpen, onClose, onSave, servicePackage, taxR
     
     const removeLine = (id: string) => setFormData(p => ({...p, costItems: (p.costItems||[]).filter(li => li.id !== id)}));
     
-    const handleSave = () => { 
-        if(!formData.name || !formData.totalPrice) return alert('Package name and total price are required.'); 
-        onSave({id:formData.id || crypto.randomUUID(), ...formData} as ServicePackage);
+    const handleSave = () => {
+        const {
+            id, name, description, entityId, costItems,
+            applicableMake, applicableModel, applicableVariant,
+            totalPrice, taxCodeId: defaultTaxCodeId
+        } = formData;
+    
+        if (!name) return alert('Package name is required.');
+        if (totalPrice === undefined || totalPrice === null) return alert('Total price is required.');
+    
+        const finalCostItems = costItems || [];
+    
+        const totalSaleNet = finalCostItems.reduce((sum, item) => sum + ((item.unitPrice || 0) * (item.quantity || 0)), 0);
+        const totalCost = finalCostItems.reduce((sum, item) => sum + ((item.unitCost || 0) * (item.quantity || 0)), 0);
+        const totalVat = finalCostItems.reduce((sum, item) => {
+            const taxRate = taxRates.find(t => t.id === item.taxCodeId)?.rate || 0;
+            const itemVat = ((item.unitPrice || 0) * (item.quantity || 0)) * (taxRate / 100);
+            return sum + itemVat;
+        }, 0);
+        const isMixedVat = new Set(finalCostItems.map(i => i.taxCodeId)).size > 1;
+    
+        let finalPackageTaxCodeId = defaultTaxCodeId;
+        if (isMixedVat && t99RateId) {
+            finalPackageTaxCodeId = t99RateId;
+        } else if (!isMixedVat && defaultTaxCodeId === t99RateId) {
+            finalPackageTaxCodeId = standardTaxRateId;
+        }
+    
+        const packageToSave: ServicePackage = {
+            id: id || `pkg_${Date.now()}`,
+            name: name || '',
+            entityId: entityId || '',
+            description: description || '',
+            applicableMake: applicableMake || null,
+            applicableModel: applicableModel || null,
+            applicableVariant: applicableVariant || null,
+            totalPrice: totalPrice,
+            totalPriceNet: totalSaleNet,
+            totalPriceVat: totalVat,
+            totalCost: totalCost,
+            isMixedVat: isMixedVat,
+            taxCodeId: finalPackageTaxCodeId || standardTaxRateId || '',
+            costItems: finalCostItems,
+        };
+        
+        onSave(packageToSave);
         onClose();
     };
     
@@ -95,7 +140,9 @@ const ServicePackageFormModal = ({ isOpen, onClose, onSave, servicePackage, taxR
             description: part.description,
             unitCost: part.costPrice,
             unitPrice: part.salePrice,
+            supplierId: part.defaultSupplierId,
             fromStock: part.stockQuantity > 0,
+            taxCodeId: part.taxCodeId || formData.taxCodeId || standardTaxRateId
         } : li)}));
         setActiveSearchRow(null);
         setSearchTerm('');
@@ -113,7 +160,6 @@ const ServicePackageFormModal = ({ isOpen, onClose, onSave, servicePackage, taxR
     };
 
     const handleSaveNewPart = (newPart: Part) => {
-        // This would ideally be handled via a centralized data management system
         const newPartWithId = { ...newPart, id: `new-${crypto.randomUUID()}`}; 
         setParts(currentParts => [...currentParts, newPartWithId]);
         if (activeLineItemId) {
@@ -128,39 +174,41 @@ const ServicePackageFormModal = ({ isOpen, onClose, onSave, servicePackage, taxR
         const costItems = formData.costItems || [];
         const totalCost = costItems.reduce((sum, item) => sum + ((item.unitCost || 0) * (item.quantity || 0)), 0);
         
-        const taxRateValue = taxRates.find(t => t.id === formData.taxCodeId)?.rate || 0;
-        const totalSaleGross = formData.totalPrice || 0;
-        const totalSaleNet = totalSaleGross / (1 + (taxRateValue / 100));
-        const totalVat = totalSaleGross - totalSaleNet;
-        
-        const totalProfit = totalSaleNet - totalCost;
-        const margin = totalSaleNet > 0 ? (totalProfit / totalSaleNet) * 100 : 0;
-
-        return { totalCost, totalSaleNet, totalVat, totalSaleGross, totalProfit, margin };
-    }, [formData.costItems, taxRates, formData.totalPrice, formData.taxCodeId]);
-
-    const recalculateTotalPrice = useCallback(() => {
-        const costItems = formData.costItems || [];
         const totalSaleNet = costItems.reduce((sum, item) => sum + ((item.unitPrice || 0) * (item.quantity || 0)), 0);
+        
         const totalVat = costItems.reduce((sum, item) => {
             const taxRate = taxRates.find(t => t.id === item.taxCodeId)?.rate || 0;
             const itemVat = ((item.unitPrice || 0) * (item.quantity || 0)) * (taxRate / 100);
             return sum + itemVat;
         }, 0);
-        const gross = totalSaleNet + totalVat;
-        setFormData(p => ({ ...p, totalPrice: gross }));
+
+        const calculatedGross = totalSaleNet + totalVat;
+        const totalProfit = totalSaleNet - totalCost;
+        const margin = totalSaleNet > 0 ? (totalProfit / totalSaleNet) * 100 : 0;
+    
+        return { 
+            totalCost, 
+            totalSaleNet,
+            totalVat,
+            calculatedGross, 
+            totalProfit, 
+            margin
+        };
     }, [formData.costItems, taxRates]);
+
+    const recalculateTotalPrice = useCallback(() => {
+        setFormData(p => ({ ...p, totalPrice: packageTotals.calculatedGross }));
+    }, [packageTotals.calculatedGross]);
 
     const handleBlur = () => {
         setTimeout(() => {
             setActiveSearchRow(null);
-        }, 150); // Delay to allow clicks on search results
+        }, 150);
     };
 
     return (
         <>
-            <FormModal isOpen={isOpen} onClose={onClose} onSave={handleSave} title={servicePackage?.id ? "Edit Service Package" : "Add Service Package"} maxWidth="max-w-5xl">
-                {/* ... form content ... */}
+            <FormModal isOpen={isOpen} onClose={onClose} onSave={handleSave} title={servicePackage?.id ? "Edit Service Package" : "Add Service Package"} maxWidth="max-w-6xl">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <div className="md:col-span-2">
                         <label className="block text-sm font-medium text-gray-700 mb-1">Business Entity</label>
@@ -179,7 +227,7 @@ const ServicePackageFormModal = ({ isOpen, onClose, onSave, servicePackage, taxR
                         </select>
                     </div>
                     <div className="md:col-span-2">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Total Price (Inc. VAT)</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Target Price (Inc. VAT)</label>
                         <div className="flex items-center gap-2">
                             <input name="totalPrice" type="number" value={formData.totalPrice || ''} onChange={handleChange} className="w-full p-2 border rounded" />
                             <button onClick={recalculateTotalPrice} className="p-2 bg-gray-200 rounded hover:bg-gray-300" title="Recalculate from line items"><RefreshCw size={16}/></button>
@@ -210,13 +258,15 @@ const ServicePackageFormModal = ({ isOpen, onClose, onSave, servicePackage, taxR
                 </div>
                 
                 <h4 className="font-bold mb-2 mt-4">Cost & Sale Items (Parts & Labor)</h4>
-                <div className="grid grid-cols-12 gap-2 items-center text-xs font-semibold text-gray-500 px-2 pb-1 border-b">
+                <div className="grid grid-cols-13 gap-2 items-center text-xs font-semibold text-gray-500 px-2 pb-1 border-b">
                     <div className="col-span-2">Part Number</div>
                     <div className="col-span-3">Description</div>
+                    <div className="col-span-1">Supplier</div>
                     <div className="col-span-1">Qty</div>
                     <div className="col-span-1 text-right">Unit Cost</div>
                     <div className="col-span-1 text-right">Unit Price</div>
-                    <div className="col-span-2">Tax Code</div>
+                    <div className="col-span-1">Tax</div>
+                    <div className="col-span-1">Stock</div>
                     <div className="col-span-1">Type</div>
                     <div className="col-span-1"></div>
                 </div>
@@ -225,7 +275,7 @@ const ServicePackageFormModal = ({ isOpen, onClose, onSave, servicePackage, taxR
                     {(formData.costItems || []).map(li => {
                         const showSearch = !li.isLabor && activeSearchRow === li.id && searchTerm.length > 1;
                         return (
-                            <div key={li.id} className="grid grid-cols-12 gap-2 items-start relative">
+                            <div key={li.id} className="grid grid-cols-13 gap-2 items-start relative">
                                 <div className="col-span-2">
                                     {!li.isLabor && (
                                         <input
@@ -239,7 +289,7 @@ const ServicePackageFormModal = ({ isOpen, onClose, onSave, servicePackage, taxR
                                         />
                                     )}
                                 </div>
-                                <div className="col-span-3">
+                                <div className="col-span-3 relative">
                                     <input
                                         value={li.description}
                                         onFocus={() => { if (!li.isLabor) { setActiveSearchRow(li.id); setSearchTerm(li.description); } else { setActiveSearchRow(null) } }}
@@ -274,13 +324,31 @@ const ServicePackageFormModal = ({ isOpen, onClose, onSave, servicePackage, taxR
                                         </div>
                                     )}
                                 </div>
+                                <div className="col-span-1 flex items-center justify-center pt-1">
+                                    {!li.isLabor && li.supplierId && (
+                                        <span className="font-mono bg-gray-200 px-1 rounded text-xs">
+                                            {supplierMap.get(li.supplierId) || '???'}
+                                        </span>
+                                    )}
+                                </div>
                                 <div className="col-span-1"><input type="number" step="0.1" value={li.quantity} onChange={e=>handleLineChange(li.id, 'quantity', e.target.value)} placeholder="Qty" className="p-1 border rounded text-sm text-right w-full"/></div>
                                 <div className="col-span-1"><input type="number" step="0.01" value={li.unitCost || ''} onChange={e=>handleLineChange(li.id, 'unitCost', e.target.value)} placeholder="Cost" className="w-full p-1 border rounded text-sm text-right"/></div>
                                 <div className="col-span-1"><input type="number" step="0.01" value={li.unitPrice || ''} onChange={e=>handleLineChange(li.id, 'unitPrice', e.target.value)} placeholder="Price" className="w-full p-1 border rounded text-sm text-right"/></div>
-                                <div className="col-span-2">
+                                <div className="col-span-1">
                                     <select value={li.taxCodeId || ''} onChange={e => handleLineChange(li.id, 'taxCodeId', e.target.value)} className="w-full p-1 border rounded text-sm bg-white">
                                         {taxRates.map(t => <option key={t.id} value={t.id}>{t.code} ({t.rate}%)</option>)}
                                     </select>
+                                </div>
+                                <div className="col-span-1 flex items-center justify-center">
+                                    {!li.isLabor && (
+                                        <input 
+                                            type="checkbox" 
+                                            checked={li.fromStock || false} 
+                                            onChange={e => handleLineChange(li.id, 'fromStock', e.target.checked)}
+                                            className="h-4 w-4 rounded"
+                                            title="Is this part from existing stock?"
+                                        />
+                                    )}
                                 </div>
                                 <div className="col-span-1 flex items-center justify-center">
                                     {li.isLabor ? <span className="text-xs font-semibold">LABOR</span> : <span className="text-xs font-semibold">PART</span>}
@@ -296,13 +364,13 @@ const ServicePackageFormModal = ({ isOpen, onClose, onSave, servicePackage, taxR
                 </div>
            
                 <div className="mt-6 pt-6 border-t">
-                    <h4 className="font-bold mb-2">Package Financial Summary</h4>
+                    <h4 className="font-bold mb-2">Package Financial Summary (Calculated from Line Items)</h4>
                     <div className="grid grid-cols-2 gap-x-8 text-sm bg-gray-50 p-4 rounded-lg border">
                         <div className="space-y-1">
                             <div className="flex justify-between"><span>Total Cost Price:</span><span className="font-mono">{formatCurrency(packageTotals.totalCost)}</span></div>
                             <div className="flex justify-between"><span>Total Sale Price (Net):</span><span className="font-mono">{formatCurrency(packageTotals.totalSaleNet)}</span></div>
-                            <div className="flex justify-between"><span>Total VAT:</span><span className="font-mono">{formatCurrency(packageTotals.totalVat)}</span></div>
-                            <div className="flex justify-between font-bold"><span>Total Sale Price (Gross):</span><span className="font-mono">{formatCurrency(packageTotals.totalSaleGross)}</span></div>
+                            <div className="flex justify-between"><span>Total VAT:</span><span className="font-mono text-red-500 font-bold">{formatCurrency(packageTotals.totalVat)}</span></div>
+                            <div className="flex justify-between font-bold"><span>Total Sale Price (Gross):</span><span className="font-mono">{formatCurrency(packageTotals.calculatedGross)}</span></div>
                         </div>
                         <div className="space-y-1">
                             <div className={`flex justify-between font-semibold ${packageTotals.totalProfit < 0 ? 'text-red-600' : 'text-green-700'}`}>

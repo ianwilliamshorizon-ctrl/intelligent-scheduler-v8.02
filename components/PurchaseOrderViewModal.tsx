@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback, useContext } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useContext, useRef } from 'react';
 import ReactDOM from 'react-dom/client';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -32,7 +32,8 @@ export const PurchaseOrderViewModal: React.FC<PurchaseOrderViewModalProps> = ({ 
     const [pdfUrl, setPdfUrl] = useState<string | null>(null);
     const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
     const [isEmailing, setIsEmailing] = useState(false);
-    const [currentPo, setCurrentPo] = useState<PurchaseOrder | null>(purchaseOrder);
+    const [currentPo, setCurrentPo] = useState<PurchaseOrder | null>(null);
+    const initialPdfLoadDone = useRef(false);
 
     const getUsername = (userId: string) => (users.find(u => u.id === userId) as User)?.name || 'Unknown User';
 
@@ -58,7 +59,7 @@ export const PurchaseOrderViewModal: React.FC<PurchaseOrderViewModalProps> = ({ 
         };
     }, [currentPo, users]);
 
-    const generatePurchaseOrderDataUrl = useCallback(async (po: PurchaseOrder, supplier: Supplier, entity: BusinessEntity, totals: { net: number, vat: number, grandTotal: number }): Promise<string> => {
+    const generatePurchaseOrderPdf = useCallback(async (po: PurchaseOrder, supplier: Supplier, entity: BusinessEntity, totals: { net: number, vat: number, grandTotal: number }): Promise<{blobUrl: string, dataUri: string}> => {
         const printMountPoint = document.createElement('div');
         printMountPoint.style.position = 'absolute';
         printMountPoint.style.left = '-9999px';
@@ -76,23 +77,39 @@ export const PurchaseOrderViewModal: React.FC<PurchaseOrderViewModalProps> = ({ 
             </React.StrictMode>
         );
 
-        await new Promise(resolve => setTimeout(resolve, 800));
+        await new Promise(resolve => setTimeout(resolve, 200));
 
         try {
-            const canvas = await html2canvas(printMountPoint.children[0] as HTMLElement, { scale: 2, useCORS: true });
+            const elementToPrint = printMountPoint.children[0] as HTMLElement;
+            if (!elementToPrint) {
+                throw new Error("PDF print container not found during generation.");
+            }
+            const canvas = await html2canvas(elementToPrint, { scale: 2, useCORS: true });
             const imgData = canvas.toDataURL('image/png');
-            const pdf = new jsPDF('p', 'mm', 'a4');
+            
+            const pdf = new jsPDF('p', 'mm', 'a4', true);
             const pdfWidth = pdf.internal.pageSize.getWidth();
             const pdfHeight = pdf.internal.pageSize.getHeight();
-            const canvasHeightOnPdf = pdfWidth * (canvas.height / canvas.width);
             
-            pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, canvasHeightOnPdf);
+            const imgProps = pdf.getImageProperties(imgData);
+            const imgHeight = (imgProps.height * pdfWidth) / imgProps.width;
 
-            if (canvasHeightOnPdf > pdfHeight) {
-                console.warn("Purchase order content is longer than one page. Consider a multi-page solution if needed.");
+            let heightLeft = imgHeight;
+            let position = 0;
+
+            pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+            heightLeft -= pdfHeight;
+
+            while (heightLeft >= 1) {
+                position -= pdfHeight;
+                pdf.addPage();
+                pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+                heightLeft -= pdfHeight;
             }
 
-            return pdf.output('datauristring');
+            const blob = pdf.output('blob');
+            const dataUri = pdf.output('datauristring');
+            return { blobUrl: URL.createObjectURL(blob), dataUri };
         } finally {
             root.unmount();
             document.body.removeChild(printMountPoint);
@@ -110,9 +127,9 @@ export const PurchaseOrderViewModal: React.FC<PurchaseOrderViewModalProps> = ({ 
 
         setIsGeneratingPdf(true);
         try {
-            const url = await generatePurchaseOrderDataUrl(po, poSupplier, poEntity, poTotals);
-            setPdfUrl(url);
-            const updatedPo = { ...po, pdfUrl: url, pdfGeneratedAt: new Date().toISOString() };
+            const { blobUrl, dataUri } = await generatePurchaseOrderPdf(po, poSupplier, poEntity, poTotals);
+            setPdfUrl(blobUrl);
+            const updatedPo = { ...po, pdfUrl: dataUri, pdfGeneratedAt: new Date().toISOString() };
             setCurrentPo(updatedPo);
             if (onUpdatePO) {
                 onUpdatePO(updatedPo);
@@ -122,46 +139,59 @@ export const PurchaseOrderViewModal: React.FC<PurchaseOrderViewModalProps> = ({ 
         } finally {
             setIsGeneratingPdf(false);
         }
-    }, [generatePurchaseOrderDataUrl, onUpdatePO, suppliers, businessEntities, poTotals]);
+    }, [generatePurchaseOrderPdf, onUpdatePO, suppliers, businessEntities, poTotals]);
 
-    const loadFreshPoAndGeneratePdf = useCallback(async (poId: string) => {
+    const loadFreshPoAndGeneratePdf = useCallback(async (poId: string, poForGeneration: PurchaseOrder) => {
         setIsGeneratingPdf(true);
         try {
             const docRef = doc(db, 'brooks_purchaseOrders', poId);
             const docSnap = await getDoc(docRef);
 
+            let poToUse: PurchaseOrder;
             if (docSnap.exists()) {
-                const freshPoFromDb = { id: docSnap.id, ...docSnap.data() } as PurchaseOrder;
-                setPurchaseOrders(prev => prev.map(p => p.id === freshPoFromDb.id ? freshPoFromDb : p));
-                setCurrentPo(freshPoFromDb);
-                await handleGeneratePdf(freshPoFromDb);
-            } else if (purchaseOrder) {
-                await handleGeneratePdf(purchaseOrder);
+                poToUse = { id: docSnap.id, ...docSnap.data() } as PurchaseOrder;
+                setPurchaseOrders(prev => prev.map(p => p.id === poToUse.id ? poToUse : p));
+            } else {
+                poToUse = poForGeneration;
             }
+            setCurrentPo(poToUse);
+            await handleGeneratePdf(poToUse);
+
         } catch (error) {
             console.error("Failed to load fresh PO and generate PDF", error);
-            if (purchaseOrder) await handleGeneratePdf(purchaseOrder);
+            setCurrentPo(poForGeneration);
+            await handleGeneratePdf(poForGeneration);
         } finally {
             setIsGeneratingPdf(false);
         }
-    }, [handleGeneratePdf, purchaseOrder, setPurchaseOrders]);
+    }, [handleGeneratePdf, setPurchaseOrders]);
 
     const handleRefresh = () => {
         if (currentPo) {
-            loadFreshPoAndGeneratePdf(currentPo.id);
+            loadFreshPoAndGeneratePdf(currentPo.id, currentPo);
         }
     };
 
     useEffect(() => {
-        if (isOpen && purchaseOrder?.id) {
-            loadFreshPoAndGeneratePdf(purchaseOrder.id);
+        if (pdfUrl) {
+            return () => {
+                URL.revokeObjectURL(pdfUrl);
+            };
+        }
+    }, [pdfUrl]);
+
+    useEffect(() => {
+        if (isOpen && purchaseOrder && !initialPdfLoadDone.current) {
+            initialPdfLoadDone.current = true;
+            loadFreshPoAndGeneratePdf(purchaseOrder.id, purchaseOrder);
         }
 
         if (!isOpen) {
             setCurrentPo(null);
             setPdfUrl(null);
+            initialPdfLoadDone.current = false;
         }
-    }, [isOpen, purchaseOrder?.id]);
+    }, [isOpen, purchaseOrder, loadFreshPoAndGeneratePdf]);
 
     if (!isOpen || !currentPo) return null;
 
@@ -193,17 +223,35 @@ export const PurchaseOrderViewModal: React.FC<PurchaseOrderViewModalProps> = ({ 
             </React.StrictMode>
         );
 
-        await new Promise(resolve => setTimeout(resolve, 800));
+        await new Promise(resolve => setTimeout(resolve, 200));
     
         try {
-            const canvas = await html2canvas(printMountPoint.children[0] as HTMLElement, { scale: 2, useCORS: true });
+            const elementToPrint = printMountPoint.children[0] as HTMLElement;
+            if (!elementToPrint) {
+                throw new Error("PDF print container not found for download.");
+            }
+            const canvas = await html2canvas(elementToPrint, { scale: 2, useCORS: true });
             const imgData = canvas.toDataURL('image/png');
-            const pdf = new jsPDF('p', 'mm', 'a4');
+
+            const pdf = new jsPDF('p', 'mm', 'a4', true);
             const pdfWidth = pdf.internal.pageSize.getWidth();
             const pdfHeight = pdf.internal.pageSize.getHeight();
-            const canvasHeightOnPdf = pdfWidth * (canvas.height / canvas.width);
+            
+            const imgProps = pdf.getImageProperties(imgData);
+            const imgHeight = (imgProps.height * pdfWidth) / imgProps.width;
 
-            pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, canvasHeightOnPdf);
+            let heightLeft = imgHeight;
+            let position = 0;
+
+            pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+            heightLeft -= pdfHeight;
+
+            while (heightLeft >= 1) {
+                position -= pdfHeight;
+                pdf.addPage();
+                pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+                heightLeft -= pdfHeight;
+            }
 
             pdf.save(`PO-${currentPo.id}.pdf`);
         } catch (error) {
@@ -261,11 +309,11 @@ export const PurchaseOrderViewModal: React.FC<PurchaseOrderViewModalProps> = ({ 
                                 {isGeneratingPdf ? <Loader2 size={16} className="mr-2 animate-spin" /> : <RefreshCw size={16} className="mr-2" />}
                                 {isGeneratingPdf ? 'Reloading...' : 'Reload'}
                             </button>
-                            <button onClick={handleDownloadPdf} disabled={isGeneratingPdf} className="flex items-center justify-center py-2 px-4 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:bg-blue-300 transition-all">
+                            <button onClick={handleDownloadPdf} disabled={!pdfUrl || isGeneratingPdf} className="flex items-center justify-center py-2 px-4 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:bg-blue-300 transition-all">
                                 <Download size={16} className="mr-2" />
                                 Download PDF
                             </button>
-                            <button onClick={() => setIsEmailing(true)} disabled={!pdfUrl || isGeneratingPdf} className="flex items-center justify-center py-2 px-4 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 disabled:bg-green-300 transition-all">
+                            <button onClick={() => setIsEmailing(true)} disabled={!currentPo.pdfUrl || isGeneratingPdf} className="flex items-center justify-center py-2 px-4 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 disabled:bg-green-300 transition-all">
                                 <Mail size={16} className="mr-2" />
                                 Email to Supplier
                             </button>

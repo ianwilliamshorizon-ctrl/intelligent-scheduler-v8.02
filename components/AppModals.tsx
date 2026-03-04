@@ -261,6 +261,7 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                     entity={businessEntities.find(e => e.id === modals.viewInvoiceModal.invoice!.entityId)}
                     job={jobs.find(j => j.id === modals.viewInvoiceModal.invoice!.jobId)}
                     taxRates={taxRates}
+                    servicePackages={servicePackages}
                     onUpdateInvoice={(inv) => handleSaveItem(setInvoices, inv, 'brooks_invoices')}
                     onInvoiceAction={(id) => actions.handleMarkJobAsAwaitingCollection(id)}
                 />
@@ -467,6 +468,7 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                     customer={customers.find(c => c.id === modals.estimateViewModal.estimate!.customerId)}
                     vehicle={vehicles.find(v => v.id === modals.estimateViewModal.estimate!.vehicleId)}
                     taxRates={taxRates}
+                    servicePackages={servicePackages}
                     entityDetails={businessEntities.find(e => e.id === modals.estimateViewModal.estimate!.entityId)}
                     onApprove={actions.handleApproveEstimate}
                     onCustomerApprove={actions.handleCustomerApproveEstimate}

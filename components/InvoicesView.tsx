@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Invoice, Customer, Vehicle, EstimateLineItem, TaxRate } from '../types';
+import { Invoice, Customer, Vehicle, EstimateLineItem, TaxRate, ServicePackage } from '../types';
 import { Eye, Trash2, Search, Download, PlusCircle, Edit } from 'lucide-react';
 import { formatCurrency } from '../core/utils/formatUtils';
 import { formatDate } from '../core/utils/dateUtils';
@@ -29,7 +29,7 @@ const StatusFilter = ({ statuses, selectedStatuses, onToggle }: { statuses: read
 };
 
 
-const InvoicesView = ({ invoices, customers, vehicles, onViewInvoice, onEditInvoice, onOpenExportModal, onCreateAdhocInvoice, taxRates }: { invoices: Invoice[]; customers: Customer[]; vehicles: Vehicle[]; onViewInvoice: (invoice: Invoice) => void; onEditInvoice: (invoice: Invoice) => void; onOpenExportModal: (type: string, items: any[]) => void; onCreateAdhocInvoice: () => void; taxRates: TaxRate[] }) => {
+const InvoicesView = ({ invoices, customers, vehicles, onViewInvoice, onEditInvoice, onOpenExportModal, onCreateAdhocInvoice, taxRates, servicePackages }: { invoices: Invoice[]; customers: Customer[]; vehicles: Vehicle[]; onViewInvoice: (invoice: Invoice) => void; onEditInvoice: (invoice: Invoice) => void; onOpenExportModal: (type: string, items: any[]) => void; onCreateAdhocInvoice: () => void; taxRates: TaxRate[]; servicePackages: ServicePackage[] }) => {
     const [filter, setFilter] = useState('');
     const [statusFilter, setStatusFilter] = useState<Invoice['status'][]>([]);
     const [startDate, setStartDate] = useState(() => formatDate(new Date(new Date().getFullYear(), new Date().getMonth(), 1)));
@@ -38,18 +38,35 @@ const InvoicesView = ({ invoices, customers, vehicles, onViewInvoice, onEditInvo
     const customerMap = useMemo(() => new Map(customers.map(c => [c.id, `${c.forename} ${c.surname}`])), [customers]);
     const vehicleMap = useMemo(() => new Map(vehicles.map(v => [v.id, v.registration])), [vehicles]);
     const taxRatesMap = useMemo(() => new Map(taxRates.map(t => [t.id, t.rate])), [taxRates]);
-    const standardTaxRate = useMemo(() => taxRates.find(t => t.code === 'T1')?.rate || 0, [taxRates]);
     const standardTaxRateId = useMemo(() => taxRates.find(t => t.code === 'T1')?.id, [taxRates]);
-
+    const t99RateId = useMemo(() => taxRates.find(t => t.code === 'T99')?.id, [taxRates]);
 
     const calculateGrossTotal = (lineItems: EstimateLineItem[]) => {
-        return lineItems.reduce((sum, item) => {
-            if (item.isPackageComponent) return sum;
-            const net = (item.quantity || 0) * (item.unitPrice || 0);
-            const rate = taxRatesMap.get(item.taxCodeId || standardTaxRateId) || standardTaxRate;
-            const vat = net * (rate / 100);
-            return sum + net + vat;
-        }, 0);
+        let totalNet = 0;
+        let totalVat = 0;
+
+        if (!lineItems) return 0;
+
+        const billableItems = lineItems.filter(item => !item.isPackageComponent);
+
+        billableItems.forEach(item => {
+            const itemNet = (item.quantity || 0) * (item.unitPrice || 0);
+            totalNet += itemNet;
+
+            if (item.taxCodeId === t99RateId) {
+                totalVat += (item.preCalculatedVat || 0) * (item.quantity || 1);
+            } else {
+                const taxCodeId = item.taxCodeId || standardTaxRateId;
+                if (!taxCodeId) return;
+
+                const rate = taxRatesMap.get(taxCodeId);
+                if (rate === undefined) return;
+
+                totalVat += itemNet * (rate / 100);
+            }
+        });
+
+        return totalNet + totalVat;
     };
 
     const filteredInvoices = useMemo(() => {
