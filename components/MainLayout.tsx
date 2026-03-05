@@ -4,15 +4,16 @@ import { useData } from '../core/state/DataContext';
 import { 
     Menu, LogOut, Settings, Building2, UserCheck, LayoutDashboard, 
     Calendar, Wrench, Briefcase, FileText, ShoppingCart, Car, 
-    Archive, Truck, MessageSquare, Phone, CalendarDays, GitPullRequest, Search, X 
+    Archive, Truck, MessageSquare, Phone, CalendarDays, GitPullRequest, Search, X, HelpCircle
 } from 'lucide-react';
 import * as T from '../types';
 
 const MainLayout: React.FC<{ 
     children: React.ReactNode, 
     onOpenManagement: () => void, 
+    onOpenHelpCentre: () => void, // Added this prop
     onSearchResult: (type: string, id: string) => void 
-}> = ({ children, onOpenManagement, onSearchResult }) => {
+}> = ({ children, onOpenManagement, onOpenHelpCentre, onSearchResult }) => {
     const { 
         currentView, setCurrentView, 
         currentUser, selectedEntityId, setSelectedEntityId, 
@@ -201,6 +202,13 @@ const MainLayout: React.FC<{
                     </div>
 
                     <div className="flex items-center gap-2 lg:gap-4 ml-2">
+                         <button 
+                            onClick={onOpenHelpCentre} 
+                            className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-full transition-colors"
+                        >
+                            <HelpCircle size={20} />
+                        </button>
+
                         <div className="hidden sm:flex items-center gap-3">
                             <div className="flex flex-col items-end">
                                 <span className="text-xs font-bold text-gray-900 leading-none">{currentUser.name}</span>

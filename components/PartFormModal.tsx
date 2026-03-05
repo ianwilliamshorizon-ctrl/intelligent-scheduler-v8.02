@@ -54,7 +54,7 @@ const PartFormModal: React.FC<PartFormModalProps> = ({ isOpen, onClose, onSave, 
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-[80]">
             <div className="relative top-20 mx-auto p-5 border w-full max-w-2xl shadow-lg rounded-md bg-white">
                 <h3 className="text-lg font-bold">{part?.id ? 'Edit Part' : 'Create Part'}</h3>
                 <form onSubmit={handleSubmit} className="mt-4 space-y-4">

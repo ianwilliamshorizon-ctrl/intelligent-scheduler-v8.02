@@ -75,7 +75,7 @@ const MemoizedEditableLineItemRow = React.memo(({
                     <div className="relative w-full">
                         <textarea 
                             placeholder="Description" 
-                            value={(item.description || '').replace(/\n/g, '\n')} 
+                            value={item.description || ''} 
                             onChange={handleDescriptionChange}
                             onFocus={() => {
                                 if (!item.isLabor && !item.servicePackageId && !item.isPackageComponent) {
@@ -86,13 +86,8 @@ const MemoizedEditableLineItemRow = React.memo(({
                             onBlur={() => setTimeout(() => onSetActivePartSearch(null), 150)}
                             rows={1}
                             style={{ whiteSpace: 'pre-wrap', minHeight: '38px' }}
-                            className="w-full p-1 border rounded disabled:bg-gray-200 text-sm resize-none overflow-hidden" 
+                            className="w-full p-1 border rounded disabled:bg-gray-200 text-sm resize-y-none overflow-hidden"
                             disabled={!!isPackageComponent} 
-                            onInput={(e) => {
-                                const target = e.target as HTMLTextAreaElement;
-                                target.style.height = 'auto';
-                                target.style.height = `${target.scrollHeight}px`;
-                            }}
                         />
                          {activePartSearch === item.id && (
                             <div className="absolute z-20 top-full left-0 w-full bg-white border rounded shadow-lg max-h-60 overflow-y-auto mt-1">
@@ -421,28 +416,44 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
         setFormData(prev => {
             const lineItems = prev.lineItems || [];
             const targetItem = lineItems.find(i => i.id === id);
+            if (!targetItem) return prev;
+
             let processedValue = value;
-            if (['quantity', 'unitPrice', 'unitCost'].includes(field as string)) {
+
+            if (field === 'unitPrice' && targetItem.unitPrice === 0 && (Number(value) || 0) > 0) {
+                const grossPrice = Number(value) || 0;
+                const taxCodeId = targetItem.taxCodeId || standardTaxRateId;
+                const taxRateInfo = taxRates.find(t => t.id === taxCodeId);
+                const rate = taxRateInfo ? taxRateInfo.rate : 20;
+
+                if (rate > 0) {
+                    processedValue = grossPrice / (1 + (rate / 100));
+                } else {
+                    processedValue = grossPrice;
+                }
+            } else if (['quantity', 'unitPrice', 'unitCost'].includes(field as string)) {
                 processedValue = Number(value) || 0;
             }
-            const updatedLineItems = lineItems.map(item => 
-                item.id === id 
-                ? { ...item, [field]: processedValue } 
-                : item
+
+            const updatedLineItems = lineItems.map(item =>
+                item.id === id
+                    ? { ...item, [field]: processedValue }
+                    : item
             );
+
             if (targetItem && field === 'isOptional' && targetItem.servicePackageId && !targetItem.isPackageComponent) {
                 return {
                     ...prev,
-                    lineItems: updatedLineItems.map(item => 
+                    lineItems: updatedLineItems.map(item =>
                         item.servicePackageId === targetItem.servicePackageId && item.isPackageComponent
-                            ? { ...item, isOptional: processedValue }
+                            ? { ...item, isOptional: value as boolean }
                             : item
                     )
                 };
             }
             return { ...prev, lineItems: updatedLineItems };
         });
-    }, []);
+    }, [taxRates, standardTaxRateId]);
     
     const entityLaborRate = businessEntities.find(e => e.id === formData.entityId)?.laborRate;
     const entityLaborCostRate = businessEntities.find(e => e.id === formData.entityId)?.laborCostRate;
@@ -479,11 +490,29 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
             preCalculatedVat: pkg.taxCodeId === t99RateId ? pkg.totalPriceVat : undefined
         };
         newItems.push(mainPackageItem);
+
+        let runningTotal = 0;
         if (pkg.costItems) {
             pkg.costItems.forEach(costItem => {
-                newItems.push({ ...costItem, id: crypto.randomUUID(), unitPrice: 0, servicePackageId: pkg.id, servicePackageName: pkg.name, isPackageComponent: true, isOptional });
+                const itemPrice = costItem.unitPrice || 0;
+                runningTotal += itemPrice * (costItem.quantity || 1);
+                newItems.push({ 
+                    ...costItem, 
+                    id: crypto.randomUUID(), 
+                    unitPrice: itemPrice, 
+                    servicePackageId: pkg.id, 
+                    servicePackageName: pkg.name, 
+                    isPackageComponent: true, 
+                    isOptional 
+                });
             });
         }
+
+        // If the main package price is zero, calculate it from components
+        if (mainPackageItem.unitPrice === 0 && runningTotal > 0) {
+            mainPackageItem.unitPrice = runningTotal;
+        }
+
         setFormData(prev => ({ ...prev, lineItems: [...(prev.lineItems || []), ...newItems] }));
     };
 

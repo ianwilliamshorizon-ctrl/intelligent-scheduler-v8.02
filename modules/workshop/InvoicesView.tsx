@@ -1,15 +1,12 @@
 import React, { useState, useMemo } from 'react';
 import { useData } from '../../core/state/DataContext';
 import { useApp } from '../../core/state/AppContext';
-import { Invoice, Customer, Vehicle, EstimateLineItem, TaxRate } from '../../types';
-import { Eye, Search, Download, PlusCircle, Edit, Printer } from 'lucide-react';
+import { Invoice, Customer, Vehicle, EstimateLineItem } from '../../types';
+import { Eye, Search, Download, PlusCircle, Edit } from 'lucide-react';
 import { formatCurrency } from '../../core/utils/formatUtils';
 import { formatDate } from '../../core/utils/dateUtils';
 import { getCustomerDisplayName } from '../../core/utils/customerUtils';
-import PrintableInvoiceList from '../../components/PrintableInvoiceList';
-import { usePrint } from '../../core/hooks/usePrint';
 import { StatusFilter } from '../../components/shared/StatusFilter';
-import InvoiceModal from '../../components/InvoiceModal';
 
 interface InvoicesViewProps {
     onViewInvoice: (invoice: Invoice) => void;
@@ -26,15 +23,12 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({ onViewInvoice, onEditInvoic
     
     const [startDate, setStartDate] = useState(() => formatDate(new Date(new Date().getFullYear(), 0, 1)));
     const [endDate, setEndDate] = useState(() => formatDate(new Date()));
-    
-    const print = usePrint();
 
     const customerMap = useMemo(() => new Map(customers.map(c => [c.id, c])), [customers]);
     const vehicleMap = useMemo(() => new Map(vehicles.map(v => [v.id, v])), [vehicles]);
     const taxRatesMap = useMemo(() => new Map(taxRates.map(t => [t.id, t.rate])), [taxRates]);
     const standardTaxRate = useMemo(() => taxRates.find(t => t.code === 'T1')?.rate || 0, [taxRates]);
     const standardTaxRateId = useMemo(() => taxRates.find(t => t.code === 'T1')?.id, [taxRates]);
-    const entityMap = useMemo(() => new Map(businessEntities.map(e => [e.id, e])), [businessEntities]);
 
     const calculateGrossTotal = (lineItems: EstimateLineItem[]) => {
         return (lineItems || []).reduce((sum, item) => {
@@ -85,25 +79,6 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({ onViewInvoice, onEditInvoic
         );
     };
     
-    const handlePrintList = () => {
-        print(
-            <PrintableInvoiceList 
-                invoices={filteredInvoices} 
-                customers={customerMap} 
-                vehicles={vehicleMap}
-                taxRates={taxRates}
-                title={`Invoices (${startDate} to ${endDate})`}
-            />
-        );
-    };
-
-    const handleReprint = (invoice: Invoice) => {
-        const customer = customerMap.get(invoice.customerId);
-        const vehicle = invoice.vehicleId ? vehicleMap.get(invoice.vehicleId) : undefined;
-        const entity = entityMap.get(invoice.entityId);
-        print(<InvoiceModal invoice={invoice} customer={customer} vehicle={vehicle} entity={entity} taxRates={taxRates} isOpen={true} onClose={() => {}} />);
-    };
-    
     const invoiceStatusOptions: readonly Invoice['status'][] = ['Draft', 'Sent', 'Part Paid', 'Paid', 'Overdue'];
 
     return (
@@ -111,9 +86,6 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({ onViewInvoice, onEditInvoic
             <header className="flex justify-between items-center mb-4 flex-shrink-0">
                 <h2 className="text-2xl font-bold text-gray-800">Invoices</h2>
                  <div className="flex items-center gap-2">
-                    <button onClick={handlePrintList} className="flex items-center gap-2 py-2 px-4 bg-gray-600 text-white font-semibold rounded-lg shadow-md hover:bg-gray-700">
-                        <Printer size={16}/> Print List
-                    </button>
                     <button onClick={() => onOpenExportModal('invoices', filteredInvoices)} className="flex items-center gap-2 py-2 px-4 bg-gray-600 text-white font-semibold rounded-lg shadow-md hover:bg-gray-700">
                         <Download size={16}/> Export for Accounts
                     </button>
@@ -188,7 +160,6 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({ onViewInvoice, onEditInvoic
                                         <div className="flex gap-1">
                                             <button onClick={() => onViewInvoice(invoice)} className="p-1.5 text-gray-600 hover:bg-gray-100 rounded-full" title="View"><Eye size={16} /></button>
                                             <button onClick={() => onEditInvoice(invoice)} className="p-1.5 text-indigo-600 hover:bg-indigo-100 rounded-full" title="Edit"><Edit size={16} /></button>
-                                            <button onClick={() => handleReprint(invoice)} className="p-1.5 text-gray-600 hover:bg-gray-100 rounded-full" title="Reprint"><Printer size={16} /></button>
                                         </div>
                                     </td>
                                 </tr>

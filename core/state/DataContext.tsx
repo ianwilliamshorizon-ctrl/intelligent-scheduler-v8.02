@@ -50,6 +50,7 @@ interface DataContextType {
     discountCodes: T.DiscountCode[]; setDiscountCodes: React.Dispatch<React.SetStateAction<T.DiscountCode[]>>;
     forceRefresh: (collectionKey: keyof any) => Promise<void>;
     isDataLoaded: boolean; // Flag to indicate if all data has been loaded.
+    saveRecord: <T extends { id: string }>(collectionKey: string, record: T) => Promise<T>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -101,6 +102,30 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
     }, []);
 
+    const saveRecord = useCallback(async <T extends { id: string }>(collectionKey: string, record: T): Promise<T> => {
+        const hookKey = `brooks_${collectionKey}` as keyof typeof stateHooks;
+        const hook = stateHooksRef.current[hookKey];
+
+        if (!hook) {
+            throw new Error(`Invalid collection key for saveRecord: ${collectionKey}`);
+        }
+
+        const [, setState] = hook as unknown as UsePersistentStateTuple<T[]>;
+
+        setState(currentItems => {
+            const existingIndex = currentItems.findIndex(item => item.id === record.id);
+            if (existingIndex > -1) {
+                const newItems = [...currentItems];
+                newItems[existingIndex] = record;
+                return newItems;
+            } else {
+                return [...currentItems, record];
+            }
+        });
+        
+        return record;
+    }, []);
+
     const loadingFlags = Object.values(stateHooks).map(([, , , isLoading]) => isLoading);
     const isDataLoaded = useMemo(() => {
         return loadingFlags.every(flag => !flag);
@@ -108,15 +133,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const states = Object.values(stateHooks).map(([state]) => state);
     const value = useMemo(() => {
-        const contextValue: Partial<DataContextType> = { forceRefresh, isDataLoaded };
+        const contextValue: Partial<DataContextType> = { forceRefresh, isDataLoaded, saveRecord };
         for (const key in stateHooks) {
             const [state, setState] = stateHooks[key as keyof typeof stateHooks];
-            const plainKey = key.replace('brooks_','') as keyof Omit<DataContextType, 'forceRefresh' | 'isDataLoaded'>;
+            const plainKey = key.replace('brooks_','') as keyof Omit<DataContextType, 'forceRefresh' | 'isDataLoaded' | 'saveRecord'>;
             contextValue[plainKey] = state as any;
             (contextValue as any)[`set${plainKey.charAt(0).toUpperCase() + plainKey.slice(1)}`] = setState;
         }
         return contextValue as DataContextType;
-    }, [forceRefresh, isDataLoaded, ...states]);
+    }, [forceRefresh, isDataLoaded, saveRecord, ...states]);
 
     return (
         <DataContext.Provider value={value}>

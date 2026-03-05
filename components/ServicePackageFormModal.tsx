@@ -8,7 +8,7 @@ import { useData } from '../core/state/DataContext';
 
 const ServicePackageFormModal = ({ isOpen, onClose, onSave, servicePackage, taxRates, entityId, businessEntities, parts }: { isOpen: boolean, onClose: () => void, onSave: (pkg: ServicePackage) => void, servicePackage: Partial<ServicePackage> | null, taxRates: TaxRate[], entityId: string, businessEntities: BusinessEntity[], parts: Part[] }) => {
     const [formData, setFormData] = useState<Partial<ServicePackage>>({});
-    const { suppliers, setParts } = useData();
+    const { suppliers, saveRecord } = useData();
     const supplierMap = useMemo(() => new Map(suppliers.map(s => [s.id, s.shortCode])), [suppliers]);
     const standardTaxRateId = useMemo(() => taxRates.find(t => t.code === 'T1')?.id, [taxRates]);
     const t99RateId = useMemo(() => taxRates.find(t => t.code === 'T99')?.id, [taxRates]);
@@ -82,26 +82,73 @@ const ServicePackageFormModal = ({ isOpen, onClose, onSave, servicePackage, taxR
     };
     
     const removeLine = (id: string) => setFormData(p => ({...p, costItems: (p.costItems||[]).filter(li => li.id !== id)}));
+
+    const packageTotals = useMemo(() => {
+        const costItems = formData.costItems || [];
+        const grossTargetPrice = formData.totalPrice || 0;
+        const totalCost = costItems.reduce((sum, item) => sum + ((item.unitCost || 0) * (item.quantity || 0)), 0);
+        const totalSaleNetFromItems = costItems.reduce((sum, item) => sum + ((item.unitPrice || 0) * (item.quantity || 0)), 0);
     
+        // If line items have prices, use them as the source of truth
+        if (totalSaleNetFromItems > 0) {
+            const totalVatFromItems = costItems.reduce((sum, item) => {
+                const itemTaxRateInfo = taxRates.find(t => t.id === item.taxCodeId);
+                const rate = itemTaxRateInfo ? itemTaxRateInfo.rate : 0;
+                const itemVat = ((item.unitPrice || 0) * (item.quantity || 0)) * (rate / 100);
+                return sum + itemVat;
+            }, 0);
+            
+            const grossFromItems = totalSaleNetFromItems + totalVatFromItems;
+            const profit = totalSaleNetFromItems - totalCost;
+            const margin = totalSaleNetFromItems > 0 ? (profit / totalSaleNetFromItems) * 100 : 0;
+    
+            return {
+                totalCost,
+                totalSaleNet: totalSaleNetFromItems,
+                totalVat: totalVatFromItems,
+                calculatedGross: grossFromItems,
+                totalProfit: profit,
+                margin
+            };
+        }
+    
+        // Otherwise, if a gross target price is set, calculate from that
+        if (grossTargetPrice > 0) {
+            const packageTaxRateInfo = taxRates.find(t => t.id === formData.taxCodeId) || taxRates.find(t => t.code === 'T1');
+            const rate = packageTaxRateInfo ? packageTaxRateInfo.rate : 20;
+            let net = grossTargetPrice;
+            let vat = 0;
+    
+            if (rate > 0) {
+                net = grossTargetPrice / (1 + (rate / 100));
+                vat = grossTargetPrice - net;
+            }
+    
+            const profit = net - totalCost;
+            const margin = net > 0 ? (profit / net) * 100 : 0;
+            
+            return {
+                totalCost,
+                totalSaleNet: net,
+                totalVat: vat,
+                calculatedGross: grossTargetPrice,
+                totalProfit: profit,
+                margin
+            };
+        }
+    
+        // Default case: everything is zero
+        const profit = -totalCost;
+        return { totalCost, totalSaleNet: 0, totalVat: 0, calculatedGross: 0, totalProfit: profit, margin: 0 };
+    
+    }, [formData.costItems, taxRates, formData.totalPrice, formData.taxCodeId]);
+            
     const handleSave = () => {
-        const {
-            id, name, description, entityId, costItems,
-            applicableMake, applicableModel, applicableVariant,
-            totalPrice, taxCodeId: defaultTaxCodeId
-        } = formData;
+        const { id, name, description, entityId, costItems, applicableMake, applicableModel, applicableVariant, totalPrice, taxCodeId: defaultTaxCodeId } = formData;
     
         if (!name) return alert('Package name is required.');
-        if (totalPrice === undefined || totalPrice === null) return alert('Total price is required.');
-    
+        
         const finalCostItems = costItems || [];
-    
-        const totalSaleNet = finalCostItems.reduce((sum, item) => sum + ((item.unitPrice || 0) * (item.quantity || 0)), 0);
-        const totalCost = finalCostItems.reduce((sum, item) => sum + ((item.unitCost || 0) * (item.quantity || 0)), 0);
-        const totalVat = finalCostItems.reduce((sum, item) => {
-            const taxRate = taxRates.find(t => t.id === item.taxCodeId)?.rate || 0;
-            const itemVat = ((item.unitPrice || 0) * (item.quantity || 0)) * (taxRate / 100);
-            return sum + itemVat;
-        }, 0);
         const isMixedVat = new Set(finalCostItems.map(i => i.taxCodeId)).size > 1;
     
         let finalPackageTaxCodeId = defaultTaxCodeId;
@@ -110,16 +157,18 @@ const ServicePackageFormModal = ({ isOpen, onClose, onSave, servicePackage, taxR
         } else if (!isMixedVat && defaultTaxCodeId === t99RateId) {
             finalPackageTaxCodeId = standardTaxRateId;
         }
+
+        const { totalSaleNet, totalVat, totalCost, calculatedGross } = packageTotals;
     
         const packageToSave: ServicePackage = {
-            id: id || `pkg_${Date.now()}`,
+            id: id || `pkg_${Date.now()}`.replace('.', ''),
             name: name || '',
             entityId: entityId || '',
             description: description || '',
             applicableMake: applicableMake || null,
             applicableModel: applicableModel || null,
             applicableVariant: applicableVariant || null,
-            totalPrice: totalPrice,
+            totalPrice: totalPrice || calculatedGross, 
             totalPriceNet: totalSaleNet,
             totalPriceVat: totalVat,
             totalCost: totalCost,
@@ -159,42 +208,27 @@ const ServicePackageFormModal = ({ isOpen, onClose, onSave, servicePackage, taxR
         setActiveSearchRow(null);
     };
 
-    const handleSaveNewPart = (newPart: Part) => {
-        const newPartWithId = { ...newPart, id: `new-${crypto.randomUUID()}`}; 
-        setParts(currentParts => [...currentParts, newPartWithId]);
-        if (activeLineItemId) {
-            handleSelectPart(activeLineItemId, newPartWithId);
+    const handleSaveNewPart = async (newPart: Part) => {
+        if (!saveRecord) {
+            alert("Error: Save function not available.");
+            return;
         }
-        setIsPartModalOpen(false);
-        setNewPartDraft(null);
-        setActiveLineItemId(null);
+        try {
+            const partToSave: Part = { ...newPart, id: newPart.id || `part_${Date.now()}`.replace('.', '') };
+            const savedPart = await saveRecord('parts', partToSave);
+            
+            if (activeLineItemId && savedPart) {
+                handleSelectPart(activeLineItemId, savedPart);
+            }
+        } catch (error) {
+            console.error("Failed to save new part:", error);
+            alert("An error occurred while saving the part. See console for details.");
+        } finally {
+            setIsPartModalOpen(false);
+            setNewPartDraft(null);
+            setActiveLineItemId(null);
+        }
     };
-
-    const packageTotals = useMemo(() => {
-        const costItems = formData.costItems || [];
-        const totalCost = costItems.reduce((sum, item) => sum + ((item.unitCost || 0) * (item.quantity || 0)), 0);
-        
-        const totalSaleNet = costItems.reduce((sum, item) => sum + ((item.unitPrice || 0) * (item.quantity || 0)), 0);
-        
-        const totalVat = costItems.reduce((sum, item) => {
-            const taxRate = taxRates.find(t => t.id === item.taxCodeId)?.rate || 0;
-            const itemVat = ((item.unitPrice || 0) * (item.quantity || 0)) * (taxRate / 100);
-            return sum + itemVat;
-        }, 0);
-
-        const calculatedGross = totalSaleNet + totalVat;
-        const totalProfit = totalSaleNet - totalCost;
-        const margin = totalSaleNet > 0 ? (totalProfit / totalSaleNet) * 100 : 0;
-    
-        return { 
-            totalCost, 
-            totalSaleNet,
-            totalVat,
-            calculatedGross, 
-            totalProfit, 
-            margin
-        };
-    }, [formData.costItems, taxRates]);
 
     const recalculateTotalPrice = useCallback(() => {
         setFormData(p => ({ ...p, totalPrice: packageTotals.calculatedGross }));
@@ -203,7 +237,7 @@ const ServicePackageFormModal = ({ isOpen, onClose, onSave, servicePackage, taxR
     const handleBlur = () => {
         setTimeout(() => {
             setActiveSearchRow(null);
-        }, 150);
+        }, 300);
     };
 
     return (
