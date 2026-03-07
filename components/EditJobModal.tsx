@@ -367,15 +367,17 @@ const EditJobModal: React.FC<{
         return parts.filter(p => p.partNumber.toLowerCase().includes(lowerSearch) || p.description.toLowerCase().includes(lowerSearch)).slice(0, 10);
     }, [partSearchTerm, parts]);
 
-    const handleRaisePurchaseOrders = useCallback(() => {
+    const handleRaisePurchaseOrders = useCallback(async () => {
         if (!editableJob || !editableEstimate || !vehicle) return;
 
-        const itemsToOrder = editableEstimate.lineItems.filter(li => 
-            !li.isLabor &&
-            li.partId &&
-            !li.fromStock &&
-            !li.purchaseOrderLineItemId
-        );
+        const itemsToOrder = editableEstimate.lineItems.filter(li => {
+            const isPackageHeader = !!li.servicePackageId && !li.isPackageComponent;
+            return !li.isLabor && 
+                   !isPackageHeader &&
+                   li.partId && 
+                   !li.fromStock && 
+                   !li.purchaseOrderLineItemId;
+        });
 
         if (itemsToOrder.length === 0) {
             setConfirmation({ isOpen: true, title: 'No Parts to Order', message: 'There are no new parts on this estimate that require ordering.', type: 'info' });
@@ -444,11 +446,13 @@ const EditJobModal: React.FC<{
         });
 
         if (newPOs.length > 0) {
-            newPOs.forEach(po => {
-                handleSaveItem(data.setPurchaseOrders, po, 'brooks_purchaseOrders');
-            });
 
-            setEditableEstimate(prev => prev ? { ...prev, lineItems: updatedLineItems } : null);
+            const poSavePromises = newPOs.map(po => handleSaveItem(data.setPurchaseOrders, po, 'brooks_purchaseOrders'));
+            await Promise.all(poSavePromises);
+
+            const newEstimateState = { ...editableEstimate, lineItems: updatedLineItems };
+            setEditableEstimate(newEstimateState);
+            await handleSaveItem(setEstimates, newEstimateState, 'brooks_estimates');
             
             setEditableJob(prev => {
                 if (!prev) return null;
@@ -467,7 +471,7 @@ const EditJobModal: React.FC<{
             message: `${newPOs.length} purchase order(s) have been created in Draft status. You can review and edit them from the "Linked Purchase Orders" section.`,
             type: 'success',
         });
-    }, [editableJob, editableEstimate, vehicle, parts, businessEntities, purchaseOrders, generatePurchaseOrderId, handleSaveItem, data.setPurchaseOrders, setJobs, setConfirmation]);
+    }, [editableJob, editableEstimate, vehicle, parts, businessEntities, purchaseOrders, generatePurchaseOrderId, handleSaveItem, data.setPurchaseOrders, setJobs, setEstimates, setConfirmation]);
 
     const handleSelectPart = (lineItemId: string, part: T.Part) => {
         handleLineItemChange(lineItemId, 'partNumber', part.partNumber);
@@ -629,7 +633,7 @@ const EditJobModal: React.FC<{
                 newEstimateId = estimateToSave.id;
             }
     
-            handleSaveItem(setEstimates, estimateToSave, 'brooks_estimates');
+            await handleSaveItem(setEstimates, estimateToSave, 'brooks_estimates');
     
             if (newEstimateId) {
                 jobToSave.estimateId = newEstimateId;

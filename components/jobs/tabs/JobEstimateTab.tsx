@@ -32,6 +32,10 @@ const MemoizedEditableLineItemRow = React.memo(({
     const isPackageComponent = item.isPackageComponent;
     const isPackageHeader = !!item.servicePackageId && !item.isPackageComponent;
 
+    const showStockStatus = useMemo(() => {
+        return !item.isLabor && !isPackageHeader;
+    }, [item.isLabor, isPackageHeader]);
+
     const supplierShortCode = useMemo(() => {
         if (item.isLabor) return 'N/A';
         if (!item.supplierId) return <span className="text-gray-400">-</span>;
@@ -86,8 +90,12 @@ const MemoizedEditableLineItemRow = React.memo(({
                     )}
                 </div>
             </div>
-            <div className={`col-span-1 text-xs text-center p-1 rounded ${item.fromStock ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                {item.fromStock ? 'FROM STOCK' : 'TO ORDER'}
+             <div className="col-span-1 text-xs text-center p-1 rounded">
+                {showStockStatus && (
+                    <span className={item.fromStock ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}>
+                        {item.fromStock ? 'FROM STOCK' : 'TO ORDER'}
+                    </span>
+                )}
             </div>
             <input type="number" step="0.1" value={item.quantity} onChange={e => onLineItemChange(item.id, 'quantity', e.target.value)} className="col-span-1 p-1 border rounded text-right disabled:bg-gray-200" disabled={isReadOnly || isPackageHeader} />
             
@@ -190,9 +198,10 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
 
     const partsToOrderCount = useMemo(() => {
         if (!editableEstimate) return 0;
-        return editableEstimate.lineItems.filter((li: EstimateLineItem) => 
-            !li.isLabor && li.partId && !li.fromStock && !li.purchaseOrderLineItemId
-        ).length;
+        return editableEstimate.lineItems.filter((li: EstimateLineItem) => {
+            const isPackageHeader = !!li.servicePackageId && !li.isPackageComponent;
+            return !li.isLabor && !isPackageHeader && li.partId && !li.fromStock && !li.purchaseOrderLineItemId;
+        }).length;
     }, [editableEstimate]);
 
     const toggleExpandSuppEst = (id: string) => {
