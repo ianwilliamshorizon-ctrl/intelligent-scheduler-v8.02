@@ -367,6 +367,73 @@ const EditJobModal: React.FC<{
         return parts.filter(p => p.partNumber.toLowerCase().includes(lowerSearch) || p.description.toLowerCase().includes(lowerSearch)).slice(0, 10);
     }, [partSearchTerm, parts]);
 
+    const handleCreatePoForSingleItem = (lineItemId: string, part: T.Part) => {
+        if (!editableJob || !editableEstimate || !vehicle) return;
+    
+        const lineItem = editableEstimate.lineItems.find(li => li.id === lineItemId);
+    
+        if (!lineItem) {
+            console.error("Could not find line item to create PO.");
+            return;
+        }
+    
+        setConfirmation({
+            isOpen: true,
+            title: 'Create Purchase Order?',
+            message: `The part '${part.description}' is not in stock. Would you like to create a new purchase order for this item now?`,
+            type: 'info',
+            onConfirm: () => {
+                setConfirmation(prev => ({ ...prev, isOpen: false }));
+    
+                if (!editableJob || !editableEstimate || !vehicle) return; // Re-check after confirmation
+
+                const lineItem = editableEstimate.lineItems.find(li => li.id === lineItemId); // Re-find line item
+                if (!lineItem) return;
+
+                const supplierId = part.defaultSupplierId || null;
+                const entity = businessEntities.find(e => e.id === editableJob.entityId);
+                const entityShortCode = entity?.shortCode || 'UNK';
+                
+                const newPoId = generatePurchaseOrderId(purchaseOrders, entityShortCode);
+                const newPoLineItemId = crypto.randomUUID();
+                const newPo: T.PurchaseOrder = {
+                    id: newPoId,
+                    entityId: editableJob.entityId,
+                    supplierId: supplierId,
+                    orderDate: formatDate(new Date()),
+                    status: 'Draft',
+                    jobId: editableJob.id,
+                    vehicleRegistrationRef: vehicle.registration,
+                    lineItems: [{
+                        id: newPoLineItemId,
+                        partNumber: part.partNumber,
+                        description: part.description,
+                        quantity: lineItem.quantity,
+                        unitPrice: part.costPrice,
+                        taxCodeId: part.taxCodeId,
+                        jobLineItemId: lineItemId
+                    }],
+                    notes: `Generated from Job #${editableJob.id}`
+                };
+    
+                handleSaveItem(data.setPurchaseOrders, newPo, 'brooks_purchaseOrders');
+                handleLineItemChange(lineItemId, 'purchaseOrderLineItemId', newPoLineItemId);
+    
+                const updatedJob = {
+                    ...editableJob,
+                    purchaseOrderIds: [...(editableJob.purchaseOrderIds || []), newPo.id]
+                };
+                handleSaveItem(setJobs, updatedJob, 'brooks_jobs');
+    
+                setEditableJob(updatedJob);
+                onOpenPurchaseOrder(newPo);
+            },
+            onCancel: () => {
+                setConfirmation(prev => ({ ...prev, isOpen: false }));
+            }
+        });
+    };
+
     const handleSelectPart = (lineItemId: string, part: T.Part) => {
         handleLineItemChange(lineItemId, 'partNumber', part.partNumber);
         handleLineItemChange(lineItemId, 'description', part.description);
@@ -374,9 +441,16 @@ const EditJobModal: React.FC<{
         handleLineItemChange(lineItemId, 'unitCost', part.costPrice);
         handleLineItemChange(lineItemId, 'partId', part.id);
         handleLineItemChange(lineItemId, 'taxCodeId', part.taxCodeId || standardTaxRateId);
-        handleLineItemChange(lineItemId, 'fromStock', part.stockQuantity > 0);
+        
+        const fromStock = part.stockQuantity > 0;
+        handleLineItemChange(lineItemId, 'fromStock', fromStock);
+        
         setActivePartSearch(null);
         setPartSearchTerm('');
+
+        if (!fromStock && !isReadOnly) {
+            setTimeout(() => handleCreatePoForSingleItem(lineItemId, part), 200);
+        }
     };
 
     const handleAddNewPartClick = (lineItemId: string, searchTerm: string) => {
@@ -388,7 +462,9 @@ const EditJobModal: React.FC<{
 
     const handleSaveNewPart = async (part: T.Part) => {
         const savedPart = await handleSaveItem(setParts, part, 'brooks_parts');
-        if (targetLineItemId) handleSelectPart(targetLineItemId, savedPart);
+        if (targetLineItemId) {
+            handleSelectPart(targetLineItemId, savedPart);
+        }
         setIsAddingPart(false);
         setTargetLineItemId(null);
     };

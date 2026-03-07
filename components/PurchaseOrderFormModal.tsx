@@ -1,10 +1,14 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { PurchaseOrder, PurchaseOrderLineItem, Supplier, BusinessEntity, TaxRate, Part, Vehicle, Customer, Job } from '../types';
-import { Save, PlusCircle, Trash2, X, CheckSquare, ArrowDownCircle, AlertTriangle, Info } from 'lucide-react';
+import { Save, PlusCircle, Trash2, X, CheckSquare, ArrowDownCircle, AlertTriangle, Info, Printer, Mail, Phone, Plus } from 'lucide-react';
 import { formatDate } from '../core/utils/dateUtils';
 import { formatCurrency } from '../utils/formatUtils';
 import useToaster from '../hooks/useToaster';
 import { HoverInfo } from './shared/HoverInfo';
+import PartFormModal from './PartFormModal';
+import { PurchaseOrderPrint } from './PurchaseOrderPrint';
+import EmailPurchaseOrderModal from './EmailPurchaseOrderModal';
+import { usePrint } from '../core/hooks/usePrint';
 
 interface PurchaseOrderLineItemRowProps {
     item: PurchaseOrderLineItem;
@@ -15,6 +19,7 @@ interface PurchaseOrderLineItemRowProps {
     isOrderedOrLater: boolean;
     isCredit: boolean;
     isNewItem: boolean;
+    onAddNewPart: (lineItemId: string, searchTerm: string) => void;
 }
 
 const PurchaseOrderLineItemRow: React.FC<PurchaseOrderLineItemRowProps> = ({
@@ -25,27 +30,32 @@ const PurchaseOrderLineItemRow: React.FC<PurchaseOrderLineItemRowProps> = ({
     isReceivingDisabled,
     isOrderedOrLater,
     isCredit,
-    isNewItem
+    isNewItem,
+    onAddNewPart,
 }) => {
-    const [partSearch, setPartSearch] = useState(item.partNumber || '');
+    const [descriptionSearch, setDescriptionSearch] = useState(item.description || '');
     const [showResults, setShowResults] = useState(false);
 
     const filteredParts = useMemo(() => {
-        if (partSearch.length < 2) return [];
-        const lowerSearch = partSearch.toLowerCase();
+        if (descriptionSearch.length < 2) return [];
+        const lowerSearch = descriptionSearch.toLowerCase();
         return parts.filter(p =>
-            p.partNumber.toLowerCase().includes(lowerSearch) ||
-            p.description.toLowerCase().includes(lowerSearch)
+            p.description.toLowerCase().includes(lowerSearch) ||
+            p.partNumber.toLowerCase().includes(lowerSearch)
         ).slice(0, 10);
-    }, [partSearch, parts]);
+    }, [descriptionSearch, parts]);
 
     const handleSelectPart = (part: Part) => {
         onLineItemChange(item.id, 'partNumber', part.partNumber);
         onLineItemChange(item.id, 'description', part.description);
         onLineItemChange(item.id, 'unitPrice', part.costPrice);
-        setPartSearch(part.partNumber);
+        setDescriptionSearch(part.description);
         setShowResults(false);
     };
+
+    useEffect(() => {
+        setDescriptionSearch(item.description || '');
+    }, [item.description]);
 
     const fieldsDisabled = isOrderedOrLater && !isNewItem;
     const ordered = item.quantity || 0;
@@ -57,35 +67,38 @@ const PurchaseOrderLineItemRow: React.FC<PurchaseOrderLineItemRowProps> = ({
 
     return (
         <div className={`grid grid-cols-12 gap-2 items-start p-2 border bg-white rounded-lg ${isFullyReceived && isOrderedOrLater ? 'bg-green-50/50' : ''} ${isPendingReturn ? 'bg-amber-50 border-amber-200' : ''} ${isCredit ? 'bg-red-50/30' : ''}`}>
-            <div className="col-span-2 relative">
+            <div className="col-span-4 relative">
                 <input
                     type="text"
-                    placeholder="Search Part No..."
-                    value={partSearch}
+                    placeholder="Search Description or Part No..."
+                    value={descriptionSearch}
                     onChange={e => {
-                        setPartSearch(e.target.value);
-                        onLineItemChange(item.id, 'partNumber', e.target.value);
+                        setDescriptionSearch(e.target.value);
+                        onLineItemChange(item.id, 'description', e.target.value);
                         if (!showResults) setShowResults(true);
                     }}
                     onFocus={() => setShowResults(true)}
                     onBlur={() => setTimeout(() => setShowResults(false), 200)}
-                    className="w-full p-1 border rounded disabled:bg-gray-100 disabled:cursor-not-allowed text-sm font-medium"
+                    className="w-full p-1 border rounded disabled:bg-gray-100 disabled:cursor-not-allowed text-sm"
                     disabled={fieldsDisabled}
                 />
-                {showResults && filteredParts.length > 0 && (
+                {showResults && (
                     <div className="absolute z-20 w-full bg-white border rounded-md mt-1 max-h-60 overflow-y-auto shadow-lg">
                         {filteredParts.map(part => (
                             <div key={part.id} onMouseDown={() => handleSelectPart(part)} className="p-2 hover:bg-indigo-50 cursor-pointer">
-                                <p className="font-bold text-sm">{part.partNumber}</p>
-                                <p className="text-xs text-gray-500">{part.description}</p>
+                                <p className="font-bold text-sm">{part.description}</p>
+                                <p className="text-xs text-gray-500">{part.partNumber}</p>
                                 <p className="text-xs text-gray-500">Stock: {part.stockQuantity}</p>
                             </div>
                         ))}
+                         <div onMouseDown={() => onAddNewPart(item.id, descriptionSearch)} className="p-2 bg-indigo-50 hover:bg-indigo-100 cursor-pointer text-sm text-indigo-700 font-semibold border-t flex items-center gap-1">
+                            <Plus size={14}/> Create New Part
+                        </div>
                     </div>
                 )}
             </div>
 
-            <input type="text" placeholder="Description" value={item.description || ''} onChange={e => onLineItemChange(item.id, 'description', e.target.value)} className="col-span-4 p-1 border rounded disabled:bg-gray-100 disabled:cursor-not-allowed text-sm" disabled={fieldsDisabled} />
+            <input type="text" placeholder="Part Number" value={item.partNumber || ''} onChange={e => onLineItemChange(item.id, 'partNumber', e.target.value)} className="col-span-2 p-1 border rounded disabled:bg-gray-100 disabled:cursor-not-allowed text-sm font-medium" disabled={fieldsDisabled} />
             <input type="number" step="1" value={item.quantity ?? 0} onChange={e => onLineItemChange(item.id, 'quantity', e.target.value)} className={`col-span-1 p-1 border rounded text-right disabled:bg-gray-100 disabled:cursor-not-allowed text-sm ${isCredit ? 'text-red-600 font-bold' : ''}`} disabled={fieldsDisabled} />
 
             <div className="col-span-2 relative">
@@ -122,6 +135,7 @@ interface PurchaseOrderFormModalProps {
     isOpen: boolean;
     onClose: () => void;
     onSave: (po: PurchaseOrder) => void;
+    onSavePart: (part: Part) => void;
     purchaseOrder: PurchaseOrder | null;
     suppliers: Supplier[];
     taxRates: TaxRate[];
@@ -140,7 +154,7 @@ interface PurchaseOrderFormModalProps {
     forceRefresh: (collectionKey: string) => Promise<void>;
 }
 
-const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen, onClose, onSave, purchaseOrder, suppliers, taxRates, businessEntities, allPurchaseOrders, selectedEntityId, parts, setParts, onViewPurchaseOrder, jobId, jobs, vehicles, customers, setJobs, generatePurchaseOrderId, forceRefresh }) => {
+const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen, onClose, onSave, onSavePart, purchaseOrder, suppliers, taxRates, businessEntities, allPurchaseOrders, selectedEntityId, parts, setParts, onViewPurchaseOrder, jobId, jobs, vehicles, customers, setJobs, generatePurchaseOrderId, forceRefresh }) => {
     const [formData, setFormData] = useState<Partial<PurchaseOrder>>({ 
         lineItems: [],
         supplierId: '',
@@ -154,16 +168,50 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
         jobId: '',
     });
     const { showError, showSuccess } = useToaster();
+    const print = usePrint();
+    const [isAddingPart, setIsAddingPart] = useState(false);
+    const [newPart, setNewPart] = useState<Partial<Part> | null>(null);
+    const [targetLineItemId, setTargetLineItemId] = useState<string | null>(null);
+    const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
 
     const saveAndLinkPo = useCallback((poToSave: PurchaseOrder) => {
         onSave(poToSave);
     
-        if (poToSave.jobId && setJobs && allPurchaseOrders) {
+        if (poToSave.jobId && setJobs && allPurchaseOrders && jobs && parts) {
             const updatedPOsList = [...allPurchaseOrders.filter(p => p.id !== poToSave.id), poToSave];
             const poMap = new Map(updatedPOsList.map(p => [p.id, p]));
     
             setJobs(prevJobs => prevJobs.map(job => {
                 if (job.id === poToSave.jobId) {
+                    const newJobLineItemsFromPO = (poToSave.lineItems || []).map(poItem => {
+                        const part = parts.find(p => p.partNumber.toLowerCase() === poItem.partNumber?.toLowerCase());
+                        let salePrice = part?.salePrice;
+                        if (salePrice === undefined || salePrice === null) {
+                            console.warn(`Part ${poItem.partNumber} does not have a sale price. Using cost price from PO as a fallback.`);
+                            salePrice = poItem.unitPrice;
+                        }
+    
+                        return {
+                            id: `po_item_${poItem.id}`,
+                            purchaseOrderLineItemId: poItem.id,
+                            description: poItem.description,
+                            quantity: poItem.quantity,
+                            unitPrice: salePrice,
+                            isLabor: false,
+                            partId: part?.id || null,
+                            taxCodeId: poItem.taxCodeId,
+                        };
+                    });
+    
+                    const existingJobLineItems = job.lineItems || [];
+                    const poItemIds = new Set((poToSave.lineItems || []).map(li => li.id));
+    
+                    const otherJobLineItems = existingJobLineItems.filter(
+                        li => !li.purchaseOrderLineItemId || !poItemIds.has(li.purchaseOrderLineItemId)
+                    );
+    
+                    const updatedJobLineItems = [...otherJobLineItems, ...newJobLineItemsFromPO];
+    
                     const currentPoIds = job.purchaseOrderIds || [];
                     const newPurchaseOrderIds = Array.from(new Set([...currentPoIds, poToSave.id]));
                     
@@ -184,6 +232,8 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
                             newPartsStatus = 'Partially Received';
                         } else if (anyOrdered) {
                             newPartsStatus = 'Ordered';
+                        } else {
+                            newPartsStatus = 'Awaiting Order';
                         }
                     }
     
@@ -191,12 +241,13 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
                         ...job,
                         purchaseOrderIds: newPurchaseOrderIds,
                         partsStatus: newPartsStatus,
+                        lineItems: updatedJobLineItems, 
                     };
                 }
                 return job;
             }));
         }
-    }, [onSave, setJobs, allPurchaseOrders]);
+    }, [onSave, setJobs, allPurchaseOrders, jobs, parts]);
     
     const partsMap = useMemo(() => new Map(parts.map(p => [p.partNumber.toLowerCase(), p])), [parts]);
     const standardTaxRate = useMemo(() => taxRates.find(t => t.code === 'T1') || taxRates[0], [taxRates]);
@@ -285,7 +336,7 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
                 jobId: jobId || '',
             });
         }
-    }, [purchaseOrder, isOpen, selectedEntityId, jobId, partsMap]);
+    }, [purchaseOrder, isOpen, selectedEntityId, jobId]);
     
     const isReceivingDisabled = useMemo(() => formData.status === 'Draft', [formData.status]);
     const isOrderedOrLater = useMemo(() => ['Ordered', 'Partially Received', 'Received'].includes(formData.status || ''), [formData.status]);
@@ -328,6 +379,42 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
     const removeLineItem = useCallback((id: string) => {
         setFormData(prev => ({ ...prev, lineItems: (prev.lineItems || []).filter(item => item.id !== id) }));
     }, []);
+
+    const handleAddNewPartClick = (lineItemId: string, searchTerm: string) => {
+        setTargetLineItemId(lineItemId);
+        const newPartData: Partial<Part> = {
+            description: searchTerm,
+            partNumber: searchTerm,
+            taxCodeId: standardTaxRate?.id || '',
+        };
+        setNewPart(newPartData);
+        setIsAddingPart(true);
+    };
+
+    const handleSaveNewPart = (part: Part) => {
+        const newPartWithId = { ...part, id: part.id || `part_${Date.now()}` };
+        onSavePart(newPartWithId);
+
+        if (targetLineItemId) {
+            setFormData(prev => {
+                const lineItems = prev.lineItems || [];
+                const updatedLineItems = lineItems.map(item =>
+                    item.id === targetLineItemId
+                        ? {
+                            ...item,
+                            partNumber: newPartWithId.partNumber,
+                            description: newPartWithId.description,
+                            unitPrice: newPartWithId.costPrice,
+                        }
+                        : item
+                );
+                return { ...prev, lineItems: updatedLineItems };
+            });
+        }
+        setIsAddingPart(false);
+        setNewPart(null);
+        setTargetLineItemId(null);
+    };
     
     const handleFillBalance = () => {
         setFormData(prev => ({
@@ -458,6 +545,26 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
         return { totalNet: net, totalTax: tax, grandTotal: net + tax };
     }, [formData.lineItems, standardTaxRate]);
 
+    const currentSupplier = useMemo(() => suppliers.find(s => s.id === formData.supplierId), [formData.supplierId, suppliers]);
+    const currentEntity = useMemo(() => businessEntities.find(e => e.id === formData.entityId), [formData.entityId, businessEntities]);
+
+    const handlePrint = () => {
+        if (!currentEntity || !currentSupplier) {
+            showError("Please select a supplier and business entity before printing.");
+            return;
+        }
+        print(<PurchaseOrderPrint purchaseOrder={formData as PurchaseOrder} entityDetails={currentEntity} supplier={currentSupplier} totals={{ net: totalNet, vat: totalTax, grandTotal: grandTotal }} />);
+    };
+
+    const handleOrderByPhone = () => {
+        setFormData(prev => ({
+            ...prev,
+            status: 'Ordered',
+            notes: `${prev.notes || ''}\n\n[System Note: Manually marked as 'Ordered by phone' on ${formatDate(new Date())}]`
+        }));
+        showSuccess('PO status has been set to Ordered.');
+    };
+
     if (!isOpen) return null;
 
     return (
@@ -555,8 +662,8 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
                         </div>
                         
                         <div className="grid grid-cols-12 gap-2 px-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                            <div className="col-span-2">Part Number</div>
                             <div className="col-span-4">Description</div>
+                            <div className="col-span-2">Part Number</div>
                             <div className="col-span-1 text-right">Qty</div>
                             <div className="col-span-2 text-right">Rec'd</div>
                             <div className="col-span-2 text-right">Unit Cost</div>
@@ -574,6 +681,7 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
                                 isOrderedOrLater={isOrderedOrLater}
                                 isCredit={formData.type === 'Credit'}
                                 isNewItem={!originalLineItemIds.has(item.id)}
+                                onAddNewPart={handleAddNewPartClick}
                             />
                         ))}
                          {['Draft', 'Ordered', 'Partially Received'].includes(formData.status || '') && formData.type !== 'Credit' && (
@@ -607,6 +715,13 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
 
                 <footer className="p-4 border-t flex justify-between bg-gray-50">
                     <div className="flex gap-2">
+                         {formData.status === 'Draft' && formData.type !== 'Credit' && (
+                            <div className="flex items-center gap-2">
+                                <button onClick={handlePrint} className="px-3 py-2 bg-gray-600 text-white rounded-lg flex items-center gap-2 hover:bg-gray-700 font-semibold shadow-sm"><Printer size={16}/> Print</button>
+                                <button onClick={() => setIsEmailModalOpen(true)} className="px-3 py-2 bg-gray-600 text-white rounded-lg flex items-center gap-2 hover:bg-gray-700 font-semibold shadow-sm"><Mail size={16}/> Email</button>
+                                <button onClick={handleOrderByPhone} className="px-3 py-2 bg-gray-600 text-white rounded-lg flex items-center gap-2 hover:bg-gray-700 font-semibold shadow-sm"><Phone size={16}/> Order by Phone</button>
+                            </div>
+                        )}
                         {!isReceivingDisabled && formData.type !== 'Credit' && (
                             <button onClick={handleFinalizeReceipt} className="px-4 py-2 bg-green-600 text-white rounded-lg flex items-center gap-2 hover:bg-green-700 font-bold shadow-sm">
                                 <CheckSquare size={16}/> Save & Finalize Receipt
@@ -625,6 +740,28 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
                     </div>
                 </footer>
             </div>
+
+            {isAddingPart && (
+                <PartFormModal
+                    isOpen={isAddingPart}
+                    onClose={() => setIsAddingPart(false)}
+                    onSave={handleSaveNewPart}
+                    part={newPart}
+                    suppliers={suppliers}
+                    taxRates={taxRates}
+                />
+            )}
+
+            {isEmailModalOpen && currentEntity && currentSupplier && (
+                 <EmailPurchaseOrderModal
+                    isOpen={isEmailModalOpen}
+                    onClose={() => setIsEmailModalOpen(false)}
+                    onSend={() => {}}
+                    purchaseOrder={formData as PurchaseOrder}
+                    businessEntity={currentEntity}
+                    supplier={currentSupplier}
+                 />
+            )}
         </div>
     );
 };

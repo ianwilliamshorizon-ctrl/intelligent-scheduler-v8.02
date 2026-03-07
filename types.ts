@@ -57,6 +57,8 @@ export interface BusinessEntity {
     postcode?: string;
     vatNumber?: string;
     companyNumber?: string;
+    phone?: string;
+    email?: string;
     bankAccountName?: string;
     bankSortCode?: string;
     bankAccountNumber?: string;
@@ -233,6 +235,8 @@ export interface Job {
     jobType?: string;
     checkInTimestamp?: string;
     checkOutTimestamp?: string;
+    vehicleRegistration?: string;
+    lineItems?: EstimateLineItem[];
 }
 
 export interface EstimateLineItem {
@@ -255,6 +259,7 @@ export interface EstimateLineItem {
     isStorageCharge?: boolean;
     supplierId?: string;
     preCalculatedVat?: number;
+    purchaseOrderLineItemId?: string;
 }
 
 export interface Estimate {
@@ -302,6 +307,7 @@ export interface PurchaseOrderLineItem {
     unitPrice: number; 
     taxCodeId?: string;
     returnStatus?: 'None' | 'Pending' | 'Returned' | 'Credited';
+    jobLineItemId?: string;
 }
 
 export interface Part {

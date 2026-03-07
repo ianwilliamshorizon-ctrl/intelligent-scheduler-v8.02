@@ -170,6 +170,7 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                     isOpen={true}
                     onClose={() => setters.setPoModal({isOpen: false, po: null})}
                     onSave={(po) => actions.handleSavePurchaseOrder({ ...po, createdByUserId: po.createdByUserId || currentUser.id })}
+                    onSavePart={(part) => handleSaveItem(setParts, part, 'brooks_parts')}
                     purchaseOrder={modals.poModal.po}
                     suppliers={suppliers}
                     taxRates={taxRates}

@@ -1,6 +1,6 @@
 import React from 'react';
 import { X, Send } from 'lucide-react';
-import { PurchaseOrder, Supplier } from '../types';
+import { PurchaseOrder, Supplier, BusinessEntity } from '../types';
 
 interface EmailPurchaseOrderModalProps {
     isOpen: boolean;
@@ -8,12 +8,13 @@ interface EmailPurchaseOrderModalProps {
     onSend: () => void;
     purchaseOrder: PurchaseOrder;
     supplier?: Supplier | null;
+    businessEntity: BusinessEntity;
 }
 
-const EmailPurchaseOrderModal: React.FC<EmailPurchaseOrderModalProps> = ({ isOpen, onClose, onSend, purchaseOrder, supplier }) => {
+const EmailPurchaseOrderModal: React.FC<EmailPurchaseOrderModalProps> = ({ isOpen, onClose, onSend, purchaseOrder, supplier, businessEntity }) => {
     if (!isOpen) return null;
 
-    const supplierEmail = `accounts@${supplier?.name.toLowerCase().replace(/\s/g, '')}.com` || 'supplier@example.com';
+    const supplierEmail = supplier?.email || 'supplier@example.com';
 
     return (
         <div className="fixed inset-0 bg-gray-900 bg-opacity-70 z-[80] flex justify-center items-center p-4">
@@ -33,11 +34,11 @@ const EmailPurchaseOrderModal: React.FC<EmailPurchaseOrderModalProps> = ({ isOpe
                     </div>
                     <div className="flex items-center p-2 bg-gray-100 rounded-md">
                         <span className="font-semibold text-gray-600 w-20">From:</span>
-                        <span>BROOKSPEED &lt;no-reply@brookspeed.com&gt;</span>
+                        <span>{businessEntity.name} &lt;{businessEntity.email || 'no-reply@brookspeed.com'}&gt;</span>
                     </div>
                     <div className="flex items-center p-2 bg-gray-100 rounded-md">
                         <span className="font-semibold text-gray-600 w-20">Subject:</span>
-                        <span>Purchase Order #{purchaseOrder.id} from BROOKSPEED</span>
+                        <span>Purchase Order #{purchaseOrder.id} from {businessEntity.name}</span>
                     </div>
 
                     <div className="p-4 border rounded-md mt-4 h-64 overflow-y-auto">
@@ -47,7 +48,7 @@ const EmailPurchaseOrderModal: React.FC<EmailPurchaseOrderModalProps> = ({ isOpe
                         <p className="mb-4">Please confirm receipt and provide an estimated delivery date.</p>
                         <p>If you have any questions, please don't hesitate to contact us.</p>
                         <p className="mt-4">Kind regards,</p>
-                        <p className="font-semibold">The BROOKSPEED Team</p>
+                        <p className="font-semibold">The {businessEntity.name} Team</p>
                     </div>
                 </div>
 

@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { PurchaseOrder, Supplier } from '../../types';
-import { Edit, Trash2, Search, PlusCircle, Eye, Download, Printer } from 'lucide-react';
+import { Edit, Trash2, Search, PlusCircle, Download, Printer } from 'lucide-react';
 import { formatCurrency } from '../../utils/formatUtils';
 import { getRelativeDate } from '../../core/utils/dateUtils';
 import { useData } from '../../core/state/DataContext';
@@ -11,7 +11,7 @@ import PrintablePurchaseOrderList from '../../components/PrintablePurchaseOrderL
 import { StatusFilter } from '../../components/shared/StatusFilter';
 import useToaster from '../../hooks/useToaster';
 
-const PurchaseOrdersView = ({ onOpenPurchaseOrderModal, onViewPurchaseOrder, onExport, onOpenBatchAddModal }: { onOpenPurchaseOrderModal: (po: PurchaseOrder | null) => void, onViewPurchaseOrder: (po: PurchaseOrder) => void, onExport: (data: any[], filename: string) => void, onOpenBatchAddModal: () => void }) => {
+const PurchaseOrdersView = ({ onOpenPurchaseOrderModal, onExport, onOpenBatchAddModal }: { onOpenPurchaseOrderModal: (po: PurchaseOrder | null) => void, onExport: (data: any[], filename: string) => void, onOpenBatchAddModal: () => void }) => {
     const { purchaseOrders, suppliers, businessEntities, setPurchaseOrders } = useData();
     const { selectedEntityId } = useApp();
     const { showSuccess } = useToaster();
@@ -154,7 +154,6 @@ const PurchaseOrdersView = ({ onOpenPurchaseOrderModal, onViewPurchaseOrder, onE
                                     <td className="p-3 text-right font-semibold">{formatCurrency(calculateTotal(po.lineItems))}</td>
                                     <td className="p-3">
                                          <div className="flex gap-1 justify-end">
-                                            <button onClick={() => onViewPurchaseOrder(po)} className="p-1.5 text-gray-600 hover:bg-gray-100 rounded-full" title="View"><Eye size={16} /></button>
                                             <button onClick={() => onOpenPurchaseOrderModal(po)} className="p-1.5 text-indigo-600 hover:bg-indigo-100 rounded-full" title="Edit"><Edit size={16} /></button>
                                             <button onClick={() => handleDeletePurchaseOrder(po.id)} className="p-1.5 text-red-600 hover:bg-red-100 rounded-full" title="Delete"><Trash2 size={16} /></button>
                                         </div>

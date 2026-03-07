@@ -233,7 +233,8 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
                 <label className="font-semibold">Parts Status</label>
                 <select name="partsStatus" value={partsStatus || 'Not Required'} onChange={onChange} className="w-full p-2 border rounded bg-white mt-1" disabled={isReadOnly}>
                     <option>Not Required</option>
-                    <option>Not Ordered</option>
+                    <option>Awaiting Parts</option>
+                    <option>Awaiting Order</option>
                     <option>Ordered</option>
                     <option>Partially Received</option>
                     <option>Fully Received</option>
@@ -282,22 +283,6 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
                 
                 {editableEstimate && (
                     <div className="space-y-4">
-                        {!isReadOnly && (
-                            <div className="flex justify-between items-center pt-2">
-                                <div className="flex gap-2">
-                                    <button onClick={() => onAddLineItem(true)} className="flex items-center text-xs py-1 px-2 bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200"><PlusCircle size={14} className="mr-1" /> Add Labor</button>
-                                    <button onClick={() => onAddLineItem(false)} className="flex items-center text-xs py-1 px-2 bg-green-100 text-green-700 rounded-md hover:bg-green-200"><PlusCircle size={14} className="mr-1" /> Add Part</button>
-                                </div>
-                                <div className="flex items-center gap-2 w-64">
-                                    <SearchableSelect
-                                        options={sortedPackages}
-                                        onSelect={(packageId) => { if (packageId) onAddPackage(packageId); }}
-                                        placeholder="Add Package..."
-                                        dropdownClassName="min-w-[450px] right-0"
-                                    />
-                                </div>
-                            </div>
-                        )}
                         <div className="hidden lg:grid grid-cols-11 gap-2 text-xs text-gray-500 font-medium px-2">
                             <div className="col-span-7">Part / Description</div>
                             <div className="col-span-1 text-right">Qty/Hrs</div>
@@ -361,6 +346,23 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
                         {estimateBreakdown.standaloneParts.length > 0 && <h5 className="font-bold text-gray-800 text-xs uppercase pt-2">Parts</h5>}
                         {estimateBreakdown.standaloneParts.map((item: any) => <MemoizedEditableLineItemRow key={item.id} canViewPricing={canViewPricing} isReadOnly={isReadOnly} item={item} taxRates={taxRates} suppliers={suppliers} onLineItemChange={onLineItemChange} onRemoveLineItem={onRemoveLineItem} filteredParts={filteredParts} activePartSearch={activePartSearch} onPartSearchChange={onPartSearchChange} onSetActivePartSearch={onSetActivePartSearch} onSelectPart={onSelectPart} onManageMedia={onManageMedia} onAddNewPart={onAddNewPart} onOpenSupplierSelection={openSupplierSelection}/>)}
                         
+                        {!isReadOnly && (
+                            <div className="flex justify-between items-center pt-4 mt-4 border-t">
+                                <div className="flex gap-2">
+                                    <button onClick={() => onAddLineItem(true)} className="flex items-center text-xs py-1 px-2 bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200"><PlusCircle size={14} className="mr-1" /> Add Labor</button>
+                                    <button onClick={() => onAddLineItem(false)} className="flex items-center text-xs py-1 px-2 bg-green-100 text-green-700 rounded-md hover:bg-green-200"><PlusCircle size={14} className="mr-1" /> Add Part</button>
+                                </div>
+                                <div className="flex items-center gap-2 w-64">
+                                    <SearchableSelect
+                                        options={sortedPackages}
+                                        onSelect={(packageId) => { if (packageId) onAddPackage(packageId); }}
+                                        placeholder="Add Package..."
+                                        dropdownClassName="min-w-[450px] right-0"
+                                    />
+                                </div>
+                            </div>
+                        )}
+
                         {canViewPricing && (
                             <div className="mt-4 pt-4 border-t flex justify-end">
                                 <div className="w-64 text-sm">
