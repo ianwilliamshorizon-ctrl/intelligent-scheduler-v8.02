@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { EstimateLineItem, TaxRate, Part, PurchaseOrder, ServicePackage, Estimate, Vehicle, Supplier } from '../../../types';
-import { Trash2, PlusCircle, FileText, Clock, ChevronDown, ChevronUp, Plus, Image as ImageIcon, Search } from 'lucide-react';
+import { Trash2, PlusCircle, FileText, Clock, ChevronDown, ChevronUp, Plus, Image as ImageIcon, Search, ShoppingCart } from 'lucide-react';
 import { formatCurrency } from '../../../utils/formatUtils';
 import SearchableSelect from '../../SearchableSelect';
 import { getScoredServicePackages } from '../../../utils/servicePackageScoring';
@@ -48,8 +48,8 @@ const MemoizedEditableLineItemRow = React.memo(({
     };
 
     return (
-         <div className={`grid grid-cols-11 gap-2 items-center p-2 rounded-lg border ${isPackageComponent ? 'bg-gray-100' : 'bg-white'}`}>
-            <div className="col-span-7 space-y-1">
+         <div className={`grid grid-cols-12 gap-2 items-center p-2 rounded-lg border ${isPackageComponent ? 'bg-gray-100' : 'bg-white'}`}>
+            <div className="col-span-6 space-y-1">
                  <input 
                     type="text" 
                     placeholder="Part No." 
@@ -86,7 +86,9 @@ const MemoizedEditableLineItemRow = React.memo(({
                     )}
                 </div>
             </div>
-            
+            <div className={`col-span-1 text-xs text-center p-1 rounded ${item.fromStock ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                {item.fromStock ? 'FROM STOCK' : 'TO ORDER'}
+            </div>
             <input type="number" step="0.1" value={item.quantity} onChange={e => onLineItemChange(item.id, 'quantity', e.target.value)} className="col-span-1 p-1 border rounded text-right disabled:bg-gray-200" disabled={isReadOnly || isPackageHeader} />
             
             {canViewPricing ? (
@@ -172,6 +174,7 @@ interface JobEstimateTabProps {
     onManageMedia: (itemId: string) => void;
     vehicle?: Vehicle;
     onAddNewPart: (lineItemId: string, searchTerm: string) => void;
+    onRaisePurchaseOrders: () => void;
 }
 
 export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
@@ -179,11 +182,18 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
     estimateBreakdown, isReadOnly, canViewPricing, taxRates, filteredParts, activePartSearch, servicePackages,
     totalNet, vatBreakdown, grandTotal, currentJobHours, onChange, onOpenPurchaseOrder, onCreateEstimate, onRaiseSupplementaryEstimate, onViewEstimate,
     onAddLineItem, onAddPackage, onLineItemChange, onRemoveLineItem, onPartSearchChange, onSetActivePartSearch, onSelectPart, onManageMedia,
-    vehicle, onAddNewPart, suppliers
+    vehicle, onAddNewPart, suppliers, onRaisePurchaseOrders
 }) => {
     const [expandedSuppEstIds, setExpandedSuppEstIds] = useState<Set<string>>(new Set());
     const [isSupplierSelectionOpen, setIsSupplierSelectionOpen] = useState(false);
     const [lineItemForSupplier, setLineItemForSupplier] = useState<string | null>(null);
+
+    const partsToOrderCount = useMemo(() => {
+        if (!editableEstimate) return 0;
+        return editableEstimate.lineItems.filter((li: EstimateLineItem) => 
+            !li.isLabor && li.partId && !li.fromStock && !li.purchaseOrderLineItemId
+        ).length;
+    }, [editableEstimate]);
 
     const toggleExpandSuppEst = (id: string) => {
         setExpandedSuppEstIds(prev => {
@@ -274,17 +284,26 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
             <div>
                 <div className="flex justify-between items-end mb-2">
                     <h4 className="font-semibold">Main Job Estimate & Items</h4>
-                    <button onClick={onRaiseSupplementaryEstimate} className="text-xs flex items-center gap-1 bg-amber-100 text-amber-800 px-2 py-1 rounded font-semibold hover:bg-amber-200 border border-amber-300">
-                         <PlusCircle size={12}/> Raise Supplementary Estimate
-                    </button>
+                    <div className="flex items-center gap-2">
+                         <button onClick={onRaiseSupplementaryEstimate} className="text-xs flex items-center gap-1 bg-amber-100 text-amber-800 px-2 py-1 rounded font-semibold hover:bg-amber-200 border border-amber-300">
+                            <PlusCircle size={12}/> Raise Supplementary Estimate
+                        </button>
+                        {partsToOrderCount > 0 && (
+                            <button onClick={onRaisePurchaseOrders} className="text-xs flex items-center gap-1 bg-teal-100 text-teal-800 px-2 py-1 rounded font-semibold hover:bg-teal-200 border border-teal-300 relative">
+                                <ShoppingCart size={12}/> Create Purchase Order(s)
+                                <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center">{partsToOrderCount}</span>
+                            </button>
+                        )}
+                    </div>
                 </div>
 
                 {!editableEstimate && !isReadOnly && <button onClick={onCreateEstimate} className="text-indigo-600 hover:underline">This job has no estimate. Click here to add items.</button>}
                 
                 {editableEstimate && (
-                    <div className="space-y-4">
-                        <div className="hidden lg:grid grid-cols-11 gap-2 text-xs text-gray-500 font-medium px-2">
-                            <div className="col-span-7">Part / Description</div>
+                    <div className="space-y-2">
+                        <div className="hidden lg:grid grid-cols-12 gap-2 text-xs text-gray-500 font-medium px-2">
+                            <div className="col-span-6">Part / Description</div>
+                            <div className="col-span-1 text-center">Stock Status</div>
                             <div className="col-span-1 text-right">Qty/Hrs</div>
                             {canViewPricing ? (
                                 <div className="col-span-1 text-right">Sell</div>
@@ -292,7 +311,7 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
                                 <div className="col-span-1"></div>
                             )}
                             <div className="col-span-1 text-center">Supplier</div>
-                            <div className="col-span-1"></div>
+                            <div className="col-span-2"></div>
                         </div>
                         
                         {estimateBreakdown.packages.length > 0 && <h5 className="font-bold text-gray-800 text-xs uppercase pt-2">Service Packages</h5>}
@@ -346,7 +365,7 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
                         {estimateBreakdown.standaloneParts.length > 0 && <h5 className="font-bold text-gray-800 text-xs uppercase pt-2">Parts</h5>}
                         {estimateBreakdown.standaloneParts.map((item: any) => <MemoizedEditableLineItemRow key={item.id} canViewPricing={canViewPricing} isReadOnly={isReadOnly} item={item} taxRates={taxRates} suppliers={suppliers} onLineItemChange={onLineItemChange} onRemoveLineItem={onRemoveLineItem} filteredParts={filteredParts} activePartSearch={activePartSearch} onPartSearchChange={onPartSearchChange} onSetActivePartSearch={onSetActivePartSearch} onSelectPart={onSelectPart} onManageMedia={onManageMedia} onAddNewPart={onAddNewPart} onOpenSupplierSelection={openSupplierSelection}/>)}
                         
-                        {!isReadOnly && (
+                         {!isReadOnly && (
                             <div className="flex justify-between items-center pt-4 mt-4 border-t">
                                 <div className="flex gap-2">
                                     <button onClick={() => onAddLineItem(true)} className="flex items-center text-xs py-1 px-2 bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200"><PlusCircle size={14} className="mr-1" /> Add Labor</button>

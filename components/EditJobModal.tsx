@@ -367,72 +367,107 @@ const EditJobModal: React.FC<{
         return parts.filter(p => p.partNumber.toLowerCase().includes(lowerSearch) || p.description.toLowerCase().includes(lowerSearch)).slice(0, 10);
     }, [partSearchTerm, parts]);
 
-    const handleCreatePoForSingleItem = (lineItemId: string, part: T.Part) => {
+    const handleRaisePurchaseOrders = useCallback(() => {
         if (!editableJob || !editableEstimate || !vehicle) return;
-    
-        const lineItem = editableEstimate.lineItems.find(li => li.id === lineItemId);
-    
-        if (!lineItem) {
-            console.error("Could not find line item to create PO.");
+
+        const itemsToOrder = editableEstimate.lineItems.filter(li => 
+            !li.isLabor &&
+            li.partId &&
+            !li.fromStock &&
+            !li.purchaseOrderLineItemId
+        );
+
+        if (itemsToOrder.length === 0) {
+            setConfirmation({ isOpen: true, title: 'No Parts to Order', message: 'There are no new parts on this estimate that require ordering.', type: 'info' });
             return;
         }
-    
-        setConfirmation({
-            isOpen: true,
-            title: 'Create Purchase Order?',
-            message: `The part '${part.description}' is not in stock. Would you like to create a new purchase order for this item now?`,
-            type: 'info',
-            onConfirm: () => {
-                setConfirmation(prev => ({ ...prev, isOpen: false }));
-    
-                if (!editableJob || !editableEstimate || !vehicle) return; // Re-check after confirmation
 
-                const lineItem = editableEstimate.lineItems.find(li => li.id === lineItemId); // Re-find line item
-                if (!lineItem) return;
+        const itemsWithPartData = itemsToOrder.map(li => ({
+            lineItem: li,
+            part: parts.find(p => p.id === li.partId)
+        })).filter(item => item.part);
 
-                const supplierId = part.defaultSupplierId || null;
-                const entity = businessEntities.find(e => e.id === editableJob.entityId);
-                const entityShortCode = entity?.shortCode || 'UNK';
-                
-                const newPoId = generatePurchaseOrderId(purchaseOrders, entityShortCode);
+        const supplierGroups = new Map<string, { part: T.Part, lineItem: T.EstimateLineItem }[]>();
+        itemsWithPartData.forEach(item => {
+            const supplierId = item.part!.defaultSupplierId || 'UNKNOWN';
+            if (!supplierGroups.has(supplierId)) {
+                supplierGroups.set(supplierId, []);
+            }
+            supplierGroups.get(supplierId)!.push(item as { part: T.Part; lineItem: T.EstimateLineItem; });
+        });
+
+        const newPOs: T.PurchaseOrder[] = [];
+        const newPoIds: string[] = [];
+        let updatedLineItems = [...editableEstimate.lineItems];
+
+        const entity = businessEntities.find(e => e.id === editableJob.entityId);
+        const entityShortCode = entity?.shortCode || 'UNK';
+
+        supplierGroups.forEach((items, supplierId) => {
+            const newPoId = generatePurchaseOrderId(purchaseOrders, entityShortCode);
+            newPoIds.push(newPoId);
+
+            const poLineItems: T.PurchaseOrderLineItem[] = items.map(item => {
                 const newPoLineItemId = crypto.randomUUID();
-                const newPo: T.PurchaseOrder = {
-                    id: newPoId,
-                    entityId: editableJob.entityId,
-                    supplierId: supplierId,
-                    orderDate: formatDate(new Date()),
-                    status: 'Draft',
-                    jobId: editableJob.id,
-                    vehicleRegistrationRef: vehicle.registration,
-                    lineItems: [{
-                        id: newPoLineItemId,
-                        partNumber: part.partNumber,
-                        description: part.description,
-                        quantity: lineItem.quantity,
-                        unitPrice: part.costPrice,
-                        taxCodeId: part.taxCodeId,
-                        jobLineItemId: lineItemId
-                    }],
-                    notes: `Generated from Job #${editableJob.id}`
+                
+                const originalIndex = updatedLineItems.findIndex(li => li.id === item.lineItem.id);
+                if (originalIndex !== -1) {
+                    updatedLineItems[originalIndex] = {
+                        ...updatedLineItems[originalIndex],
+                        purchaseOrderLineItemId: newPoLineItemId
+                    };
+                }
+                
+                return {
+                    id: newPoLineItemId,
+                    partNumber: item.part.partNumber,
+                    description: item.part.description,
+                    quantity: item.lineItem.quantity,
+                    unitPrice: item.part.costPrice,
+                    taxCodeId: item.part.taxCodeId,
+                    jobLineItemId: item.lineItem.id,
                 };
-    
-                handleSaveItem(data.setPurchaseOrders, newPo, 'brooks_purchaseOrders');
-                handleLineItemChange(lineItemId, 'purchaseOrderLineItemId', newPoLineItemId);
-    
+            });
+
+            const newPo: T.PurchaseOrder = {
+                id: newPoId,
+                entityId: editableJob.entityId,
+                supplierId: supplierId === 'UNKNOWN' ? null : supplierId,
+                orderDate: formatDate(new Date()),
+                status: 'Draft',
+                jobId: editableJob.id,
+                vehicleRegistrationRef: vehicle.registration,
+                lineItems: poLineItems,
+                notes: `Generated from Job #${editableJob.id}`
+            };
+            newPOs.push(newPo);
+        });
+
+        if (newPOs.length > 0) {
+            newPOs.forEach(po => {
+                handleSaveItem(data.setPurchaseOrders, po, 'brooks_purchaseOrders');
+            });
+
+            setEditableEstimate(prev => prev ? { ...prev, lineItems: updatedLineItems } : null);
+            
+            setEditableJob(prev => {
+                if (!prev) return null;
                 const updatedJob = {
-                    ...editableJob,
-                    purchaseOrderIds: [...(editableJob.purchaseOrderIds || []), newPo.id]
+                    ...prev,
+                    purchaseOrderIds: [...(prev.purchaseOrderIds || []), ...newPoIds]
                 };
                 handleSaveItem(setJobs, updatedJob, 'brooks_jobs');
-    
-                setEditableJob(updatedJob);
-                onOpenPurchaseOrder(newPo);
-            },
-            onCancel: () => {
-                setConfirmation(prev => ({ ...prev, isOpen: false }));
-            }
+                return updatedJob;
+            });
+        }
+
+        setConfirmation({
+            isOpen: true,
+            title: 'Purchase Orders Created',
+            message: `${newPOs.length} purchase order(s) have been created in Draft status. You can review and edit them from the "Linked Purchase Orders" section.`,
+            type: 'success',
         });
-    };
+    }, [editableJob, editableEstimate, vehicle, parts, businessEntities, purchaseOrders, generatePurchaseOrderId, handleSaveItem, data.setPurchaseOrders, setJobs, setConfirmation]);
 
     const handleSelectPart = (lineItemId: string, part: T.Part) => {
         handleLineItemChange(lineItemId, 'partNumber', part.partNumber);
@@ -442,15 +477,11 @@ const EditJobModal: React.FC<{
         handleLineItemChange(lineItemId, 'partId', part.id);
         handleLineItemChange(lineItemId, 'taxCodeId', part.taxCodeId || standardTaxRateId);
         
-        const fromStock = part.stockQuantity > 0;
+        const fromStock = part.isStockItem && part.stockQuantity > 0;
         handleLineItemChange(lineItemId, 'fromStock', fromStock);
         
         setActivePartSearch(null);
         setPartSearchTerm('');
-
-        if (!fromStock && !isReadOnly) {
-            setTimeout(() => handleCreatePoForSingleItem(lineItemId, part), 200);
-        }
     };
 
     const handleAddNewPartClick = (lineItemId: string, searchTerm: string) => {
@@ -685,6 +716,7 @@ const EditJobModal: React.FC<{
                         onManageMedia={handleOpenLineItemMedia}
                         vehicle={vehicle}
                         onAddNewPart={handleAddNewPartClick}
+                        onRaisePurchaseOrders={handleRaisePurchaseOrders}
                     />
                 );
             case 'inspection':
