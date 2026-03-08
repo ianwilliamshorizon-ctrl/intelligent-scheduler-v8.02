@@ -399,11 +399,11 @@ const EditJobModal: React.FC<{
 
         const itemsToOrder = editableEstimate.lineItems.filter(li => {
             const isPackageHeader = !!li.servicePackageId && !li.isPackageComponent;
-            return !li.isLabor && 
-                   !isPackageHeader &&
-                   li.partId && 
-                   !li.fromStock && 
-                   !li.purchaseOrderLineItemId;
+            return !li.isLabor &&
+                !isPackageHeader &&
+                li.partId &&
+                !li.fromStock &&
+                !li.purchaseOrderLineItemId;
         });
 
         if (itemsToOrder.length === 0) {
@@ -411,91 +411,124 @@ const EditJobModal: React.FC<{
             return;
         }
 
-        const itemsWithPartData = itemsToOrder.map(li => ({
-            lineItem: li,
-            part: parts.find(p => p.id === li.partId)
-        })).filter(item => item.part);
+        const supplierGroups = new Map<string, T.EstimateLineItem[]>();
 
-        const supplierGroups = new Map<string, { part: T.Part, lineItem: T.EstimateLineItem }[]>();
-        itemsWithPartData.forEach(item => {
-            const supplierId = item.part!.defaultSupplierId || 'UNKNOWN';
+        itemsToOrder.forEach(lineItem => {
+            const part = parts.find(p => p.id === lineItem.partId);
+            if (!part) return; 
+
+            const supplierId = lineItem.supplierId || part.defaultSupplierId || 'UNKNOWN';
+
             if (!supplierGroups.has(supplierId)) {
                 supplierGroups.set(supplierId, []);
             }
-            supplierGroups.get(supplierId)!.push(item as { part: T.Part; lineItem: T.EstimateLineItem; });
+            supplierGroups.get(supplierId)!.push(lineItem);
         });
 
+        const posToUpdate: T.PurchaseOrder[] = [];
         const newPOs: T.PurchaseOrder[] = [];
-        const newPoIds: string[] = [];
+        const newPoIdsToLink: string[] = [];
         let updatedLineItems = [...editableEstimate.lineItems];
 
         const entity = businessEntities.find(e => e.id === editableJob.entityId);
         const entityShortCode = entity?.shortCode || 'UNK';
+        const jobPOs = purchaseOrders.filter(po => po.jobId === editableJob.id);
 
         supplierGroups.forEach((items, supplierId) => {
-            const newPoId = generatePurchaseOrderId(purchaseOrders, entityShortCode);
-            newPoIds.push(newPoId);
+            const existingDraftPO = jobPOs.find(po => po.status === 'Draft' && (po.supplierId === supplierId || (supplierId === 'UNKNOWN' && !po.supplierId)));
 
-            const poLineItems: T.PurchaseOrderLineItem[] = items.map(item => {
-                const newPoLineItemId = crypto.randomUUID();
-                
-                const originalIndex = updatedLineItems.findIndex(li => li.id === item.lineItem.id);
-                if (originalIndex !== -1) {
-                    updatedLineItems[originalIndex] = {
-                        ...updatedLineItems[originalIndex],
-                        purchaseOrderLineItemId: newPoLineItemId
+            if (existingDraftPO) {
+                const newPoLineItems: T.PurchaseOrderLineItem[] = items.map(item => {
+                    const newPoLineItemId = crypto.randomUUID();
+                    const part = parts.find(p => p.id === item.partId!)!;
+
+                    const originalIndex = updatedLineItems.findIndex(li => li.id === item.id);
+                    if (originalIndex !== -1) {
+                        updatedLineItems[originalIndex] = { ...updatedLineItems[originalIndex], purchaseOrderLineItemId: newPoLineItemId };
+                    }
+
+                    return {
+                        id: newPoLineItemId,
+                        partNumber: part.partNumber,
+                        description: part.description,
+                        quantity: item.quantity,
+                        unitPrice: part.costPrice,
+                        taxCodeId: part.taxCodeId,
+                        jobLineItemId: item.id,
                     };
-                }
-                
-                return {
-                    id: newPoLineItemId,
-                    partNumber: item.part.partNumber,
-                    description: item.part.description,
-                    quantity: item.lineItem.quantity,
-                    unitPrice: item.part.costPrice,
-                    taxCodeId: item.part.taxCodeId,
-                    jobLineItemId: item.lineItem.id,
-                };
-            });
+                });
 
-            const newPo: T.PurchaseOrder = {
-                id: newPoId,
-                entityId: editableJob.entityId,
-                supplierId: supplierId === 'UNKNOWN' ? null : supplierId,
-                orderDate: formatDate(new Date()),
-                status: 'Draft',
-                jobId: editableJob.id,
-                vehicleRegistrationRef: vehicle.registration,
-                lineItems: poLineItems,
-                notes: `Generated from Job #${editableJob.id}`
-            };
-            newPOs.push(newPo);
+                const updatedPO = {
+                    ...existingDraftPO,
+                    lineItems: [...(existingDraftPO.lineItems || []), ...newPoLineItems]
+                };
+                posToUpdate.push(updatedPO);
+
+            } else {
+                const newPoId = generatePurchaseOrderId(purchaseOrders.concat(newPOs), entityShortCode);
+                newPoIdsToLink.push(newPoId);
+
+                const poLineItems: T.PurchaseOrderLineItem[] = items.map(item => {
+                    const newPoLineItemId = crypto.randomUUID();
+                    const part = parts.find(p => p.id === item.partId!)!;
+
+                    const originalIndex = updatedLineItems.findIndex(li => li.id === item.id);
+                    if (originalIndex !== -1) {
+                        updatedLineItems[originalIndex] = { ...updatedLineItems[originalIndex], purchaseOrderLineItemId: newPoLineItemId };
+                    }
+
+                    return {
+                        id: newPoLineItemId,
+                        partNumber: part.partNumber,
+                        description: part.description,
+                        quantity: item.quantity,
+                        unitPrice: part.costPrice,
+                        taxCodeId: part.taxCodeId,
+                        jobLineItemId: item.id,
+                    };
+                });
+
+                const newPo: T.PurchaseOrder = {
+                    id: newPoId,
+                    entityId: editableJob.entityId,
+                    supplierId: supplierId === 'UNKNOWN' ? null : supplierId,
+                    orderDate: formatDate(new Date()),
+                    status: 'Draft',
+                    jobId: editableJob.id,
+                    vehicleRegistrationRef: vehicle.registration,
+                    lineItems: poLineItems,
+                    notes: `Generated from Job #${editableJob.id}`
+                };
+                newPOs.push(newPo);
+            }
         });
 
-        if (newPOs.length > 0) {
+        const allPOsToSave = [...newPOs, ...posToUpdate];
 
-            const poSavePromises = newPOs.map(po => handleSaveItem(data.setPurchaseOrders, po, 'brooks_purchaseOrders'));
+        if (allPOsToSave.length > 0) {
+            const poSavePromises = allPOsToSave.map(po => handleSaveItem(data.setPurchaseOrders, po, 'brooks_purchaseOrders'));
             await Promise.all(poSavePromises);
 
             const newEstimateState = { ...editableEstimate, lineItems: updatedLineItems };
             setEditableEstimate(newEstimateState);
             await handleSaveItem(setEstimates, newEstimateState, 'brooks_estimates');
-            
-            setEditableJob(prev => {
-                if (!prev) return null;
-                const updatedJob = {
-                    ...prev,
-                    purchaseOrderIds: [...(prev.purchaseOrderIds || []), ...newPoIds]
-                };
-                handleSaveItem(setJobs, updatedJob, 'brooks_jobs');
-                return updatedJob;
-            });
+
+            if (newPoIdsToLink.length > 0) {
+                setEditableJob(prev => {
+                    if (!prev) return null;
+                    const updatedJob = {
+                        ...prev,
+                        purchaseOrderIds: [...(prev.purchaseOrderIds || []), ...newPoIdsToLink]
+                    };
+                    return updatedJob;
+                });
+            }
         }
 
         setConfirmation({
             isOpen: true,
-            title: 'Purchase Orders Created',
-            message: `${newPOs.length} purchase order(s) have been created in Draft status. You can review and edit them from the "Linked Purchase Orders" section.`,
+            title: 'Purchase Orders Updated',
+            message: `${newPOs.length} new purchase order(s) created and ${posToUpdate.length} existing draft PO(s) updated.`,
             type: 'success',
         });
     }, [editableJob, editableEstimate, vehicle, parts, businessEntities, purchaseOrders, generatePurchaseOrderId, handleSaveItem, data.setPurchaseOrders, setJobs, setEstimates, setConfirmation]);
@@ -507,6 +540,7 @@ const EditJobModal: React.FC<{
         handleLineItemChange(lineItemId, 'unitCost', part.costPrice);
         handleLineItemChange(lineItemId, 'partId', part.id);
         handleLineItemChange(lineItemId, 'taxCodeId', part.taxCodeId || standardTaxRateId);
+        handleLineItemChange(lineItemId, 'supplierId', part.defaultSupplierId); 
         
         const fromStock = part.isStockItem && part.stockQuantity > 0;
         handleLineItemChange(lineItemId, 'fromStock', fromStock);
