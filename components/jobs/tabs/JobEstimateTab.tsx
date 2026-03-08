@@ -6,11 +6,47 @@ import SearchableSelect from '../../SearchableSelect';
 import { getScoredServicePackages } from '../../../utils/servicePackageScoring';
 import SupplierSelectionModal from '../../SupplierSelectionModal';
 
-// Reusable Row Component within the tab
+
+const PartsStatusBadge: React.FC<{ status: string }> = ({ status }) => {
+    const statusStyles: { [key: string]: string } = {
+        'Not Required': 'bg-gray-100 text-gray-800',
+        'Awaiting Parts': 'bg-yellow-100 text-yellow-800',
+        'Awaiting Order': 'bg-orange-100 text-orange-800',
+        'Ordered': 'bg-blue-100 text-blue-800',
+        'Partially Received': 'bg-indigo-100 text-indigo-800',
+        'Fully Received': 'bg-green-100 text-green-800',
+    };
+
+    return (
+        <span className={`px-3 py-1 text-sm font-bold rounded-full ${statusStyles[status] || 'bg-gray-200'}`}>
+            {status}
+        </span>
+    );
+};
+
+const LineItemPOStatusBadge: React.FC<{ status: string }> = ({ status }) => {
+    const statusStyles: { [key: string]: string } = {
+        'From Stock': 'bg-green-100 text-green-800',
+        'To Order': 'bg-red-100 text-red-800',
+        'Awaiting Order': 'bg-orange-100 text-orange-800',
+        'Ordered': 'bg-blue-100 text-blue-800',
+        'Partially Received': 'bg-indigo-100 text-indigo-800',
+        'Received': 'bg-teal-100 text-teal-800',
+        'PO Linked': 'bg-gray-100 text-gray-800',
+    };
+
+    return (
+        <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${statusStyles[status] || 'bg-gray-200'}`}>
+            {status}
+        </span>
+    );
+};
+
 interface EditableLineItemRowProps {
     item: EstimateLineItem;
     taxRates: TaxRate[];
     suppliers: Supplier[];
+    purchaseOrders: PurchaseOrder[];
     filteredParts: Part[];
     activePartSearch: string | null;
     onLineItemChange: (id: string, field: keyof EstimateLineItem, value: any) => void;
@@ -27,14 +63,35 @@ interface EditableLineItemRowProps {
 
 const MemoizedEditableLineItemRow = React.memo(({ 
     item, taxRates, onLineItemChange, onRemoveLineItem, filteredParts, activePartSearch, onPartSearchChange, onSetActivePartSearch, onSelectPart, 
-    isReadOnly, canViewPricing, onManageMedia, onAddNewPart, suppliers, onOpenSupplierSelection 
+    isReadOnly, canViewPricing, onManageMedia, onAddNewPart, suppliers, onOpenSupplierSelection, purchaseOrders 
 }: EditableLineItemRowProps) => {
     const isPackageComponent = item.isPackageComponent;
     const isPackageHeader = !!item.servicePackageId && !item.isPackageComponent;
 
-    const showStockStatus = useMemo(() => {
-        return !item.isLabor && !isPackageHeader;
-    }, [item.isLabor, isPackageHeader]);
+    const lineItemStatus = useMemo(() => {
+        if (item.isLabor || isPackageHeader) return null;
+        if (item.fromStock) return 'From Stock';
+
+        if (item.purchaseOrderLineItemId) {
+            for (const po of purchaseOrders) {
+                if (po.lineItems.some(li => li.id === item.purchaseOrderLineItemId)) {
+                    switch (po.status) {
+                        case 'Draft': return 'Awaiting Order';
+                        case 'Ordered': return 'Ordered';
+                        case 'Partially Received': return 'Partially Received';
+                        case 'Received':
+                        case 'Finalized': return 'Received';
+                        default: return 'PO Linked';
+                    }
+                }
+            }
+        }
+        
+        if (item.partId) return 'To Order';
+
+        return null;
+
+    }, [item, purchaseOrders, isPackageHeader]);
 
     const supplierShortCode = useMemo(() => {
         if (item.isLabor) return 'N/A';
@@ -90,12 +147,8 @@ const MemoizedEditableLineItemRow = React.memo(({
                     )}
                 </div>
             </div>
-             <div className="col-span-1 text-xs text-center p-1 rounded">
-                {showStockStatus && (
-                    <span className={item.fromStock ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}>
-                        {item.fromStock ? 'FROM STOCK' : 'TO ORDER'}
-                    </span>
-                )}
+             <div className="col-span-1 text-xs text-center">
+                {lineItemStatus && <LineItemPOStatusBadge status={lineItemStatus} />}
             </div>
             <input type="number" step="0.1" value={item.quantity} onChange={e => onLineItemChange(item.id, 'quantity', e.target.value)} className="col-span-1 p-1 border rounded text-right disabled:bg-gray-200" disabled={isReadOnly || isPackageHeader} />
             
@@ -167,7 +220,6 @@ interface JobEstimateTabProps {
     vatBreakdown: any[];
     grandTotal: number;
     currentJobHours: number;
-    onChange: (e: React.ChangeEvent<HTMLSelectElement>) => void;
     onOpenPurchaseOrder: (po: PurchaseOrder) => void;
     onCreateEstimate: () => void;
     onRaiseSupplementaryEstimate: () => void;
@@ -188,7 +240,7 @@ interface JobEstimateTabProps {
 export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
     partsStatus, purchaseOrderIds, purchaseOrders, supplierMap, editableEstimate, supplementaryEstimates,
     estimateBreakdown, isReadOnly, canViewPricing, taxRates, filteredParts, activePartSearch, servicePackages,
-    totalNet, vatBreakdown, grandTotal, currentJobHours, onChange, onOpenPurchaseOrder, onCreateEstimate, onRaiseSupplementaryEstimate, onViewEstimate,
+    totalNet, vatBreakdown, grandTotal, currentJobHours, onOpenPurchaseOrder, onCreateEstimate, onRaiseSupplementaryEstimate, onViewEstimate,
     onAddLineItem, onAddPackage, onLineItemChange, onRemoveLineItem, onPartSearchChange, onSetActivePartSearch, onSelectPart, onManageMedia,
     vehicle, onAddNewPart, suppliers, onRaisePurchaseOrders
 }) => {
@@ -241,23 +293,18 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
     return (
         <div className="space-y-4 text-sm">
             <div className="flex justify-between items-center bg-gray-100 p-3 rounded-lg border border-gray-200">
-                <div className="flex items-center gap-2">
-                    <Clock size={18} className="text-indigo-600"/>
-                    <span className="font-semibold text-gray-700">Total Job Hours:</span>
+                <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2">
+                        <Clock size={18} className="text-indigo-600"/>
+                        <span className="font-semibold text-gray-700">Total Job Hours:</span>
+                        <span className="font-bold text-lg text-indigo-700">{currentJobHours.toFixed(1)} hrs</span>
+                    </div>
+                    <div className="border-l-2 border-gray-300 h-8"></div>
+                    <div className="flex items-center gap-2">
+                        <span className="font-semibold text-gray-700">Parts Status:</span>
+                        <PartsStatusBadge status={partsStatus} />
+                    </div>
                 </div>
-                <span className="font-bold text-lg text-indigo-700">{currentJobHours.toFixed(1)} hrs</span>
-            </div>
-
-            <div>
-                <label className="font-semibold">Parts Status</label>
-                <select name="partsStatus" value={partsStatus || 'Not Required'} onChange={onChange} className="w-full p-2 border rounded bg-white mt-1" disabled={isReadOnly}>
-                    <option>Not Required</option>
-                    <option>Awaiting Parts</option>
-                    <option>Awaiting Order</option>
-                    <option>Ordered</option>
-                    <option>Partially Received</option>
-                    <option>Fully Received</option>
-                </select>
             </div>
             
             {supplementaryEstimates.length > 0 && (
@@ -312,7 +359,7 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
                     <div className="space-y-2">
                         <div className="hidden lg:grid grid-cols-12 gap-2 text-xs text-gray-500 font-medium px-2">
                             <div className="col-span-6">Part / Description</div>
-                            <div className="col-span-1 text-center">Stock Status</div>
+                            <div className="col-span-1 text-center">Line Status</div>
                             <div className="col-span-1 text-right">Qty/Hrs</div>
                             {canViewPricing ? (
                                 <div className="col-span-1 text-right">Sell</div>
@@ -332,6 +379,7 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
                                     item={header} 
                                     taxRates={taxRates} 
                                     suppliers={suppliers}
+                                    purchaseOrders={purchaseOrders}
                                     onLineItemChange={onLineItemChange} 
                                     onRemoveLineItem={onRemoveLineItem} 
                                     filteredParts={filteredParts} 
@@ -352,6 +400,7 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
                                             item={child} 
                                             taxRates={taxRates} 
                                             suppliers={suppliers}
+                                            purchaseOrders={purchaseOrders}
                                             onLineItemChange={onLineItemChange} 
                                             onRemoveLineItem={onRemoveLineItem} 
                                             filteredParts={filteredParts} 
@@ -369,10 +418,10 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
                         ))}
                         
                         {estimateBreakdown.standaloneLabor.length > 0 && <h5 className="font-bold text-gray-800 text-xs uppercase pt-2">Labor</h5>}
-                        {estimateBreakdown.standaloneLabor.map((item: any) => <MemoizedEditableLineItemRow key={item.id} canViewPricing={canViewPricing} isReadOnly={isReadOnly} item={item} taxRates={taxRates} suppliers={suppliers} onLineItemChange={onLineItemChange} onRemoveLineItem={onRemoveLineItem} filteredParts={filteredParts} activePartSearch={activePartSearch} onPartSearchChange={onPartSearchChange} onSetActivePartSearch={onSetActivePartSearch} onSelectPart={onSelectPart} onManageMedia={onManageMedia} onAddNewPart={onAddNewPart} onOpenSupplierSelection={openSupplierSelection}/>)}
+                        {estimateBreakdown.standaloneLabor.map((item: any) => <MemoizedEditableLineItemRow key={item.id} canViewPricing={canViewPricing} isReadOnly={isReadOnly} item={item} taxRates={taxRates} suppliers={suppliers} purchaseOrders={purchaseOrders} onLineItemChange={onLineItemChange} onRemoveLineItem={onRemoveLineItem} filteredParts={filteredParts} activePartSearch={activePartSearch} onPartSearchChange={onPartSearchChange} onSetActivePartSearch={onSetActivePartSearch} onSelectPart={onSelectPart} onManageMedia={onManageMedia} onAddNewPart={onAddNewPart} onOpenSupplierSelection={openSupplierSelection}/>)}
                         
                         {estimateBreakdown.standaloneParts.length > 0 && <h5 className="font-bold text-gray-800 text-xs uppercase pt-2">Parts</h5>}
-                        {estimateBreakdown.standaloneParts.map((item: any) => <MemoizedEditableLineItemRow key={item.id} canViewPricing={canViewPricing} isReadOnly={isReadOnly} item={item} taxRates={taxRates} suppliers={suppliers} onLineItemChange={onLineItemChange} onRemoveLineItem={onRemoveLineItem} filteredParts={filteredParts} activePartSearch={activePartSearch} onPartSearchChange={onPartSearchChange} onSetActivePartSearch={onSetActivePartSearch} onSelectPart={onSelectPart} onManageMedia={onManageMedia} onAddNewPart={onAddNewPart} onOpenSupplierSelection={openSupplierSelection}/>)}
+                        {estimateBreakdown.standaloneParts.map((item: any) => <MemoizedEditableLineItemRow key={item.id} canViewPricing={canViewPricing} isReadOnly={isReadOnly} item={item} taxRates={taxRates} suppliers={suppliers} purchaseOrders={purchaseOrders} onLineItemChange={onLineItemChange} onRemoveLineItem={onRemoveLineItem} filteredParts={filteredParts} activePartSearch={activePartSearch} onPartSearchChange={onPartSearchChange} onSetActivePartSearch={onSetActivePartSearch} onSelectPart={onSelectPart} onManageMedia={onManageMedia} onAddNewPart={onAddNewPart} onOpenSupplierSelection={openSupplierSelection}/>)}
                         
                          {!isReadOnly && (
                             <div className="flex justify-between items-center pt-4 mt-4 border-t">

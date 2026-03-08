@@ -178,16 +178,43 @@ const EditJobModal: React.FC<{
             if (!jobCopy.inspectionChecklist) jobCopy.inspectionChecklist = [];
             if (!jobCopy.tyreCheck) jobCopy.tyreCheck = JSON.parse(JSON.stringify(initialTyreCheckData));
             if (!jobCopy.damagePoints) jobCopy.damagePoints = [];
+
+            let currentEstimate = mainEstimate ? JSON.parse(JSON.stringify(mainEstimate)) : null;
+
+            // Healing logic for legacy data
+            if (currentEstimate && Array.isArray(currentEstimate.lineItems) && Array.isArray(purchaseOrders)) {
+                const jobPOs = purchaseOrders.filter(po => po.jobId === job.id);
+                if (jobPOs.length > 0) {
+                    let hasBeenUpdated = false;
+                    const updatedLineItems = currentEstimate.lineItems.map((estLi: T.EstimateLineItem) => {
+                        if (estLi.purchaseOrderLineItemId || estLi.fromStock || estLi.isLabor) {
+                            return estLi;
+                        }
+
+                        for (const po of jobPOs) {
+                            const matchingPoLi = (po.lineItems || []).find(poLi => poLi.jobLineItemId === estLi.id);
+                            if (matchingPoLi) {
+                                hasBeenUpdated = true;
+                                return { ...estLi, purchaseOrderLineItemId: matchingPoLi.id };
+                            }
+                        }
+                        return estLi;
+                    });
+
+                    if (hasBeenUpdated) {
+                        currentEstimate = { ...currentEstimate, lineItems: updatedLineItems };
+                    }
+                }
+            }
+
             setEditableJob(jobCopy);
-            
-            const currentEstimate = mainEstimate ? JSON.parse(JSON.stringify(mainEstimate)) : null;
             setEditableEstimate(currentEstimate);
             setActiveTab('estimate');
         } else {
             setEditableJob(null);
             setEditableEstimate(null);
         }
-    }, [job, isOpen, mainEstimate]);
+    }, [job, isOpen, mainEstimate, purchaseOrders]);
 
     const isReadOnly = !!editableJob?.invoiceId;
 
@@ -577,43 +604,49 @@ const EditJobModal: React.FC<{
     const engineerMap = useMemo(() => new Map((Array.isArray(engineers) ? engineers : []).map(e => [e.id, e.name])), [engineers]);
 
     const derivedPartsStatus = useMemo(() => {
-        if (!job) return 'Not Required';
-        const poIds = job.purchaseOrderIds || [];
-        const hasPartsOnEstimate = (editableEstimate?.lineItems || []).some(li => !li.isLabor && (li.partId || li.partNumber));
+        const hasPartsOnEstimate = (editableEstimate?.lineItems || []).some(li => !li.isLabor && !li.isPackageComponent && (li.partId || li.partNumber));
     
-        if (poIds.length === 0) {
-            return hasPartsOnEstimate ? 'Awaiting Parts' : 'Not Required';
+        if (!hasPartsOnEstimate) {
+            return 'Not Required';
         }
-    
+
+        const poIds = editableJob?.purchaseOrderIds || [];
         const relatedPOs = purchaseOrders.filter(po => poIds.includes(po.id));
-    
+
         if (relatedPOs.length === 0) {
-            return hasPartsOnEstimate ? 'Awaiting Parts' : 'Not Required';
+            const needsOrdering = (editableEstimate?.lineItems || []).some(li => !li.isLabor && !li.isPackageComponent && !li.fromStock);
+            return needsOrdering ? 'Awaiting Parts' : 'Not Required';
         }
         
-        const allCompleted = relatedPOs.every(po => po.status === 'Received' || po.status === 'Finalized');
-        if (allCompleted) {
+        const needsNewPO = (editableEstimate?.lineItems || []).some(li => !li.isLabor && !li.isPackageComponent && !li.fromStock && !li.purchaseOrderLineItemId);
+        const allPOsCompleted = relatedPOs.every(po => po.status === 'Received' || po.status === 'Finalized');
+
+        if (allPOsCompleted && !needsNewPO) {
             return 'Fully Received';
         }
 
-        const anyReceived = relatedPOs.some(po => po.status === 'Received' || po.status === 'Finalized' || po.status === 'Partially Received');
-        if (anyReceived) {
+        const anyPOReceived = relatedPOs.some(po => po.status === 'Received' || po.status === 'Finalized' || po.status === 'Partially Received');
+        if (anyPOReceived || (allPOsCompleted && needsNewPO)) {
             return 'Partially Received';
         }
     
-        const anySent = relatedPOs.some(po => po.status === 'Ordered');
-        if (anySent) {
+        const anyPOOrdered = relatedPOs.some(po => po.status === 'Ordered');
+        if (anyPOOrdered) {
             return 'Ordered';
         }
         
-        return 'Awaiting Order';
-    }, [job, purchaseOrders, editableEstimate]);
+        if (poIds.length > 0) {
+            return 'Awaiting Order';
+        }
+
+        return 'Awaiting Parts';
+    }, [editableJob, purchaseOrders, editableEstimate]);
 
     useEffect(() => {
         if (editableJob && derivedPartsStatus !== editableJob.partsStatus) {
             setEditableJob(prev => prev ? { ...prev, partsStatus: derivedPartsStatus } : null);
         }
-    }, [derivedPartsStatus, editableJob]);
+    }, [derivedPartsStatus, editableJob?.partsStatus]);
 
 
     const handleSaveMain = async () => {
@@ -698,7 +731,6 @@ const EditJobModal: React.FC<{
                         vatBreakdown={vatBreakdown}
                         grandTotal={grandTotal}
                         currentJobHours={editableJob.estimatedHours || 0}
-                        onChange={handleChange}
                         onOpenPurchaseOrder={(stalePo: T.PurchaseOrder) => {
                             const freshPo = purchaseOrders.find(p => p.id === stalePo.id);
                             if (freshPo) {
