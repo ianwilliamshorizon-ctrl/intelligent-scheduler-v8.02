@@ -31,36 +31,41 @@ const TyreCheck: React.FC<TyreCheckProps> = ({ tyreData, onUpdate, isReadOnly })
     };
     
     return (
-        <div className="border rounded-lg bg-white overflow-hidden">
+        <div className="border rounded-lg bg-white overflow-hidden avoid-break">
             <h3 className="text-md font-bold p-3 bg-gray-100 border-b">Tyre Report</h3>
             <div className="divide-y">
                 {Object.keys(tyreLabels).map(loc => {
                     const location = loc as TyreLocation;
                     const data = tyreData[location];
+                    if (!data) return null; 
+
+                    const hasTreadData = data.outer || data.middle || data.inner;
+                    if (isReadOnly && data.indicator === 'na' && !hasTreadData && !data.pressure && !data.comments) return null;
+
                     return (
-                        <div key={location} className="p-3 grid grid-cols-12 gap-x-4 gap-y-2 items-center">
-                            <h4 className="col-span-12 md:col-span-2 font-semibold text-sm">{tyreLabels[location]}</h4>
+                        <div key={location} className="p-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+                            <h4 className="w-full sm:w-48 font-semibold text-sm flex-shrink-0">{tyreLabels[location]}</h4>
                             
-                            <div className="col-span-12 md:col-span-3">
-                                <label className="text-xs text-gray-500">Tread Depth (mm)</label>
+                            <div style={{ width: '190px' }}>
+                                <label className="text-xs text-gray-500">Tread Depth (mm): O | M | I</label>
                                 <div className="flex gap-2">
-                                    <input type="number" step="0.1" value={data.outer ?? ''} onChange={e => handleUpdate(location, 'outer', e.target.value)} placeholder="Outer" className="w-1/3 p-1 border rounded text-xs" disabled={isReadOnly} />
-                                    <input type="number" step="0.1" value={data.middle ?? ''} onChange={e => handleUpdate(location, 'middle', e.target.value)} placeholder="Middle" className="w-1/3 p-1 border rounded text-xs" disabled={isReadOnly} />
-                                    <input type="number" step="0.1" value={data.inner ?? ''} onChange={e => handleUpdate(location, 'inner', e.target.value)} placeholder="Inner" className="w-1/3 p-1 border rounded text-xs" disabled={isReadOnly} />
+                                    <input type="number" step="0.1" value={data.outer ?? ''} onChange={e => handleUpdate(location, 'outer', e.target.value)} placeholder="O" className="w-1/3 p-1 border rounded text-xs text-center" disabled={isReadOnly} />
+                                    <input type="number" step="0.1" value={data.middle ?? ''} onChange={e => handleUpdate(location, 'middle', e.target.value)} placeholder="M" className="w-1/3 p-1 border rounded text-xs text-center" disabled={isReadOnly} />
+                                    <input type="number" step="0.1" value={data.inner ?? ''} onChange={e => handleUpdate(location, 'inner', e.target.value)} placeholder="I" className="w-1/3 p-1 border rounded text-xs text-center" disabled={isReadOnly} />
                                 </div>
                             </div>
                             
-                            <div className="col-span-6 md:col-span-1">
+                            <div className="w-24">
                                 <label className="text-xs text-gray-500">Pressure</label>
                                 <input type="number" value={data.pressure ?? ''} onChange={e => handleUpdate(location, 'pressure', e.target.value)} placeholder="PSI" className="w-full p-1 border rounded text-xs" disabled={isReadOnly} />
                             </div>
 
-                             <div className="col-span-12 md:col-span-3">
+                             <div className="flex-grow sm:flex-grow-0" style={{ minWidth: '200px' }}>
                                 <label className="text-xs text-gray-500">Comments</label>
                                 <input type="text" value={data.comments || ''} onChange={e => handleUpdate(location, 'comments', e.target.value)} className="w-full p-1 border rounded text-xs" disabled={isReadOnly} />
                             </div>
 
-                            <div className="col-span-6 md:col-span-3 flex items-center justify-end gap-1">
+                            <div className="w-full sm:w-auto flex items-center justify-end gap-1 sm:ml-auto">
                                 {Object.keys(statusConfig).map(s => {
                                     const status = s as ChecklistItemStatus;
                                     const config = statusConfig[status];

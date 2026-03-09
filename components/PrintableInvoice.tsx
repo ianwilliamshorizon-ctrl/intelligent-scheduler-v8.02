@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Invoice, Customer, Vehicle, BusinessEntity, Job, TaxRate, EstimateLineItem, ChecklistSection, ServicePackage } from '../types';
+import { Invoice, Customer, Vehicle, BusinessEntity, Job, TaxRate, EstimateLineItem, ChecklistSection, ServicePackage, InspectionTemplate } from '../types';
 import { formatCurrency } from '../core/utils/formatUtils';
 import InspectionChecklist from './InspectionChecklist';
 import VehicleDamageReport from './VehicleDamageReport';
@@ -14,9 +14,19 @@ interface PrintableInvoiceProps {
     job?: Job | null;
     taxRates: TaxRate[];
     servicePackages: ServicePackage[];
+    inspectionTemplates: InspectionTemplate[];
 }
 
-const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, customer, vehicle, entity, job, taxRates, servicePackages }) => {
+const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, customer, vehicle, entity, job, taxRates, servicePackages, inspectionTemplates }) => {
+
+    const inspectionTemplate = useMemo(() => {
+        if (!job?.inspectionTemplateId || !inspectionTemplates) return null;
+        return inspectionTemplates.find(t => t.id === job.inspectionTemplateId);
+    }, [job?.inspectionTemplateId, inspectionTemplates]);
+
+    const inspectionTitle = useMemo(() => {
+        return inspectionTemplate?.name ?? 'Inspection Report';
+    }, [inspectionTemplate]);
 
     const totals = useMemo(() => {
         if (!invoice) return { subtotal: 0, grandTotal: 0, vatBreakdown: [] };
@@ -95,30 +105,12 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, customer, 
 
     const hasTechnicianNotes = job && Array.isArray(job.technicianObservations) && job.technicianObservations.length > 0;
     
-    const inspectionGroups = useMemo(() => {
-        const checklist = Array.isArray(job?.inspectionChecklist) ? job.inspectionChecklist : [];
-        const result = { part1: [] as ChecklistSection[], part2: [] as ChecklistSection[], part3: [] as ChecklistSection[], part4: [] as ChecklistSection[] };
-        
-        checklist.forEach((s: ChecklistSection) => {
-            if (['section_interior_electrics', 'section_exterior'].includes(s.id)) result.part1.push(s);
-            else if (s.id === 'section_engine_compartment') result.part2.push(s);
-            else if (s.id === 'section_vehicle_below') result.part3.push(s);
-            else result.part4.push(s);
-        });
-        
-        return result;
-    }, [job?.inspectionChecklist]);
-
     const hasAnyInspectionData = job && (
         (Array.isArray(job.inspectionChecklist) && job.inspectionChecklist.some((s: any) => s.items?.some((i: any) => i.status !== 'na'))) ||
         (job.tyreCheck && Object.values(job.tyreCheck).some((t: any) => t.indicator !== 'na')) ||
         (Array.isArray(job.damagePoints) && job.damagePoints.length > 0)
     );
-
-    const hasPart1 = inspectionGroups.part1.length > 0;
-    const hasPart2 = inspectionGroups.part2.length > 0;
-    const hasPart3 = inspectionGroups.part3.length > 0;
-    const hasPart4 = inspectionGroups.part4.length > 0 || (job && job.tyreCheck);
+    
     const hasDamageReport = job && Array.isArray(job.damagePoints) && job.damagePoints.length > 0;
 
     const pageStyle = {
@@ -139,6 +131,15 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, customer, 
              </div>
         </div>
     );
+
+    const inspectionSections = useMemo(() => {
+        if (!job?.inspectionChecklist) return [];
+        const templateSections = inspectionTemplate?.sections || [];
+        return job.inspectionChecklist.map(section => ({
+            ...section,
+            pageBreakBefore: templateSections.find(t => t.id === section.id)?.pageBreakBefore || false
+        }));
+    }, [job?.inspectionChecklist, inspectionTemplate]);
 
     return (
         <div className="bg-gray-100 font-sans text-sm text-gray-800">
@@ -279,44 +280,31 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, customer, 
                 </div>
             )}
 
-            {hasAnyInspectionData && hasPart1 && (
-                <div className="printable-page pdf-page-section" style={{ ...pageStyle, pageBreakBefore: 'always', breakBefore: 'page' }}>
-                    {renderHeader('Inspection: Interior & Exterior')}
-                    <section><InspectionChecklist checklistData={inspectionGroups.part1} onUpdate={()=>{}} isReadOnly={true} /></section>
-                </div>
+            {hasAnyInspectionData && inspectionSections.length > 0 && (
+                <React.Fragment>
+                    {inspectionSections.map((section, index) => (
+                        <div key={section.id} className="printable-page pdf-page-section" style={{ ...pageStyle, ...(section.pageBreakBefore && { pageBreakBefore: 'always', breakBefore: 'page', marginTop: '30mm' }) }}>
+                            {renderHeader(`${inspectionTitle}: ${section.title}`)}
+                            <section>
+                                <InspectionChecklist checklistData={[section]} onUpdate={() => { }} isReadOnly={true} />
+                            </section>
+                        </div>
+                    ))}
+                </React.Fragment>
             )}
 
-            {hasAnyInspectionData && hasPart2 && (
-                <div className="printable-page pdf-page-section" style={{ ...pageStyle, pageBreakBefore: 'always', breakBefore: 'page' }}>
-                    {renderHeader('Inspection: Engine Compartment')}
-                    <section><InspectionChecklist checklistData={inspectionGroups.part2} onUpdate={()=>{}} isReadOnly={true} /></section>
-                </div>
-            )}
-
-            {hasAnyInspectionData && hasPart3 && (
-                <div className="printable-page pdf-page-section" style={{ ...pageStyle, pageBreakBefore: 'always', breakBefore: 'page' }}>
-                    {renderHeader('Inspection: Underbody')}
-                    <section><InspectionChecklist checklistData={inspectionGroups.part3} onUpdate={()=>{}} isReadOnly={true} /></section>
-                </div>
-            )}
-
-            {hasAnyInspectionData && hasPart4 && (
-                <div className="printable-page pdf-page-section" style={{ ...pageStyle, pageBreakBefore: 'always', breakBefore: 'page' }}>
-                    {renderHeader('Inspection: Final Checks & Tyres')}
+            {job?.tyreCheck && (
+                <div className="printable-page pdf-page-section" style={{ ...pageStyle, pageBreakBefore: 'always', breakBefore: 'page', marginTop: '30mm' }}>
+                    {renderHeader(`${inspectionTitle}: Tyre Check`)}
                     <section>
-                        {inspectionGroups.part4.length > 0 && (
-                            <div className="mb-6"><InspectionChecklist checklistData={inspectionGroups.part4} onUpdate={()=>{}} isReadOnly={true} /></div>
-                        )}
-                        {job.tyreCheck && (
-                            <div className="mb-6 page-break-inside-avoid"><TyreCheck tyreData={job.tyreCheck} onUpdate={()=>{}} isReadOnly={true} /></div>
-                        )}
+                        <div className="mb-6 page-break-inside-avoid"><TyreCheck tyreData={job.tyreCheck} onUpdate={()=>{}} isReadOnly={true} /></div>
                     </section>
                 </div>
             )}
 
             {hasDamageReport && (
-                 <div className="printable-page pdf-page-section" style={{ ...pageStyle, pageBreakBefore: 'always', breakBefore: 'page' }}>
-                    {renderHeader('Inspection: Bodywork Report')}
+                 <div className="printable-page pdf-page-section" style={{ ...pageStyle, pageBreakBefore: 'always', breakBefore: 'page', marginTop: '30mm' }}>
+                    {renderHeader(`${inspectionTitle}: Bodywork Report`)}
                     <section>
                         <div className="mb-6 break-inside-avoid page-break-inside-avoid">
                             <h4 className="font-bold text-gray-600 mb-2 ml-1">Bodywork Inspection</h4>

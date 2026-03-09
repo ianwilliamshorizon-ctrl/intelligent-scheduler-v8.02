@@ -97,7 +97,7 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
         setEstimates, setInvoices, setStorageBookings, setRentalBookings, 
         setSaleVehicles, setProspects, setInquiries, setParts,
         saleOverheadPackages, inquiries, batteryChargers, lifts,discountCodes,
-        forceRefresh
+        inspectionTemplates, forceRefresh
     } = useData();
     
     const { currentUser, selectedEntityId, confirmation, setConfirmation, users } = useApp();
@@ -263,6 +263,7 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                     job={jobs.find(j => j.id === modals.viewInvoiceModal.invoice!.jobId)}
                     taxRates={taxRates}
                     servicePackages={servicePackages}
+                    inspectionTemplates={inspectionTemplates}
                     onUpdateInvoice={(inv) => handleSaveItem(setInvoices, inv, 'brooks_invoices')}
                     onInvoiceAction={(id) => actions.handleMarkJobAsAwaitingCollection(id)}
                 />

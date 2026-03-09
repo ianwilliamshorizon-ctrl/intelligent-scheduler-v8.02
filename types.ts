@@ -173,6 +173,7 @@ export interface ChecklistSection {
     title: string;
     items: ChecklistItem[];
     comments?: string;
+    pageBreakBefore?: boolean;
 }
 
 export type TyreLocation = 'frontLeft' | 'frontRight' | 'rearLeft' | 'rearRight' | 'spare';
@@ -260,6 +261,7 @@ export interface EstimateLineItem {
     supplierId?: string;
     preCalculatedVat?: number;
     purchaseOrderLineItemId?: string;
+    order?: number;
 }
 
 export interface Estimate {
@@ -681,6 +683,7 @@ export interface InspectionSectionTemplate {
     id: string;
     title: string;
     items: InspectionItemTemplate[];
+    pageBreakBefore?: boolean;
 }
 
 export interface InspectionTemplate {

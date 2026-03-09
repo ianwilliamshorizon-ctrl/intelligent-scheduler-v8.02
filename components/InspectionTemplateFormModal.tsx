@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { InspectionTemplate, InspectionSectionTemplate, InspectionItemTemplate } from '../types';
 import FormModal from './FormModal';
-import { Plus, Trash2, GripVertical } from 'lucide-react';
+import { Plus, Trash2, GripVertical, FilePlus2 } from 'lucide-react';
 
 interface InspectionTemplateFormModalProps {
     isOpen: boolean;
@@ -15,12 +15,24 @@ const InspectionTemplateFormModal: React.FC<InspectionTemplateFormModalProps> = 
 
     useEffect(() => {
         if (isOpen) {
-            setFormData(template ? JSON.parse(JSON.stringify(template)) : {
-                name: '',
-                description: '',
-                isDefault: false,
-                sections: []
-            });
+            // When loading an existing template, ensure all sections have default values for new properties.
+            if (template) {
+                const initialData = JSON.parse(JSON.stringify(template));
+                if (initialData.sections && Array.isArray(initialData.sections)) {
+                    initialData.sections.forEach(section => {
+                        section.pageBreakBefore = section.pageBreakBefore || false;
+                    });
+                }
+                setFormData(initialData);
+            } else {
+                // Set up for a new template
+                setFormData({
+                    name: '',
+                    description: '',
+                    isDefault: false,
+                    sections: []
+                });
+            }
         }
     }, [isOpen, template]);
 
@@ -48,7 +60,8 @@ const InspectionTemplateFormModal: React.FC<InspectionTemplateFormModalProps> = 
         const newSection: InspectionSectionTemplate = {
             id: `sec_${Date.now()}`,
             title: '',
-            items: []
+            items: [],
+            pageBreakBefore: false, // Explicitly set default value
         };
         setFormData(prev => ({ ...prev, sections: [...(prev.sections || []), newSection] }));
     };
@@ -57,10 +70,10 @@ const InspectionTemplateFormModal: React.FC<InspectionTemplateFormModalProps> = 
         setFormData(prev => ({ ...prev, sections: (prev.sections || []).filter(s => s.id !== sectionId) }));
     };
 
-    const updateSectionTitle = (sectionId: string, title: string) => {
+    const updateSection = (sectionId: string, updatedValues: Partial<InspectionSectionTemplate>) => {
         setFormData(prev => ({
             ...prev,
-            sections: (prev.sections || []).map(s => s.id === sectionId ? { ...s, title } : s)
+            sections: (prev.sections || []).map(s => s.id === sectionId ? { ...s, ...updatedValues } : s)
         }));
     };
 
@@ -125,26 +138,36 @@ const InspectionTemplateFormModal: React.FC<InspectionTemplateFormModalProps> = 
                 {/* Section Builder */}
                 <div>
                     <div className="flex justify-between items-center mb-4">
-                        <h3 className="font-bold text-gray-800 flex items-center gap-2">
-                            Checklist Structure 
-                            <span className="text-xs font-normal text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">{(formData.sections || []).length} Sections</span>
-                        </h3>
+                        <h3 className="font-bold text-gray-800 flex items-center gap-2">Checklist Structure</h3>
                         <button type="button" onClick={addSection} className="flex items-center gap-1 text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 font-semibold shadow-sm transition-all">
                             <Plus size={14} /> Add New Section
                         </button>
                     </div>
 
                     <div className="space-y-4">
-                        {(formData.sections || []).map((section) => (
+                        {(formData.sections || []).map((section, index) => (
                             <div key={section.id} className="border border-gray-200 rounded-xl bg-white shadow-sm overflow-hidden">
                                 <div className="bg-gray-50 p-3 flex items-center gap-3 border-b border-gray-200">
-                                    <GripVertical size={16} className="text-gray-300" />
+                                    <GripVertical size={16} className="text-gray-400" />
                                     <input 
-                                        value={section.title} 
-                                        onChange={(e) => updateSectionTitle(section.id, e.target.value)}
-                                        className="font-bold bg-transparent border-b border-transparent focus:border-indigo-400 focus:outline-none px-1 flex-grow text-gray-800 placeholder:text-gray-300"
-                                        placeholder="Section Title (e.g., Exterior)"
+                                        value={section.title || ''} 
+                                        onChange={(e) => updateSection(section.id, { title: e.target.value })}
+                                        className="font-bold bg-transparent border-b border-transparent focus:border-indigo-400 focus:outline-none px-1 flex-grow text-gray-800 placeholder:text-gray-400"
+                                        placeholder={`Section ${index + 1} Title`}
                                     />
+                                    <div className="flex items-center gap-2 pr-2 border-r mr-2">
+                                        <input 
+                                            type="checkbox" 
+                                            id={`page-break-${section.id}`} 
+                                            checked={section.pageBreakBefore || false} 
+                                            onChange={(e) => updateSection(section.id, { pageBreakBefore: e.target.checked })}
+                                            className="h-4 w-4 text-indigo-600 rounded cursor-pointer"
+                                        />
+                                        <label htmlFor={`page-break-${section.id}`} className="text-xs text-gray-600 font-medium cursor-pointer flex items-center gap-1">
+                                            <FilePlus2 size={12} />
+                                            Page Break Before
+                                        </label>
+                                    </div>
                                     <button onClick={() => removeSection(section.id)} className="text-gray-400 hover:text-red-500 p-1.5 hover:bg-red-50 rounded-lg transition-colors">
                                         <Trash2 size={16}/>
                                     </button>
@@ -153,29 +176,29 @@ const InspectionTemplateFormModal: React.FC<InspectionTemplateFormModalProps> = 
                                     <div className="space-y-2">
                                         {section.items.map((item, idx) => (
                                             <div key={item.id} className="flex items-center gap-3 group">
-                                                <span className="text-[10px] font-bold text-gray-300 w-4">{idx + 1}</span>
+                                                <span className="text-xs font-semibold text-gray-400 w-5 text-right">{idx + 1}.</span>
                                                 <input 
-                                                    value={item.label} 
+                                                    value={item.label || ''} 
                                                     onChange={(e) => updateItemLabel(section.id, item.id, e.target.value)}
                                                     className="flex-grow p-2 border border-gray-200 rounded-lg text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-all"
-                                                    placeholder="Item to check..."
+                                                    placeholder="e.g., Check tyre pressures..."
                                                 />
-                                                <button onClick={() => removeItem(section.id, item.id)} className="text-gray-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100">
+                                                <button onClick={() => removeItem(section.id, item.id)} className="text-gray-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100">
                                                     <Trash2 size={14}/>
                                                 </button>
                                             </div>
                                         ))}
                                     </div>
-                                    <button type="button" onClick={() => addItem(section.id)} className="text-[11px] text-indigo-600 font-bold flex items-center gap-1 hover:text-indigo-800 px-7">
-                                        <Plus size={14} /> ADD CHECK ITEM
+                                    <button type="button" onClick={() => addItem(section.id)} className="text-xs text-indigo-600 font-bold flex items-center gap-1 hover:text-indigo-800 ml-8 mt-2">
+                                        <Plus size={14} /> Add Check Item
                                     </button>
                                 </div>
                             </div>
                         ))}
                         
                         {(!formData.sections || formData.sections.length === 0) && (
-                            <div className="text-center text-gray-400 py-12 border-2 border-dashed border-gray-100 rounded-xl">
-                                <p className="text-sm">Checklist is empty. Start by adding a section.</p>
+                            <div className="text-center text-gray-500 py-16 border-2 border-dashed border-gray-200 rounded-xl bg-gray-50">
+                                <p>This template is empty. Start by adding a section.</p>
                             </div>
                         )}
                     </div>

@@ -7,13 +7,14 @@ import AsyncImage from './AsyncImage';
 
 interface DamageMarkerProps {
     point: VehicleDamagePoint;
+    index: number;
     onUpdate?: (id: string, notes: string) => void;
     onRemove?: (id: string) => void;
     isReadOnly: boolean;
     colorClass: string;
 }
 
-const DamageMarker: React.FC<DamageMarkerProps> = ({ point, onUpdate, onRemove, isReadOnly, colorClass }) => {
+const DamageMarker: React.FC<DamageMarkerProps> = ({ point, index, onUpdate, onRemove, isReadOnly, colorClass }) => {
     const [isEditing, setIsEditing] = useState(point.notes === '' && !!onUpdate);
     const [notes, setNotes] = useState(point.notes);
     const inputRef = useRef<HTMLInputElement>(null);
@@ -23,24 +24,29 @@ const DamageMarker: React.FC<DamageMarkerProps> = ({ point, onUpdate, onRemove, 
         setIsEditing(false);
     };
 
+    const markerStyle: React.CSSProperties = {
+        left: `${point.x}%`,
+        top: `${point.y}%`,
+        transform: 'translate(-50%, -50%)'
+    };
+
     return (
-        <div className="absolute group" style={{ left: `${point.x}%`, top: `${point.y}%`, transform: 'translate(-50%, -50%)' }}>
-            <div className={`w-4 h-4 rounded-full border-2 border-white shadow-md ${colorClass} ${!isReadOnly && onUpdate ? 'cursor-pointer' : ''}`} onClick={() => !isReadOnly && onUpdate && setIsEditing(true)} />
+        <div className="absolute group" style={markerStyle}>
+            <div 
+                className={`w-6 h-6 rounded-full border-2 border-white shadow-md ${colorClass} flex items-center justify-center text-white font-bold text-xs`}
+                onClick={() => !isReadOnly && onUpdate && setIsEditing(true)}
+            >
+                {index + 1}
+            </div>
             
             {!isReadOnly && onRemove && (
                 <button 
                     type="button" 
                     onClick={(e) => { e.stopPropagation(); onRemove(point.id); }} 
-                    className="absolute -top-1.5 -right-1.5 opacity-0 group-hover:opacity-100 transition-opacity z-20"
+                    className="absolute -top-2 -right-2 opacity-0 group-hover:opacity-100 transition-opacity z-20"
                 >
-                    <XCircle size={18} className="text-red-600 bg-white rounded-full" />
+                    <XCircle size={20} className="text-red-600 bg-white rounded-full" />
                 </button>
-            )}
-            
-            {(point.notes && !isEditing) && (
-                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-xs bg-gray-800 text-white text-xs rounded py-1 px-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
-                    {point.notes}
-                </div>
             )}
             
             {isEditing && !isReadOnly && onUpdate && (
@@ -72,7 +78,6 @@ interface VehicleDamageReportProps {
     activeColorClass?: string;
 }
 
-
 const VehicleDamageReport: React.FC<VehicleDamageReportProps> = ({ activePoints, onUpdate, isReadOnly, vehicleModel, imageId, referencePoints, activeColorClass = 'bg-red-500' }) => {
     const containerRef = useRef<HTMLDivElement>(null);
 
@@ -100,33 +105,32 @@ const VehicleDamageReport: React.FC<VehicleDamageReportProps> = ({ activePoints,
         onUpdate(activePoints.filter(p => p.id !== id));
     };
     
-    const hasActiveNotes = activePoints.some(p => p.notes);
-    const hasReferenceNotes = referencePoints && referencePoints.points.some(p => p.notes);
+    const activeNotes = activePoints.filter(p => p.notes);
+    const referenceNotes = referencePoints ? referencePoints.points.filter(p => p.notes) : [];
 
     return (
-        <div className="space-y-4">
+        <div className="grid grid-cols-3 gap-x-8">
             <div
-                className={`relative w-full max-w-lg mx-auto ${!isReadOnly ? 'cursor-crosshair' : ''}`}
+                className={`col-span-2 relative w-full mx-auto ${!isReadOnly ? 'cursor-crosshair' : ''}`}
                 ref={containerRef}
                 onClick={handleContainerClick}
             >
-                <div 
-                    className="relative w-full bg-gray-100 rounded-lg border overflow-hidden"
-                >
+                <div className="relative w-full bg-gray-100 rounded-lg border overflow-hidden">
                     {imageId ? (
                         <AsyncImage imageId={imageId} alt="Vehicle Diagram" className="w-full h-auto" />
                     ) : (
                         <PorscheFrames view="top" vehicleModel={vehicleModel} />
                     )}
                     
-                    {referencePoints && referencePoints.points.map(point => (
-                        <DamageMarker key={point.id} point={point} isReadOnly={true} colorClass={referencePoints.colorClass} />
+                    {referencePoints && referencePoints.points.map((point, index) => (
+                        <DamageMarker key={point.id} point={point} index={index} isReadOnly={true} colorClass={referencePoints.colorClass} />
                     ))}
 
-                    {activePoints.map(point => (
+                    {activePoints.map((point, index) => (
                         <DamageMarker
                             key={point.id}
                             point={point}
+                            index={index}
                             onUpdate={handleUpdatePoint}
                             onRemove={handleRemovePoint}
                             isReadOnly={isReadOnly}
@@ -135,24 +139,23 @@ const VehicleDamageReport: React.FC<VehicleDamageReportProps> = ({ activePoints,
                     ))}
                 </div>
             </div>
-             {isReadOnly && (hasActiveNotes || hasReferenceNotes) && (
-                <div className="mt-4 text-xs space-y-2 page-break-inside-avoid">
-                    {hasReferenceNotes && (
+
+            {(activeNotes.length > 0 || referenceNotes.length > 0) && (
+                <div className="col-span-1 text-xs space-y-3 pt-2">
+                     {referenceNotes.length > 0 && (
                         <div>
-                            <h5 className="font-bold text-gray-700">Pre-existing Damage Notes:</h5>
-                            <ul className="list-disc list-inside pl-2">
-                                {referencePoints!.points.filter(p => p.notes).map(p => <li key={`ref-${p.id}`}>{p.notes}</li>)}
-                            </ul>
+                            <h5 className="font-bold text-gray-700 mb-1">Pre-existing Damage:</h5>
+                            <ol className="list-decimal list-inside space-y-1">
+                                {referenceNotes.map((p, index) => <li key={`ref-${p.id}`}><span className="font-semibold">{`#${index + 1}:`}</span> {p.notes}</li>)}
+                            </ol>
                         </div>
                     )}
-                    {hasActiveNotes && (
-                         <div>
-                            <h5 className="font-bold text-gray-700">{referencePoints ? 'New Damage Notes:' : 'Damage Notes:'}</h5>
-                            <ul className="list-disc list-inside pl-2">
-                                {activePoints.filter(p => p.notes).map((p, index) => (
-                                    <li key={`${p.id}-${index}`}>{p.notes}</li>
-                                ))}
-                            </ul>
+                    {activeNotes.length > 0 && (
+                        <div>
+                            <h5 className="font-bold text-gray-700 mb-1">{referenceNotes.length > 0 ? 'New Damage Recorded:' : 'Damage Recorded:'}</h5>
+                            <ol className="list-decimal list-inside space-y-1">
+                                {activeNotes.map((p, index) => <li key={p.id}><span className="font-semibold">{`#${index + 1}:`}</span> {p.notes}</li>)}
+                            </ol>
                         </div>
                     )}
                 </div>

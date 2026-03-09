@@ -9,6 +9,8 @@ import PartFormModal from './PartFormModal';
 import { PurchaseOrderPrint } from './PurchaseOrderPrint';
 import EmailPurchaseOrderModal from './EmailPurchaseOrderModal';
 import { usePrint } from '../core/hooks/usePrint';
+import { useWorkshopActions } from '../core/hooks/useWorkshopActions';
+import { useApp } from '../core/state/AppContext';
 
 interface PurchaseOrderLineItemRowProps {
     item: PurchaseOrderLineItem;
@@ -155,6 +157,8 @@ interface PurchaseOrderFormModalProps {
 }
 
 const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen, onClose, onSave, onSavePart, purchaseOrder, suppliers, taxRates, businessEntities, allPurchaseOrders, selectedEntityId, parts, setParts, onViewPurchaseOrder, jobId, jobs, vehicles, customers, setJobs, generatePurchaseOrderId, forceRefresh }) => {
+    const { setConfirmation } = useApp();
+    const { handleDeletePurchaseOrder } = useWorkshopActions();
     const [formData, setFormData] = useState<Partial<PurchaseOrder>>({ 
         lineItems: [],
         supplierId: '',
@@ -472,6 +476,20 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
         onClose();
     };
 
+    const handleDelete = () => {
+        if (!formData.id) return;
+        setConfirmation({
+            isOpen: true,
+            title: 'Delete Purchase Order',
+            message: `Are you sure you want to permanently delete this purchase order? This action cannot be undone.`,
+            type: 'warning',
+            onConfirm: async () => {
+                await handleDeletePurchaseOrder(formData.id!);
+                onClose();
+            },
+        });
+    };
+
     const handleFinalizeReceipt = async () => {
         if (isOriginalStatusReceived) {
             showError('This purchase order has already been finalized.');
@@ -714,6 +732,17 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
                 </div>
 
                 <footer className="p-4 border-t flex justify-between bg-gray-50">
+                     <div className="flex gap-2">
+                        {formData.id && (
+                            <button 
+                                onClick={handleDelete} 
+                                className="px-4 py-2 bg-red-600 text-white rounded-lg flex items-center gap-2 hover:bg-red-700 font-bold shadow-sm disabled:bg-red-300"
+                                disabled={isOriginalStatusReceived || (isOrderedOrLater && formData.status !== 'Cancelled')}
+                            >
+                                <Trash2 size={16}/> Delete
+                            </button>
+                        )}
+                    </div>
                     <div className="flex gap-2">
                          {formData.status === 'Draft' && formData.type !== 'Credit' && (
                             <div className="flex items-center gap-2">
@@ -727,8 +756,6 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
                                 <CheckSquare size={16}/> Save & Finalize Receipt
                             </button>
                         )}
-                    </div>
-                    <div className="flex gap-2">
                         <button onClick={onClose} className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg font-bold hover:bg-gray-50">Cancel</button>
                         <button 
                             onClick={handleSave} 

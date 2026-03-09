@@ -63,7 +63,8 @@ export const DraggableJobCard: React.FC<{
         }
     };
     
-    const associatedPOs = (job.purchaseOrderIds || []).map(id => purchaseOrders.find(po => po.id === id)).filter(Boolean) as PurchaseOrder[];
+    const uniquePoIds = [...new Set(job.purchaseOrderIds || [])];
+    const associatedPOs = uniquePoIds.map(id => purchaseOrders.find(po => po.id === id)).filter(Boolean) as PurchaseOrder[];
     const isReadyForWorkshop = job.vehicleStatus === 'On Site' && (job.partsStatus === 'Fully Received' || job.partsStatus === 'Not Required');
     
     return (
