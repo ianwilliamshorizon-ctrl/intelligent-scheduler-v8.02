@@ -132,13 +132,27 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, customer, 
         </div>
     );
 
-    const inspectionSections = useMemo(() => {
+    const inspectionPages = useMemo(() => {
         if (!job?.inspectionChecklist) return [];
         const templateSections = inspectionTemplate?.sections || [];
-        return job.inspectionChecklist.map(section => ({
-            ...section,
-            pageBreakBefore: templateSections.find(t => t.id === section.id)?.pageBreakBefore || false
-        }));
+        const pages: { sections: ChecklistSection[] }[] = [];
+        let currentPage: { sections: ChecklistSection[] } = { sections: [] };
+
+        job.inspectionChecklist.forEach(section => {
+            const templateSection = templateSections.find(t => t.id === section.id);
+            if (templateSection?.pageBreakBefore && currentPage.sections.length > 0) {
+                pages.push(currentPage);
+                currentPage = { sections: [section] };
+            } else {
+                currentPage.sections.push(section);
+            }
+        });
+
+        if (currentPage.sections.length > 0) {
+            pages.push(currentPage);
+        }
+
+        return pages;
     }, [job?.inspectionChecklist, inspectionTemplate]);
 
     return (
@@ -280,13 +294,13 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, customer, 
                 </div>
             )}
 
-            {hasAnyInspectionData && inspectionSections.length > 0 && (
+            {hasAnyInspectionData && inspectionPages.length > 0 && (
                 <React.Fragment>
-                    {inspectionSections.map((section, index) => (
-                        <div key={section.id} className="printable-page pdf-page-section" style={{ ...pageStyle, ...(section.pageBreakBefore && { pageBreakBefore: 'always', breakBefore: 'page', marginTop: '30mm' }) }}>
-                            {renderHeader(`${inspectionTitle}: ${section.title}`)}
+                    {inspectionPages.map((page, pageIndex) => (
+                        <div key={`inspection-page-${pageIndex}`} className="printable-page pdf-page-section" style={{ ...pageStyle, pageBreakBefore: 'always', breakBefore: 'page', marginTop: '30mm' }}>
+                            {renderHeader(inspectionTitle)}
                             <section>
-                                <InspectionChecklist checklistData={[section]} onUpdate={() => { }} isReadOnly={true} />
+                                <InspectionChecklist checklistData={page.sections} onUpdate={() => { }} isReadOnly={true} />
                             </section>
                         </div>
                     ))}
