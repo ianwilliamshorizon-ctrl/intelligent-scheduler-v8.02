@@ -4,7 +4,7 @@ import { useData } from '../core/state/DataContext';
 import { 
     Menu, LogOut, Settings, Building2, UserCheck, LayoutDashboard, 
     Calendar, Wrench, Briefcase, FileText, ShoppingCart, Car, 
-    Archive, Truck, MessageSquare, Phone, CalendarDays, GitPullRequest, Search, X, HelpCircle
+    Archive, Truck, MessageSquare, Phone, CalendarDays, GitPullRequest, Search, X, HelpCircle, Building
 } from 'lucide-react';
 import * as T from '../types';
 
@@ -61,6 +61,7 @@ const MainLayout: React.FC<{
 
     const navItems = [
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+        { id: 'directors-dashboard', label: 'Directors', icon: Building },
         { id: 'dispatch', label: 'Dispatch', icon: Calendar },
         { id: 'workflow', label: 'Workflow', icon: GitPullRequest },
         { id: 'concierge', label: 'Service Stream', icon: Wrench },

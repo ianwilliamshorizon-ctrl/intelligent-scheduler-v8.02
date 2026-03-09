@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Save, Shield, Key } from 'lucide-react';
-import { Role, UserRole, ViewType } from '../types';
+import { Role, UserRole, ViewType, ManagedDataPermissions } from '../types';
 
 interface RoleFormModalProps {
     isOpen: boolean;
@@ -17,18 +17,55 @@ const ALL_VIEWS: ViewType[] = [
 
 const ALL_USER_ROLES: UserRole[] = ['Admin', 'Dispatcher', 'Engineer', 'Garage Concierge', 'Sales'];
 
+const ALL_MANAGED_DATA_PERMISSIONS = {
+    canManageCustomers: 'Customers',
+    canManageVehicles: 'Vehicles',
+    canManageServicePackages: 'Service Packages',
+    canManageDiscountCodes: 'Discount Codes',
+    canManageParts: 'Parts',
+    canManageSuppliers: 'Suppliers',
+    canManageStaff: 'Staff',
+    canManageRoles: 'Roles',
+    canManageEntities: 'Entities',
+    canManageLifts: 'Lifts',
+    canManageBatteryChargers: 'Battery Chargers',
+    canManageNominalCodes: 'Nominal Codes',
+    canManageTaxCodes: 'Tax Codes',
+    canManageInspectionDiagrams: 'Inspection Diagrams',
+    canManageInspectionTemplates: 'Inspection Templates',
+    canManageBackups: 'Backups'
+};
+
 const RoleFormModal: React.FC<RoleFormModalProps> = ({ isOpen, onClose, onSave, role }) => {
     
     const getInitialFormData = (): Role => {
         if (role) return role;
-        // CORRECTED: Simple, inline, robust ID generation. No more non-existent imports.
         const newId = `role_${Date.now()}`;
         return {
             id: newId,
             name: '',
             description: '',
-            baseRole: 'Engineer', // Default to a valid UserRole to satisfy type constraints
-            defaultAllowedViews: []
+            baseRole: 'Engineer', 
+            defaultAllowedViews: [],
+            managedDataPermissions: {
+                isSuperAdmin: false,
+                canManageCustomers: false,
+                canManageVehicles: false,
+                canManageServicePackages: false,
+                canManageDiscountCodes: false,
+                canManageParts: false,
+                canManageSuppliers: false,
+                canManageStaff: false,
+                canManageRoles: false,
+                canManageEntities: false,
+                canManageLifts: false,
+                canManageBatteryChargers: false,
+                canManageNominalCodes: false,
+                canManageTaxCodes: false,
+                canManageInspectionDiagrams: false,
+                canManageInspectionTemplates: false,
+                canManageBackups: false
+            }
         }
     }
 
@@ -48,6 +85,24 @@ const RoleFormModal: React.FC<RoleFormModalProps> = ({ isOpen, onClose, onSave, 
         setFormData({ ...formData, defaultAllowedViews: updatedViews });
     };
 
+    const handlePermissionChange = (permission: keyof ManagedDataPermissions) => {
+        const currentPermissions = formData.managedDataPermissions || {} as ManagedDataPermissions;
+        let updatedPermissions: ManagedDataPermissions;
+
+        if (permission === 'isSuperAdmin') {
+            const isSuperAdmin = !currentPermissions.isSuperAdmin;
+            updatedPermissions = {
+                ...currentPermissions,
+                isSuperAdmin,
+                ...Object.keys(ALL_MANAGED_DATA_PERMISSIONS).reduce((acc, key) => ({ ...acc, [key]: isSuperAdmin }), {})
+            };
+        } else {
+            updatedPermissions = { ...currentPermissions, [permission]: !currentPermissions[permission] };
+        }
+
+        setFormData({ ...formData, managedDataPermissions: updatedPermissions });
+    };
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         if (!formData.name) {
@@ -63,7 +118,7 @@ const RoleFormModal: React.FC<RoleFormModalProps> = ({ isOpen, onClose, onSave, 
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex justify-center items-center p-4">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl transform transition-all opacity-100 scale-100 m-8">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl transform transition-all opacity-100 scale-100 m-8">
                 <form onSubmit={handleSubmit}>
                     <div className="px-8 py-6 border-b border-slate-200 flex justify-between items-center">
                         <h2 className="text-xl font-black text-slate-700 uppercase tracking-wider flex items-center gap-3">
@@ -75,7 +130,7 @@ const RoleFormModal: React.FC<RoleFormModalProps> = ({ isOpen, onClose, onSave, 
                         </button>
                     </div>
                     
-                    <div className="p-8 space-y-6">
+                    <div className="p-8 space-y-6 max-h-[70vh] overflow-y-auto">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div className="space-y-2">
                                 <label className="font-bold text-xs text-slate-500 uppercase tracking-wider">Role Name</label>
@@ -128,6 +183,38 @@ const RoleFormModal: React.FC<RoleFormModalProps> = ({ isOpen, onClose, onSave, 
                                         </span>
                                     </label>
                                 ))}
+                            </div>
+                        </div>
+
+                        <div className="space-y-3 pt-2">
+                            <label className="font-bold text-xs text-slate-500 uppercase tracking-wider">Managed Data Permissions</label>
+                            <div className="p-4 bg-slate-50/80 border border-slate-200/80 rounded-xl">
+                                <label className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-amber-50 transition cursor-pointer font-bold">
+                                    <input 
+                                        type="checkbox" 
+                                        checked={formData.managedDataPermissions?.isSuperAdmin} 
+                                        onChange={() => handlePermissionChange('isSuperAdmin')} 
+                                        className="h-5 w-5 rounded border-slate-300 text-amber-600 focus:ring-amber-500"
+                                    />
+                                    <span className="text-sm font-bold text-amber-700 uppercase tracking-wide">Super Admin (Full Access)</span>
+                                </label>
+                                <hr className="my-3"/>
+                                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                                    {Object.entries(ALL_MANAGED_DATA_PERMISSIONS).map(([key, label]) => (
+                                        <label key={key} className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-indigo-50 transition cursor-pointer">
+                                            <input 
+                                                type="checkbox" 
+                                                checked={formData.managedDataPermissions?.[key as keyof ManagedDataPermissions]} 
+                                                onChange={() => handlePermissionChange(key as keyof ManagedDataPermissions)} 
+                                                disabled={formData.managedDataPermissions?.isSuperAdmin}
+                                                className="h-5 w-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 disabled:opacity-50"
+                                            />
+                                            <span className="text-sm font-medium text-slate-700 capitalize tracking-wide">
+                                                {label}
+                                            </span>
+                                        </label>
+                                    ))}
+                                </div>
                             </div>
                         </div>
                     </div>

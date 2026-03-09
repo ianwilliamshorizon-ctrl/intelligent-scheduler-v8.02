@@ -36,7 +36,7 @@ export const initialChecklistData = [
 
 // --- Roles ---
 export const getInitialRoles = (): Role[] => ([
-    { id: 'role_admin', name: 'Admin', baseRole: 'Admin', defaultAllowedViews: ['dashboard', 'dispatch', 'workflow', 'concierge', 'inquiries', 'communications', 'estimates', 'invoices', 'purchaseOrders', 'jobs', 'sales', 'storage', 'rentals', 'absence'] },
+    { id: 'role_admin', name: 'Admin', baseRole: 'Admin', defaultAllowedViews: ['dashboard', 'directors-dashboard', 'dispatch', 'workflow', 'concierge', 'inquiries', 'communications', 'estimates', 'invoices', 'purchaseOrders', 'jobs', 'sales', 'storage', 'rentals', 'absence'] },
     { id: 'role_dispatcher', name: 'Dispatcher', baseRole: 'Dispatcher', defaultAllowedViews: ['dashboard', 'dispatch', 'workflow', 'concierge', 'inquiries', 'communications', 'estimates', 'invoices', 'purchaseOrders', 'jobs', 'sales', 'storage', 'rentals', 'absence'] },
     { id: 'role_engineer', name: 'Engineer', baseRole: 'Engineer', defaultAllowedViews: ['dashboard', 'concierge', 'workflow', 'absence', 'inquiries'] },
     { id: 'role_sales', name: 'Sales', baseRole: 'Sales', defaultAllowedViews: ['dashboard', 'sales', 'estimates', 'absence', 'inquiries'] },

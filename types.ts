@@ -2,8 +2,8 @@ import React from 'react';
 
 // --- Global Types & Enums ---
 
-export type ViewType = 'dashboard' | 'dispatch' | 'workflow' | 'concierge' | 'inquiries' | 'communications' | 'estimates' | 'invoices' | 'purchaseOrders' | 'jobs' | 'sales' | 'storage' | 'rentals' | 'absence' | 'management';
-export type UserRole = 'Admin' | 'Dispatcher' | 'Engineer' | 'Sales' | 'Garage Concierge';
+export type ViewType = 'dashboard' | 'dispatch' | 'workflow' | 'concierge' | 'inquiries' | 'communications' | 'estimates' | 'invoices' | 'purchaseOrders' | 'jobs' | 'sales' | 'storage' | 'rentals' | 'absence' | 'management' | 'directors-dashboard';
+export type UserRole = 'Admin' | 'Director' | 'Dispatcher' | 'Engineer' | 'Sales' | 'Garage Concierge';
 export type AppEnvironment = 'Production' | 'UAT' | 'Development';
 
 // --- Core Interfaces ---
@@ -24,11 +24,33 @@ export interface User {
     createdAt?: string;
 }
 
+export interface ManagedDataPermissions {
+    isSuperAdmin?: boolean;
+    canSeeDirectorsDashboard?: boolean;
+    canManageCustomers?: boolean;
+    canManageVehicles?: boolean;
+    canManageServicePackages?: boolean;
+    canManageDiscountCodes?: boolean;
+    canManageParts?: boolean;
+    canManageSuppliers?: boolean;
+    canManageStaff?: boolean;
+    canManageRoles?: boolean;
+    canManageEntities?: boolean;
+    canManageLifts?: boolean;
+    canManageBatteryChargers?: boolean;
+    canManageNominalCodes?: boolean;
+    canManageTaxCodes?: boolean;
+    canManageInspectionDiagrams?: boolean;
+    canManageInspectionTemplates?: boolean;
+    canManageBackups?: boolean;
+}
+
 export interface Role {
     id: string;
     name: string;
     baseRole: UserRole;
     defaultAllowedViews: ViewType[];
+    managedDataPermissions?: ManagedDataPermissions;
     description?: string;
 }
 
@@ -792,6 +814,9 @@ export interface AppState {
     logout: () => void;
     appEnvironment: AppEnvironment; 
     setAppEnvironment: (env: AppEnvironment) => void;
+    viewingJobId: string | null;
+    viewingEstimateId: string | null;
+    viewingInvoiceId: string | null;
 }
 
 export interface DataContextType {

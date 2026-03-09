@@ -1,14 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useData } from '../core/state/DataContext';
 import { useApp } from '../core/state/AppContext';
 import { 
+    ManagedDataPermissions,
     Vehicle, Customer, User, Part, ServicePackage, Supplier, BusinessEntity, 
-    BackupSchedule, Estimate, Role, InspectionDiagram, NominalCode, NominalCodeRule
+    BackupSchedule, Estimate, Role, InspectionDiagram, NominalCode, NominalCodeRule,
+    UserRole
 } from '../types';
 import { 
     X, Settings, Database, User as UserIcon, Car, Wrench, Package, Briefcase, 
     ShieldCheck, Users, Truck, AlertTriangle, RefreshCw, CarFront, List, Info, CheckCircle, Server, Save,
-    ArrowUpCircle, BatteryCharging, ClipboardCheck, Search, Banknote, Tag
+    ArrowUpCircle, BatteryCharging, ClipboardCheck, Search, Banknote, Tag, Lock, Eye, BarChart2
 } from 'lucide-react';
 
 // Extracted Tab Views
@@ -38,13 +40,13 @@ interface ManagementModalProps {
 
 const ManagementModal: React.FC<ManagementModalProps> = ({ isOpen, onClose, initialView, backupSchedule, setBackupSchedule, onManualBackup }) => {
     const dataContext = useData();
-    const { users } = useApp();
+    const { users, currentUser, setCurrentView } = useApp();
+    const { roles } = dataContext;
 
-    // Ensure the active tab defaults to 'customers' or the initialView tab
     const [activeTab, setActiveTab] = useState(initialView?.tab || 'customers');
     const [searchTerm, setSearchTerm] = useState('');
+    const [viewAs, setViewAs] = useState<UserRole>(currentUser?.role || 'Admin');
     
-    // Global Status Message
     const [statusMessage, setStatusMessage] = useState<{ type: 'info' | 'success' | 'error', text: string } | null>(null);
     const [isSaving, setIsSaving] = useState(false);
     
@@ -55,13 +57,65 @@ const ManagementModal: React.FC<ManagementModalProps> = ({ isOpen, onClose, init
         }
     };
 
+    const permissions = useMemo<ManagedDataPermissions | null>(() => {
+        if (!currentUser) return null;
+
+        const roleName = viewAs === 'Admin' ? currentUser.role : viewAs;
+
+        if (roleName === 'Admin') {
+            return { isSuperAdmin: true, canSeeDirectorsDashboard: true };
+        }
+        
+        const userRole = roles.find(r => r.name === roleName);
+        return userRole?.managedDataPermissions || null;
+    }, [currentUser, roles, viewAs]);
+
+    const allTabs = useMemo(() => [
+        { id: 'directors-dashboard', label: "Director's Dashboard", icon: BarChart2, render: () => { setCurrentView('directors-dashboard'); onClose(); return null; }, permission: 'canSeeDirectorsDashboard' },
+        { id: 'customers', label: 'Customers', icon: UserIcon, render: () => <ManagementCustomersTab searchTerm={searchTerm} onShowStatus={showStatus} />, permission: 'canManageCustomers' },
+        { id: 'vehicles', label: 'Vehicles', icon: Car, render: () => <ManagementVehiclesTab searchTerm={searchTerm} onShowStatus={showStatus} />, permission: 'canManageVehicles' },
+        { id: 'diagrams', label: 'Vehicle Diagrams', icon: CarFront, render: () => <ManagementDiagramsTab searchTerm={searchTerm} onShowStatus={showStatus} />, permission: 'canManageInspectionDiagrams' },
+        { id: 'inspectionTemplates', label: 'Inspection Templates', icon: ClipboardCheck, render: () => <ManagementInspectionTemplatesTab searchTerm={searchTerm} onShowStatus={showStatus} />, permission: 'canManageInspectionTemplates' },
+        { id: 'staff', label: 'Staff (Users)', icon: Users, render: () => <ManagementStaffTab searchTerm={searchTerm} onShowStatus={showStatus} />, permission: 'canManageStaff' },
+        { id: 'roles', label: 'Roles', icon: ShieldCheck, render: () => <ManagementRolesTab searchTerm={searchTerm} onShowStatus={showStatus} />, permission: 'canManageRoles' },
+        { id: 'entities', label: 'Business Entities', icon: Briefcase, render: () => <ManagementEntitiesTab searchTerm={searchTerm} onShowStatus={showStatus} />, permission: 'canManageEntities' },
+        { id: 'lifts', label: 'Lifts & Bays', icon: ArrowUpCircle, render: () => <ManagementLiftsTab searchTerm={searchTerm} onShowStatus={showStatus} />, permission: 'canManageLifts' },
+        { id: 'batteryChargers', label: 'Battery Chargers', icon: BatteryCharging, render: () => <ManagementBatteryChargersTab searchTerm={searchTerm} onShowStatus={showStatus} />, permission: 'canManageBatteryChargers' },
+        { id: 'suppliers', label: 'Suppliers', icon: Truck, render: () => <ManagementSuppliersTab searchTerm={searchTerm} onShowStatus={showStatus} />, permission: 'canManageSuppliers' },
+        { id: 'parts', label: 'Parts', icon: Settings, render: () => <ManagementPartsTab searchTerm={searchTerm} onShowStatus={showStatus} />, permission: 'canManageParts' },
+        { id: 'packages', label: 'Service Packages', icon: Package, render: () => <ManagementPackagesTab searchTerm={searchTerm} onShowStatus={showStatus} />, permission: 'canManageServicePackages' },
+        { id: 'nominalCodes', label: 'Nominal Codes', icon: List, render: () => <ManagementNominalCodesTab searchTerm={searchTerm} onShowStatus={showStatus} />, permission: 'canManageNominalCodes' },
+        { id: 'taxCodes', label: 'Tax Codes', icon: Banknote, render: () => <ManagementTaxCodesTab searchTerm={searchTerm} onShowStatus={showStatus} />, permission: 'canManageTaxCodes' },
+        { id: 'discountCodes', label: 'Discount Codes', icon: Tag, render: () => <ManagementDiscountCodesTab />, permission: 'canManageDiscountCodes' },
+        { id: 'backup', label: 'Backup & Restore', icon: Database, render: () => <ManagementBackupTab backupSchedule={backupSchedule} setBackupSchedule={setBackupSchedule} onManualBackup={onManualBackup} onShowStatus={showStatus} />, permission: 'canManageBackups' },
+    ], [searchTerm, backupSchedule, onManualBackup, setBackupSchedule, setCurrentView, onClose]);
+
+    const filteredTabs = useMemo(() => {
+        if (!permissions) return [];
+        if (permissions.isSuperAdmin) return allTabs;
+        return allTabs.filter(tab => permissions[tab.permission as keyof ManagedDataPermissions]);
+    }, [permissions, allTabs]);
+
+    useEffect(() => {
+        if (initialView?.tab && filteredTabs.some(t => t.id === initialView.tab)) {
+            setActiveTab(initialView.tab);
+        } else if (filteredTabs.length > 0 && !filteredTabs.some(t => t.id === activeTab)) {
+            setActiveTab(filteredTabs[0].id);
+        }
+    }, [filteredTabs, initialView, activeTab]);
+
+    useEffect(() => {
+        if (currentUser) {
+            setViewAs(currentUser.role);
+        }
+    }, [currentUser]);
+
     if (!isOpen) return null;
-    
+
     const handleForceSave = async () => {
         setIsSaving(true);
         showStatus('Forcing save of all data to Firestore...', 'info');
         try {
-            // Using the setter from your db.ts which maps to 'brooks_settings' collection
             await Promise.all([
                 setItem('brooks_jobs', dataContext.jobs),
                 setItem('brooks_vehicles', dataContext.vehicles),
@@ -88,7 +142,6 @@ const ManagementModal: React.FC<ManagementModalProps> = ({ isOpen, onClose, init
                 setItem('brooks_absenceRequests', dataContext.absenceRequests),
                 setItem('brooks_inquiries', dataContext.inquiries),
                 setItem('brooks_reminders', dataContext.reminders),
-                setItem('brooks_auditLog', dataContext.auditLog),
                 setItem('brooks_businessEntities', dataContext.businessEntities),
                 setItem('brooks_taxRates', dataContext.taxRates),
                 setItem('brooks_roles', dataContext.roles),
@@ -120,28 +173,54 @@ const ManagementModal: React.FC<ManagementModalProps> = ({ isOpen, onClose, init
         );
     };
 
-    // Shared props for tabs
-    const sharedTabProps = { searchTerm, onShowStatus: showStatus };
+    const handleTabClick = (tab) => {
+        if (tab.id === 'directors-dashboard') {
+            tab.render();
+        } else {
+            setActiveTab(tab.id);
+            setSearchTerm('');
+        }
+    };
 
-    const tabs = [
-        { id: 'customers', label: 'Customers', icon: UserIcon, render: () => <ManagementCustomersTab searchTerm={searchTerm} onShowStatus={showStatus} /> },
-        { id: 'vehicles', label: 'Vehicles', icon: Car, render: () => <ManagementVehiclesTab searchTerm={searchTerm} onShowStatus={showStatus} /> },
-        { id: 'diagrams', label: 'Vehicle Diagrams', icon: CarFront, render: () => <ManagementDiagramsTab searchTerm={searchTerm} onShowStatus={showStatus} /> },
-        // FIXED ID: Changed from 'templates' to 'inspectionTemplates' to match context key
-        { id: 'inspectionTemplates', label: 'Inspection Templates', icon: ClipboardCheck, render: () => <ManagementInspectionTemplatesTab searchTerm={searchTerm} onShowStatus={showStatus} /> },
-        { id: 'staff', label: 'Staff (Users)', icon: Users, render: () => <ManagementStaffTab searchTerm={searchTerm} onShowStatus={showStatus} /> },
-        { id: 'roles', label: 'Roles', icon: ShieldCheck, render: () => <ManagementRolesTab searchTerm={searchTerm} onShowStatus={showStatus} /> },
-        { id: 'entities', label: 'Business Entities', icon: Briefcase, render: () => <ManagementEntitiesTab searchTerm={searchTerm} onShowStatus={showStatus} /> },
-        { id: 'lifts', label: 'Lifts & Bays', icon: ArrowUpCircle, render: () => <ManagementLiftsTab searchTerm={searchTerm} onShowStatus={showStatus} /> },
-        { id: 'batteryChargers', label: 'Battery Chargers', icon: BatteryCharging, render: () => <ManagementBatteryChargersTab searchTerm={searchTerm} onShowStatus={showStatus} /> },
-        { id: 'suppliers', label: 'Suppliers', icon: Truck, render: () => <ManagementSuppliersTab searchTerm={searchTerm} onShowStatus={showStatus} /> },
-        { id: 'parts', label: 'Parts', icon: Settings, render: () => <ManagementPartsTab searchTerm={searchTerm} onShowStatus={showStatus} /> },
-        { id: 'packages', label: 'Service Packages', icon: Package, render: () => <ManagementPackagesTab searchTerm={searchTerm} onShowStatus={showStatus} /> },
-        { id: 'nominalCodes', label: 'Nominal Codes', icon: List, render: () => <ManagementNominalCodesTab searchTerm={searchTerm} onShowStatus={showStatus} /> },
-        { id: 'taxCodes', label: 'Tax Codes', icon: Banknote, render: () => <ManagementTaxCodesTab searchTerm={searchTerm} onShowStatus={showStatus} /> },
-        { id: 'discountCodes', label: 'Discount Codes', icon: Tag, render: () => <ManagementDiscountCodesTab /> },
-        { id: 'backup', label: 'Backup & Restore', icon: Database, render: () => <ManagementBackupTab backupSchedule={backupSchedule} setBackupSchedule={setBackupSchedule} onManualBackup={onManualBackup} onShowStatus={showStatus} /> },
-    ];
+    const renderContent = () => {
+        if (filteredTabs.length === 0) {
+            return (
+                <div className="flex-grow flex items-center justify-center bg-white">
+                    <div className="text-center">
+                        <Lock size={48} className="mx-auto text-gray-400" />
+                        <h3 className="mt-2 text-lg font-medium text-gray-900">Access Denied</h3>
+                        <p className="mt-1 text-sm text-gray-500">You do not have permission to view any management sections.</p>
+                        {currentUser?.role === 'Admin' && (
+                             <p className="mt-2 text-sm text-gray-500">Currently viewing as: <strong>{viewAs}</strong></p>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        const activeComponent = filteredTabs.find(t => t.id === activeTab)?.render();
+
+        return (
+            <div className="flex flex-grow overflow-hidden">
+                <nav className="w-64 bg-gray-50 border-r overflow-y-auto flex-shrink-0 p-3 space-y-1">
+                    {filteredTabs.map(tab => (
+                        <button
+                            key={tab.id}
+                            onClick={() => handleTabClick(tab)}
+                            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-sm font-medium ${activeTab === tab.id ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-200'}`}
+                        >
+                            <tab.icon size={20} />
+                            {tab.label}
+                        </button>
+                    ))}
+                </nav>
+                
+                <main className="flex-grow overflow-y-auto bg-white relative">
+                    {activeComponent}
+                </main>
+            </div>
+        );
+    }
 
     return (
         <div className="fixed inset-0 bg-gray-900 bg-opacity-75 z-[60] flex justify-center items-center p-4">
@@ -161,6 +240,15 @@ const ManagementModal: React.FC<ManagementModalProps> = ({ isOpen, onClose, init
                             />
                             <Search className="absolute left-3 top-2 text-gray-400" size={16}/>
                         </div>
+                        {currentUser?.role === 'Admin' && (
+                             <div className="flex items-center gap-2 text-sm">
+                                <span className="font-medium">View as:</span>
+                                <select value={viewAs} onChange={e => setViewAs(e.target.value as UserRole)} className="p-1.5 border rounded-lg bg-white text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+                                    <option value="Admin">Admin (Full Access)</option>
+                                    {roles.filter(r => r.name !== 'Admin').map(r => <option key={r.id} value={r.name}>{r.name}</option>)}
+                                </select>
+                            </div>
+                        )}
                     </div>
 
                     <div className="flex items-center gap-2">
@@ -183,24 +271,7 @@ const ManagementModal: React.FC<ManagementModalProps> = ({ isOpen, onClose, init
                 
                 {renderStatusBanner()}
 
-                <div className="flex flex-grow overflow-hidden">
-                    <nav className="w-64 bg-gray-50 border-r overflow-y-auto flex-shrink-0 p-3 space-y-1">
-                        {tabs.map(tab => (
-                            <button
-                                key={tab.id}
-                                onClick={() => { setActiveTab(tab.id); setSearchTerm(''); }}
-                                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-sm font-medium ${activeTab === tab.id ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-200'}`}
-                            >
-                                <tab.icon size={20} />
-                                {tab.label}
-                            </button>
-                        ))}
-                    </nav>
-                    
-                    <main className="flex-grow overflow-y-auto bg-white relative">
-                        {tabs.find(t => t.id === activeTab)?.render()}
-                    </main>
-                </div>
+                {renderContent()}
             </div>
         </div>
     );

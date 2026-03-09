@@ -8,5 +8,7 @@ export const formatCurrency = (value: number | undefined | null): string => {
     if (value === null || value === undefined) {
         return '£0.00';
     }
-    return `£${value.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    // Round to 2 decimal places to handle floating point inaccuracies
+    const roundedValue = Math.round(value * 100) / 100;
+    return `£${roundedValue.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 };

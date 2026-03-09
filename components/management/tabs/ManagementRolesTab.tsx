@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useData } from '../../../core/state/DataContext';
 import { Role } from '../../../types';
-import { PlusCircle, Shield, ShieldCheck, Edit3, Fingerprint, Lock } from 'lucide-react';
+import { PlusCircle, Shield, ShieldCheck, Edit3, Fingerprint, Lock, Check, X } from 'lucide-react';
 import RoleFormModal from '../../RoleFormModal';
 import { saveDocument } from '../../../core/db/index';
 
@@ -9,6 +9,25 @@ interface ManagementRolesTabProps {
     searchTerm: string;
     onShowStatus: (text: string, type: 'info' | 'success' | 'error') => void;
 }
+
+const ALL_MANAGED_DATA_PERMISSIONS_LABELS = {
+    canManageCustomers: 'Customers',
+    canManageVehicles: 'Vehicles',
+    canManageServicePackages: 'Service Packages',
+    canManageDiscountCodes: 'Discount Codes',
+    canManageParts: 'Parts',
+    canManageSuppliers: 'Suppliers',
+    canManageStaff: 'Staff',
+    canManageRoles: 'Roles',
+    canManageEntities: 'Entities',
+    canManageLifts: 'Lifts',
+    canManageBatteryChargers: 'Battery Chargers',
+    canManageNominalCodes: 'Nominal Codes',
+    canManageTaxCodes: 'Tax Codes',
+    canManageInspectionDiagrams: 'Inspection Diagrams',
+    canManageInspectionTemplates: 'Inspection Templates',
+    canManageBackups: 'Backups'
+};
 
 export const ManagementRolesTab: React.FC<ManagementRolesTabProps> = ({ searchTerm = '', onShowStatus }) => {
     const { roles = [], setRoles } = useData();
@@ -51,6 +70,33 @@ export const ManagementRolesTab: React.FC<ManagementRolesTabProps> = ({ searchTe
         }
     };
 
+    const renderPermissions = (role: Role) => {
+        const permissions = role.managedDataPermissions;
+        if (!permissions) return <span className="text-slate-400 italic">Not Configured</span>;
+
+        if (permissions.isSuperAdmin) {
+            return <span className="inline-flex items-center gap-2 font-bold text-amber-600 bg-amber-50 px-3 py-1 rounded-full text-xs">Super Admin</span>;
+        }
+
+        const grantedPermissions = Object.entries(permissions)
+            .filter(([key, value]) => key !== 'isSuperAdmin' && value)
+            .map(([key]) => ALL_MANAGED_DATA_PERMISSIONS_LABELS[key as keyof typeof ALL_MANAGED_DATA_PERMISSIONS_LABELS])
+            .filter(Boolean);
+        
+        if(grantedPermissions.length === 0) return <span className="text-slate-400 italic">No specific permissions</span>
+
+        return (
+            <div className="flex flex-wrap gap-2">
+                {grantedPermissions.map(label => (
+                    <span key={label} className="inline-flex items-center gap-1.5 bg-slate-100 text-slate-700 px-2 py-1 rounded-md text-[10px] font-bold">
+                        <Check size={12} className="text-green-500"/>
+                        {label}
+                    </span>
+                ))}
+            </div>
+        )
+    }
+
     return (
         <div className="p-1">
             <div className="flex justify-between items-end mb-8">
@@ -74,7 +120,8 @@ export const ManagementRolesTab: React.FC<ManagementRolesTabProps> = ({ searchTe
                     <thead className="bg-slate-50 border-b border-slate-200">
                         <tr>
                             <th className="px-6 py-4 font-black text-slate-400 uppercase text-[10px] tracking-[0.15em]">Security Profile</th>
-                            <th className="px-6 py-4 font-black text-slate-400 uppercase text-[10px] tracking-[0.15em]">Scope of Authority</th>
+                            <th className="px-6 py-4 font-black text-slate-400 uppercase text-[10px] tracking-[0.15em]">Data Permissions</th>
+                            <th className="px-6 py-4 font-black text-slate-400 uppercase text-[10px] tracking-[0.15em]">Description</th>
                             <th className="px-6 py-4 font-black text-slate-400 uppercase text-[10px] tracking-[0.15em] text-right">Settings</th>
                         </tr>
                     </thead>
@@ -85,7 +132,7 @@ export const ManagementRolesTab: React.FC<ManagementRolesTabProps> = ({ searchTe
                                     <td className="px-6 py-6">
                                         <div className="flex items-center gap-4">
                                             <div className={`p-2.5 rounded-xl ${
-                                                role.name.toLowerCase().includes('admin') 
+                                                role.managedDataPermissions?.isSuperAdmin
                                                 ? 'bg-rose-50 text-rose-600' 
                                                 : 'bg-indigo-50 text-indigo-600'
                                             }`}>
@@ -101,6 +148,9 @@ export const ManagementRolesTab: React.FC<ManagementRolesTabProps> = ({ searchTe
                                                 </div>
                                             </div>
                                         </div>
+                                    </td>
+                                    <td className="px-6 py-6 max-w-sm">
+                                        {renderPermissions(role)}
                                     </td>
                                     <td className="px-6 py-6">
                                         <p className="text-slate-600 font-medium leading-relaxed max-w-md italic">
@@ -120,7 +170,7 @@ export const ManagementRolesTab: React.FC<ManagementRolesTabProps> = ({ searchTe
                             ))
                         ) : (
                             <tr>
-                                <td colSpan={3} className="py-24 text-center">
+                                <td colSpan={4} className="py-24 text-center">
                                     <div className="flex flex-col items-center gap-3 opacity-20">
                                         <Shield size={64} strokeWidth={1} />
                                         <span className="font-black uppercase tracking-[0.3em] text-xs">No Profiles Found</span>

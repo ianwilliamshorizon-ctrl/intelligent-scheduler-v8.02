@@ -2,7 +2,7 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/generative-ai';
 import { ServicePackage, EstimateLineItem, Part } from '../../types';
 
-const functions = getFunctions();
+const functions = getFunctions(undefined, 'europe-west1');
 const generate = httpsCallable(functions, 'generate');
 
 let genAI: GoogleGenerativeAI | null = null;
@@ -28,19 +28,16 @@ async function generateWithRetry(modelName: string, prompt: string, retries = 2)
   }
 }
 
-export const createAssistantChat = async () => {
-    if (!genAI) {
-        console.error("Generative AI not initialized. Call initializeGenerativeAI first.");
-        return null;
+export const getAIAssistantResponse = async (prompt: string, dataContext: string): Promise<string> => {
+    const fullPrompt = `Based on the following data, answer the question: "${prompt}"\n\nData:\n${dataContext}`;
+
+    try {
+        const text = await generateWithRetry("gemini-1.5-flash-latest", fullPrompt);
+        return text || "Sorry, I could not generate a response.";
+    } catch (error) {
+        console.error("AI Error (Assistant):", error);
+        throw error;
     }
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
-    const safetySettings = [
-        { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
-        { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
-        { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
-        { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
-    ];
-    return model.startChat({ safetySettings });
 };
 
 export const parseJobRequest = async (
