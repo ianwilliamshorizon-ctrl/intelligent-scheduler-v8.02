@@ -62,10 +62,12 @@ export const parseJobRequest = async (
 export const generateServicePackageName = async (
     lineItems: EstimateLineItem[],
     vehicleMake: string,
-    vehicleModel: string
+    vehicleModel: string,
+    engineSize?: number
 ): Promise<{ name: string; description: string }> => {
     const itemsDescription = (lineItems || []).map(item => `- ${item.description}`).join('\n');
-    const fullPrompt = `Generate a concise service name and description for a ${vehicleMake} ${vehicleModel} based on these items:\n${itemsDescription}\nReturn JSON: { "name": string, "description": string }`;
+    const vehicleIdentifier = `${vehicleMake} ${vehicleModel}` + (engineSize ? ` (${engineSize}cc)` : '');
+    const fullPrompt = `Generate a concise service name and description for a ${vehicleIdentifier} based on these items:\n${itemsDescription}\nReturn JSON: { "name": string, "description": string }`;
 
     try {
         const text = await generateWithRetry("gemini-1.5-flash-latest", fullPrompt);

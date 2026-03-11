@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState } from 'react';
 import { Job, Vehicle, Customer, Engineer, User, PurchaseOrder } from '../types';
 import { ClipboardCheck, FileText, CheckCircle, Car, User as UserIcon, MessageSquare, Clock, Wrench, PlayCircle, Search, X, PauseCircle, Wand2, Package as PackageIcon, UserPlus } from 'lucide-react';
@@ -17,7 +18,8 @@ const WorkflowJobCard: React.FC<{
     onOpenAssistant: (jobId: string) => void;
     onOpenPurchaseOrder: (po: PurchaseOrder) => void;
     purchaseOrders: PurchaseOrder[];
-}> = ({ job, vehicle, customer, children, statusColorClass, onEdit, onOpenAssistant, onOpenPurchaseOrder, purchaseOrders }) => {
+    today: string;
+}> = ({ job, vehicle, customer, children, statusColorClass, onEdit, onOpenAssistant, onOpenPurchaseOrder, purchaseOrders, today }) => {
     
     const { partsStatus } = job;
     const cardBgClass = () => {
@@ -101,7 +103,6 @@ const WorkflowView: React.FC<WorkflowViewProps> = ({ jobs, vehicles, customers, 
     const { purchaseOrders } = useData();
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedEngineerId, setSelectedEngineerId] = useState<string>('all');
-    const [selectedDateFilter, setSelectedDateFilter] = useState<'today' | '7days' | '14days'>('7days');
 
     const vehiclesById = useMemo(() => new Map(vehicles.map(v => [v.id, v])), [vehicles]);
     const customersById = useMemo(() => new Map(customers.map(c => [c.id, c])), [customers]);
@@ -109,21 +110,23 @@ const WorkflowView: React.FC<WorkflowViewProps> = ({ jobs, vehicles, customers, 
     
     const isEngineerView = currentUser.role === 'Engineer';
 
-    const filterOptions: { id: 'today' | '7days' | '14days'; label: string }[] = [
-        { id: 'today', label: 'Today' },
-        { id: '7days', label: '7 Days' },
-        { id: '14days', label: '14 Days' },
-    ];
-
-    const { workflowJobs, filterEndDate, today } = useMemo(() => {
-        let filteredJobs = jobs.filter(job => job.status !== 'Unallocated' && job.status !== 'Invoiced' && job.status !== 'Closed');
+    const { workflowJobs, today } = useMemo(() => {
+        let filteredJobs = jobs.filter(job => !['Unallocated', 'Invoiced', 'Closed', 'Cancelled'].includes(job.status));
         
+        const engineerFilterId = isEngineerView ? currentUser.engineerId : (selectedEngineerId !== 'all' ? selectedEngineerId : null);
+        if (engineerFilterId) {
+            filteredJobs = filteredJobs.filter(job => 
+                (job.segments || []).some(s => s.engineerId === engineerFilterId)
+            );
+        }
+
         if (searchTerm.trim()) {
             const lowerSearch = searchTerm.toLowerCase();
             filteredJobs = filteredJobs.filter(job => {
                 const vehicle = vehiclesById.get(job.vehicleId);
                 const customer = customersById.get(job.customerId);
                 return (
+                    job.id.toLowerCase().includes(lowerSearch) ||
                     job.description.toLowerCase().includes(lowerSearch) ||
                     (vehicle && vehicle.registration.toLowerCase().replace(/\s/g, '').includes(lowerSearch.replace(/\s/g, ''))) ||
                     (customer && `${String(customer.forename)} ${String(customer.surname)}`.toLowerCase().includes(lowerSearch))
@@ -132,62 +135,19 @@ const WorkflowView: React.FC<WorkflowViewProps> = ({ jobs, vehicles, customers, 
         }
 
         const today = getRelativeDate(0);
-        let filterEndDate: string;
-        if (selectedDateFilter === 'today') {
-            filterEndDate = today;
-        } else if (selectedDateFilter === '7days') {
-            filterEndDate = getRelativeDate(6);
-        } else { // 14days
-            filterEndDate = getRelativeDate(13);
-        }
-
-        const relevantJobs = filteredJobs.filter(job => {
-            // A job is relevant if it's currently in progress OR its segments fall within the date range.
-            const isJobInProgress = job.status === 'In Progress' || (job.segments || []).some(s => s.status === 'Paused');
-            if (isJobInProgress) {
-                return true; // Always include in-progress jobs
-            }
-            
-            const engineerFilterId = isEngineerView ? currentUser.engineerId : (selectedEngineerId !== 'all' ? selectedEngineerId : null);
-            
-            return (job.segments || []).some(s => {
-                const dateMatch = s.date && s.date >= today && s.date <= filterEndDate;
-                if (!dateMatch) return false;
-
-                if (engineerFilterId) {
-                    return s.engineerId === engineerFilterId;
-                }
-
-                return true;
-            });
-        });
-
-        const inProgress = relevantJobs.filter(job => job.status === 'In Progress' || (job.segments || []).some(s => s.status === 'Paused'));
-        const pendingQC = relevantJobs.filter(job => job.status === 'Pending QC');
-        const allocated = relevantJobs.filter(job => job.status === 'Allocated');
-        const complete = relevantJobs.filter(job => job.status === 'Complete');
+        
+        const inProgress = filteredJobs.filter(job => job.status === 'In Progress' || (job.segments || []).some(s => s.status === 'Paused'));
+        const pendingQC = filteredJobs.filter(job => job.status === 'Pending QC');
+        const allocated = filteredJobs.filter(job => job.status === 'Allocated');
+        const complete = filteredJobs.filter(job => job.status === 'Complete');
         
         return { 
             workflowJobs: { inProgress, pendingQC, allocated, complete },
-            filterEndDate,
             today
         };
 
-    }, [jobs, isEngineerView, currentUser.engineerId, selectedEngineerId, selectedDateFilter, searchTerm, vehiclesById, customersById]);
+    }, [jobs, isEngineerView, currentUser.engineerId, selectedEngineerId, searchTerm, vehiclesById, customersById, purchaseOrders]);
     
-    const getWorkflowTitle = () => {
-        if (selectedDateFilter === 'today') {
-            return `Today's Workflow (${formatReadableDate(today)})`;
-        }
-        if (selectedDateFilter === '7days') {
-            return `Workflow - Next 7 Days`;
-        }
-        if (selectedDateFilter === '14days') {
-            return `Workflow - Next 14 Days`;
-        }
-        return `Workflow`;
-    };
-
     const statusColumns: { title: string; jobs: Job[]; color: string; icon: React.ElementType }[] = [
         { title: 'Allocated', jobs: workflowJobs.allocated, color: 'border-blue-500', icon: Clock },
         { title: 'In Progress', jobs: workflowJobs.inProgress, color: 'border-yellow-500', icon: Wrench },
@@ -205,14 +165,14 @@ const WorkflowView: React.FC<WorkflowViewProps> = ({ jobs, vehicles, customers, 
         <div className="w-full h-full flex flex-col bg-gray-100 p-4">
             <header className="flex-shrink-0 mb-4">
                 <div className="flex justify-between items-center">
-                    <h2 className="text-xl font-bold text-gray-800">{getWorkflowTitle()}</h2>
+                    <h2 className="text-xl font-bold text-gray-800">Workshop Workflow</h2>
                     <div className="flex items-center gap-4">
                         <div className="relative">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16}/>
                             <input
                                 value={searchTerm}
                                 onChange={e => setSearchTerm(e.target.value)}
-                                placeholder="Search workflow..."
+                                placeholder="Search by job, vehicle, or customer..."
                                 className="w-64 p-1.5 pl-9 border rounded-lg bg-white text-sm"
                             />
                              {searchTerm && (
@@ -239,28 +199,15 @@ const WorkflowView: React.FC<WorkflowViewProps> = ({ jobs, vehicles, customers, 
                         )}
                     </div>
                 </div>
-                <div className="mt-3">
-                    <div className="flex gap-1 p-1 bg-gray-200 rounded-lg w-fit">
-                        {filterOptions.map(opt => (
-                            <button 
-                                key={opt.id}
-                                onClick={() => setSelectedDateFilter(opt.id)}
-                                className={`py-1.5 px-4 rounded-md font-semibold text-sm transition ${selectedDateFilter === opt.id ? 'bg-white shadow' : 'text-gray-600 hover:bg-gray-200/50'}`}
-                            >
-                                {opt.label}
-                            </button>
-                        ))}
-                    </div>
-                </div>
             </header>
-            <main className="flex-grow">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <main className="flex-grow overflow-y-auto">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 h-full">
                     {statusColumns.map(({ title, jobs, color, icon: Icon }) => (
                         <div key={title} className="bg-gray-200 rounded-lg flex flex-col">
                             <h3 className={`flex items-center gap-2 font-bold text-gray-700 p-3 border-b-2 ${color}`}>
                                 <Icon size={16}/> {title} ({jobs.length})
                             </h3>
-                            <div className="p-3 space-y-3">
+                            <div className="p-3 space-y-3 overflow-y-auto">
                                 {jobs.map(job => (
                                     <WorkflowJobCard
                                         key={job.id}
@@ -272,9 +219,10 @@ const WorkflowView: React.FC<WorkflowViewProps> = ({ jobs, vehicles, customers, 
                                         onOpenAssistant={onOpenAssistant}
                                         onOpenPurchaseOrder={onOpenPurchaseOrder}
                                         purchaseOrders={purchaseOrders || []}
+                                        today={today}
                                     >
                                         <div className="mt-2 text-xs space-y-1">
-                                            {(job.segments || []).filter(s => s.date && s.date >= today && s.date <= filterEndDate && s.allocatedLift).map(seg => {
+                                            {(job.segments || []).filter(s => s.allocatedLift).map(seg => {
                                                 const startSegmentIndex = seg.scheduledStartSegment;
                                                 let timeString = `${seg.duration} hrs`;
                                                 if (startSegmentIndex !== null && startSegmentIndex !== undefined) {

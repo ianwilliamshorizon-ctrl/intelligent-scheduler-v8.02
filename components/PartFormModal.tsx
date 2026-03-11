@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Part, Supplier, TaxRate } from '../types';
 import { Save, X } from 'lucide-react';
 
@@ -13,10 +13,15 @@ interface PartFormModalProps {
 
 const PartFormModal: React.FC<PartFormModalProps> = ({ isOpen, onClose, onSave, part, suppliers, taxRates }) => {
     const [formData, setFormData] = useState<Partial<Part>>({});
+    const defaultSupplierId = useMemo(() => (suppliers && suppliers.length > 0) ? suppliers[0].id : undefined, [suppliers]);
 
     useEffect(() => {
-        setFormData(part || {});
-    }, [part]);
+        if (part) {
+            setFormData(part);
+        } else {
+            setFormData({ defaultSupplierId });
+        }
+    }, [part, defaultSupplierId]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value, type } = e.target;

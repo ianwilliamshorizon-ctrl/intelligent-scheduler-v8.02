@@ -241,7 +241,7 @@ export interface Job {
     estimateId?: string;
     invoiceId?: string;
     vehicleStatus?: VehicleStatus;
-    partsStatus?: 'Awaiting Order' | 'Ordered' | 'Partially Received' | 'Fully Received' | 'Not Required' | 'Awaiting Parts';
+    partsStatus?: 'Awaiting Order' | 'Ordered' | 'Partially Received' | 'Fully Received' | 'Not Required' | 'Awaiting Parts' | 'In Stock';
     purchaseOrderIds?: string[];
     notes?: string;
     checkInPhotos?: CheckInPhoto[];
@@ -332,6 +332,7 @@ export interface PurchaseOrderLineItem {
     taxCodeId?: string;
     returnStatus?: 'None' | 'Pending' | 'Returned' | 'Credited';
     jobLineItemId?: string;
+    supplierId?: string;
 }
 
 export interface Part {
@@ -427,6 +428,7 @@ export interface ServicePackage {
     applicableModel?: string;
     applicableVariant?: string;
     isMixedVat?: boolean;
+    applicableEngineSize?: number;
 }
 
 export interface Lift {
@@ -564,7 +566,7 @@ export interface Prospect {
     status: 'Active' | 'Contacted' | 'Converted' | 'Archived';
     desiredVehicle: string;
     notes?: string;
-    linkedSaleVehicleId?: string | null;
+    linkedSaleVehicleId?: string | null; 
     customerId?: string | null; 
     createdAt: string;
 }

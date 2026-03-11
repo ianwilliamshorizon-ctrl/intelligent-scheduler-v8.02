@@ -7,6 +7,7 @@ import { generateJobId } from '../core/utils/numberGenerators';
 import { BookingCalendarView } from './BookingCalendarView';
 import { MOTBookingModal } from './MOTBookingModal';
 import { TIME_SEGMENTS } from '../constants';
+import { useApp } from '../core/state/AppContext';
 
 interface ScheduleJobFromEstimateModalProps {
     isOpen: boolean;
@@ -25,6 +26,7 @@ interface ScheduleJobFromEstimateModalProps {
 }
 
 const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> = ({ isOpen, onClose, onConfirm, estimate, customer, vehicle, jobs, vehicles, maxDailyCapacityHours, businessEntities, customers, absenceRequests, onEditJob }) => {
+    const { setConfirmation } = useApp();
     const [scheduledDate, setScheduledDate] = useState(() => estimate.jobId ? getRelativeDate(0) : (estimate as any).requestedDate || getRelativeDate(0));
     const [suggestion, setSuggestion] = useState<{ suggestedDate: string; originalDate: string } | null>(null);
     const [currentMonth, setCurrentMonth] = useState(() => dateStringToDate(scheduledDate));
@@ -32,6 +34,12 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
     // MOT State
     const [isMotBookingOpen, setIsMotBookingOpen] = useState(false);
     const [motBooking, setMotBooking] = useState<{ date: string; time: string; liftId: string } | null>(null);
+    const isMotRequired = useMemo(() => 
+        estimate.lineItems.some(item => 
+            item.description.toLowerCase().includes('mot') && !item.isOptional
+        ), 
+    [estimate.lineItems]);
+
 
     useEffect(() => {
         if (isOpen) {
@@ -123,11 +131,28 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
         setScheduledDate(date);
         setCurrentMonth(dateStringToDate(date));
         setIsMotBookingOpen(false);
+        setConfirmation({
+            isOpen: true,
+            title: 'MOT Slot Booked',
+            message: `An MOT slot has been reserved for ${formatReadableDate(date)} at ${time}.`,
+            type: 'success',
+        });
     };
 
     if (!isOpen) return null;
 
     const handleConfirmClick = () => {
+        if (isMotRequired && !motBooking) {
+            setConfirmation({
+                isOpen: true,
+                title: 'MOT Booking Required',
+                message: 'This estimate includes an MOT. Please use the "Book Specific MOT Slot" button to schedule the MOT before creating the job.',
+                type: 'error',
+                onConfirm: () => setConfirmation({ isOpen: false, title: '', message: '' }),
+            });
+            return;
+        }
+
         const entityShortCode = entityForEstimate?.shortCode || 'UNK';
         const dailyHours = (jobsForEntity.flatMap(j => j.segments) || [])
             .filter(s => s.date === scheduledDate && s.status !== 'Cancelled')
@@ -249,7 +274,9 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
                     }
                     
                     // Link notes
-                    mainJob.notes += `\n\nLinked MOT Booking: #${motJobId} @ ${motBooking.time}`;
+                    mainJob.notes += `
+
+Linked MOT Booking: #${motJobId} @ ${motBooking.time}`;
 
                     const updatedEstimate: Estimate = { ...estimate, status: 'Converted to Job', jobId: mainJob.id };
                     // Create both jobs
@@ -285,6 +312,18 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
 
     const handleAcceptSuggestion = () => {
         if (!suggestion) return;
+
+        if (isMotRequired && !motBooking) {
+            setConfirmation({
+                isOpen: true,
+                title: 'MOT Booking Required',
+                message: 'This estimate includes an MOT. Please use the "Book Specific MOT Slot" button to schedule the MOT before creating the job.',
+                type: 'error',
+                onConfirm: () => setConfirmation({ isOpen: false, title: '', message: '' }),
+            });
+            return;
+        }
+
         const newJob: Job = {
             id: generateJobId(jobs, entityForEstimate?.shortCode || 'UNK'),
             entityId: estimate.entityId, vehicleId: estimate.vehicleId, customerId: estimate.customerId,
@@ -369,6 +408,7 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
                                     <input type="date" id="scheduledDate" value={scheduledDate} onChange={(e) => { setScheduledDate(e.target.value); setMotBooking(null); }} className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" required />
                                 </div>
 
+                                {isMotRequired && (
                                 <div className="pt-2">
                                      <button 
                                         type="button" 
@@ -384,6 +424,7 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
                                         )}
                                     </button>
                                 </div>
+                                )}
                             </div>
 
                             <div className="lg:col-span-9 flex flex-col h-full">

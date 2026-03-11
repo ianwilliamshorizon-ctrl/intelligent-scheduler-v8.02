@@ -1,11 +1,10 @@
 import React, { useMemo, useState } from 'react';
 import { EstimateLineItem, TaxRate, Part, PurchaseOrder, ServicePackage, Estimate, Vehicle, Supplier } from '../../../types';
-import { Trash2, PlusCircle, FileText, Clock, ChevronDown, ChevronUp, Plus, Image as ImageIcon, Search, ShoppingCart } from 'lucide-react';
-import { formatCurrency } from '../../../utils/formatUtils';
+import { Trash2, PlusCircle, FileText, Clock, ChevronDown, ChevronUp, Plus, Image as ImageIcon, Search, ShoppingCart, Edit } from 'lucide-react';
+import { formatCurrency } from '../../../core/utils/formatUtils';
 import SearchableSelect from '../../SearchableSelect';
 import { getScoredServicePackages } from '../../../utils/servicePackageScoring';
 import SupplierSelectionModal from '../../SupplierSelectionModal';
-
 
 const PartsStatusBadge: React.FC<{ status: string }> = ({ status }) => {
     const statusStyles: { [key: string]: string } = {
@@ -49,6 +48,7 @@ interface EditableLineItemRowProps {
     purchaseOrders: PurchaseOrder[];
     filteredParts: Part[];
     activePartSearch: string | null;
+    packageTotal?: number;
     onLineItemChange: (id: string, field: keyof EstimateLineItem, value: any) => void;
     onRemoveLineItem: (id: string) => void;
     onPartSearchChange: (value: string) => void;
@@ -63,7 +63,7 @@ interface EditableLineItemRowProps {
 
 const MemoizedEditableLineItemRow = React.memo(({ 
     item, taxRates, onLineItemChange, onRemoveLineItem, filteredParts, activePartSearch, onPartSearchChange, onSetActivePartSearch, onSelectPart, 
-    isReadOnly, canViewPricing, onManageMedia, onAddNewPart, suppliers, onOpenSupplierSelection, purchaseOrders 
+    isReadOnly, canViewPricing, onManageMedia, onAddNewPart, suppliers, onOpenSupplierSelection, purchaseOrders, packageTotal
 }: EditableLineItemRowProps) => {
     const isPackageComponent = item.isPackageComponent;
     const isPackageHeader = !!item.servicePackageId && !item.isPackageComponent;
@@ -108,29 +108,48 @@ const MemoizedEditableLineItemRow = React.memo(({
         }
     };
 
+    if (isPackageHeader) {
+        return (
+            <div className={`grid grid-cols-12 gap-2 items-center p-2 rounded-lg border bg-indigo-50 border-indigo-200`}>
+                <div className="col-span-6 font-bold text-indigo-800">{item.description}</div>
+                <div className="col-span-1"></div>
+                <div className="col-span-1 p-1 text-right">{item.quantity}</div>
+                {canViewPricing ? (
+                    <div className="col-span-1 p-1 text-right font-semibold">{formatCurrency(packageTotal || 0)}</div>
+                ) : (
+                    <div className="col-span-1"></div>
+                )}
+                <div className="col-span-1 text-center text-gray-500">-</div>
+                <div className="col-span-2 flex justify-end items-center gap-1">
+                    <button onClick={() => onRemoveLineItem(item.id)} className="text-red-500 hover:text-red-700 p-1" disabled={isReadOnly}><Trash2 size={14} /></button>
+                </div>
+            </div>
+        );
+    }
+
     return (
          <div className={`grid grid-cols-12 gap-2 items-center p-2 rounded-lg border ${isPackageComponent ? 'bg-gray-100' : 'bg-white'}`}>
             <div className="col-span-6 space-y-1">
-                 <input 
+                <input 
                     type="text" 
                     placeholder="Part No." 
                     value={item.partNumber || ''} 
                     onChange={e => onLineItemChange(item.id, 'partNumber', e.target.value)} 
                     className="w-full p-1 border rounded disabled:bg-gray-200 text-sm" 
-                    disabled={isReadOnly || isPackageComponent || item.isLabor} 
+                    disabled={isReadOnly || item.isLabor} 
                 />
                 <div className="relative w-full">
-                     <input
+                    <input
                         type="text"
                         placeholder="Description"
                         value={item.description}
                         onChange={handleDescriptionChange}
-                        onFocus={() => !item.isLabor && !isPackageHeader && !isPackageComponent && onSetActivePartSearch(item.id)}
+                        onFocus={() => !item.isLabor && onSetActivePartSearch(item.id)}
                         onBlur={() => setTimeout(() => onSetActivePartSearch(null), 150)}
                         className="w-full p-1 border rounded disabled:bg-gray-200"
-                        disabled={isReadOnly || isPackageHeader || isPackageComponent}
+                        disabled={isReadOnly || isPackageComponent}
                     />
-                     {activePartSearch === item.id && (
+                    {activePartSearch === item.id && (
                         <div className="absolute z-20 top-full left-0 w-full bg-white border rounded shadow-lg max-h-50 overflow-y-auto mt-1">
                             {filteredParts.map(part => (
                                 <div key={part.id} onMouseDown={() => onSelectPart(item.id, part)} className="p-2 hover:bg-indigo-100 cursor-pointer text-sm border-b last:border-0">
@@ -147,13 +166,13 @@ const MemoizedEditableLineItemRow = React.memo(({
                     )}
                 </div>
             </div>
-             <div className="col-span-1 text-xs text-center">
+            <div className="col-span-1 text-xs text-center">
                 {lineItemStatus && <LineItemPOStatusBadge status={lineItemStatus} />}
             </div>
-            <input type="number" step="0.1" value={item.quantity} onChange={e => onLineItemChange(item.id, 'quantity', e.target.value)} className="col-span-1 p-1 border rounded text-right disabled:bg-gray-200" disabled={isReadOnly || isPackageHeader} />
+            <input type="number" step="0.1" value={item.quantity} onChange={e => onLineItemChange(item.id, 'quantity', e.target.value)} className="col-span-1 p-1 border rounded text-right disabled:bg-gray-200" disabled={isReadOnly} />
             
             {canViewPricing ? (
-                <input type="number" step="0.01" value={item.unitPrice} onChange={e => onLineItemChange(item.id, 'unitPrice', e.target.value)} className="col-span-1 p-1 border rounded text-right disabled:bg-gray-200" placeholder="Sale" disabled={isReadOnly || isPackageHeader || isPackageComponent}/>
+                <input type="number" step="0.01" value={item.unitPrice} onChange={e => onLineItemChange(item.id, 'unitPrice', e.target.value)} className="col-span-1 p-1 border rounded text-right disabled:bg-gray-200" placeholder="Sale" disabled={isReadOnly || isPackageComponent}/>
             ) : (
                 <div className="col-span-1 p-1 text-right font-semibold text-gray-500">Hidden</div>
             )}
@@ -162,14 +181,14 @@ const MemoizedEditableLineItemRow = React.memo(({
                     type="button" 
                     onClick={() => onOpenSupplierSelection(item.id)} 
                     className="w-full p-1 border rounded text-sm text-center hover:bg-gray-50 disabled:bg-gray-200 disabled:cursor-not-allowed h-full" 
-                    disabled={item.isLabor || isPackageComponent || isPackageHeader}
+                    disabled={isReadOnly || item.isLabor || (lineItemStatus && lineItemStatus !== 'To Order' && lineItemStatus !== 'Awaiting Order')}
                 >
                     {supplierShortCode}
                 </button>
             </div>
            
-            <div className="col-span-1 flex justify-end items-center gap-1">
-                {!isPackageComponent && !isPackageHeader && (
+            <div className="col-span-2 flex justify-end items-center gap-1">
+                {!isPackageComponent && (
                     <button 
                         onClick={() => onManageMedia(item.id)} 
                         className={`p-1 rounded hover:bg-gray-200 ${item.media && item.media.length > 0 ? 'text-indigo-600' : 'text-gray-400'}`} 
@@ -371,7 +390,7 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
                         </div>
                         
                         {estimateBreakdown.packages.length > 0 && <h5 className="font-bold text-gray-800 text-xs uppercase pt-2">Service Packages</h5>}
-                        {estimateBreakdown.packages.map(({ header, children }: any) => (
+                        {estimateBreakdown.packages.map(({ header, children, pkg, packageTotal }: any) => (
                             <div key={header.id}>
                                 <MemoizedEditableLineItemRow 
                                     canViewPricing={canViewPricing} 
@@ -390,6 +409,7 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
                                     onManageMedia={onManageMedia} 
                                     onAddNewPart={onAddNewPart} 
                                     onOpenSupplierSelection={openSupplierSelection}
+                                    packageTotal={packageTotal}
                                 />
                                 <div className="pl-6 border-l-2 ml-2 space-y-1 mt-1">
                                     {children.map((child: any) => (

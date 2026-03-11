@@ -8,7 +8,13 @@ export const formatCurrency = (value: number | undefined | null): string => {
     if (value === null || value === undefined) {
         return '£0.00';
     }
-    // Round to 2 decimal places to handle floating point inaccuracies
-    const roundedValue = Math.round(value * 100) / 100;
-    return `£${roundedValue.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+    const numValue = Number(value);
+
+    return numValue.toLocaleString('en-GB', {
+        style: 'currency',
+        currency: 'GBP',
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    });
 };

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { PurchaseOrder, PurchaseOrderLineItem, Supplier, BusinessEntity, TaxRate, Part, Vehicle, Customer, Job } from '../types';
+import { PurchaseOrder, PurchaseOrderLineItem, Supplier, BusinessEntity, TaxRate, Part, Vehicle, Customer, Job, Estimate } from '../types';
 import { Save, PlusCircle, Trash2, X, CheckSquare, ArrowDownCircle, AlertTriangle, Info, Printer, Mail, Phone, Plus } from 'lucide-react';
 import { formatDate } from '../core/utils/dateUtils';
 import { formatCurrency } from '../utils/formatUtils';
@@ -11,10 +11,12 @@ import EmailPurchaseOrderModal from './EmailPurchaseOrderModal';
 import { usePrint } from '../core/hooks/usePrint';
 import { useWorkshopActions } from '../core/hooks/useWorkshopActions';
 import { useApp } from '../core/state/AppContext';
+import SupplierSelectionModal from './SupplierSelectionModal';
 
 interface PurchaseOrderLineItemRowProps {
     item: PurchaseOrderLineItem;
     parts: Part[];
+    suppliers: Supplier[];
     onLineItemChange: (id: string, field: keyof PurchaseOrderLineItem, value: any) => void;
     onRemoveLineItem: (id: string) => void;
     isReceivingDisabled: boolean;
@@ -27,6 +29,7 @@ interface PurchaseOrderLineItemRowProps {
 const PurchaseOrderLineItemRow: React.FC<PurchaseOrderLineItemRowProps> = ({
     item,
     parts,
+    suppliers,
     onLineItemChange,
     onRemoveLineItem,
     isReceivingDisabled,
@@ -37,6 +40,7 @@ const PurchaseOrderLineItemRow: React.FC<PurchaseOrderLineItemRowProps> = ({
 }) => {
     const [descriptionSearch, setDescriptionSearch] = useState(item.description || '');
     const [showResults, setShowResults] = useState(false);
+    const [isSupplierModalOpen, setIsSupplierModalOpen] = useState(false);
 
     const filteredParts = useMemo(() => {
         if (descriptionSearch.length < 2) return [];
@@ -51,6 +55,7 @@ const PurchaseOrderLineItemRow: React.FC<PurchaseOrderLineItemRowProps> = ({
         onLineItemChange(item.id, 'partNumber', part.partNumber);
         onLineItemChange(item.id, 'description', part.description);
         onLineItemChange(item.id, 'unitPrice', part.costPrice);
+        onLineItemChange(item.id, 'supplierId', part.defaultSupplierId);
         setDescriptionSearch(part.description);
         setShowResults(false);
     };
@@ -67,9 +72,15 @@ const PurchaseOrderLineItemRow: React.FC<PurchaseOrderLineItemRowProps> = ({
     const canReceive = !isReceivingDisabled && !isCredit;
     const hasBeenReceived = (item.receivedQuantity || 0) > 0;
 
+    const supplierShortCode = useMemo(() => {
+        if (!item.supplierId) return <span className="text-gray-400">-</span>;
+        const supplier = suppliers.find(s => s.id === item.supplierId);
+        return <span className="font-mono bg-gray-200 px-1 rounded">{supplier?.shortCode || '???'}</span>;
+    }, [item.supplierId, suppliers]);
+
     return (
         <div className={`grid grid-cols-12 gap-2 items-start p-2 border bg-white rounded-lg ${isFullyReceived && isOrderedOrLater ? 'bg-green-50/50' : ''} ${isPendingReturn ? 'bg-amber-50 border-amber-200' : ''} ${isCredit ? 'bg-red-50/30' : ''}`}>
-            <div className="col-span-4 relative">
+            <div className="col-span-3 relative">
                 <input
                     type="text"
                     placeholder="Search Description or Part No..."
@@ -103,7 +114,7 @@ const PurchaseOrderLineItemRow: React.FC<PurchaseOrderLineItemRowProps> = ({
             <input type="text" placeholder="Part Number" value={item.partNumber || ''} onChange={e => onLineItemChange(item.id, 'partNumber', e.target.value)} className="col-span-2 p-1 border rounded disabled:bg-gray-100 disabled:cursor-not-allowed text-sm font-medium" disabled={fieldsDisabled} />
             <input type="number" step="1" value={item.quantity ?? 0} onChange={e => onLineItemChange(item.id, 'quantity', e.target.value)} className={`col-span-1 p-1 border rounded text-right disabled:bg-gray-100 disabled:cursor-not-allowed text-sm ${isCredit ? 'text-red-600 font-bold' : ''}`} disabled={fieldsDisabled} />
 
-            <div className="col-span-2 relative">
+            <div className="col-span-1 relative">
                 <input
                     type="number"
                     step="1"
@@ -114,6 +125,25 @@ const PurchaseOrderLineItemRow: React.FC<PurchaseOrderLineItemRowProps> = ({
                     disabled={isReceivingDisabled}
                     title={`Ordered: ${ordered}`}
                 />
+            </div>
+
+            <div className="col-span-2">
+                 <button 
+                    type="button" 
+                    onClick={() => setIsSupplierModalOpen(true)} 
+                    className="w-full p-1 border rounded text-sm text-center hover:bg-gray-50 disabled:bg-gray-200 disabled:cursor-not-allowed h-full" 
+                    disabled={fieldsDisabled}
+                >
+                    {supplierShortCode}
+                </button>
+                {isSupplierModalOpen && (
+                    <SupplierSelectionModal 
+                        isOpen={isSupplierModalOpen}
+                        onClose={() => setIsSupplierModalOpen(false)}
+                        onSelect={(supplierId) => onLineItemChange(item.id, 'supplierId', supplierId)}
+                        suppliers={suppliers}
+                    />
+                )}
             </div>
 
             <input type="number" step="0.01" value={item.unitPrice ?? 0} onChange={e => onLineItemChange(item.id, 'unitPrice', e.target.value)} className="col-span-2 p-1 border rounded text-right text-sm" placeholder="Unit Cost"/>
@@ -136,7 +166,7 @@ const PurchaseOrderLineItemRow: React.FC<PurchaseOrderLineItemRowProps> = ({
 interface PurchaseOrderFormModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSave: (po: PurchaseOrder) => void;
+    onSave: (po: PurchaseOrder, updatedParts?: Part[], updatedEstimate?: Estimate) => void;
     onSavePart: (part: Part) => void;
     purchaseOrder: PurchaseOrder | null;
     suppliers: Supplier[];
@@ -145,6 +175,7 @@ interface PurchaseOrderFormModalProps {
     allPurchaseOrders: PurchaseOrder[];
     selectedEntityId: string;
     parts: Part[];
+    estimates: Estimate[];
     setParts: React.Dispatch<React.SetStateAction<Part[]>>;
     onViewPurchaseOrder?: (po: PurchaseOrder) => void;
     jobId?: string; 
@@ -156,7 +187,10 @@ interface PurchaseOrderFormModalProps {
     forceRefresh: (collectionKey: string) => Promise<void>;
 }
 
-const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen, onClose, onSave, onSavePart, purchaseOrder, suppliers, taxRates, businessEntities, allPurchaseOrders, selectedEntityId, parts, setParts, onViewPurchaseOrder, jobId, jobs, vehicles, customers, setJobs, generatePurchaseOrderId, forceRefresh }) => {
+const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ 
+    isOpen, onClose, onSave, onSavePart, purchaseOrder, suppliers, taxRates, businessEntities, allPurchaseOrders, selectedEntityId, parts, setParts, estimates, 
+    onViewPurchaseOrder, jobId, jobs, vehicles, customers, setJobs, generatePurchaseOrderId, forceRefresh 
+}) => {
     const { setConfirmation } = useApp();
     const { handleDeletePurchaseOrder } = useWorkshopActions();
     const [formData, setFormData] = useState<Partial<PurchaseOrder>>({ 
@@ -178,80 +212,9 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
     const [targetLineItemId, setTargetLineItemId] = useState<string | null>(null);
     const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
 
-    const saveAndLinkPo = useCallback((poToSave: PurchaseOrder) => {
-        onSave(poToSave);
-    
-        if (poToSave.jobId && setJobs && allPurchaseOrders && jobs && parts) {
-            const updatedPOsList = [...allPurchaseOrders.filter(p => p.id !== poToSave.id), poToSave];
-            const poMap = new Map(updatedPOsList.map(p => [p.id, p]));
-    
-            setJobs(prevJobs => prevJobs.map(job => {
-                if (job.id === poToSave.jobId) {
-                    const newJobLineItemsFromPO = (poToSave.lineItems || []).map(poItem => {
-                        const part = parts.find(p => p.partNumber.toLowerCase() === poItem.partNumber?.toLowerCase());
-                        let salePrice = part?.salePrice;
-                        if (salePrice === undefined || salePrice === null) {
-                            console.warn(`Part ${poItem.partNumber} does not have a sale price. Using cost price from PO as a fallback.`);
-                            salePrice = poItem.unitPrice;
-                        }
-    
-                        return {
-                            id: `po_item_${poItem.id}`,
-                            purchaseOrderLineItemId: poItem.id,
-                            description: poItem.description,
-                            quantity: poItem.quantity,
-                            unitPrice: salePrice,
-                            isLabor: false,
-                            partId: part?.id || null,
-                            taxCodeId: poItem.taxCodeId,
-                        };
-                    });
-    
-                    const existingJobLineItems = job.lineItems || [];
-                    const poItemIds = new Set((poToSave.lineItems || []).map(li => li.id));
-    
-                    const otherJobLineItems = existingJobLineItems.filter(
-                        li => !li.purchaseOrderLineItemId || !poItemIds.has(li.purchaseOrderLineItemId)
-                    );
-    
-                    const updatedJobLineItems = [...otherJobLineItems, ...newJobLineItemsFromPO];
-    
-                    const currentPoIds = job.purchaseOrderIds || [];
-                    const newPurchaseOrderIds = Array.from(new Set([...currentPoIds, poToSave.id]));
-                    
-                    const jobPOs = newPurchaseOrderIds
-                        .map(id => poMap.get(id))
-                        .filter((p): p is PurchaseOrder => !!p && p.type !== 'Credit');
-    
-                    let newPartsStatus: Job['partsStatus'] = 'Not Required';
-    
-                    if (jobPOs.length > 0) {
-                        const allReceived = jobPOs.every(p => p.status === 'Received');
-                        const anyReceived = jobPOs.some(p => p.status === 'Received' || p.status === 'Partially Received');
-                        const anyOrdered = jobPOs.some(p => p.status === 'Ordered');
-    
-                        if (allReceived) {
-                            newPartsStatus = 'Fully Received';
-                        } else if (anyReceived) {
-                            newPartsStatus = 'Partially Received';
-                        } else if (anyOrdered) {
-                            newPartsStatus = 'Ordered';
-                        } else {
-                            newPartsStatus = 'Awaiting Order';
-                        }
-                    }
-    
-                    return {
-                        ...job,
-                        purchaseOrderIds: newPurchaseOrderIds,
-                        partsStatus: newPartsStatus,
-                        lineItems: updatedJobLineItems, 
-                    };
-                }
-                return job;
-            }));
-        }
-    }, [onSave, setJobs, allPurchaseOrders, jobs, parts]);
+    const saveAndLinkPo = useCallback((poToSave: PurchaseOrder, updatedParts?: Part[], updatedEstimate?: Estimate) => {
+        onSave(poToSave, updatedParts, updatedEstimate);
+    }, [onSave]);
     
     const partsMap = useMemo(() => new Map(parts.map(p => [p.partNumber.toLowerCase(), p])), [parts]);
     const standardTaxRate = useMemo(() => taxRates.find(t => t.code === 'T1') || taxRates[0], [taxRates]);
@@ -375,7 +338,8 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
             description: '', 
             quantity: 1, 
             unitPrice: 0, 
-            taxCodeId: standardTaxRate?.id || ''
+            taxCodeId: standardTaxRate?.id || '',
+            supplierId: formData.supplierId || ''
         };
         setFormData(prev => ({ ...prev, lineItems: [...(prev.lineItems || []), newItem] }));
     };
@@ -409,6 +373,7 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
                             partNumber: newPartWithId.partNumber,
                             description: newPartWithId.description,
                             unitPrice: newPartWithId.costPrice,
+                            supplierId: newPartWithId.defaultSupplierId
                         }
                         : item
                 );
@@ -518,6 +483,8 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
             status: newStatus,
             jobId: formData.jobId,
         };
+        
+        const { updatedParts, updatedEstimate } = updateRecordsFromPO(updatedPO as PurchaseOrder);
 
         const itemsToReturn = (formData.lineItems || []).filter(item => item.returnStatus === 'Pending');
 
@@ -542,26 +509,91 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
             saveAndLinkPo(creditNote as PurchaseOrder);
             showSuccess(`Receipt finalized. Credit note for ${itemsToReturn.length} item(s) has been raised.`);
         } else {
-            showSuccess('Receipt finalized successfully.');
+            showSuccess('Receipt finalized successfully. Part records and job card costs have been updated.');
         }
         
-        saveAndLinkPo(updatedPO as PurchaseOrder);
+        saveAndLinkPo(updatedPO as PurchaseOrder, updatedParts, updatedEstimate);
         await forceRefresh('brooks_purchaseOrders');
         await forceRefresh('brooks_jobs');
         onClose();
     };
 
-    const { totalNet, totalTax, grandTotal } = useMemo(() => {
-        let net = 0;
-        (formData.lineItems || []).forEach(item => {
-            net += (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0);
+    const updateRecordsFromPO = (finalizedPO: PurchaseOrder) => {
+        const poLineItems = finalizedPO.lineItems || [];
+        let updatedParts: Part[] = [];
+        let updatedEstimate: Estimate | undefined = undefined;
+
+        // 1. Update Part Records
+        const newPartsState = [...parts];
+        poLineItems.forEach(poItem => {
+            if (!poItem.partNumber) return;
+            const partIndex = newPartsState.findIndex(p => p.partNumber.toLowerCase() === poItem.partNumber!.toLowerCase());
+            if (partIndex !== -1) {
+                const originalPart = newPartsState[partIndex];
+                if (originalPart.costPrice !== poItem.unitPrice) {
+                    const updatedPart = { ...originalPart, costPrice: poItem.unitPrice };
+                    newPartsState[partIndex] = updatedPart;
+                    updatedParts.push(updatedPart);
+                }
+            }
         });
+
+        // 2. Update Estimate Record
+        if (finalizedPO.jobId) {
+            const job = jobs.find(j => j.id === finalizedPO.jobId);
+            if (job && job.estimateId) {
+                const estimate = estimates.find(e => e.id === job.estimateId);
+                if (estimate) {
+                    updatedEstimate = JSON.parse(JSON.stringify(estimate));
+                    let estimateUpdated = false;
+
+                    updatedEstimate.lineItems.forEach((estItem, index) => {
+                        const correspondingPoItem = poLineItems.find(poItem => poItem.jobLineItemId === estItem.id);
+                        if (correspondingPoItem) {
+                            if (estItem.unitCost !== correspondingPoItem.unitPrice) {
+                                updatedEstimate.lineItems[index].unitCost = correspondingPoItem.unitPrice;
+                                estimateUpdated = true;
+                            }
+                        }
+                    });
+
+                    if (!estimateUpdated) {
+                        updatedEstimate = undefined; // Don't save if nothing changed
+                    }
+                }
+            }
+        }
         
-        const taxRatePercent = standardTaxRate?.rate || 20;
-        const tax = net * (taxRatePercent / 100);
-        
-        return { totalNet: net, totalTax: tax, grandTotal: net + tax };
-    }, [formData.lineItems, standardTaxRate]);
+        return { updatedParts, updatedEstimate };
+    }
+
+    const { totalNet, totalTax, grandTotal } = useMemo(() => {
+        const taxRatesMap = new Map(taxRates.map(t => [t.id, t.rate]));
+        const standardTaxRateId = taxRates.find(t => t.code === 'T1')?.id;
+        const standardRateValue = taxRatesMap.get(standardTaxRateId || '') || 20;
+
+        let net = 0;
+        let tax = 0;
+
+        (formData.lineItems || []).forEach(item => {
+            const itemNet = (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0);
+            net += itemNet;
+
+            const taxCodeId = item.taxCodeId || standardTaxRateId;
+            const rate = taxRatesMap.get(taxCodeId || '') ?? standardRateValue;
+            
+            tax += itemNet * (rate / 100);
+        });
+
+        const roundedNet = Math.round(net * 100) / 100;
+        const roundedTax = Math.round(tax * 100) / 100;
+
+        return { 
+            totalNet: roundedNet, 
+            totalTax: roundedTax, 
+            grandTotal: roundedNet + roundedTax
+        };
+    }, [formData.lineItems, taxRates]);
 
     const currentSupplier = useMemo(() => suppliers.find(s => s.id === formData.supplierId), [formData.supplierId, suppliers]);
     const currentEntity = useMemo(() => businessEntities.find(e => e.id === formData.entityId), [formData.entityId, businessEntities]);
@@ -680,10 +712,11 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
                         </div>
                         
                         <div className="grid grid-cols-12 gap-2 px-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                            <div className="col-span-4">Description</div>
+                            <div className="col-span-3">Description</div>
                             <div className="col-span-2">Part Number</div>
                             <div className="col-span-1 text-right">Qty</div>
-                            <div className="col-span-2 text-right">Rec'd</div>
+                            <div className="col-span-1 text-right">Rec'd</div>
+                            <div className="col-span-2 text-center">Supplier</div>
                             <div className="col-span-2 text-right">Unit Cost</div>
                             <div className="col-span-1"></div>
                         </div>
@@ -693,6 +726,7 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
                                 key={item.id} 
                                 item={item} 
                                 parts={parts}
+                                suppliers={suppliers}
                                 onLineItemChange={handleLineItemChange} 
                                 onRemoveLineItem={removeLineItem} 
                                 isReceivingDisabled={isReceivingDisabled}
@@ -720,7 +754,7 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ isOpen,
                                 <span>{formatCurrency(totalNet)}</span>
                             </div>
                             <div className="flex justify-between text-xs text-gray-500 italic">
-                                <span>VAT ({standardTaxRate?.rate || 20}%)</span>
+                                <span>Total VAT</span>
                                 <span>{formatCurrency(totalTax)}</span>
                             </div>
                             <div className="flex justify-between font-bold text-xl mt-2 pt-2 border-t text-indigo-900">

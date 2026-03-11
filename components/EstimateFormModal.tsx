@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Estimate, Customer, Vehicle, BusinessEntity, TaxRate, ServicePackage, Part, EstimateLineItem, Job, User, CheckInPhoto, Supplier } from '../types';
-import { Save, PlusCircle, Gauge, Info, FileText, ChevronUp, ChevronDown, Trash2, X, TrendingUp, Plus, Image as ImageIcon, History, Car, Wand2, Expand } from 'lucide-react';
+import { Save, PlusCircle, Gauge, Info, FileText, ChevronUp, ChevronDown, Trash2, X, TrendingUp, Plus, Image as ImageIcon, History, Car, Wand2, Expand, Edit } from 'lucide-react';
 import { formatDate, getTodayISOString, getFutureDateISOString } from '../core/utils/dateUtils';
 import { generateEstimateNumber } from '../core/utils/numberGenerators';
 import { formatCurrency } from '../utils/formatUtils';
@@ -51,6 +51,21 @@ const MemoizedEditableLineItemRow = React.memo(({
         }
     };
 
+    if (isPackageHeader) {
+        return (
+            <div className={`grid grid-cols-12 gap-2 items-center p-2 rounded-lg border bg-indigo-50 border-indigo-200`}>
+                <div className="col-span-5 font-bold text-indigo-800">{item.description}</div>
+                <div className="col-span-1 p-1 text-right text-sm">{item.quantity}</div>
+                <div className="col-span-2 p-1 text-right text-sm">-</div>
+                <div className="col-span-2 p-1 text-right text-sm font-semibold">{formatCurrency(item.unitPrice)}</div>
+                <div className="col-span-1 text-center text-sm text-gray-500">-</div>
+                <div className="col-span-1 flex justify-center items-center gap-1">
+                    <button onClick={() => onRemoveLineItem(item.id)} className="text-red-500 hover:text-red-700 p-1"><Trash2 size={14} /></button>
+                </div>
+            </div>
+        );
+    }
+
     return (
          <div className={`grid grid-cols-12 gap-2 items-start p-2 rounded-lg border ${isPackageComponent ? 'bg-gray-100' : 'bg-white'}`}>
             <div className="col-span-5 flex items-start gap-2">
@@ -78,7 +93,7 @@ const MemoizedEditableLineItemRow = React.memo(({
                             value={item.description || ''} 
                             onChange={handleDescriptionChange}
                             onFocus={() => {
-                                if (!item.isLabor && !item.servicePackageId && !item.isPackageComponent) {
+                                if (!item.isLabor && !isPackageComponent) {
                                     onSetActivePartSearch(item.id);
                                     onPartSearchChange(item.description || '');
                                 }
@@ -87,7 +102,7 @@ const MemoizedEditableLineItemRow = React.memo(({
                             rows={1}
                             style={{ whiteSpace: 'pre-wrap', minHeight: '38px' }}
                             className="w-full p-1 border rounded disabled:bg-gray-200 text-sm resize-y-none overflow-hidden"
-                            disabled={!!isPackageComponent} 
+                            disabled={isPackageComponent} 
                         />
                          {activePartSearch === item.id && (
                             <div className="absolute z-20 top-full left-0 w-full bg-white border rounded shadow-lg max-h-60 overflow-y-auto mt-1">
@@ -107,19 +122,19 @@ const MemoizedEditableLineItemRow = React.memo(({
             </div>
             <input type="number" step="0.1" value={item.quantity} onChange={e => onLineItemChange(item.id, 'quantity', e.target.value)} className="col-span-1 p-1 border rounded text-right text-sm" />
             <input type="number" step="0.01" value={item.unitCost || ''} onChange={e => onLineItemChange(item.id, 'unitCost', e.target.value)} className="col-span-2 p-1 border rounded text-right text-sm" placeholder="Cost" />
-            <input type="number" step="0.01" value={item.unitPrice} onChange={e => onLineItemChange(item.id, 'unitPrice', e.target.value)} className="col-span-2 p-1 border rounded text-right text-sm" placeholder="Sell" disabled={!!isPackageComponent}/>
+            <input type="number" step="0.01" value={item.unitPrice} onChange={e => onLineItemChange(item.id, 'unitPrice', e.target.value)} className="col-span-2 p-1 border rounded text-right text-sm" placeholder="Sell" disabled={isPackageComponent}/>
             <div className="col-span-1">
                 <button 
                     type="button" 
                     onClick={() => onOpenSupplierSelection(item.id)} 
                     className="w-full p-1 border rounded text-sm text-center hover:bg-gray-50 disabled:bg-gray-200 disabled:cursor-not-allowed h-full" 
-                    disabled={item.isLabor || isPackageComponent || isPackageHeader}
+                    disabled={item.isLabor}
                 >
                     {supplierShortCode}
                 </button>
             </div>
             <div className="col-span-1 flex justify-center items-center gap-1">
-                <button onClick={() => onRemoveLineItem(item.id)} className="text-red-500 hover:text-red-700 disabled:opacity-50 p-1" disabled={!!isPackageComponent}><Trash2 size={14} /></button>
+                <button onClick={() => onRemoveLineItem(item.id)} className="text-red-500 hover:text-red-700 disabled:opacity-50 p-1" disabled={isPackageComponent}><Trash2 size={14} /></button>
             </div>
          </div>
     );
@@ -370,9 +385,7 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
             const customersCars = vehicles.filter(v => v.customerId === customer.id);
             let newVehicleId = prev.vehicleId;
 
-            // If there's no vehicle selected, or the selected vehicle does not belong to the new customer
             if (!newVehicleId || !customersCars.some(car => car.id === newVehicleId)) {
-                // If the new customer has only one car, select it. Otherwise, clear selection.
                 newVehicleId = customersCars.length === 1 ? customersCars[0].id : '';
             }
 
@@ -508,7 +521,6 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
             });
         }
 
-        // If the main package price is zero, calculate it from components
         if (mainPackageItem.unitPrice === 0 && runningTotal > 0) {
             mainPackageItem.unitPrice = runningTotal;
         }
@@ -861,7 +873,6 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                     suppliers={suppliers}
                 />
             )}
-
 
             {isAddingVehicle && (
                 <VehicleFormModal

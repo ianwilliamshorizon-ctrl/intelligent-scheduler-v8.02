@@ -2,12 +2,15 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useApp } from '../../core/state/AppContext';
 import { useData } from '../../core/state/DataContext';
-import { Job, Vehicle, Customer } from '../../types';
-import { Eye, Search, PlusCircle, Printer, Briefcase } from 'lucide-react';
+import { Job, Vehicle, Customer, ServicePackage, Estimate } from '../../types';
+import { Eye, Search, PlusCircle, Printer, Briefcase, Wand2, Loader2, CalendarDays } from 'lucide-react';
 import { getCustomerDisplayName } from '../../core/utils/customerUtils';
-import { getRelativeDate } from '../../core/utils/dateUtils';
+import { getRelativeDate, formatDate, dateStringToDate, addDays, formatReadableDate } from '../../core/utils/dateUtils';
 import PrintableJobList from '../../components/PrintableJobList';
 import { usePrint } from '../../core/hooks/usePrint';
+import { generateServicePackageName } from '../../core/services/geminiService';
+import ServicePackageFormModal from '../../components/ServicePackageFormModal';
+import { useWorkshopActions } from '../../core/hooks/useWorkshopActions';
 
 interface JobsViewProps {
     onEditJob: (jobId: string) => void;
@@ -16,66 +19,114 @@ interface JobsViewProps {
 
 const statusFilterOptions: readonly Job['status'][] = ['Unallocated', 'Allocated', 'In Progress', 'Pending QC', 'Complete', 'Invoiced', 'Cancelled', 'Closed'];
 
+const dateFilterOptions = {
+    '30days': 'Last 30 Days',
+    '90days': 'Last 90 Days',
+    'all': 'All Time',
+};
+
+type DateFilterOption = keyof typeof dateFilterOptions;
+
 const JobsView: React.FC<JobsViewProps> = ({ onEditJob, onSmartCreateClick }) => {
-    const { jobs, customers, vehicles, businessEntities } = useData();
-    const { selectedEntityId } = useApp();
+    const { jobs, customers, vehicles, businessEntities, estimates, taxRates, setServicePackages, parts } = useData();
+    const { selectedEntityId, setConfirmation } = useApp();
     const print = usePrint();
+    const { handleSaveItem } = useWorkshopActions();
     
     const [filter, setFilter] = useState('');
     const [statusFilter, setStatusFilter] = useState<Job['status'][]>([]);
+    const [dateFilter, setDateFilter] = useState<DateFilterOption>('30days');
     const [displayLimit, setDisplayLimit] = useState(50);
+    const [isCreatingPackage, setIsCreatingPackage] = useState(false);
+    const [isPackageModalOpen, setIsPackageModalOpen] = useState(false);
+    const [suggestedPackage, setSuggestedPackage] = useState<Partial<ServicePackage> | null>(null);
 
     const customerMap = useMemo(() => new Map(customers.map(c => [c.id, c])), [customers]);
     const vehicleMap = useMemo(() => new Map(vehicles.map(v => [v.id, v])), [vehicles]);
-    
-    const filteredJobs = useMemo(() => {
-        const thirtyDaysAgo = getRelativeDate(-30);
-        const selectedEntity = businessEntities.find(e => e.id === selectedEntityId);
+    const estimateMap = useMemo(() => new Map(estimates.map(e => [e.id, e])), [estimates]);
+    const standardTaxRateId = useMemo(() => taxRates.find(t => t.code === 'T1')?.id, [taxRates]);
 
-        return jobs.filter(job => {
-            // Business Entity Filter (using shortCode prefix)
+    const filteredJobs = useMemo(() => {
+        const selectedEntity = businessEntities.find(e => e.id === selectedEntityId);
+        let dateCutoff: string | null = null;
+        if (dateFilter === '30days') {
+            dateCutoff = getRelativeDate(-30);
+        } else if (dateFilter === '90days') {
+            dateCutoff = getRelativeDate(-90);
+        }
+
+        const initialFilter = jobs.filter(job => {
             if (selectedEntityId !== 'all' && selectedEntity?.shortCode) {
                 if (!job.id.startsWith(selectedEntity.shortCode)) return false;
             } else if (selectedEntityId !== 'all') {
-                // Fallback to entityId if shortCode is missing
                 if (job.entityId !== selectedEntityId) return false;
             }
-
-            // Date Filter
-            if (job.createdAt < thirtyDaysAgo) return false;
             
-            // Status Filter
+            if (dateCutoff && job.createdAt < dateCutoff) {
+                return false;
+            }
+
             const matchesStatus = statusFilter.length === 0 || statusFilter.includes(job.status);
             if (!matchesStatus) return false;
 
-            // Search Filter
             const lowerFilter = filter.toLowerCase();
-            const vehicle = vehicleMap.get(job.vehicleId);
-            const customer = customerMap.get(job.customerId);
-            
-            const customerName = customer ? getCustomerDisplayName(customer).toLowerCase() : '';
-            const description = job.description ? String(job.description).toLowerCase() : '';
-            const jobId = String(job.id).toLowerCase();
-            
-            const reg = vehicle?.registration ? String(vehicle.registration).toLowerCase().replace(/\s/g, '') : '';
-            const filterNoSpace = lowerFilter.replace(/\s/g, '');
-            const prevRegMatch = (vehicle?.previousRegistrations || []).some(pr => 
-                String(pr.registration).toLowerCase().replace(/\s/g, '').includes(filterNoSpace)
-            );
+            if (lowerFilter) {
+                const vehicle = vehicleMap.get(job.vehicleId);
+                const customer = customerMap.get(job.customerId);
+                
+                const customerName = customer ? getCustomerDisplayName(customer).toLowerCase() : '';
+                const description = job.description ? String(job.description).toLowerCase() : '';
+                const jobId = String(job.id).toLowerCase();
+                
+                const reg = vehicle?.registration ? String(vehicle.registration).toLowerCase().replace(/\s/g, '') : '';
+                const filterNoSpace = lowerFilter.replace(/\s/g, '');
+                const prevRegMatch = (vehicle?.previousRegistrations || []).some(pr => 
+                    String(pr.registration).toLowerCase().replace(/\s/g, '').includes(filterNoSpace)
+                );
 
-            return filter === '' ||
-                jobId.includes(lowerFilter) ||
-                description.includes(lowerFilter) ||
-                customerName.includes(lowerFilter) ||
-                reg.includes(filterNoSpace) ||
-                prevRegMatch;
-        }).sort((a,b) => (b.createdAt || '').localeCompare(a.createdAt || '') || (b.id || '').localeCompare(a.id || ''));
-    }, [jobs, filter, statusFilter, customerMap, vehicleMap, selectedEntityId, businessEntities]);
+                return jobId.includes(lowerFilter) ||
+                    description.includes(lowerFilter) ||
+                    customerName.includes(lowerFilter) ||
+                    reg.includes(filterNoSpace) ||
+                    prevRegMatch;
+            }
 
-    // Reset pagination when filters change
+            return true; 
+        });
+
+        const jobIdsInInitialFilter = new Set(initialFilter.map(j => j.id));
+        const supplementaryJobsToAdd: Job[] = [];
+
+        // If there's a text filter, we might need to add supplementary jobs whose parents are in the results
+        if (filter.trim()) {
+            jobs.forEach(job => {
+                const description = job.description || '';
+                if (description.toLowerCase().includes('supplementary for job #')) {
+                    const parentIdMatch = description.match(/#(\S+)/);
+                    if (parentIdMatch && parentIdMatch[1]) {
+                        const parentId = parentIdMatch[1];
+                        if (jobIdsInInitialFilter.has(parentId) && !jobIdsInInitialFilter.has(job.id)) {
+                           supplementaryJobsToAdd.push(job);
+                        }
+                    }
+                }
+            });
+        }
+
+        const finalJobs = [...initialFilter, ...supplementaryJobsToAdd].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '') || (b.id || '').localeCompare(a.id || ''));
+
+        const uniqueJobs = finalJobs.filter((job, index, self) =>
+            index === self.findIndex((j) => j.id === job.id)
+        );
+
+        return uniqueJobs;
+
+    }, [jobs, filter, statusFilter, dateFilter, customerMap, vehicleMap, selectedEntityId, businessEntities]);
+
+
     useEffect(() => {
         setDisplayLimit(50);
-    }, [filter, statusFilter, selectedEntityId]);
+    }, [filter, statusFilter, selectedEntityId, dateFilter]);
 
     const displayedJobs = filteredJobs.slice(0, displayLimit);
 
@@ -95,15 +146,66 @@ const JobsView: React.FC<JobsViewProps> = ({ onEditJob, onSmartCreateClick }) =>
                 jobs={filteredJobs} 
                 vehicles={vehicleMap} 
                 customers={customerMap}
-                title={`Job Report (Last 30 Days)`}
+                title={`Job Report (${dateFilterOptions[dateFilter]})`}
             />
         );
+    };
+
+    const handleCreatePackage = async (job: Job) => {
+        const estimate = estimateMap.get(job.estimateId || '');
+        if (!estimate || !estimate.lineItems || estimate.lineItems.length === 0) {
+            setConfirmation({ isOpen: true, title: 'No Line Items', message: 'This job has no estimate or line items to create a package from.', type: 'info' });
+            return;
+        }
+
+        const vehicle = vehicleMap.get(job.vehicleId);
+        if (!vehicle) {
+            setConfirmation({ isOpen: true, title: 'Error', message: "Cannot create a package without an associated vehicle.", type: 'warning' });
+            return;
+        }
+
+        setIsCreatingPackage(true);
+        try {
+            const { name, description } = await generateServicePackageName(estimate.lineItems, vehicle.make, vehicle.model, vehicle.cc);
+            const totalNet = (estimate.lineItems || []).filter(item => !item.isPackageComponent).reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
+
+            const costItems = (estimate.lineItems || [])
+                .filter(item => !item.servicePackageId || item.isPackageComponent)
+                .map(li => ({
+                    ...li,
+                    id: crypto.randomUUID(),
+                    servicePackageId: undefined,
+                    servicePackageName: undefined,
+                    isPackageComponent: false,
+                    isOptional: false
+                }));
+
+            const newPackage: Partial<ServicePackage> = {
+                entityId: job.entityId,
+                name,
+                description,
+                totalPrice: totalNet,
+                costItems: costItems,
+                applicableMake: vehicle.make,
+                applicableModel: vehicle.model,
+                applicableEngineSize: vehicle.cc,
+                taxCodeId: standardTaxRateId
+            };
+            
+            setSuggestedPackage(newPackage);
+            setIsPackageModalOpen(true);
+
+        } catch (error: any) {
+             setConfirmation({ isOpen: true, title: 'AI Error', message: `AI failed to create package: ${error.message}`, type: 'warning' });
+        } finally {
+            setIsCreatingPackage(false);
+        }
     };
 
     return (
         <div className="w-full h-full flex flex-col p-6 bg-gray-50">
             <header className="flex justify-between items-center mb-4 flex-shrink-0">
-                <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2"><Briefcase /> All Jobs (Last 30 Days)</h2>
+                <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2"><Briefcase /> Jobs <span className="text-gray-500 font-medium text-lg">({dateFilterOptions[dateFilter]})</span></h2>
                 <div className="flex items-center gap-2">
                      <button onClick={handlePrint} className="flex items-center gap-2 py-2 px-4 bg-gray-600 text-white font-semibold rounded-lg shadow-md hover:bg-gray-700">
                         <Printer size={16}/> Print List
@@ -115,10 +217,26 @@ const JobsView: React.FC<JobsViewProps> = ({ onEditJob, onSmartCreateClick }) =>
             </header>
             
             <div className="space-y-4 mb-4 flex-shrink-0">
-                <div className="relative flex-grow">
-                    <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
-                    <input type="text" placeholder="Search by ID, customer, vehicle, or description..." value={filter} onChange={e => setFilter(e.target.value)} className="w-full p-2 pl-9 border rounded-lg"/>
+                <div className='flex gap-4'>
+                    <div className="relative flex-grow">
+                        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
+                        <input type="text" placeholder="Search by ID, customer, vehicle, or description..." value={filter} onChange={e => setFilter(e.target.value)} className="w-full p-2 pl-9 border rounded-lg"/>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-gray-700"><CalendarDays size={16} className="inline-block mr-1"/>Date Range:</span>
+                        <div className="flex items-center gap-1 p-1 bg-gray-200 rounded-lg">
+                            {Object.keys(dateFilterOptions).map((key) => (
+                                <button 
+                                    key={key}
+                                    onClick={() => setDateFilter(key as DateFilterOption)}
+                                    className={`py-1 px-3 rounded-md font-semibold text-xs transition ${dateFilter === key ? 'bg-white shadow' : 'text-gray-600 hover:bg-gray-300'}`}>
+                                    {dateFilterOptions[key as DateFilterOption]}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
                 </div>
+
                 <div className="flex flex-wrap gap-2 items-center">
                     <span className="text-sm font-medium text-gray-700 mr-2">Status:</span>
                     {statusFilterOptions.map(status => (
@@ -150,7 +268,7 @@ const JobsView: React.FC<JobsViewProps> = ({ onEditJob, onSmartCreateClick }) =>
                                 return (
                                 <tr key={job.id} className="hover:bg-indigo-50">
                                     <td className="p-3 font-mono">{job.id}</td>
-                                    <td className="p-3">{job.createdAt}</td>
+                                    <td className="p-3">{job.createdAt ? formatReadableDate(job.createdAt) : 'N/A'}</td>
                                     <td className="p-3">{getCustomerDisplayName(customer)}</td>
                                     <td className="p-3 font-mono">{vehicle?.registration}</td>
                                     <td className="p-3">{job.description}</td>
@@ -165,6 +283,9 @@ const JobsView: React.FC<JobsViewProps> = ({ onEditJob, onSmartCreateClick }) =>
                                     <td className="p-3">
                                         <div className="flex gap-1" onClick={e => e.stopPropagation()}>
                                             <button onClick={() => onEditJob(job.id)} className="p-1.5 text-gray-600 hover:bg-gray-100 rounded-full" title="View/Edit Job"><Eye size={16} /></button>
+                                            <button onClick={() => handleCreatePackage(job)} disabled={isCreatingPackage} className="p-1.5 text-teal-600 hover:bg-teal-100 rounded-full disabled:opacity-50" title="Create Service Package">
+                                                {isCreatingPackage ? <Loader2 className="animate-spin" size={16} /> : <Wand2 size={16} />}
+                                            </button>
                                         </div>
                                     </td>
                                 </tr>
@@ -180,6 +301,36 @@ const JobsView: React.FC<JobsViewProps> = ({ onEditJob, onSmartCreateClick }) =>
                     </div>
                 )}
             </main>
+            {isPackageModalOpen && (
+                <ServicePackageFormModal
+                    isOpen={isPackageModalOpen}
+                    onClose={() => setIsPackageModalOpen(false)}
+                    onSave={async (pkg) => {
+                        try {
+                            await handleSaveItem(setServicePackages, pkg, 'brooks_servicePackages');
+                            setConfirmation({
+                                isOpen: true,
+                                title: 'Service Package Created',
+                                message: `Service Package "${pkg.name}" has been saved successfully.`,
+                                type: 'success'
+                            });
+                            setIsPackageModalOpen(false);
+                        } catch (e) {
+                             setConfirmation({
+                                isOpen: true,
+                                title: 'Error',
+                                message: 'Failed to save service package.',
+                                type: 'warning'
+                            });
+                        }
+                    }}
+                    servicePackage={suggestedPackage}
+                    taxRates={taxRates}
+                    entityId={selectedEntityId === 'all' ? (businessEntities[0]?.id || '') : selectedEntityId}
+                    businessEntities={businessEntities}
+                    parts={parts}
+                />
+            )}
         </div>
     );
 };

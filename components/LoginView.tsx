@@ -47,9 +47,12 @@ const LoginView: React.FC<LoginViewProps> = ({ users, onLogin, environment }) =>
                 const success = await onLogin(email, password);
                 if (!success) {
                     setError('Invalid credentials. Please try again.');
+                    setPassword(''); // Clear password on failed login
+                    return; // Explicitly stop execution on failure
                 }
             }
         } catch (err: any) {
+            setPassword(''); // Also clear password on any exception
             if (err.message === 'NOT_AUTHORIZED_BY_ADMIN') {
                 setError('Access Denied: Your email has not been authorized by an administrator.');
             } else if (err.code === 'auth/email-already-in-use') {

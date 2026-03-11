@@ -164,54 +164,17 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
         }
     };
 
-    const handleSavePurchaseOrder = async (po: T.PurchaseOrder) => {
-        const existingPO = purchaseOrders.find(p => p.id === po.id);
-
-        if (existingPO && existingPO.jobId && existingPO.status === 'Draft' && po.status === 'Draft' && existingPO.supplierId !== po.supplierId) {
-            const targetPO = purchaseOrders.find(p =>
-                p.jobId === existingPO.jobId &&
-                p.id !== existingPO.id &&
-                p.status === 'Draft' &&
-                p.supplierId === po.supplierId
-            );
-
-            if (targetPO) {
-                const mergedPO: T.PurchaseOrder = {
-                    ...targetPO,
-                    lineItems: [...targetPO.lineItems, ...existingPO.lineItems],
-                };
-                await handleSaveItem(setPurchaseOrders, mergedPO, 'brooks_purchaseOrders');
-
-                await deleteDocument('brooks_purchaseOrders', existingPO.id);
-                setPurchaseOrders(prev => prev.filter(p => p.id !== existingPO.id));
-                
-                return; 
+    const handleSavePurchaseOrder = async (po: T.PurchaseOrder, updatedParts?: T.Part[], updatedEstimate?: T.Estimate) => {
+        await handleSaveItem(setPurchaseOrders, po);
+    
+        if (updatedParts && updatedParts.length > 0) {
+            for (const part of updatedParts) {
+                await handleSaveItem(setParts, part);
             }
         }
-        
-        await handleSaveItem(setPurchaseOrders, po, 'brooks_purchaseOrders');
-
-        if (po.partUpdates && po.partUpdates.length > 0) {
-            for (const part of po.partUpdates) {
-                await handleSaveItem(setParts, part, 'brooks_parts');
-            }
-        }
-        
-        for (const inq of inquiries) {
-            const isLinkedToPO = inq.linkedPurchaseOrderIds?.includes(po.id);
-            if (isLinkedToPO) {
-                const otherInqPos = purchaseOrders.filter(p => inq.linkedPurchaseOrderIds?.includes(p.id) && p.id !== po.id);
-                const allInqPos = [...otherInqPos, po];
-                const allOrderedOrBetter = allInqPos.every(p => ['Ordered', 'Partially Received', 'Received'].includes(p.status));
-                
-                if (allOrderedOrBetter) {
-                    const updatedInquiry = { 
-                        ...inq, 
-                        actionNotes: (inq.actionNotes || '') + `\n[System]: All parts ordered.` 
-                    };
-                    await handleSaveItem(setInquiries, updatedInquiry, 'brooks_inquiries');
-                }
-            }
+    
+        if (updatedEstimate) {
+            await handleSaveItem(setEstimates, updatedEstimate);
         }
     };
 

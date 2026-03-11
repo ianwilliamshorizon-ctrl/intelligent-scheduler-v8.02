@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { ServicePackage, EstimateLineItem, TaxRate, BusinessEntity, Part, Supplier } from '../types';
 import { PlusCircle, Trash2, Filter, RefreshCw } from 'lucide-react';
-import { formatCurrency } from '../utils/formatUtils';
+import { formatCurrency } from '../core/utils/formatUtils';
 import FormModal from './FormModal';
 import PartFormModal from './PartFormModal';
 import { useData } from '../core/state/DataContext';
@@ -12,7 +12,8 @@ const ServicePackageFormModal = ({ isOpen, onClose, onSave, servicePackage, taxR
     const supplierMap = useMemo(() => new Map(suppliers.map(s => [s.id, s.shortCode])), [suppliers]);
     const standardTaxRateId = useMemo(() => taxRates.find(t => t.code === 'T1')?.id, [taxRates]);
     const t99RateId = useMemo(() => taxRates.find(t => t.code === 'T99')?.id, [taxRates]);
-    
+    const defaultSupplierId = useMemo(() => (suppliers && suppliers.length > 0) ? suppliers[0].id : undefined, [suppliers]);
+
     const [activeSearchRow, setActiveSearchRow] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [isPartModalOpen, setIsPartModalOpen] = useState(false);
@@ -49,8 +50,11 @@ const ServicePackageFormModal = ({ isOpen, onClose, onSave, servicePackage, taxR
     }, [parts, searchTerm]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-        const { name, value } = e.target;
-        const processedValue = name === 'totalPrice' ? parseFloat(value) || 0 : value;
+        const { name, value, type } = e.target;
+        let processedValue: string | number = value;
+        if (type === 'number') {
+            processedValue = parseFloat(value) || 0;
+        }
         setFormData(p => ({...p, [name]: processedValue}));
 
         if (name === 'taxCodeId') {
@@ -77,7 +81,17 @@ const ServicePackageFormModal = ({ isOpen, onClose, onSave, servicePackage, taxR
     }, [formData.costItems, activeSearchRow]);
     
     const addLine = (isLabor: boolean) => { 
-        const newLine:EstimateLineItem = {id:crypto.randomUUID(), description:'', quantity:1, unitPrice:0, unitCost:0, isLabor, taxCodeId:formData.taxCodeId || standardTaxRateId, fromStock: false}; 
+        const newLine:EstimateLineItem = {
+            id:crypto.randomUUID(), 
+            description:'', 
+            quantity:1, 
+            unitPrice:0, 
+            unitCost:0, 
+            isLabor, 
+            taxCodeId:formData.taxCodeId || standardTaxRateId, 
+            fromStock: false,
+            supplierId: isLabor ? undefined : defaultSupplierId
+        }; 
         setFormData(p => ({...p, costItems: [...(p.costItems||[]), newLine]})); 
     };
     
@@ -89,7 +103,6 @@ const ServicePackageFormModal = ({ isOpen, onClose, onSave, servicePackage, taxR
         const totalCost = costItems.reduce((sum, item) => sum + ((item.unitCost || 0) * (item.quantity || 0)), 0);
         const totalSaleNetFromItems = costItems.reduce((sum, item) => sum + ((item.unitPrice || 0) * (item.quantity || 0)), 0);
     
-        // If line items have prices, use them as the source of truth
         if (totalSaleNetFromItems > 0) {
             const totalVatFromItems = costItems.reduce((sum, item) => {
                 const itemTaxRateInfo = taxRates.find(t => t.id === item.taxCodeId);
@@ -112,7 +125,6 @@ const ServicePackageFormModal = ({ isOpen, onClose, onSave, servicePackage, taxR
             };
         }
     
-        // Otherwise, if a gross target price is set, calculate from that
         if (grossTargetPrice > 0) {
             const packageTaxRateInfo = taxRates.find(t => t.id === formData.taxCodeId) || taxRates.find(t => t.code === 'T1');
             const rate = packageTaxRateInfo ? packageTaxRateInfo.rate : 20;
@@ -137,14 +149,13 @@ const ServicePackageFormModal = ({ isOpen, onClose, onSave, servicePackage, taxR
             };
         }
     
-        // Default case: everything is zero
         const profit = -totalCost;
         return { totalCost, totalSaleNet: 0, totalVat: 0, calculatedGross: 0, totalProfit: profit, margin: 0 };
     
     }, [formData.costItems, taxRates, formData.totalPrice, formData.taxCodeId]);
             
     const handleSave = () => {
-        const { id, name, description, entityId, costItems, applicableMake, applicableModel, applicableVariant, totalPrice, taxCodeId: defaultTaxCodeId } = formData;
+        const { id, name, description, entityId, costItems, applicableMake, applicableModel, applicableVariant, applicableEngineSize, totalPrice, taxCodeId: defaultTaxCodeId } = formData;
     
         if (!name) return alert('Package name is required.');
         
@@ -165,9 +176,10 @@ const ServicePackageFormModal = ({ isOpen, onClose, onSave, servicePackage, taxR
             name: name || '',
             entityId: entityId || '',
             description: description || '',
-            applicableMake: applicableMake || null,
-            applicableModel: applicableModel || null,
-            applicableVariant: applicableVariant || null,
+            applicableMake: applicableMake || undefined,
+            applicableModel: applicableModel || undefined,
+            applicableVariant: applicableVariant || undefined,
+            applicableEngineSize: applicableEngineSize || undefined,
             totalPrice: totalPrice || calculatedGross, 
             totalPriceNet: totalSaleNet,
             totalPriceVat: totalVat,
@@ -201,6 +213,7 @@ const ServicePackageFormModal = ({ isOpen, onClose, onSave, servicePackage, taxR
         const draft: Partial<Part> = {
             partNumber: searchTerm,
             description: searchTerm,
+            defaultSupplierId: defaultSupplierId
         };
         setNewPartDraft(draft);
         setActiveLineItemId(lineId);
@@ -275,7 +288,7 @@ const ServicePackageFormModal = ({ isOpen, onClose, onSave, servicePackage, taxR
                 
                 <div className="mt-4 p-4 bg-gray-50 border rounded-lg">
                     <h4 className="font-bold text-sm text-gray-700 mb-3 flex items-center gap-2"><Filter size={16}/> Vehicle Compatibility (Hierarchical)</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                         <div>
                             <label className="block text-xs font-medium text-gray-600 mb-1">Make (Level 1)</label>
                             <input name="applicableMake" value={formData.applicableMake || ''} onChange={handleChange} placeholder="e.g. Porsche" className="w-full p-2 border rounded text-sm" />
@@ -287,6 +300,10 @@ const ServicePackageFormModal = ({ isOpen, onClose, onSave, servicePackage, taxR
                         <div>
                             <label className="block text-xs font-medium text-gray-600 mb-1">Variant/Type (Level 3)</label>
                             <input name="applicableVariant" value={formData.applicableVariant || ''} onChange={handleChange} placeholder="e.g. GT4" className="w-full p-2 border rounded text-sm" />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Engine Size (cc)</label>
+                            <input name="applicableEngineSize" type="number" value={formData.applicableEngineSize || ''} onChange={handleChange} placeholder="e.g. 3996" className="w-full p-2 border rounded text-sm" />
                         </div>
                     </div>
                 </div>
