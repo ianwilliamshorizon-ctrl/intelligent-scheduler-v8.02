@@ -574,7 +574,8 @@ const getNextSequence = (items: any[], entityShortCode: string, prefix: string, 
                             }
                         }
                         
-                        await handleSaveItem(setEstimates, est, 'brooks_estimates');
+                        const estimateToSave = { ...est, status: 'Approved' };
+                        await handleSaveItem(setEstimates, estimateToSave, 'brooks_estimates');
                         
                         if (inquiry) {
                              const allLinkedIds = [...new Set([...(inquiry.linkedPurchaseOrderIds || []), ...newPurchaseOrderIds])];
