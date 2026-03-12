@@ -231,7 +231,7 @@ export interface Job {
     description: string;
     estimatedHours: number;
     scheduledDate: string | null;
-    status: 'Unallocated' | 'Allocated' | 'In Progress' | 'Pending QC' | 'Complete' | 'Invoiced' | 'Cancelled' | 'Closed';
+    status: 'Unallocated' | 'Allocated' | 'Booked In' | 'In Progress' | 'Awaiting Parts' | 'Awaiting Customer' | 'Awaiting Collection' | 'Ready for Invoicing' | 'Invoiced' | 'Complete' | 'Archived';
     createdAt: string;
     createdByUserId?: string;
     segments: JobSegment[];

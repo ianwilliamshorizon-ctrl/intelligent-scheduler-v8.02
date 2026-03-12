@@ -9,6 +9,7 @@ import VehicleFormModal from './VehicleFormModal';
 import SearchableSelect from './SearchableSelect';
 import FormModal from './FormModal';
 import { useData } from '../core/state/DataContext';
+import { calculatePackagePrices } from '../core/utils/packageUtils';
 
 interface EditableLineItemRowProps {
     item: InvoiceLineItem;
@@ -114,17 +115,18 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
 }) => {
     const { estimates } = useData();
     const [formData, setFormData] = useState<Partial<Invoice>>({});
+    const [selectedPackage, setSelectedPackage] = useState<ServicePackage | null>(null);
 
     const [isAddingCustomer, setIsAddingCustomer] = useState(false);
     const [isAddingVehicle, setIsAddingVehicle] = useState(false);
 
-    // Discount State [cite: 639]
     const [discountCodeInput, setDiscountCodeInput] = useState('');
     const [appliedDiscount, setAppliedDiscount] = useState<DiscountCode | null>(null);
     const [discountError, setDiscountError] = useState<string | null>(null);
 
     const taxRatesMap = useMemo(() => new Map((taxRates || []).map(t => [t.id, t])), [taxRates]);
     const standardTaxRateId = useMemo(() => (taxRates || []).find(t => t.code === 'T1')?.id, [taxRates]);
+    const t99RateId = useMemo(() => (taxRates || []).find(t => t.code === 'T99')?.id, [taxRates]);
 
     const mainEstimate = useMemo(() => {
         if (!job || !Array.isArray(estimates)) return null;
@@ -174,7 +176,6 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
                 };
             }
             setFormData(initialData);
-            // Reset discount states when opening [cite: 644]
             setAppliedDiscount(null);
             setDiscountCodeInput('');
             setDiscountError(null);
@@ -221,22 +222,31 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
         setFormData(prev => ({ ...prev, lineItems: [...(prev.lineItems || []), newItem] }));
     };
 
-    const addPackage = (packageId: string) => {
-        const pkg = (servicePackages || []).find(p => p.id === packageId);
+
+    const handlePackageSelect = (packageId: string) => {
+        const pkg = servicePackages.find(p => p.id === packageId);
+        if (pkg) {
+            setSelectedPackage(pkg);
+        }
+    };
+
+    const addPackage = (pkg: ServicePackage) => {
         if (!pkg) return;
+        const { net, vat } = calculatePackagePrices(pkg, taxRates);
         const newItems: InvoiceLineItem[] = [];
         const totalCost = (pkg.costItems || []).reduce((sum, item) => sum + ((item.unitCost || 0) * item.quantity), 0);
         const mainPackageItem: InvoiceLineItem = {
             id: crypto.randomUUID(),
             description: pkg.name,
             quantity: 1,
-            unitPrice: pkg.totalPrice,
+            unitPrice: net,
             unitCost: totalCost,
             isLabor: false, 
-            taxCodeId: standardTaxRateId,
+            taxCodeId: pkg.taxCodeId || standardTaxRateId,
             servicePackageId: pkg.id,
             servicePackageName: pkg.name,
             isPackageComponent: false,
+            preCalculatedVat: pkg.taxCodeId === t99RateId ? vat : undefined,
         };
         newItems.push(mainPackageItem);
         if (pkg.costItems) {
@@ -255,6 +265,13 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
         setFormData(prev => ({ ...prev, lineItems: [...(prev.lineItems || []), ...newItems] }));
     };
 
+    const confirmAddPackage = () => {
+        if (selectedPackage) {
+            addPackage(selectedPackage);
+            setSelectedPackage(null);
+        }
+    };
+
     const removeLineItem = useCallback((id: string) => {
         setFormData(prev => {
             const itemToRemove = (prev.lineItems || []).find(i => i.id === id);
@@ -266,7 +283,6 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
         });
     }, []);
 
-    // Discount Calculation Logic [cite: 671, 674]
     const handleApplyDiscount = () => {
         const code = (discountCodes || []).find(d => d.code === discountCodeInput && d.isActive);
         if (!code) {
@@ -315,11 +331,9 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
             totalCost += (Number(item.quantity) || 0) * (Number(item.unitCost) || 0);
         });
 
-        // Apply Discount to Totals [cite: 687, 690]
         const discountVal = calculateDiscountAmount();
         const netAfterDiscount = currentTotalNet - discountVal;
 
-        // Simplified VAT adjustment for discount
         if (discountVal > 0 && standardTaxRateId && breakdown[standardTaxRateId]) {
              breakdown[standardTaxRateId].net -= discountVal;
         }
@@ -345,7 +359,6 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
         const entity = (businessEntities || []).find(e => e.id === formData.entityId);
         const entityShortCode = entity?.shortCode || 'UNK';
         
-        // Merge discount as a negative line item on save [cite: 665]
         let finalLineItems = [...(formData.lineItems || [])];
         if (appliedDiscount && discountAmount > 0) {
             finalLineItems.push({
@@ -369,10 +382,10 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
     };
 
     const customerOptions = useMemo(() => (customers || []).map(c => ({
-        label: c.businessName ? c.businessName : `${c.forename || ''} ${c.surname || ''}`.trim(),
+        label: c.companyName ? c.companyName : `${c.forename || ''} ${c.surname || ''}`.trim(),
         value: c.id,
         description: c.phone || 'No phone',
-        searchField: `${c.businessName || ''} ${c.forename || ''} ${c.surname || ''} ${c.phone || ''} ${c.address?.postcode || ''}`.toLowerCase()
+        searchField: `${c.companyName || ''} ${c.forename || ''} ${c.surname || ''} ${c.phone || ''} ${c.postcode || ''}`.toLowerCase()
     })), [customers]);
 
     const filteredVehicles = useMemo(() => 
@@ -478,7 +491,6 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
                                     <option>Overdue</option>
                                 </select>
                             </div>
-                            {/* Discount Entry Section [cite: 711] */}
                             <div className="pt-2 border-t">
                                 <label className="font-semibold text-gray-700 flex items-center gap-2"><Tag size={16}/> Discount Code</label>
                                 <div className="flex gap-2 mt-1">
@@ -527,16 +539,13 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
                                 <div className="col-span-2 text-center">Tax</div>
                                 <div className="col-span-1"></div>
                             </div>
-                            {/* Packages Section */}
                             {invoiceBreakdown.packages.map(({ header, children }) => (
                                 <div key={header.id} className="space-y-1 border-l-4 border-indigo-400 pl-2">
                                     <MemoizedEditableLineItemRow item={header} taxRates={taxRates} onLineItemChange={handleLineItemChange} onRemoveLineItem={removeLineItem} />
                                     {children.map(child => <MemoizedEditableLineItemRow key={child.id} item={child} taxRates={taxRates} onLineItemChange={handleLineItemChange} onRemoveLineItem={removeLineItem} />)}
                                 </div>
                             ))}
-                            {/* Custom Labor Section */}
                             {invoiceBreakdown.customLabor.map(item => <MemoizedEditableLineItemRow key={item.id} item={item} taxRates={taxRates} onLineItemChange={handleLineItemChange} onRemoveLineItem={removeLineItem} />)}
-                            {/* Custom Parts Section */}
                             {invoiceBreakdown.customParts.map(item => <MemoizedEditableLineItemRow key={item.id} item={item} taxRates={taxRates} onLineItemChange={handleLineItemChange} onRemoveLineItem={removeLineItem} />)}
 
                             <div className="flex flex-wrap gap-2 pt-2 border-t">
@@ -546,7 +555,7 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
                                 <button type="button" onClick={() => addLineItem(false)} className="flex items-center gap-2 px-3 py-1 bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 text-sm font-medium">
                                     <Plus size={14} /> Add Part
                                 </button>
-                                <select onChange={(e) => { if (e.target.value) { addPackage(e.target.value); e.target.value = ''; } }} className="px-3 py-1 bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 text-sm font-medium border-none outline-none">
+                                <select onChange={(e) => { if (e.target.value) { handlePackageSelect(e.target.value); e.target.value = ''; } }} className="px-3 py-1 bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 text-sm font-medium border-none outline-none">
                                     <option value="">+ Add Package</option>
                                     {(servicePackages || []).map(pkg => <option key={pkg.id} value={pkg.id}>{pkg.name}</option>)}
                                 </select>
@@ -593,7 +602,33 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
                 </div>
             </div>
 
-            {/* Modal Components */}
+            {selectedPackage && (
+                <FormModal
+                    isOpen={!!selectedPackage}
+                    onClose={() => setSelectedPackage(null)}
+                    onSave={confirmAddPackage}
+                    title="Confirm Add Package"
+                    saveText="Confirm & Add"
+                    maxWidth="max-w-lg"
+                    zIndex="z-[80]"
+                >
+                    <div className="space-y-4 p-2">
+                        <h3 className="text-lg font-bold">{selectedPackage.name}</h3>
+                        <p className="text-sm text-gray-600">{selectedPackage.description}</p>
+                        <div className="grid grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg border">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-500">Package Gross Price</label>
+                                <p className="text-2xl font-bold">{formatCurrency(selectedPackage.totalPrice || 0)}</p>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-500">Package Net Price</label>
+                                <p className="text-2xl font-bold">{formatCurrency(calculatePackagePrices(selectedPackage, taxRates).net)}</p>
+                            </div>
+                        </div>
+                    </div>
+                </FormModal>
+            )}
+
             {isAddingCustomer && (
                 <CustomerFormModal
                     isOpen={isAddingCustomer}
@@ -605,6 +640,10 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
                     }}
                     customer={null}
                     existingCustomers={customers}
+                    jobs={[]}
+                    vehicles={[]}
+                    estimates={[]}
+                    invoices={[]}
                 />
             )}
 

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { ServicePackage, EstimateLineItem, TaxRate, BusinessEntity, Part, Supplier } from '../types';
 import { PlusCircle, Trash2, Filter, RefreshCw } from 'lucide-react';
@@ -101,58 +102,45 @@ const ServicePackageFormModal = ({ isOpen, onClose, onSave, servicePackage, taxR
         const costItems = formData.costItems || [];
         const grossTargetPrice = formData.totalPrice || 0;
         const totalCost = costItems.reduce((sum, item) => sum + ((item.unitCost || 0) * (item.quantity || 0)), 0);
-        const totalSaleNetFromItems = costItems.reduce((sum, item) => sum + ((item.unitPrice || 0) * (item.quantity || 0)), 0);
-    
-        if (totalSaleNetFromItems > 0) {
+        const isT99Package = formData.taxCodeId === t99RateId;
+
+        const calculateFromItems = () => {
+            const totalSaleNetFromItems = costItems.reduce((sum, item) => sum + ((item.unitPrice || 0) * (item.quantity || 0)), 0);
             const totalVatFromItems = costItems.reduce((sum, item) => {
                 const itemTaxRateInfo = taxRates.find(t => t.id === item.taxCodeId);
                 const rate = itemTaxRateInfo ? itemTaxRateInfo.rate : 0;
                 const itemVat = ((item.unitPrice || 0) * (item.quantity || 0)) * (rate / 100);
                 return sum + itemVat;
             }, 0);
-            
             const grossFromItems = totalSaleNetFromItems + totalVatFromItems;
             const profit = totalSaleNetFromItems - totalCost;
             const margin = totalSaleNetFromItems > 0 ? (profit / totalSaleNetFromItems) * 100 : 0;
-    
-            return {
-                totalCost,
-                totalSaleNet: totalSaleNetFromItems,
-                totalVat: totalVatFromItems,
-                calculatedGross: grossFromItems,
-                totalProfit: profit,
-                margin
-            };
-        }
-    
-        if (grossTargetPrice > 0) {
-            const packageTaxRateInfo = taxRates.find(t => t.id === formData.taxCodeId) || taxRates.find(t => t.code === 'T1');
-            const rate = packageTaxRateInfo ? packageTaxRateInfo.rate : 20;
-            let net = grossTargetPrice;
-            let vat = 0;
-    
-            if (rate > 0) {
-                net = grossTargetPrice / (1 + (rate / 100));
-                vat = grossTargetPrice - net;
+            return { totalCost, totalSaleNet: totalSaleNetFromItems, totalVat: totalVatFromItems, calculatedGross: grossFromItems, totalProfit: profit, margin };
+        };
+
+        const calculateFromGross = () => {
+            if (grossTargetPrice > 0) {
+                const packageTaxRateInfo = taxRates.find(t => t.id === formData.taxCodeId) || taxRates.find(t => t.code === 'T1');
+                const rate = packageTaxRateInfo ? packageTaxRateInfo.rate : 20;
+                let net = grossTargetPrice;
+                let vat = 0;
+                if (rate > 0) {
+                    net = grossTargetPrice / (1 + (rate / 100));
+                    vat = grossTargetPrice - net;
+                }
+                const profit = net - totalCost;
+                const margin = net > 0 ? (profit / net) * 100 : 0;
+                return { totalCost, totalSaleNet: net, totalVat: vat, calculatedGross: grossTargetPrice, totalProfit: profit, margin };
             }
-    
-            const profit = net - totalCost;
-            const margin = net > 0 ? (profit / net) * 100 : 0;
-            
-            return {
-                totalCost,
-                totalSaleNet: net,
-                totalVat: vat,
-                calculatedGross: grossTargetPrice,
-                totalProfit: profit,
-                margin
-            };
+            return calculateFromItems(); // Fallback if no gross price
+        };
+
+        if (isT99Package) {
+            return calculateFromItems();
+        } else {
+            return calculateFromGross();
         }
-    
-        const profit = -totalCost;
-        return { totalCost, totalSaleNet: 0, totalVat: 0, calculatedGross: 0, totalProfit: profit, margin: 0 };
-    
-    }, [formData.costItems, taxRates, formData.totalPrice, formData.taxCodeId]);
+    }, [formData.costItems, taxRates, formData.totalPrice, formData.taxCodeId, t99RateId]);
             
     const handleSave = () => {
         const { id, name, description, entityId, costItems, applicableMake, applicableModel, applicableVariant, applicableEngineSize, totalPrice, taxCodeId: defaultTaxCodeId } = formData;
@@ -274,10 +262,23 @@ const ServicePackageFormModal = ({ isOpen, onClose, onSave, servicePackage, taxR
                         </select>
                     </div>
                     <div className="md:col-span-2">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Target Price (Inc. VAT)</label>
-                        <div className="flex items-center gap-2">
-                            <input name="totalPrice" type="number" value={formData.totalPrice || ''} onChange={handleChange} className="w-full p-2 border rounded" />
-                            <button onClick={recalculateTotalPrice} className="p-2 bg-gray-200 rounded hover:bg-gray-300" title="Recalculate from line items"><RefreshCw size={16}/></button>
+                         <div className="grid grid-cols-2 gap-2">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Package Gross Price</label>
+                                <div className="flex items-center gap-2">
+                                    <input name="totalPrice" type="number" value={formData.totalPrice || ''} onChange={handleChange} className="w-full p-2 border rounded" />
+                                    <button onClick={recalculateTotalPrice} className="p-2 bg-gray-200 rounded hover:bg-gray-300" title="Recalculate from line items"><RefreshCw size={16}/></button>
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Package Net Price</label>
+                                <input 
+                                    type="text" 
+                                    readOnly 
+                                    value={formatCurrency(packageTotals.totalSaleNet)} 
+                                    className="w-full p-2 border rounded bg-gray-100 text-gray-600"
+                                />
+                            </div>
                         </div>
                     </div>
                 </div>

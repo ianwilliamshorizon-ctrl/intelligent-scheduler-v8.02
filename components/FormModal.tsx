@@ -10,12 +10,24 @@ interface FormModalProps {
   saveText?: string;
   saveIcon?: React.ElementType;
   maxWidth?: string;
+  zIndex?: string;
 }
 
-const FormModal: React.FC<FormModalProps> = ({ isOpen, onClose, title, children, onSave, saveText = "Save", saveIcon: SaveIcon = Save, maxWidth = "max-w-3xl" }) => {
+const FormModal: React.FC<FormModalProps> = ({ 
+    isOpen, 
+    onClose, 
+    title, 
+    children, 
+    onSave, 
+    saveText = "Save", 
+    saveIcon: SaveIcon = Save, 
+    maxWidth = "max-w-3xl",
+    zIndex = "z-[70]"
+}) => {
   if (!isOpen) return null;
+
   return (
-    <div className="fixed inset-0 bg-gray-900 bg-opacity-75 z-[70] flex justify-center items-center p-4">
+    <div className={`fixed inset-0 bg-gray-900 bg-opacity-75 ${zIndex} flex justify-center items-center p-4`}>
       <div className={`bg-white rounded-xl shadow-2xl w-full ${maxWidth} flex flex-col max-h-[90vh] animate-fade-in-up overflow-y-auto`}>
         <div className="flex justify-between items-center border-b p-4 flex-shrink-0 sticky top-0 bg-white z-10">
           <h2 className="text-xl font-bold text-indigo-700">{title}</h2>

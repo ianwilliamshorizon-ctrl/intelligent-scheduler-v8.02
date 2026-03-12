@@ -131,12 +131,6 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
         setScheduledDate(date);
         setCurrentMonth(dateStringToDate(date));
         setIsMotBookingOpen(false);
-        setConfirmation({
-            isOpen: true,
-            title: 'MOT Slot Booked',
-            message: `An MOT slot has been reserved for ${formatReadableDate(date)} at ${time}.`,
-            type: 'success',
-        });
     };
 
     if (!isOpen) return null;

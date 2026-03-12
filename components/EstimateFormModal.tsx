@@ -13,6 +13,8 @@ import PartFormModal from './PartFormModal';
 import LiveAssistant from './LiveAssistant';
 import { getScoredServicePackages } from '../utils/servicePackageScoring';
 import SupplierSelectionModal from './SupplierSelectionModal';
+import { calculatePackagePrices } from '../core/utils/packageUtils';
+import { HoverInfo } from './shared/HoverInfo';
 
 interface EditableLineItemRowProps {
     item: EstimateLineItem;
@@ -233,6 +235,7 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
     const [activePartSearch, setActivePartSearch] = useState<string | null>(null);
     const [isMediaModalOpen, setIsMediaModalOpen] = useState(false);
     const [recentCustomerIds, setRecentCustomerIds] = useState<string[]>([]);
+    const [selectedPackage, setSelectedPackage] = useState<ServicePackage | null>(null);
     const standardTaxRateId = taxRates.find(t => t.code === 'T1')?.id;
     const t99RateId = taxRates.find(t => t.code === 'T99')?.id;
 
@@ -328,6 +331,7 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
         };
     }, [formData.lineItems, taxRates, standardTaxRateId, t99RateId]);
 
+    const currentCustomer = customers.find(c => c.id === formData.customerId);
     const currentVehicle = vehicles.find(v => v.id === formData.vehicleId);
     const customerOptions = customers.map(c => {
         const fullName = c.companyName
@@ -482,50 +486,59 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
         setFormData(prev => ({ ...prev, lineItems: [...(prev.lineItems || []), newItem] }));
     };
 
-    const addPackage = (selection: any) => {
-        const packageId = selection?.id || selection;
-        const pkg = servicePackages.find(p => p.id === packageId);
+    const handlePackageSelect = (packageId: string | null) => {
+        if (packageId) {
+            const pkg = servicePackages.find(p => p.id === packageId);
+            if (pkg) {
+                setSelectedPackage(pkg);
+            }
+        }
+    };
+
+    const addPackage = (pkg: ServicePackage) => {
         if (!pkg) return;
         const isOptional = false;
+        const { net, vat } = calculatePackagePrices(pkg, taxRates);
+    
         const newItems: EstimateLineItem[] = [];
         const mainPackageItem: EstimateLineItem = {
-            id: crypto.randomUUID(), 
-            description: pkg.name || (pkg as any).description || '', 
-            quantity: 1, 
-            unitPrice: pkg.totalPriceNet ?? pkg.totalPrice, 
-            unitCost: 0, 
-            isLabor: false, 
-            taxCodeId: pkg.taxCodeId || standardTaxRateId, 
-            servicePackageId: pkg.id, 
-            servicePackageName: pkg.name, 
-            isPackageComponent: false, 
+            id: crypto.randomUUID(),
+            description: pkg.name || (pkg as any).description || '',
+            quantity: 1,
+            unitPrice: net,
+            unitCost: 0,
+            isLabor: false,
+            taxCodeId: pkg.taxCodeId || standardTaxRateId,
+            servicePackageId: pkg.id,
+            servicePackageName: pkg.name,
+            isPackageComponent: false,
             isOptional,
-            preCalculatedVat: pkg.taxCodeId === t99RateId ? pkg.totalPriceVat : undefined
+            preCalculatedVat: pkg.taxCodeId === t99RateId ? vat : undefined
         };
         newItems.push(mainPackageItem);
-
-        let runningTotal = 0;
+    
         if (pkg.costItems) {
             pkg.costItems.forEach(costItem => {
-                const itemPrice = costItem.unitPrice || 0;
-                runningTotal += itemPrice * (costItem.quantity || 1);
                 newItems.push({ 
                     ...costItem, 
-                    id: crypto.randomUUID(), 
-                    unitPrice: itemPrice, 
-                    servicePackageId: pkg.id, 
-                    servicePackageName: pkg.name, 
-                    isPackageComponent: true, 
+                    id: crypto.randomUUID(),
+                    unitPrice: costItem.unitPrice || 0,
+                    servicePackageId: pkg.id,
+                    servicePackageName: pkg.name,
+                    isPackageComponent: true,
                     isOptional 
                 });
             });
         }
-
-        if (mainPackageItem.unitPrice === 0 && runningTotal > 0) {
-            mainPackageItem.unitPrice = runningTotal;
-        }
-
+    
         setFormData(prev => ({ ...prev, lineItems: [...(prev.lineItems || []), ...newItems] }));
+    };
+
+    const confirmAddPackage = () => {
+        if (selectedPackage) {
+            addPackage(selectedPackage);
+            setSelectedPackage(null);
+        }
     };
 
     const removeLineItem = useCallback((id: string) => {
@@ -638,6 +651,20 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
     const linkedVehicles = vehicles.filter(v => v.customerId === formData.customerId);
     const recentCustomers = customers.filter(c => recentCustomerIds.includes(c.id));
 
+    const customerInfoData = currentCustomer ? {
+        phone: currentCustomer.phone || currentCustomer.mobile,
+        email: currentCustomer.email,
+        address: `${currentCustomer.addressLine1 || ''}, ${currentCustomer.postcode || ''}`.replace(/^,|,$/g, '').trim(),
+        company: currentCustomer.companyName,
+    } : {};
+
+    const vehicleInfoData = currentVehicle ? {
+        type: `${currentVehicle.year || ''} ${currentVehicle.make || ''} ${currentVehicle.model || ''}`.trim(),
+        colour: currentVehicle.colour,
+        vin: currentVehicle.vin,
+        motDue: currentVehicle.nextMotDate,
+    } : {};
+
     return (
         <FormModal 
             isOpen={isOpen} 
@@ -661,7 +688,13 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                     <Section title="Estimate Details" icon={Info}>
                         <div className="space-y-3 text-sm">
                             <div>
-                                <label className="font-semibold">Customer</label>
+                                <label className="font-semibold flex items-center gap-2">Customer
+                                    {currentCustomer && (
+                                        <HoverInfo title="Customer Info" data={customerInfoData}>
+                                            <Info size={14} className="text-indigo-500 cursor-help" />
+                                        </HoverInfo>
+                                    )}
+                                </label>
                                 <div className="flex items-center gap-2 mt-1">
                                     <SearchableSelect
                                         options={customerOptions}
@@ -690,7 +723,13 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                                 )}
                             </div>
                             <div>
-                                <label className="font-semibold">Vehicle (Optional)</label>
+                                <label className="font-semibold flex items-center gap-2">Vehicle (Optional)
+                                    {currentVehicle && (
+                                        <HoverInfo title="Vehicle Info" data={vehicleInfoData}>
+                                            <Info size={14} className="text-indigo-500 cursor-help" />
+                                        </HoverInfo>
+                                    )}
+                                </label>
                                 <div className="flex flex-col gap-2 mt-1">
                                     <div className="flex items-center gap-2">
                                         <SearchableSelect
@@ -791,7 +830,7 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                                  <div className="w-64">
                                     <SearchableSelect 
                                         options={sortedPackages}
-                                        onSelect={(val) => addPackage(val)} 
+                                        onSelect={handlePackageSelect}
                                         placeholder="Search & Add Package..." 
                                         dropdownClassName="min-w-[450px] right-0" 
                                     />
@@ -812,6 +851,33 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                     </Section>
                 </div>
             </div>
+
+            {selectedPackage && (
+                <FormModal
+                    isOpen={!!selectedPackage}
+                    onClose={() => setSelectedPackage(null)}
+                    onSave={confirmAddPackage}
+                    title="Confirm Add Package"
+                    saveText="Confirm & Add"
+                    maxWidth="max-w-lg"
+                    zIndex="z-[80]"
+                >
+                    <div className="space-y-4 p-2">
+                        <h3 className="text-lg font-bold">{selectedPackage.name}</h3>
+                        <p className="text-sm text-gray-600">{selectedPackage.description}</p>
+                        <div className="grid grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg border">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-500">Package Gross Price</label>
+                                <p className="text-2xl font-bold">{formatCurrency(selectedPackage.totalPrice || 0)}</p>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-500">Package Net Price</label>
+                                <p className="text-2xl font-bold">{formatCurrency(calculatePackagePrices(selectedPackage, taxRates).net)}</p>
+                            </div>
+                        </div>
+                    </div>
+                </FormModal>
+            )}
 
             <LiveAssistant 
                 isOpen={isAssistantOpen} 

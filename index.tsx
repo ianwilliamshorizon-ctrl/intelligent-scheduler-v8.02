@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import './index.css';
+import './styles/printable.css';
 import { DataContextProvider } from './core/state/DataContext';
 import { AppProvider } from './core/state/AppContext';
 import { initializeGenerativeAI } from './core/services/geminiService';

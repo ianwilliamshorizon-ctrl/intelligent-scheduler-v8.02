@@ -11,7 +11,14 @@ interface PrintableEstimateListProps {
     title: string;
 }
 
-const PrintableEstimateList: React.FC<PrintableEstimateListProps> = ({ estimates, customers, vehicles, taxRates, title }) => {
+const PrintableEstimateList: React.FC<PrintableEstimateListProps> = ({ 
+    estimates, 
+    customers, 
+    vehicles, 
+    taxRates, 
+    title 
+}) => {
+    // 1. Logic Helpers
     const taxRatesMap = new Map<string, number>(taxRates.map(t => [t.id, t.rate]));
     const standardTaxRateId = taxRates.find(t => t.code === 'T1')?.id;
 
@@ -39,45 +46,136 @@ const PrintableEstimateList: React.FC<PrintableEstimateListProps> = ({ estimates
         return totalNet + totalVat;
     };
 
-
     return (
-        <div className="bg-white font-sans text-sm text-gray-800 printable-page" style={{ width: '210mm', padding: '10mm', boxSizing: 'border-box' }}>
-            <header className="pb-4 border-b mb-6">
-                <h1 className="text-2xl font-bold text-gray-900">Estimates Report</h1>
-                <h2 className="text-lg text-gray-700">{title}</h2>
-                <p className="text-xs text-gray-500 mt-1">Generated on {new Date().toLocaleDateString()}</p>
-            </header>
-            <main>
-                <table className="w-full text-left text-xs" style={{ borderCollapse: 'collapse', width: '100%' }}>
-                    <thead className="bg-gray-100">
-                        <tr>
-                            <th className="p-2 border border-gray-300">Number</th>
-                            <th className="p-2 border border-gray-300">Date</th>
-                            <th className="p-2 border border-gray-300">Customer</th>
-                            <th className="p-2 border border-gray-300">Vehicle</th>
-                            <th className="p-2 border border-gray-300">Status</th>
-                            <th className="p-2 border border-gray-300 text-right">Total (Gross)</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {estimates.map(est => {
-                            const customer = customers.get(est.customerId);
-                            const vehicle = est.vehicleId ? vehicles.get(est.vehicleId) : null;
-                            const total = calculateTotal(est.lineItems);
-                            return (
-                                <tr key={est.id}>
-                                    <td className="p-2 border border-gray-300 font-mono">{est.estimateNumber}</td>
-                                    <td className="p-2 border border-gray-300">{est.issueDate}</td>
-                                    <td className="p-2 border border-gray-300">{getCustomerDisplayName(customer)}</td>
-                                    <td className="p-2 border border-gray-300">{vehicle?.registration || 'N/A'}</td>
-                                    <td className="p-2 border border-gray-300">{est.status}</td>
-                                    <td className="p-2 border border-gray-300 text-right">{formatCurrency(total)}</td>
+        <div style={{ 
+            backgroundColor: '#ffffff', 
+            color: '#000000', 
+            fontFamily: 'Arial, sans-serif', 
+            width: '210mm', 
+            padding: '15mm', 
+            margin: '0 auto',
+            boxSizing: 'border-box',
+            WebkitPrintColorAdjust: 'exact',
+            printColorAdjust: 'exact'
+        }}>
+            {/* THE SAFETY NET:
+                This style block is injected directly into the document. 
+                It forces the browser to show this specific component and hide the 
+                background UI, which solves the "Blank Page" issue.
+            */}
+            <style dangerouslySetInnerHTML={{ __html: `
+                @media print {
+                    @page { 
+                        size: A4 vertical; 
+                        margin: 10mm; 
+                    }
+                    /* Hide everything else on the screen */
+                    body * { 
+                        visibility: hidden; 
+                    }
+                    /* Specifically show ONLY the printable content and its children */
+                    .rebuild-print-container, .rebuild-print-container * { 
+                        visibility: visible !important; 
+                    }
+                    .rebuild-print-container { 
+                        position: absolute !important; 
+                        left: 0 !important; 
+                        top: 0 !important; 
+                        width: 100% !important;
+                    }
+                    /* Force table borders to render */
+                    table { 
+                        width: 100% !important; 
+                        border-collapse: collapse !important; 
+                        margin-top: 20px !important;
+                    }
+                    th { 
+                        background-color: #f2f2f2 !important; 
+                        -webkit-print-color-adjust: exact; 
+                    }
+                    td, th { 
+                        border: 1px solid #333333 !important; 
+                        padding: 10px !important; 
+                        color: #000 !important; 
+                    }
+                }
+            `}} />
+
+            <div className="rebuild-print-container">
+                <header style={{ 
+                    borderBottom: '3px solid #000000', 
+                    paddingBottom: '15px', 
+                    marginBottom: '25px' 
+                }}>
+                    <h1 style={{ fontSize: '26px', margin: '0 0 5px 0', fontWeight: 'bold', color: '#000' }}>
+                        Estimates Report
+                    </h1>
+                    <h2 style={{ fontSize: '18px', margin: '0', color: '#333' }}>
+                        {title}
+                    </h2>
+                    <p style={{ fontSize: '11px', color: '#666', marginTop: '10px', textTransform: 'uppercase' }}>
+                        Generated: {new Date().toLocaleDateString('en-GB')} at {new Date().toLocaleTimeString('en-GB')}
+                    </p>
+                </header>
+
+                <main>
+                    <table style={{ width: '100%', border: '1px solid #333', fontSize: '12px' }}>
+                        <thead>
+                            <tr style={{ backgroundColor: '#f2f2f2' }}>
+                                <th style={{ textAlign: 'left' }}>Estimate #</th>
+                                <th style={{ textAlign: 'left' }}>Issue Date</th>
+                                <th style={{ textAlign: 'left' }}>Customer</th>
+                                <th style={{ textAlign: 'left' }}>Vehicle</th>
+                                <th style={{ textAlign: 'left' }}>Status</th>
+                                <th style={{ textAlign: 'right' }}>Total (Inc. VAT)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {estimates.length > 0 ? (
+                                estimates.map(est => {
+                                    const customer = customers.get(est.customerId);
+                                    const vehicle = est.vehicleId ? vehicles.get(est.vehicleId) : null;
+                                    const total = calculateTotal(est.lineItems);
+                                    
+                                    return (
+                                        <tr key={est.id}>
+                                            <td style={{ fontWeight: 'bold', fontFamily: 'monospace' }}>
+                                                {est.estimateNumber}
+                                            </td>
+                                            <td>{est.issueDate}</td>
+                                            <td>{getCustomerDisplayName(customer)}</td>
+                                            <td>{vehicle?.registration || 'N/A'}</td>
+                                            <td style={{ fontSize: '10px' }}>
+                                                {est.status.toUpperCase()}
+                                            </td>
+                                            <td style={{ textAlign: 'right', fontWeight: 'bold' }}>
+                                                {formatCurrency(total)}
+                                            </td>
+                                        </tr>
+                                    );
+                                })
+                            ) : (
+                                <tr>
+                                    <td colSpan={6} style={{ textAlign: 'center', padding: '40px', color: '#999' }}>
+                                        No estimates found for the selected criteria.
+                                    </td>
                                 </tr>
-                            );
-                        })}
-                    </tbody>
-                </table>
-            </main>
+                            )}
+                        </tbody>
+                    </table>
+                </main>
+
+                <footer style={{ 
+                    marginTop: '40px', 
+                    paddingTop: '10px', 
+                    borderTop: '1px solid #eee', 
+                    fontSize: '9px', 
+                    color: '#999', 
+                    textAlign: 'center' 
+                }}>
+                    Workshop Management System - Confidential Report
+                </footer>
+            </div>
         </div>
     );
 };

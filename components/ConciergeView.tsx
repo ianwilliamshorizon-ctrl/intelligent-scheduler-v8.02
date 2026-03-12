@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { useApp } from '../core/state/AppContext';
 import { useData } from '../core/state/DataContext';
@@ -35,7 +34,7 @@ const ConciergeView: React.FC<ConciergeViewProps> = (props) => {
     const customersById = useMemo(() => new Map(customers.map(c => [c.id, c])), [customers]);
 
     const filteredJobs = useMemo(() => {
-        let relevantJobs = jobs.filter(job => (selectedEntityId === 'all' || job.entityId === selectedEntityId) && job.vehicleStatus !== 'Collected' && job.status !== 'Cancelled');
+        let relevantJobs = jobs.filter(job => (selectedEntityId === 'all' || job.entityId === selectedEntityId) && job.status !== 'Archived');
         
         // --- ENGINEER FILTERING LOGIC ---
         // If current user is an Engineer, only show jobs assigned to them
@@ -90,7 +89,7 @@ const ConciergeView: React.FC<ConciergeViewProps> = (props) => {
             }
 
             // 3. Pending QC
-            if (job.status === 'Pending QC') {
+            if ((job.status as any) === 'Pending QC') {
                 pendingQC.push(job);
                 return;
             }
@@ -108,7 +107,7 @@ const ConciergeView: React.FC<ConciergeViewProps> = (props) => {
             }
 
             // 6. Allocated / Unallocated
-            if (job.status === 'Allocated' || job.status === 'Unallocated') {
+            if ((job.status as any) === 'Allocated' || job.status === 'Unallocated') {
                 allocated.push(job);
                 return;
             }

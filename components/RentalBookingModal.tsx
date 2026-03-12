@@ -93,19 +93,19 @@ const RentalBookingModal: React.FC<RentalBookingModalProps> = ({ isOpen, onClose
                         <SearchableSelect
                             options={rentalVehicles.map(rv => {
                                 const v = vehicles.find(vh => vh.id === rv.id);
-                                return { id: rv.id, label: `${v?.registration} - ${v?.make} ${v?.model}` };
+                                return { value: rv.id, label: `${v?.registration} - ${v?.make} ${v?.model}` };
                             })}
-                            value={formData.rentalVehicleId || null}
-                            onChange={(value) => setFormData(p => ({ ...p, rentalVehicleId: value || '' }))}
+                            defaultValue={formData.rentalVehicleId || null}
+                            onSelect={(value) => setFormData(p => ({ ...p, rentalVehicleId: value || '' }))}
                             placeholder="Select rental vehicle..."
                         />
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Customer*</label>
                         <SearchableSelect
-                            options={customers.map(c => ({ id: c.id, label: getCustomerDisplayName(c) }))}
-                            value={formData.customerId || null}
-                            onChange={(value) => setFormData(p => ({ ...p, customerId: value || '' }))}
+                            options={customers.map(c => ({ value: c.id, label: getCustomerDisplayName(c) }))}
+                            defaultValue={formData.customerId || null}
+                            onSelect={(value) => setFormData(p => ({ ...p, customerId: value || '' }))}
                             placeholder="Select customer..."
                         />
                     </div>
@@ -134,9 +134,9 @@ const RentalBookingModal: React.FC<RentalBookingModalProps> = ({ isOpen, onClose
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Linked Job</label>
                             <SearchableSelect
-                                options={jobs.filter(j => j.customerId === formData.customerId).map(j => ({ id: j.id, label: `${j.id} - ${j.description}` }))}
-                                value={formData.jobId || null}
-                                onChange={(value) => setFormData(p => ({ ...p, jobId: value || '' }))}
+                                options={jobs.filter(j => j.customerId === formData.customerId).map(j => ({ value: j.id, label: `${j.id} - ${j.description}` }))}
+                                defaultValue={formData.jobId || null}
+                                onSelect={(value) => setFormData(p => ({ ...p, jobId: value || '' }))}
                                 placeholder="Link to a job..."
                                 disabled={!formData.customerId}
                             />

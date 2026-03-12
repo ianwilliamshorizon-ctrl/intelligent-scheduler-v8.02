@@ -1,20 +1,20 @@
 import React, { useState } from 'react';
 import * as T from '../../../types';
-import { Car, User, KeyRound, Calendar, Clock, Edit, Phone, Mail, MapPin, Building, Briefcase, Expand, ImageIcon, X, Gauge, Info } from 'lucide-react';
+import { Car, User, KeyRound, Edit, Phone, Mail, MapPin, Building, Briefcase, Expand, ImageIcon, X, Gauge, Info } from 'lucide-react';
 import { HoverInfo } from '../../shared/HoverInfo';
 
 interface TabSectionProps {
     title: string;
     icon: React.ElementType;
     children: React.ReactNode;
-    actions?: React.ReactNode;
+    action?: React.ReactNode;
 }
 
-const TabSection: React.FC<TabSectionProps> = ({ title, icon: Icon, children, actions }) => (
+const TabSection: React.FC<TabSectionProps> = ({ title, icon: Icon, children, action }) => (
     <div className="border rounded-lg bg-white shadow-sm">
         <h3 className="text-md font-bold p-3 flex justify-between items-center bg-gray-50 rounded-t-lg">
             <span className="flex items-center gap-2"><Icon size={16}/> {title}</span>
-            {actions}
+            {action && <span>{action}</span>}
         </h3>
         <div className="p-3 text-sm space-y-2">{children}</div>
     </div>
@@ -25,23 +25,13 @@ interface JobDetailsTabProps {
     vehicle?: T.Vehicle;
     customer?: T.Customer;
     isReadOnly: boolean;
-    linkedBooking?: T.RentalBooking;
-    rentalVehicleRegistration?: string;
-    onBookCourtesyCar: () => void;
-    onOpenRentalBooking: (booking: T.RentalBooking) => void;
-    onOpenConditionReport: (booking: T.RentalBooking, mode: 'checkOut' | 'checkIn') => void;
     onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => void;
     onViewCustomer: (customerId: string) => void;
     onViewVehicle: (vehicleId: string) => void;
-    engineers: T.Engineer[];
-    onCheckIn: () => void;
-    onCheckOut: () => void;
 }
 
 const JobDetailsTab: React.FC<JobDetailsTabProps> = ({ 
-    editableJob, vehicle, customer, isReadOnly, linkedBooking, rentalVehicleRegistration, 
-    onBookCourtesyCar, onOpenRentalBooking, onOpenConditionReport, onChange, onViewCustomer, 
-    onViewVehicle, engineers, onCheckIn, onCheckOut 
+    editableJob, vehicle, customer, isReadOnly, onChange, onViewCustomer, onViewVehicle 
 }) => {
     const [isNotesModalOpen, setIsNotesModalOpen] = useState(false);
     
@@ -50,93 +40,103 @@ const JobDetailsTab: React.FC<JobDetailsTabProps> = ({
         setIsNotesModalOpen(false);
     };
     
+    const customerInfoData = customer ? {
+        phone: customer.phone || customer.mobile,
+        email: customer.email,
+        address: `${customer.addressLine1 || ''}, ${customer.postcode || ''}`.replace(/^,|,$/g, '').trim(),
+        company: customer.companyName,
+    } : {};
+
+    const vehicleInfoData = vehicle ? {
+        type: `${vehicle.year || ''} ${vehicle.make || ''} ${vehicle.model || ''}`.trim(),
+        colour: vehicle.colour,
+        vin: vehicle.vin,
+        motDue: vehicle.nextMotDate,
+    } : {};
+
+
     return (
         <div className="space-y-4">
              <TabSection title="Key Details" icon={KeyRound}>
                 <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                    <div className="flex items-center gap-2"><KeyRound size={14} className="text-gray-500"/><strong>Key Number:</strong> 
+                    <div className="flex items-center gap-2"><KeyRound size={14} className="text-gray-500"/><strong>Key #:</strong> 
                         {isReadOnly ? (
-                            <span>{editableJob.keyNumber || 'N/A'}</span>
+                            <span className="font-semibold">{editableJob.keyNumber || 'N/A'}</span>
                         ) : (
-                            <input type="number" name="keyNumber" value={editableJob.keyNumber || ''} onChange={onChange} className="p-1 border rounded bg-white text-sm w-full" />
+                            <input type="text" name="keyNumber" value={editableJob.keyNumber || ''} onChange={onChange} className="p-1 border rounded bg-white text-sm w-full" />
                         )}
                     </div>
-                    <div className="flex items-center gap-2"><Gauge size={14} className="text-gray-500"/><strong>Mileage:</strong> 
+                     <div className="flex items-center gap-2"><Gauge size={14} className="text-gray-500"/><strong>Mileage:</strong> 
                         {isReadOnly ? (
-                            <span>{editableJob.mileage || 'N/A'}</span>
+                            <span className="font-semibold">{editableJob.mileage ? `${editableJob.mileage.toLocaleString()} mi` : 'N/A'}</span>
                         ) : (
-                            <input type="number" name="mileage" value={editableJob.mileage || ''} onChange={onChange} className="p-1 border rounded bg-white text-sm w-full" />
+                            <input type="text" name="mileage" value={editableJob.mileage || ''} onChange={onChange} className="p-1 border rounded bg-white text-sm w-full" />
                         )}
                     </div>
                 </div>
             </TabSection>
 
             {customer && (
-                <TabSection title="Customer Details" icon={User} actions={<button type="button" onClick={() => onViewCustomer(customer.id)} className="text-xs bg-white border border-gray-300 px-2 py-1 rounded hover:bg-gray-100">View Full</button>}>
+                <TabSection 
+                    title="Customer Details" 
+                    icon={User}
+                    action={
+                        <HoverInfo title="Customer Info" data={customerInfoData}>
+                             <Info size={14} className="text-gray-400 cursor-pointer" />
+                        </HoverInfo>
+                    }
+                >
                      <div className="flex items-center justify-between">
                         <p className="font-bold text-base">{customer.forename} {customer.surname}</p>
-                        <HoverInfo
-                            title="Customer Details"
-                            data={{
-                                Email: customer.email,
-                                Phone: customer.mobile || customer.phone,
-                                Address: `${customer.addressLine1}, ${customer.city}, ${customer.postcode}`,
-                                Company: customer.companyName,
-                            }}
-                        >
-                            <Info size={16} className="text-gray-400 cursor-pointer"/>
-                        </HoverInfo>
+                        <button type="button" onClick={() => onViewCustomer(customer.id)} className="text-xs bg-white border border-gray-300 px-2 py-1 rounded hover:bg-gray-100">View Full</button>
                     </div>
                 </TabSection>
             )}
             
             {vehicle && (
-                <TabSection title="Vehicle Details" icon={Car} actions={<button type="button" onClick={() => onViewVehicle(vehicle.id)} className="text-xs bg-white border border-gray-300 px-2 py-1 rounded hover:bg-gray-100">View Full</button>}>
+                <TabSection 
+                    title="Vehicle Details" 
+                    icon={Car}
+                    action={
+                        <HoverInfo title="Vehicle Info" data={vehicleInfoData}>
+                             <Info size={14} className="text-gray-400 cursor-pointer" />
+                        </HoverInfo>
+                    }
+                >
                     <div className="flex items-center justify-between">
                         <div>
                             <p className="font-bold text-base">{vehicle.registration}</p>
                             <p className="text-gray-600 text-xs">{vehicle.make} {vehicle.model}</p>
                         </div>
-                        <HoverInfo
-                            title="Vehicle Details"
-                            data={{
-                                Year: vehicle.year,
-                                VIN: vehicle.vin,
-                                Mileage: editableJob.mileage,
-                                MOT: vehicle.motExpiryDate
-                            }}
-                        >
-                            <Info size={16} className="text-gray-400 cursor-pointer"/>
-                        </HoverInfo>
+                        <button type="button" onClick={() => onViewVehicle(vehicle.id)} className="text-xs bg-white border border-gray-300 px-2 py-1 rounded hover:bg-gray-100">View Full</button>
                     </div>
                 </TabSection>
             )}
 
-            <TabSection title="Job Status & Actions" icon={Briefcase}>
+            <TabSection title="Job Status" icon={Briefcase}>
                 <div className="space-y-2">
                     <div className="flex items-center gap-2">
-                        <label htmlFor="jobStatus" className="font-semibold">Status:</label>
-                        <select id="jobStatus" name="status" value={editableJob.status} onChange={onChange} className="p-1 border rounded bg-white text-sm w-full" disabled={isReadOnly}>
-                            <option>Unallocated</option>
-                            <option>Allocated</option>
-                            <option>In Progress</option>
-                            <option>Paused</option>
-                            <option>Pending QC</option>
-                            <option>Complete</option>
-                            <option>Invoiced</option>
-                            <option>Closed</option>
+                        <label htmlFor="status" className="font-semibold">Status:</label>
+                        <select id="status" name="status" value={editableJob.status} onChange={onChange} className="p-1 border rounded bg-white text-sm w-full" disabled={isReadOnly}>
+                            <option value="Booked In">Booked In</option>
+                            <option value="Allocated">Allocated</option>
+                            <option value="Unallocated">Unallocated</option>
+                            <option value="In Progress">In Progress</option>
+                            <option value="Awaiting Parts">Awaiting Parts</option>
+                            <option value="Awaiting Customer">Awaiting Customer</option>
+                            <option value="Awaiting Collection">Awaiting Collection</option>
+                            <option value="Ready for Invoicing">Ready for Invoicing</option>
+                            <option value="Invoiced">Invoiced</option>
+                            <option value="Complete">Complete</option>
+                            <option value="Archived">Archived</option>
                         </select>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2 pt-2 border-t">
-                        <button onClick={onCheckIn} disabled={!!editableJob.checkInTimestamp} className="py-2 px-3 bg-blue-500 text-white rounded-lg disabled:bg-gray-300 text-sm">Vehicle Check-in</button>
-                        <button onClick={onCheckOut} disabled={!!editableJob.checkOutTimestamp} className="py-2 px-3 bg-green-500 text-white rounded-lg disabled:bg-gray-300 text-sm">Vehicle Check-out</button>
                     </div>
                 </div>
             </TabSection>
 
              <div className="border rounded-lg bg-white shadow-sm">
                 <h3 className="text-md font-bold p-3 flex justify-between items-center bg-gray-50 rounded-t-lg">
-                    <span className="flex items-center gap-2"><ImageIcon size={16}/> Notes & Media</span>
+                    <span className="flex items-center gap-2"><ImageIcon size={16}/> Notes</span>
                     <div className="flex items-center gap-2">
                         <button type="button" onClick={() => setIsNotesModalOpen(true)} className="text-xs bg-white border border-gray-300 text-indigo-600 px-2 py-1 rounded flex items-center gap-1 hover:bg-indigo-50 shadow-sm"><Expand size={14}/> Expand</button>
                     </div>
