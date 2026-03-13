@@ -53,97 +53,119 @@ const PrintableVehicleHistory: React.FC<PrintableVehicleHistoryProps> = ({
     const firstEntity = entityMap.get(jobs[0]?.entityId) || entityMap.get(financials[0]?.entityId) || businessEntities.find(e => e && e.id);
 
     return (
-        <>
-            {/* Page 1: Summary & Details */}
-            <Page>
-                <Header title={`Vehicle History Report: ${vehicle.registration}`} entity={firstEntity} />
+        <div style={{ 
+            backgroundColor: '#ffffff', 
+            WebkitPrintColorAdjust: 'exact',
+            printColorAdjust: 'exact'
+        }}>
+             <style dangerouslySetInnerHTML={{ __html: `
+                @media print {
+                    @page { 
+                        size: A4 portrait;
+                        margin: 10mm; 
+                    }
+                    body * { 
+                        visibility: hidden; 
+                    }
+                    .rebuild-print-container, .rebuild-print-container * { 
+                        visibility: visible !important; 
+                    }
+                    .rebuild-print-container { 
+                        position: absolute !important; 
+                        left: 0 !important; 
+                        top: 0 !importan`}} />
+            <div className="rebuild-print-container">
+                {/* Page 1: Summary & Details */}
+                <Page>
+                    <Header title={`Vehicle History Report: ${vehicle.registration}`} entity={firstEntity} />
+                    
+                    <Section title="Vehicle & Current Owner Details">
+                        <div className="grid grid-cols-2 gap-4 text-xs">
+                            <div>
+                                <p><strong>Make:</strong> {vehicle.make}</p>
+                                <p><strong>Model:</strong> {vehicle.model}</p>
+                                <p><strong>Registration:</strong> {vehicle.registration}</p>
+                                <p><strong>VIN:</strong> {vehicle.vin || 'N/A'}</p>
+                            </div>
+                            <div>
+                                <p><strong>Owner:</strong> {owner?.forename} {owner?.surname}</p>
+                                <p><strong>Contact:</strong> {owner?.mobile || owner?.phone}</p>
+                                <p><strong>Address:</strong> {owner?.addressLine1}, {owner?.city}, {owner?.postcode}</p>
+                            </div>
+                        </div>
+                    </Section>
+
+                    <Section title="Ownership History">
+                        <div className="space-y-2 text-xs">
+                            {ownership.map(({ customer, firstSeen }) => (
+                                <div key={customer.id} className="p-2 bg-gray-50 rounded">
+                                    <p><strong>{customer.forename} {customer.surname}</strong> (First seen on {firstSeen.toLocaleDateString()})</p>
+                                </div>
+                            ))}
+                        </div>
+                    </Section>
+
+                    <Section title="Financial Summary">
+                        <div className="space-y-2 text-xs">
+                            {financials.map(item => (
+                                <div key={`${item.type}-${item.id}`} className="p-2 bg-gray-50 rounded">
+                                    <p><strong>{item.type} #{'estimateNumber' in item ? item.estimateNumber : item.id}</strong> on {item.issueDate} - Status: {item.status}</p>
+                                </div>
+                            ))}
+                        </div>
+                    </Section>
+                </Page>
                 
-                <Section title="Vehicle & Current Owner Details">
-                    <div className="grid grid-cols-2 gap-4 text-xs">
-                        <div>
-                            <p><strong>Make:</strong> {vehicle.make}</p>
-                            <p><strong>Model:</strong> {vehicle.model}</p>
-                            <p><strong>Registration:</strong> {vehicle.registration}</p>
-                            <p><strong>VIN:</strong> {vehicle.vin || 'N/A'}</p>
-                        </div>
-                        <div>
-                            <p><strong>Owner:</strong> {owner?.forename} {owner?.surname}</p>
-                            <p><strong>Contact:</strong> {owner?.mobile || owner?.phone}</p>
-                            <p><strong>Address:</strong> {owner?.addressLine1}, {owner?.city}, {owner?.postcode}</p>
-                        </div>
-                    </div>
-                </Section>
+                {/* Page 2 onwards: Job History */}
+                {jobs.map((job, index) => {
+                    const jobEntity = entityMap.get(job.entityId);
+                    const technicianIds = new Set(job.segments.map(s => s.engineerId).filter(Boolean));
+                    const technicianNames = Array.from(technicianIds).map(id => engineerMap.get(id!)).filter(Boolean).join(', ');
 
-                <Section title="Ownership History">
-                    <div className="space-y-2 text-xs">
-                        {ownership.map(({ customer, firstSeen }) => (
-                            <div key={customer.id} className="p-2 bg-gray-50 rounded">
-                                <p><strong>{customer.forename} {customer.surname}</strong> (First seen on {firstSeen.toLocaleDateString()})</p>
-                            </div>
-                        ))}
-                    </div>
-                </Section>
+                    return (
+                        <Page key={job.id}>
+                            <Header title={`Job Card Detail: ${job.id}`} entity={jobEntity} />
+                            <Section title={job.description}>
+                                <div className="grid grid-cols-2 gap-4 text-xs mb-4">
+                                    <div>
+                                        <p><strong>Date Created:</strong> {job.createdAt}</p>
+                                        <p><strong>Status:</strong> {job.status}</p>
+                                    </div>
+                                    <div>
+                                        <p><strong>Mileage In:</strong> {typeof job.mileage === 'number' ? `${job.mileage.toLocaleString()} miles` : 'N/A'}</p>
+                                        <p><strong>Key Number:</strong> {job.keyNumber || 'N/A'}</p>
+                                    </div>
+                                    <div>
+                                        <p><strong>Technician:</strong> {technicianNames || 'N/A'}</p>
+                                    </div>
+                                </div>
+                                
+                                <div className="page-break-inside-avoid">
+                                    <h4 className="text-sm font-semibold mb-1">Technician Observations</h4>
+                                    <div className="p-2 bg-gray-50 rounded text-xs">
+                                        {(job.technicianObservations && job.technicianObservations.length > 0) ? (
+                                            <ul className="list-disc list-inside">
+                                                {job.technicianObservations.map((obs, i) => <li key={i}>{obs}</li>)}
+                                            </ul>
+                                        ) : <p>No observations recorded.</p>}
+                                    </div>
+                                </div>
 
-                <Section title="Financial Summary">
-                    <div className="space-y-2 text-xs">
-                        {financials.map(item => (
-                            <div key={`${item.type}-${item.id}`} className="p-2 bg-gray-50 rounded">
-                                <p><strong>{item.type} #{'estimateNumber' in item ? item.estimateNumber : item.id}</strong> on {item.issueDate} - Status: {item.status}</p>
-                            </div>
-                        ))}
-                    </div>
-                </Section>
-            </Page>
-            
-            {/* Page 2 onwards: Job History */}
-            {jobs.map((job, index) => {
-                const jobEntity = entityMap.get(job.entityId);
-                const technicianIds = new Set(job.segments.map(s => s.engineerId).filter(Boolean));
-                const technicianNames = Array.from(technicianIds).map(id => engineerMap.get(id!)).filter(Boolean).join(', ');
-
-                return (
-                    <Page key={job.id}>
-                        <Header title={`Job Card Detail: ${job.id}`} entity={jobEntity} />
-                        <Section title={job.description}>
-                            <div className="grid grid-cols-2 gap-4 text-xs mb-4">
-                                <div>
-                                    <p><strong>Date Created:</strong> {job.createdAt}</p>
-                                    <p><strong>Status:</strong> {job.status}</p>
+                                <div className="page-break-inside-avoid mt-4">
+                                    <h4 className="text-sm font-semibold mb-1">Tyre Depths (mm)</h4>
+                                    <div className="p-2 bg-gray-50 rounded text-xs grid grid-cols-2 gap-x-4">
+                                        <p><strong>Offside Front (OSF):</strong> {job.tyreDepths?.osf || 'N/A'}</p>
+                                        <p><strong>Nearside Front (NSF):</strong> {job.tyreDepths?.nsf || 'N/A'}</p>
+                                        <p><strong>Offside Rear (OSR):</strong> {job.tyreDepths?.osr || 'N/A'}</p>
+                                        <p><strong>Nearside Rear (NSR):</strong> {job.tyreDepths?.nsr || 'N/A'}</p>
+                                    </div>
                                 </div>
-                                <div>
-                                    <p><strong>Mileage In:</strong> {typeof job.mileage === 'number' ? `${job.mileage.toLocaleString()} miles` : 'N/A'}</p>
-                                    <p><strong>Key Number:</strong> {job.keyNumber || 'N/A'}</p>
-                                </div>
-                                <div>
-                                    <p><strong>Technician:</strong> {technicianNames || 'N/A'}</p>
-                                </div>
-                            </div>
-                            
-                            <div className="page-break-inside-avoid">
-                                <h4 className="text-sm font-semibold mb-1">Technician Observations</h4>
-                                <div className="p-2 bg-gray-50 rounded text-xs">
-                                    {(job.technicianObservations && job.technicianObservations.length > 0) ? (
-                                        <ul className="list-disc list-inside">
-                                            {job.technicianObservations.map((obs, i) => <li key={i}>{obs}</li>)}
-                                        </ul>
-                                    ) : <p>No observations recorded.</p>}
-                                </div>
-                            </div>
-
-                             <div className="page-break-inside-avoid mt-4">
-                                <h4 className="text-sm font-semibold mb-1">Tyre Depths (mm)</h4>
-                                 <div className="p-2 bg-gray-50 rounded text-xs grid grid-cols-2 gap-x-4">
-                                     <p><strong>Offside Front (OSF):</strong> {job.tyreDepths?.osf || 'N/A'}</p>
-                                     <p><strong>Nearside Front (NSF):</strong> {job.tyreDepths?.nsf || 'N/A'}</p>
-                                     <p><strong>Offside Rear (OSR):</strong> {job.tyreDepths?.osr || 'N/A'}</p>
-                                     <p><strong>Nearside Rear (NSR):</strong> {job.tyreDepths?.nsr || 'N/A'}</p>
-                                 </div>
-                            </div>
-                        </Section>
-                    </Page>
-                );
-            })}
-        </>
+                            </Section>
+                        </Page>
+                    );
+                })}
+            </div>
+        </div>
     );
 };
 

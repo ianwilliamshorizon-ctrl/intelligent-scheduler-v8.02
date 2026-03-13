@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useData } from '../core/state/DataContext';
 import { useApp } from '../core/state/AppContext';
 import * as T from '../types';
-import { X, Save, Car, User, FileText, Wrench, Package, DollarSign, Edit, Plus, Trash2, KeyRound, MessageSquare, ChevronUp, ChevronDown, ListChecks, PlusCircle, ClipboardCheck, CarFront, Image as ImageIcon, Ban, Expand, Loader2, Printer } from 'lucide-react';
+import { X, Save, Car, User, FileText, Wrench, Package, DollarSign, Edit, Plus, Trash2, KeyRound, MessageSquare, ChevronUp, ChevronDown, ListChecks, PlusCircle, ClipboardCheck, CarFront, Image as ImageIcon, Ban, Expand, Loader2, Printer, CalendarDays } from 'lucide-react';
 import { formatCurrency } from '../utils/formatUtils';
 import { formatDate, addDays } from '../core/utils/dateUtils';
 import { generateEstimateNumber } from '../core/utils/numberGenerators';
@@ -15,9 +15,10 @@ import { useWorkshopActions } from '../core/hooks/useWorkshopActions';
 import { getScoredServicePackages } from '../utils/servicePackageScoring';
 import { generateServicePackageName } from '../core/services/geminiService';
 import ServicePackageFormModal from './ServicePackageFormModal';
-import { calculatePackagePrices } from '../core/utils/packageUtils';
 import { useReactToPrint } from 'react-to-print';
 import PrintableJobCard from './PrintableJobCard';
+import InspectionChecklist from './InspectionChecklist';
+import { calculatePackagePrices } from '../core/utils/packageUtils';
 
 const EditJobModal: React.FC<{
     isOpen: boolean;
@@ -60,12 +61,17 @@ const EditJobModal: React.FC<{
     const { handleSaveItem } = useWorkshopActions();
 
     const {
-        jobs, setJobs, vehicles, customers, estimates, setEstimates, suppliers, parts, setParts, servicePackages, taxRates, businessEntities, setServicePackages, engineers
+        jobs, setJobs, vehicles, customers, estimates, setEstimates, suppliers, parts, setParts, servicePackages, taxRates, businessEntities, setServicePackages, engineers, inspectionTemplates
     } = data;
 
+    const [activeTab, setActiveTab] = useState('estimates');
     const job = useMemo(() => Array.isArray(jobs) ? jobs.find(j => j.id === selectedJobId) : undefined, [jobs, selectedJobId]);
     const [editableJob, setEditableJob] = useState<T.Job | null>(null);
     const [editableEstimate, setEditableEstimate] = useState<T.Estimate | null>(null);
+    const [isPrinting, setIsPrinting] = useState(false);
+    const [printBlankSheet, setPrintBlankSheet] = useState(true);
+    const componentToPrintRef = useRef<HTMLDivElement>(null);
+
     const [partSearchTerm, setPartSearchTerm] = useState('');
     const [activePartSearch, setActivePartSearch] = useState<string | null>(null);
     const [isMediaModalOpen, setIsMediaModalOpen] = useState(false);
@@ -78,89 +84,93 @@ const EditJobModal: React.FC<{
     const [isCreatingPackage, setIsCreatingPackage] = useState(false);
     const [isPackageModalOpen, setIsPackageModalOpen] = useState(false);
     const [suggestedPackage, setSuggestedPackage] = useState<Partial<T.ServicePackage> | null>(null);
-    const [isPrinting, setIsPrinting] = useState(false);
 
-    const componentToPrintRef = useRef<HTMLDivElement>(null);
+    // Data dependencies defined before they are used in print handlers
+    const vehicle = useMemo(() => (job && Array.isArray(vehicles)) ? vehicles.find(v => v.id === job.vehicleId) : undefined, [job, vehicles]);
+    const customer = useMemo(() => (job && Array.isArray(customers)) ? customers.find(c => c.id === job.customerId) : undefined, [job, customers]);
+    const mainEstimate = useMemo(() => {
+        if (!job || !Array.isArray(estimates)) return null;
+        return estimates.find(e => e.id === job.estimateId) || null;
+    }, [job, estimates]);
+    const supplementaryEstimates = useMemo(() => {
+        if (!job || !Array.isArray(estimates)) return [];
+        const mainId = mainEstimate?.id;
+        return estimates.filter(e => e.jobId === job.id && e.id !== mainId);
+    }, [estimates, job, mainEstimate]);
+    const businessEntity = useMemo(() => businessEntities.find(e => e.id === editableJob?.entityId), [businessEntities, editableJob]);
 
+    // Correctly configured print handler
     const handlePrint = useReactToPrint({
-        content: () => componentToPrintRef.current,
+        contentRef: componentToPrintRef, // Pass the ref object directly
+        documentTitle: `JobCard_${editableJob?.id}`,
         onAfterPrint: () => setIsPrinting(false),
     });
 
-    useEffect(() => {
-        if (isPrinting && componentToPrintRef.current) {
-            handlePrint();
-        }
-    }, [isPrinting, handlePrint]);
-
-    const triggerPrint = () => {
+    // Simplified trigger function
+    const triggerPrint = useCallback(() => {
         if (editableJob && vehicle && customer) {
             setIsPrinting(true);
+            handlePrint(); // The component is already rendered, so we can print directly
         } else {
-            setConfirmation({ isOpen: true, title: 'Cannot Print', message: 'Missing required data to print job card. Please ensure a customer and vehicle are assigned.', type: 'warning' });
+            setConfirmation({
+                isOpen: true,
+                title: 'Cannot Print',
+                message: 'Required data (Job, Vehicle, or Customer) is missing.',
+                type: 'warning'
+            });
         }
-    };
+    }, [editableJob, vehicle, customer, handlePrint, setConfirmation]);
 
     const canViewPricing = useMemo(() => {
         if (!currentUser) return false;
         return ['Admin', 'Director', 'Sales'].includes(currentUser.role);
     }, [currentUser]);
 
-    const vehicle = useMemo(() => (job && Array.isArray(vehicles)) ? vehicles.find(v => v.id === job.vehicleId) : undefined, [job, vehicles]);
-    const customer = useMemo(() => (job && Array.isArray(customers)) ? customers.find(c => c.id === job.customerId) : undefined, [job, customers]);
     const taxRatesMap = useMemo(() => new Map((Array.isArray(taxRates) ? taxRates : []).map(t => [t.id, t])), [taxRates]);
     const standardTaxRateId = useMemo(() => (Array.isArray(taxRates) ? taxRates : []).find(t => t.code === 'T1')?.id, [taxRates]);
     const t99RateId = useMemo(() => taxRates.find(t => t.code === 'T99')?.id, [taxRates]);
-
-    const mainEstimate = useMemo(() => {
-        if (!job || !Array.isArray(estimates)) return null;
-        return estimates.find(e => e.id === job.estimateId) || null;
-    }, [job, estimates]);
-
-    const supplementaryEstimates = useMemo(() => {
-        if (!job || !Array.isArray(estimates)) return [];
-        const mainId = mainEstimate?.id;
-        return estimates.filter(e => e.jobId === job.id && e.id !== mainId);
-    }, [estimates, job, mainEstimate]);
-
-    const businessEntity = useMemo(() => businessEntities.find(e => e.id === editableJob?.entityId), [businessEntities, editableJob]);
+    const vehicleImage = useMemo(() => vehicle?.images?.find(img => img.isPrimaryDiagram) || vehicle?.images?.[0], [vehicle]);
 
     useEffect(() => {
-        if (job) {
+        if (isOpen && job) {
             const jobCopy = JSON.parse(JSON.stringify(job));
-            const currentEstimate = mainEstimate ? JSON.parse(JSON.stringify(mainEstimate)) : null;
+            const obs = jobCopy.technicianObservations || [];
+            jobCopy.technicianObservations = [...obs, ...Array(Math.max(0, 5 - obs.length)).fill('')].slice(0, 5);
+            if (!jobCopy.inspectionChecklist && inspectionTemplates.some(t => t.isDefault)) {
+                const defaultTemplate = inspectionTemplates.find(t => t.isDefault);
+                if (defaultTemplate) {
+                    jobCopy.inspectionTemplateId = defaultTemplate.id;
+                    jobCopy.inspectionChecklist = defaultTemplate.sections.map(s => ({
+                        ...s,
+                        id: crypto.randomUUID(),
+                        items: s.items.map(i => ({ ...i, id: crypto.randomUUID(), status: 'na' }))
+                    }));
+                }
+            }
             setEditableJob(jobCopy);
-            setEditableEstimate(currentEstimate);
-        } else {
+        } else if (!isOpen) {
             setEditableJob(null);
+        }
+    }, [isOpen, job, inspectionTemplates]);
+
+    useEffect(() => {
+        if (isOpen) {
+            const currentEstimate = mainEstimate ? JSON.parse(JSON.stringify(mainEstimate)) : null;
+            setEditableEstimate(currentEstimate);
+        } else if (!isOpen) {
             setEditableEstimate(null);
         }
-    }, [job, isOpen, mainEstimate]);
+    }, [isOpen, mainEstimate]);
 
     const isReadOnly = !!editableJob?.invoiceId;
 
     const sortedPackages = useMemo(() => {
         const allAvailable = Array.isArray(servicePackages) ? servicePackages : [];
         if (!vehicle) {
-            return allAvailable.map(pkg => ({
-                ...pkg,
-                id: pkg.id,
-                label: pkg.name || 'Unnamed Package',
-                value: pkg.id,
-                description: pkg.description || 'Service Package',
-                badge: { text: 'Generic', className: 'bg-gray-100 text-gray-800' }
-            }));
+            return allAvailable.map(pkg => ({ ...pkg, id: pkg.id, label: pkg.name || 'Unnamed Package', value: pkg.id, description: pkg.description || 'Service Package', badge: { text: 'Generic', className: 'bg-gray-100 text-gray-800' } }));
         }
-
         const scoredResults = getScoredServicePackages(allAvailable, vehicle);
-        return scoredResults.map(({ pkg, matchType, color }) => ({
-            ...pkg,
-            id: pkg.id,
-            label: pkg.name || 'Unnamed Package',
-            value: pkg.id,
-            description: pkg.description || 'Service Package',
-            badge: { text: matchType, className: color }
-        }));
+        return scoredResults.map(({ pkg, matchType, color }) => ({ ...pkg, id: pkg.id, label: pkg.name || 'Unnamed Package', value: pkg.id, description: pkg.description || 'Service Package', badge: { text: matchType, className: color } }));
     }, [servicePackages, vehicle]);
 
     const handleCreateEstimateIfNeeded = useCallback(() => {
@@ -204,44 +214,16 @@ const EditJobModal: React.FC<{
         const pkg = servicePackages.find(p => p.id === packageId);
         if (!pkg) return;
         handleCreateEstimateIfNeeded();
-
         setEditableEstimate(prev => {
             if (!prev) return null;
             const newItems: T.EstimateLineItem[] = [];
             const { net, vat } = calculatePackagePrices(pkg, taxRates);
-            const mainPackageItem: T.EstimateLineItem = {
-                id: crypto.randomUUID(),
-                description: pkg.name || '',
-                quantity: 1,
-                unitPrice: net,
-                unitCost: 0,
-                isLabor: false, 
-                taxCodeId: pkg.taxCodeId || standardTaxRateId,
-                servicePackageId: pkg.id,
-                servicePackageName: pkg.name,
-                isPackageComponent: false,
-                isOptional: true,
-                preCalculatedVat: pkg.taxCodeId === t99RateId ? vat : undefined,
-            };
+            const mainPackageItem: T.EstimateLineItem = { id: crypto.randomUUID(), description: pkg.name || '', quantity: 1, unitPrice: net, unitCost: 0, isLabor: false, taxCodeId: pkg.taxCodeId || standardTaxRateId, servicePackageId: pkg.id, servicePackageName: pkg.name, isPackageComponent: false, isOptional: true, preCalculatedVat: pkg.taxCodeId === t99RateId ? vat : undefined };
             newItems.push(mainPackageItem);
-
             (pkg.costItems || []).forEach(costItem => {
-                const newItem: T.EstimateLineItem = {
-                    id: crypto.randomUUID(),
-                    description: costItem.description,
-                    quantity: costItem.quantity,
-                    unitPrice: 0,
-                    unitCost: costItem.unitCost,
-                    partNumber: costItem.partNumber,
-                    isLabor: costItem.isLabor,
-                    servicePackageId: pkg.id, 
-                    servicePackageName: pkg.name, 
-                    isPackageComponent: true,
-                    isOptional: true
-                };
+                const newItem: T.EstimateLineItem = { id: crypto.randomUUID(), description: costItem.description, quantity: costItem.quantity, unitPrice: 0, unitCost: costItem.unitCost, partNumber: costItem.partNumber, isLabor: costItem.isLabor, servicePackageId: pkg.id, servicePackageName: pkg.name, isPackageComponent: true, isOptional: true };
                 newItems.push(newItem);
             });
-
             return { ...prev, lineItems: [...(prev.lineItems || []), ...newItems] };
         });
     };
@@ -249,6 +231,79 @@ const EditJobModal: React.FC<{
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
         setEditableJob(prev => prev ? { ...prev, [name]: value } : null);
+    };
+
+    const handleTechObservationChange = (index: number, value: string) => {
+        setEditableJob(prev => {
+            if (!prev) return null;
+            const newObservations = [...(prev.technicianObservations || [])];
+            newObservations[index] = value;
+            return { ...prev, technicianObservations: newObservations };
+        });
+    };
+
+    const handleInspectionTemplateChange = (templateId: string) => {
+        const template = inspectionTemplates.find(t => t.id === templateId);
+        if (template && editableJob) {
+            setEditableJob({
+                ...editableJob,
+                inspectionTemplateId: template.id,
+                inspectionChecklist: template.sections.map(s => ({
+                    ...s,
+                    id: crypto.randomUUID(),
+                    items: s.items.map(i => ({ ...i, id: crypto.randomUUID(), status: 'na' }))
+                }))
+            });
+        }
+    };
+
+    const handleAddDamagePoint = (e: React.MouseEvent<HTMLDivElement>) => {
+        if (isReadOnly) return;
+        const rect = e.currentTarget.getBoundingClientRect();
+        const x = ((e.clientX - rect.left) / rect.width) * 100;
+        const y = ((e.clientY - rect.top) / rect.height) * 100;
+        const notes = prompt('Enter notes for this damage point:');
+        if (notes !== null) {
+            const newPoint: T.VehicleDamagePoint = { id: crypto.randomUUID(), x, y, notes };
+            setEditableJob(prev => prev ? { ...prev, damagePoints: [...(prev.damagePoints || []), newPoint] } : null);
+        }
+    };
+
+    const handleDamagePointClick = (pointId: string) => {
+        if (isReadOnly) return;
+        if (window.confirm('Do you want to remove this damage point?')) {
+            setEditableJob(prev => prev ? { ...prev, damagePoints: (prev.damagePoints || []).filter(p => p.id !== pointId) } : null);
+        }
+    };
+
+    const handleTyreDataChange = (location: T.TyreLocation, field: keyof Omit<T.TyreData, 'indicator' | 'comments'>, value: string) => {
+        setEditableJob(prev => {
+            if (!prev) return null;
+            const newTyreCheck = { ...(prev.tyreCheck || {}) } as T.TyreCheckData;
+            if (!newTyreCheck[location]) { newTyreCheck[location] = { indicator: 'na' }; }
+            (newTyreCheck[location] as any)[field] = parseFloat(value) || 0;
+            return { ...prev, tyreCheck: newTyreCheck };
+        });
+    };
+    
+    const handleTyreTextDataChange = (location: T.TyreLocation, field: 'comments', value: string) => {
+        setEditableJob(prev => {
+            if (!prev) return null;
+            const newTyreCheck = { ...(prev.tyreCheck || {}) } as T.TyreCheckData;
+            if (!newTyreCheck[location]) { newTyreCheck[location] = { indicator: 'na' }; }
+            newTyreCheck[location][field] = value;
+            return { ...prev, tyreCheck: newTyreCheck };
+        });
+    };
+    
+    const handleTyreStatusChange = (location: T.TyreLocation, status: T.ChecklistItemStatus) => {
+        setEditableJob(prev => {
+            if (!prev) return null;
+            const newTyreCheck = { ...(prev.tyreCheck || {}) } as T.TyreCheckData;
+            if (!newTyreCheck[location]) { newTyreCheck[location] = { indicator: 'na' }; }
+            newTyreCheck[location].indicator = status;
+            return { ...prev, tyreCheck: newTyreCheck };
+        });
     };
 
     const handleOpenLineItemMedia = (itemId: string) => {
@@ -267,16 +322,7 @@ const EditJobModal: React.FC<{
         setEditableEstimate(prev => {
             if (!prev) return null;
             const entity = Array.isArray(businessEntities) ? businessEntities.find(e => e.id === editableJob?.entityId) : undefined;
-            const newItem: T.EstimateLineItem = {
-                id: crypto.randomUUID(),
-                description: isLabor ? 'Labor' : '',
-                quantity: 1,
-                unitPrice: isLabor ? (entity?.laborRate || 0) : 0,
-                unitCost: isLabor ? (entity?.laborCostRate || 0) : 0,
-                isLabor,
-                taxCodeId: standardTaxRateId,
-                isOptional: true
-            };
+            const newItem: T.EstimateLineItem = { id: crypto.randomUUID(), description: isLabor ? 'Labor' : '', quantity: 1, unitPrice: isLabor ? (entity?.laborRate || 0) : 0, unitCost: isLabor ? (entity?.laborCostRate || 0) : 0, isLabor, taxCodeId: standardTaxRateId, isOptional: true };
             return { ...prev, lineItems: [...(prev.lineItems || []), newItem] };
         });
     };
@@ -300,29 +346,16 @@ const EditJobModal: React.FC<{
 
     const handleRaisePurchaseOrders = useCallback(async () => {
         if (!editableJob || !editableEstimate || !vehicle) return;
-
-        const itemsToOrder = editableEstimate.lineItems.filter(li => {
-            const isPackageHeader = !!li.servicePackageId && !li.isPackageComponent;
-            return !li.isLabor &&
-                !isPackageHeader &&
-                li.partId &&
-                !li.fromStock &&
-                !li.purchaseOrderLineItemId;
-        });
-
+        const itemsToOrder = editableEstimate.lineItems.filter(li => !li.isLabor && !li.isPackageComponent && li.partId && !li.fromStock && !li.purchaseOrderLineItemId);
         if (itemsToOrder.length === 0) {
             setConfirmation({ isOpen: true, title: 'No Parts to Order', message: 'There are no new parts on this estimate that require ordering.', type: 'info' });
             return;
         }
-
         const supplierGroups = new Map<string, T.EstimateLineItem[]>();
-
         itemsToOrder.forEach(lineItem => {
             const part = parts.find(p => p.id === lineItem.partId);
-            if (!part) return; 
-
+            if (!part) return;
             const supplierId = lineItem.supplierId || part.defaultSupplierId || 'UNKNOWN';
-
             if (!supplierGroups.has(supplierId)) {
                 supplierGroups.set(supplierId, []);
             }
@@ -333,7 +366,6 @@ const EditJobModal: React.FC<{
         const newPOs: T.PurchaseOrder[] = [];
         const newPoIdsToLink: string[] = [];
         let updatedLineItems = [...editableEstimate.lineItems];
-
         const entity = businessEntities.find(e => e.id === editableJob.entityId);
         const entityShortCode = entity?.shortCode || 'UNK';
         const jobPoIds = editableJob.purchaseOrderIds || [];
@@ -341,98 +373,47 @@ const EditJobModal: React.FC<{
 
         supplierGroups.forEach((items, supplierId) => {
             const existingDraftPO = jobPOs.find(po => po.status === 'Draft' && (po.supplierId === supplierId || (supplierId === 'UNKNOWN' && !po.supplierId)));
-
             if (existingDraftPO) {
                 const newPoLineItems: T.PurchaseOrderLineItem[] = items.map(item => {
                     const newPoLineItemId = crypto.randomUUID();
                     const part = parts.find(p => p.id === item.partId!)!;
-
                     const originalIndex = updatedLineItems.findIndex(li => li.id === item.id);
                     if (originalIndex !== -1) {
                         updatedLineItems[originalIndex] = { ...updatedLineItems[originalIndex], purchaseOrderLineItemId: newPoLineItemId };
                     }
-
-                    return {
-                        id: newPoLineItemId,
-                        partNumber: part.partNumber,
-                        description: part.description,
-                        quantity: item.quantity,
-                        unitPrice: part.costPrice,
-                        taxCodeId: part.taxCodeId,
-                    };
+                    return { id: newPoLineItemId, partNumber: part.partNumber, description: part.description, quantity: item.quantity, unitPrice: part.costPrice, taxCodeId: part.taxCodeId };
                 });
-
-                const updatedPO = {
-                    ...existingDraftPO,
-                    lineItems: [...(existingDraftPO.lineItems || []), ...newPoLineItems]
-                };
+                const updatedPO = { ...existingDraftPO, lineItems: [...(existingDraftPO.lineItems || []), ...newPoLineItems] };
                 posToUpdate.push(updatedPO);
-
             } else {
                 const newPoId = generatePurchaseOrderId(purchaseOrders.concat(newPOs), entityShortCode);
                 newPoIdsToLink.push(newPoId);
-
                 const poLineItems: T.PurchaseOrderLineItem[] = items.map(item => {
                     const newPoLineItemId = crypto.randomUUID();
                     const part = parts.find(p => p.id === item.partId!)!;
-
                     const originalIndex = updatedLineItems.findIndex(li => li.id === item.id);
                     if (originalIndex !== -1) {
                         updatedLineItems[originalIndex] = { ...updatedLineItems[originalIndex], purchaseOrderLineItemId: newPoLineItemId };
                     }
-
-                    return {
-                        id: newPoLineItemId,
-                        partNumber: part.partNumber,
-                        description: part.description,
-                        quantity: item.quantity,
-                        unitPrice: part.costPrice,
-                        taxCodeId: part.taxCodeId,
-                    };
+                    return { id: newPoLineItemId, partNumber: part.partNumber, description: part.description, quantity: item.quantity, unitPrice: part.costPrice, taxCodeId: part.taxCodeId };
                 });
-
-                const newPo: T.PurchaseOrder = {
-                    id: newPoId,
-                    entityId: editableJob.entityId,
-                    supplierId: supplierId === 'UNKNOWN' ? undefined : supplierId,
-                    vehicleRegistrationRef: vehicle.registration,
-                    orderDate: formatDate(new Date()),
-                    status: 'Draft',
-                    lineItems: poLineItems,
-                    notes: `Generated from Job #${editableJob.id}`
-                };
+                const newPo: T.PurchaseOrder = { id: newPoId, entityId: editableJob.entityId, supplierId: supplierId === 'UNKNOWN' ? undefined : supplierId, vehicleRegistrationRef: vehicle.registration, orderDate: formatDate(new Date()), status: 'Draft', lineItems: poLineItems, notes: `Generated from Job #${editableJob.id}` };
                 newPOs.push(newPo);
             }
         });
 
         const allPOsToSave = [...newPOs, ...posToUpdate];
-
         if (allPOsToSave.length > 0) {
             const poSavePromises = allPOsToSave.map(po => handleSaveItem(data.setPurchaseOrders, po, 'brooks_purchaseOrders'));
             await Promise.all(poSavePromises);
-
             const newEstimateState = { ...editableEstimate, lineItems: updatedLineItems };
             setEditableEstimate(newEstimateState);
             await handleSaveItem(setEstimates, newEstimateState, 'brooks_estimates');
-
             if (newPoIdsToLink.length > 0) {
-                setEditableJob(prev => {
-                    if (!prev) return null;
-                    const updatedJob = {
-                        ...prev,
-                        purchaseOrderIds: [...(prev.purchaseOrderIds || []), ...newPoIdsToLink]
-                    };
-                    return updatedJob;
-                });
+                setEditableJob(prev => prev ? { ...prev, purchaseOrderIds: [...(prev.purchaseOrderIds || []), ...newPoIdsToLink] } : null);
             }
         }
-
-        setConfirmation({
-            isOpen: true,
-            title: 'Purchase Orders Updated',
-            message: `${newPOs.length} new purchase order(s) created and ${posToUpdate.length} existing draft PO(s) updated.`,
-            type: 'success',
-        });
+        setConfirmation({ isOpen: true, title: 'Purchase Orders Updated', message: `${newPOs.length} new purchase order(s) created and ${posToUpdate.length} existing draft PO(s) updated.`, type: 'success' });
     }, [editableJob, editableEstimate, vehicle, parts, businessEntities, purchaseOrders, generatePurchaseOrderId, handleSaveItem, data.setPurchaseOrders, setEstimates, setConfirmation]);
 
     const handleSelectPart = (lineItemId: string, part: T.Part) => {
@@ -442,11 +423,9 @@ const EditJobModal: React.FC<{
         handleLineItemChange(lineItemId, 'unitCost', part.costPrice);
         handleLineItemChange(lineItemId, 'partId', part.id);
         handleLineItemChange(lineItemId, 'taxCodeId', part.taxCodeId || standardTaxRateId);
-        handleLineItemChange(lineItemId, 'supplierId', part.defaultSupplierId); 
-        
+        handleLineItemChange(lineItemId, 'supplierId', part.defaultSupplierId);
         const fromStock = part.isStockItem && part.stockQuantity > 0;
         handleLineItemChange(lineItemId, 'fromStock', fromStock);
-        
         setActivePartSearch(null);
         setPartSearchTerm('');
     };
@@ -468,49 +447,21 @@ const EditJobModal: React.FC<{
     };
     
     const handleCreatePackage = async () => {
-        if (!editableEstimate || !editableEstimate.lineItems || editableEstimate.lineItems.length === 0) {
-            setConfirmation({ isOpen: true, title: 'No Line Items', message: 'This job has no estimate or line items to create a package from.', type: 'info' });
+        if (!editableEstimate || !editableEstimate.lineItems || editableEstimate.lineItems.length === 0 || !vehicle || !editableJob) {
+            setConfirmation({ isOpen: true, title: 'Cannot Create Package', message: 'A job, vehicle, and at least one estimate line item are required to create a package.', type: 'info' });
             return;
         }
-        if (!vehicle || !editableJob) {
-            setConfirmation({ isOpen: true, title: 'Error', message: "Cannot create a package without an associated vehicle or job.", type: 'warning' });
-            return;
-        }
-
         setIsCreatingPackage(true);
         try {
             const { name, description } = await generateServicePackageName(editableEstimate.lineItems, vehicle.make, vehicle.model);
             const totalNet = (editableEstimate.lineItems || []).filter(item => !item.isPackageComponent).reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
-
-            const costItems: T.EstimateLineItem[] = (editableEstimate.lineItems || [])
-                .filter(item => !item.servicePackageId || item.isPackageComponent)
-                .map(li => ({
-                    id: crypto.randomUUID(),
-                    description: li.description,
-                    quantity: li.quantity,
-                    unitPrice: 0,
-                    unitCost: li.unitCost || 0,
-                    partNumber: li.partNumber,
-                    isLabor: li.isLabor
-                }));
-
+            const costItems: T.EstimateLineItem[] = (editableEstimate.lineItems || []).filter(item => !item.servicePackageId || item.isPackageComponent).map(li => ({ id: crypto.randomUUID(), description: li.description, quantity: li.quantity, unitPrice: 0, unitCost: li.unitCost || 0, partNumber: li.partNumber, isLabor: li.isLabor }));
             const taxRate = standardTaxRateId ? (taxRates.find(t => t.id === standardTaxRateId)?.rate || 0) / 100 : 0;
             const totalVat = totalNet * taxRate;
             const totalPrice = totalNet + totalVat;
-
-            const newPackage: Partial<T.ServicePackage> = {
-                entityId: editableJob.entityId,
-                name,
-                description,
-                totalPrice,
-                totalPriceNet: totalNet,
-                costItems: costItems,
-                taxCodeId: standardTaxRateId
-            };
-            
+            const newPackage: Partial<T.ServicePackage> = { entityId: editableJob.entityId, name, description, totalPrice, totalPriceNet: totalNet, costItems: costItems, taxCodeId: standardTaxRateId };
             setSuggestedPackage(newPackage);
             setIsPackageModalOpen(true);
-
         } catch (error: any) {
              setConfirmation({ isOpen: true, title: 'AI Error', message: `AI failed to create package: ${error.message}`, type: 'warning' });
         } finally {
@@ -549,174 +500,86 @@ const EditJobModal: React.FC<{
     const { totalNet, grandTotal, vatBreakdown } = useMemo(() => {
         const breakdown: { [key: string]: { net: number; vat: number; rate: number | string; name: string; } } = {};
         if (!editableEstimate || !editableEstimate.lineItems) return { totalNet: 0, grandTotal: 0, vatBreakdown: [] };
-
         let currentTotalNet = 0;
-
         const billableItems = (editableEstimate.lineItems || []).filter(item => !item.isPackageComponent);
-
         billableItems.forEach(item => {
             const itemNet = Number(item.quantity || 0) * Number(item.unitPrice || 0);
             currentTotalNet += itemNet;
-
             if (item.taxCodeId === t99RateId) {
                 const taxCodeId = t99RateId;
-                if (!breakdown[taxCodeId]) {
-                    breakdown[taxCodeId] = { net: 0, vat: 0, rate: 'Mixed', name: 'Mixed VAT' };
-                }
+                if (!breakdown[taxCodeId]) { breakdown[taxCodeId] = { net: 0, vat: 0, rate: 'Mixed', name: 'Mixed VAT' }; }
                 breakdown[taxCodeId].net += itemNet;
                 breakdown[taxCodeId].vat += (item.preCalculatedVat || 0) * (item.quantity || 1);
-
             } else {
                 const taxCodeId = item.taxCodeId || standardTaxRateId;
                 if (!taxCodeId) return;
-
                 const taxRate = taxRatesMap.get(taxCodeId);
                 if (!taxRate) return;
-
-                if (!breakdown[taxCodeId]) {
-                    breakdown[taxCodeId] = { net: 0, vat: 0, rate: taxRate.rate, name: taxRate.name };
-                }
+                if (!breakdown[taxCodeId]) { breakdown[taxCodeId] = { net: 0, vat: 0, rate: taxRate.rate, name: taxRate.name }; }
                 breakdown[taxCodeId].net += itemNet;
-                if (taxRate.rate > 0) {
-                    breakdown[taxCodeId].vat += itemNet * (taxRate.rate / 100);
-                }
+                if (taxRate.rate > 0) { breakdown[taxCodeId].vat += itemNet * (taxRate.rate / 100); }
             }
         });
-
         const finalVatBreakdown = Object.values(breakdown).filter(b => b.net !== 0 || b.vat !== 0);
         const totalVat = finalVatBreakdown.reduce((sum, b) => sum + b.vat, 0);
-
         return { totalNet: currentTotalNet, grandTotal: currentTotalNet + totalVat, vatBreakdown: finalVatBreakdown };
-
     }, [editableEstimate, taxRatesMap, standardTaxRateId, t99RateId]);
 
     const supplierMap = useMemo(() => new Map((Array.isArray(suppliers) ? suppliers : []).map(s => [s.id, s.name])), [suppliers]);
 
-    const derivedPartsStatus = useMemo(() => {
-        if (!editableEstimate) return 'Not Required';
+    const poStatusKey = useMemo(() => {
+        const jobRelatedPOs = job?.purchaseOrderIds ? purchaseOrders.filter(po => job.purchaseOrderIds.includes(po.id)) : [];
+        return jobRelatedPOs.map(po => `${po.id}:${po.status}`).join(',');
+    }, [job, purchaseOrders]);
 
-        const hasPartsOnEstimate = (editableEstimate.lineItems || []).some(li => !li.isLabor && !li.isPackageComponent && (li.partId || li.partNumber));
-    
-        if (!hasPartsOnEstimate) {
-            return 'Not Required';
-        }
-
-        const poIds = editableJob?.purchaseOrderIds || [];
-        const relatedPOs = purchaseOrders.filter(po => poIds.includes(po.id));
-
-        if (relatedPOs.length === 0) {
-            const needsOrdering = (editableEstimate.lineItems || []).some(li => !li.isLabor && !li.isPackageComponent && !li.fromStock);
-            return needsOrdering ? 'Awaiting Parts' : 'Not Required';
-        }
-        
-        const needsNewPO = (editableEstimate.lineItems || []).some(li => !li.isLabor && !li.isPackageComponent && !li.fromStock && !li.purchaseOrderLineItemId);
-        const allPOsCompleted = relatedPOs.every(po => po.status === 'Received' || po.status === 'Finalized');
-
-        if (allPOsCompleted && !needsNewPO) {
-            return 'Fully Received';
-        }
-
-        const anyPOReceived = relatedPOs.some(po => po.status === 'Received' || po.status === 'Finalized' || po.status === 'Partially Received');
-        if (anyPOReceived || (allPOsCompleted && needsNewPO)) {
-            return 'Partially Received';
-        }
-    
-        const anyPOOrdered = relatedPOs.some(po => po.status === 'Ordered');
-        if (anyPOOrdered) {
-            return 'Ordered';
-        }
-        
-        if (poIds.length > 0) {
-            return 'Awaiting Order';
-        }
-
-        return 'Awaiting Parts';
-    }, [editableJob, purchaseOrders, editableEstimate]);
-
-    useEffect(() => {
-        if (editableJob && derivedPartsStatus !== editableJob.partsStatus) {
-            setEditableJob(prev => prev ? { ...prev, partsStatus: derivedPartsStatus } : null);
-        }
-    }, [derivedPartsStatus, editableJob?.partsStatus]);
-
+    const totalLaborHours = useMemo(() => {
+        if (!editableEstimate) return 0;
+        return (editableEstimate.lineItems || []).filter(li => li.isLabor).reduce((sum, li) => sum + Number(li.quantity || 0), 0);
+    }, [editableEstimate]);
 
     const handleSaveMain = async () => {
-        if (!editableJob) {
-            onClose();
-            return;
-        }
-    
+        if (!editableJob) { onClose(); return; }
         let jobToSave = { ...editableJob };
-    
+        jobToSave.technicianObservations = (jobToSave.technicianObservations || []).filter(obs => obs.trim() !== '');
+
         if (editableEstimate) {
             let estimateToSave = { ...editableEstimate };
             let newEstimateId: string | null = null;
-    
             if (estimateToSave.id.endsWith('_temp')) {
                 estimateToSave.id = `est_${Date.now()}`;
                 newEstimateId = estimateToSave.id;
             }
-    
             await handleSaveItem(setEstimates, estimateToSave, 'brooks_estimates');
-    
-            if (newEstimateId) {
-                jobToSave.estimateId = newEstimateId;
-            }
+            if (newEstimateId) { jobToSave.estimateId = newEstimateId; }
         }
-    
         await handleSaveItem(setJobs, jobToSave, 'brooks_jobs');
-    
         onClose();
     };
+
+    const TabButton = ({ tabId, label, icon }: { tabId: string, label: string, icon: React.ReactNode }) => (
+        <button onClick={() => setActiveTab(tabId)} className={`flex-1 flex items-center justify-center gap-2 py-3 text-sm font-semibold border-b-4 ${activeTab === tabId ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-gray-500 hover:text-indigo-600'}`}>
+            {icon}{label}
+        </button>
+    );
     
-    const handleCancelJob = () => {
-        if (editableJob) {
-            setConfirmation({
-                isOpen: true,
-                title: 'Confirm Cancellation',
-                message: 'Are you sure you want to cancel this job? It will be moved to the Archived status.',
-                type: 'warning',
-                onConfirm: async () => {
-                    setEditableJob(prev => prev ? { ...prev, status: 'Archived' } : null);
-                    // This will be picked up by handleSaveMain
-                }
-            });
-        }
-    };
-
-    const jobRelatedPOs = useMemo(() => {
-        const poIds = job?.purchaseOrderIds || [];
-        return purchaseOrders.filter(po => poIds.includes(po.id));
-    }, [job, purchaseOrders]);
-
-    const poStatusKey = useMemo(() => {
-        return jobRelatedPOs.map(po => `${po.id}:${po.status}`).join(',');
-    }, [jobRelatedPOs]);
-
-    const totalLaborHours = useMemo(() => {
-        if (!editableEstimate) return 0;
-        return (editableEstimate.lineItems || [])
-            .filter(li => li.isLabor)
-            .reduce((sum, li) => sum + Number(li.quantity || 0), 0);
-    }, [editableEstimate]);
+    const tyreLocations: T.TyreLocation[] = ['frontLeft', 'frontRight', 'rearLeft', 'rearRight', 'spare'];
+    const tyreLocationLabels: Record<T.TyreLocation, string> = { frontLeft: 'Front Left', frontRight: 'Front Right', rearLeft: 'Rear Left', rearRight: 'Rear Right', spare: 'Spare' };
+    const statusColors: Record<T.ChecklistItemStatus, string> = { ok: 'bg-green-100 text-green-800', attention: 'bg-yellow-100 text-yellow-800', urgent: 'bg-red-100 text-red-800', na: 'bg-gray-100 text-gray-800' };
 
     if (!isOpen || !editableJob) return null;
 
     return (
         <div className="fixed inset-0 bg-gray-900 bg-opacity-75 z-[60] flex justify-center items-center p-4">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-[95vw] max-h-[90vh] flex flex-col">
-                <header className="flex-shrink-0 flex justify-between items-center p-4 border-b">
+            <div className="bg-gray-100 rounded-xl shadow-2xl w-full max-w-[95vw] max-h-[95vh] flex flex-col">
+                <header className="flex-shrink-0 flex justify-between items-center p-4 border-b bg-white">
                     <div className="flex items-center gap-3">
-                        <div>
-                            <h2 className="text-xl font-bold text-indigo-700">Edit Job #{job?.id}</h2>
-                            <p className="text-sm text-gray-600">{job?.notes}</p>
-                        </div>
+                        <h2 className="text-xl font-bold text-indigo-700">Edit Job #{job?.id}</h2>
                         {job?.status === 'Archived' && <span className="bg-red-100 text-red-800 px-2 py-0.5 rounded text-xs font-bold uppercase">Cancelled</span>}
                     </div>
                     <button type="button" onClick={onClose}><X size={24} /></button>
                 </header>
 
-                <main className="flex-grow overflow-y-auto p-6 grid grid-cols-1 lg:grid-cols-6 gap-6 bg-gray-50">
+                <main className="flex-grow overflow-y-auto p-6 grid grid-cols-1 lg:grid-cols-6 gap-6">
                     <div className="lg:col-span-2 space-y-4">
                         <JobDetailsTab 
                             editableJob={editableJob}
@@ -724,171 +587,231 @@ const EditJobModal: React.FC<{
                             customer={customer}
                             isReadOnly={isReadOnly}
                             onChange={handleChange}
-                            onViewCustomer={onViewCustomer}
-                            onViewVehicle={onViewVehicle}
+                            onViewCustomer={() => customer && onViewCustomer(customer.id)}
+                            onViewVehicle={() => vehicle && onViewVehicle(vehicle.id)}
                         />
-                        <div className="border rounded-lg bg-white shadow-sm p-4">
-                            <h3 className="text-md font-bold mb-2 flex items-center gap-2"><DollarSign size={16}/> Billing</h3>
-                            <div className="text-sm space-y-2">
-                                <p><strong>Estimate:</strong> {editableEstimate ? `#${editableEstimate.estimateNumber}` : 'N/A'}</p>
-                                <p><strong>Invoice:</strong> {job?.invoiceId ? `#${job.invoiceId}` : 'Not Invoiced'}</p>
-                            </div>
-                        </div>
                     </div>
-                    <div className="lg:col-span-4">
-                        <div className="p-4 bg-white border rounded-lg min-h-[300px]">
-                            {isReadOnly && <div className="p-3 bg-yellow-100 text-yellow-800 rounded-lg text-sm mb-4">This job has been invoiced and is now read-only.</div>}
-                            {isCreatingPackage && <div className="absolute inset-0 bg-white bg-opacity-80 flex justify-center items-center z-50"><Loader2 className="animate-spin" size={48} /></div>}
-                            <JobEstimateTab
-                                key={poStatusKey}
-                                partsStatus={editableJob.partsStatus || 'Not Required'}
-                                purchaseOrderIds={editableJob.purchaseOrderIds || []}
-                                purchaseOrders={Array.isArray(purchaseOrders) ? purchaseOrders : []}
-                                supplierMap={supplierMap}
-                                suppliers={suppliers || []}
-                                editableEstimate={editableEstimate}
-                                supplementaryEstimates={supplementaryEstimates}
-                                estimateBreakdown={estimateBreakdown}
-                                isReadOnly={isReadOnly}
-                                canViewPricing={canViewPricing}
-                                taxRates={Array.isArray(taxRates) ? taxRates : []}
-                                filteredParts={filteredParts}
-                                activePartSearch={activePartSearch}
-                                servicePackages={sortedPackages as any}
-                                totalNet={totalNet}
-                                vatBreakdown={vatBreakdown}
-                                grandTotal={grandTotal}
-                                currentJobHours={totalLaborHours}
-                                onOpenPurchaseOrder={(stalePo: T.PurchaseOrder) => {
-                                    const freshPo = purchaseOrders.find(p => p.id === stalePo.id);
-                                    if (freshPo) {
-                                        onOpenPurchaseOrder(freshPo);
-                                    } else {
-                                        onOpenPurchaseOrder(stalePo);
-                                    }
-                                }}
-                                onCreateEstimate={handleCreateEstimateIfNeeded}
-                                onRaiseSupplementaryEstimate={() => editableJob && onRaiseSupplementaryEstimate(editableJob)}
-                                onViewEstimate={onViewEstimate}
-                                onAddLineItem={addLineItem}
-                                onAddPackage={addPackage}
-                                onLineItemChange={handleLineItemChange}
-                                onRemoveLineItem={removeLineItem}
-                                onPartSearchChange={setPartSearchTerm}
-                                onSetActivePartSearch={setActivePartSearch}
-                                onSelectPart={handleSelectPart}
-                                onManageMedia={handleOpenLineItemMedia}
-                                vehicle={vehicle}
-                                customer={customer}
-                                onAddNewPart={handleAddNewPartClick}
-                                onRaisePurchaseOrders={handleRaisePurchaseOrders}
-                                onCreatePackage={handleCreatePackage}
-                            />
+
+                    <div className="lg:col-span-4 flex flex-col">
+                        <div className="flex items-stretch bg-gray-50 rounded-t-lg border-b border-gray-200">
+                           <TabButton tabId="estimates" label="Estimates & Parts" icon={<DollarSign size={16}/>} />
+                           <TabButton tabId="inspection" label="Inspection" icon={<ListChecks size={16}/>} />
+                           <TabButton tabId="notes" label="Technician Notes" icon={<MessageSquare size={16}/>} />
+                           <TabButton tabId="segments" label="Segments" icon={<CalendarDays size={16}/>} />
+                        </div>
+                        <div className="bg-white border-x border-b rounded-b-lg shadow-sm flex-grow p-4">
+                            {activeTab === 'estimates' && (
+                                <JobEstimateTab
+                                    key={poStatusKey}
+                                    partsStatus={editableJob.partsStatus || 'Not Required'}
+                                    purchaseOrderIds={editableJob.purchaseOrderIds || []}
+                                    purchaseOrders={Array.isArray(purchaseOrders) ? purchaseOrders : []}
+                                    supplierMap={supplierMap}
+                                    suppliers={suppliers || []}
+                                    editableEstimate={editableEstimate}
+                                    supplementaryEstimates={supplementaryEstimates}
+                                    estimateBreakdown={estimateBreakdown}
+                                    isReadOnly={isReadOnly}
+                                    canViewPricing={canViewPricing}
+                                    taxRates={Array.isArray(taxRates) ? taxRates : []}
+                                    filteredParts={filteredParts}
+                                    activePartSearch={activePartSearch}
+                                    servicePackages={sortedPackages as any}
+                                    totalNet={totalNet}
+                                    vatBreakdown={vatBreakdown}
+                                    grandTotal={grandTotal}
+                                    currentJobHours={totalLaborHours}
+                                    onOpenPurchaseOrder={(stalePo: T.PurchaseOrder) => {
+                                        const freshPo = purchaseOrders.find(p => p.id === stalePo.id);
+                                        if (freshPo) onOpenPurchaseOrder(freshPo);
+                                        else onOpenPurchaseOrder(stalePo);
+                                    }}
+                                    onCreateEstimate={handleCreateEstimateIfNeeded}
+                                    onRaiseSupplementaryEstimate={() => editableJob && onRaiseSupplementaryEstimate(editableJob)}
+                                    onViewEstimate={onViewEstimate}
+                                    onAddLineItem={addLineItem}
+                                    onAddPackage={addPackage}
+                                    onLineItemChange={handleLineItemChange}
+                                    onRemoveLineItem={removeLineItem}
+                                    onPartSearchChange={setPartSearchTerm}
+                                    onSetActivePartSearch={setActivePartSearch}
+                                    onSelectPart={handleSelectPart}
+                                    onManageMedia={handleOpenLineItemMedia}
+                                    vehicle={vehicle}
+                                    customer={customer}
+                                    onAddNewPart={handleAddNewPartClick}
+                                    onRaisePurchaseOrders={handleRaisePurchaseOrders}
+                                    onCreatePackage={handleCreatePackage}
+                                />
+                            )}
+                             {activeTab === 'inspection' && (
+                                <div className="space-y-8">
+                                    <div>
+                                        <div className="flex justify-between items-center mb-4">
+                                            <h3 className="text-lg font-bold text-gray-800">Inspection Checklist</h3>
+                                            <div className="w-64">
+                                                <select id="inspectionTemplate" value={editableJob.inspectionTemplateId || ''} onChange={(e) => handleInspectionTemplateChange(e.target.value)} className="w-full p-2 border rounded-md bg-white shadow-sm text-sm" disabled={isReadOnly}>
+                                                    <option value="">Select a template...</option>
+                                                    {inspectionTemplates.map(t => (<option key={t.id} value={t.id}>{t.name}</option>))}
+                                                </select>
+                                            </div>
+                                        </div>
+                                        {editableJob.inspectionChecklist ? (
+                                            <InspectionChecklist checklistData={editableJob.inspectionChecklist} onUpdate={(sections) => setEditableJob(prev => prev ? { ...prev, inspectionChecklist: sections } : null)} isReadOnly={isReadOnly} />
+                                        ) : (
+                                            <div className="text-center py-10 px-4 bg-gray-50 rounded-lg"><ListChecks size={32} className="mx-auto text-gray-400"/><h3 className="mt-2 text-sm font-medium text-gray-900">No Inspection Selected</h3><p className="mt-1 text-sm text-gray-500">Please select an inspection template to begin.</p></div>
+                                        )}
+                                    </div>
+
+                                    <div>
+                                        <h3 className="text-lg font-bold text-gray-800 mb-4">Vehicle Damage Report</h3>
+                                        <div className="relative w-full max-w-2xl mx-auto rounded-lg overflow-hidden shadow-md bg-gray-200 cursor-crosshair" onClick={handleAddDamagePoint}>
+                                            {vehicleImage ? (
+                                                <img src={vehicleImage.dataUrl} alt="Vehicle Diagram" className="w-full" />
+                                            ) : (
+                                                <div className="h-64 flex items-center justify-center"><p className="text-gray-500">No vehicle image available</p></div>
+                                            )}
+                                            {(editableJob.damagePoints || []).map(point => (
+                                                <div key={point.id} className="absolute w-6 h-6 rounded-full bg-red-500 bg-opacity-75 border-2 border-white shadow-lg cursor-pointer flex items-center justify-center" style={{ top: `${point.y}%`, left: `${point.x}%`, transform: 'translate(-50%, -50%)' }} title={point.notes} onClick={(e) => { e.stopPropagation(); handleDamagePointClick(point.id); }}></div>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <h3 className="text-lg font-bold text-gray-800 mb-4">Tyre Check Report</h3>
+                                        <div className="overflow-x-auto">
+                                            <table className="min-w-full text-sm text-left text-gray-500">
+                                                <thead className="text-xs text-gray-700 uppercase bg-gray-100">
+                                                    <tr>
+                                                        <th scope="col" className="py-3 px-4">Location</th>
+                                                        <th scope="col" className="py-3 px-2">Outer</th>
+                                                        <th scope="col" className="py-3 px-2">Middle</th>
+                                                        <th scope="col" className="py-3 px-2">Inner</th>
+                                                        <th scope="col" className="py-3 px-2">Pressure</th>
+                                                        <th scope="col" className="py-3 px-4">Status</th>
+                                                        <th scope="col" className="py-3 px-4">Comments</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {tyreLocations.map(location => {
+                                                        const tyreData = editableJob.tyreCheck?.[location];
+                                                        return (
+                                                            <tr key={location} className="bg-white border-b">
+                                                                <th scope="row" className="py-3 px-4 font-medium text-gray-900 whitespace-nowrap">{tyreLocationLabels[location]}</th>
+                                                                <td className="py-2 px-1"><input type="number" value={tyreData?.outer || ''} onChange={e => handleTyreDataChange(location, 'outer', e.target.value)} className="w-16 p-1 border rounded" readOnly={isReadOnly}/></td>
+                                                                <td className="py-2 px-1"><input type="number" value={tyreData?.middle || ''} onChange={e => handleTyreDataChange(location, 'middle', e.target.value)} className="w-16 p-1 border rounded" readOnly={isReadOnly}/></td>
+                                                                <td className="py-2 px-1"><input type="number" value={tyreData?.inner || ''} onChange={e => handleTyreDataChange(location, 'inner', e.target.value)} className="w-16 p-1 border rounded" readOnly={isReadOnly}/></td>
+                                                                <td className="py-2 px-1"><input type="number" value={tyreData?.pressure || ''} onChange={e => handleTyreDataChange(location, 'pressure', e.target.value)} className="w-16 p-1 border rounded" readOnly={isReadOnly}/></td>
+                                                                <td className="py-2 px-2">
+                                                                    <select value={tyreData?.indicator || 'na'} onChange={e => handleTyreStatusChange(location, e.target.value as T.ChecklistItemStatus)} className={`w-full p-1 border rounded ${statusColors[tyreData?.indicator || 'na']}`} disabled={isReadOnly}>
+                                                                        <option value="ok">OK</option><option value="attention">Attention</option><option value="urgent">Urgent</option><option value="na">N/A</option>
+                                                                    </select>
+                                                                </td>
+                                                                <td className="py-2 px-2"><input type="text" value={tyreData?.comments || ''} onChange={e => handleTyreTextDataChange(location, 'comments', e.target.value)} className="w-full p-1 border rounded" readOnly={isReadOnly}/></td>
+                                                            </tr>
+                                                        );
+                                                    })}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                            {activeTab === 'notes' && (
+                                <div className="space-y-3">
+                                    <h3 className="text-md font-bold">Internal Technician Notes</h3>
+                                    {(editableJob.technicianObservations || []).map((obs, index) => (
+                                        <textarea 
+                                            key={index}
+                                            value={obs}
+                                            onChange={(e) => handleTechObservationChange(index, e.target.value)}
+                                            readOnly={isReadOnly}
+                                            className="w-full p-2 border rounded bg-gray-50 h-24"
+                                            placeholder={`Observation ${index + 1}...`}
+                                        />
+                                    ))}
+                                </div>
+                            )}
+                            {activeTab === 'segments' && (
+                                <div>
+                                    <h3 className="text-md font-bold mb-3">Job Segments</h3>
+                                    <ul className="space-y-2">
+                                        {(editableJob.segments || []).map(seg => {
+                                            const engineer = engineers.find(e => e.id === seg.engineerId);
+                                            return (
+                                                <li key={seg.segmentId} className="p-3 bg-gray-50 rounded-md border text-sm">
+                                                    <div className="font-semibold">Status: <span className="font-normal">{seg.status}</span></div>
+                                                    <div className="font-semibold">Engineer: <span className="font-normal">{engineer?.name || 'Unassigned'}</span></div>
+                                                    <div className="font-semibold">Date: <span className="font-normal">{seg.date ? formatDate(new Date(seg.date)) : 'Not Scheduled'}</span></div>
+                                                    <div className="font-semibold">Duration: <span className="font-normal">{seg.duration} hours</span></div>
+                                                </li>
+                                            );
+                                        })}
+                                        {(editableJob.segments || []).length === 0 && <p className="text-gray-500 italic">No segments for this job.</p>}
+                                    </ul>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </main>
 
-                <footer className="flex-shrink-0 flex justify-end gap-2 p-4 border-t bg-gray-50 items-center">
-                    {currentUser?.role === 'Admin' && job?.status !== 'Archived' && (
-                        <button type="button" onClick={handleCancelJob} className="flex items-center gap-2 py-2 px-4 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 mr-auto text-sm font-semibold">
-                            <Ban size={14}/> Cancel Job
+                <footer className="flex-shrink-0 flex justify-between items-center p-4 border-t bg-white">
+                    <div>
+                        {onDelete && !isReadOnly && (
+                            <button
+                                type="button"
+                                onClick={() => setConfirmation({
+                                    isOpen: true,
+                                    title: 'Confirm Cancellation',
+                                    message: 'Are you sure you want to cancel this job? This action cannot be undone.',
+                                    type: 'danger',
+                                    onConfirm: () => {
+                                        if(editableJob) onDelete(editableJob.id);
+                                        onClose();
+                                    }
+                                })}
+                                className="flex items-center gap-2 py-2 px-4 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-semibold"
+                            >
+                                <Ban size={14} /> Cancel Job
+                            </button>
+                        )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2">
+                            <input type="checkbox" id="print-blank-sheet" checked={printBlankSheet} onChange={(e) => setPrintBlankSheet(e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+                            <label htmlFor="print-blank-sheet" className="text-sm text-gray-700">Print Blank Inspection Sheet</label>
+                        </div>
+                        <button type="button" onClick={triggerPrint} className="flex items-center gap-2 py-2 px-4 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 text-sm font-semibold" disabled={isPrinting}>
+                            <Printer size={14} /> {isPrinting ? 'Loading...' : 'Print Job Card'}
                         </button>
-                    )}
-                    <button
-                        type="button"
-                        onClick={triggerPrint}
-                        className="flex items-center gap-2 py-2 px-4 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 text-sm font-semibold"
-                        disabled={isPrinting}
-                    >
-                        <Printer size={14} /> {isPrinting ? 'Loading...' : 'Print Job Card'}
-                    </button>
-                    <button type="button" onClick={onClose} className="py-2 px-4 bg-gray-200 rounded-lg font-semibold">Close</button>
-                    <button type="button" onClick={handleSaveMain} className="flex items-center gap-2 py-2 px-4 bg-indigo-600 text-white font-semibold rounded-lg disabled:opacity-50" disabled={isReadOnly}><Save size={14}/> Save Changes</button>
+                        <button type="button" onClick={onClose} className="py-2 px-4 bg-gray-200 rounded-lg font-semibold">Close</button>
+                        <button type="button" onClick={handleSaveMain} className="flex items-center gap-2 py-2 px-4 bg-indigo-600 text-white font-semibold rounded-lg disabled:opacity-50" disabled={isReadOnly}><Save size={14}/> Save Changes</button>
+                    </div>
                 </footer>
             </div>
-            
-            {isMediaModalOpen && (
-                <MediaManagerModal
-                    isOpen={isMediaModalOpen}
-                    onClose={() => setIsMediaModalOpen(false)}
-                    title={mediaModalTitle}
-                    initialMedia={mediaModalData}
-                    onSave={(newMedia) => {
-                        if (onMediaSaveCallback) {
-                            onMediaSaveCallback(newMedia);
-                        }
-                        setIsMediaModalOpen(false);
-                    }}
-                />
-            )}
 
-            {isAddingPart && (
-                <PartFormModal 
-                    isOpen={isAddingPart}
-                    onClose={() => { setIsAddingPart(false); setTargetLineItemId(null); }}
-                    onSave={handleSaveNewPart}
-                    part={{
-                        id: `new_${Date.now()}`,
-                        partNumber: '',
-                        description: newPartDescription,
-                        stockQuantity: 0,
-                        costPrice: 0,
-                        salePrice: 0,
-                        taxCodeId: standardTaxRateId || '',
-                        defaultSupplierId: '',
-                        isStockItem: false,
-                    }}
-                    suppliers={suppliers || []} 
-                    taxRates={taxRates || []}
-                />
-            )}
-
-            {isPackageModalOpen && editableJob && (
-                <ServicePackageFormModal
-                    isOpen={isPackageModalOpen}
-                    onClose={() => setIsPackageModalOpen(false)}
-                    onSave={async (pkg) => {
-                        try {
-                            const savedPackage = await handleSaveItem(setServicePackages, pkg, 'brooks_servicePackages');
-                            setConfirmation({
-                                isOpen: true,
-                                title: 'Service Package Created',
-                                message: `Service Package "${savedPackage.name}" has been saved successfully.`,
-                                type: 'success'
-                            });
-                            addPackage(savedPackage.id);
-                            setIsPackageModalOpen(false);
-                        } catch (e) {
-                             setConfirmation({
-                                isOpen: true,
-                                title: 'Error',
-                                message: 'Failed to save service package.',
-                                type: 'warning'
-                            });
-                        }
-                    }}
-                    servicePackage={suggestedPackage}
-                    taxRates={taxRates}
-                    entityId={editableJob.entityId || (businessEntities[0]?.id || '')}
-                    businessEntities={businessEntities}
-                    parts={parts}
-                />
-            )}
+            {/* Visually hidden container for the printable component */}
             <div className="hidden">
-                {isPrinting && (
-                    <div ref={componentToPrintRef}>
+                <div ref={componentToPrintRef}>
+                    {editableJob && vehicle && customer && (
                         <PrintableJobCard
-                            job={editableJob!}
+                            job={editableJob}
                             estimates={mainEstimate ? [mainEstimate, ...supplementaryEstimates] : supplementaryEstimates}
-                            customer={customer!}
-                            vehicle={vehicle!}
+                            customer={customer}
+                            vehicle={vehicle}
                             entity={businessEntity}
                             engineers={engineers}
                             taxRates={taxRates}
+                            printBlankInspectionSheet={printBlankSheet}
+                            inspectionTemplates={inspectionTemplates}
                         />
-                    </div>
-                )}
+                    )}
+                </div>
             </div>
+
+            {isMediaModalOpen && <MediaManagerModal isOpen={isMediaModalOpen} onClose={() => setIsMediaModalOpen(false)} title={mediaModalTitle} initialMedia={mediaModalData} onSave={(newMedia) => { if (onMediaSaveCallback) { onMediaSaveCallback(newMedia); } setIsMediaModalOpen(false); }} />}
+            {isAddingPart && <PartFormModal isOpen={isAddingPart} onClose={() => { setIsAddingPart(false); setTargetLineItemId(null); }} onSave={handleSaveNewPart} part={{ id: `new_${Date.now()}`, partNumber: '', description: newPartDescription, stockQuantity: 0, costPrice: 0, salePrice: 0, taxCodeId: standardTaxRateId || '', defaultSupplierId: '', isStockItem: false }} suppliers={suppliers || []} taxRates={taxRates || []} />}
+            {isPackageModalOpen && editableJob && <ServicePackageFormModal isOpen={isPackageModalOpen} onClose={() => setIsPackageModalOpen(false)} onSave={async (pkg) => { const savedPackage = await handleSaveItem(setServicePackages, pkg, 'brooks_servicePackages'); addPackage(savedPackage.id); setIsPackageModalOpen(false); }} servicePackage={suggestedPackage} taxRates={taxRates} entityId={editableJob.entityId || (businessEntities[0]?.id || '')} businessEntities={businessEntities} parts={parts} />}
         </div>
     );
 };

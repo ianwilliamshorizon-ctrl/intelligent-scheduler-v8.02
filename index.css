@@ -1,12 +1,19 @@
 @import "tailwindcss";
 
-/* --- Brookspeed Global Resets --- */
-@layer base {
-  :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-  }
+/* --- 1. Tailwind v4 Theme Engine --- */
+@theme {
+  /* Move your Brookspeed variables here */
+  --background: #FFFFFF;
+  --foreground: #0F172A;
+  
+  /* Adding these ensures Shadcn-like utilities work if you use them */
+  --color-border: #e2e8f0;
+  --color-input: #e2e8f0;
+  --color-ring: #3b82f6;
+}
 
+/* --- 2. Global Resets --- */
+@layer base {
   body {
     margin: 0;
     padding: 0;
@@ -20,11 +27,19 @@
 
   * {
     box-sizing: inherit;
+    /* v4 needs explicit border colors for the '*' selector sometimes */
+    border-color: #e2e8f0;
   }
 }
 
-/* --- Dynamic Print Engine Fixes --- */
+/* --- 3. Dynamic Print Engine (The "Blank Page" Fixer) --- */
 @media print {
+  * {
+    /* Critical for v4: Forces colors and backgrounds to render */
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
   /* Forces the main container to grow naturally for multiple pages */
   .printable-page, .invoice-section {
     display: block !important;
@@ -37,25 +52,23 @@
   .pdf-page-section {
     display: block !important;
     break-before: page !important;
-    page-break-before: always !important;
     margin: 0 !important;
-    /* Fix: Adds a 20mm margin so content doesn't start too high on the page */
+    /* Adds margin so content doesn't start too high */
     padding-top: 20mm !important; 
   }
 
   /* Prevents tables or rows from being cut in half across pages */
   .page-break-inside-avoid {
-    page-break-inside: avoid !important;
     break-inside: avoid !important;
   }
 
   /* Hide UI elements like scrollbars or buttons during print */
   ::-webkit-scrollbar {
-    display: none;
+    display: none !important;
   }
 }
 
-/* --- Dashboard & Interaction UI --- */
+/* --- 4. Dashboard & Interaction UI --- */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
