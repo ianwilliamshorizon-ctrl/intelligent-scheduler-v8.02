@@ -556,9 +556,17 @@ const EditJobModal: React.FC<{
         onClose();
     };
 
-    const TabButton = ({ tabId, label, icon }: { tabId: string, label: string, icon: React.ReactNode }) => (
-        <button onClick={() => setActiveTab(tabId)} className={`flex-1 flex items-center justify-center gap-2 py-3 text-sm font-semibold border-b-4 ${activeTab === tabId ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-gray-500 hover:text-indigo-600'}`}>
+    const TabButton = ({ tabId, label, icon, isFirst, isLast }: { tabId: string, label: string, icon: React.ReactNode, isFirst?: boolean, isLast?: boolean }) => (
+        <button 
+            onClick={() => setActiveTab(tabId)} 
+            className={`flex-1 flex items-center justify-center gap-2 py-3 text-sm font-semibold relative 
+                ${activeTab === tabId 
+                    ? 'bg-white text-indigo-700' 
+                    : 'bg-gray-50 text-gray-500 hover:bg-gray-100 hover:text-indigo-600'}
+                ${!isFirst ? 'border-l border-gray-200' : ''}
+                transition-colors duration-150 ease-in-out`}>
             {icon}{label}
+            {activeTab === tabId && <div className="absolute bottom-0 left-0 right-0 h-1 bg-indigo-600"></div>}
         </button>
     );
     
@@ -593,13 +601,13 @@ const EditJobModal: React.FC<{
                     </div>
 
                     <div className="lg:col-span-4 flex flex-col">
-                        <div className="flex items-stretch bg-gray-50 rounded-t-lg border-b border-gray-200">
-                           <TabButton tabId="estimates" label="Estimates & Parts" icon={<DollarSign size={16}/>} />
+                        <div className="flex items-stretch bg-gray-50 rounded-t-lg border border-gray-200 overflow-hidden">
+                           <TabButton tabId="estimates" label="Estimates & Parts" icon={<DollarSign size={16}/>} isFirst />
                            <TabButton tabId="inspection" label="Inspection" icon={<ListChecks size={16}/>} />
                            <TabButton tabId="notes" label="Technician Notes" icon={<MessageSquare size={16}/>} />
-                           <TabButton tabId="segments" label="Segments" icon={<CalendarDays size={16}/>} />
+                           <TabButton tabId="segments" label="Segments" icon={<CalendarDays size={16}/>} isLast />
                         </div>
-                        <div className="bg-white border-x border-b rounded-b-lg shadow-sm flex-grow p-4">
+                        <div className="bg-white border-x border-b border-gray-200 rounded-b-lg shadow-sm flex-grow p-4">
                             {activeTab === 'estimates' && (
                                 <JobEstimateTab
                                     key={poStatusKey}

@@ -9,9 +9,7 @@ import {
     TaxRate, 
     EstimateLineItem, 
     InspectionTemplate,
-    ChecklistSection,
-    TyreLocation,
-    ChecklistItemStatus
+    ChecklistSection
 } from '../types';
 import InspectionChecklist from './InspectionChecklist';
 
@@ -60,8 +58,6 @@ const PrintableJobCard: React.FC<PrintableJobCardProps> = ({
         return inspectionTemplates.find(t => t.id === job.inspectionTemplateId);
     }, [job?.inspectionTemplateId, inspectionTemplates]);
 
-    const vehicleImage = useMemo(() => vehicle?.images?.find(img => img.isPrimaryDiagram) || vehicle?.images?.[0], [vehicle]);
-
     const blankChecklistData: ChecklistSection[] = useMemo(() => {
         if (!inspectionTemplate || !Array.isArray(inspectionTemplate.sections)) return [];
         return inspectionTemplate.sections.map(section => ({
@@ -84,11 +80,6 @@ const PrintableJobCard: React.FC<PrintableJobCardProps> = ({
         display: 'flex',
         flexDirection: 'column'
     };
-
-    const tyreLocations: TyreLocation[] = ['frontLeft', 'frontRight', 'rearLeft', 'rearRight', 'spare'];
-    const tyreLocationLabels: Record<TyreLocation, string> = { frontLeft: 'F/L', frontRight: 'F/R', rearLeft: 'R/L', rearRight: 'R/R', spare: 'Spare' };
-    const statusLabels: Record<ChecklistItemStatus, string> = { ok: 'OK', attention: 'ATTN', urgent: 'URGENT', na: 'N/A' };
-
 
     const mainContent = (
         <div className="bg-white font-sans text-sm text-gray-800 printable-page" style={pageStyle}>
@@ -191,57 +182,12 @@ const PrintableJobCard: React.FC<PrintableJobCardProps> = ({
                 
                 <div style={{ pageBreakBefore: 'always' }} />
 
-                 <section className="flex-grow flex flex-col">
+                <section className="flex-grow flex flex-col">
                     <h3 className="text-xs font-bold text-gray-400 uppercase mb-2 ml-1">Technician Findings / Required Repairs</h3>
-                    <div className="flex-grow border-2 border-dashed border-gray-200 rounded-lg p-4 bg-gray-50/30 min-h-[200px]">
+                    <div className="flex-grow border-2 border-dashed border-gray-200 rounded-lg p-4 bg-gray-50/30">
                         <div className="space-y-8 pt-4">
                             <div className="border-b border-gray-200 pb-2 text-gray-300 text-[10px] uppercase">Notes / Observations:</div>
                             {[...Array(6)].map((_, i) => <div key={i} className="border-b border-gray-100"></div>)}
-                        </div>
-                    </div>
-                </section>
-
-                 <section className="mt-6">
-                    <h3 className="text-xs font-bold text-gray-400 uppercase mb-2 ml-1">Vehicle Damage & Tyre Report</h3>
-                    <div className="grid grid-cols-2 gap-6">
-                        <div className="relative w-full mx-auto rounded-lg overflow-hidden shadow-md bg-gray-200 border border-gray-300">
-                            {vehicleImage ? (
-                                <img src={vehicleImage.dataUrl} alt="Vehicle Diagram" className="w-full" />
-                            ) : (
-                                <div className="h-48 flex items-center justify-center"><p className="text-gray-500">No vehicle image</p></div>
-                            )}
-                            {(job.damagePoints || []).map(point => (
-                                <div key={point.id} className="absolute w-5 h-5 rounded-full bg-red-500 bg-opacity-75 border-2 border-white shadow-lg" style={{ top: `${point.y}%`, left: `${point.x}%`, transform: 'translate(-50%, -50%)' }} title={point.notes}></div>
-                            ))}
-                        </div>
-                        <div className="border border-gray-200 rounded-lg overflow-hidden bg-white text-[10px]">
-                             <table className="w-full text-left border-collapse">
-                                <thead className="bg-gray-50 uppercase text-gray-500 border-b">
-                                    <tr>
-                                        <th className="px-3 py-1.5">Tyre</th>
-                                        <th className="px-2 py-1.5">Outer</th>
-                                        <th className="px-2 py-1.5">Mid</th>
-                                        <th className="px-2 py-1.5">Inner</th>
-                                        <th className="px-2 py-1.5">PSI</th>
-                                        <th className="px-3 py-1.5">Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-100 font-mono">
-                                    {tyreLocations.map(location => {
-                                        const tyreData = job.tyreCheck?.[location];
-                                        return (
-                                            <tr key={location} className="text-xs">
-                                                <th className="px-3 py-2 font-bold uppercase">{tyreLocationLabels[location]}</th>
-                                                <td className="px-2 py-2">{tyreData?.outer || '-'}</td>
-                                                <td className="px-2 py-2">{tyreData?.middle || '-'}</td>
-                                                <td className="px-2 py-2">{tyreData?.inner || '-'}</td>
-                                                <td className="px-2 py-2">{tyreData?.pressure || '-'}</td>
-                                                <td className="px-3 py-2 font-bold">{statusLabels[tyreData?.indicator || 'na']}</td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
                         </div>
                     </div>
                 </section>
