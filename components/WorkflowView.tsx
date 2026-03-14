@@ -1,4 +1,3 @@
-
 import React, { useMemo, useState } from 'react';
 import { Job, Vehicle, Customer, Engineer, User, PurchaseOrder } from '../types';
 import { ClipboardCheck, FileText, CheckCircle, Car, User as UserIcon, MessageSquare, Clock, Wrench, PlayCircle, Search, X, PauseCircle, Wand2, Package as PackageIcon, UserPlus } from 'lucide-react';
@@ -7,6 +6,7 @@ import { TIME_SEGMENTS, SEGMENT_DURATION_MINUTES, END_HOUR, END_MINUTE } from '.
 import { useData } from '../core/state/DataContext';
 import { getPoStatusColor } from '../core/utils/statusUtils';
 import { HoverInfo } from '../components/shared/HoverInfo';
+import LiveAssistant from './LiveAssistant'; // Make sure this path is correct
 
 const WorkflowJobCard: React.FC<{
     job: Job;
@@ -99,10 +99,23 @@ interface WorkflowViewProps {
     onOpenPurchaseOrder: (po: PurchaseOrder) => void;
 }
 
-const WorkflowView: React.FC<WorkflowViewProps> = ({ jobs, vehicles, customers, engineers, onQcApprove, onGenerateInvoice, onEditJob, currentUser, onStartWork, onEngineerComplete, onPause, onRestart, onOpenAssistant, onOpenPurchaseOrder }) => {
-    const { purchaseOrders } = useData();
+const WorkflowView: React.FC<WorkflowViewProps> = ({ jobs, vehicles, customers, engineers, onQcApprove, onGenerateInvoice, onEditJob, currentUser, onStartWork, onEngineerComplete, onPause, onRestart, onOpenPurchaseOrder }) => {
+    const { purchaseOrders, saveRecord } = useData();
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedEngineerId, setSelectedEngineerId] = useState<string>('all');
+    const [assistantJobId, setAssistantJobId] = useState<string | null>(null);
+
+    const handleOpenAssistant = (jobId: string) => setAssistantJobId(jobId);
+    const handleCloseAssistant = () => setAssistantJobId(null);
+    
+    const handleAddNoteFromAssistant = (note: string) => {
+        if (!assistantJobId) return;
+        const job = jobs.find(j => j.id === assistantJobId);
+        if (job) {
+            const newNotes = `${job.notes || ''}\n\n--- Assistant Note ---\n${note}`;
+            saveRecord('jobs', { ...job, notes: newNotes });
+        }
+    };
 
     const vehiclesById = useMemo(() => new Map(vehicles.map(v => [v.id, v])), [vehicles]);
     const customersById = useMemo(() => new Map(customers.map(c => [c.id, c])), [customers]);
@@ -216,7 +229,7 @@ const WorkflowView: React.FC<WorkflowViewProps> = ({ jobs, vehicles, customers, 
                                         customer={customersById.get(job.customerId)}
                                         statusColorClass={color}
                                         onEdit={onEditJob}
-                                        onOpenAssistant={onOpenAssistant}
+                                        onOpenAssistant={handleOpenAssistant}
                                         onOpenPurchaseOrder={onOpenPurchaseOrder}
                                         purchaseOrders={purchaseOrders || []}
                                         today={today}
@@ -306,6 +319,12 @@ const WorkflowView: React.FC<WorkflowViewProps> = ({ jobs, vehicles, customers, 
                     ))}
                 </div>
             </main>
+            <LiveAssistant 
+                isOpen={!!assistantJobId} 
+                onClose={handleCloseAssistant} 
+                jobId={assistantJobId} 
+                onAddNote={handleAddNoteFromAssistant} 
+            />
         </div>
     );
 };

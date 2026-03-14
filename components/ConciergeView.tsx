@@ -8,6 +8,7 @@ import { getRelativeDate } from '../core/utils/dateUtils';
 import PauseReasonModal from './PauseReasonModal';
 import { ConciergeJobCard } from './concierge/ConciergeJobCard';
 import { KanbanColumn } from './concierge/KanbanColumn';
+import LiveAssistant from './LiveAssistant';
 
 interface ConciergeViewProps {
     onEditJob: (jobId: string) => void;
@@ -24,20 +25,31 @@ interface ConciergeViewProps {
 }
 
 const ConciergeView: React.FC<ConciergeViewProps> = (props) => {
-    const { jobs, customers, vehicles, purchaseOrders, invoices, engineers } = useData();
+    const { jobs, customers, vehicles, purchaseOrders, invoices, engineers, saveRecord } = useData();
     const { selectedEntityId, currentUser } = useApp();
     const [searchTerm, setSearchTerm] = useState('');
     const [pauseData, setPauseData] = useState<{ jobId: string, segmentId: string } | null>(null);
     const [arrivalFilter, setArrivalFilter] = useState<'today' | '7days' | '14days'>('today');
-    
+    const [assistantJobId, setAssistantJobId] = useState<string | null>(null);
+
     const vehiclesById = useMemo(() => new Map(vehicles.map(v => [v.id, v])), [vehicles]);
     const customersById = useMemo(() => new Map(customers.map(c => [c.id, c])), [customers]);
+
+    const handleOpenAssistant = (jobId: string) => setAssistantJobId(jobId);
+    const handleCloseAssistant = () => setAssistantJobId(null);
+
+    const handleAddNoteFromAssistant = (note: string) => {
+        if (!assistantJobId) return;
+        const job = jobs.find(j => j.id === assistantJobId);
+        if (job) {
+            const newNotes = `${job.notes || ''}\n\n--- Assistant Note ---\n${note}`;
+            saveRecord('jobs', { ...job, notes: newNotes });
+        }
+    };
 
     const filteredJobs = useMemo(() => {
         let relevantJobs = jobs.filter(job => (selectedEntityId === 'all' || job.entityId === selectedEntityId) && job.status !== 'Archived');
         
-        // --- ENGINEER FILTERING LOGIC ---
-        // If current user is an Engineer, only show jobs assigned to them
         if (currentUser.role === 'Engineer' && currentUser.engineerId) {
             relevantJobs = relevantJobs.filter(job => 
                 (job.segments || []).some(segment => segment.engineerId === currentUser.engineerId)
@@ -73,7 +85,6 @@ const ConciergeView: React.FC<ConciergeViewProps> = (props) => {
         if (arrivalFilter === '14days') filterEndDate = getRelativeDate(13);
 
         filteredJobs.forEach(job => {
-            // 1. Arrivals
             if (job.vehicleStatus === 'Awaiting Arrival') {
                 const isDue = (job.segments || []).some(s => s.date && s.date <= filterEndDate);
                 if (isDue) {
@@ -82,32 +93,27 @@ const ConciergeView: React.FC<ConciergeViewProps> = (props) => {
                 return; 
             }
 
-            // 2. Handover (Ready for Collection) - PRIORITIZED
             if (job.vehicleStatus === 'Awaiting Collection' || (job.vehicleStatus === 'On Site' && job.invoiceId)) {
                 handover.push(job);
                 return;
             }
 
-            // 3. Pending QC
-            if ((job.status as any) === 'Pending QC') {
+            if (job.status === 'Pending QC') {
                 pendingQC.push(job);
                 return;
             }
 
-            // 4. Invoicing (Complete but no invoice yet)
             if (job.status === 'Complete' && !job.invoiceId) {
                 invoicing.push(job);
                 return;
             }
 
-            // 5. In Progress
             if (job.status === 'In Progress' || (job.segments || []).some(s => s.status === 'Paused')) {
                 inProgress.push(job);
                 return;
             }
 
-            // 6. Allocated / Unallocated
-            if ((job.status as any) === 'Allocated' || job.status === 'Unallocated') {
+            if (job.status === 'Allocated' || job.status === 'Unallocated') {
                 allocated.push(job);
                 return;
             }
@@ -140,6 +146,7 @@ const ConciergeView: React.FC<ConciergeViewProps> = (props) => {
             onPause={handlePauseClick}
             onEdit={props.onEditJob}
             highlightAction={highlight}
+            onOpenAssistant={handleOpenAssistant}
         />
     );
 
@@ -213,6 +220,12 @@ const ConciergeView: React.FC<ConciergeViewProps> = (props) => {
                     onConfirm={handleConfirmPause}
                 />
             )}
+            <LiveAssistant 
+                isOpen={!!assistantJobId} 
+                onClose={handleCloseAssistant} 
+                jobId={assistantJobId} 
+                onAddNote={handleAddNoteFromAssistant} 
+            />
         </div>
     );
 };

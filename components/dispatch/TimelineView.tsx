@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Job, JobSegment, PurchaseOrder } from '../../types';
 import { Clock } from 'lucide-react';
 import { useData } from '../../core/state/DataContext';
@@ -6,6 +6,7 @@ import { useApp } from '../../core/state/AppContext';
 import { DraggableJobCard } from './DraggableJobCard';
 import { AllocatedJobCard } from './AllocatedJobCard';
 import { TIME_SEGMENTS } from '../../constants';
+import LiveAssistant from '../LiveAssistant';
 
 const liftColorClasses: Record<string, string> = {
     blue: 'bg-blue-100 text-blue-800',
@@ -50,15 +51,28 @@ export const TimelineView: React.FC<TimelineViewProps> = (props) => {
         onDragOverUnallocated, onDropOnUnallocated, onDragLeaveUnallocated,
         unallocatedJobs, allocatedSegmentsByLift, unallocatedDateFilter, setUnallocatedDateFilter, 
         showOnSiteOnly, setShowOnSiteOnly, onEditJob, onCheckIn, onOpenPurchaseOrder, 
-        onStartWork, onPause, onRestart, onReassign, onUnscheduleSegment, onOpenAssistant
+        onStartWork, onPause, onRestart, onReassign, onUnscheduleSegment, 
     } = props;
 
-    const { jobs, engineers, customers, vehicles, purchaseOrders } = useData();
+    const { jobs, engineers, customers, vehicles, purchaseOrders, saveRecord } = useData();
     const { currentUser } = useApp();
+    const [assistantJobId, setAssistantJobId] = useState<string | null>(null);
 
     const vehiclesById = useMemo(() => new Map(vehicles.map(v => [v.id, v])), [vehicles]);
     const customersById = useMemo(() => new Map(customers.map(c => [c.id, c])), [customers]);
     const engineersById = useMemo(() => new Map(engineers.map(e => [e.id, e])), [engineers]);
+
+    const handleOpenAssistant = (jobId: string) => setAssistantJobId(jobId);
+    const handleCloseAssistant = () => setAssistantJobId(null);
+
+    const handleAddNoteFromAssistant = (note: string) => {
+        if (!assistantJobId) return;
+        const job = jobs.find(j => j.id === assistantJobId);
+        if (job) {
+            const newNotes = `${job.notes || ''}\n\n--- Assistant Note ---\n${note}`;
+            saveRecord('jobs', { ...job, notes: newNotes });
+        }
+    };
 
     const totalUnallocatedHours = useMemo(() => {
         return unallocatedJobs.reduce((sum, job) => sum + (job.estimatedHours || 0), 0);
@@ -122,7 +136,7 @@ export const TimelineView: React.FC<TimelineViewProps> = (props) => {
                             onCheckIn={onCheckIn}
                             onOpenPurchaseOrder={onOpenPurchaseOrder}
                             currentUser={currentUser}
-                            onOpenAssistant={onOpenAssistant}
+                            onOpenAssistant={handleOpenAssistant}
                         />
                     ))}
                 </div>
@@ -173,7 +187,7 @@ export const TimelineView: React.FC<TimelineViewProps> = (props) => {
                                                 onOpenPurchaseOrder={onOpenPurchaseOrder}
                                                 onUnscheduleSegment={onUnscheduleSegment}
                                                 currentUser={currentUser}
-                                                onOpenAssistant={onOpenAssistant}
+                                                onOpenAssistant={handleOpenAssistant}
                                             />
                                         );
                                     })}
@@ -183,6 +197,12 @@ export const TimelineView: React.FC<TimelineViewProps> = (props) => {
                     })}
                 </div>
             </div>
+            <LiveAssistant 
+                isOpen={!!assistantJobId} 
+                onClose={handleCloseAssistant} 
+                jobId={assistantJobId} 
+                onAddNote={handleAddNoteFromAssistant} 
+            />
         </div>
     );
 };

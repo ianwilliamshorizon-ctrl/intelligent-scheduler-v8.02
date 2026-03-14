@@ -255,7 +255,7 @@ const JobsView: React.FC<JobsViewProps> = ({ onEditJob, onSmartCreateClick }) =>
                                 <th className="p-3 text-left font-semibold text-gray-600">Job ID</th>
                                 <th className="p-3 text-left font-semibold text-gray-600">Date</th>
                                 <th className="p-3 text-left font-semibold text-gray-600">Customer</th>
-                                <th className="p-3 text-left font-semibold text-gray-600">Vehicle</th>
+                                <th className-="p-3 text-left font-semibold text-gray-600">Vehicle</th>
                                 <th className="p-3 text-left font-semibold text-gray-600">Description</th>
                                 <th className="p-3 text-left font-semibold text-gray-600">Status</th>
                                 <th className="p-3"></th>
