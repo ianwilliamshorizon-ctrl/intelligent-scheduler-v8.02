@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { Vehicle, Customer, Job, Estimate, Invoice } from '../types';
 import FormModal from './FormModal';
@@ -11,7 +10,6 @@ import { useApp } from '../core/state/AppContext';
 import * as T from '../types';
 import { formatCurrency } from '../utils/formatUtils';
 import { formatDate, dateStringToDate } from '../core/utils/dateUtils';
-import { useData } from '../core/state/DataContext';
 import AddNewVehicleForm from './AddNewVehicleForm';
 
 
@@ -67,7 +65,6 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
         setIsTransferMode(!vehicle?.id);
     }, [vehicle, isOpen, initialCustomerId, initialRegistration]);
     
-    // If we're adding a new vehicle (not editing), show the AddNewVehicleForm
     if (!vehicle) {
         return (
              <FormModal isOpen={isOpen} onClose={onClose} onSave={() => {}} title="Add New Vehicle & Customer" maxWidth="max-w-4xl">
@@ -86,8 +83,6 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
         );
     }
 
-
-    // Calculate totals helpers
     const getInvoiceTotal = (inv: Invoice) => inv.lineItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
     const getEstimateTotal = (est: Estimate) => est.lineItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
 
@@ -133,10 +128,10 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
     const handleMotIncrement = () => {
         if (formData.nextMotDate) {
             const currentMot = dateStringToDate(formData.nextMotDate);
-            const nextYear = new Date(currentMot.setFullYear(currentMot.getFullYear() + 1));
+            const nextYear = new global.Date(currentMot.setFullYear(currentMot.getFullYear() + 1));
             setFormData(prev => ({ ...prev, nextMotDate: formatDate(nextYear) }));
         } else {
-            const nextYear = new Date();
+            const nextYear = new global.Date();
             nextYear.setFullYear(nextYear.getFullYear() + 1);
             setFormData(prev => ({ ...prev, nextMotDate: formatDate(nextYear) }));
         }
@@ -153,7 +148,7 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
         if (!isNew && vehicle?.registration && vehicle.registration !== vehicleToSave.registration) {
             const historyEntry: T.PreviousRegistration = {
                 registration: vehicle.registration,
-                changedAt: new Date().toISOString(),
+                changedAt: new global.Date().toISOString(),
                 changedByUserId: currentUser.id,
             };
 
@@ -337,7 +332,7 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
                             <label htmlFor="covid19MotExemption" className="ml-2 block text-sm font-medium text-gray-700">COVID-19 MOT Exemption</label>
                         </div>
                     </div>
-                     {formData.id && <VehicleImageManager vehicle={formData as Vehicle} onUpdateVehicle={handleImageUpdate} />}
+                    {formData.id && <VehicleImageManager vehicle={formData as Vehicle} onUpdateVehicle={handleImageUpdate} />}
                 </div>
 
                  <div className="md:col-span-2 space-y-4">
@@ -447,11 +442,11 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
                                         <p className="font-semibold text-indigo-700">Current</p>
                                     </div>
                                 </div>
-                                {[...vehicle.previousRegistrations].sort((a, b) => new Date(b.changedAt).getTime() - new Date(a.changedAt).getTime()).map((reg, index) => (
+                                {[...vehicle.previousRegistrations].sort((a, b) => new global.Date(b.changedAt).getTime() - new global.Date(a.changedAt).getTime()).map((reg, index) => (
                                     <div key={index} className="p-2 border rounded-lg bg-gray-50/70 text-xs">
                                         <div className="flex justify-between items-center">
                                             <p className="font-mono font-semibold text-gray-700">{reg.registration}</p>
-                                            <p className="text-gray-500 italic">Ended: {new Date(reg.changedAt).toLocaleDateString()}</p>
+                                            <p className="text-gray-500 italic">Ended: {new global.Date(reg.changedAt).toLocaleDateString()}</p>
                                         </div>
                                     </div>
                                 ))}

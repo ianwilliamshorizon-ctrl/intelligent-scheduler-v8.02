@@ -21,8 +21,8 @@ interface PrintableJobCardProps {
     customer?: Customer;
     estimates?: Estimate[];
     entity?: BusinessEntity;
-    engineers: Engineer[];
-    taxRates: TaxRate[];
+    engineers?: Engineer[];
+    taxRates?: TaxRate[];
     printBlankInspectionSheet?: boolean;
     inspectionTemplates?: InspectionTemplate[];
 }
@@ -51,13 +51,13 @@ const PrintableJobCard: React.FC<PrintableJobCardProps> = ({
     const technicianIds = new Set(segments.map((s: any) => s?.engineerId).filter(Boolean));
     
     const technicianNames = Array.from(technicianIds)
-        .map(id => engineers.find(e => e.id === id)?.name)
+        .map(id => (engineers || []).find(e => e.id === id)?.name)
         .filter(Boolean)
         .join(', ');
 
     const inspectionTemplate = useMemo(() => {
-        if (!job?.inspectionTemplateId || !Array.isArray(inspectionTemplates)) return null;
-        return inspectionTemplates.find(t => t.id === job.inspectionTemplateId);
+        if (!job?.inspectionTemplateId) return null;
+        return (inspectionTemplates || []).find(t => t.id === job.inspectionTemplateId);
     }, [job?.inspectionTemplateId, inspectionTemplates]);
 
     const vehicleImage = useMemo(() => vehicle?.images?.find(img => img.isPrimaryDiagram) || vehicle?.images?.[0], [vehicle]);
@@ -172,8 +172,8 @@ const PrintableJobCard: React.FC<PrintableJobCardProps> = ({
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
-                                {estimates && estimates.length > 0 ? (
-                                    estimates.flatMap(est => (est.lineItems || []).map((item: EstimateLineItem) => (
+                                {(estimates || []).length > 0 ? (
+                                    (estimates || []).flatMap(est => (est.lineItems || []).map((item: EstimateLineItem) => (
                                         <tr key={item.id} className="text-sm">
                                             <td className="px-4 py-3 font-mono text-[10px] text-gray-400 uppercase">{item.partNumber || (item.isLabor ? 'LABOUR' : 'PART')}</td>
                                             <td className="px-4 py-3 text-gray-900 font-semibold">{item.description}</td>

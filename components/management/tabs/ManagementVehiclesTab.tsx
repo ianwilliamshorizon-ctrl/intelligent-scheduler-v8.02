@@ -1,24 +1,21 @@
 import React, { useState, useMemo, useEffect, memo, useDeferredValue, useCallback, useTransition } from 'react';
 import { VList } from 'virtua';
 import { useData } from '../../../core/state/DataContext';
-import { Vehicle, Customer, Job, Estimate, Invoice } from '../../../types';
-import { PlusCircle, Trash2, Upload, RefreshCw, Search, Car } from 'lucide-react';
+import { Vehicle, Customer, Job, Estimate, Invoice, InspectionDiagram } from '../../../types';
+import { PlusCircle, Trash2, Upload, RefreshCw, Search, Wand2 } from 'lucide-react';
 import { useManagementTable } from '../hooks/useManagementTable';
 import { parseCsv } from '../../../utils/csvUtils';
 import { getCustomerDisplayName } from '../../../core/utils/customerUtils';
 import VehicleFormModal from '../../VehicleFormModal';
 import { db } from '../../../core/db';
 import { writeBatch, doc, collection } from 'firebase/firestore';
+import { findBestDiagramMatch } from '../../../core/utils/diagramUtils';
 
 interface ManagementVehiclesTabProps {
     searchTerm: string;
     onShowStatus: (text: string, type: 'info' | 'success' | 'error') => void;
 }
 
-/**
- * PRODUCTION ROW COMPONENT
- * Fixed height (64px) for perfect virtualization sync.
- */
 const VehicleRow = memo(({ 
     v, 
     searchTerm, 
@@ -103,25 +100,23 @@ const HighlightText = memo(({ text, highlight }: { text: string; highlight: stri
 });
 
 export const ManagementVehiclesTab: React.FC<ManagementVehiclesTabProps> = ({ searchTerm, onShowStatus }) => {
-    const { vehicles, customers, jobs, estimates, invoices, forceRefresh } = useData();
-    const { selectedIds, updateItem, deleteItem, toggleSelection, toggleSelectAll, bulkDelete } = useManagementTable(vehicles, 'brooks_vehicles');
+    const { vehicles, setVehicles, customers, jobs, estimates, invoices, inspectionDiagrams, forceRefresh } = useData();
+    const { selectedIds, updateItem, deleteItem, toggleSelection, toggleSelectAll, bulkDelete } = useManagementTable(vehicles, 'brooks_vehicles', setVehicles);
 
     const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isImporting, setIsImporting] = useState(false);
+    const [isMatching, setIsMatching] = useState(false);
     const [isPending, startTransition] = useTransition();
 
-    // 1. Use Deferred Value to keep the keyboard input buttery smooth
     const deferredSearch = useDeferredValue(searchTerm);
 
-    // 2. Map of customer names for instant O(1) lookup
     const customerMap = useMemo(() => {
         const map = new Map<string, string>();
         customers.forEach(c => map.set(c.id, getCustomerDisplayName(c)));
         return map;
     }, [customers]);
 
-    // 3. Pre-index search data for fast filtering
     const searchableItems = useMemo(() => {
         return vehicles.map(v => ({
             ...v,
@@ -142,6 +137,94 @@ export const ManagementVehiclesTab: React.FC<ManagementVehiclesTabProps> = ({ se
             setIsModalOpen(true);
         });
     }, []);
+
+    const handleBulkMatch = async () => {
+        setIsMatching(true);
+        onShowStatus("Starting bulk diagram matching for all vehicles...", "info");
+
+        if (!vehicles || vehicles.length === 0) {
+            onShowStatus("There are no vehicles to match.", "info");
+            setIsMatching(false);
+            return;
+        }
+
+        if (!inspectionDiagrams || inspectionDiagrams.length === 0) {
+            onShowStatus("No inspection diagrams are available for matching.", "error");
+            setIsMatching(false);
+            return;
+        }
+
+        try {
+            let matchedCount = 0;
+            const batchLimit = 400;
+            let currentBatch = writeBatch(db);
+            let batchCount = 0;
+            const vehiclesCollection = collection(db, 'brooks_vehicles');
+
+            for (const vehicle of vehicles) {
+                const bestMatchId = findBestDiagramMatch(vehicle, inspectionDiagrams);
+
+                if (bestMatchId) {
+                    const diagramToAssign = inspectionDiagrams.find(d => d.id === bestMatchId);
+                    if (!diagramToAssign || !diagramToAssign.imageId) {
+                        continue;
+                    }
+
+                    const vehicleImages = vehicle.images || [];
+                    const currentPrimary = vehicleImages.find(img => img.isPrimaryDiagram);
+
+                    if (currentPrimary && currentPrimary.id === diagramToAssign.imageId) {
+                        continue; // Already correctly matched
+                    }
+
+                    let imageExists = false;
+                    const updatedImages = vehicleImages.map(img => {
+                        const isNewPrimary = img.id === diagramToAssign.imageId;
+                        if (isNewPrimary) {
+                            imageExists = true;
+                        }
+                        return { ...img, isPrimaryDiagram: isNewPrimary };
+                    });
+
+                    if (!imageExists) {
+                        updatedImages.push({
+                            id: diagramToAssign.imageId,
+                            uploadedAt: new (window as any).Date().toISOString(),
+                            isPrimaryDiagram: true,
+                        });
+                    }
+                    
+                    const vehicleRef = doc(vehiclesCollection, vehicle.id);
+                    currentBatch.update(vehicleRef, { images: updatedImages, inspectionDiagramId: null });
+                    matchedCount++;
+                    batchCount++;
+
+                    if (batchCount >= batchLimit) {
+                        await currentBatch.commit();
+                        currentBatch = writeBatch(db);
+                        batchCount = 0;
+                    }
+                }
+            }
+
+            if (batchCount > 0) {
+                await currentBatch.commit();
+            }
+
+            if (matchedCount > 0) {
+                onShowStatus(`Successfully updated ${matchedCount} vehicles with new diagrams.`, 'success');
+                await forceRefresh('brooks_vehicles');
+            } else {
+                onShowStatus("No new diagram assignments were needed. All vehicles are up to date.", "info");
+            }
+
+        } catch (error) {
+            console.error("Error during bulk matching:", error);
+            onShowStatus("An error occurred during the matching process.", "error");
+        } finally {
+            setIsMatching(false);
+        }
+    };
 
     const handleImportVehicles = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -206,6 +289,14 @@ export const ManagementVehiclesTab: React.FC<ManagementVehiclesTabProps> = ({ se
                     </div>
                 </div>
                 <div className="flex gap-2">
+                     <button 
+                        onClick={handleBulkMatch}
+                        disabled={isMatching}
+                        className="bg-teal-600 text-white px-4 py-2 rounded-lg hover:bg-teal-700 shadow-md flex items-center gap-2 text-sm font-semibold disabled:opacity-50 transition-all"
+                    >
+                        {isMatching ? <RefreshCw size={16} className="animate-spin" /> : <Wand2 size={16} />}
+                        Bulk Match Diagrams
+                    </button>
                     <label className={`flex items-center gap-2 bg-white text-gray-700 border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50 cursor-pointer shadow-sm text-sm font-semibold transition-all ${isImporting ? 'opacity-50' : ''}`}>
                         {isImporting ? <RefreshCw size={16} className="animate-spin text-blue-600" /> : <Upload size={16} className="text-blue-600"/>}
                         Import CSV
@@ -263,7 +354,7 @@ export const ManagementVehiclesTab: React.FC<ManagementVehiclesTabProps> = ({ se
 
             {isModalOpen && (
                 <VehicleFormModal 
-                    key={JSON.stringify(vehicles)}
+                    key={selectedVehicle ? selectedVehicle.id : 'new'}
                     isOpen={isModalOpen} 
                     onClose={() => setIsModalOpen(false)} 
                     onSave={handleSave} 

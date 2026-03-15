@@ -167,6 +167,7 @@ export const AllocatedJobCard: React.FC<{
                     
                     {canPerformActions && (
                         <>
+                            <button onClick={(e) => handleAction(e, () => onOpenAssistant(job.id))} title="Technical Assistant" className="p-1 rounded bg-white/20 hover:bg-white/40 text-white"><Wand2 size={14} /></button>
                             <button 
                                 onClick={(e) => handleAction(e, () => onEdit(job.id))} 
                                 title="Edit Job" 

@@ -7,5 +7,8 @@ export default {
   theme: {
     extend: {},
   },
+  future: {
+    modernColorFormat: false,
+  },
   plugins: [],
 }

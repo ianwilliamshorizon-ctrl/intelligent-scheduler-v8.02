@@ -240,7 +240,7 @@ const WorkflowView: React.FC<WorkflowViewProps> = ({ jobs, vehicles, customers, 
                                                 let timeString = `${seg.duration} hrs`;
                                                 if (startSegmentIndex !== null && startSegmentIndex !== undefined) {
                                                     const startTime = TIME_SEGMENTS[startSegmentIndex];
-                                                    const numberOfSegments = seg.duration * (60 / SEGMENT_DURATION_MINUTES);
+                                                    const numberOfSegments = seg.duration ? seg.duration * (60 / SEGMENT_DURATION_MINUTES) : 0;
                                                     const endSegmentIndex = startSegmentIndex + numberOfSegments;
                                                     let endTime = `${(END_HOUR % 12 === 0 ? 12 : END_HOUR % 12)}:${String(END_MINUTE).padStart(2,'0')} PM`;
                                                     if (endSegmentIndex < TIME_SEGMENTS.length) {

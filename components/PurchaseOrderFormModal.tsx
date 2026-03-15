@@ -1,4 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import ReactDOM from 'react-dom/client';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 import { PurchaseOrder, PurchaseOrderLineItem, Supplier, BusinessEntity, TaxRate, Part, Vehicle, Customer, Job, Estimate } from '../types';
 import { Save, PlusCircle, Trash2, X, CheckSquare, ArrowDownCircle, AlertTriangle, Info, Printer, Mail, Phone, Plus } from 'lucide-react';
 import { formatDate } from '../core/utils/dateUtils';
@@ -8,7 +11,6 @@ import { HoverInfo } from './shared/HoverInfo';
 import PartFormModal from './PartFormModal';
 import { PurchaseOrderPrint } from './PurchaseOrderPrint';
 import EmailPurchaseOrderModal from './EmailPurchaseOrderModal';
-import { usePrint } from '../core/hooks/usePrint';
 import { useWorkshopActions } from '../core/hooks/useWorkshopActions';
 import { useApp } from '../core/state/AppContext';
 import SupplierSelectionModal from './SupplierSelectionModal';
@@ -206,11 +208,11 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({
         jobId: '',
     });
     const { showError, showSuccess } = useToaster();
-    const print = usePrint();
     const [isAddingPart, setIsAddingPart] = useState(false);
     const [newPart, setNewPart] = useState<Partial<Part> | null>(null);
     const [targetLineItemId, setTargetLineItemId] = useState<string | null>(null);
     const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
+    const [isPrinting, setIsPrinting] = useState(false);
 
     const saveAndLinkPo = useCallback((poToSave: PurchaseOrder, updatedParts?: Part[], updatedEstimate?: Estimate) => {
         onSave(poToSave, updatedParts, updatedEstimate);
@@ -597,13 +599,71 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({
 
     const currentSupplier = useMemo(() => suppliers.find(s => s.id === formData.supplierId), [formData.supplierId, suppliers]);
     const currentEntity = useMemo(() => businessEntities.find(e => e.id === formData.entityId), [formData.entityId, businessEntities]);
-
-    const handlePrint = () => {
+    
+    const handlePrint = async () => {
         if (!currentEntity || !currentSupplier) {
             showError("Please select a supplier and business entity before printing.");
             return;
         }
-        print(<PurchaseOrderPrint purchaseOrder={formData as PurchaseOrder} entityDetails={currentEntity} supplier={currentSupplier} totals={{ net: totalNet, vat: totalTax, grandTotal: grandTotal }} />);
+        setIsPrinting(true);
+        const printMountPoint = document.createElement('div');
+        printMountPoint.style.position = 'absolute';
+        printMountPoint.style.left = '-9999px';
+        document.body.appendChild(printMountPoint);
+
+        const root = ReactDOM.createRoot(printMountPoint);
+        root.render(
+            <React.StrictMode>
+                <PurchaseOrderPrint 
+                    purchaseOrder={formData as PurchaseOrder} 
+                    supplier={currentSupplier}
+                    entityDetails={currentEntity}
+                    totals={{ net: totalNet, vat: totalTax, grandTotal: grandTotal }}
+                />
+            </React.StrictMode>
+        );
+
+        await new Promise(resolve => setTimeout(resolve, 300));
+    
+        try {
+            const elementToPrint = printMountPoint.children[0] as HTMLElement;
+            if (!elementToPrint) {
+                throw new Error("PDF print container not found.");
+            }
+            const canvas = await html2canvas(elementToPrint, { scale: 2, useCORS: true, allowTaint: true });
+            const imgData = canvas.toDataURL('image/png');
+
+            const pdf = new jsPDF('p', 'mm', 'a4', true);
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = pdf.internal.pageSize.getHeight();
+            
+            const imgProps = pdf.getImageProperties(imgData);
+            const imgHeight = (imgProps.height * pdfWidth) / imgProps.width;
+
+            let heightLeft = imgHeight;
+            let position = 0;
+
+            pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+            heightLeft -= pdfHeight;
+
+            while (heightLeft >= 1) {
+                position -= pdfHeight;
+                pdf.addPage();
+                pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+                heightLeft -= pdfHeight;
+            }
+
+            pdf.autoPrint();
+            window.open(pdf.output('bloburl'), '_blank');
+
+        } catch (error) {
+            console.error("Error generating PDF for printing:", error);
+            showError("Could not generate PDF for printing. Please try again.");
+        } finally {
+            root.unmount();
+            document.body.removeChild(printMountPoint);
+            setIsPrinting(false);
+        }
     };
 
     const handleOrderByPhone = () => {
@@ -618,7 +678,7 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 bg-gray-900 bg-opacity-75 z-[70] flex justify-center items-center p-4">
+         <div className="fixed inset-0 bg-gray-900 bg-opacity-75 z-[70] flex justify-center items-center p-4">
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl flex flex-col max-h-[90vh]">
                 <div className="flex justify-between items-center border-b p-4">
                     <h2 className="text-xl font-bold text-indigo-700">{title}</h2>
@@ -780,7 +840,9 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({
                     <div className="flex gap-2">
                          {formData.status === 'Draft' && formData.type !== 'Credit' && (
                             <div className="flex items-center gap-2">
-                                <button onClick={handlePrint} className="px-3 py-2 bg-gray-600 text-white rounded-lg flex items-center gap-2 hover:bg-gray-700 font-semibold shadow-sm"><Printer size={16}/> Print</button>
+                                <button onClick={handlePrint} disabled={isPrinting} className="px-3 py-2 bg-gray-600 text-white rounded-lg flex items-center gap-2 hover:bg-gray-700 font-semibold shadow-sm disabled:bg-gray-400">
+                                    <Printer size={16}/> {isPrinting ? 'Printing...' : 'Print'}
+                                </button>
                                 <button onClick={() => setIsEmailModalOpen(true)} className="px-3 py-2 bg-gray-600 text-white rounded-lg flex items-center gap-2 hover:bg-gray-700 font-semibold shadow-sm"><Mail size={16}/> Email</button>
                                 <button onClick={handleOrderByPhone} className="px-3 py-2 bg-gray-600 text-white rounded-lg flex items-center gap-2 hover:bg-gray-700 font-semibold shadow-sm"><Phone size={16}/> Order by Phone</button>
                             </div>

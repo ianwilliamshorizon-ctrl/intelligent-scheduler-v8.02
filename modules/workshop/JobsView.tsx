@@ -28,7 +28,7 @@ const dateFilterOptions = {
 type DateFilterOption = keyof typeof dateFilterOptions;
 
 const JobsView: React.FC<JobsViewProps> = ({ onEditJob, onSmartCreateClick }) => {
-    const { jobs, customers, vehicles, businessEntities, estimates, taxRates, setServicePackages, parts } = useData();
+    const { jobs, customers, vehicles, businessEntities, estimates, taxRates, inspectionTemplates, setServicePackages, parts } = useData();
     const { selectedEntityId, setConfirmation } = useApp();
     const print = usePrint();
     const { handleSaveItem } = useWorkshopActions();

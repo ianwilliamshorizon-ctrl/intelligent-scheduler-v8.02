@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import * as T from '../../../types';
-import { Car, User, KeyRound, Edit, Phone, Mail, MapPin, Building, Briefcase, Expand, ImageIcon, X, Gauge, Info } from 'lucide-react';
+import { Car, User, KeyRound, Edit, Phone, Mail, MapPin, Building, Briefcase, Expand, ImageIcon, X, Gauge, Info, Wrench } from 'lucide-react';
 import { HoverInfo } from '../../shared/HoverInfo';
+import LiveAssistant from '../../LiveAssistant';
 
 interface TabSectionProps {
     title: string;
@@ -34,24 +35,30 @@ const JobDetailsTab: React.FC<JobDetailsTabProps> = ({
     editableJob, vehicle, customer, isReadOnly, onChange, onViewCustomer, onViewVehicle 
 }) => {
     const [isNotesModalOpen, setIsNotesModalOpen] = useState(false);
+    const [isAssistantOpen, setIsAssistantOpen] = useState(false);
     
     const handleNotesSave = (newNotes: string) => {
         onChange({ target: { name: 'notes', value: newNotes } } as React.ChangeEvent<HTMLTextAreaElement>);
         setIsNotesModalOpen(false);
     };
+
+    const handleAddNoteFromAssistant = (note: string) => {
+        const newNotes = `${editableJob.notes || ''}\n\n--- Assistant Note ---\n${note}`;
+        onChange({ target: { name: 'notes', value: newNotes } } as React.ChangeEvent<HTMLTextAreaElement>);
+    };
     
     const customerInfoData = customer ? {
-        phone: customer.phone || customer.mobile,
-        email: customer.email,
-        address: `${customer.addressLine1 || ''}, ${customer.postcode || ''}`.replace(/^,|,$/g, '').trim(),
-        company: customer.companyName,
+        phone: customer.phone || customer.mobile || 'N/A',
+        email: customer.email || 'N/A',
+        address: `${customer.addressLine1 || ''}, ${customer.postcode || ''}`.replace(/^,|,$/g, '').trim() || 'N/A',
+        company: customer.companyName || 'N/A',
     } : {};
 
     const vehicleInfoData = vehicle ? {
-        type: `${vehicle.year || ''} ${vehicle.make || ''} ${vehicle.model || ''}`.trim(),
-        colour: vehicle.colour,
-        vin: vehicle.vin,
-        motDue: vehicle.nextMotDate,
+        type: `${vehicle.year || ''} ${vehicle.make || ''} ${vehicle.model || ''}`.trim() || 'N/A',
+        colour: vehicle.colour || 'N/A',
+        vin: vehicle.vin || 'N/A',
+        motDue: vehicle.nextMotDate || 'N/A',
     } : {};
 
 
@@ -68,7 +75,9 @@ const JobDetailsTab: React.FC<JobDetailsTabProps> = ({
                     </div>
                      <div className="flex items-center gap-2"><Gauge size={14} className="text-gray-500"/><strong>Mileage:</strong> 
                         {isReadOnly ? (
-                            <span className="font-semibold">{editableJob.mileage ? `${editableJob.mileage.toLocaleString()} mi` : 'N/A'}</span>
+                            <span className="font-semibold">
+                                {editableJob.mileage ? `${Number(editableJob.mileage).toLocaleString()} mi` : 'N/A'}
+                            </span>
                         ) : (
                             <input type="text" name="mileage" value={editableJob.mileage || ''} onChange={onChange} className="p-1 border rounded bg-white text-sm w-full" />
                         )}
@@ -134,6 +143,16 @@ const JobDetailsTab: React.FC<JobDetailsTabProps> = ({
                 </div>
             </TabSection>
 
+            <TabSection title="Technical Assistant" icon={Wrench}>
+                <button
+                    type="button"
+                    onClick={() => setIsAssistantOpen(true)}
+                    className="w-full flex items-center justify-center gap-2 py-2 px-4 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-semibold transition-colors"
+                >
+                    <Wrench size={14} /> Get Assistance
+                </button>
+            </TabSection>
+
              <div className="border rounded-lg bg-white shadow-sm">
                 <h3 className="text-md font-bold p-3 flex justify-between items-center bg-gray-50 rounded-t-lg">
                     <span className="flex items-center gap-2"><ImageIcon size={16}/> Notes</span>
@@ -147,7 +166,7 @@ const JobDetailsTab: React.FC<JobDetailsTabProps> = ({
                         value={editableJob.notes || ''} 
                         onChange={onChange} 
                         rows={8} 
-                        className="w-full p-2 border rounded text-sm" 
+                        className="w-full p-2 border rounded text-sm focus:ring-1 focus:ring-indigo-500 outline-none" 
                         placeholder="Internal notes for the job..." 
                         disabled={isReadOnly} 
                     />
@@ -159,25 +178,32 @@ const JobDetailsTab: React.FC<JobDetailsTabProps> = ({
                     <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl h-[80vh] flex flex-col">
                         <header className="flex justify-between items-center p-4 border-b">
                             <h2 className="text-lg font-bold">Job Notes</h2>
-                            <button onClick={() => setIsNotesModalOpen(false)}><X size={24} /></button>
+                            <button onClick={() => setIsNotesModalOpen(false)} className="hover:text-gray-600"><X size={24} /></button>
                         </header>
                         <div className="flex-grow p-4">
                             <textarea
                                 value={editableJob.notes || ''}
                                 onChange={onChange}
                                 name="notes"
-                                className="w-full h-full p-2 border rounded resize-none text-sm"
+                                className="w-full h-full p-2 border rounded resize-none text-sm focus:ring-1 focus:ring-indigo-500 outline-none"
                                 placeholder="Enter notes..."
                                 readOnly={isReadOnly}
                             />
                         </div>
                         <footer className="p-4 border-t flex justify-end gap-2">
-                            <button onClick={() => setIsNotesModalOpen(false)} className="px-4 py-2 bg-gray-200 rounded-lg">Close</button>
-                            {!isReadOnly && <button onClick={() => handleNotesSave(editableJob.notes || '')} className="px-4 py-2 bg-indigo-600 text-white rounded-lg">Save</button>}
+                            <button onClick={() => setIsNotesModalOpen(false)} className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors">Close</button>
+                            {!isReadOnly && <button onClick={() => handleNotesSave(editableJob.notes || '')} className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors">Save</button>}
                         </footer>
                     </div>
                 </div>
             )}
+
+            <LiveAssistant 
+                isOpen={isAssistantOpen} 
+                onClose={() => setIsAssistantOpen(false)} 
+                jobId={editableJob.id} 
+                onAddNote={handleAddNoteFromAssistant} 
+            />
         </div>
     );
 };
