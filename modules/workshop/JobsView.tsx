@@ -32,6 +32,14 @@ const JobsView: React.FC<JobsViewProps> = ({ onEditJob, onSmartCreateClick }) =>
     const { selectedEntityId, setConfirmation } = useApp();
     const print = usePrint();
     const { handleSaveItem } = useWorkshopActions();
+
+    const safeJobs = Array.isArray(jobs) ? jobs : [];
+    const safeCustomers = Array.isArray(customers) ? customers : [];
+    const safeVehicles = Array.isArray(vehicles) ? vehicles : [];
+    const safeBusinessEntities = Array.isArray(businessEntities) ? businessEntities : [];
+    const safeEstimates = Array.isArray(estimates) ? estimates : [];
+    const safeTaxRates = Array.isArray(taxRates) ? taxRates : [];
+    const safeParts = Array.isArray(parts) ? parts : [];
     
     const [filter, setFilter] = useState('');
     const [statusFilter, setStatusFilter] = useState<Job['status'][]>([]);
@@ -41,13 +49,13 @@ const JobsView: React.FC<JobsViewProps> = ({ onEditJob, onSmartCreateClick }) =>
     const [isPackageModalOpen, setIsPackageModalOpen] = useState(false);
     const [suggestedPackage, setSuggestedPackage] = useState<Partial<ServicePackage> | null>(null);
 
-    const customerMap = useMemo(() => new Map(customers.map(c => [c.id, c])), [customers]);
-    const vehicleMap = useMemo(() => new Map(vehicles.map(v => [v.id, v])), [vehicles]);
-    const estimateMap = useMemo(() => new Map(estimates.map(e => [e.id, e])), [estimates]);
-    const standardTaxRateId = useMemo(() => taxRates.find(t => t.code === 'T1')?.id, [taxRates]);
+    const customerMap = useMemo(() => new Map(safeCustomers.map(c => [c.id, c])), [safeCustomers]);
+    const vehicleMap = useMemo(() => new Map(safeVehicles.map(v => [v.id, v])), [safeVehicles]);
+    const estimateMap = useMemo(() => new Map(safeEstimates.map(e => [e.id, e])), [safeEstimates]);
+    const standardTaxRateId = useMemo(() => safeTaxRates.find(t => t.code === 'T1')?.id, [safeTaxRates]);
 
     const filteredJobs = useMemo(() => {
-        const selectedEntity = businessEntities.find(e => e.id === selectedEntityId);
+        const selectedEntity = safeBusinessEntities.find(e => e.id === selectedEntityId);
         let dateCutoff: string | null = null;
         if (dateFilter === '30days') {
             dateCutoff = getRelativeDate(-30);
@@ -55,7 +63,7 @@ const JobsView: React.FC<JobsViewProps> = ({ onEditJob, onSmartCreateClick }) =>
             dateCutoff = getRelativeDate(-90);
         }
 
-        const initialFilter = jobs.filter(job => {
+        const initialFilter = safeJobs.filter(job => {
             if (selectedEntityId !== 'all' && selectedEntity?.shortCode) {
                 if (!job.id.startsWith(selectedEntity.shortCode)) return false;
             } else if (selectedEntityId !== 'all') {
@@ -99,7 +107,7 @@ const JobsView: React.FC<JobsViewProps> = ({ onEditJob, onSmartCreateClick }) =>
 
         // If there's a text filter, we might need to add supplementary jobs whose parents are in the results
         if (filter.trim()) {
-            jobs.forEach(job => {
+            safeJobs.forEach(job => {
                 const description = job.description || '';
                 if (description.toLowerCase().includes('supplementary for job #')) {
                     const parentIdMatch = description.match(/#(\S+)/);
@@ -121,7 +129,7 @@ const JobsView: React.FC<JobsViewProps> = ({ onEditJob, onSmartCreateClick }) =>
 
         return uniqueJobs;
 
-    }, [jobs, filter, statusFilter, dateFilter, customerMap, vehicleMap, selectedEntityId, businessEntities]);
+    }, [safeJobs, filter, statusFilter, dateFilter, customerMap, vehicleMap, selectedEntityId, safeBusinessEntities]);
 
 
     useEffect(() => {
@@ -255,7 +263,7 @@ const JobsView: React.FC<JobsViewProps> = ({ onEditJob, onSmartCreateClick }) =>
                                 <th className="p-3 text-left font-semibold text-gray-600">Job ID</th>
                                 <th className="p-3 text-left font-semibold text-gray-600">Date</th>
                                 <th className="p-3 text-left font-semibold text-gray-600">Customer</th>
-                                <th className-="p-3 text-left font-semibold text-gray-600">Vehicle</th>
+                                <th className="p-3 text-left font-semibold text-gray-600">Vehicle</th>
                                 <th className="p-3 text-left font-semibold text-gray-600">Description</th>
                                 <th className="p-3 text-left font-semibold text-gray-600">Status</th>
                                 <th className="p-3"></th>
@@ -325,10 +333,10 @@ const JobsView: React.FC<JobsViewProps> = ({ onEditJob, onSmartCreateClick }) =>
                         }
                     }}
                     servicePackage={suggestedPackage}
-                    taxRates={taxRates}
+                    taxRates={safeTaxRates}
                     entityId={selectedEntityId === 'all' ? (businessEntities[0]?.id || '') : selectedEntityId}
-                    businessEntities={businessEntities}
-                    parts={parts}
+                    businessEntities={safeBusinessEntities}
+                    parts={safeParts}
                 />
             )}
         </div>

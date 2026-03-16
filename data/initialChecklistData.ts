@@ -1,11 +1,12 @@
 import { ChecklistSection, ChecklistItemStatus, TyreCheckData } from '../types';
 
-const createDefaultItems = (labels: string[]): { id: string; label: string; status: ChecklistItemStatus; }[] =>
+const createDefaultItems = (labels: string[]): { id: string; label: string; status: ChecklistItemStatus; comment: string; }[] =>
   labels.map((label, index) => ({
     // Use a stable ID based on the index so it never changes on refresh
     id: `item_${index}_${label.toLowerCase().replace(/\s+/g, '_').substring(0, 10)}`, 
     label,
     status: 'na', 
+    comment: ''
   }));
 
 export const initialChecklistData: ChecklistSection[] = [

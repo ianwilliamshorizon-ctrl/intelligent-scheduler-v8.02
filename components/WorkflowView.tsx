@@ -41,7 +41,7 @@ const WorkflowJobCard: React.FC<{
         >
             <div className="flex justify-between items-start">
                 <div>
-                    <h3 className="font-bold text-gray-800 text-sm">{job.description}</h3>
+                    <h3 className="text-xs text-gray-800">{job.description}</h3>
                     <div className="flex items-center gap-3 text-xs text-gray-500 mt-1">
                         {vehicle && (
                              <HoverInfo title="Vehicle Details" data={{ make: vehicle.make, model: vehicle.model, year: vehicle.year, vin: vehicle.vin }}>
@@ -56,7 +56,7 @@ const WorkflowJobCard: React.FC<{
                     </div>
                 </div>
                 <div className="flex flex-col items-end gap-2">
-                    <span className="font-mono text-xs bg-gray-200 px-1.5 py-0.5 rounded">#{job.id}</span>
+                    <span className="font-mono text-sm font-bold bg-gray-200 px-1.5 py-0.5 rounded">#{job.id}</span>
                     <button onClick={(e) => { e.stopPropagation(); onOpenAssistant(job.id); }} className="p-1.5 bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200" title="Technical Assistant"><Wand2 size={14} /></button>
                 </div>
             </div>

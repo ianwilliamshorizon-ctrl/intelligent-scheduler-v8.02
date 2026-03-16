@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { Job, Vehicle, Customer, PurchaseOrder, User, JobSegment, Engineer, VehicleStatus } from '../../types';
-import { Package as PackageIcon, PackageCheck, CheckCircle, ArrowRightCircle, Clock, KeyRound, Car, Wand2, LogIn, ClipboardCheck, FileText, LogOut, PlayCircle, Play, PauseCircle, User as UserIcon } from 'lucide-react';
+import { Package as PackageIcon, PackageCheck, CheckCircle, ArrowRightCircle, Clock, KeyRound, Car, Wand2, LogIn, ClipboardCheck, FileText, LogOut, PlayCircle, Play, PauseCircle, User as UserIcon, XCircle } from 'lucide-react';
 import { getCustomerDisplayName } from '../../core/utils/customerUtils';
 import { getRelativeDate } from '../../core/utils/dateUtils';
 import { TIME_SEGMENTS, SEGMENT_DURATION_MINUTES, END_HOUR, END_MINUTE } from '../../constants';
@@ -48,6 +48,7 @@ export const ConciergeJobCard: React.FC<ConciergeJobCardProps> = (props) => {
         'Awaiting Arrival': { icon: Clock, color: 'text-gray-500', text: 'Awaiting Arrival' },
         'Awaiting Collection': { icon: Clock, color: 'text-purple-600', text: 'Awaiting Collection' },
         'Collected': { icon: CheckCircle, color: 'text-gray-500', text: 'Collected' },
+        'Cancelled': { icon: XCircle, color: 'text-red-600', text: 'Cancelled' },
     };
     const currentVehicleStatus = vehicleStatusInfo[vehicleStatus || 'Awaiting Arrival'];
 
@@ -82,11 +83,11 @@ export const ConciergeJobCard: React.FC<ConciergeJobCardProps> = (props) => {
         >
             {/* Header */}
             <div className="flex justify-between items-start">
-                <h4 className="font-bold text-gray-800 flex-grow text-xs flex items-center gap-1">
+                <h4 className="text-gray-800 flex-grow text-xs flex items-center gap-1">
                     {job.description}
                 </h4>
                 <div className="flex flex-col items-end gap-0.5">
-                    <span className="font-mono text-[9px] bg-gray-200 px-1 py-0.5 rounded text-gray-600">#{job.id}</span>
+                    <span className="font-mono text-sm font-bold bg-gray-200 px-1.5 py-0.5 rounded text-gray-800">#{job.id}</span>
                     {job.keyNumber && (
                         <span className="flex items-center gap-0.5 text-[9px] font-bold bg-yellow-100 text-yellow-800 px-1 py-0.5 rounded border border-yellow-200">
                             <KeyRound size={8} /> {job.keyNumber}

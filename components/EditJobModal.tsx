@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useData } from '../core/state/DataContext';
 import { useApp } from '../core/state/AppContext';
@@ -64,8 +65,21 @@ const EditJobModal: React.FC<{
         jobs, setJobs, vehicles, customers, estimates, setEstimates, suppliers, parts, setParts, servicePackages, taxRates, businessEntities, setServicePackages, engineers, inspectionTemplates
     } = data;
 
+    const safeJobs = Array.isArray(jobs) ? jobs : [];
+    const safeVehicles = Array.isArray(vehicles) ? vehicles : [];
+    const safeCustomers = Array.isArray(customers) ? customers : [];
+    const safeEstimates = Array.isArray(estimates) ? estimates : [];
+    const safeSuppliers = Array.isArray(suppliers) ? suppliers : [];
+    const safeParts = Array.isArray(parts) ? parts : [];
+    const safeServicePackages = Array.isArray(servicePackages) ? servicePackages : [];
+    const safeTaxRates = Array.isArray(taxRates) ? taxRates : [];
+    const safeBusinessEntities = Array.isArray(businessEntities) ? businessEntities : [];
+    const safeEngineers = Array.isArray(engineers) ? engineers : [];
+    const safeInspectionTemplates = Array.isArray(inspectionTemplates) ? inspectionTemplates : [];
+    const safePurchaseOrders = Array.isArray(purchaseOrders) ? purchaseOrders : [];
+    const safeRentalBookings = Array.isArray(rentalBookings) ? rentalBookings : [];
+
     const [activeTab, setActiveTab] = useState('estimates');
-    const job = useMemo(() => (jobs || []).find(j => j.id === selectedJobId), [jobs, selectedJobId]);
     const [editableJob, setEditableJob] = useState<T.Job | null>(null);
     const [editableEstimate, setEditableEstimate] = useState<T.Estimate | null>(null);
     const [isPrinting, setIsPrinting] = useState(false);
@@ -85,32 +99,31 @@ const EditJobModal: React.FC<{
     const [isPackageModalOpen, setIsPackageModalOpen] = useState(false);
     const [suggestedPackage, setSuggestedPackage] = useState<Partial<T.ServicePackage> | null>(null);
 
-    // Data dependencies defined before they are used in print handlers
-    const vehicle = useMemo(() => (job && Array.isArray(vehicles)) ? vehicles.find(v => v.id === job.vehicleId) : undefined, [job, vehicles]);
-    const customer = useMemo(() => (job && Array.isArray(customers)) ? customers.find(c => c.id === job.customerId) : undefined, [job, customers]);
-    const mainEstimate = useMemo(() => {
-        if (!job || !Array.isArray(estimates)) return null;
-        return estimates.find(e => e.id === job.estimateId) || null;
-    }, [job, estimates]);
-    const supplementaryEstimates = useMemo(() => {
-        if (!job || !Array.isArray(estimates)) return [];
-        const mainId = mainEstimate?.id;
-        return estimates.filter(e => e.jobId === job.id && e.id !== mainId);
-    }, [estimates, job, mainEstimate]);
-    const businessEntity = useMemo(() => (businessEntities || []).find(e => e.id === editableJob?.entityId), [businessEntities, editableJob]);
+    const job = useMemo(() => (Array.isArray(jobs) ? jobs : []).find(j => j.id === selectedJobId), [jobs, selectedJobId]);
+    const vehicle = useMemo(() => job ? (Array.isArray(vehicles) ? vehicles : []).find(v => v.id === job.vehicleId) : undefined, [job, vehicles]);
+    const customer = useMemo(() => job ? (Array.isArray(customers) ? customers : []).find(c => c.id === job.customerId) : undefined, [job, customers]);
+    const businessEntity = useMemo(() => (Array.isArray(businessEntities) ? businessEntities : []).find(e => e.id === editableJob?.entityId), [businessEntities, editableJob?.entityId]);
 
-    // Correctly configured print handler
+    const mainEstimate = useMemo(() => {
+        if (!job) return null;
+        return safeEstimates.find(e => e.id === job.estimateId) || null;
+    }, [job, safeEstimates]);
+    const supplementaryEstimates = useMemo(() => {
+        if (!job) return [];
+        const mainId = mainEstimate?.id;
+        return safeEstimates.filter(e => e.jobId === job.id && e.id !== mainId);
+    }, [safeEstimates, job, mainEstimate]);
+
     const handlePrint = useReactToPrint({
-        contentRef: componentToPrintRef, // Pass the ref object directly
+        contentRef: componentToPrintRef,
         documentTitle: `JobCard_${editableJob?.id}`,
         onAfterPrint: () => setIsPrinting(false),
     });
 
-    // Simplified trigger function
     const triggerPrint = useCallback(() => {
         if (editableJob && vehicle && customer) {
             setIsPrinting(true);
-            handlePrint(); // The component is already rendered, so we can print directly
+            handlePrint();
         } else {
             setConfirmation({
                 isOpen: true,
@@ -126,24 +139,29 @@ const EditJobModal: React.FC<{
         return ['Admin', 'Director', 'Sales'].includes(currentUser.role);
     }, [currentUser]);
 
-    const taxRatesMap = useMemo(() => new Map((Array.isArray(taxRates) ? taxRates : []).map(t => [t.id, t])), [taxRates]);
-    const standardTaxRateId = useMemo(() => (Array.isArray(taxRates) ? taxRates : []).find(t => t.code === 'T1')?.id, [taxRates]);
-    const t99RateId = useMemo(() => (taxRates || []).find(t => t.code === 'T99')?.id, [taxRates]);
-    const vehicleImage = useMemo(() => vehicle?.images?.find(img => img.isPrimaryDiagram) || vehicle?.images?.[0], [vehicle]);
+    const taxRatesMap = useMemo(() => new Map(safeTaxRates.map(t => [t.id, t])), [safeTaxRates]);
+    const standardTaxRateId = useMemo(() => safeTaxRates.find(t => t.code === 'T1')?.id, [safeTaxRates]);
+    const t99RateId = useMemo(() => safeTaxRates.find(t => t.code === 'T99')?.id, [safeTaxRates]);
+    const vehicleImage = useMemo(() => {
+        if (vehicle && Array.isArray(vehicle.images)) {
+            return vehicle.images.find(img => img.isPrimaryDiagram) || vehicle.images[0];
+        }
+        return null;
+    }, [vehicle]);
 
     useEffect(() => {
         if (isOpen && job) {
             const jobCopy = JSON.parse(JSON.stringify(job));
             const obs = jobCopy.technicianObservations || [];
             jobCopy.technicianObservations = [...obs, ...Array(Math.max(0, 5 - obs.length)).fill('')].slice(0, 5);
-            if (!jobCopy.inspectionChecklist && (inspectionTemplates || [])?.some(t => t.isDefault)) {
-                const defaultTemplate = (inspectionTemplates || []).find(t => t.isDefault);
+            if (!jobCopy.inspectionChecklist && safeInspectionTemplates.some(t => t.isDefault)) {
+                const defaultTemplate = safeInspectionTemplates.find(t => t.isDefault);
                 if (defaultTemplate) {
                     jobCopy.inspectionTemplateId = defaultTemplate.id;
-                    jobCopy.inspectionChecklist = defaultTemplate.sections.map(s => ({
+                    jobCopy.inspectionChecklist = (defaultTemplate.sections || []).map(s => ({
                         ...s,
                         id: crypto.randomUUID(),
-                        items: s.items.map(i => ({ ...i, id: crypto.randomUUID(), status: 'na' }))
+                        items: (s.items || []).map(i => ({ ...i, id: crypto.randomUUID(), status: 'na' }))
                     }));
                 }
             }
@@ -151,7 +169,7 @@ const EditJobModal: React.FC<{
         } else if (!isOpen) {
             setEditableJob(null);
         }
-    }, [isOpen, job, inspectionTemplates]);
+    }, [isOpen, job, safeInspectionTemplates]);
 
     useEffect(() => {
         if (isOpen) {
@@ -165,21 +183,20 @@ const EditJobModal: React.FC<{
     const isReadOnly = !!editableJob?.invoiceId;
 
     const sortedPackages = useMemo(() => {
-        const allAvailable = Array.isArray(servicePackages) ? servicePackages : [];
         if (!vehicle) {
-            return allAvailable.map(pkg => ({ ...pkg, id: pkg.id, label: pkg.name || 'Unnamed Package', value: pkg.id, description: pkg.description || 'Service Package', badge: { text: 'Generic', className: 'bg-gray-100 text-gray-800' } }));
+            return safeServicePackages.map(pkg => ({ ...pkg, id: pkg.id, label: pkg.name || 'Unnamed Package', value: pkg.id, description: pkg.description || 'Service Package', badge: { text: 'Generic', className: 'bg-gray-100 text-gray-800' } }));
         }
-        const scoredResults = getScoredServicePackages(allAvailable, vehicle);
+        const scoredResults = getScoredServicePackages(safeServicePackages, vehicle);
         return scoredResults.map(({ pkg, matchType, color }) => ({ ...pkg, id: pkg.id, label: pkg.name || 'Unnamed Package', value: pkg.id, description: pkg.description || 'Service Package', badge: { text: matchType, className: color } }));
-    }, [servicePackages, vehicle]);
+    }, [safeServicePackages, vehicle]);
 
     const handleCreateEstimateIfNeeded = useCallback(() => {
         if (!editableEstimate && editableJob && currentUser) {
-            const entity = Array.isArray(businessEntities) ? businessEntities.find(e => e.id === editableJob.entityId) : undefined;
+            const entity = safeBusinessEntities.find(e => e.id === editableJob.entityId);
             const entityShortCode = entity?.shortCode || 'UNK';
             const newEstimate: T.Estimate = {
                 id: `est_${Date.now()}_temp`,
-                estimateNumber: generateEstimateNumber(Array.isArray(estimates) ? estimates : [], entityShortCode),
+                estimateNumber: generateEstimateNumber(safeEstimates, entityShortCode),
                 entityId: editableJob.entityId,
                 customerId: editableJob.customerId,
                 vehicleId: editableJob.vehicleId,
@@ -195,7 +212,7 @@ const EditJobModal: React.FC<{
             return newEstimate;
         }
         return editableEstimate;
-    }, [editableEstimate, editableJob, businessEntities, estimates, currentUser]);
+    }, [editableEstimate, editableJob, safeBusinessEntities, safeEstimates, currentUser]);
 
     const handleLineItemChange = useCallback((id: string, field: keyof T.EstimateLineItem, value: any) => { 
         setEditableEstimate(prev => {
@@ -211,13 +228,13 @@ const EditJobModal: React.FC<{
 
     const addPackage = (selection: any) => {
         const packageId = selection?.value || selection?.id || selection;
-        const pkg = (servicePackages || []).find(p => p.id === packageId);
+        const pkg = safeServicePackages.find(p => p.id === packageId);
         if (!pkg) return;
         handleCreateEstimateIfNeeded();
         setEditableEstimate(prev => {
             if (!prev) return null;
             const newItems: T.EstimateLineItem[] = [];
-            const { net, vat } = calculatePackagePrices(pkg, taxRates);
+            const { net, vat } = calculatePackagePrices(pkg, safeTaxRates);
             const mainPackageItem: T.EstimateLineItem = { id: crypto.randomUUID(), description: pkg.name || '', quantity: 1, unitPrice: net, unitCost: 0, isLabor: false, taxCodeId: pkg.taxCodeId || standardTaxRateId, servicePackageId: pkg.id, servicePackageName: pkg.name, isPackageComponent: false, isOptional: true, preCalculatedVat: pkg.taxCodeId === t99RateId ? vat : undefined };
             newItems.push(mainPackageItem);
             (pkg.costItems || []).forEach(costItem => {
@@ -243,15 +260,15 @@ const EditJobModal: React.FC<{
     };
 
     const handleInspectionTemplateChange = (templateId: string) => {
-        const template = (inspectionTemplates || []).find(t => t.id === templateId);
+        const template = safeInspectionTemplates.find(t => t.id === templateId);
         if (template && editableJob) {
             setEditableJob({
                 ...editableJob,
                 inspectionTemplateId: template.id,
-                inspectionChecklist: template.sections.map(s => ({
+                inspectionChecklist: (template.sections || []).map(s => ({
                     ...s,
                     id: crypto.randomUUID(),
-                    items: s.items.map(i => ({ ...i, id: crypto.randomUUID(), status: 'na' }))
+                    items: (s.items || []).map(i => ({ ...i, id: crypto.randomUUID(), status: 'na' }))
                 }))
             });
         }
@@ -307,7 +324,7 @@ const EditJobModal: React.FC<{
     };
 
     const handleOpenLineItemMedia = (itemId: string) => {
-        const item = editableEstimate?.lineItems?.find(li => li.id === itemId);
+        const item = (editableEstimate?.lineItems || []).find(li => li.id === itemId);
         if (!item) return;
         setMediaModalTitle(`Media for: ${item.description || 'Line Item'}`);
         setMediaModalData(item.media || []);
@@ -321,7 +338,7 @@ const EditJobModal: React.FC<{
         handleCreateEstimateIfNeeded();
         setEditableEstimate(prev => {
             if (!prev) return null;
-            const entity = Array.isArray(businessEntities) ? businessEntities.find(e => e.id === editableJob?.entityId) : undefined;
+            const entity = safeBusinessEntities.find(e => e.id === editableJob?.entityId);
             const newItem: T.EstimateLineItem = { id: crypto.randomUUID(), description: isLabor ? 'Labor' : '', quantity: 1, unitPrice: isLabor ? (entity?.laborRate || 0) : 0, unitCost: isLabor ? (entity?.laborCostRate || 0) : 0, isLabor, taxCodeId: standardTaxRateId, isOptional: true };
             return { ...prev, lineItems: [...(prev.lineItems || []), newItem] };
         });
@@ -339,21 +356,21 @@ const EditJobModal: React.FC<{
     }, []);
 
     const filteredParts = useMemo(() => {
-        if (!partSearchTerm || !Array.isArray(parts)) return [];
+        if (!partSearchTerm) return [];
         const lowerSearch = partSearchTerm.toLowerCase();
-        return parts.filter(p => p.partNumber.toLowerCase().includes(lowerSearch) || p.description.toLowerCase().includes(lowerSearch)).slice(0, 10);
-    }, [partSearchTerm, parts]);
+        return safeParts.filter(p => p.partNumber.toLowerCase().includes(lowerSearch) || p.description.toLowerCase().includes(lowerSearch)).slice(0, 10);
+    }, [partSearchTerm, safeParts]);
 
     const handleRaisePurchaseOrders = useCallback(async () => {
         if (!editableJob || !editableEstimate || !vehicle) return;
-        const itemsToOrder = editableEstimate.lineItems.filter(li => !li.isLabor && !li.isPackageComponent && li.partId && !li.fromStock && !li.purchaseOrderLineItemId);
+        const itemsToOrder = (editableEstimate.lineItems || []).filter(li => !li.isLabor && !li.isPackageComponent && li.partId && !li.fromStock && !li.purchaseOrderLineItemId);
         if (itemsToOrder.length === 0) {
             setConfirmation({ isOpen: true, title: 'No Parts to Order', message: 'There are no new parts on this estimate that require ordering.', type: 'info' });
             return;
         }
         const supplierGroups = new Map<string, T.EstimateLineItem[]>();
         itemsToOrder.forEach(lineItem => {
-            const part = (parts || []).find(p => p.id === lineItem.partId);
+            const part = safeParts.find(p => p.id === lineItem.partId);
             if (!part) return;
             const supplierId = lineItem.supplierId || part.defaultSupplierId || 'UNKNOWN';
             if (!supplierGroups.has(supplierId)) {
@@ -365,18 +382,18 @@ const EditJobModal: React.FC<{
         const posToUpdate: T.PurchaseOrder[] = [];
         const newPOs: T.PurchaseOrder[] = [];
         const newPoIdsToLink: string[] = [];
-        let updatedLineItems = [...editableEstimate.lineItems];
-        const entity = (businessEntities || []).find(e => e.id === editableJob.entityId);
+        let updatedLineItems = [...(editableEstimate.lineItems || [])];
+        const entity = safeBusinessEntities.find(e => e.id === editableJob.entityId);
         const entityShortCode = entity?.shortCode || 'UNK';
         const jobPoIds = editableJob.purchaseOrderIds || [];
-        const jobPOs = (purchaseOrders || []).filter(po => jobPoIds.includes(po.id));
+        const jobPOs = safePurchaseOrders.filter(po => jobPoIds.includes(po.id));
 
         supplierGroups.forEach((items, supplierId) => {
             const existingDraftPO = jobPOs.find(po => po.status === 'Draft' && (po.supplierId === supplierId || (supplierId === 'UNKNOWN' && !po.supplierId)));
             if (existingDraftPO) {
                 const newPoLineItems: T.PurchaseOrderLineItem[] = items.map(item => {
                     const newPoLineItemId = crypto.randomUUID();
-                    const part = (parts || []).find(p => p.id === item.partId!)!;
+                    const part = safeParts.find(p => p.id === item.partId!)!;
                     const originalIndex = updatedLineItems.findIndex(li => li.id === item.id);
                     if (originalIndex !== -1) {
                         updatedLineItems[originalIndex] = { ...updatedLineItems[originalIndex], purchaseOrderLineItemId: newPoLineItemId };
@@ -386,11 +403,11 @@ const EditJobModal: React.FC<{
                 const updatedPO = { ...existingDraftPO, lineItems: [...(existingDraftPO.lineItems || []), ...newPoLineItems] };
                 posToUpdate.push(updatedPO);
             } else {
-                const newPoId = generatePurchaseOrderId((purchaseOrders || []).concat(newPOs), entityShortCode);
+                const newPoId = generatePurchaseOrderId(safePurchaseOrders.concat(newPOs), entityShortCode);
                 newPoIdsToLink.push(newPoId);
                 const poLineItems: T.PurchaseOrderLineItem[] = items.map(item => {
                     const newPoLineItemId = crypto.randomUUID();
-                    const part = (parts || []).find(p => p.id === item.partId!)!;
+                    const part = safeParts.find(p => p.id === item.partId!)!;
                     const originalIndex = updatedLineItems.findIndex(li => li.id === item.id);
                     if (originalIndex !== -1) {
                         updatedLineItems[originalIndex] = { ...updatedLineItems[originalIndex], purchaseOrderLineItemId: newPoLineItemId };
@@ -414,7 +431,7 @@ const EditJobModal: React.FC<{
             }
         }
         setConfirmation({ isOpen: true, title: 'Purchase Orders Updated', message: `${newPOs.length} new purchase order(s) created and ${posToUpdate.length} existing draft PO(s) updated.`, type: 'success' });
-    }, [editableJob, editableEstimate, vehicle, parts, businessEntities, purchaseOrders, generatePurchaseOrderId, handleSaveItem, data.setPurchaseOrders, setEstimates, setConfirmation]);
+    }, [editableJob, editableEstimate, vehicle, safeParts, safeBusinessEntities, safePurchaseOrders, generatePurchaseOrderId, handleSaveItem, data.setPurchaseOrders, setEstimates, setConfirmation]);
 
     const handleSelectPart = (lineItemId: string, part: T.Part) => {
         handleLineItemChange(lineItemId, 'partNumber', part.partNumber);
@@ -447,20 +464,19 @@ const EditJobModal: React.FC<{
     };
     
     const handleCreatePackage = async () => {
-        if (!editableEstimate || !editableEstimate.lineItems || editableEstimate.lineItems.length === 0 || !vehicle || !editableJob) {
+        if (!editableEstimate || !(editableEstimate.lineItems || []).length || !vehicle || !editableJob) {
             setConfirmation({ isOpen: true, title: 'Cannot Create Package', message: 'A job, vehicle, and at least one estimate line item are required to create a package.', type: 'info' });
             return;
         }
         setIsCreatingPackage(true);
         try {
-            // TEMPORARY MOCK to avoid COOP errors
             const name = `${vehicle.make} ${vehicle.model} Service`;
             const description = "Generated service package";
-            // const { name, description } = await generateServicePackageName(editableEstimate.lineItems, vehicle.make, vehicle.model);
-
+            
             const totalNet = (editableEstimate.lineItems || []).filter(item => !item.isPackageComponent).reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
             const costItems: T.EstimateLineItem[] = (editableEstimate.lineItems || []).filter(item => !item.servicePackageId || item.isPackageComponent).map(li => ({ id: crypto.randomUUID(), description: li.description, quantity: li.quantity, unitPrice: 0, unitCost: li.unitCost || 0, partNumber: li.partNumber, isLabor: li.isLabor }));
-            const taxRate = standardTaxRateId ? ((taxRates || []).find(t => t.id === standardTaxRateId)?.rate || 0) / 100 : 0;
+            const taxRateInfo = standardTaxRateId ? safeTaxRates.find(t => t.id === standardTaxRateId) : null;
+            const taxRate = taxRateInfo ? taxRateInfo.rate / 100 : 0;
             const totalVat = totalNet * taxRate;
             const totalPrice = totalNet + totalVat;
             const newPackage: Partial<T.ServicePackage> = { entityId: editableJob.entityId, name, description, totalPrice, totalPriceNet: totalNet, costItems: costItems, taxCodeId: standardTaxRateId };
@@ -475,15 +491,16 @@ const EditJobModal: React.FC<{
 
     const estimateBreakdown = useMemo(() => {
         if (!editableEstimate) return { packages: [], standaloneLabor: [], standaloneParts: [] };
+        const items = Array.isArray(editableEstimate.lineItems) ? editableEstimate.lineItems : [];
         const packagesMap = new Map<string, { header: T.EstimateLineItem, children: T.EstimateLineItem[], pkg: T.ServicePackage, packageTotal: number }>();
         const standaloneLabor: T.EstimateLineItem[] = [];
         const standaloneParts: T.EstimateLineItem[] = [];
-        (editableEstimate.lineItems || []).forEach(item => {
+        items.forEach(item => {
             if (item.servicePackageId) {
                 if (!item.isPackageComponent) {
-                    const pkg = (servicePackages || []).find(p => p.id === item.servicePackageId);
+                    const pkg = safeServicePackages.find(p => p.id === item.servicePackageId);
                     if (pkg) {
-                        const { net } = calculatePackagePrices(pkg, taxRates);
+                        const { net } = calculatePackagePrices(pkg, safeTaxRates);
                         packagesMap.set(item.servicePackageId, { header: item, children: [], pkg, packageTotal: net });
                     }
                 } 
@@ -492,20 +509,23 @@ const EditJobModal: React.FC<{
                 else standaloneParts.push(item);
             }
         });
-        (editableEstimate.lineItems || []).forEach(item => {
+        items.forEach(item => {
             if (item.servicePackageId && item.isPackageComponent) {
                 const pkgEntry = packagesMap.get(item.servicePackageId);
                 if (pkgEntry) pkgEntry.children.push(item);
             }
         });
         return { packages: Array.from(packagesMap.values()), standaloneLabor, standaloneParts };
-    }, [editableEstimate, servicePackages, taxRates]);
-
+    }, [editableEstimate, safeServicePackages, safeTaxRates]);
+    
     const { totalNet, grandTotal, vatBreakdown } = useMemo(() => {
         const breakdown: { [key: string]: { net: number; vat: number; rate: number | string; name: string; } } = {};
-        if (!editableEstimate || !editableEstimate.lineItems) return { totalNet: 0, grandTotal: 0, vatBreakdown: [] };
+        const safeLineItems = Array.isArray(editableEstimate?.lineItems) ? editableEstimate.lineItems : [];
+        if (safeLineItems.length === 0) return { totalNet: 0, grandTotal: 0, vatBreakdown: [] };
+    
         let currentTotalNet = 0;
-        const billableItems = (editableEstimate.lineItems || []).filter(item => !item.isPackageComponent);
+        const billableItems = safeLineItems.filter(item => !item.isPackageComponent);
+    
         billableItems.forEach(item => {
             const itemNet = Number(item.quantity || 0) * Number(item.unitPrice || 0);
             currentTotalNet += itemNet;
@@ -524,17 +544,20 @@ const EditJobModal: React.FC<{
                 if (taxRate.rate > 0) { breakdown[taxCodeId].vat += itemNet * (taxRate.rate / 100); }
             }
         });
+        
         const finalVatBreakdown = Object.values(breakdown).filter(b => b.net !== 0 || b.vat !== 0);
         const totalVat = finalVatBreakdown.reduce((sum, b) => sum + b.vat, 0);
         return { totalNet: currentTotalNet, grandTotal: currentTotalNet + totalVat, vatBreakdown: finalVatBreakdown };
     }, [editableEstimate, taxRatesMap, standardTaxRateId, t99RateId]);
 
-    const supplierMap = useMemo(() => new Map((Array.isArray(suppliers) ? suppliers : []).map(s => [s.id, s.name])), [suppliers]);
+    const supplierMap = useMemo(() => new Map(safeSuppliers.map(s => [s.id, s.name])), [safeSuppliers]);
 
     const poStatusKey = useMemo(() => {
-        const jobRelatedPOs = job?.purchaseOrderIds ? (purchaseOrders || []).filter(po => job.purchaseOrderIds.includes(po.id)) : [];
+        const poIds = Array.isArray(job?.purchaseOrderIds) ? job.purchaseOrderIds : [];
+        if (poIds.length === 0) return '';
+        const jobRelatedPOs = safePurchaseOrders.filter(po => poIds.includes(po.id));
         return jobRelatedPOs.map(po => `${po.id}:${po.status}`).join(',');
-    }, [job, purchaseOrders]);
+    }, [job, safePurchaseOrders]);
 
     const totalLaborHours = useMemo(() => {
         if (!editableEstimate) return 0;
@@ -544,8 +567,9 @@ const EditJobModal: React.FC<{
     const handleSaveMain = async () => {
         if (!editableJob) { onClose(); return; }
         let jobToSave = { ...editableJob };
-        jobToSave.technicianObservations = (jobToSave.technicianObservations || []).filter(obs => obs.trim() !== '');
-
+        const obs = Array.isArray(jobToSave.technicianObservations) ? jobToSave.technicianObservations : [];
+        jobToSave.technicianObservations = obs.filter(o => o.trim() !== '');
+    
         if (editableEstimate) {
             let estimateToSave = { ...editableEstimate };
             let newEstimateId: string | null = null;
@@ -617,15 +641,15 @@ const EditJobModal: React.FC<{
                                     key={poStatusKey}
                                     partsStatus={editableJob.partsStatus || 'Not Required'}
                                     purchaseOrderIds={editableJob.purchaseOrderIds || []}
-                                    purchaseOrders={Array.isArray(purchaseOrders) ? purchaseOrders : []}
+                                    purchaseOrders={safePurchaseOrders}
                                     supplierMap={supplierMap}
-                                    suppliers={suppliers || []}
+                                    suppliers={safeSuppliers}
                                     editableEstimate={editableEstimate}
                                     supplementaryEstimates={supplementaryEstimates}
                                     estimateBreakdown={estimateBreakdown}
                                     isReadOnly={isReadOnly}
                                     canViewPricing={canViewPricing}
-                                    taxRates={Array.isArray(taxRates) ? taxRates : []}
+                                    taxRates={safeTaxRates}
                                     filteredParts={filteredParts}
                                     activePartSearch={activePartSearch}
                                     servicePackages={sortedPackages as any}
@@ -634,7 +658,7 @@ const EditJobModal: React.FC<{
                                     grandTotal={grandTotal}
                                     currentJobHours={totalLaborHours}
                                     onOpenPurchaseOrder={(stalePo: T.PurchaseOrder) => {
-                                        const freshPo = (purchaseOrders || []).find(p => p.id === stalePo.id);
+                                        const freshPo = safePurchaseOrders.find(p => p.id === stalePo.id);
                                         if (freshPo) onOpenPurchaseOrder(freshPo);
                                         else onOpenPurchaseOrder(stalePo);
                                     }}
@@ -664,7 +688,7 @@ const EditJobModal: React.FC<{
                                             <div className="w-64">
                                                 <select id="inspectionTemplate" value={editableJob.inspectionTemplateId || ''} onChange={(e) => handleInspectionTemplateChange(e.target.value)} className="w-full p-2 border rounded-md bg-white shadow-sm text-sm" disabled={isReadOnly}>
                                                     <option value="">Select a template...</option>
-                                                    {(inspectionTemplates || []).map(t => (<option key={t.id} value={t.id}>{t.name}</option>))}
+                                                    {safeInspectionTemplates.map(t => (<option key={t.id} value={t.id}>{t.name}</option>))}
                                                 </select>
                                             </div>
                                         </div>
@@ -748,8 +772,8 @@ const EditJobModal: React.FC<{
                                 <div>
                                     <h3 className="text-md font-bold mb-3">Job Segments</h3>
                                     <ul className="space-y-2">
-                                        {(editableJob.segments || []).map(seg => {
-                                            const engineer = (engineers || []).find(e => e.id === seg.engineerId);
+                                        {(Array.isArray(editableJob.segments) ? editableJob.segments : []).map(seg => {
+                                            const engineer = safeEngineers.find(e => e.id === seg.engineerId);
                                             return (
                                                 <li key={seg.segmentId} className="p-3 bg-gray-50 rounded-md border text-sm">
                                                     <div className="font-semibold">Status: <span className="font-normal">{seg.status}</span></div>
@@ -759,7 +783,9 @@ const EditJobModal: React.FC<{
                                                 </li>
                                             );
                                         })}
-                                        {(editableJob.segments || []).length === 0 && <p className="text-gray-500 italic">No segments for this job.</p>}
+                                        {(!Array.isArray(editableJob.segments) || editableJob.segments.length === 0) && (
+                                            <p className="text-gray-500 italic">No segments for this job.</p>
+                                        )}
                                     </ul>
                                 </div>
                             )}
@@ -802,7 +828,6 @@ const EditJobModal: React.FC<{
                 </footer>
             </div>
 
-            {/* Visually hidden container for the printable component */}
             <div className="hidden">
                 <div ref={componentToPrintRef}>
                     {editableJob && vehicle && customer && (
@@ -812,18 +837,18 @@ const EditJobModal: React.FC<{
                             customer={customer}
                             vehicle={vehicle}
                             entity={businessEntity}
-                            engineers={engineers}
-                            taxRates={taxRates}
+                            engineers={safeEngineers}
+                            taxRates={safeTaxRates}
                             printBlankInspectionSheet={printBlankSheet}
-                            inspectionTemplates={inspectionTemplates}
+                            inspectionTemplates={safeInspectionTemplates}
                         />
                     )}
                 </div>
             </div>
 
             {isMediaModalOpen && <MediaManagerModal isOpen={isMediaModalOpen} onClose={() => setIsMediaModalOpen(false)} title={mediaModalTitle} initialMedia={mediaModalData} onSave={(newMedia) => { if (onMediaSaveCallback) { onMediaSaveCallback(newMedia); } setIsMediaModalOpen(false); }} />}
-            {isAddingPart && <PartFormModal isOpen={isAddingPart} onClose={() => { setIsAddingPart(false); setTargetLineItemId(null); }} onSave={handleSaveNewPart} part={{ id: `new_${Date.now()}`, partNumber: '', description: newPartDescription, stockQuantity: 0, costPrice: 0, salePrice: 0, taxCodeId: standardTaxRateId || '', defaultSupplierId: '', isStockItem: false }} suppliers={suppliers || []} taxRates={taxRates || []} />}
-            {isPackageModalOpen && editableJob && <ServicePackageFormModal isOpen={isPackageModalOpen} onClose={() => setIsPackageModalOpen(false)} onSave={async (pkg) => { const savedPackage = await handleSaveItem(setServicePackages, pkg, 'brooks_servicePackages'); addPackage(savedPackage.id); setIsPackageModalOpen(false); }} servicePackage={suggestedPackage} taxRates={taxRates} entityId={editableJob.entityId || ((businessEntities || [])[0]?.id || '')} businessEntities={businessEntities} parts={parts} />}
+            {isAddingPart && <PartFormModal isOpen={isAddingPart} onClose={() => { setIsAddingPart(false); setTargetLineItemId(null); }} onSave={handleSaveNewPart} part={{ id: `new_${Date.now()}`, partNumber: '', description: newPartDescription, stockQuantity: 0, costPrice: 0, salePrice: 0, taxCodeId: standardTaxRateId || '', defaultSupplierId: '', isStockItem: false }} suppliers={safeSuppliers} taxRates={safeTaxRates} />}
+            {isPackageModalOpen && editableJob && <ServicePackageFormModal isOpen={isPackageModalOpen} onClose={() => setIsPackageModalOpen(false)} onSave={async (pkg) => { const savedPackage = await handleSaveItem(setServicePackages, pkg, 'brooks_servicePackages'); addPackage(savedPackage.id); setIsPackageModalOpen(false); }} servicePackage={suggestedPackage} taxRates={safeTaxRates} entityId={editableJob.entityId || ((safeBusinessEntities)[0]?.id || '')} businessEntities={safeBusinessEntities} parts={safeParts} />}
         </div>
     );
 };

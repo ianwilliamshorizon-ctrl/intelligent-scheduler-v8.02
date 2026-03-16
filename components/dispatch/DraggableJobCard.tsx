@@ -76,11 +76,11 @@ export const DraggableJobCard: React.FC<{
             title={canDrag ? `Drag to schedule: ${job.description} (${segmentToDrag.duration}h)`: 'View job details'}
         >
             <div className="flex justify-between items-start">
-                <h4 className="font-bold text-sm text-gray-800 flex-grow flex items-center gap-2">
+                <h4 className="text-xs text-gray-800 flex-grow flex items-center gap-2">
                     {isReadyForWorkshop && <span title="Ready for Workshop"><Wrench size={16} className="text-green-600" /></span>}
                     {job.description}
                 </h4>
-                <span className="font-mono text-xs bg-gray-200 px-1.5 py-0.5 rounded ml-2 flex-shrink-0">#{job.id}</span>
+                <span className="font-mono text-sm font-bold bg-gray-200 px-1.5 py-0.5 rounded ml-2 flex-shrink-0">#{job.id}</span>
             </div>
             <div className="text-xs text-gray-600 space-y-1">
                 {/* @ts-ignore */}

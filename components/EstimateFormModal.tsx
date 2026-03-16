@@ -219,7 +219,7 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
     estimates, currentUser, selectedEntityId, onSavePart, suppliers
 }) => {
     const [formData, setFormData] = useState<Partial<Estimate>>({ 
-        lineItems: [], customerId: '', vehicleId: '', entityId: '', issueDate: '', expiryDate: '', status: 'Draft', notes: '', media: []
+        lineItems: [], customerId: '', vehicleId: '', entityId: '', issueDate: '', expiryDate: '', status: 'Draft', notes: ''
     });
     const [isAddingCustomer, setIsAddingCustomer] = useState(false);
     const [isAddingVehicle, setIsAddingVehicle] = useState(false);
@@ -250,7 +250,7 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                 customerId: '', vehicleId: '',
                 entityId: initialEntity,
                 issueDate: getTodayISOString(), expiryDate: getFutureDateISOString(30),
-                status: 'Draft', lineItems: [], notes: '', createdByUserId: currentUser.id, media: []
+                status: 'Draft', lineItems: [], notes: '', createdByUserId: currentUser.id
             });
         }
     }, [estimate, isOpen, businessEntities, selectedEntityId, currentUser.id]);
@@ -618,7 +618,17 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
     };
     
     const handleManageMedia = () => setIsMediaModalOpen(true);
-    const handleSaveMedia = (media: CheckInPhoto[]) => setFormData(prev => ({ ...prev, media }));
+    const handleSaveMedia = (media: CheckInPhoto[]) => {
+        setFormData(prev => {
+            const updatedLineItems = prev.lineItems?.map(item => {
+                if (item.id === 'some_id') { // Replace with the actual line item ID
+                    return { ...item, media };
+                }
+                return item;
+            });
+            return { ...prev, lineItems: updatedLineItems };
+        });
+    };
     const openSupplierSelection = (lineItemId: string) => {
         setLineItemForSupplier(lineItemId);
         setIsSupplierSelectionOpen(true);
@@ -916,7 +926,7 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                     isOpen={isMediaModalOpen}
                     onClose={() => setIsMediaModalOpen(false)}
                     onSave={handleSaveMedia}
-                    initialMedia={formData.media || []} 
+                    initialMedia={[] as CheckInPhoto[]} 
                     title="Estimate Photos & Videos"
                 />
             )}

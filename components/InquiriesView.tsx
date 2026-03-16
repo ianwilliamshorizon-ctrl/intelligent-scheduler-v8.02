@@ -37,30 +37,31 @@ const InquiryCard: React.FC<{
     onViewEstimate?: (estimate: Estimate) => void;
     onOpenPurchaseOrder?: (po: PurchaseOrder) => void;
 }> = ({ inquiry, onOpenInquiryModal, onInitiateMerge, onInitiateBooking, onViewEstimate, onOpenPurchaseOrder }) => {
-    const { customers, vehicles, estimates, purchaseOrders } = useData();
+    const { customers, vehicles, estimates, purchaseOrders, jobs } = useData();
     const { users } = useApp();
     
     const takenBy = users.find(u => u.id === inquiry.takenByUserId);
     const customer = inquiry.linkedCustomerId ? customers.find(c => c.id === inquiry.linkedCustomerId) : null;
     const vehicle = inquiry.linkedVehicleId ? vehicles.find(v => v.id === inquiry.linkedVehicleId) : null;
     const estimate = inquiry.linkedEstimateId ? estimates.find(e => e.id === inquiry.linkedEstimateId) : null;
+    const job = estimate?.jobId ? jobs.find(j => j.id === estimate.jobId) : null;
     
     const linkedPOs = useMemo(() => 
-        (inquiry.linkedPurchaseOrderIds || [])
+        (job?.purchaseOrderIds || [])
             .map(id => purchaseOrders.find(po => po.id === id))
             .filter((po): po is PurchaseOrder => !!po),
-        [inquiry.linkedPurchaseOrderIds, purchaseOrders]
+        [job, purchaseOrders]
     );
 
     const isApproved = inquiry.status === 'Approved' || estimate?.status === 'Approved';
-    const mergeJobId = estimate?.jobId || inquiry.linkedJobId;
+    const mergeJobId = estimate?.jobId;
 
     return (
         <div 
             className={`bg-white rounded-lg shadow p-3 border-l-4 ${
-                inquiry.status === 'Open' ? 'border-red-400' : 
+                inquiry.status === 'New' ? 'border-red-400' : 
                 inquiry.status === 'In Progress' ? 'border-blue-400' : 
-                inquiry.status === 'Sent' ? 'border-yellow-400' : 
+                inquiry.status === 'Quoted' ? 'border-yellow-400' : 
                 inquiry.status === 'Approved' ? 'border-green-400' : 'border-gray-200'
             } cursor-pointer hover:shadow-md transition-shadow mb-3`}
             onClick={() => onOpenInquiryModal(inquiry)}
@@ -250,7 +251,7 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
 
     const activeInquiries = useMemo(() => {
         const columns: { [key in Inquiry['status']]?: Inquiry[] } = {
-            'Open': [], 'In Progress': [], 'Sent': [], 'Approved': [], 'Rejected': [],
+            'New': [], 'In Progress': [], 'Quoted': [], 'Approved': [], 'Rejected': [],
         };
         filteredInquiries.forEach(i => {
             if (i.status !== 'Closed' && columns[i.status]) columns[i.status]!.push(i);
@@ -267,10 +268,6 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
             <header className="flex justify-between items-center mb-4 flex-shrink-0">
                 <div className="flex items-center gap-4">
                     <h2 className="text-2xl font-bold text-gray-800">Inquiries</h2>
-                    <div className="flex bg-gray-200 p-1 rounded-lg">
-                        <button onClick={() => setActiveTab('active')} className={`px-4 py-1.5 text-sm font-semibold rounded-md transition ${activeTab === 'active' ? 'bg-white shadow text-indigo-700' : 'text-gray-600'}`}>Active Board</button>
-                        <button onClick={() => setActiveTab('closed')} className={`px-4 py-1.5 text-sm font-semibold rounded-md transition ${activeTab === 'closed' ? 'bg-white shadow text-indigo-700' : 'text-gray-600'}`}>Archive</button>
-                    </div>
                 </div>
                 <div className="flex items-center gap-4">
                     <div className="relative">
@@ -286,7 +283,7 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
             {activeTab === 'active' ? (
                 <main className="flex-grow overflow-x-auto pb-2">
                     <div className="flex gap-4 h-full min-w-full">
-                        {(['Open', 'In Progress', 'Sent', 'Approved', 'Rejected'] as Inquiry['status'][]).map(status => (
+                        {(['New', 'In Progress', 'Quoted', 'Approved', 'Rejected'] as Inquiry['status'][]).map(status => (
                             <div key={status} className="flex-1 flex flex-col bg-gray-100 rounded-xl min-w-[280px] h-full">
                                 <div className="p-3 border-b-2 border-indigo-200 bg-white rounded-t-xl font-bold text-gray-700">
                                     {status} ({activeInquiries[status]?.length || 0})

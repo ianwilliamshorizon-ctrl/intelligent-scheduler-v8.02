@@ -60,6 +60,7 @@ export type TyreCheckData = {
     [key in TyreLocation]?: TyreData;
 };
 
+export type VehicleStatus = 'On Site' | 'Off-Site (Partner)' | 'Awaiting Arrival' | 'Awaiting Collection' | 'Collected' | 'Cancelled';
 
 export interface Vehicle {
     id: string;
@@ -74,6 +75,7 @@ export interface Vehicle {
     cc?: number;
     transmissionType?: 'Manual' | 'Automatic' | 'Other';
     nextMotDate?: string; // YYYY-MM-DD
+    motExpiryDate?: string; // YYYY-MM-DD
     nextServiceDate?: string; // YYYY-MM-DD
     winterCheckDate?: string; // YYYY-MM-DD
     fleetNumber?: string;
@@ -113,7 +115,7 @@ export interface Job {
     vehicleId: string;
     customerId?: string;
     description: string;
-    status: 'Booked In' | 'In Progress' | 'Awaiting Parts' | 'Complete' | 'Invoiced' | 'Closed' | 'Allocated' | 'Unallocated' | 'Pending QC' | 'Archived' | 'Cancelled';
+    status: 'Booked In' | 'In Progress' | 'Awaiting Parts' | 'Complete' | 'Invoiced' | 'Closed' | 'Allocated' | 'Unallocated' | 'Pending QC' | 'Archived' | 'Cancelled' | 'Paused';
     createdAt?: string; // YYYY-MM-DD
     completedAt?: string; // YYYY-MM-DD
     scheduledDate?: string;
@@ -132,6 +134,7 @@ export interface Job {
     tyreCheck?: TyreCheckData;
     inspectionChecklist?: ChecklistSection[];
     mileage?: number;
+    createdByUserId?: string;
 }
 
 export interface Estimate {
@@ -159,6 +162,7 @@ export interface Invoice {
     lineItems: any[];
     payments: Payment[];
     notes?: string;
+    entityId?: string;
 }
 
 export interface EstimateLineItem {
@@ -257,6 +261,7 @@ export interface Purchase {
 export interface Engineer { 
     id: string; 
     name: string; 
+    entityId?: string;
 }
 
 export interface Part { 
@@ -270,6 +275,7 @@ export interface Part {
     taxCodeId?: string;
     defaultSupplierId?: string;
     isStockItem: boolean;
+    alternateSupplierIds?: string[];
 }
 
 export interface ServicePackage {
@@ -294,14 +300,17 @@ export interface Supplier {
     city?: string;
     postcode?: string;
     shortCode?: string;
+    contactName?: string;
 }
 
 export interface Lift { 
     id: string; 
+    entityId?: string;
 }
 
 export interface RentalVehicle { 
     id: string; 
+    entityId?: string;
 }
 
 export interface RentalBooking { 
@@ -310,10 +319,12 @@ export interface RentalBooking {
 
 export interface SaleVehicle { 
     id: string; 
+    entityId?: string;
 }
 
 export interface SaleOverheadPackage { 
     id: string; 
+    name?: string;
 }
 
 export interface Prospect { 
@@ -324,22 +335,27 @@ export interface StorageBooking {
     id: string; 
     vehicleId: string;
     customerId: string;
+    entityId?: string;
 }
 
 export interface StorageLocation { 
     id: string; 
+    name?: string;
 }
 
 export interface BatteryCharger { 
     id: string; 
+    name?: string;
 }
 
 export interface NominalCode { 
     id: string; 
+    code?: string;
 }
 
 export interface NominalCodeRule { 
     id: string; 
+    priority?: number;
 }
 
 export interface AbsenceRequest { 

@@ -98,7 +98,7 @@ export const AllocatedJobCard: React.FC<{
                     >
                         <span className="font-bold truncate">{vehicle?.registration || 'Unknown Vehicle'}</span>
                     </HoverInfo>
-                    <span className="text-[9px] font-mono opacity-90 truncate">#{job.id}</span>
+                    <span className="font-mono text-sm font-bold">#{job.id}</span>
                 </div>
                 <div className="flex items-center gap-1 flex-shrink-0">
                     {associatedPOs && associatedPOs.length > 0 && (
@@ -134,7 +134,7 @@ export const AllocatedJobCard: React.FC<{
             </div>
             
             <div className="flex-grow my-0.5 min-h-0">
-                 <p className="text-xs font-semibold truncate leading-tight">{job.description}</p>
+                 <p className="text-xs truncate leading-tight">{job.description}</p>
                  <HoverInfo
                     title="Customer Details"
                     data={{
