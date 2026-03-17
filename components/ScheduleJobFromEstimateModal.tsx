@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Estimate, Customer, Vehicle, Job, BusinessEntity, AbsenceRequest } from '../types';
+import { Estimate, Customer, Vehicle, Job, BusinessEntity, AbsenceRequest, JobSegment } from '../types';
 import { X, Calendar, CheckCircle, ChevronLeft, ChevronRight, AlertTriangle, Gauge, Clock } from 'lucide-react';
 import { formatDate, dateStringToDate, getRelativeDate, splitJobIntoSegments, addDays, findNextAvailableDate, formatReadableDate } from '../core/utils/dateUtils';
 import { generateJobId } from '../core/utils/numberGenerators';
@@ -8,6 +8,7 @@ import { BookingCalendarView } from './BookingCalendarView';
 import { MOTBookingModal } from './MOTBookingModal';
 import { TIME_SEGMENTS } from '../constants';
 import { useApp } from '../core/state/AppContext';
+import { useData } from '../core/state/DataContext'; // Import useData
 
 interface ScheduleJobFromEstimateModalProps {
     isOpen: boolean;
@@ -27,6 +28,7 @@ interface ScheduleJobFromEstimateModalProps {
 
 const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> = ({ isOpen, onClose, onConfirm, estimate, customer, vehicle, jobs, vehicles, maxDailyCapacityHours, businessEntities, customers, absenceRequests, onEditJob }) => {
     const { setConfirmation } = useApp();
+    const { saveRecord } = useData(); // Use the useData hook
     const [scheduledDate, setScheduledDate] = useState(() => estimate.jobId ? getRelativeDate(0) : (estimate as any).requestedDate || getRelativeDate(0));
     const [suggestion, setSuggestion] = useState<{ suggestedDate: string; originalDate: string } | null>(null);
     const [currentMonth, setCurrentMonth] = useState(() => dateStringToDate(scheduledDate));
@@ -52,12 +54,11 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
     }, [isOpen, estimate]);
     
     const laborHours = useMemo(() => {
-        // Calculate hours from labor items. If 0 (e.g. only parts or optional items), default to 1 to ensure a segment is created.
         const hours = (estimate?.lineItems || [])
             .filter(item => item.isLabor && !item.isOptional)
             .reduce((sum, item) => sum + item.quantity, 0);
-        return Math.max(hours, 1);
-    }, [estimate]);
+        return hours === 0 ? 1 : hours;
+    }, [estimate.lineItems]);
     
     const entityForEstimate = useMemo(() => businessEntities.find(e => e.id === estimate.entityId), [businessEntities, estimate]);
 
@@ -69,12 +70,13 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
     const absencesByDate = useMemo(() => {
         const map = new Map<string, number>();
         absenceRequests.forEach(req => {
-            if (req.status === 'Approved' || req.status === 'Pending') {
-                 let currentDate = dateStringToDate(req.startDate);
-                 const endDate = dateStringToDate(req.endDate);
+            const reqAsAny = req as any; // Bypass incorrect type definition
+            if (reqAsAny.status === 'Approved' || reqAsAny.status === 'Pending') {
+                 let currentDate = dateStringToDate(reqAsAny.startDate);
+                 const endDate = dateStringToDate(reqAsAny.endDate);
                  while(currentDate <= endDate) {
                     const dateStr = formatDate(currentDate);
-                    map.set(dateStr, (map.get(dateStr) || 0) + 8); // Assuming 8 hours per day
+                    map.set(dateStr, (map.get(dateStr) || 0) + 8);
                     currentDate = addDays(currentDate, 1);
                 }
             }
@@ -83,7 +85,8 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
     }, [absenceRequests]);
 
     const dailyStats = useMemo(() => {
-        const maxCapacity = entityForEstimate?.dailyCapacityHours || maxDailyCapacityHours;
+        const entity = entityForEstimate as any;
+        const maxCapacity = entity?.dailyCapacityHours || maxDailyCapacityHours;
         const absenceHours = absencesByDate.get(scheduledDate) || 0;
         const effectiveCapacity = Math.max(0, maxCapacity - absenceHours);
 
@@ -135,7 +138,7 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
 
     if (!isOpen) return null;
 
-    const handleConfirmClick = () => {
+    const handleConfirmClick = async () => {
         if (isMotRequired && !motBooking) {
             setConfirmation({
                 isOpen: true,
@@ -147,75 +150,75 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
             return;
         }
 
+        if (customer) {
+            await saveRecord('customers', customer);
+        }
+
         const entityShortCode = entityForEstimate?.shortCode || 'UNK';
         const dailyHours = (jobsForEntity.flatMap(j => j.segments) || [])
             .filter(s => s.date === scheduledDate && s.status !== 'Cancelled')
             .reduce((sum, s) => sum + s.duration, 0);
             
-        const baseCapacity = entityForEstimate?.dailyCapacityHours || maxDailyCapacityHours;
+        const baseCapacity = (entityForEstimate as any)?.dailyCapacityHours || maxDailyCapacityHours;
         const absenceHours = absencesByDate.get(scheduledDate) || 0;
         const effectiveCapacity = Math.max(0, baseCapacity - absenceHours);
 
-        // Logic check: Is this purely an MOT job, or a Service + MOT?
-        const isMotOnlyEstimate = motBooking && laborHours <= 1.5;
+        const hasOtherLabor = estimate.lineItems.some(item => 
+            item.isLabor && 
+            !item.isOptional && 
+            !item.description.toLowerCase().includes('mot')
+        );
+        const isMotOnlyEstimate = motBooking && !hasOtherLabor;
 
         if (dailyHours + laborHours > effectiveCapacity && !motBooking) {
             const alternativeDate = findNextAvailableDate(scheduledDate, laborHours, jobsForEntity, baseCapacity);
             setSuggestion({ suggestedDate: alternativeDate, originalDate: scheduledDate });
         } else {
             
-            // SCENARIO 1: MOT BOOKING DETECTED
             if (motBooking) {
                 const timeIndex = TIME_SEGMENTS.indexOf(motBooking.time);
                 
                 if (isMotOnlyEstimate) {
-                    // --- SCENARIO 1A: JUST AN MOT ---
-                    // Create ONE Allocated job. It IS the MOT job. It holds the estimate link for invoicing.
                     const motJobId = generateJobId(jobs, entityShortCode);
-                    
                     const motJob: Job = {
                         id: motJobId,
                         entityId: estimate.entityId,
                         vehicleId: estimate.vehicleId,
                         customerId: estimate.customerId,
                         description: `MOT Test`,
-                        estimatedHours: 1, // Standard MOT
+                        estimatedHours: 1,
                         scheduledDate: motBooking.date,
-                        status: 'Allocated', // Explicitly Allocated
+                        status: 'Allocated',
                         createdAt: formatDate(new Date()),
                         createdByUserId: '',
-                        estimateId: estimate.id, // Holds the invoice link
+                        estimateId: estimate.id,
                         vehicleStatus: 'Awaiting Arrival',
                         partsStatus: 'Not Required',
                         notes: estimate.notes || '',
-                        segments: [] // Will be populated below
+                        segments: []
                     };
                     
                     if (timeIndex !== -1) {
                         motJob.segments = [{
+                            id: crypto.randomUUID(),
+                            description: 'MOT',
                             segmentId: crypto.randomUUID(),
                             date: motBooking.date,
                             duration: 1,
                             status: 'Allocated',
                             allocatedLift: motBooking.liftId,
                             scheduledStartSegment: timeIndex,
-                            engineerId: null // Engineer assigned later
+                            engineerId: null
                         }];
                     } else {
-                        // Fallback if time index not found (shouldn't happen with valid UI)
                         motJob.segments = splitJobIntoSegments(motJob);
                         motJob.status = 'Unallocated';
                     }
 
                     const updatedEstimate: Estimate = { ...estimate, status: 'Converted to Job', jobId: motJob.id };
-                    // No extra jobs, just the allocated MOT job
                     onConfirm(motJob, updatedEstimate, { isAlternative: false, originalDate: scheduledDate });
 
                 } else {
-                    // --- SCENARIO 1B: SERVICE + MOT ---
-                    // Create MASTER job (Unallocated, Full Duration) + LINKED MOT Job (Allocated, 1hr)
-                    
-                    // 1. Master Job (Holds Estimate & Invoice)
                     const mainJobId = generateJobId(jobs, entityShortCode);
                     const mainJob: Job = {
                         id: mainJobId,
@@ -223,19 +226,18 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
                         vehicleId: estimate.vehicleId, 
                         customerId: estimate.customerId,
                         description: `Work from Estimate #${estimate.estimateNumber}`, 
-                        estimatedHours: laborHours, // Full duration
+                        estimatedHours: laborHours,
                         scheduledDate: scheduledDate,
                         status: 'Unallocated', 
                         createdAt: formatDate(new Date()), 
                         segments: [], 
-                        estimateId: estimate.id, // CRITICAL: Master job holds the financial link
+                        estimateId: estimate.id,
                         notes: estimate.notes || '',
                         vehicleStatus: 'Awaiting Arrival',
                         createdByUserId: '',
                     };
-                    mainJob.segments = splitJobIntoSegments(mainJob); // Create unallocated segments for mechanic assignment
+                    mainJob.segments = splitJobIntoSegments(mainJob);
 
-                    // 2. Linked MOT Job (The booking slot)
                     const motJobId = `${mainJobId}-MOT`;
                     const motJob: Job = {
                         id: motJobId,
@@ -249,7 +251,7 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
                         createdAt: formatDate(new Date()),
                         createdByUserId: '',
                         segments: [],
-                        estimateId: undefined, // CRITICAL: No financial link, prevents double invoicing
+                        estimateId: undefined,
                         vehicleStatus: 'Awaiting Arrival', 
                         notes: `Linked to Master Job #${mainJobId}. Do not invoice separately.`,
                         partsStatus: 'Not Required'
@@ -257,6 +259,8 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
 
                     if (timeIndex !== -1) {
                         motJob.segments = [{
+                            id: crypto.randomUUID(),
+                            description: 'MOT',
                             segmentId: crypto.randomUUID(),
                             date: motBooking.date,
                             duration: 1,
@@ -267,17 +271,14 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
                         }];
                     }
                     
-                    // Link notes
                     mainJob.notes += `
 
 Linked MOT Booking: #${motJobId} @ ${motBooking.time}`;
 
                     const updatedEstimate: Estimate = { ...estimate, status: 'Converted to Job', jobId: mainJob.id };
-                    // Create both jobs
                     onConfirm(mainJob, updatedEstimate, { isAlternative: false, originalDate: scheduledDate }, [motJob]);
                 }
             } else {
-                // --- SCENARIO 2: STANDARD JOB (NO MOT SLOT) ---
                 const mainJobId = generateJobId(jobs, entityShortCode);
                 const mainJob: Job = {
                     id: mainJobId,
@@ -304,7 +305,7 @@ Linked MOT Booking: #${motJobId} @ ${motBooking.time}`;
         }
     };
 
-    const handleAcceptSuggestion = () => {
+    const handleAcceptSuggestion = async () => {
         if (!suggestion) return;
 
         if (isMotRequired && !motBooking) {
@@ -318,13 +319,17 @@ Linked MOT Booking: #${motJobId} @ ${motBooking.time}`;
             return;
         }
 
+        if (customer) {
+            await saveRecord('customers', customer);
+        }
+
         const newJob: Job = {
             id: generateJobId(jobs, entityForEstimate?.shortCode || 'UNK'),
             entityId: estimate.entityId, vehicleId: estimate.vehicleId, customerId: estimate.customerId,
             description: `Work from Estimate #${estimate.estimateNumber}`, estimatedHours: laborHours, scheduledDate: suggestion.suggestedDate,
             status: 'Unallocated', createdAt: formatDate(new Date()), segments: [], estimateId: estimate.id, notes: estimate.notes,
             vehicleStatus: 'Awaiting Arrival',
-            createdByUserId: '', // Will be overwritten by AppModals with correct user ID
+            createdByUserId: '',
         };
         newJob.segments = splitJobIntoSegments(newJob);
         const updatedEstimate: Estimate = { ...estimate, status: 'Converted to Job', jobId: newJob.id };
@@ -437,7 +442,7 @@ Linked MOT Booking: #${motJobId} @ ${motBooking.time}`;
                                         customers={customers}
                                         onAddJob={() => {}}
                                         onDragStart={() => {}}
-                                        maxDailyCapacityHours={entityForEstimate?.dailyCapacityHours || maxDailyCapacityHours}
+                                        maxDailyCapacityHours={(entityForEstimate as any)?.dailyCapacityHours || maxDailyCapacityHours}
                                         absencesByDate={absencesByDate}
                                         onDayClick={(date) => { setScheduledDate(date); setMotBooking(null); }}
                                         onEditJob={onEditJob}

@@ -14,7 +14,7 @@ interface ManagementStaffTabProps {
 
 export const ManagementStaffTab: React.FC<ManagementStaffTabProps> = ({ searchTerm, onShowStatus }) => {
     const { users = [], setUsers, adminResetPassword } = useApp();
-    const { roles = [] } = useData();
+    const { roles = [], businessEntities = [] } = useData();
     
     const [localUsers, setLocalUsers] = useState<UserType[]>(Array.isArray(users) ? users : []);
 
@@ -93,69 +93,78 @@ export const ManagementStaffTab: React.FC<ManagementStaffTabProps> = ({ searchTe
                                 <th className="px-6 py-4 font-black text-slate-400 uppercase text-[10px] tracking-[0.15em]">Team Member</th>
                                 <th className="px-6 py-4 font-black text-slate-400 uppercase text-[10px] tracking-[0.15em]">System Access</th>
                                 <th className="px-6 py-4 font-black text-slate-400 uppercase text-[10px] tracking-[0.15em]">Role</th>
+                                <th className="px-6 py-4 font-black text-slate-400 uppercase text-[10px] tracking-[0.15em]">Default Entity</th>
                                 <th className="px-6 py-4 font-black text-slate-400 uppercase text-[10px] tracking-[0.15em] text-right">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
-                            {filteredUsers.map(u => (
-                                <tr key={u.id} className="group hover:bg-slate-50/50 transition-colors">
-                                    <td className="px-6 py-5">
-                                        <div className="flex items-center gap-3">
-                                            <div className="h-10 w-10 bg-indigo-50 rounded-full flex items-center justify-center text-indigo-600 border border-indigo-100">
-                                                <User size={18} />
+                            {filteredUsers.map(u => {
+                                const entity = businessEntities.find(e => e.id === u.preferredEntityId);
+                                return (
+                                    <tr key={u.id} className="group hover:bg-slate-50/50 transition-colors">
+                                        <td className="px-6 py-5">
+                                            <div className="flex items-center gap-3">
+                                                <div className="h-10 w-10 bg-indigo-50 rounded-full flex items-center justify-center text-indigo-600 border border-indigo-100">
+                                                    <User size={18} />
+                                                </div>
+                                                <div className="font-black text-slate-900 uppercase text-xs tracking-tight">{u.name}</div>
                                             </div>
-                                            <div className="font-black text-slate-900 uppercase text-xs tracking-tight">{u.name}</div>
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-5">
-                                        <div className="flex items-center gap-2 text-slate-500 font-medium">
-                                            <Mail size={14} className="text-slate-300" />
-                                            {u.email}
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-5">
-                                        <div className="flex items-center gap-2">
-                                            <ShieldCheck size={14} className="text-emerald-500" />
-                                            <span className="px-3 py-1 bg-slate-100 text-slate-700 rounded-lg text-[10px] font-black uppercase tracking-widest border border-slate-200">
-                                                {u.role}
+                                        </td>
+                                        <td className="px-6 py-5">
+                                            <div className="flex items-center gap-2 text-slate-500 font-medium">
+                                                <Mail size={14} className="text-slate-300" />
+                                                {u.email}
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-5">
+                                            <div className="flex items-center gap-2">
+                                                <ShieldCheck size={14} className="text-emerald-500" />
+                                                <span className="px-3 py-1 bg-slate-100 text-slate-700 rounded-lg text-[10px] font-black uppercase tracking-widest border border-slate-200">
+                                                    {u.role}
+                                                </span>
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-5">
+                                            <span className="text-slate-500 font-medium text-xs">
+                                                {entity ? entity.name : 'N/A'}
                                             </span>
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-5 text-right">
-                                        <div className="flex justify-end gap-1">
-                                            <button 
-                                                onClick={() => {
-                                                    if(window.confirm(`Send a password reset link to ${u.email}?`)) {
-                                                        adminResetPassword(u.email).then(() => onShowStatus("Password reset email sent", 'success')).catch(() => onShowStatus("Failed to send reset email", 'error'));
-                                                    }
-                                                }} 
-                                                className="p-2 text-slate-400 hover:text-orange-600 hover:bg-orange-50 rounded-xl transition-all"
-                                                title="Reset Password"
-                                            >
-                                                <ShieldAlert size={18} />
-                                            </button>
+                                        </td>
+                                        <td className="px-6 py-5 text-right">
+                                            <div className="flex justify-end gap-1">
+                                                <button 
+                                                    onClick={() => {
+                                                        if(window.confirm(`Send a password reset link to ${u.email}?`)) {
+                                                            adminResetPassword(u.email).then(() => onShowStatus("Password reset email sent", 'success')).catch(() => onShowStatus("Failed to send reset email", 'error'));
+                                                        }
+                                                    }} 
+                                                    className="p-2 text-slate-400 hover:text-orange-600 hover:bg-orange-50 rounded-xl transition-all"
+                                                    title="Reset Password"
+                                                >
+                                                    <ShieldAlert size={18} />
+                                                </button>
 
-                                            <button 
-                                                onClick={() => { setSelectedUser(u); setIsModalOpen(true); }} 
-                                                className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all"
-                                                title="Edit Profile"
-                                            >
-                                                <Edit3 size={18} />
-                                            </button>
-                                            
-                                            <button 
-                                                onClick={() => {
-                                                    if(window.confirm(`Remove ${u.name}? This will revoke their database access.`)) deleteItem(u.id);
-                                                }} 
-                                                className="p-2 text-slate-200 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all"
-                                                title="Remove Access"
-                                            >
-                                                <Trash2 size={18} />
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))}
+                                                <button 
+                                                    onClick={() => { setSelectedUser(u); setIsModalOpen(true); }} 
+                                                    className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all"
+                                                    title="Edit Profile"
+                                                >
+                                                    <Edit3 size={18} />
+                                                </button>
+                                                
+                                                <button 
+                                                    onClick={() => {
+                                                        if(window.confirm(`Remove ${u.name}? This will revoke their database access.`)) deleteItem(u.id);
+                                                    }} 
+                                                    className="p-2 text-slate-200 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all"
+                                                    title="Remove Access"
+                                                >
+                                                    <Trash2 size={18} />
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
                         </tbody>
                     </table>
                 </div>
@@ -168,6 +177,7 @@ export const ManagementStaffTab: React.FC<ManagementStaffTabProps> = ({ searchTe
                     onSave={handleSave} 
                     user={selectedUser} 
                     roles={roles || []} 
+                    businessEntities={businessEntities || []} 
                 />
             )}
         </div>

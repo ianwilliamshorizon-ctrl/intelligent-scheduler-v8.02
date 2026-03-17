@@ -153,7 +153,7 @@ const EditJobModal: React.FC<{
         if (isOpen && job) {
             const jobCopy = JSON.parse(JSON.stringify(job));
             const obs = jobCopy.technicianObservations || [];
-            jobCopy.technicianObservations = [...obs, ...Array(Math.max(0, 5 - obs.length)).fill('')].slice(0, 5);
+            jobCopy.technicianObservations = [...obs, ...Array(Math.max(0, 10 - obs.length)).fill('')].slice(0, 10);
             if (!jobCopy.inspectionChecklist && safeInspectionTemplates.some(t => t.isDefault)) {
                 const defaultTemplate = safeInspectionTemplates.find(t => t.isDefault);
                 if (defaultTemplate) {

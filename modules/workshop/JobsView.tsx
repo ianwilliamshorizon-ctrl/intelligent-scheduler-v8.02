@@ -20,6 +20,7 @@ interface JobsViewProps {
 const statusFilterOptions: readonly Job['status'][] = ['Unallocated', 'Allocated', 'In Progress', 'Pending QC', 'Complete', 'Invoiced', 'Cancelled', 'Closed'];
 
 const dateFilterOptions = {
+    'today': 'Today',
     '30days': 'Last 30 Days',
     '90days': 'Last 90 Days',
     'all': 'All Time',
@@ -55,8 +56,10 @@ const JobsView: React.FC<JobsViewProps> = ({ onEditJob, onSmartCreateClick }) =>
     const standardTaxRateId = useMemo(() => safeTaxRates.find(t => t.code === 'T1')?.id, [safeTaxRates]);
 
     const filteredJobs = useMemo(() => {
-        const selectedEntity = safeBusinessEntities.find(e => e.id === selectedEntityId);
         let dateCutoff: string | null = null;
+        const isToday = dateFilter === 'today';
+        const todayDate = isToday ? getRelativeDate(0) : null;
+
         if (dateFilter === '30days') {
             dateCutoff = getRelativeDate(-30);
         } else if (dateFilter === '90days') {
@@ -64,13 +67,13 @@ const JobsView: React.FC<JobsViewProps> = ({ onEditJob, onSmartCreateClick }) =>
         }
 
         const initialFilter = safeJobs.filter(job => {
-            if (selectedEntityId !== 'all' && selectedEntity?.shortCode) {
-                if (!job.id.startsWith(selectedEntity.shortCode)) return false;
-            } else if (selectedEntityId !== 'all') {
-                if (job.entityId !== selectedEntityId) return false;
+            if (selectedEntityId !== 'all' && job.entityId !== selectedEntityId) {
+                return false;
             }
             
-            if (dateCutoff && job.createdAt < dateCutoff) {
+            if (isToday) {
+                if (job.scheduledDate !== todayDate) return false;
+            } else if (dateCutoff && job.createdAt < dateCutoff) {
                 return false;
             }
 
@@ -105,7 +108,6 @@ const JobsView: React.FC<JobsViewProps> = ({ onEditJob, onSmartCreateClick }) =>
         const jobIdsInInitialFilter = new Set(initialFilter.map(j => j.id));
         const supplementaryJobsToAdd: Job[] = [];
 
-        // If there's a text filter, we might need to add supplementary jobs whose parents are in the results
         if (filter.trim()) {
             safeJobs.forEach(job => {
                 const description = job.description || '';

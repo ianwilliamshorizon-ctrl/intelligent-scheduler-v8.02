@@ -1,8 +1,9 @@
+
 import React, { useState, useMemo } from 'react';
 import { useData } from '../../core/state/DataContext';
 import { useApp } from '../../core/state/AppContext';
 import { Estimate, EstimateLineItem, Vehicle, ServicePackage } from '../../types';
-import { Plus, Eye, Edit, Trash2, Search, PlusCircle, Wand2, ChevronDown, ChevronUp, Loader2, Printer, CalendarCheck, XCircle } from 'lucide-react';
+import { Plus, Eye, Edit, Trash2, Search, PlusCircle, Wand2, ChevronDown, ChevronUp, Loader2, Printer, CalendarCheck, XCircle, CalendarDays } from 'lucide-react';
 import { formatCurrency } from '../../utils/formatUtils';
 import { generateServicePackageName } from '../../core/services/geminiService';
 import { getRelativeDate } from '../../core/utils/dateUtils';
@@ -20,6 +21,15 @@ interface EstimatesViewProps {
     onScheduleEstimate?: (estimate: Estimate, inquiryId?: string) => void;
 }
 
+const dateFilterOptions = {
+    'today': 'Today',
+    '30days': 'Last 30 Days',
+    '90days': 'Last 90 Days',
+    'all': 'All Time',
+};
+
+type DateFilterOption = keyof typeof dateFilterOptions;
+
 const EstimatesView: React.FC<EstimatesViewProps> = ({ onOpenEstimateModal, onViewEstimate, onSmartCreateClick, onScheduleEstimate }) => {
     const { estimates, customers, vehicles, taxRates, setServicePackages, servicePackages, businessEntities, parts, setEstimates } = useData();
     const { selectedEntityId, users, setConfirmation, currentUser } = useApp();
@@ -28,10 +38,10 @@ const EstimatesView: React.FC<EstimatesViewProps> = ({ onOpenEstimateModal, onVi
     
     const [filter, setFilter] = useState('');
     const [statusFilter, setStatusFilter] = useState<Estimate['status'][]>([]);
+    const [dateFilter, setDateFilter] = useState<DateFilterOption>('30days');
     const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
     const [isCreatingPackage, setIsCreatingPackage] = useState(false);
     
-    // Package Creation Modal State
     const [isPackageModalOpen, setIsPackageModalOpen] = useState(false);
     const [suggestedPackage, setSuggestedPackage] = useState<Partial<ServicePackage> | null>(null);
 
@@ -44,16 +54,26 @@ const EstimatesView: React.FC<EstimatesViewProps> = ({ onOpenEstimateModal, onVi
     const estimateStatusOptions: readonly Estimate['status'][] = ['Draft', 'Sent', 'Approved', 'Rejected', 'Converted to Job', 'Closed'];
 
     const filteredEstimates = useMemo(() => {
-        const thirtyDaysAgo = getRelativeDate(-30);
-        const selectedEntity = businessEntities.find(e => e.id === selectedEntityId);
+        let dateCutoff: string | null = null;
+        const isToday = dateFilter === 'today';
+        const todayDate = isToday ? getRelativeDate(0) : null;
+
+        if (dateFilter === '30days') {
+            dateCutoff = getRelativeDate(-30);
+        } else if (dateFilter === '90days') {
+            dateCutoff = getRelativeDate(-90);
+        }
 
         return estimates.filter(estimate => {
-            if (selectedEntityId !== 'all' && selectedEntity?.shortCode) {
-                if (!estimate.estimateNumber.startsWith(selectedEntity.shortCode)) return false;
-            } else if (selectedEntityId !== 'all') {
-                if (estimate.entityId !== selectedEntityId) return false;
+            if (selectedEntityId !== 'all' && estimate.entityId !== selectedEntityId) {
+                return false;
             }
-            if (estimate.issueDate < thirtyDaysAgo) return false;
+
+            if (isToday) {
+                if (estimate.issueDate !== todayDate) return false;
+            } else if (dateCutoff && estimate.issueDate < dateCutoff) {
+                return false;
+            }
 
             const vehicle = vehicleMap.get(estimate.vehicleId);
             const customer = customerMap.get(estimate.customerId);
@@ -70,7 +90,7 @@ const EstimatesView: React.FC<EstimatesViewProps> = ({ onOpenEstimateModal, onVi
             const matchesStatus = statusFilter.length === 0 || statusFilter.includes(estimate.status);
             return matchesSearch && matchesStatus;
         }).sort((a, b) => (b.issueDate || '').localeCompare(a.issueDate || '') || (b.estimateNumber || '').localeCompare(a.estimateNumber || ''));
-    }, [estimates, filter, statusFilter, customerMap, vehicleMap, selectedEntityId, businessEntities]);
+    }, [estimates, filter, statusFilter, dateFilter, customerMap, vehicleMap, selectedEntityId, businessEntities]);
 
     const calculateTotal = (lineItems: EstimateLineItem[]) => {
         return (lineItems || []).filter(item => !item.isPackageComponent).reduce((sum, item) => {
@@ -137,7 +157,7 @@ const EstimatesView: React.FC<EstimatesViewProps> = ({ onOpenEstimateModal, onVi
                 customers={customerMap} 
                 vehicles={vehicleMap}
                 taxRates={taxRates}
-                title={"Current Filtered View"}
+                title={`Estimates Report (${dateFilterOptions[dateFilter]})`}
             />
         );
     };
@@ -160,7 +180,7 @@ const EstimatesView: React.FC<EstimatesViewProps> = ({ onOpenEstimateModal, onVi
     return (
         <div className="w-full h-full flex flex-col p-4 sm:p-6 bg-gray-50">
             <header className="flex justify-between items-center mb-4 flex-shrink-0">
-                <h2 className="text-2xl font-bold text-gray-800">Estimates (Last 30 Days)</h2>
+                <h2 className="text-2xl font-bold text-gray-800">Estimates <span className="text-gray-500 font-medium text-lg">({dateFilterOptions[dateFilter]})</span></h2>
                 <div className="flex items-center gap-2">
                      <button onClick={handlePrintList} className="flex items-center gap-2 py-2 px-4 bg-gray-600 text-white font-semibold rounded-lg shadow-md hover:bg-gray-700">
                         <Printer size={16}/> Print List
@@ -174,15 +194,30 @@ const EstimatesView: React.FC<EstimatesViewProps> = ({ onOpenEstimateModal, onVi
                 </div>
             </header>
             
-            <div className="flex justify-between items-center mb-4 flex-shrink-0">
-                <StatusFilter statuses={estimateStatusOptions} selectedStatuses={statusFilter} onToggle={handleStatusToggle}/>
-                <div className="relative w-full max-w-sm">
-                    <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
-                    <input type="text" placeholder="Search by number, customer, or vehicle..." value={filter} onChange={e => setFilter(e.target.value)} className="w-full p-2 pl-9 border rounded-lg"/>
+            <div className="space-y-4 mb-4 flex-shrink-0">
+                <div className='flex gap-4'>
+                    <div className="relative flex-grow">
+                        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
+                        <input type="text" placeholder="Search by ID, customer, vehicle, or description..." value={filter} onChange={e => setFilter(e.target.value)} className="w-full p-2 pl-9 border rounded-lg"/>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-gray-700"><CalendarDays size={16} className="inline-block mr-1"/>Date Range:</span>
+                        <div className="flex items-center gap-1 p-1 bg-gray-200 rounded-lg">
+                            {Object.keys(dateFilterOptions).map((key) => (
+                                <button 
+                                    key={key}
+                                    onClick={() => setDateFilter(key as DateFilterOption)}
+                                    className={`py-1 px-3 rounded-md font-semibold text-xs transition ${dateFilter === key ? 'bg-white shadow' : 'text-gray-600 hover:bg-gray-300'}`}>
+                                    {dateFilterOptions[key as DateFilterOption]}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
                 </div>
+                <StatusFilter statuses={estimateStatusOptions} selectedStatuses={statusFilter} onToggle={handleStatusToggle}/>
             </div>
             
-             <main className="flex-grow">
+             <main className="flex-grow overflow-y-auto">
                 <div className="border rounded-lg bg-white shadow">
                     <table className="min-w-full text-sm">
                         <thead className="bg-gray-100">

@@ -30,14 +30,9 @@ const PurchaseOrdersView = ({ onOpenPurchaseOrderModal, onViewPurchaseOrder, onE
     const supplierMap = useMemo(() => new Map(suppliers.map(s => [s.id, s.name])), [suppliers]);
 
     const filteredPurchaseOrders = useMemo(() => {
-        const selectedEntity = businessEntities.find(e => e.id === selectedEntityId);
-
         return purchaseOrders.filter(po => {
-            // Business Entity Filter
-            if (selectedEntityId !== 'all' && selectedEntity?.shortCode) {
-                if (!po.id.startsWith(selectedEntity.shortCode)) return false;
-            } else if (selectedEntityId !== 'all') {
-                if (po.entityId !== selectedEntityId) return false;
+            if (selectedEntityId !== 'all' && po.entityId !== selectedEntityId) {
+                return false;
             }
 
             if (po.orderDate < startDate || po.orderDate > endDate) return false;
@@ -54,7 +49,7 @@ const PurchaseOrdersView = ({ onOpenPurchaseOrderModal, onViewPurchaseOrder, onE
 
             return matchesSearch && matchesStatus;
         }).sort((a, b) => b.id.localeCompare(a.id));
-    }, [purchaseOrders, filter, statusFilter, supplierMap, selectedEntityId, businessEntities, startDate, endDate]);
+    }, [purchaseOrders, filter, statusFilter, supplierMap, selectedEntityId, startDate, endDate]);
 
     const handleStatusToggle = (status: PurchaseOrder['status']) => {
         setStatusFilter(prev =>

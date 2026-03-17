@@ -1,3 +1,4 @@
+
 import React, { useMemo } from 'react';
 import { 
     Job, 
@@ -50,17 +51,29 @@ const PrintableJobCard: React.FC<PrintableJobCardProps> = ({
     
     const technicianIds = new Set(segments.map((s: any) => s?.engineerId).filter(Boolean));
     
+    const safeEngineers = Array.isArray(engineers) ? engineers : [];
     const technicianNames = Array.from(technicianIds)
-        .map(id => (engineers || []).find(e => e.id === id)?.name)
+        .map(id => safeEngineers.find(e => e.id === id)?.name)
         .filter(Boolean)
         .join(', ');
 
     const inspectionTemplate = useMemo(() => {
         if (!job?.inspectionTemplateId) return null;
-        return (inspectionTemplates || []).find(t => t.id === job.inspectionTemplateId);
+        const safeTemplates = Array.isArray(inspectionTemplates) ? inspectionTemplates : [];
+        return safeTemplates.find(t => t.id === job.inspectionTemplateId);
     }, [job?.inspectionTemplateId, inspectionTemplates]);
 
-    const vehicleImage = useMemo(() => vehicle?.images?.find(img => img.isPrimaryDiagram) || vehicle?.images?.[0], [vehicle]);
+    const vehicleImage = useMemo(() => {
+        const images = Array.isArray(vehicle?.images) ? vehicle.images : [];
+        return images.find(img => img.isPrimaryDiagram) || images[0];
+    }, [vehicle]);
+
+    const hasFilledChecklist = useMemo(() => {
+        if (!job?.inspectionChecklist) return false;
+        return job.inspectionChecklist.some(section =>
+            (section.items || []).some(item => item.status !== 'na' || (item.comment && item.comment.trim() !== ''))
+        );
+    }, [job?.inspectionChecklist]);
 
     const blankChecklistData: ChecklistSection[] = useMemo(() => {
         if (!inspectionTemplate || !Array.isArray(inspectionTemplate.sections)) return [];
@@ -191,12 +204,20 @@ const PrintableJobCard: React.FC<PrintableJobCardProps> = ({
                 
                 <div style={{ pageBreakBefore: 'always' }} />
 
-                 <section className="flex-grow flex flex-col">
+                <section className="flex-grow flex flex-col">
                     <h3 className="text-xs font-bold text-gray-400 uppercase mb-2 ml-1">Technician Findings / Required Repairs</h3>
                     <div className="flex-grow border-2 border-dashed border-gray-200 rounded-lg p-4 bg-gray-50/30 min-h-[200px]">
-                        <div className="space-y-8 pt-4">
-                            <div className="border-b border-gray-200 pb-2 text-gray-300 text-[10px] uppercase">Notes / Observations:</div>
-                            {[...Array(6)].map((_, i) => <div key={i} className="border-b border-gray-100"></div>)}
+                        <div className="space-y-4">
+                            {(job.technicianObservations && job.technicianObservations.length > 0) ? (
+                                job.technicianObservations.map((note, index) => (
+                                    <p key={index} className="text-sm border-b border-gray-200 pb-2">{note}</p>
+                                ))
+                            ) : (
+                                <p className="text-sm text-gray-400 italic">No notes recorded.</p>
+                            )}
+                            {[...Array(Math.max(0, 10 - (job.technicianObservations || []).length))].map((_, i) => (
+                                <div key={i} className="border-b-2 border-dotted border-gray-300 h-8"></div>
+                            ))}
                         </div>
                     </div>
                 </section>
@@ -267,7 +288,7 @@ const PrintableJobCard: React.FC<PrintableJobCardProps> = ({
         </div>
     );
 
-    const inspectionSheet = printBlankInspectionSheet && inspectionTemplate && (
+    const blankInspectionSheet = printBlankInspectionSheet && inspectionTemplate && (
         <div className="bg-white font-sans text-sm text-gray-800 printable-page" style={pageStyle}>
             <header className="flex justify-between items-center mb-6 border-b pb-2">
                 <h2 className="text-2xl font-bold text-gray-800">{inspectionTemplate.name}</h2>
@@ -285,6 +306,26 @@ const PrintableJobCard: React.FC<PrintableJobCardProps> = ({
             </main>
         </div>
     );
+
+    const filledInspectionSheet = hasFilledChecklist && (
+         <div className="bg-white font-sans text-sm text-gray-800 printable-page" style={pageStyle}>
+            <header className="flex justify-between items-center mb-6 border-b pb-2">
+                <h2 className="text-2xl font-bold text-gray-800">{inspectionTemplate?.name || 'Inspection Report'}</h2>
+                <div className="text-right text-sm">
+                    <p><strong>Vehicle:</strong> {vehicle?.registration}</p>
+                    <p><strong>Job:</strong> {job?.id}</p>
+                </div>
+            </header>
+            <main>
+                <InspectionChecklist
+                    checklistData={job.inspectionChecklist || []}
+                    onUpdate={() => {}} 
+                    isReadOnly={true}
+                />
+            </main>
+        </div>
+    );
+
 
     return (
         <div style={{ backgroundColor: '#ffffff', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
@@ -313,7 +354,8 @@ const PrintableJobCard: React.FC<PrintableJobCardProps> = ({
             `}} />
             <div className="rebuild-print-container">
                 {mainContent}
-                {inspectionSheet}
+                {filledInspectionSheet}
+                {blankInspectionSheet}
             </div>
         </div>
     );

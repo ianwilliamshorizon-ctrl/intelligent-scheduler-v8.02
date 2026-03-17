@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Loader, ShieldCheck, Mail, User } from 'lucide-react';
+import { X, Loader, ShieldCheck, Mail, User, Briefcase } from 'lucide-react';
 import * as T from '../types';
 
 interface UserFormModalProps {
@@ -8,9 +8,10 @@ interface UserFormModalProps {
     onSave: (user: T.User) => Promise<void>;
     user: T.User | null;
     roles: T.Role[];
+    businessEntities: T.BusinessEntity[];
 }
 
-const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, user, roles }) => {
+const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, user, roles, businessEntities }) => {
     const [formData, setFormData] = useState<Partial<T.User>>({});
     const [isSaving, setIsSaving] = useState(false);
 
@@ -22,12 +23,12 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, 
                 setFormData({
                     name: '',
                     email: '',
-                    role: roles.length > 0 ? (roles[0].name as T.UserRole) : undefined,
-                    status: 'pending' // Default new users to pending
+                    role: roles.length > 0 ? (roles[0].name as any) : undefined,
+                    preferredEntityId: businessEntities.length > 0 ? businessEntities[0].id : undefined
                 });
             }
         }
-    }, [isOpen, user?.id, roles]);
+    }, [isOpen, user?.id, roles, businessEntities]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -108,23 +109,45 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, 
                         </div>
                     </div>
 
-                    {/* Role Selection */}
-                    <div className="space-y-1">
-                        <label className="text-[10px] font-black uppercase text-slate-400 ml-1">System Role</label>
-                        <div className="relative">
-                            <ShieldCheck size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" />
-                            <select
-                                className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-3 text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-bold appearance-none cursor-pointer"
-                                value={formData.role || ''}
-                                onChange={(e) => setFormData({ ...formData, role: e.target.value as T.UserRole })}
-                                required
-                                disabled={isSaving}
-                            >
-                                <option value="" disabled>Select Permissions</option>
-                                {roles.map(r => (
-                                    <option key={r.id} value={r.name}>{r.name}</option>
-                                ))}
-                            </select>
+                    <div className="grid grid-cols-2 gap-4">
+                         {/* Role Selection */}
+                        <div className="space-y-1">
+                            <label className="text-[10px] font-black uppercase text-slate-400 ml-1">System Role</label>
+                            <div className="relative">
+                                <ShieldCheck size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" />
+                                <select
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-3 text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-bold appearance-none cursor-pointer"
+                                    value={formData.role || ''}
+                                    onChange={(e) => setFormData({ ...formData, role: e.target.value as any })}
+                                    required
+                                    disabled={isSaving}
+                                >
+                                    <option value="" disabled>Select Permissions</option>
+                                    {roles.map(r => (
+                                        <option key={r.id} value={r.name}>{r.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+
+                        {/* Preferred Entity Selection */}
+                        <div className="space-y-1">
+                            <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Preferred Entity</label>
+                            <div className="relative">
+                                <Briefcase size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" />
+                                <select
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-3 text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-bold appearance-none cursor-pointer"
+                                    value={formData.preferredEntityId || ''}
+                                    onChange={(e) => setFormData({ ...formData, preferredEntityId: e.target.value })}
+                                    required
+                                    disabled={isSaving}
+                                >
+                                    <option value="" disabled>Default Entity</option>
+                                    {businessEntities.map(e => (
+                                        <option key={e.id} value={e.id}>{e.name}</option>
+                                    ))}
+                                </select>
+                            </div>
                         </div>
                     </div>
 

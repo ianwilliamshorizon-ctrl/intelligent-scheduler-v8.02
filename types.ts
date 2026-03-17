@@ -1,7 +1,7 @@
-
 import { Timestamp } from 'firebase/firestore';
 
 export type ViewType = string;
+export type AppEnvironment = 'development' | 'production' | 'staging';
 
 export interface User {
     id: string;
@@ -10,6 +10,8 @@ export interface User {
     name?: string;
     allowedViews?: ViewType[];
     engineerId?: string;
+    preferredEntityId?: string;
+    status?: 'pending' | 'active' | 'disabled';
 }
 
 export interface Customer {
@@ -144,7 +146,7 @@ export interface Estimate {
     customerId: string;
     issueDate: string; // YYYY-MM-DD
     expiryDate: string; // YYYY-MM-DD
-    status: 'Draft' | 'Sent' | 'Approved' | 'Rejected';
+    status: 'Draft' | 'Sent' | 'Approved' | 'Rejected' | 'Converted to Job' | 'Closed';
     lineItems: EstimateLineItem[];
     notes?: string;
     jobId?: string;
@@ -392,6 +394,7 @@ export interface BusinessEntity {
     postcode?: string;
     vatNumber?: string;
     logoUrl?: string;
+	 type?: 'Workshop' | 'Sales' | 'Storage' | 'Rentals';
 }
 
 export interface TaxRate {
@@ -438,3 +441,8 @@ export interface ChecklistSection {
 }
 
 export type TyreLocation = 'frontLeft' | 'frontRight' | 'rearLeft' | 'rearRight' | 'spare';
+
+export interface BackupSchedule {
+    enabled: boolean;
+    times: string[];
+}

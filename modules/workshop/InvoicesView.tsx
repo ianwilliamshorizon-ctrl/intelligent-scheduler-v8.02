@@ -1,10 +1,11 @@
+
 import React, { useState, useMemo } from 'react';
 import { useData } from '../../core/state/DataContext';
 import { useApp } from '../../core/state/AppContext';
 import { Invoice, Customer, Vehicle, EstimateLineItem } from '../../types';
-import { Eye, Search, Download, PlusCircle, Edit } from 'lucide-react';
+import { Eye, Search, Download, PlusCircle, Edit, CalendarDays } from 'lucide-react';
 import { formatCurrency } from '../../core/utils/formatUtils';
-import { formatDate } from '../../core/utils/dateUtils';
+import { formatDate, getRelativeDate } from '../../core/utils/dateUtils';
 import { getCustomerDisplayName } from '../../core/utils/customerUtils';
 import { StatusFilter } from '../../components/shared/StatusFilter';
 
@@ -15,15 +16,22 @@ interface InvoicesViewProps {
     onCreateAdhocInvoice: () => void;
 }
 
+const dateFilterOptions = {
+    'today': 'Today',
+    'this_month': 'This Month',
+    'last_month': 'Last Month',
+    'all': 'All Time',
+};
+
+type DateFilterOption = keyof typeof dateFilterOptions;
+
 const InvoicesView: React.FC<InvoicesViewProps> = ({ onViewInvoice, onEditInvoice, onOpenExportModal, onCreateAdhocInvoice }) => {
     const { invoices, customers, vehicles, businessEntities, taxRates } = useData();
     const { selectedEntityId } = useApp();
     const [filter, setFilter] = useState('');
     const [statusFilter, setStatusFilter] = useState<Invoice['status'][]>([]);
+    const [dateFilter, setDateFilter] = useState<DateFilterOption>('this_month');
     
-    const [startDate, setStartDate] = useState(() => formatDate(new Date(new Date().getFullYear(), 0, 1)));
-    const [endDate, setEndDate] = useState(() => formatDate(new Date()));
-
     const customerMap = useMemo(() => new Map(customers.map(c => [c.id, c])), [customers]);
     const vehicleMap = useMemo(() => new Map(vehicles.map(v => [v.id, v])), [vehicles]);
     const taxRatesMap = useMemo(() => new Map(taxRates.map(t => [t.id, t.rate])), [taxRates]);
@@ -41,13 +49,28 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({ onViewInvoice, onEditInvoic
     };
 
     const filteredInvoices = useMemo(() => {
-        const selectedEntity = businessEntities.find(e => e.id === selectedEntityId);
+        let startDate: string | null = null;
+        let endDate: string | null = null;
+        const today = new Date();
+
+        switch (dateFilter) {
+            case 'today':
+                startDate = getRelativeDate(0);
+                endDate = getRelativeDate(0);
+                break;
+            case 'this_month':
+                startDate = formatDate(new Date(today.getFullYear(), today.getMonth(), 1));
+                endDate = formatDate(new Date(today.getFullYear(), today.getMonth() + 1, 0));
+                break;
+            case 'last_month':
+                startDate = formatDate(new Date(today.getFullYear(), today.getMonth() - 1, 1));
+                endDate = formatDate(new Date(today.getFullYear(), today.getMonth(), 0));
+                break;
+        }
 
         return invoices.filter(invoice => {
-            if (selectedEntityId !== 'all' && selectedEntity?.shortCode) {
-                if (!invoice.id.startsWith(selectedEntity.shortCode)) return false;
-            } else if (selectedEntityId !== 'all') {
-                if (invoice.entityId !== selectedEntityId) return false;
+            if (selectedEntityId !== 'all' && invoice.entityId !== selectedEntityId) {
+                return false;
             }
 
             const customer = customerMap.get(invoice.customerId);
@@ -69,7 +92,7 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({ onViewInvoice, onEditInvoic
 
             return matchesSearch && matchesStatus;
         }).sort((a,b) => (b.issueDate || '').localeCompare(a.issueDate || '') || (b.id || '').localeCompare(a.id || ''));
-    }, [invoices, filter, statusFilter, customerMap, vehicleMap, selectedEntityId, businessEntities, startDate, endDate]);
+    }, [invoices, filter, statusFilter, customerMap, vehicleMap, selectedEntityId, businessEntities, dateFilter]);
 
     const handleStatusToggle = (status: Invoice['status']) => {
         setStatusFilter(prev =>
@@ -84,7 +107,7 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({ onViewInvoice, onEditInvoic
     return (
         <div className="w-full p-4 h-full flex flex-col">
             <header className="flex justify-between items-center mb-4 flex-shrink-0">
-                <h2 className="text-2xl font-bold text-gray-800">Invoices</h2>
+                <h2 className="text-2xl font-bold text-gray-800">Invoices <span className="text-gray-500 font-medium text-lg">({dateFilterOptions[dateFilter]})</span></h2>
                  <div className="flex items-center gap-2">
                     <button onClick={() => onOpenExportModal('invoices', filteredInvoices)} className="flex items-center gap-2 py-2 px-4 bg-gray-600 text-white font-semibold rounded-lg shadow-md hover:bg-gray-700">
                         <Download size={16}/> Export for Accounts
@@ -107,11 +130,18 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({ onViewInvoice, onEditInvoic
                             className="w-full p-2 pl-9 border rounded-lg"
                         />
                     </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                        <label className="text-sm font-medium text-gray-700">From:</label>
-                        <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="p-2 border rounded-lg bg-white" />
-                        <label className="text-sm font-medium text-gray-700">To:</label>
-                        <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="p-2 border rounded-lg bg-white" />
+                   <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-gray-700"><CalendarDays size={16} className="inline-block mr-1"/>Date Range:</span>
+                        <div className="flex items-center gap-1 p-1 bg-gray-200 rounded-lg">
+                            {Object.keys(dateFilterOptions).map((key) => (
+                                <button 
+                                    key={key}
+                                    onClick={() => setDateFilter(key as DateFilterOption)}
+                                    className={`py-1 px-3 rounded-md font-semibold text-xs transition ${dateFilter === key ? 'bg-white shadow' : 'text-gray-600 hover:bg-gray-300'}`}>
+                                    {dateFilterOptions[key as DateFilterOption]}
+                                </button>
+                            ))}
+                        </div>
                     </div>
                 </div>
                 <StatusFilter
