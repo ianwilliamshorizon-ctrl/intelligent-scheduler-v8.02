@@ -1,33 +1,50 @@
 
-
 export interface AddressDetails {
-    addressLine1: string;
-    addressLine2: string;
-    city: string;
+    summaryAddress: string;
+    street: string | null;
+    locality: string | null;
+    postTown: string | null;
+    county: string | null;
+    postcode: string | null;
 }
 
-// Mock database of Postcodes
-const postcodeDatabase: { [key: string]: AddressDetails } = {
-    'RG213AA': { addressLine1: '123 Oak Lane', addressLine2: '', city: 'Basingstoke' },
-    'RG11BB': { addressLine1: '45 Maple Drive', addressLine2: 'Apt 2', city: 'Reading' },
-    'SO143AJ': { addressLine1: 'Brookspeed', addressLine2: '14-15 Test Lane', city: 'Southampton' },
-    'SW1A0AA': { addressLine1: 'House of Commons', addressLine2: '', city: 'London' },
-};
+const API_KEY = import.meta.env.VITE_VEHICLE_DATA_GLOBAL_API_KEY;
+const API_BASE_URL = '/api/r2/lookup';
 
 /**
- * Simulates calling an external API to look up an address by postcode.
+ * Looks up an address by postcode using the Vehicle Data Global service.
  * @param postcode The postcode to look up.
- * @returns A promise that resolves with address details or rejects if not found.
+ * @returns A promise that resolves with a list of address details.
  */
-export const lookupAddressByPostcode = (postcode: string): Promise<AddressDetails> => {
-    return new Promise((resolve, reject) => {
-        setTimeout(() => {
-            const upperPostcode = postcode.toUpperCase().replace(/\s/g, ''); // Normalize postcode
-            if (postcodeDatabase[upperPostcode]) {
-                resolve(postcodeDatabase[upperPostcode]);
-            } else {
-                reject(new Error(`Address for postcode "${postcode}" not found.`));
-            }
-        }, 1000); // Simulate network delay
-    });
+export const lookupAddressByPostcode = async (postcode: string): Promise<AddressDetails[]> => {
+    if (!API_KEY) {
+        throw new Error('VITE_VEHICLE_DATA_GLOBAL_API_KEY is not set in .env');
+    }
+
+    const url = `${API_BASE_URL}?packagename=AddressDetails&apikey=${API_KEY}&postcode=${encodeURIComponent(postcode.trim())}`;
+
+    const response = await fetch(url);
+
+    if (!response.ok) {
+        throw new Error(`Address lookup failed with status: ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (data.ResponseInformation?.StatusCode !== 0) {
+        throw new Error(data.ResponseInformation?.StatusMessage || 'Failed to lookup address.');
+    }
+
+    if (data.Results?.AddressDetails?.AddressList) {
+        return data.Results.AddressDetails.AddressList.map((addr: any) => ({
+            summaryAddress: addr.SummaryAddress,
+            street: addr.FormattedAddressLines.Street,
+            locality: addr.FormattedAddressLines.Locality,
+            postTown: addr.FormattedAddressLines.PostTown,
+            county: addr.FormattedAddressLines.County,
+            postcode: addr.FormattedAddressLines.Postcode,
+        }));
+    }
+
+    return [];
 };

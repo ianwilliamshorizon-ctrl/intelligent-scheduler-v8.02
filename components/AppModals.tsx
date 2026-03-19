@@ -690,6 +690,7 @@ const getNextSequence = (items: any[], entityShortCode: string, prefix: string, 
                     onViewJob={(jobId) => { setters.setVehicleModal({ isOpen: false, vehicleId: null }); setters.setSelectedJobId(jobId); setters.setIsEditJobModalOpen(true); }}
                     onViewEstimate={(estimate) => { setters.setVehicleModal({ isOpen: false, vehicleId: null }); setters.setEstimateViewModal({ isOpen: true, estimate: estimate }); }}
                     onViewInvoice={(invoice) => { setters.setVehicleModal({ isOpen: false, vehicleId: null }); setters.setViewInvoiceModal({ isOpen: true, invoice: invoice }); }}
+                    onViewCustomer={(customerId) => { setters.setVehicleModal({ isOpen: false, vehicleId: null }); setters.setCustomerModal({ isOpen: true, customerId: customerId }); }}
                 />
             )}
 

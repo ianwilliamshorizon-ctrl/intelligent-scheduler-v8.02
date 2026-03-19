@@ -15,6 +15,8 @@ import { getScoredServicePackages } from '../utils/servicePackageScoring';
 import SupplierSelectionModal from './SupplierSelectionModal';
 import { calculatePackagePrices } from '../core/utils/packageUtils';
 import { HoverInfo } from './shared/HoverInfo';
+import LookupModal from './LookupModal';
+import { AddressDetails } from '../services/postcodeLookupService';
 
 interface EditableLineItemRowProps {
     item: EstimateLineItem;
@@ -236,6 +238,12 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
     const [isMediaModalOpen, setIsMediaModalOpen] = useState(false);
     const [recentCustomerIds, setRecentCustomerIds] = useState<string[]>([]);
     const [selectedPackage, setSelectedPackage] = useState<ServicePackage | null>(null);
+
+    const [isLookupModalOpen, setIsLookupModalOpen] = useState(false);
+    const [lookupTarget, setLookupTarget] = useState<'customer' | 'vehicle' | null>(null);
+    const [initialVehicleData, setInitialVehicleData] = useState<Partial<Vehicle> | null>(null);
+    const [initialCustomerData, setInitialCustomerData] = useState<Partial<Customer> | null>(null);
+
     const standardTaxRateId = taxRates.find(t => t.code === 'T1')?.id;
     const t99RateId = taxRates.find(t => t.code === 'T99')?.id;
 
@@ -675,6 +683,45 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
         motDue: currentVehicle.nextMotDate,
     } : {};
 
+    const handleOpenLookup = (target: 'customer' | 'vehicle') => {
+        setLookupTarget(target);
+        setIsLookupModalOpen(true);
+    };
+
+    const handleVehicleFound = (vehicleData: Partial<Vehicle>) => {
+        setInitialVehicleData(vehicleData);
+        setIsAddingVehicle(true);
+        setIsLookupModalOpen(false);
+    };
+
+    const handleAddressFound = (addresses: AddressDetails[]) => {
+        if (addresses.length > 0) {
+            const address = addresses[0];
+            const customerData: Partial<Customer> = {
+                addressLine1: address.street || '',
+                city: address.postTown || '',
+                county: address.county || '',
+                postcode: address.postcode || '',
+            } as any;
+            setInitialCustomerData(customerData);
+            setIsAddingCustomer(true);
+        } else {
+            handleManualEntry();
+        }
+        setIsLookupModalOpen(false);
+    };
+    
+    const handleManualEntry = () => {
+        setIsLookupModalOpen(false);
+        if (lookupTarget === 'customer') {
+            setInitialCustomerData(null);
+            setIsAddingCustomer(true);
+        } else if (lookupTarget === 'vehicle') {
+            setInitialVehicleData(null);
+            setIsAddingVehicle(true);
+        }
+    };
+
     return (
         <FormModal 
             isOpen={isOpen} 
@@ -712,7 +759,7 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                                         defaultValue={formData.customerId}
                                         placeholder="Search name, phone or postcode..."
                                     />
-                                    <button type="button" onClick={() => setIsAddingCustomer(true)} className="p-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 flex-shrink-0"><Plus size={20} /></button>
+                                    <button type="button" onClick={() => handleOpenLookup('customer')} className="p-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 flex-shrink-0"><Plus size={20} /></button>
                                 </div>
                                 {recentCustomers.length > 0 && !formData.customerId && (
                                     <div className="mt-2 flex flex-wrap gap-1">
@@ -748,7 +795,7 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                                             defaultValue={formData.vehicleId}
                                             placeholder="Search registration or make..."
                                         />
-                                        <button type="button" onClick={() => setIsAddingVehicle(true)} className="p-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 flex-shrink-0"><Plus size={20} /></button>
+                                        <button type="button" onClick={() => handleOpenLookup('vehicle')} className="p-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 flex-shrink-0"><Plus size={20} /></button>
                                     </div>
                                     {linkedVehicles.length > 0 && (
                                         <div className="p-2 bg-blue-50 border border-blue-100 rounded">
@@ -903,16 +950,31 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                 onSave={(newNotes) => setFormData(prev => ({...prev, notes: newNotes}))}
             />
 
+            {isLookupModalOpen && lookupTarget && (
+                <LookupModal
+                    isOpen={isLookupModalOpen}
+                    onClose={() => setIsLookupModalOpen(false)}
+                    onVehicleFound={handleVehicleFound}
+                    onAddressFound={handleAddressFound}
+                    onManualEntry={handleManualEntry}
+                    lookupType={lookupTarget === 'customer' ? 'postcode' : 'vrm'}
+                />
+            )}
+
             {isAddingCustomer && (
                 <CustomerFormModal 
                     isOpen={isAddingCustomer} 
-                    onClose={() => setIsAddingCustomer(false)} 
+                    onClose={() => {
+                        setIsAddingCustomer(false);
+                        setInitialCustomerData(null);
+                    }} 
                     onSave={(newCustomer) => { 
                         onSaveCustomer(newCustomer); 
                         handleCustomerSelect(newCustomer); 
                         setIsAddingCustomer(false); 
+                        setInitialCustomerData(null);
                     }} 
-                    customer={null}
+                    customer={initialCustomerData}
                     existingCustomers={customers}
                     jobs={[]}
                     vehicles={[]}
@@ -953,13 +1015,20 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
             {isAddingVehicle && (
                 <VehicleFormModal
                     isOpen={isAddingVehicle}
-                    onClose={() => setIsAddingVehicle(false)}
+                    onClose={() => {
+                        setIsAddingVehicle(false);
+                        setInitialVehicleData(null);
+                    }}
                     onSave={(newVehicle) => {
                         onSaveVehicle(newVehicle);
                         setIsAddingVehicle(false);
+                        setInitialVehicleData(null);
                     }}
-                    onSaveWithCustomer={handleSaveCustomerAndVehicle}
-                    vehicle={null}
+                    onSaveWithCustomer={(customer, vehicle) => {
+                        handleSaveCustomerAndVehicle(customer, vehicle);
+                        setInitialVehicleData(null);
+                    }}
+                    vehicle={initialVehicleData}
                     customers={customers}
                     initialCustomerId={formData.customerId} 
                 />

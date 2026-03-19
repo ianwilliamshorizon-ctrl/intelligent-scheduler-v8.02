@@ -11,6 +11,7 @@ interface FormModalProps {
   saveIcon?: React.ElementType;
   maxWidth?: string;
   zIndex?: string;
+  saveDisabled?: boolean;
 }
 
 const FormModal: React.FC<FormModalProps> = ({ 
@@ -22,7 +23,8 @@ const FormModal: React.FC<FormModalProps> = ({
     saveText = "Save", 
     saveIcon: SaveIcon = Save, 
     maxWidth = "max-w-3xl",
-    zIndex = "z-[70]"
+    zIndex = "z-[70]",
+    saveDisabled = false
 }) => {
   if (!isOpen) return null;
 
@@ -39,7 +41,10 @@ const FormModal: React.FC<FormModalProps> = ({
         {onSave && (
           <div className="flex justify-end p-4 border-t bg-gray-50 flex-shrink-0 sticky bottom-0 z-10">
             <button onClick={onClose} className="py-2 px-4 bg-gray-200 text-gray-800 font-semibold rounded-lg hover:bg-gray-300 transition mr-2">Cancel</button>
-            <button onClick={onSave} className="flex items-center py-2 px-4 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition">
+            <button 
+              onClick={onSave} 
+              disabled={saveDisabled}
+              className={`flex items-center py-2 px-4 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition ${saveDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}>
               <SaveIcon size={16} className="mr-2"/> {saveText}
             </button>
           </div>

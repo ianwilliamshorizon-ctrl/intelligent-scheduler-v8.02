@@ -12,6 +12,13 @@ export default defineConfig(({ mode }) => {
         hmr: {
           clientPort: 443,
         },
+        proxy: {
+          '/api': {
+            target: 'https://uk.api.vehicledataglobal.com',
+            changeOrigin: true,
+            rewrite: (path) => path.replace(/^\/api/, ''),
+          },
+        },
       },
       plugins: [
         tailwindcss(), // Move Tailwind to the top of the array

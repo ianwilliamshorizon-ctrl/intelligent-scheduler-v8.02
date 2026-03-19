@@ -20,6 +20,7 @@ import { useReactToPrint } from 'react-to-print';
 import PrintableJobCard from './PrintableJobCard';
 import InspectionChecklist from './InspectionChecklist';
 import { calculatePackagePrices } from '../core/utils/packageUtils';
+import { useDebouncedSave } from '../core/hooks/useDebouncedSave';
 
 const EditJobModal: React.FC<{
     isOpen: boolean;
@@ -103,6 +104,9 @@ const EditJobModal: React.FC<{
     const vehicle = useMemo(() => job ? (Array.isArray(vehicles) ? vehicles : []).find(v => v.id === job.vehicleId) : undefined, [job, vehicles]);
     const customer = useMemo(() => job ? (Array.isArray(customers) ? customers : []).find(c => c.id === job.customerId) : undefined, [job, customers]);
     const businessEntity = useMemo(() => (Array.isArray(businessEntities) ? businessEntities : []).find(e => e.id === editableJob?.entityId), [businessEntities, editableJob?.entityId]);
+    
+    const { isSaving, lastSaved } = useDebouncedSave('brooks_jobs', editableJob, 1500);
+
 
     const mainEstimate = useMemo(() => {
         if (!job) return null;
@@ -611,6 +615,13 @@ const EditJobModal: React.FC<{
                     <div className="flex items-center gap-3">
                         <h2 className="text-xl font-bold text-indigo-700">Edit Job #{job?.id}</h2>
                         {job?.status === 'Archived' && <span className="bg-red-100 text-red-800 px-2 py-0.5 rounded text-xs font-bold uppercase">Cancelled</span>}
+                         <div className="flex items-center gap-2 text-sm">
+                            {isSaving ? (
+                                <span className="text-gray-500 italic flex items-center gap-1"><Loader2 size={14} className="animate-spin" /> Saving...</span>
+                            ) : (
+                                lastSaved && <span className="text-gray-500">Saved at {new Date(lastSaved).toLocaleTimeString()}</span>
+                            )}
+                        </div>
                     </div>
                     <button type="button" onClick={onClose}><X size={24} /></button>
                 </header>

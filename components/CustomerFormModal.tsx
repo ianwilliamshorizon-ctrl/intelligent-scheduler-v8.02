@@ -3,7 +3,7 @@ import { Customer, Job, Vehicle, Estimate, Invoice } from '../types';
 import FormModal from './FormModal';
 import { generateCustomerId } from '../core/utils/customerUtils';
 import { formatDate } from '../core/utils/dateUtils';
-import { lookupAddressByPostcode } from '../services/postcodeLookupService';
+import { lookupAddressByPostcode, AddressDetails } from '../services/postcodeLookupService';
 import { Loader2, Search, Briefcase, Car, ChevronDown, ChevronUp } from 'lucide-react';
 import { useAuditLogger } from '../core/hooks/useAuditLogger';
 
@@ -38,6 +38,7 @@ const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
 }) => {
     const [formData, setFormData] = useState<Partial<Customer>>({});
     const [isLookingUpAddress, setIsLookingUpAddress] = useState(false);
+    const [addressList, setAddressList] = useState<AddressDetails[]>([]);
     const { logEvent } = useAuditLogger();
     const lastProcessedId = useRef<string | null | 'NEW'>(null);
 
@@ -75,16 +76,29 @@ const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
     const handleAddressLookup = async () => {
         if (!formData.postcode) return;
         setIsLookingUpAddress(true);
+        setAddressList([]);
         try {
-            const details: any = await lookupAddressByPostcode(formData.postcode);
+            const addresses = await lookupAddressByPostcode(formData.postcode);
+            setAddressList(addresses);
+        } catch (error) { 
+            console.error(error); 
+        } finally { 
+            setIsLookingUpAddress(false); 
+        }
+    };
+
+    const handleAddressSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const selectedAddress = addressList[parseInt(e.target.value, 10)];
+        if (selectedAddress) {
             setFormData(prev => ({
                 ...prev,
-                addressLine1: details.addressLine1 || '',
-                addressLine2: details.addressLine2 || '',
-                city: details.city || '',
-                county: details.county || prev.county || ''
+                addressLine1: selectedAddress.street || '',
+                addressLine2: selectedAddress.locality || '',
+                city: selectedAddress.postTown || '',
+                county: selectedAddress.county || '',
+                postcode: selectedAddress.postcode || prev.postcode
             }));
-        } catch (error) { console.error(error); } finally { setIsLookingUpAddress(false); }
+        }
     };
 
     const handleSave = () => {
@@ -134,17 +148,30 @@ const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
                         <div><label className="block text-sm font-medium text-gray-700 mb-1">Mobile</label><input name="mobile" value={formData.mobile || ''} onChange={handleChange} className="w-full p-2 border rounded"/></div>
                         <div><label className="block text-sm font-medium text-gray-700 mb-1">Email</label><input name="email" value={formData.email || ''} onChange={handleChange} className="w-full p-2 border rounded"/></div>
                         
-                        <div className="md:col-span-3 border-t pt-4"><label className="block text-sm font-medium text-gray-700 mb-1">Address Line 1</label><input name="addressLine1" value={formData.addressLine1 || ''} onChange={handleChange} className="w-full p-2 border rounded"/></div>
-                        <div className="md:col-span-3"><label className="block text-sm font-medium text-gray-700 mb-1">Address Line 2</label><input name="addressLine2" value={formData.addressLine2 || ''} onChange={handleChange} className="w-full p-2 border rounded"/></div>
-                        <div><label className="block text-sm font-medium text-gray-700 mb-1">City</label><input name="city" value={formData.city || ''} onChange={handleChange} className="w-full p-2 border rounded"/></div>
-                        <div><label className="block text-sm font-medium text-gray-700 mb-1">County</label><input name="county" value={formData.county || ''} onChange={handleChange} className="w-full p-2 border rounded"/></div>
-                        <div className="relative">
+                        <div className="md:col-span-3 border-t pt-4 relative">
                             <label className="block text-sm font-medium text-gray-700 mb-1">Postcode</label>
                             <input name="postcode" value={formData.postcode || ''} onChange={handleChange} className="w-full p-2 border rounded uppercase"/>
                             <button type="button" onClick={handleAddressLookup} className="absolute right-2 top-8 p-1.5 bg-gray-100 rounded-full hover:bg-gray-200">
                                 {isLookingUpAddress ? <Loader2 size={14} className="animate-spin text-indigo-600" /> : <Search size={14} className="text-gray-500" />}
                             </button>
                         </div>
+
+                        {addressList.length > 0 && (
+                            <div className="md:col-span-3">
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Select Address</label>
+                                <select onChange={handleAddressSelect} className="w-full p-2 border rounded bg-white">
+                                    <option value="">Select an address...</option>
+                                    {addressList.map((addr, index) => (
+                                        <option key={index} value={index}>{addr.summaryAddress}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
+
+                        <div className="md:col-span-3"><label className="block text-sm font-medium text-gray-700 mb-1">Address Line 1</label><input name="addressLine1" value={formData.addressLine1 || ''} onChange={handleChange} className="w-full p-2 border rounded"/></div>
+                        <div className="md:col-span-3"><label className="block text-sm font-medium text-gray-700 mb-1">Address Line 2</label><input name="addressLine2" value={formData.addressLine2 || ''} onChange={handleChange} className="w-full p-2 border rounded"/></div>
+                        <div><label className="block text-sm font-medium text-gray-700 mb-1">City</label><input name="city" value={formData.city || ''} onChange={handleChange} className="w-full p-2 border rounded"/></div>
+                        <div><label className="block text-sm font-medium text-gray-700 mb-1">County</label><input name="county" value={formData.county || ''} onChange={handleChange} className="w-full p-2 border rounded"/></div>
 
                         <div className="md:col-span-3 border-t pt-4 grid grid-cols-2 gap-.4">
                             <div>

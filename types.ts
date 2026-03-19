@@ -446,3 +446,15 @@ export interface BackupSchedule {
     enabled: boolean;
     times: string[];
 }
+export interface MotTest {
+    testDate?: string;
+    testPassed?: boolean;
+    odometerReading?: string;
+    odometerUnit?: string;
+    expiryDate?: string;
+    testNumber?: string;
+    annotationList?: {
+        type: 'FAIL' | 'ADVISORY' | 'MINOR';
+        text: string;
+    }[];
+}
