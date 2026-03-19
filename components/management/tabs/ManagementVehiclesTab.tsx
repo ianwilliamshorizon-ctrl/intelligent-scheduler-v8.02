@@ -14,6 +14,7 @@ import { findBestDiagramMatch } from '../../../core/utils/diagramUtils';
 interface ManagementVehiclesTabProps {
     searchTerm: string;
     onShowStatus: (text: string, type: 'info' | 'success' | 'error') => void;
+    onViewCustomer?: (customerId: string) => void; 
 }
 
 const VehicleRow = memo(({ 
@@ -99,7 +100,7 @@ const HighlightText = memo(({ text, highlight }: { text: string; highlight: stri
     );
 });
 
-export const ManagementVehiclesTab: React.FC<ManagementVehiclesTabProps> = ({ searchTerm, onShowStatus }) => {
+export const ManagementVehiclesTab: React.FC<ManagementVehiclesTabProps> = ({ searchTerm, onShowStatus, onViewCustomer }) => {
     const { vehicles, setVehicles, customers, jobs, estimates, invoices, inspectionDiagrams, forceRefresh } = useData();
     const { selectedIds, updateItem, deleteItem, toggleSelection, toggleSelectAll, bulkDelete } = useManagementTable(vehicles, 'brooks_vehicles', setVehicles);
 
@@ -174,7 +175,7 @@ export const ManagementVehiclesTab: React.FC<ManagementVehiclesTabProps> = ({ se
                     const currentPrimary = vehicleImages.find(img => img.isPrimaryDiagram);
 
                     if (currentPrimary && currentPrimary.id === diagramToAssign.imageId) {
-                        continue; // Already correctly matched
+                        continue; 
                     }
 
                     let imageExists = false;
@@ -189,7 +190,7 @@ export const ManagementVehiclesTab: React.FC<ManagementVehiclesTabProps> = ({ se
                     if (!imageExists) {
                         updatedImages.push({
                             id: diagramToAssign.imageId,
-                            uploadedAt: new (window as any).Date().toISOString(),
+                            uploadedAt: new Date().toISOString(),
                             isPrimaryDiagram: true,
                         });
                     }
@@ -234,6 +235,7 @@ export const ManagementVehiclesTab: React.FC<ManagementVehiclesTabProps> = ({ se
         try {
             const data = await parseCsv(file);
             let count = 0;
+            let batchCount = 0; // FIXED: Added declaration
             const existingIds = new Set(vehicles.map(v => v.id));
             const batchLimit = 400;
             let currentBatch = writeBatch(db);
@@ -251,14 +253,16 @@ export const ManagementVehiclesTab: React.FC<ManagementVehiclesTabProps> = ({ se
                     };
                     currentBatch.set(doc(collection(db, 'brooks_vehicles'), id), vehicleData);
                     count++;
+                    batchCount++; // FIXED: Tracking current batch size
 
-                    if (count > 0 && count % batchLimit === 0) {
+                    if (batchCount >= batchLimit) {
                         await currentBatch.commit();
                         currentBatch = writeBatch(db);
+                        batchCount = 0;
                     }
                 }
             }
-            if (count % batchLimit !== 0) await currentBatch.commit();
+            if (batchCount > 0) await currentBatch.commit();
             onShowStatus(count > 0 ? `Imported ${count} vehicles.` : 'No new vehicles found.', 'success');
         } catch (err) {
             onShowStatus('Import failed.', 'error');
@@ -267,6 +271,7 @@ export const ManagementVehiclesTab: React.FC<ManagementVehiclesTabProps> = ({ se
             e.target.value = '';
         }
     };
+
     const handleSave = async (v: Vehicle) => {
         await updateItem(v);
         await forceRefresh('brooks_vehicles');
@@ -310,7 +315,7 @@ export const ManagementVehiclesTab: React.FC<ManagementVehiclesTabProps> = ({ se
 
             {/* Main Container */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col overflow-hidden flex-1 min-h-[400px]">
-                {/* Custom Header */}
+                {/* Header */}
                 <div className="bg-gray-50 border-b border-gray-200 flex text-[10px] font-bold text-gray-600 uppercase tracking-widest shrink-0">
                     <div className="w-12 p-4 flex justify-center">
                         <input 
@@ -363,6 +368,7 @@ export const ManagementVehiclesTab: React.FC<ManagementVehiclesTabProps> = ({ se
                     jobs={jobs}
                     estimates={estimates}
                     invoices={invoices}
+                    onViewCustomer={onViewCustomer}
                 />
             )}
         </div>

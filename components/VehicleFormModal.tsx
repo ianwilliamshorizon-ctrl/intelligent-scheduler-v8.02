@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Vehicle, Customer, Job, Estimate, MotTest } from '../types';
 import FormModal from './FormModal';
@@ -72,7 +71,6 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
     isOpen, onClose, onSave, vehicle, customers, jobs, estimates, invoices, 
     onViewJob, onViewEstimate, onViewInvoice, onViewCustomer, initialCustomerId, onSaveWithCustomer, initialRegistration
 }) => {
-    // Using any for formData to bypass strict property checks on the Partial<Vehicle> type
     const [formData, setFormData] = useState<any>({});
     const [isLookingUp, setIsLookingUp] = useState(false);
     const [lookupError, setLookupError] = useState('');
@@ -82,7 +80,6 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
     const { currentUser } = useApp();
     const [isTransferMode, setIsTransferMode] = useState(false);
     
-    // Safety ref to prevent 429 Resource Exhausted loops
     const hasAutoLookedUp = useRef(false);
 
     useEffect(() => {
@@ -103,7 +100,6 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
         setIsTransferMode(!vehicle?.id);
         setActiveTab('details');
 
-        // Fire auto-lookup once per modal open
         if (initialRegistration && !vehicle?.make && !hasAutoLookedUp.current) {
             hasAutoLookedUp.current = true;
             handleLookup(initialRegistration);
@@ -151,7 +147,6 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
         try {
             const details = await lookupVehicleByVRM(lookupValue) as any;
 
-            // Sync API Quota
             if (details.AccountBalance !== undefined) setRemainingQuota(details.AccountBalance);
             else if (details.CreditsRemaining !== undefined) setRemainingQuota(details.CreditsRemaining);
 
@@ -207,7 +202,10 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
         logEvent(isNew ? 'CREATE' : 'UPDATE', 'Vehicle', finalVehicle.id, `${isNew ? 'Created' : 'Updated'} vehicle ${finalVehicle.registration}.`);
     };
 
-    const handleCustomerClick = () => {
+    const handleCustomerClick = (e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log("View Profile triggered for Customer ID:", formData.customerId);
         if (onViewCustomer && formData.customerId) {
             onViewCustomer(formData.customerId);
         } else {

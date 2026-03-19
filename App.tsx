@@ -229,6 +229,13 @@ const App = () => {
         else if (type === 'vehicle') { setters.setVehicleModal({ isOpen: true, vehicleId: id }); }
     };
 
+    // New handler to process navigation within the Management Modal
+    const handleViewCustomerFromManagement = (customerId: string) => {
+        // We close the management modal and open the specific customer detail view
+        setIsManagementOpen(false);
+        setters.setCustomerModal({ isOpen: true, customerId: customerId });
+    };
+
     const commonProps = {
         onViewCustomer: (id: string) => setters.setCustomerModal({ isOpen: true, customerId: id }),
         onViewVehicle: (id: string) => setters.setVehicleModal({ isOpen: true, vehicleId: id }),
@@ -314,6 +321,7 @@ const App = () => {
                         selectedEntityId={selectedEntityId} 
                         onViewJob={(id) => { setIsManagementOpen(false); setters.setSelectedJobId(id); setters.setIsEditJobModalOpen(true); }}
                         onViewEstimate={(est) => { setIsManagementOpen(false); setters.setEstimateViewModal({isOpen: true, estimate: est}); }}
+                        onViewCustomer={handleViewCustomerFromManagement}
                         backupSchedule={backupSchedule}
                         setBackupSchedule={setBackupSchedule}
                         onManualBackup={handleManualBackup}

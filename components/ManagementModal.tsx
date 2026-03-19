@@ -33,12 +33,15 @@ interface ManagementModalProps {
     selectedEntityId: string;
     onViewJob: (jobId: string) => void;
     onViewEstimate: (estimate: Estimate) => void;
+    onViewCustomer: (customerId: string) => void; // Added to interface
     backupSchedule: BackupSchedule;
     setBackupSchedule: (schedule: BackupSchedule) => void;
     onManualBackup: () => void;
 }
 
-const ManagementModal: React.FC<ManagementModalProps> = ({ isOpen, onClose, initialView, backupSchedule, setBackupSchedule, onManualBackup }) => {
+const ManagementModal: React.FC<ManagementModalProps> = ({ 
+    isOpen, onClose, initialView, backupSchedule, setBackupSchedule, onManualBackup, onViewCustomer 
+}) => {
     const dataContext = useData();
     const { users, currentUser, setCurrentView } = useApp();
     const { roles } = dataContext;
@@ -73,7 +76,8 @@ const ManagementModal: React.FC<ManagementModalProps> = ({ isOpen, onClose, init
     const allTabs = useMemo(() => [
         { id: 'directors-dashboard', label: "Director's Dashboard", icon: BarChart2, render: () => { setCurrentView('directors-dashboard'); onClose(); return null; }, permission: 'canSeeDirectorsDashboard' },
         { id: 'customers', label: 'Customers', icon: UserIcon, render: () => <ManagementCustomersTab searchTerm={searchTerm} onShowStatus={showStatus} />, permission: 'canManageCustomers' },
-        { id: 'vehicles', label: 'Vehicles', icon: Car, render: () => <ManagementVehiclesTab searchTerm={searchTerm} onShowStatus={showStatus} />, permission: 'canManageVehicles' },
+        // UPDATED BELOW: Added onViewCustomer prop
+        { id: 'vehicles', label: 'Vehicles', icon: Car, render: () => <ManagementVehiclesTab searchTerm={searchTerm} onShowStatus={showStatus} onViewCustomer={onViewCustomer} />, permission: 'canManageVehicles' },
         { id: 'diagrams', label: 'Vehicle Diagrams', icon: CarFront, render: () => <ManagementDiagramsTab searchTerm={searchTerm} onShowStatus={showStatus} />, permission: 'canManageInspectionDiagrams' },
         { id: 'inspectionTemplates', label: 'Inspection Templates', icon: ClipboardCheck, render: () => <ManagementInspectionTemplatesTab searchTerm={searchTerm} onShowStatus={showStatus} />, permission: 'canManageInspectionTemplates' },
         { id: 'staff', label: 'Staff (Users)', icon: Users, render: () => <ManagementStaffTab searchTerm={searchTerm} onShowStatus={showStatus} />, permission: 'canManageStaff' },
@@ -88,7 +92,7 @@ const ManagementModal: React.FC<ManagementModalProps> = ({ isOpen, onClose, init
         { id: 'taxCodes', label: 'Tax Codes', icon: Banknote, render: () => <ManagementTaxCodesTab searchTerm={searchTerm} onShowStatus={showStatus} />, permission: 'canManageTaxCodes' },
         { id: 'discountCodes', label: 'Discount Codes', icon: Tag, render: () => <ManagementDiscountCodesTab />, permission: 'canManageDiscountCodes' },
         { id: 'backup', label: 'Backup & Restore', icon: Database, render: () => <ManagementBackupTab backupSchedule={backupSchedule} setBackupSchedule={setBackupSchedule} onManualBackup={onManualBackup} onShowStatus={showStatus} />, permission: 'canManageBackups' },
-    ], [searchTerm, backupSchedule, onManualBackup, setBackupSchedule, setCurrentView, onClose]);
+    ], [searchTerm, backupSchedule, onManualBackup, setBackupSchedule, setCurrentView, onClose, onViewCustomer]); // Added onViewCustomer to dependency array
 
     const filteredTabs = useMemo(() => {
         if (!permissions) return [];

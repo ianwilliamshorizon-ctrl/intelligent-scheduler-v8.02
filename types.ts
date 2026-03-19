@@ -3,10 +3,22 @@ import { Timestamp } from 'firebase/firestore';
 export type ViewType = string;
 export type AppEnvironment = 'development' | 'production' | 'staging';
 
+export type UserRole = 'admin' | 'user' | 'Admin' | 'Engineer' | 'Dispatcher' | 'Director';
+
+export interface ManagedDataPermissions {
+    isSuperAdmin: boolean;
+    canSeeDirectorsDashboard: boolean;
+    canEditSuppliers?: boolean;
+    canDeleteSuppliers?: boolean;
+    canViewFinancials?: boolean;
+    canManageInventory?: boolean;
+    canPerformBulkActions?: boolean;
+}
+
 export interface User {
     id: string;
     email: string;
-    role: 'admin' | 'user' | 'Admin' | 'Engineer' | 'Dispatcher' | 'Director';
+    role: UserRole;
     name?: string;
     allowedViews?: ViewType[];
     engineerId?: string;
@@ -33,7 +45,7 @@ export interface Customer {
 
 export interface PreviousRegistration {
     registration: string;
-    changedAt: string; // ISO 8601 date string
+    changedAt: string; 
     changedByUserId: string;
 }
 
@@ -76,14 +88,15 @@ export interface Vehicle {
     engineNumber?: string;
     cc?: number;
     transmissionType?: 'Manual' | 'Automatic' | 'Other';
-    nextMotDate?: string; // YYYY-MM-DD
-    motExpiryDate?: string; // YYYY-MM-DD
-    nextServiceDate?: string; // YYYY-MM-DD
-    winterCheckDate?: string; // YYYY-MM-DD
+    nextMotDate?: string; 
+    motExpiryDate?: string; 
+    nextServiceDate?: string; 
+    winterCheckDate?: string; 
     fleetNumber?: string;
-    manufactureDate?: string; // YYYY-MM-DD
+    manufactureDate?: string; 
     covid19MotExemption?: boolean;
     customerId: string;
+    customer?: Customer; // <--- ADDED FOR VIEW PROFILE FUNCTIONALITY
     notes?: string;
     images?: VehicleImage[];
     previousRegistrations?: PreviousRegistration[];
@@ -93,7 +106,7 @@ export interface Vehicle {
 
 export interface VehicleImage {
     id: string;
-    uploadedAt: string; // ISO 8601 date string
+    uploadedAt: string; 
     isPrimaryDiagram?: boolean;
     dataUrl?: string;
 }
@@ -118,8 +131,8 @@ export interface Job {
     customerId?: string;
     description: string;
     status: 'Booked In' | 'In Progress' | 'Awaiting Parts' | 'Complete' | 'Invoiced' | 'Closed' | 'Allocated' | 'Unallocated' | 'Pending QC' | 'Archived' | 'Cancelled' | 'Paused';
-    createdAt?: string; // YYYY-MM-DD
-    completedAt?: string; // YYYY-MM-DD
+    createdAt?: string; 
+    completedAt?: string; 
     scheduledDate?: string;
     notes?: string;
     segments?: JobSegment[];
@@ -144,8 +157,8 @@ export interface Estimate {
     estimateNumber?: string;
     vehicleId: string;
     customerId: string;
-    issueDate: string; // YYYY-MM-DD
-    expiryDate: string; // YYYY-MM-DD
+    issueDate: string; 
+    expiryDate: string; 
     status: 'Draft' | 'Sent' | 'Approved' | 'Rejected' | 'Converted to Job' | 'Closed';
     lineItems: EstimateLineItem[];
     notes?: string;
@@ -158,8 +171,8 @@ export interface Invoice {
     id: string;
     vehicleId: string;
     customerId: string;
-    issueDate: string; // YYYY-MM-DD
-    dueDate: string; // YYYY-MM-DD
+    issueDate: string; 
+    dueDate: string; 
     status: 'Draft' | 'Sent' | 'Part Paid' | 'Paid' | 'Overdue';
     lineItems: any[];
     payments: Payment[];
@@ -202,7 +215,7 @@ export interface LineItem {
 
 export interface Payment {
     amount: number;
-    date: string; // YYYY-MM-DD
+    date: string; 
     method: 'Card' | 'Bank Transfer' | 'Cash' | 'Other';
 }
 
@@ -211,7 +224,7 @@ export interface AuditLog {
     timestamp: Timestamp;
     userId: string;
     action: 'CREATE' | 'UPDATE' | 'DELETE';
-    entity: string; // e.g., 'Vehicle', 'Customer'
+    entity: string; 
     entityId: string;
     details: string;
 }
@@ -244,7 +257,7 @@ export interface PurchaseOrder {
     supplierId?: string;
     entityId?: string;
     vehicleRegistrationRef?: string;
-    orderDate?: string; // YYYY-MM-DD
+    orderDate?: string; 
     notes?: string;
     lineItems?: PurchaseOrderLineItem[];
     supplierReference?: string;
@@ -394,7 +407,7 @@ export interface BusinessEntity {
     postcode?: string;
     vatNumber?: string;
     logoUrl?: string;
-	 type?: 'Workshop' | 'Sales' | 'Storage' | 'Rentals';
+     type?: 'Workshop' | 'Sales' | 'Storage' | 'Rentals';
 }
 
 export interface TaxRate {
@@ -408,6 +421,7 @@ export interface Role {
     id: string;
     name?: string;
     defaultAllowedViews?: ViewType[];
+    managedDataPermissions?: ManagedDataPermissions;
 }
 
 export interface InspectionTemplate {
