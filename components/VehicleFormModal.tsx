@@ -17,9 +17,6 @@ import { formatCurrency } from '../utils/formatUtils';
 import { formatDate, dateStringToDate } from '../core/utils/dateUtils';
 import AddNewVehicleForm from './AddNewVehicleForm';
 
-/**
- * Type overrides for missing exports in ../types
- */
 type LocalInvoice = any;
 type LocalPrevReg = { registration: string; changedAt: string; changedByUserId: string };
 
@@ -79,6 +76,7 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
     const { logEvent } = useAuditLogger();
     const { currentUser } = useApp();
     const [isTransferMode, setIsTransferMode] = useState(false);
+    const [includeMotHistory, setIncludeMotHistory] = useState(false);
     
     const hasAutoLookedUp = useRef(false);
 
@@ -94,6 +92,11 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
             make: '',
             model: '',
             transmissionType: 'Manual',
+            jobs: [],
+            estimates: [],
+            invoices: [],
+            motHistory: [],
+            previousRegistrations: []
         };
         
         setFormData(initialData);
@@ -125,9 +128,9 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
     const getInvoiceTotal = (inv: any) => inv.lineItems?.reduce((sum: number, item: any) => sum + (item.quantity * item.unitPrice), 0) || 0;
     const getEstimateTotal = (est: Estimate) => est.lineItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
 
-    const vehicleJobs = useMemo(() => (jobs || []).filter(j => j.vehicleId === vehicle?.id).sort((a,b) => (b.createdAt || '').localeCompare(a.createdAt || '')), [jobs, vehicle]);
-    const vehicleEstimates = useMemo(() => (estimates || []).filter(e => e.vehicleId === vehicle?.id).sort((a,b) => (b.issueDate || '').localeCompare(a.issueDate || '')), [estimates, vehicle]);
-    const vehicleInvoices = useMemo(() => (invoices || []).filter(i => i.vehicleId === vehicle?.id).sort((a,b) => (b.issueDate || '').localeCompare(a.issueDate || '')), [invoices, vehicle]);
+    const vehicleJobs = useMemo(() => (jobs || []).filter(j => j.vehicleId === formData.id).sort((a,b) => (b.createdAt || '').localeCompare(a.createdAt || '')), [jobs, formData.id]);
+    const vehicleEstimates = useMemo(() => (estimates || []).filter(e => e.vehicleId === formData.id).sort((a,b) => (b.issueDate || '').localeCompare(a.issueDate || '')), [estimates, formData.id]);
+    const vehicleInvoices = useMemo(() => (invoices || []).filter(i => i.vehicleId === formData.id).sort((a,b) => (b.issueDate || '').localeCompare(a.issueDate || '')), [invoices, formData.id]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value, type } = e.target;
@@ -140,13 +143,10 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
 
     const handleLookup = async (lookupValue: string) => {
         if (!lookupValue || lookupValue.trim().length < 2 || isLookingUp) return;
-        
         setIsLookingUp(true);
         setLookupError('');
-        
         try {
-            const details = await lookupVehicleByVRM(lookupValue) as any;
-
+            const details = await lookupVehicleByVRM(lookupValue, includeMotHistory) as any;
             if (details.AccountBalance !== undefined) setRemainingQuota(details.AccountBalance);
             else if (details.CreditsRemaining !== undefined) setRemainingQuota(details.CreditsRemaining);
 
@@ -161,7 +161,7 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
                 vin: details.vin || prev.vin,
                 nextMotDate: details.nextMotDate || prev.nextMotDate,
                 manufactureDate: details.monthOfFirstRegistration ? `${details.monthOfFirstRegistration}-01` : prev.manufactureDate,
-                motHistory: details.motHistory?.motTestDetailsList || []
+                motHistory: details.motHistory || []
             }));
         } catch (error: any) {
             setLookupError(error.message || 'Lookup failed.');
@@ -204,12 +204,8 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
 
     const handleCustomerClick = (e: React.MouseEvent) => {
         e.preventDefault();
-        e.stopPropagation();
-        console.log("View Profile triggered for Customer ID:", formData.customerId);
         if (onViewCustomer && formData.customerId) {
             onViewCustomer(formData.customerId);
-        } else {
-            console.warn("VehicleFormModal: onViewCustomer prop is missing or customerId is null.");
         }
     };
     
@@ -219,7 +215,7 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
     }));
 
     return (
-        <FormModal isOpen={isOpen} onClose={onClose} onSave={handleSave} title={vehicle?.id ? 'Edit Vehicle' : 'Add Vehicle'} maxWidth="max-w-7xl">
+        <FormModal isOpen={isOpen} onClose={onClose} onSave={handleSave} title={formData.id ? 'Edit Vehicle' : 'Add Vehicle'} maxWidth="max-w-7xl">
             <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
                 <div className="md:col-span-3 space-y-4">
                     <div className="flex border-b border-gray-200 justify-between items-center pr-2">
@@ -286,7 +282,20 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
                                             {isLookingUp ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
                                         </button>
                                     </div>
-                                    {!isTransferMode && vehicle?.id && (
+                                     <div className="flex items-center mt-2">
+                                        <input
+                                            type="checkbox"
+                                            id="includeMotHistory"
+                                            checked={includeMotHistory}
+                                            onChange={(e) => setIncludeMotHistory(e.target.checked)}
+                                            className="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                                        />
+                                        <label htmlFor="includeMotHistory" className="ml-2 block text-sm text-gray-900">
+                                            Include MOT History
+                                        </label>
+                                    </div>
+
+                                    {!isTransferMode && formData.id && (
                                         <button type="button" onClick={() => setIsTransferMode(true)} className="text-[10px] text-indigo-600 font-bold mt-1 flex items-center gap-1 uppercase">
                                             <ArrowRightLeft size={10}/> Plate Transfer
                                         </button>
@@ -392,55 +401,62 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
                 </div>
 
                  <div className="md:col-span-2 space-y-4">
-                    {vehicle?.id && (
-                        <Section title="Internal Garage History" icon={Briefcase}>
-                            <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2">
-                                <div className="p-2 bg-gray-100 rounded text-[10px] flex justify-between border border-gray-200">
-                                    <span className="font-mono font-bold text-gray-600 uppercase">VIN: {formData.vin || 'N/A'}</span>
-                                    <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('open-vehicle-history-report', { detail: { vehicleId: vehicle.id } }))} className="text-indigo-600 hover:text-indigo-800"><Printer size={14}/></button>
-                                </div>
-
-                                {vehicleJobs.length > 0 && (
-                                    <div className="space-y-1">
-                                        <h5 className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest">Recent Jobs</h5>
-                                        {vehicleJobs.map(job => (
-                                            <div key={job.id} className="text-xs flex justify-between p-2 border rounded bg-blue-50/30 hover:bg-blue-100 cursor-pointer transition-colors" onClick={() => onViewJob?.(job.id)}>
-                                                <span className="text-gray-500 font-mono">{job.createdAt}</span>
-                                                <span className="truncate font-bold flex-1 px-2">{job.description}</span>
-                                                <Eye size={14} className="text-gray-400" />
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-
-                                {vehicleEstimates.length > 0 && (
-                                    <div className="space-y-1 mt-4">
-                                        <h5 className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest">Estimates</h5>
-                                        {vehicleEstimates.map(est => (
-                                            <div key={est.id} className="text-xs flex justify-between p-2 border rounded bg-amber-50/30 hover:bg-amber-100 cursor-pointer transition-colors" onClick={() => onViewEstimate?.(est)}>
-                                                <span className="text-gray-500 font-mono">{est.issueDate}</span>
-                                                <span className="flex-1 px-2 font-bold text-amber-900">#{est.id.slice(-6)}</span>
-                                                <span className="font-extrabold">{formatCurrency(getEstimateTotal(est))}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-
-                                {vehicleInvoices.length > 0 && (
-                                    <div className="space-y-1 mt-4">
-                                        <h5 className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest">Billing</h5>
-                                        {vehicleInvoices.map(inv => (
-                                            <div key={inv.id} className="text-xs flex justify-between p-2 border rounded bg-green-50/30 hover:bg-green-100 cursor-pointer transition-colors" onClick={() => onViewInvoice?.(inv)}>
-                                                <span className="text-gray-500 font-mono">{inv.issueDate}</span>
-                                                <span className="flex-1 px-2 font-bold text-green-900">#{inv.id.slice(-6)}</span>
-                                                <span className="font-extrabold">{formatCurrency(getInvoiceTotal(inv))}</span>
-                                            </div>
-                                        ))}
-                                    </div>
+                    <Section title="Internal Garage History" icon={Briefcase}>
+                        <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2">
+                            <div className="p-2 bg-gray-100 rounded text-[10px] flex justify-between border border-gray-200">
+                                <span className="font-mono font-bold text-gray-600 uppercase">VIN: {formData.vin || 'N/A'}</span>
+                                {formData.id && (
+                                    <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('open-vehicle-history-report', { detail: { vehicleId: formData.id } }))} className="text-indigo-600 hover:text-indigo-800"><Printer size={14}/></button>
                                 )}
                             </div>
-                        </Section>
-                    )}
+
+                            {!formData.id && (
+                                <div className="text-center py-6 opacity-40">
+                                    <History size={24} className="mx-auto mb-1" />
+                                    <p className="text-[10px] font-bold">NEW VEHICLE RECORD</p>
+                                </div>
+                            )}
+
+                            {vehicleJobs.length > 0 && (
+                                <div className="space-y-1">
+                                    <h5 className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest">Recent Jobs</h5>
+                                    {vehicleJobs.map(job => (
+                                        <div key={job.id} className="text-xs flex justify-between p-2 border rounded bg-blue-50/30 hover:bg-blue-100 cursor-pointer transition-colors" onClick={() => onViewJob?.(job.id)}>
+                                            <span className="text-gray-500 font-mono">{job.createdAt}</span>
+                                            <span className="truncate font-bold flex-1 px-2">{job.description}</span>
+                                            <Eye size={14} className="text-gray-400" />
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            {vehicleEstimates.length > 0 && (
+                                <div className="space-y-1 mt-4">
+                                    <h5 className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest">Estimates</h5>
+                                    {vehicleEstimates.map(est => (
+                                        <div key={est.id} className="text-xs flex justify-between p-2 border rounded bg-amber-50/30 hover:bg-amber-100 cursor-pointer transition-colors" onClick={() => onViewEstimate?.(est)}>
+                                            <span className="text-gray-500 font-mono">{est.issueDate}</span>
+                                            <span className="flex-1 px-2 font-bold text-amber-900">#{est.id.slice(-6)}</span>
+                                            <span className="font-extrabold">{formatCurrency(getEstimateTotal(est))}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            {vehicleInvoices.length > 0 && (
+                                <div className="space-y-1 mt-4">
+                                    <h5 className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest">Billing</h5>
+                                    {vehicleInvoices.map(inv => (
+                                        <div key={inv.id} className="text-xs flex justify-between p-2 border rounded bg-green-50/30 hover:bg-green-100 cursor-pointer transition-colors" onClick={() => onViewInvoice?.(inv)}>
+                                            <span className="text-gray-500 font-mono">{inv.issueDate}</span>
+                                            <span className="flex-1 px-2 font-bold text-green-900">#{inv.id.slice(-6)}</span>
+                                            <span className="font-extrabold">{formatCurrency(getInvoiceTotal(inv))}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </Section>
                     
                     {(formData.previousRegistrations || []).length > 0 && (
                         <Section title="Plate History" icon={History}>

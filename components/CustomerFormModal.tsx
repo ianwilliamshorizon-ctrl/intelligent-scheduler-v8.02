@@ -4,7 +4,7 @@ import FormModal from './FormModal';
 import { generateCustomerId } from '../core/utils/customerUtils';
 import { formatDate } from '../core/utils/dateUtils';
 import { lookupAddressByPostcode, AddressDetails } from '../services/postcodeLookupService';
-import { Loader2, Search, Briefcase, Car, ChevronDown, ChevronUp } from 'lucide-react';
+import { Loader2, Search, Briefcase, Car, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react';
 import { useAuditLogger } from '../core/hooks/useAuditLogger';
 
 const Section = ({ title, icon: Icon, children, defaultOpen = true }: { title: string, icon: React.ElementType, children?: React.ReactNode, defaultOpen?: boolean }) => {
@@ -36,7 +36,8 @@ interface CustomerFormModalProps {
 const CustomerFormModal: React.FC<CustomerFormModalProps> = ({ 
     isOpen, onClose, onSave, customer, existingCustomers = [], vehicles = [], onViewVehicle 
 }) => {
-    const [formData, setFormData] = useState<Partial<Customer>>({});
+    // Using 'any' here temporarily to resolve the missing properties in your Customer type definition
+    const [formData, setFormData] = useState<any>({});
     const [isLookingUpAddress, setIsLookingUpAddress] = useState(false);
     const [addressList, setAddressList] = useState<AddressDetails[]>([]);
     const { logEvent } = useAuditLogger();
@@ -70,7 +71,7 @@ const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value, type } = e.target;
         const val = type === 'checkbox' ? (e.target as HTMLInputElement).checked : value;
-        setFormData(prev => ({ ...prev, [name]: val }));
+        setFormData((prev: any) => ({ ...prev, [name]: val }));
     };
 
     const handleAddressLookup = async () => {
@@ -90,7 +91,7 @@ const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
     const handleAddressSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
         const selectedAddress = addressList[parseInt(e.target.value, 10)];
         if (selectedAddress) {
-            setFormData(prev => ({
+            setFormData((prev: any) => ({
                 ...prev,
                 addressLine1: selectedAddress.street || '',
                 addressLine2: selectedAddress.locality || '',
@@ -98,6 +99,7 @@ const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
                 county: selectedAddress.county || '',
                 postcode: selectedAddress.postcode || prev.postcode
             }));
+            setAddressList([]);
         }
     };
 
@@ -112,8 +114,8 @@ const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
     };
 
     const customerVehicles = useMemo(() => 
-        (vehicles || []).filter(v => v.customerId === customer?.id), 
-    [vehicles, customer]);
+        (vehicles || []).filter(v => v.customerId === (customer?.id || formData.id)), 
+    [vehicles, customer, formData.id]);
 
     if (!isOpen) return null;
 
@@ -125,7 +127,7 @@ const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
                         
                         <div className="md:col-span-3">
                             <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Customer Account Reference</label>
-                            <input value={formData.id || customer?.id || ''} readOnly className="w-full p-2 border rounded bg-gray-50 font-mono text-gray-500 text-sm" />
+                            <input value={formData.id || ''} readOnly className="w-full p-2 border rounded bg-gray-50 font-mono text-gray-500 text-sm" />
                         </div>
                         
                         <div className="md:col-span-3 flex items-center bg-indigo-50 p-3 rounded-lg border border-indigo-100">
@@ -148,18 +150,31 @@ const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
                         <div><label className="block text-sm font-medium text-gray-700 mb-1">Mobile</label><input name="mobile" value={formData.mobile || ''} onChange={handleChange} className="w-full p-2 border rounded"/></div>
                         <div><label className="block text-sm font-medium text-gray-700 mb-1">Email</label><input name="email" value={formData.email || ''} onChange={handleChange} className="w-full p-2 border rounded"/></div>
                         
-                        <div className="md:col-span-3 border-t pt-4 relative">
+                        <div className="md:col-span-3 border-t pt-4">
                             <label className="block text-sm font-medium text-gray-700 mb-1">Postcode</label>
-                            <input name="postcode" value={formData.postcode || ''} onChange={handleChange} className="w-full p-2 border rounded uppercase"/>
-                            <button type="button" onClick={handleAddressLookup} className="absolute right-2 top-8 p-1.5 bg-gray-100 rounded-full hover:bg-gray-200">
-                                {isLookingUpAddress ? <Loader2 size={14} className="animate-spin text-indigo-600" /> : <Search size={14} className="text-gray-500" />}
-                            </button>
+                            <div className="relative">
+                                <input 
+                                    name="postcode" 
+                                    value={formData.postcode || ''} 
+                                    onChange={(e) => setFormData({...formData, postcode: e.target.value.toUpperCase()})} 
+                                    className="w-full p-2 border rounded uppercase font-mono pr-10"
+                                    placeholder="E.G. GU24 9NY"
+                                />
+                                <button 
+                                    type="button" 
+                                    onClick={handleAddressLookup} 
+                                    disabled={isLookingUpAddress}
+                                    className="absolute right-1 top-1/2 -translate-y-1/2 p-1.5 bg-gray-100 rounded hover:bg-indigo-600 hover:text-white transition-colors text-gray-500 disabled:opacity-50"
+                                >
+                                    {isLookingUpAddress ? <RefreshCw size={14} className="animate-spin" /> : <Search size={14} />}
+                                </button>
+                            </div>
                         </div>
 
                         {addressList.length > 0 && (
                             <div className="md:col-span-3">
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Select Address</label>
-                                <select onChange={handleAddressSelect} className="w-full p-2 border rounded bg-white">
+                                <label className="block text-sm font-medium text-indigo-700 mb-1">Select Address</label>
+                                <select onChange={handleAddressSelect} className="w-full p-2 border-2 border-indigo-200 rounded bg-indigo-50">
                                     <option value="">Select an address...</option>
                                     {addressList.map((addr, index) => (
                                         <option key={index} value={index}>{addr.summaryAddress}</option>
@@ -173,7 +188,7 @@ const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
                         <div><label className="block text-sm font-medium text-gray-700 mb-1">City</label><input name="city" value={formData.city || ''} onChange={handleChange} className="w-full p-2 border rounded"/></div>
                         <div><label className="block text-sm font-medium text-gray-700 mb-1">County</label><input name="county" value={formData.county || ''} onChange={handleChange} className="w-full p-2 border rounded"/></div>
 
-                        <div className="md:col-span-3 border-t pt-4 grid grid-cols-2 gap-.4">
+                        <div className="md:col-span-3 border-t pt-4 grid grid-cols-2 gap-4">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
                                 <select name="category" value={formData.category || 'Retail'} onChange={handleChange} className="w-full p-2 border rounded bg-white">
@@ -205,12 +220,16 @@ const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
                 <div className="md:col-span-2 space-y-4">
                     <Section title={`Vehicles (${customerVehicles.length})`} icon={Car}>
                         <div className="space-y-2 max-h-[500px] overflow-y-auto pr-2">
-                            {customerVehicles.map(v => (
-                                <div key={v.id} className="p-3 bg-white border rounded shadow-sm">
-                                    <p className="font-bold font-mono text-indigo-600">{v.registration}</p>
-                                    <p className="text-xs text-gray-500">{v.make} {v.model}</p>
-                                </div>
-                            ))}
+                            {customerVehicles.length === 0 ? (
+                                <p className="text-center py-8 text-gray-400 text-sm">No vehicles linked to this customer.</p>
+                            ) : (
+                                customerVehicles.map(v => (
+                                    <div key={v.id} className="p-3 bg-white border rounded shadow-sm hover:border-indigo-300 transition-colors cursor-pointer" onClick={() => onViewVehicle?.(v.id)}>
+                                        <p className="font-bold font-mono text-indigo-600">{v.registration}</p>
+                                        <p className="text-xs text-gray-500 uppercase">{v.make} {v.model}</p>
+                                    </div>
+                                ))
+                            )}
                         </div>
                     </Section>
                 </div>

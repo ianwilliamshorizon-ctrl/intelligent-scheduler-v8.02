@@ -489,130 +489,103 @@ const getNextSequence = (items: any[], entityShortCode: string, prefix: string, 
                 />
             )}
 
-            {modals.scheduleJobFromEstimateModal.isOpen && modals.scheduleJobFromEstimateModal.estimate && (
-                <ScheduleJobFromEstimateModal 
-                    isOpen={true}
-                    onClose={() => setters.setScheduleJobFromEstimateModal({isOpen: false, estimate: null})}
-                    onConfirm={async (job, est, options, extraJobs) => {
-                        const originalEstimate = modals.scheduleJobFromEstimateModal.estimate;
-                        if (!originalEstimate) return;
+            {modals.scheduleJobFromEstimateModal.isOpen && modals.scheduleJobFromEstimateModal.estimate && (() => {
+                const estimate = modals.scheduleJobFromEstimateModal.estimate;
+                if (!estimate) return null;
 
-                        const targetInquiryId = modals.scheduleJobFromEstimateModal.inquiryId || inquiries.find(i => i.linkedEstimateId === originalEstimate?.id)?.id;
-                        const inquiry = targetInquiryId ? inquiries.find(i => i.id === targetInquiryId) : null;
-                        
-                        let newPurchaseOrderIds: string[] = [];
+                const targetInquiryId = modals.scheduleJobFromEstimateModal.inquiryId || inquiries.find(i => i.linkedEstimateId === estimate.id)?.id;
+                const inquiry = targetInquiryId ? inquiries.find(i => i.id === targetInquiryId) : undefined;
 
-                        // This is a supplementary estimate, so link the new job back to the original
-                        if (originalEstimate.jobId) {
-                            const originJob = jobs.find(j => j.id === originalEstimate.jobId);
-                            if (originJob) {
-                                const updateNote = `
-[System]: Supplementary Estimate #${originalEstimate.estimateNumber} was converted to a separate Job #${job.id} scheduled for ${formatReadableDate(job.scheduledDate)}.`;
-                                const updatedOriginJob = {
-                                    ...originJob,
-                                    notes: (originJob.notes || '') + updateNote
-                                };
-                                await handleSaveItem(setJobs, updatedOriginJob, 'brooks_jobs');
-                            }
-                        }
+                return (
+                    <ScheduleJobFromEstimateModal 
+                        isOpen={true}
+                        onClose={() => setters.setScheduleJobFromEstimateModal({isOpen: false, estimate: null})}
+                        onConfirm={async (job, est, options, extraJobs, newPurchaseOrders) => {
+                            const originalEstimate = modals.scheduleJobFromEstimateModal.estimate;
+                            if (!originalEstimate) return;
 
-                        // If an inquiry is linked, handle moving POs or creating new ones
-                        if (inquiry) {
-                            const linkedPOIds = inquiry.linkedPurchaseOrderIds || [];
-                            // Case 1: The estimate is from an existing job (supplementary)
+                            const targetInquiryId = modals.scheduleJobFromEstimateModal.inquiryId || inquiries.find(i => i.linkedEstimateId === originalEstimate?.id)?.id;
+                            const inquiry = targetInquiryId ? inquiries.find(i => i.id === targetInquiryId) : null;
+                            
+                            // This is a supplementary estimate, so link the new job back to the original
                             if (originalEstimate.jobId) {
-                                const posToMove = purchaseOrders.filter(po => linkedPOIds.includes(po.id));
-                                for (const po of posToMove) {
-                                    const updatedPO = { ...po, jobId: job.id };
-                                    await handleSaveItem(setPurchaseOrders, updatedPO, 'brooks_purchaseOrders');
-                                    newPurchaseOrderIds.push(po.id);
-                                }
-                            } else {
-                                // Case 2: New job from an inquiry - check for draft POs
-                                const draftPOs = purchaseOrders.filter(po => linkedPOIds.includes(po.id) && po.status === 'Draft');
-                                if (draftPOs.length > 0) {
-                                    for (const po of draftPOs) {
-                                        const updatedPO = { ...po, jobId: job.id };
-                                        await handleSaveItem(setPurchaseOrders, updatedPO, 'brooks_purchaseOrders');
-                                        newPurchaseOrderIds.push(po.id);
-                                    }
-                                } else {
-                                    // Create new POs if needed
-                                    const partItems = (est.lineItems || []).filter(li => !li.isLabor && li.partId && !li.isOptional);
-                                    if (partItems.length > 0) {
-                                        // This logic is complex, so for now we just create one PO
-                                        const entity = businessEntities.find(e => e.id === job.entityId);
-                                        const entityShortCode = entity?.shortCode || 'UNK';
-                                        const newPOId = generatePurchaseOrderId(purchaseOrders, entityShortCode);
-                                        const vehicle = vehicles.find(v => v.id === job.vehicleId);
-
-                                        const newPO: T.PurchaseOrder = {
-                                            id: newPOId, entityId: job.entityId, supplierId: null, // Simplified for now
-                                            vehicleRegistrationRef: vehicle?.registration || 'N/A', orderDate: formatDate(new Date()), status: 'Draft', jobId: job.id, createdByUserId: currentUser.id,
-                                            lineItems: partItems.map(item => ({ id: crypto.randomUUID(), partNumber: item.partNumber, description: item.description, quantity: item.quantity, receivedQuantity: 0, unitPrice: item.unitCost || 0, taxCodeId: item.taxCodeId }))
-                                        };
-                                        await handleSaveItem(setPurchaseOrders, newPO, 'brooks_purchaseOrders');
-                                        newPurchaseOrderIds.push(newPOId);
-                                    }
+                                const originJob = jobs.find(j => j.id === originalEstimate.jobId);
+                                if (originJob) {
+                                    const updateNote = `
+[System]: Supplementary Estimate #${originalEstimate.estimateNumber} was converted to a separate Job #${job.id} scheduled for ${formatReadableDate(job.scheduledDate)}.`;
+                                    const updatedOriginJob = {
+                                        ...originJob,
+                                        notes: (originJob.notes || '') + updateNote
+                                    };
+                                    await handleSaveItem(setJobs, updatedOriginJob, 'brooks_jobs');
                                 }
                             }
-                        }
 
-                        const jobToSave: T.Job = {
-                            ...job,
-                            partsStatus: newPurchaseOrderIds.length > 0 ? 'Awaiting Order' : 'Not Required',
-                            purchaseOrderIds: newPurchaseOrderIds.length > 0 ? newPurchaseOrderIds : undefined,
-                            createdByUserId: currentUser.id,
-                            estimateId: est.id, // Ensure estimateId is saved to the job
-                        };
-                    
-                        await handleSaveItem(setJobs, jobToSave, 'brooks_jobs');
-                        
-                        if (extraJobs && extraJobs.length > 0) {
-                            for (const extraJob of extraJobs) {
-                                await handleSaveItem(setJobs, { ...extraJob, createdByUserId: currentUser.id }, 'brooks_jobs');
+                            // Save the new/updated purchase orders from the modal
+                            const purchaseOrdersToSave = newPurchaseOrders || [];
+                            if (purchaseOrdersToSave.length > 0) {
+                                for (const po of purchaseOrdersToSave) {
+                                    // handleSaveItem is an upsert, so it works for new and updated POs
+                                    await handleSaveItem(setPurchaseOrders, { ...po, createdByUserId: po.createdByUserId || currentUser.id }, 'brooks_purchaseOrders');
+                                }
                             }
-                        }
-                        
-                        const estimateToSave = { ...est, status: 'Approved' };
-                        await handleSaveItem(setEstimates, estimateToSave, 'brooks_estimates');
-                        
-                        if (inquiry) {
-                             const allLinkedIds = [...new Set([...(inquiry.linkedPurchaseOrderIds || []), ...newPurchaseOrderIds])];
-                            const hasParts = allLinkedIds.length > 0;
-                            const updatedInquiry: T.Inquiry = {
-                                ...inquiry, 
-                                status: hasParts ? 'In Progress' : 'Closed',
-                                linkedJobId: jobToSave.id, // Link the new job to the inquiry
-                                linkedPurchaseOrderIds: allLinkedIds,
-                                actionNotes: (inquiry.actionNotes || '') + `
-[System]: Job #${jobToSave.id} scheduled for ${formatReadableDate(jobToSave.scheduledDate)}. ${hasParts ? 'Parts status updated.' : 'No parts required, inquiry closed.'}` 
+
+                            const jobToSave = {
+                                ...job,
+                                createdByUserId: currentUser.id,
+                                estimateId: est.id,
                             };
-                            await handleSaveItem(setInquiries, updatedInquiry, 'brooks_inquiries');
-                        }
-                    
-                        setters.setScheduleJobFromEstimateModal({isOpen: false, estimate: null});
-                        
-                        const extraJobMsg = extraJobs && extraJobs.length > 0 ? ` plus ${extraJobs.length} linked job(s)` : '';
-                        setConfirmation({
-                            isOpen: true, 
-                            title: 'Job Scheduled', 
-                            message: `Job #${jobToSave.id} has been scheduled for ${formatReadableDate(jobToSave.scheduledDate)}${extraJobMsg}.`, 
-                            type: 'success'
-                        });
-                    }}
-                    estimate={modals.scheduleJobFromEstimateModal.estimate}
-                    customer={customers.find(c => c.id === modals.scheduleJobFromEstimateModal.estimate!.customerId)}
-                    vehicle={vehicles.find(v => v.id === modals.scheduleJobFromEstimateModal.estimate!.vehicleId)}
-                    jobs={jobs}
-                    vehicles={vehicles}
-                    maxDailyCapacityHours={businessEntities.find(e => e.id === modals.scheduleJobFromEstimateModal.estimate!.entityId)?.dailyCapacityHours || 40}
-                    businessEntities={businessEntities}
-                    customers={customers}
-                    absenceRequests={absenceRequests}
-                    onEditJob={(id) => { setters.setSelectedJobId(id); setters.setIsEditJobModalOpen(true); }}
-                />
-            )}
+
+                            await handleSaveItem(setJobs, jobToSave, 'brooks_jobs');
+                            
+                            if (extraJobs && extraJobs.length > 0) {
+                                for (const extraJob of extraJobs) {
+                                    await handleSaveItem(setJobs, { ...extraJob, createdByUserId: currentUser.id }, 'brooks_jobs');
+                                }
+                            }
+                            
+                            await handleSaveItem(setEstimates, est, 'brooks_estimates');
+                            
+                            if (inquiry) {
+                                const newPoIds = purchaseOrdersToSave.map(po => po.id);
+                                const allLinkedIds = [...new Set([...(inquiry.linkedPurchaseOrderIds || []), ...newPoIds])];
+                                const hasParts = allLinkedIds.length > 0;
+                                const updatedInquiry = {
+                                    ...inquiry, 
+                                    status: hasParts ? 'In Progress' : 'Closed',
+                                    linkedJobId: jobToSave.id,
+                                    linkedPurchaseOrderIds: allLinkedIds,
+                                    actionNotes: (inquiry.actionNotes || '') + `
+[System]: Job #${jobToSave.id} scheduled for ${formatReadableDate(jobToSave.scheduledDate)}. ${hasParts ? 'Parts status updated.' : 'No parts required, inquiry closed.'}` 
+                                };
+                                await handleSaveItem(setInquiries, updatedInquiry, 'brooks_inquiries');
+                            }
+
+                            setters.setScheduleJobFromEstimateModal({isOpen: false, estimate: null});
+                            
+                            const extraJobMsg = extraJobs && extraJobs.length > 0 ? ` plus ${extraJobs.length} linked job(s)` : '';
+                            setConfirmation({
+                                isOpen: true, 
+                                title: 'Job Scheduled', 
+                                message: `Job #${jobToSave.id} has been scheduled for ${formatReadableDate(jobToSave.scheduledDate)}${extraJobMsg}.`, 
+                                type: 'success'
+                            });
+                        }}
+                        estimate={estimate}
+                        inquiry={inquiry}
+                        customer={customers.find(c => c.id === estimate.customerId)}
+                        vehicle={vehicles.find(v => v.id === estimate.vehicleId)}
+                        jobs={jobs}
+                        vehicles={vehicles}
+                        parts={parts}
+                        maxDailyCapacityHours={businessEntities.find(e => e.id === estimate.entityId)?.dailyCapacityHours || 40}
+                        businessEntities={businessEntities}
+                        customers={customers}
+                        absenceRequests={absenceRequests}
+                        onEditJob={(jobId) => { setters.setSelectedJobId(jobId); setters.setIsEditJobModalOpen(true); }}
+                    />
+                );
+            })()}
 
             {modals.scheduleEmailModal.isOpen && (
                 <ScheduleConfirmationEmailModal 

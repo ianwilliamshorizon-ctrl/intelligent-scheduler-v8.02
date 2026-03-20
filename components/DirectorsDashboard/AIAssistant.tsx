@@ -1,9 +1,6 @@
 import React, { useState } from 'react';
 import { useData } from '../../core/state/DataContext';
-import { GoogleGenerativeAI } from '@google/generative-ai';
-
-// Initialize the AI model directly, using the same key as LiveAssistant.tsx
-const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY);
+import { generateContent } from '../../core/services/geminiService';
 
 const AIAssistant: React.FC = () => {
     const [isLoading, setIsLoading] = useState(false);
@@ -38,15 +35,11 @@ const AIAssistant: React.FC = () => {
         const fullPrompt = `Based on the following data, answer the question: "${currentPrompt}"\n\nData:\n${dataContext}`;
 
         try {
-            // Use the same model as LiveAssistant.tsx to ensure key compatibility
-            const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
-            const generationResult = await model.generateContent(fullPrompt);
-            const response = await generationResult.response;
-            const text = response.text();
+            const text = await generateContent(fullPrompt);
             setResult(text);
         } catch (error) {
             console.error("AI Assistant Error:", error);
-            setResult("Sorry, I encountered an error. Please ensure your API key is valid and has access to the model.");
+            setResult("Sorry, I encountered an error. Please try again later.");
         } finally {
             setIsLoading(false);
         }

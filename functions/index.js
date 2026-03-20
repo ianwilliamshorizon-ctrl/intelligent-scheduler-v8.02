@@ -1,31 +1,48 @@
+const { onRequest } = require("firebase-functions/v2/https");
+const axios = require("axios");
+const logger = require("firebase-functions/logger");
 
-const functions = require('firebase-functions');
-const admin = require('firebase-admin');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
-const { defineString } = require('firebase-functions/params');
-
-admin.initializeApp();
-
-// Define the Gemini API key as a parameter for the function
-const geminiApiKey = defineString('GEMINI_API_KEY');
-
-exports.generate = functions.region('europe-west1').https.onCall(async (data, context) => {
-  // Initialize the AI model within the function call
-  const genAI = new GoogleGenerativeAI(geminiApiKey.value());
-
-  const { prompt, modelName } = data;
-
-  if (!prompt || !modelName) {
-    throw new functions.https.HttpsError('invalid-argument', 'The function must be called with "prompt" and "modelName" arguments.');
-  }
-
+/**
+ * Universal Proxy Function
+ * Handles: Vehicle Details, MOT History, and Postcode Lookups
+ */
+exports.generatecontent = onRequest({ 
+  region: "europe-west1", 
+  cors: true, 
+  timeoutSeconds: 60 
+}, async (req, res) => {
   try {
-    const model = genAI.getGenerativeModel({ model: modelName });
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    return { text: response.text() };
+    // 1. Get all query parameters from your frontend services
+    // This includes vrm, postcode, apikey, and packagename
+    const queryParams = req.query;
+
+    if (!queryParams.packagename) {
+      return res.status(400).json({ error: "Missing packagename" });
+    }
+
+    // 2. The Provider's Base URL
+    const baseUrl = `https://uk.api.vehicledataglobal.com/r2/lookup`;
+
+    logger.info(`Proxying ${queryParams.packagename} for: ${queryParams.vrm || queryParams.postcode}`);
+
+    // 3. Forward the request to Vehicle Data Global
+    const response = await axios.get(baseUrl, {
+      params: queryParams,
+      // Ensure we pass through headers if the provider requires them
+      headers: { 'Accept': 'application/json' }
+    });
+
+    // 4. Return the REAL JSON payload back to your frontend services
+    // This fixes the "Unexpected token H" because it's now sending {...}
+    res.json(response.data);
+
   } catch (error) {
-    console.error('Error calling Gemini API:', error);
-    throw new functions.https.HttpsError('internal', 'Failed to generate content from Gemini API.');
+    logger.error("Proxy Error:", error.message);
+    
+    // Send a structured JSON error so your frontend catch blocks work
+    const status = error.response?.status || 500;
+    const errorData = error.response?.data || { error: "Provider unreachable", message: error.message };
+    
+    res.status(status).json(errorData);
   }
 });

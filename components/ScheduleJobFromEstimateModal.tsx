@@ -1,19 +1,18 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
-import { Estimate, Customer, Vehicle, Job, BusinessEntity, AbsenceRequest, JobSegment } from '../types';
+import { Estimate, Customer, Vehicle, Job, BusinessEntity, AbsenceRequest, JobSegment, PurchaseOrder, Inquiry, Part } from '../types';
 import { X, Calendar, CheckCircle, ChevronLeft, ChevronRight, AlertTriangle, Gauge, Clock } from 'lucide-react';
 import { formatDate, dateStringToDate, getRelativeDate, splitJobIntoSegments, addDays, findNextAvailableDate, formatReadableDate } from '../core/utils/dateUtils';
-import { generateJobId } from '../core/utils/numberGenerators';
+import { generateJobId, generatePurchaseOrderId } from '../core/utils/numberGenerators';
 import { BookingCalendarView } from './BookingCalendarView';
 import { MOTBookingModal } from './MOTBookingModal';
 import { TIME_SEGMENTS } from '../constants';
 import { useApp } from '../core/state/AppContext';
-import { useData } from '../core/state/DataContext'; // Import useData
+import { useData } from '../core/state/DataContext';
 
 interface ScheduleJobFromEstimateModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onConfirm: (job: Job, estimate: Estimate, options: { isAlternative: boolean; originalDate: string }, extraJobs?: Job[]) => void;
+    onConfirm: (job: Job, estimate: Estimate, options: { isAlternative: boolean; originalDate: string }, extraJobs?: Job[], newPurchaseOrders?: PurchaseOrder[]) => void;
     estimate: Estimate;
     customer?: Customer;
     vehicle?: Vehicle;
@@ -24,16 +23,17 @@ interface ScheduleJobFromEstimateModalProps {
     customers: Customer[];
     absenceRequests: AbsenceRequest[];
     onEditJob: (jobId: string) => void;
+    inquiry?: Inquiry;
+    parts: Part[];
 }
 
-const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> = ({ isOpen, onClose, onConfirm, estimate, customer, vehicle, jobs, vehicles, maxDailyCapacityHours, businessEntities, customers, absenceRequests, onEditJob }) => {
-    const { setConfirmation } = useApp();
-    const { saveRecord } = useData(); // Use the useData hook
+const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> = ({ isOpen, onClose, onConfirm, estimate, customer, vehicle, jobs, vehicles, maxDailyCapacityHours, businessEntities, customers, absenceRequests, onEditJob, inquiry, parts }) => {
+    const { setConfirmation, currentUser } = useApp();
+    const { saveRecord, purchaseOrders } = useData();
     const [scheduledDate, setScheduledDate] = useState(() => estimate.jobId ? getRelativeDate(0) : (estimate as any).requestedDate || getRelativeDate(0));
     const [suggestion, setSuggestion] = useState<{ suggestedDate: string; originalDate: string } | null>(null);
     const [currentMonth, setCurrentMonth] = useState(() => dateStringToDate(scheduledDate));
     
-    // MOT State
     const [isMotBookingOpen, setIsMotBookingOpen] = useState(false);
     const [motBooking, setMotBooking] = useState<{ date: string; time: string; liftId: string } | null>(null);
     const isMotRequired = useMemo(() => 
@@ -41,7 +41,6 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
             item.description.toLowerCase().includes('mot') && !item.isOptional
         ), 
     [estimate.lineItems]);
-
 
     useEffect(() => {
         if (isOpen) {
@@ -70,7 +69,7 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
     const absencesByDate = useMemo(() => {
         const map = new Map<string, number>();
         absenceRequests.forEach(req => {
-            const reqAsAny = req as any; // Bypass incorrect type definition
+            const reqAsAny = req as any;
             if (reqAsAny.status === 'Approved' || reqAsAny.status === 'Pending') {
                  let currentDate = dateStringToDate(reqAsAny.startDate);
                  const endDate = dateStringToDate(reqAsAny.endDate);
@@ -105,14 +104,7 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
             statusColor = 'bg-amber-100 border-amber-200 text-amber-800';
         }
 
-        return {
-            maxCapacity,
-            absenceHours,
-            effectiveCapacity,
-            currentLoad,
-            remainingCapacity,
-            statusColor
-        };
+        return { maxCapacity, absenceHours, effectiveCapacity, currentLoad, remainingCapacity, statusColor };
     }, [scheduledDate, jobsForEntity, laborHours, entityForEstimate, maxDailyCapacityHours, absencesByDate]);
 
     const handleMonthChange = (offset: number) => {
@@ -138,6 +130,72 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
 
     if (!isOpen) return null;
 
+    const preparePurchaseOrders = (job: Job, estimateToConvert: Estimate, inquiry?: Inquiry): PurchaseOrder[] => {
+        const allPOs = purchaseOrders || [];
+        
+        if (inquiry && inquiry.linkedPurchaseOrderIds && inquiry.linkedPurchaseOrderIds.length > 0) {
+            const draftPOsToUpdate = allPOs.filter(po => 
+                inquiry.linkedPurchaseOrderIds.includes(po.id) && po.status === 'Draft'
+            );
+    
+            if (draftPOsToUpdate.length > 0) {
+                return draftPOsToUpdate.map(po => ({ ...po, jobId: job.id, status: 'Ordered' }));
+            }
+        }
+    
+        const itemsToOrder = (estimateToConvert.lineItems || []).filter(li => {
+            if (li.isLabor || li.isOptional || !li.partId) return false;
+            const part = parts.find(p => p.id === li.partId);
+            return !part || part.stockQuantity < li.quantity;
+        });
+        
+        if (itemsToOrder.length === 0) return [];
+    
+        const entity = businessEntities.find(e => e.id === job.entityId);
+        const entityShortCode = entity?.shortCode || 'UNK';
+        const vehicle = vehicles.find(v => v.id === job.vehicleId);
+    
+        const partsBySupplier: Record<string, (typeof estimate.lineItems[0] & { orderQuantity: number })[]> = {};
+        itemsToOrder.forEach(item => {
+            const part = parts.find(p => p.id === item.partId);
+            const stock = part?.stockQuantity || 0;
+            const orderQuantity = item.quantity - stock;
+            if(orderQuantity <= 0) return;
+
+            const sId = item.supplierId || 'no_supplier';
+            if (!partsBySupplier[sId]) partsBySupplier[sId] = [];
+            partsBySupplier[sId].push({ ...item, orderQuantity });
+        });
+    
+        const generatedPOs: PurchaseOrder[] = Object.entries(partsBySupplier).map(([supplierId, items]) => {
+            const newPOId = generatePurchaseOrderId(allPOs, entityShortCode);
+    
+            return {
+                id: newPOId,
+                entityId: job.entityId,
+                supplierId: supplierId === 'no_supplier' ? null : supplierId, 
+                vehicleRegistrationRef: vehicle?.registration || 'N/A',
+                orderDate: formatDate(new Date()),
+                status: 'Ordered',
+                jobId: job.id,
+                createdByUserId: currentUser?.id || '',
+                lineItems: items.map(item => ({
+                    id: crypto.randomUUID(),
+                    partNumber: item.partNumber,
+                    description: item.description,
+                    quantity: item.orderQuantity,
+                    receivedQuantity: 0,
+                    unitPrice: item.unitCost || 0,
+                    taxCodeId: item.taxCodeId,
+                    supplierId: item.supplierId
+                })),
+                notes: `Auto-generated from Estimate #${estimateToConvert.estimateNumber}`
+            };
+        });
+        
+        return generatedPOs.filter(po => po.lineItems.length > 0);
+    };
+
     const handleConfirmClick = async () => {
         if (isMotRequired && !motBooking) {
             setConfirmation({
@@ -155,167 +213,78 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
         }
 
         const entityShortCode = entityForEstimate?.shortCode || 'UNK';
-        const dailyHours = (jobsForEntity.flatMap(j => j.segments) || [])
-            .filter(s => s.date === scheduledDate && s.status !== 'Cancelled')
-            .reduce((sum, s) => sum + s.duration, 0);
-            
+        const dailyHours = (jobsForEntity.flatMap(j => j.segments) || []).filter(s => s.date === scheduledDate && s.status !== 'Cancelled').reduce((sum, s) => sum + s.duration, 0);
         const baseCapacity = (entityForEstimate as any)?.dailyCapacityHours || maxDailyCapacityHours;
         const absenceHours = absencesByDate.get(scheduledDate) || 0;
         const effectiveCapacity = Math.max(0, baseCapacity - absenceHours);
 
-        const hasOtherLabor = estimate.lineItems.some(item => 
-            item.isLabor && 
-            !item.isOptional && 
-            !item.description.toLowerCase().includes('mot')
-        );
+        const hasOtherLabor = estimate.lineItems.some(item => item.isLabor && !item.isOptional && !item.description.toLowerCase().includes('mot'));
         const isMotOnlyEstimate = motBooking && !hasOtherLabor;
 
         if (dailyHours + laborHours > effectiveCapacity && !motBooking) {
             const alternativeDate = findNextAvailableDate(scheduledDate, laborHours, jobsForEntity, baseCapacity);
             setSuggestion({ suggestedDate: alternativeDate, originalDate: scheduledDate });
-        } else {
+            return;
+        }
+
+        let mainJob: Job;
+        let extraJobs: Job[] = [];
+        let newPurchaseOrders: PurchaseOrder[] = [];
+
+        if (motBooking) {
+            const timeIndex = TIME_SEGMENTS.indexOf(motBooking.time);
             
-            if (motBooking) {
-                const timeIndex = TIME_SEGMENTS.indexOf(motBooking.time);
-                
-                if (isMotOnlyEstimate) {
-                    const motJobId = generateJobId(jobs, entityShortCode);
-                    const motJob: Job = {
-                        id: motJobId,
-                        entityId: estimate.entityId,
-                        vehicleId: estimate.vehicleId,
-                        customerId: estimate.customerId,
-                        description: `MOT Test`,
-                        estimatedHours: 1,
-                        scheduledDate: motBooking.date,
-                        status: 'Allocated',
-                        createdAt: formatDate(new Date()),
-                        createdByUserId: '',
-                        estimateId: estimate.id,
-                        vehicleStatus: 'Awaiting Arrival',
-                        partsStatus: 'Not Required',
-                        notes: estimate.notes || '',
-                        segments: []
-                    };
-                    
-                    if (timeIndex !== -1) {
-                        motJob.segments = [{
-                            id: crypto.randomUUID(),
-                            description: 'MOT',
-                            segmentId: crypto.randomUUID(),
-                            date: motBooking.date,
-                            duration: 1,
-                            status: 'Allocated',
-                            allocatedLift: motBooking.liftId,
-                            scheduledStartSegment: timeIndex,
-                            engineerId: null
-                        }];
-                    } else {
-                        motJob.segments = splitJobIntoSegments(motJob);
-                        motJob.status = 'Unallocated';
-                    }
-
-                    const updatedEstimate: Estimate = { ...estimate, status: 'Converted to Job', jobId: motJob.id };
-                    onConfirm(motJob, updatedEstimate, { isAlternative: false, originalDate: scheduledDate });
-
+            if (isMotOnlyEstimate) {
+                const motJobId = generateJobId(jobs, entityShortCode);
+                mainJob = {
+                    id: motJobId, entityId: estimate.entityId, vehicleId: estimate.vehicleId, customerId: estimate.customerId, description: `MOT Test`, estimatedHours: 1, scheduledDate: motBooking.date, status: 'Allocated', createdAt: formatDate(new Date()), createdByUserId: '', estimateId: estimate.id, vehicleStatus: 'Awaiting Arrival', partsStatus: 'Not Required', notes: estimate.notes || '', segments: []
+                };
+                if (timeIndex !== -1) {
+                    mainJob.segments = [{ id: crypto.randomUUID(), description: 'MOT', segmentId: crypto.randomUUID(), date: motBooking.date, duration: 1, status: 'Allocated', allocatedLift: motBooking.liftId, scheduledStartSegment: timeIndex, engineerId: null }];
                 } else {
-                    const mainJobId = generateJobId(jobs, entityShortCode);
-                    const mainJob: Job = {
-                        id: mainJobId,
-                        entityId: estimate.entityId, 
-                        vehicleId: estimate.vehicleId, 
-                        customerId: estimate.customerId,
-                        description: `Work from Estimate #${estimate.estimateNumber}`, 
-                        estimatedHours: laborHours,
-                        scheduledDate: scheduledDate,
-                        status: 'Unallocated', 
-                        createdAt: formatDate(new Date()), 
-                        segments: [], 
-                        estimateId: estimate.id,
-                        notes: estimate.notes || '',
-                        vehicleStatus: 'Awaiting Arrival',
-                        createdByUserId: '',
-                    };
                     mainJob.segments = splitJobIntoSegments(mainJob);
-
-                    const motJobId = `${mainJobId}-MOT`;
-                    const motJob: Job = {
-                        id: motJobId,
-                        entityId: estimate.entityId,
-                        vehicleId: estimate.vehicleId,
-                        customerId: estimate.customerId,
-                        description: `MOT Test (Linked to ${mainJobId})`,
-                        estimatedHours: 1,
-                        scheduledDate: motBooking.date,
-                        status: 'Allocated',
-                        createdAt: formatDate(new Date()),
-                        createdByUserId: '',
-                        segments: [],
-                        estimateId: undefined,
-                        vehicleStatus: 'Awaiting Arrival', 
-                        notes: `Linked to Master Job #${mainJobId}. Do not invoice separately.`,
-                        partsStatus: 'Not Required'
-                    };
-
-                    if (timeIndex !== -1) {
-                        motJob.segments = [{
-                            id: crypto.randomUUID(),
-                            description: 'MOT',
-                            segmentId: crypto.randomUUID(),
-                            date: motBooking.date,
-                            duration: 1,
-                            status: 'Allocated',
-                            allocatedLift: motBooking.liftId,
-                            scheduledStartSegment: timeIndex,
-                            engineerId: null
-                        }];
-                    }
-                    
-                    mainJob.notes += `
-
-Linked MOT Booking: #${motJobId} @ ${motBooking.time}`;
-
-                    const updatedEstimate: Estimate = { ...estimate, status: 'Converted to Job', jobId: mainJob.id };
-                    onConfirm(mainJob, updatedEstimate, { isAlternative: false, originalDate: scheduledDate }, [motJob]);
+                    mainJob.status = 'Unallocated';
                 }
             } else {
                 const mainJobId = generateJobId(jobs, entityShortCode);
-                const mainJob: Job = {
-                    id: mainJobId,
-                    entityId: estimate.entityId, 
-                    vehicleId: estimate.vehicleId, 
-                    customerId: estimate.customerId,
-                    description: `Work from Estimate #${estimate.estimateNumber}`, 
-                    estimatedHours: laborHours, 
-                    scheduledDate: scheduledDate,
-                    status: 'Unallocated', 
-                    createdAt: formatDate(new Date()), 
-                    segments: [], 
-                    estimateId: estimate.id, 
-                    notes: estimate.notes || '',
-                    vehicleStatus: 'Awaiting Arrival',
-                    createdByUserId: '', 
+                mainJob = {
+                    id: mainJobId, entityId: estimate.entityId, vehicleId: estimate.vehicleId, customerId: estimate.customerId, description: `Work from Estimate #${estimate.estimateNumber}`, estimatedHours: laborHours, scheduledDate: scheduledDate, status: 'Unallocated', createdAt: formatDate(new Date()), segments: [], estimateId: estimate.id, notes: estimate.notes || '', vehicleStatus: 'Awaiting Arrival', createdByUserId: '',
                 };
-                
                 mainJob.segments = splitJobIntoSegments(mainJob);
-                
-                const updatedEstimate: Estimate = { ...estimate, status: 'Converted to Job', jobId: mainJob.id };
-                onConfirm(mainJob, updatedEstimate, { isAlternative: false, originalDate: scheduledDate });
+
+                const motJobId = `${mainJobId}-MOT`;
+                const motJob: Job = { id: motJobId, entityId: estimate.entityId, vehicleId: estimate.vehicleId, customerId: estimate.customerId, description: `MOT Test (Linked to ${mainJobId})`, estimatedHours: 1, scheduledDate: motBooking.date, status: 'Allocated', createdAt: formatDate(new Date()), createdByUserId: '', segments: [], estimateId: undefined, vehicleStatus: 'Awaiting Arrival', notes: `Linked to Master Job #${mainJobId}. Do not invoice separately.`, partsStatus: 'Not Required' };
+
+                if (timeIndex !== -1) {
+                    motJob.segments = [{ id: crypto.randomUUID(), description: 'MOT', segmentId: crypto.randomUUID(), date: motBooking.date, duration: 1, status: 'Allocated', allocatedLift: motBooking.liftId, scheduledStartSegment: timeIndex, engineerId: null }];
+                }
+                mainJob.notes += `
+
+Linked MOT Booking: #${motJobId} @ ${motBooking.time}`;
+                extraJobs.push(motJob);
             }
+        } else {
+            const mainJobId = generateJobId(jobs, entityShortCode);
+            mainJob = { id: mainJobId, entityId: estimate.entityId, vehicleId: estimate.vehicleId, customerId: estimate.customerId, description: `Work from Estimate #${estimate.estimateNumber}`, estimatedHours: laborHours, scheduledDate: scheduledDate, status: 'Unallocated', createdAt: formatDate(new Date()), segments: [], estimateId: estimate.id, notes: estimate.notes || '', vehicleStatus: 'Awaiting Arrival', createdByUserId: '', };
+            mainJob.segments = splitJobIntoSegments(mainJob);
         }
+
+        newPurchaseOrders = preparePurchaseOrders(mainJob, estimate, inquiry);
+        if (newPurchaseOrders.length > 0) {
+            mainJob.purchaseOrderIds = newPurchaseOrders.map(po => po.id);
+            mainJob.partsStatus = 'Awaiting Order';
+        } else {
+            mainJob.partsStatus = 'Not Required';
+        }
+
+        const updatedEstimate: Estimate = { ...estimate, status: 'Converted to Job', jobId: mainJob.id };
+        onConfirm(mainJob, updatedEstimate, { isAlternative: false, originalDate: scheduledDate }, extraJobs, newPurchaseOrders);
     };
 
     const handleAcceptSuggestion = async () => {
         if (!suggestion) return;
-
-        if (isMotRequired && !motBooking) {
-            setConfirmation({
-                isOpen: true,
-                title: 'MOT Booking Required',
-                message: 'This estimate includes an MOT. Please use the "Book Specific MOT Slot" button to schedule the MOT before creating the job.',
-                type: 'error',
-                onConfirm: () => setConfirmation({ isOpen: false, title: '', message: '' }),
-            });
+        if (isMotRequired) {
+            setConfirmation({ isOpen: true, title: 'MOT Booking Required', message: 'Please use the calendar to select a valid date and then book the MOT slot before creating the job.', type: 'error' });
             return;
         }
 
@@ -323,21 +292,21 @@ Linked MOT Booking: #${motJobId} @ ${motBooking.time}`;
             await saveRecord('customers', customer);
         }
 
-        const newJob: Job = {
-            id: generateJobId(jobs, entityForEstimate?.shortCode || 'UNK'),
-            entityId: estimate.entityId, vehicleId: estimate.vehicleId, customerId: estimate.customerId,
-            description: `Work from Estimate #${estimate.estimateNumber}`, estimatedHours: laborHours, scheduledDate: suggestion.suggestedDate,
-            status: 'Unallocated', createdAt: formatDate(new Date()), segments: [], estimateId: estimate.id, notes: estimate.notes,
-            vehicleStatus: 'Awaiting Arrival',
-            createdByUserId: '',
-        };
+        const newJobId = generateJobId(jobs, entityForEstimate?.shortCode || 'UNK');
+        let newJob: Job = { id: newJobId, entityId: estimate.entityId, vehicleId: estimate.vehicleId, customerId: estimate.customerId, description: `Work from Estimate #${estimate.estimateNumber}`, estimatedHours: laborHours, scheduledDate: suggestion.suggestedDate, status: 'Unallocated', createdAt: formatDate(new Date()), segments: [], estimateId: estimate.id, notes: estimate.notes, vehicleStatus: 'Awaiting Arrival', createdByUserId: '', };
         newJob.segments = splitJobIntoSegments(newJob);
+
+        const newPurchaseOrders = preparePurchaseOrders(newJob, estimate, inquiry);
+        if (newPurchaseOrders.length > 0) {
+            newJob.purchaseOrderIds = newPurchaseOrders.map(po => po.id);
+            newJob.partsStatus = 'Awaiting Order';
+        }
+
         const updatedEstimate: Estimate = { ...estimate, status: 'Converted to Job', jobId: newJob.id };
-        onConfirm(newJob, updatedEstimate, { isAlternative: true, originalDate: suggestion.originalDate });
+        onConfirm(newJob, updatedEstimate, { isAlternative: true, originalDate: suggestion.originalDate }, [], newPurchaseOrders);
     };
 
     const monthYearString = currentMonth.toLocaleString('default', { month: 'long', year: 'numeric', timeZone: 'UTC' });
-
 
     return (
         <div className="fixed inset-0 bg-gray-900 bg-opacity-75 z-[80] flex justify-center items-center p-4">
@@ -401,9 +370,7 @@ Linked MOT Booking: #${motJobId} @ ${motBooking.time}`;
                                 </div>
 
                                 <div className="border-t pt-4">
-                                    <label htmlFor="scheduledDate" className="block text-sm font-medium text-gray-700 mb-1">
-                                        Selected Start Date
-                                    </label>
+                                    <label htmlFor="scheduledDate" className="block text-sm font-medium text-gray-700 mb-1">Selected Start Date</label>
                                     <input type="date" id="scheduledDate" value={scheduledDate} onChange={(e) => { setScheduledDate(e.target.value); setMotBooking(null); }} className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" required />
                                 </div>
 

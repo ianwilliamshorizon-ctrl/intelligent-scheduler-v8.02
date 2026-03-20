@@ -146,7 +146,7 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
                 fromContact: 'Internal',
                 message: `Supplementary Estimate #${estimate.estimateNumber} created for Job #${estimate.jobId}.`,
                 takenByUserId: currentUser.id,
-                status: 'Open',
+                status: 'New',
                 linkedCustomerId: estimate.customerId,
                 linkedVehicleId: estimate.vehicleId,
                 linkedEstimateId: estimate.id,
@@ -179,6 +179,9 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
     };
 
     const handleApproveEstimate = async (estimate: T.Estimate, selectedOptionalItemIds: string[], notes?: string, scheduledDate?: string) => {
+        // --- 1. Initialize local state to avoid redeclaration errors ---
+        let allGeneratedPOIds: string[] = [];
+
         const explicitItemIds = new Set((estimate.lineItems || []).filter(li => !li.isOptional || selectedOptionalItemIds.includes(li.id)).map(i => i.id));
         const allIncludedIds = new Set(explicitItemIds);
         (estimate.lineItems || []).forEach(item => {
@@ -198,7 +201,7 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
         };
 
         const createPOs = async (targetJobId: string, entityShortCode: string, itemsForPO: T.EstimateLineItem[]) => {
-            const partItems = itemsForPO.filter(li => !li.isLabor && li.partId);
+            const partItems = itemsForPO.filter(li => !li.isLabor && !li.fromStock);
             const poIds: string[] = [];
             if (partItems.length > 0) {
                 const partsBySupplier: Record<string, T.EstimateLineItem[]> = {};
@@ -243,7 +246,8 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
             const existingJob = jobs.find(j => j.id === estimate.jobId);
             if (existingJob) {
                 const entity = businessEntities.find(e => e.id === existingJob.entityId);
-                const newPurchaseOrderIds = await createPOs(existingJob.id, entity?.shortCode || 'UNK', approvedLineItems);
+                // Assign to global tracker
+                allGeneratedPOIds = await createPOs(existingJob.id, entity?.shortCode || 'UNK', approvedLineItems);
         
                 let jobToSave: T.Job | null = null;
                 setJobs(prevJobs => {
@@ -253,7 +257,7 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
                     const job = prevJobs[jobIndex];
                     
                     const currentPOIds = new Set(job.purchaseOrderIds || []);
-                    newPurchaseOrderIds.forEach(id => currentPOIds.add(id));
+                    allGeneratedPOIds.forEach(id => currentPOIds.add(id));
                     const uniquePurchaseOrderIds = Array.from(currentPOIds);
         
                     const existingLineItemIds = new Set((job.lineItems || []).map(li => li.id));
@@ -284,7 +288,7 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
                     const updatedInquiry = {
                         ...existingInquiry,
                         status: 'Approved' as const,
-                        linkedPurchaseOrderIds: [...(existingInquiry.linkedPurchaseOrderIds || []), ...newPurchaseOrderIds],
+                        linkedPurchaseOrderIds: [...(existingInquiry.linkedPurchaseOrderIds || []), ...allGeneratedPOIds],
                         actionNotes: (existingInquiry.actionNotes || '') + '\n[System]: Approved and POs generated.',
                     };
                     await handleSaveItem(setInquiries, updatedInquiry, 'brooks_inquiries');
@@ -296,7 +300,6 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
             const includesMot = approvedLineItems.some(li => li.description === 'MOT');
             const entity = businessEntities.find(e => e.id === estimate.entityId);
             const entityShortCode = entity?.shortCode || 'UNK';
-            const customer = customers.find(c => c.id === estimate.customerId);
             const vehicle = vehicles.find(v => v.id === estimate.vehicleId);
 
             if (isMotOnly) {
@@ -312,7 +315,7 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
                     status: 'Unallocated', 
                     createdAt: new Date().toISOString(), 
                     createdByUserId: currentUser.id, 
-                    segments: [{ segmentId: crypto.randomUUID(), date: scheduledDate, duration: 1, status: 'Unallocated', allocatedLift: 'MOT', scheduledStartSegment: null, engineerId: null }], 
+                    segments: [{ id: crypto.randomUUID(), description: 'MOT', segmentId: crypto.randomUUID(), date: scheduledDate, duration: 1, status: 'Unallocated', allocatedLift: 'MOT', scheduledStartSegment: null, engineerId: null }], 
                     estimateId: estimate.id, 
                     notes: `MOT Only job created from Estimate #${estimate.estimateNumber}`,
                     vehicleStatus: 'Awaiting Arrival', 
@@ -344,7 +347,7 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
                     status: 'Unallocated',
                     createdAt: new Date().toISOString(),
                     createdByUserId: currentUser.id,
-                    segments: [{ segmentId: crypto.randomUUID(), date: scheduledDate, duration: 1, status: 'Unallocated', allocatedLift: 'MOT', scheduledStartSegment: null, engineerId: null }],
+                    segments: [{ id: crypto.randomUUID(), description: 'MOT', segmentId: crypto.randomUUID(), date: scheduledDate, duration: 1, status: 'Unallocated', allocatedLift: 'MOT', scheduledStartSegment: null, engineerId: null }],
                     estimateId: estimate.id,
                     notes: `Associated with Job #${mainJobId}`,
                     vehicleStatus: 'Awaiting Arrival',
@@ -357,7 +360,9 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
                 };
                 await handleSaveItem(setJobs, motJob, 'brooks_jobs');
 
-                const mainJobPOIds = await createPOs(mainJobId, entityShortCode, otherLineItems);
+                // Update PO Tracker
+                allGeneratedPOIds = await createPOs(mainJobId, entityShortCode, otherLineItems);
+                
                 const mainJob: T.Job = {
                     id: mainJobId,
                     entityId: estimate.entityId,
@@ -373,8 +378,8 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
                     estimateId: estimate.id,
                     notes: `MOT booked separately as Job #${motJobId}.\n${notes || estimate.notes || ''}`,
                     vehicleStatus: 'Awaiting Arrival',
-                    partsStatus: mainJobPOIds.length > 0 ? 'Awaiting Order' : 'Not Required',
-                    purchaseOrderIds: mainJobPOIds,
+                    partsStatus: allGeneratedPOIds.length > 0 ? 'Awaiting Order' : 'Not Required',
+                    purchaseOrderIds: allGeneratedPOIds,
                     associatedJobId: motJobId,
                     vehicleRegistration: vehicle?.registration || '',
                     jobType: 'Standard',
@@ -388,7 +393,9 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
 
             } else { 
                 const newJobId = await generateSequenceId('992', entityShortCode);
-                const newPurchaseOrderIds = await createPOs(newJobId, entityShortCode, approvedLineItems);
+                // Update PO Tracker
+                allGeneratedPOIds = await createPOs(newJobId, entityShortCode, approvedLineItems);
+                
                 const laborItems = approvedLineItems.filter(li => li.isLabor);
                 const totalHours = laborItems.reduce((acc, i) => acc + i.quantity, 0);
                 const newJob: T.Job = { 
@@ -406,8 +413,8 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
                     estimateId: estimate.id, 
                     notes: notes || estimate.notes, 
                     vehicleStatus: 'Awaiting Arrival', 
-                    partsStatus: newPurchaseOrderIds.length > 0 ? 'Awaiting Order' : 'Not Required', 
-                    purchaseOrderIds: newPurchaseOrderIds,                    
+                    partsStatus: allGeneratedPOIds.length > 0 ? 'Awaiting Order' : 'Not Required', 
+                    purchaseOrderIds: allGeneratedPOIds,                    
                     vehicleRegistration: vehicle?.registration || '',
                     jobType: 'Standard',
                     lineItems: approvedLineItems,
@@ -420,7 +427,12 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
              
              const existingInquiry = inquiries.find(i => i.linkedEstimateId === estimate.id);
              if (existingInquiry) {
-                  await handleSaveItem(setInquiries, { ...existingInquiry, status: 'Approved', linkedJobId: updatedEstimate.jobId }, 'brooks_inquiries');
+                  await handleSaveItem(setInquiries, { 
+                      ...existingInquiry, 
+                      status: 'Approved', 
+                      linkedJobId: updatedEstimate.jobId,
+                      linkedPurchaseOrderIds: [...(existingInquiry.linkedPurchaseOrderIds || []), ...allGeneratedPOIds]
+                  }, 'brooks_inquiries');
              }
         } 
         await handleSaveItem(setEstimates, updatedEstimate, 'brooks_estimates');
@@ -442,6 +454,8 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
             while (remainingToAdd > 0) {
                 const chunkDuration = Math.min(remainingToAdd, 8);
                 newSegments.push({
+                    id: crypto.randomUUID(),
+                    description: 'Supplementary Work',
                     segmentId: crypto.randomUUID(),
                     date: null, 
                     duration: chunkDuration,
@@ -496,7 +510,7 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
 
         const newSegments = job.segments.map(s => 
             s.status === 'Engineer Complete' 
-                ? { ...s, status: 'QC Complete' as const, qcCompletedAt: new Date().toISOString(), qcCompletedByUserId: currentUser.id } 
+                ? { ...s, status: 'QC Complete' as const, engineerCompletedAt: new Date().toISOString(), qcCompletedByUserId: currentUser.id } 
                 : s
         );
 
@@ -505,7 +519,7 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
         await handleSaveItem(setJobs, updatedJob, 'brooks_jobs');
 
         if (job.associatedJobId) {
-            const associatedMOT = jobs.find(j => j.id === job.associatedJobId && j.description === 'MOT');
+            const associatedMOT = jobs.find(j => j.id === job.associatedJobId && j.jobType === 'MOT');
             if (associatedMOT) {
                 await handleSaveItem(setJobs, { ...associatedMOT, status: 'Closed' } as T.Job, 'brooks_jobs');
             }
@@ -519,7 +533,7 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
             await handleSaveItem(setJobs, { ...job, segments: newSegments } as T.Job, 'brooks_jobs');
 
             if (job.associatedJobId) {
-                const associatedMOT = jobs.find(j => j.id === job.associatedJobId && j.description === 'MOT');
+                const associatedMOT = jobs.find(j => j.id === job.associatedJobId && j.jobType === 'MOT');
                 if (associatedMOT && associatedMOT.segments.every(s => !s.engineerId)) {
                     const newMotSegments = associatedMOT.segments.map(s => ({ ...s, engineerId: newEngineerId }));
                     await handleSaveItem(setJobs, { ...associatedMOT, segments: newMotSegments } as T.Job, 'brooks_jobs');

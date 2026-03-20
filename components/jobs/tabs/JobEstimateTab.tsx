@@ -91,7 +91,7 @@ const MemoizedEditableLineItemRow = React.memo(({
             }
         }
         
-        if (item.partId) return 'To Order';
+        if (item.partId || item.description) return 'To Order';
         return null;
     }, [item, purchaseOrders, isPackageHeader]);
 
@@ -105,7 +105,7 @@ const MemoizedEditableLineItemRow = React.memo(({
     const handleDescriptionChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const value = e.target.value;
         onLineItemChange(item.id, 'description', value);
-        if (!item.isLabor && !isPackageHeader && !isPackageComponent) {
+        if (!item.isLabor && !isPackageHeader) {
             onPartSearchChange(value);
         }
     };
@@ -149,7 +149,7 @@ const MemoizedEditableLineItemRow = React.memo(({
                         onFocus={() => !item.isLabor && onSetActivePartSearch(item.id)}
                         onBlur={() => setTimeout(() => onSetActivePartSearch(null), 150)}
                         className="w-full p-1 border rounded disabled:bg-gray-200"
-                        disabled={isReadOnly || isPackageComponent}
+                        disabled={isReadOnly}
                     />
                     {activePartSearch === item.id && (
                         <div className="absolute z-20 top-full left-0 w-full bg-white border rounded shadow-lg max-h-50 overflow-y-auto mt-1">
@@ -281,7 +281,7 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
         if (!editableEstimate) return 0;
         return editableEstimate.lineItems.filter((li: EstimateLineItem) => {
             const isPackageHeader = !!li.servicePackageId && !li.isPackageComponent;
-            return !li.isLabor && !isPackageHeader && li.partId && !li.fromStock && !li.purchaseOrderLineItemId;
+            return !li.isLabor && !isPackageHeader && !li.fromStock && !li.purchaseOrderLineItemId;
         }).length;
     }, [editableEstimate]);
 

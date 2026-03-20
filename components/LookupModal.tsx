@@ -3,6 +3,7 @@ import FormModal from './FormModal';
 import { lookupVehicleByVRM } from '../services/vehicleLookupService';
 import { lookupAddressByPostcode, AddressDetails } from '../services/postcodeLookupService';
 import { Vehicle } from '../types';
+import { History, Car, MapPin, AlertCircle } from 'lucide-react';
 
 interface LookupModalProps {
     isOpen: boolean;
@@ -25,6 +26,9 @@ const LookupModal: React.FC<LookupModalProps> = ({
     const [isLoading, setIsLoading] = useState(false);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const [addressList, setAddressList] = useState<AddressDetails[] | null>(null);
+    
+    // Flag to determine if we should fetch full MOT history
+    const [includeMotHistory, setIncludeMotHistory] = useState(false);
 
     useEffect(() => {
         if (isOpen) {
@@ -33,6 +37,7 @@ const LookupModal: React.FC<LookupModalProps> = ({
             setErrorMessage(null);
             setIsLoading(false);
             setAddressList(null);
+            setIncludeMotHistory(false); 
         }
     }, [isOpen]);
 
@@ -42,7 +47,9 @@ const LookupModal: React.FC<LookupModalProps> = ({
         setAddressList(null);
         try {
             if (lookupType === 'vrm') {
-                const vehicle = await lookupVehicleByVRM(inputValue);
+                // Pass the inputValue and the boolean flag to the service
+                const vehicle = await lookupVehicleByVRM(inputValue, includeMotHistory);
+                
                 if (vehicle && Object.keys(vehicle).length > 0) {
                     onVehicleFound(vehicle);
                     onClose();
@@ -112,7 +119,7 @@ const LookupModal: React.FC<LookupModalProps> = ({
                         </button>
                         <button
                             type="button"
-                            onClick={() => setAddressList(null)} // Go back to search
+                            onClick={() => setAddressList(null)} 
                             className="w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:text-sm"
                         >
                             Back to Search
@@ -121,27 +128,57 @@ const LookupModal: React.FC<LookupModalProps> = ({
                 </div>
             ) : (
                 <div className="p-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                        {lookupType === 'vrm' ? 'Enter Vehicle Registration' : 'Enter Postcode'}
-                    </label>
+                    <div className="flex items-center gap-2 mb-2">
+                        {lookupType === 'vrm' ? <Car size={16} className="text-gray-400" /> : <MapPin size={16} className="text-gray-400" />}
+                        <label className="block text-sm font-medium text-gray-700">
+                            {lookupType === 'vrm' ? 'Vehicle Registration Number' : 'Postcode'}
+                        </label>
+                    </div>
+                    
                     <input 
                         type="text" 
                         value={inputValue} 
                         onChange={e => setInputValue(e.target.value.toUpperCase())} 
                         placeholder={lookupType === 'vrm' ? 'e.g. AB12 CDE' : 'e.g. SW1A 0AA'}
-                        className="flex-1 min-w-0 block w-full px-3 py-2 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm border-gray-300"
+                        className="block w-full px-4 py-3 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-lg font-mono border-gray-300 transition-all"
+                        autoFocus
                     />
 
+                    {/* MOT History Toggle - Only visible for VRM Lookups */}
+                    {lookupType === 'vrm' && (
+                        <div className="mt-4 p-3 bg-indigo-50 rounded-lg border border-indigo-100 flex items-center justify-between group cursor-pointer" onClick={() => setIncludeMotHistory(!includeMotHistory)}>
+                            <div className="flex items-center gap-3">
+                                <div className={`p-2 rounded-full transition-colors ${includeMotHistory ? 'bg-indigo-600 text-white' : 'bg-white text-indigo-400 border border-indigo-100'}`}>
+                                    <History size={16} />
+                                </div>
+                                <div>
+                                    <p className="text-xs font-bold text-indigo-900 uppercase tracking-wider">Fetch MOT History</p>
+                                    <p className="text-[10px] text-indigo-600">Includes advisories & test records</p>
+                                </div>
+                            </div>
+                            <input 
+                                type="checkbox" 
+                                checked={includeMotHistory}
+                                onChange={(e) => setIncludeMotHistory(e.target.checked)}
+                                onClick={(e) => e.stopPropagation()} // Prevent double toggle
+                                className="h-5 w-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                            />
+                        </div>
+                    )}
+
                     {errorMessage && (
-                        <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-md">
-                            <p className="text-sm text-red-700">{errorMessage}</p>
-                            <button
-                                type="button"
-                                onClick={handleManualEntryClick}
-                                className="mt-2 w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-indigo-600 text-base font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:text-sm"
-                            >
-                                Enter Manually
-                            </button>
+                        <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-md flex gap-3">
+                            <AlertCircle size={20} className="text-red-500 shrink-0" />
+                            <div>
+                                <p className="text-sm text-red-700">{errorMessage}</p>
+                                <button
+                                    type="button"
+                                    onClick={handleManualEntryClick}
+                                    className="mt-2 text-sm font-bold text-red-700 hover:underline"
+                                >
+                                    Skip and Enter Manually →
+                                </button>
+                            </div>
                         </div>
                     )}
                 </div>

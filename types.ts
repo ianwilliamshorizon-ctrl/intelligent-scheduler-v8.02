@@ -1,10 +1,48 @@
 import { Timestamp } from 'firebase/firestore';
 
+/**
+ * CORE SYSTEM TYPES
+ */
 export type ViewType = string;
 export type AppEnvironment = 'development' | 'production' | 'staging';
-
 export type UserRole = 'admin' | 'user' | 'Admin' | 'Engineer' | 'Dispatcher' | 'Director';
 
+/** 
+ * MOT & VEHICLE HISTORY TYPES 
+ * Mapped from UKVD MotHistoryDetails (Normalized to camelCase for TS conventions)
+ */
+export interface MotAnnotation {
+    type: 'FAIL' | 'ADVISORY' | 'MINOR' | 'MAJOR' | 'DANGEROUS' | 'PRS' | 'USER ENTERED';
+    text: string;
+    isDangerous: boolean;
+}
+
+export interface MotExtension {
+    hasExtensionPeriod: boolean;
+    extensionPeriodReason?: string;
+    extensionPeriodAdditionalDays?: number;
+    extensionPeriodOriginalDueDate?: string;
+}
+
+export interface MotTest {
+    testDate: string;
+    testPassed: boolean;
+    expiryDate?: string | null;
+    odometerReading?: string;
+    odometerUnit?: string;
+    odometerResultType?: string;
+    testNumber?: string;
+    daysSinceLastTest?: number | null;
+    daysSinceLastPass?: number | null;
+    daysOutOfMot?: number | null;
+    isRetest: boolean;
+    extensionInformation?: MotExtension | null;
+    annotationList: MotAnnotation[];
+}
+
+/**
+ * USER, ROLE & PERMISSION TYPES
+ */
 export interface ManagedDataPermissions {
     isSuperAdmin: boolean;
     canSeeDirectorsDashboard: boolean;
@@ -26,6 +64,16 @@ export interface User {
     status?: 'pending' | 'active' | 'disabled';
 }
 
+export interface Role {
+    id: string;
+    name?: string;
+    defaultAllowedViews?: ViewType[];
+    managedDataPermissions?: ManagedDataPermissions;
+}
+
+/**
+ * CUSTOMER & CONTACT TYPES
+ */
 export interface Customer {
     id: string;
     forename: string;
@@ -43,6 +91,9 @@ export interface Customer {
     searchField?: string;
 }
 
+/**
+ * VEHICLE & INSPECTION TYPES
+ */
 export interface PreviousRegistration {
     registration: string;
     changedAt: string; 
@@ -61,6 +112,20 @@ export interface VehicleDamagePoint {
     notes: string;
 }
 
+export interface VehicleImage {
+    id: string;
+    uploadedAt: string; 
+    isPrimaryDiagram?: boolean;
+    dataUrl?: string;
+}
+
+export interface InspectionDiagram {
+    id: string;
+    make: string;
+    model: string;
+    imageId: string;
+}
+
 export interface TyreData {
     outer?: number;
     middle?: number;
@@ -70,10 +135,44 @@ export interface TyreData {
     comments?: string;
 }
 
+export type TyreLocation = 'frontLeft' | 'frontRight' | 'rearLeft' | 'rearRight' | 'spare';
+
 export type TyreCheckData = {
     [key in TyreLocation]?: TyreData;
 };
-
+export interface Job {
+    id: string;
+    entityId?: string;
+    vehicleId: string;
+    customerId?: string;
+    description: string;
+    // Added 'Cancelled' to this union to allow the comparison in your Modal
+    status: 'Booked In' | 'In Progress' | 'Awaiting Parts' | 'Complete' | 'Invoiced' | 'Closed' | 'Allocated' | 'Unallocated' | 'Pending QC' | 'Archived' | 'Cancelled' | 'Paused';
+    createdAt?: string; 
+    completedAt?: string; 
+    scheduledDate?: string;
+    notes?: string;
+    segments?: JobSegment[];
+    vehicleStatus?: string;
+    invoiceId?: string;
+    estimatedHours?: number;
+    partsStatus?: string;
+    purchaseOrderIds?: string[];
+    technicianObservations?: string[];
+    estimateId?: string;
+    inspectionTemplateId?: string;
+    keyNumber?: string;
+    damagePoints?: VehicleDamagePoint[];
+    tyreCheck?: TyreCheckData;
+    inspectionChecklist?: ChecklistSection[];
+    mileage?: number;
+    createdByUserId?: string;
+    lineItems?: EstimateLineItem[];
+    associatedJobId?: string;
+    isStandalone?: boolean;
+    vehicleRegistration?: string;
+    jobType?: 'MOT' | 'Standard';
+}
 export type VehicleStatus = 'On Site' | 'Off-Site (Partner)' | 'Awaiting Arrival' | 'Awaiting Collection' | 'Collected' | 'Cancelled';
 
 export interface Vehicle {
@@ -96,25 +195,27 @@ export interface Vehicle {
     manufactureDate?: string; 
     covid19MotExemption?: boolean;
     customerId: string;
-    customer?: Customer; // <--- ADDED FOR VIEW PROFILE FUNCTIONALITY
+    customer?: Customer; 
     notes?: string;
     images?: VehicleImage[];
     previousRegistrations?: PreviousRegistration[];
     inspectionDiagramId?: string;
     searchField?: string;
+    
+    // RELATIONAL DATA FOR SIDEBAR/TABS
+    motHistory?: MotTest[];
+    jobs?: Job[];
+    estimates?: Estimate[];
+    invoices?: Invoice[];
 }
 
-export interface VehicleImage {
-    id: string;
-    uploadedAt: string; 
-    isPrimaryDiagram?: boolean;
-    dataUrl?: string;
-}
-
+/**
+ * WORKSHOP & JOB TYPES
+ */
 export interface JobSegment {
     id: string;
     description: string;
-    status: string;
+    status: 'Unallocated' | 'Allocated' | 'In Progress' | 'Engineer Complete' | 'QC Complete' | 'Paused' | 'Cancelled';
     engineerId?: string;
     date?: string;
     segmentId?: string;
@@ -150,6 +251,67 @@ export interface Job {
     inspectionChecklist?: ChecklistSection[];
     mileage?: number;
     createdByUserId?: string;
+    lineItems?: EstimateLineItem[];
+    associatedJobId?: string;
+    isStandalone?: boolean;
+    vehicleRegistration?: string;
+    jobType?: 'MOT' | 'Standard';
+}
+
+/**
+ * FINANCIAL & ACCOUNTING TYPES
+ */
+export interface NominalCode { 
+    id: string; 
+    code?: string;
+    description?: string;
+}
+
+export interface NominalCodeRule { 
+    id: string; 
+    priority?: number;
+    condition?: string;
+    nominalCodeId?: string;
+}
+
+export interface TaxRate {
+    id: string;
+    code?: string;
+    rate?: number;
+    name?: string;
+}
+
+/**
+ * ESTIMATE & INVOICE TYPES
+ */
+export interface EstimateLineItem {
+    id: string;
+    description: string;
+    quantity: number;
+    unitPrice: number;
+    unitCost: number;
+    taxCodeId?: string; // Required by your error logs
+    servicePackageName?: string;
+    // --- ADD/VERIFY THESE OPTIONAL PROPERTIES ---
+    partId?: string;
+    partNumber?: string;
+    isStock?: boolean;
+    fromStock?: boolean;           // Added for JobEstimateTab
+    isPackage?: boolean;
+    isPackageComponent?: boolean;
+    servicePackageId?: string;
+    isOptional?: boolean;
+    isLabor?: boolean;             // Added to fix "isLabor does not exist"
+    
+    // Purchase Order & Supplier fields
+    supplierId?: string;           // Added for supplier selection
+    purchaseOrderLineItemId?: string; // Added for PO tracking
+    
+    // Other functional fields
+    media?: any[];                 // Added for media attachments
+    preCalculatedVat?: number;     // Added for tax calculations
+    
+    type?: 'labor' | 'part' | 'package';
 }
 
 export interface Estimate {
@@ -178,39 +340,9 @@ export interface Invoice {
     payments: Payment[];
     notes?: string;
     entityId?: string;
-}
-
-export interface EstimateLineItem {
-    id: string;
-    description: string;
-    quantity: number;
-    unitPrice: number;
-    isPackageComponent?: boolean;
-    servicePackageId?: string;
-    isOptional?: boolean;
-    unitCost?: number;
-    servicePackageName?: string;
-    partNumber?: string;
-    isLabor?: boolean;
-    taxCodeId?: string;
-    media?: CheckInPhoto[];
-    partId?: string;
-    fromStock?: boolean;
-    purchaseOrderLineItemId?: string;
-    supplierId?: string;
-    preCalculatedVat?: number;
-}
-
-export interface LineItem {
-    id: string;
-    description: string;
-    quantity: number;
-    unitPrice: number;
-    isPackageComponent?: boolean;
-    servicePackageId?: string;
-    isOptional?: boolean;
-    unitCost?: number;
-    servicePackageName?: string;
+    jobId?: string;
+    createdByUserId?: string;
+    saleVehicleId?: string;
 }
 
 export interface Payment {
@@ -219,23 +351,9 @@ export interface Payment {
     method: 'Card' | 'Bank Transfer' | 'Cash' | 'Other';
 }
 
-export interface AuditLog {
-    id: string;
-    timestamp: Timestamp;
-    userId: string;
-    action: 'CREATE' | 'UPDATE' | 'DELETE';
-    entity: string; 
-    entityId: string;
-    details: string;
-}
-
-export interface InspectionDiagram {
-    id: string;
-    make: string;
-    model: string;
-    imageId: string;
-}
-
+/**
+ * PURCHASE & INVENTORY TYPES
+ */
 export interface PurchaseOrderLineItem {
     id: string;
     partNumber: string;
@@ -267,16 +385,7 @@ export interface PurchaseOrder {
     history?: { userId: string; timestamp: string; status: string; }[];
     pdfUrl?: string;
     pdfGeneratedAt?: string;
-}
-
-export interface Purchase { 
-    id: string; 
-}
-
-export interface Engineer { 
-    id: string; 
-    name: string; 
-    entityId?: string;
+    createdByUserId?: string;
 }
 
 export interface Part { 
@@ -293,20 +402,6 @@ export interface Part {
     alternateSupplierIds?: string[];
 }
 
-export interface ServicePackage {
-    id: string;
-    entityId?: string;
-    name?: string;
-    description?: string;
-    totalPrice?: number;
-    totalPriceNet?: number;
-    costItems?: any[]; 
-    applicableMake?: string;
-    applicableModel?: string;
-    applicableEngineSize?: number;
-    taxCodeId?: string;
-}
-
 export interface Supplier { 
     id: string; 
     name?: string;
@@ -318,84 +413,9 @@ export interface Supplier {
     contactName?: string;
 }
 
-export interface Lift { 
-    id: string; 
-    entityId?: string;
-}
-
-export interface RentalVehicle { 
-    id: string; 
-    entityId?: string;
-}
-
-export interface RentalBooking { 
-    id: string; 
-}
-
-export interface SaleVehicle { 
-    id: string; 
-    entityId?: string;
-}
-
-export interface SaleOverheadPackage { 
-    id: string; 
-    name?: string;
-}
-
-export interface Prospect { 
-    id: string; 
-}
-
-export interface StorageBooking { 
-    id: string; 
-    vehicleId: string;
-    customerId: string;
-    entityId?: string;
-}
-
-export interface StorageLocation { 
-    id: string; 
-    name?: string;
-}
-
-export interface BatteryCharger { 
-    id: string; 
-    name?: string;
-}
-
-export interface NominalCode { 
-    id: string; 
-    code?: string;
-}
-
-export interface NominalCodeRule { 
-    id: string; 
-    priority?: number;
-}
-
-export interface AbsenceRequest { 
-    id: string; 
-}
-
-export interface Inquiry {
-    id: string;
-    entityId?: string;
-    createdAt: string;
-    fromName: string;
-    fromContact: string;
-    message: string;
-    takenByUserId: string;
-    status: 'New' | 'In Progress' | 'Quoted' | 'Closed' | 'Approved' | 'Rejected';
-    linkedCustomerId?: string;
-    linkedVehicleId?: string;
-    linkedEstimateId?: string;
-    actionNotes?: string;
-}
-
-export interface Reminder { 
-    id: string; 
-}
-
+/**
+ * BUSINESS & ENTITY TYPES
+ */
 export interface BusinessEntity {
     id: string;
     name?: string;
@@ -407,38 +427,42 @@ export interface BusinessEntity {
     postcode?: string;
     vatNumber?: string;
     logoUrl?: string;
-     type?: 'Workshop' | 'Sales' | 'Storage' | 'Rentals';
+    type?: 'Workshop' | 'Sales' | 'Storage' | 'Rentals';
+    dailyCapacityHours?: number;
 }
 
-export interface TaxRate {
+export interface Engineer { 
+    id: string; 
+    name: string; 
+    entityId?: string;
+}
+
+export interface ServicePackage {
     id: string;
-    code?: string;
-    rate?: number;
+    entityId?: string;
     name?: string;
+    description?: string;
+    totalPrice?: number;
+    totalPriceNet?: number;
+    // Update this from any[] to a specific structure
+    costItems?: {
+        description: string;
+        quantity: number;
+        unitPrice: number;
+        unitCost: number;
+        isStock?: boolean;
+        isLabor?: boolean;
+        partNumber?: string;
+    }[]; 
+    applicableMake?: string;
+    applicableModel?: string;
+    applicableEngineSize?: number;
+    taxCodeId?: string;
 }
 
-export interface Role {
-    id: string;
-    name?: string;
-    defaultAllowedViews?: ViewType[];
-    managedDataPermissions?: ManagedDataPermissions;
-}
-
-export interface InspectionTemplate {
-    id: string;
-    name: string;
-    sections: ChecklistSection[];
-    isDefault?: boolean;
-}
-
-export interface DiscountCode {
-    id: string;
-}
-
-export interface AuditLogEntry {
-    id: string;
-}
-
+/**
+ * INSPECTION & CHECKLIST TYPES
+ */
 export type ChecklistItemStatus = 'ok' | 'attention' | 'urgent' | 'na';
 
 export interface ChecklistItem {
@@ -454,21 +478,104 @@ export interface ChecklistSection {
     items: ChecklistItem[];
 }
 
-export type TyreLocation = 'frontLeft' | 'frontRight' | 'rearLeft' | 'rearRight' | 'spare';
+export interface InspectionTemplate {
+    id: string;
+    name: string;
+    sections: ChecklistSection[];
+    isDefault?: boolean;
+}
+
+/**
+ * INQUIRY & COMMUNICATIONS
+ */
+export interface Inquiry {
+    id: string;
+    entityId?: string;
+    createdAt: string;
+    fromName: string;
+    fromContact: string;
+    message: string;
+    takenByUserId: string;
+    status: 'New' | 'In Progress' | 'Quoted' | 'Closed' | 'Approved' | 'Rejected' | 'Sent';
+    linkedCustomerId?: string;
+    linkedVehicleId?: string;
+    linkedEstimateId?: string;
+    actionNotes?: string;
+    linkedPurchaseOrderIds?: string[];
+    linkedJobId?: string;
+}
+
+/**
+ * LOGGING & SYSTEM ADMIN
+ */
+export interface AuditLog {
+    id: string;
+    timestamp: Timestamp;
+    userId: string;
+    action: 'CREATE' | 'UPDATE' | 'DELETE';
+    entity: string; 
+    entityId: string;
+    details: string;
+}
 
 export interface BackupSchedule {
     enabled: boolean;
     times: string[];
 }
-export interface MotTest {
-    testDate?: string;
-    testPassed?: boolean;
-    odometerReading?: string;
-    odometerUnit?: string;
-    expiryDate?: string;
-    testNumber?: string;
-    annotationList?: {
-        type: 'FAIL' | 'ADVISORY' | 'MINOR';
-        text: string;
-    }[];
+/**
+ * RENTAL & BOOKING TYPES
+ */
+export interface RentalBooking {
+    id: string;
+    entityId: string;
+    customerId: string;
+    rentalVehicleId: string; // Changed from vehicleId to match AppModals
+    startDate: string;
+    endDate: string;
+    status: 'Draft' | 'Confirmed' | 'Active' | 'Completed' | 'Cancelled';
+    notes?: string;
+    totalPrice?: number;
+    createdByUserId?: string;
+}
+export interface AbsenceRequest {
+    id: string;
+    userId: string;
+    startDate: string;
+    endDate: string;
+    type: 'Holiday' | 'Sick' | 'Other';
+    status: 'Pending' | 'Approved' | 'Rejected';
+  }
+  export interface SaleVehicle {
+    id: string;
+    make: string;
+    model: string;
+    registration?: string;
+    vin?: string;
+    price: number;
+    status: 'Available' | 'Reserved' | 'Sold' | 'Internal';
+    // Add these missing fields:
+    vehicleId?: string; 
+    entityId?: string;
+    invoiceId?: string;
+    stockNumber?: string;
+    year?: number;
+    mileage?: number;
+    description?: string;
+    images?: string[];
+    createdAt?: string;
+    updatedAt?: string;
+}
+
+export interface Prospect {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone?: string;
+    source?: string; // e.g., 'Website', 'Walk-in'
+    status: 'New' | 'Contacted' | 'Qualified' | 'Lost' | 'Converted';
+    notes?: string;
+    interestedVehicleId?: string; // Links to SaleVehicle
+    createdAt?: string;
+    assignedUserId?: string;
 }
