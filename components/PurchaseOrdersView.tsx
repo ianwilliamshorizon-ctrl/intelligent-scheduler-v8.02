@@ -313,7 +313,6 @@ const PurchaseOrdersView = ({ purchaseOrders, suppliers, onOpenPurchaseOrderModa
                                     <td className="p-3 text-right font-semibold">{formatCurrency(calculateTotal(po.lineItems))}</td>
                                     <td className="p-3">
                                          <div className="flex gap-1 justify-end">
-                                            <button onClick={() => handleViewPo(po)} className="p-1.5 text-gray-600 hover:bg-gray-100 rounded-full" title="View"><Eye size={16} /></button>
                                             <button onClick={() => onOpenPurchaseOrderModal(po)} className="p-1.5 text-indigo-600 hover:bg-indigo-100 rounded-full" title="Edit"><Edit size={16} /></button>
                                             <button onClick={() => onDeletePurchaseOrder(po.id)} className="p-1.5 text-red-600 hover:bg-red-100 rounded-full" title="Delete"><Trash2 size={16} /></button>
                                         </div>

@@ -12,13 +12,13 @@ import {
 import { firebaseConfig, FIREBASE_DATABASE_ID } from '../config/firebaseConfig'; 
 
 // Initialize Firebase App if not already initialized
-const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+export const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
 /**
  * Initialize Firestore with the specific Database ID from your config.
  * Production/UAT uses '(default)', Development uses 'isdevdb'.
  */
-const db: Firestore = getFirestore(app, FIREBASE_DATABASE_ID);
+export const db: Firestore = getFirestore(app, FIREBASE_DATABASE_ID);
 
 export interface RecordItem {
   id: string;

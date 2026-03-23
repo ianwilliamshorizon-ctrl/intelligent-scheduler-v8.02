@@ -3,9 +3,10 @@
   "version": "1.0.0",
   "main": "index.js",
   "engines": {
-    "node": "20"
+    "node": "22"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.0",
     "axios": "^1.13.6",
     "cors": "^2.8.5",
     "firebase-admin": "^12.7.0",

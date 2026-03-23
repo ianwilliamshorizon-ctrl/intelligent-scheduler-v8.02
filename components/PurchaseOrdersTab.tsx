@@ -101,9 +101,7 @@ const PurchaseOrdersTab: React.FC = () => {
                                     <td className="px-5 py-5 border-b border-gray-200 bg-white text-sm">{po.status}</td>
                                     <td className="px-5 py-5 border-b border-gray-200 bg-white text-sm">{formatCurrency(total)}</td>
                                     <td className="px-5 py-5 border-b border-gray-200 bg-white text-sm text-right">
-                                        <button onClick={() => handleOpenViewModal(po)} className="text-gray-500 hover:text-indigo-600 p-1">
-                                            <Eye size={20} />
-                                        </button>
+
                                         {canEdit && (
                                             <button onClick={() => handleOpenEditModal(po)} className="text-gray-500 hover:text-indigo-600 p-1">
                                                 <Edit size={20} />

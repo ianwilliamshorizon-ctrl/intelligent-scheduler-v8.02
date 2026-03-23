@@ -1,4 +1,7 @@
 const { onRequest } = require("firebase-functions/v2/https");
+const { onCall, HttpsError } = require("firebase-functions/v2/https");
+// FORCE DEPLOY TIMESTAMP: 2026-03-23-19-45
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 const axios = require("axios");
 const logger = require("firebase-functions/logger");
 
@@ -46,3 +49,37 @@ exports.generatecontent = onRequest({
     res.status(status).json(errorData);
   }
 });
+
+// Pinned version 001 for guaranteed resolution in europe-west1
+async function runGeminiAction(request) {
+  const geminiApiKey = process.env.GEMINI_API_KEY;
+
+  if (!geminiApiKey) {
+    logger.error("GEMINI_API_KEY environment variable is not set.");
+    throw new HttpsError("internal", "AI service is not configured.");
+  }
+
+  const prompt = request.data?.prompt;
+  if (!prompt) {
+    throw new HttpsError("invalid-argument", 'The function must be called with a "prompt" argument.');
+  }
+
+  try {
+    const genAI = new GoogleGenerativeAI(geminiApiKey);
+    // Explicitly using the confirmed gemini-2.5-flash model from your list
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const result = await model.generateContent(prompt);
+    const text = result.response.text();
+    return { text };
+  } catch (error) {
+    logger.error("Gemini API Error Detail:", {
+      message: error.message,
+      status: error.status,
+      stack: error.stack
+    });
+    throw new HttpsError("internal", `Error generating content from AI: ${error.message}`);
+  }
+}
+
+// Clear call names to ensure no conflicts on Cloud Run
+exports.geminiGenerateContent = onCall({ region: "europe-west1", secrets: ["GEMINI_API_KEY"] }, runGeminiAction);

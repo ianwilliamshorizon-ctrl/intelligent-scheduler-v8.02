@@ -1,52 +1,55 @@
+import { app } from '../services/firebaseServices';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 
-const functions = getFunctions(undefined, 'europe-west1');
-const generateContentCallable = httpsCallable(functions, 'generateContent');
+const functions = getFunctions(app, 'europe-west1');
+// Notice the new name here!
+const generateContentCallable = httpsCallable(functions, 'geminiGenerateContent');
 
-/** 
- * ADD THIS BLOCK TO FIX THE "MISSING EXPORT" ERROR
- * Since you're using Firebase Functions, we just provide a "dummy" 
- * initializer so the rest of the app doesn't crash on boot.
- */
 export const initializeGenerativeAI = (apiKey?: string) => {
     console.log("Gemini Service initialized via Firebase Functions");
-    return { initialized: true }; 
+    return { initialized: true };
 };
 
 export const generateContent = async (prompt: string): Promise<string> => {
     try {
         const result: any = await generateContentCallable({ prompt });
-        return result.data;
+        return result.data.text || result.data || "";
     } catch (error) {
-        console.error("Error calling generateContent function:", error);
-        const anyError = error as any;
-        if (anyError.code === 'functions/resource-exhausted') {
-             return "The AI service is currently busy. Please try again in a moment.";
-        }
+        console.error("DIAGNOSTIC-FIX-V1: Error calling geminiGenerateContent function:", error);
         return "An error occurred while communicating with the AI service.";
     }
 };
 
+/**
+ * PARSE JOB REQUEST
+ * Uses the AI to extract structured JSON from a text prompt
+ */
 export const parseJobRequest = async (prompt: string): Promise<any> => {
     const rawResult = await generateContent(prompt);
 
-    if (rawResult.startsWith("The AI service is currently busy") || rawResult.startsWith("An error occurred")) {
+    if (rawResult.startsWith("The AI service is")) {
         throw new Error(rawResult);
     }
 
     try {
-        const jsonStringMatch = rawResult.match(/```json\n([\s\S]*?)\n```/);
-        if (jsonStringMatch && jsonStringMatch[1]) {
-            return JSON.parse(jsonStringMatch[1]);
-        }
-        return JSON.parse(rawResult);
+        // Use regex to extract JSON if the AI wrapped it in markdown code blocks
+        const jsonStringMatch = rawResult.match(/```json\n([\s\S]*?)\n```/) || rawResult.match(/```([\s\S]*?)```/);
+        const cleanJson = jsonStringMatch ? jsonStringMatch[1] : rawResult;
+
+        return JSON.parse(cleanJson.trim());
     } catch (error) {
         console.error("Error parsing JSON from AI response:", error);
-        throw new Error("Failed to parse the AI's response. The format was unexpected.");
+        console.log("Raw response was:", rawResult);
+        throw new Error("Failed to parse the AI's response into a valid format.");
     }
 };
 
+/**
+ * GENERATE SERVICE PACKAGE NAME
+ * Simple helper to get a clean name string
+ */
 export const generateServicePackageName = async (prompt: string): Promise<string> => {
     const name = await generateContent(prompt);
+    // Remove quotes if the AI included them
     return name.replace(/"/g, '').trim();
 };
