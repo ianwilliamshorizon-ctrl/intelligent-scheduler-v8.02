@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Estimate, Customer, Vehicle, Job, BusinessEntity, AbsenceRequest, JobSegment, PurchaseOrder, Inquiry, Part } from '../types';
+import { Estimate, Customer, Vehicle, Job, BusinessEntity, AbsenceRequest, JobSegment, PurchaseOrder, Inquiry, Part, PurchaseOrderStatus, EstimateLineItem } from '../types';
 import { X, Calendar, CheckCircle, ChevronLeft, ChevronRight, AlertTriangle, Gauge, Clock } from 'lucide-react';
 import { formatDate, dateStringToDate, getRelativeDate, splitJobIntoSegments, addDays, findNextAvailableDate, formatReadableDate } from '../core/utils/dateUtils';
 import { generateJobId, generatePurchaseOrderId } from '../core/utils/numberGenerators';
@@ -132,68 +132,89 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
 
     const preparePurchaseOrders = (job: Job, estimateToConvert: Estimate, inquiry?: Inquiry): PurchaseOrder[] => {
         const allPOs = purchaseOrders || [];
-        
-        if (inquiry && inquiry.linkedPurchaseOrderIds && inquiry.linkedPurchaseOrderIds.length > 0) {
-            const draftPOsToUpdate = allPOs.filter(po => 
-                inquiry.linkedPurchaseOrderIds.includes(po.id) && po.status === 'Draft'
-            );
+        const toCreate: PurchaseOrder[] = [];
+        const toUpdate: { [key: string]: PurchaseOrder } = {};
+        const processedInquiryPoIds = new Set<string>();
     
-            if (draftPOsToUpdate.length > 0) {
-                return draftPOsToUpdate.map(po => ({ ...po, jobId: job.id, status: 'Ordered' }));
-            }
-        }
-    
-        const itemsToOrder = (estimateToConvert.lineItems || []).filter(li => {
-            if (li.isLabor || li.isOptional || !li.partId) return false;
-            const part = parts.find(p => p.id === li.partId);
-            return !part || part.stockQuantity < li.quantity;
-        });
-        
-        if (itemsToOrder.length === 0) return [];
-    
-        const entity = businessEntities.find(e => e.id === job.entityId);
-        const entityShortCode = entity?.shortCode || 'UNK';
-        const vehicle = vehicles.find(v => v.id === job.vehicleId);
-    
-        const partsBySupplier: Record<string, (typeof estimate.lineItems[0] & { orderQuantity: number })[]> = {};
-        itemsToOrder.forEach(item => {
-            const part = parts.find(p => p.id === item.partId);
-            const stock = part?.stockQuantity || 0;
-            const orderQuantity = item.quantity - stock;
-            if(orderQuantity <= 0) return;
+        const itemsNeedingOrder = (estimateToConvert.lineItems || [])
+            .map(item => {
+                if (item.isLabor || item.isOptional || !item.partId) return null;
+                const part = parts.find(p => p.id === item.partId);
+                const requiredQty = item.quantity;
+                const stockQty = part?.stockQuantity || 0;
+                const orderQty = requiredQty - stockQty;
+                if (orderQty <= 0) return null;
+                return { ...item, orderQuantity: orderQty, partInfo: part };
+            })
+            .filter(Boolean) as (EstimateLineItem & { orderQuantity: number, partInfo?: Part })[];
 
-            const sId = item.supplierId || 'no_supplier';
-            if (!partsBySupplier[sId]) partsBySupplier[sId] = [];
-            partsBySupplier[sId].push({ ...item, orderQuantity });
-        });
-    
-        const generatedPOs: PurchaseOrder[] = Object.entries(partsBySupplier).map(([supplierId, items]) => {
-            const newPOId = generatePurchaseOrderId(allPOs, entityShortCode);
-    
-            return {
-                id: newPOId,
-                entityId: job.entityId,
-                supplierId: supplierId === 'no_supplier' ? null : supplierId, 
-                vehicleRegistrationRef: vehicle?.registration || 'N/A',
-                orderDate: formatDate(new Date()),
-                status: 'Ordered',
-                jobId: job.id,
-                createdByUserId: currentUser?.id || '',
-                lineItems: items.map(item => ({
-                    id: crypto.randomUUID(),
-                    partNumber: item.partNumber,
-                    description: item.description,
-                    quantity: item.orderQuantity,
-                    receivedQuantity: 0,
-                    unitPrice: item.unitCost || 0,
-                    taxCodeId: item.taxCodeId,
-                    supplierId: item.supplierId
-                })),
-                notes: `Auto-generated from Estimate #${estimateToConvert.estimateNumber}`
-            };
+        const partsBySupplier: Record<string, typeof itemsNeedingOrder> = {};
+        itemsNeedingOrder.forEach(item => {
+            const supplierId = item.supplierId || item.partInfo?.defaultSupplierId || 'no_supplier';
+            if (!partsBySupplier[supplierId]) partsBySupplier[supplierId] = [];
+            partsBySupplier[supplierId].push(item);
         });
         
-        return generatedPOs.filter(po => po.lineItems.length > 0);
+        let poListForIdGeneration = [...allPOs];
+
+        Object.entries(partsBySupplier).forEach(([supplierId, items]) => {
+            const supId = supplierId === 'no_supplier' ? undefined : supplierId;
+            const inquiryDraftPO = inquiry?.linkedPurchaseOrderIds
+                ?.map(id => allPOs.find(p => p.id === id))
+                .find(po => po && po.status === 'Draft' && po.supplierId === supId);
+
+            const poLineItems = items.map(item => ({
+                id: crypto.randomUUID(),
+                partNumber: item.partNumber,
+                description: item.description,
+                quantity: item.orderQuantity,
+                receivedQuantity: 0,
+                unitPrice: item.unitCost || 0,
+                taxCodeId: item.taxCodeId,
+                supplierId: supId
+            }));
+
+            if (inquiryDraftPO) {
+                if (!toUpdate[inquiryDraftPO.id]) {
+                    toUpdate[inquiryDraftPO.id] = { ...inquiryDraftPO };
+                }
+                const existingItems = toUpdate[inquiryDraftPO.id].lineItems || [];
+                toUpdate[inquiryDraftPO.id].lineItems = [...existingItems, ...poLineItems];
+                toUpdate[inquiryDraftPO.id].jobId = job.id;
+                toUpdate[inquiryDraftPO.id].status = 'Ordered';
+                processedInquiryPoIds.add(inquiryDraftPO.id);
+            } else {
+                const entity = businessEntities.find(e => e.id === job.entityId);
+                const entityShortCode = entity?.shortCode || 'UNK';
+                const vehicle = vehicles.find(v => v.id === job.vehicleId);
+                const newPOId = generatePurchaseOrderId(poListForIdGeneration, entityShortCode);
+
+                const newPO: PurchaseOrder = {
+                    id: newPOId,
+                    entityId: job.entityId,
+                    supplierId: supId,
+                    vehicleRegistrationRef: vehicle?.registration || 'N/A',
+                    orderDate: formatDate(new Date()),
+                    status: 'Ordered',
+                    jobId: job.id,
+                    createdByUserId: currentUser?.id || '',
+                    lineItems: poLineItems,
+                    notes: `Auto-generated from Estimate #${estimateToConvert.estimateNumber}`
+                };
+                toCreate.push(newPO);
+                poListForIdGeneration.push(newPO);
+            }
+        });
+
+        (inquiry?.linkedPurchaseOrderIds || []).forEach(poId => {
+            if (processedInquiryPoIds.has(poId)) return;
+            const po = allPOs.find(p => p.id === poId);
+            if (po && po.status === 'Draft') {
+                toUpdate[po.id] = { ...po, jobId: job.id, status: 'Ordered' };
+            }
+        });
+
+        return [...toCreate, ...Object.values(toUpdate)];
     };
 
     const handleConfirmClick = async () => {
@@ -229,8 +250,7 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
 
         let mainJob: Job;
         let extraJobs: Job[] = [];
-        let newPurchaseOrders: PurchaseOrder[] = [];
-
+        
         if (motBooking) {
             const timeIndex = TIME_SEGMENTS.indexOf(motBooking.time);
             
@@ -269,7 +289,7 @@ Linked MOT Booking: #${motJobId} @ ${motBooking.time}`;
             mainJob.segments = splitJobIntoSegments(mainJob);
         }
 
-        newPurchaseOrders = preparePurchaseOrders(mainJob, estimate, inquiry);
+        const newPurchaseOrders = preparePurchaseOrders(mainJob, estimate, inquiry);
         if (newPurchaseOrders.length > 0) {
             mainJob.purchaseOrderIds = newPurchaseOrders.map(po => po.id);
             mainJob.partsStatus = 'Awaiting Order';

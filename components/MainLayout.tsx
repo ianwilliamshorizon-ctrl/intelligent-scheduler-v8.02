@@ -11,7 +11,7 @@ import * as T from '../types';
 const MainLayout: React.FC<{ 
     children: React.ReactNode, 
     onOpenManagement: () => void, 
-    onOpenHelpCentre: () => void, // Added this prop
+    onOpenHelpCentre: () => void, 
     onSearchResult: (type: string, id: string) => void 
 }> = ({ children, onOpenManagement, onOpenHelpCentre, onSearchResult }) => {
     const { 
@@ -21,12 +21,10 @@ const MainLayout: React.FC<{
     } = useApp();
     const { roles, customers, vehicles, parts } = useData();
 
-    // Default: Closed on mobile (< 1024px), Open on desktop
     const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth >= 1024);
     const [searchQuery, setSearchQuery] = useState('');
     const [isSearchFocused, setIsSearchFocused] = useState(false);
 
-    // Monitor screen resize to toggle sidebar behavior
     useEffect(() => {
         const handleResize = () => {
             if (window.innerWidth < 1024) {
@@ -39,7 +37,6 @@ const MainLayout: React.FC<{
         return () => window.removeEventListener('resize', handleResize);
     }, []);
 
-    // --- Search Logic ---
     const searchResults = useMemo(() => {
         if (!searchQuery.trim() || searchQuery.length < 2) return [];
         const q = searchQuery.toLowerCase();
@@ -54,7 +51,7 @@ const MainLayout: React.FC<{
 
         const partMatches = parts
             .filter(p => p.searchField?.includes(q))
-            .map(p => ({ id: p.id, label: p.partNumber, sub: p.partName, type: 'Part', icon: ShoppingCart }));
+            .map(p => ({ id: p.id, label: p.partNumber, sub: p.description, type: 'Part', icon: ShoppingCart }));
 
         return [...customerMatches, ...vehicleMatches, ...partMatches].slice(0, 8);
     }, [searchQuery, customers, vehicles, parts]);
@@ -84,7 +81,6 @@ const MainLayout: React.FC<{
     return (
         <div className="flex h-screen bg-gray-100 font-sans text-gray-900 overflow-hidden">
             
-            {/* MOBILE OVERLAY: Dims the background when sidebar is open on mobile */}
             {isSidebarOpen && (
                 <div 
                     className="fixed inset-0 bg-black/50 z-40 lg:hidden" 
@@ -92,7 +88,6 @@ const MainLayout: React.FC<{
                 />
             )}
 
-            {/* SIDEBAR: Absolute on mobile, Relative on desktop */}
             <aside className={`
                 fixed inset-y-0 left-0 z-50 lg:relative
                 ${isSidebarOpen ? 'w-64 translate-x-0' : 'w-0 -translate-x-full lg:translate-x-0 lg:w-20'} 
@@ -108,7 +103,6 @@ const MainLayout: React.FC<{
                     >
                         <Menu size={20} />
                     </button>
-                    {/* Mobile Close X */}
                     <button onClick={() => setIsSidebarOpen(false)} className="lg:hidden p-1">
                         <X size={24} />
                     </button>
@@ -138,13 +132,10 @@ const MainLayout: React.FC<{
                 </nav>
             </aside>
 
-            {/* MAIN APP AREA */}
             <div className="flex-grow flex flex-col h-full overflow-hidden w-full">
                 
-                {/* HEADER */}
                 <header className="bg-white border-b border-gray-200 h-16 flex items-center justify-between px-4 lg:px-6 flex-shrink-0 z-30 shadow-sm">
                     <div className="flex items-center gap-4 flex-1">
-                        {/* Mobile Menu Button */}
                         <button onClick={() => setIsSidebarOpen(true)} className="lg:hidden p-2 -ml-2 text-gray-600">
                             <Menu size={24} />
                         </button>
@@ -162,7 +153,6 @@ const MainLayout: React.FC<{
                              </select>
                         </div>
 
-                        {/* --- Global Search Bar: Shrinks on mobile --- */}
                         <div className="relative w-full max-w-xs lg:max-w-md">
                             <div className="relative">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
@@ -235,7 +225,6 @@ const MainLayout: React.FC<{
                     </div>
                 </header>
 
-                {/* VIEWPORT AREA */}
                 <main className="flex-grow overflow-auto relative bg-gray-100">
                     {children}
                 </main>

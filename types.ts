@@ -356,6 +356,7 @@ export interface Payment {
  */
 export interface PurchaseOrderLineItem {
     id: string;
+    partId?: string;
     partNumber: string;
     description: string;
     quantity: number;
@@ -365,6 +366,7 @@ export interface PurchaseOrderLineItem {
     receivedQuantity?: number;
     returnStatus?: 'None' | 'Pending';
     jobLineItemId?: string;
+    purchaseOrderId?: string;
 }
 
 export type PurchaseOrderStatus = 'Draft' | 'Ordered' | 'Partially Received' | 'Received' | 'Cancelled' | 'Awaiting Supplier Action' | 'Finalized';

@@ -1,9 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Send, Loader2, Bot, ClipboardCopy, Expand } from 'lucide-react';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { generateContent } from '../core/services/geminiService';
 import { Estimate } from '../types';
-
-const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY);
 
 interface Message {
     id: string;
@@ -60,25 +58,20 @@ const LiveAssistant: React.FC<LiveAssistantProps> = ({ isOpen, onClose, jobId, o
         setIsLoading(true);
         
         try {
-            const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
-            
             const prompt = `You are a technician assistant at Brookspeed. 
             Job context: ${jobId || 'General'}. Provide clear specs and repair data. 
             User Question: ${currentText}`;
 
-            const result = await model.generateContent(prompt);
-            const response = await result.response;
-            const responseText = response.text();
+            const responseText = await generateContent(prompt);
     
-            if (responseText) {
-                 setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'model', text: responseText }]);
-            }
+            setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'model', text: responseText }]);
+
         } catch (error: any) {
             console.error("AI Error:", error);
             setMessages(prev => [...prev, { 
                 id: crypto.randomUUID(), 
                 role: 'model', 
-                text: "Assistant error. Please check that your API key is valid and you are using the <gemini-3.0-flash-latest." 
+                text: "An unexpected error occurred. Please try again."
             }]);
         } finally {
             setIsLoading(false);

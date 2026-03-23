@@ -1,336 +1,246 @@
-import React, { useState, useEffect, useMemo, useCallback, useContext, useRef } from 'react';
-import ReactDOM from 'react-dom/client';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
-import { PurchaseOrder, Supplier, User, BusinessEntity } from '../types';
-import { X, Download, Mail, RefreshCw, Loader2, Info } from 'lucide-react';
-import { useData } from '../core/state/DataContext';
-import { AppContext } from '../core/state/AppContext';
-import EmailPurchaseOrderModal from './EmailPurchaseOrderModal';
-import { getDoc, doc } from 'firebase/firestore';
-import { db } from '../core/config/firebaseConfig';
+import React, { useState, useMemo, useRef, useEffect, Dispatch, SetStateAction } from 'react';
+import * as T from '../types';
+import { X, Printer, Package, Send, Phone, Plus, Save } from 'lucide-react';
+import { useReactToPrint } from 'react-to-print';
 import { PurchaseOrderPrint } from './PurchaseOrderPrint';
+import { formatCurrency } from '../core/utils/formatUtils';
+import { useData } from '../core/state/DataContext';
+import EditableLineItemRow from './EditableLineItemRow';
+import { v4 as uuidv4 } from 'uuid';
 
 interface PurchaseOrderViewModalProps {
     isOpen: boolean;
     onClose: () => void;
-    purchaseOrder: PurchaseOrder | null;
-    onUpdatePO?: (updatedPO: PurchaseOrder) => void;
+    purchaseOrder: T.PurchaseOrder;
+    // Updated signature to accept the optional source string from PurchaseOrdersTab
+    onUpdate: (updatedPO: T.PurchaseOrder, source?: string) => Promise<void>;
+    onSend: (poId: string) => void;
+    
+    // Made these optional (?) to fix the TS2739 error in PurchaseOrdersTab.tsx
+    onEditPart?: (part: any) => void; 
+    handleSaveItem?: (
+        setter: Dispatch<SetStateAction<any[]>>, 
+        item: any, 
+        collectionOverride?: string
+    ) => Promise<void>;
 }
 
-const PDFViewer: React.FC<{ src: string }> = ({ src }) => (
-    <iframe src={src} className="w-full h-full" title="Purchase Order Preview" />
-);
+const PurchaseOrderViewModal: React.FC<PurchaseOrderViewModalProps> = ({ 
+    isOpen, 
+    onClose, 
+    purchaseOrder, 
+    onUpdate, 
+    onSend,
+    onEditPart,
+    handleSaveItem
+}) => {
+    const { taxRates, suppliers, businessEntities } = useData();
+    const componentToPrintRef = useRef<HTMLDivElement>(null);
+    const [lineItems, setLineItems] = useState<T.PurchaseOrderLineItem[]>([]);
 
-const VAT_RATE = 0.20; // 20% VAT
+    useEffect(() => {
+        if (purchaseOrder.lineItems) {
+            setLineItems(purchaseOrder.lineItems);
+        }
+    }, [purchaseOrder.lineItems]);
 
-export const PurchaseOrderViewModal: React.FC<PurchaseOrderViewModalProps> = ({ isOpen, onClose, purchaseOrder, onUpdatePO }) => {
+    const taxRatesMap = useMemo(() => new Map(taxRates.map(tr => tr.id && tr.rate ? [tr.id, tr.rate] : [null, 0])), [taxRates]);
 
-    const { setPurchaseOrders, suppliers, businessEntities } = useData();
-    const appContext = useContext(AppContext);
-    const users = appContext?.users ?? [];
-    const [pdfUrl, setPdfUrl] = useState<string | null>(null);
-    const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
-    const [isEmailing, setIsEmailing] = useState(false);
-    const [currentPo, setCurrentPo] = useState<PurchaseOrder | null>(null);
-    const initialPdfLoadDone = useRef(false);
+    const handlePrint = useReactToPrint({
+        documentTitle: `Purchase_Order_${purchaseOrder.id}`,
+    });
 
-    const getUsername = (userId: string) => (users.find(u => u.id === userId) as User)?.name || 'Unknown User';
+    const triggerPrint = () => {
+        // Correct 2026 syntax: single functional argument
+        handlePrint(() => componentToPrintRef.current);
+    };
 
-    const poTotals = useMemo(() => {
-        if (!currentPo) return { net: 0, vat: 0, grandTotal: 0 };
-        const net = currentPo.lineItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
-        const vat = net * VAT_RATE;
-        const grandTotal = net + vat;
-        return { net, vat, grandTotal };
-    }, [currentPo]);
+    const handleOrderByPhone = async () => {
+        const confirmedPO = { ...purchaseOrder, status: 'Ordered' as const, lineItems };
+        await onUpdate(confirmedPO);
+        onClose();
+    };
 
-    const entityDetails = useMemo(() => 
-        businessEntities.find(e => e.id === currentPo?.entityId)
-    , [businessEntities, currentPo]);
+    const handleSave = async () => {
+        const updatedPO = { ...purchaseOrder, lineItems };
+        await onUpdate(updatedPO);
+        onClose();
+    };
 
-    const lastUpdatedBy = useMemo(() => {
-        if (!currentPo?.history?.length) return null;
-        const lastEvent = currentPo.history[currentPo.history.length - 1];
-        return {
-            user: getUsername(lastEvent.userId),
-            timestamp: new Date(lastEvent.timestamp).toLocaleString(),
-            status: lastEvent.status
+    const handleLineItemChange = (updatedItem: T.PurchaseOrderLineItem) => {
+        const updatedLineItems = lineItems.map(item => item.id === updatedItem.id ? updatedItem : item);
+        setLineItems(updatedLineItems);
+    };
+
+    const handleAddLineItem = () => {
+        const newItem: T.PurchaseOrderLineItem = {
+            id: uuidv4(),
+            partNumber: '',
+            description: '',
+            quantity: 1,
+            unitPrice: 0,
+            taxCodeId: undefined, 
         };
-    }, [currentPo, users]);
-
-    const generatePurchaseOrderPdf = useCallback(async (po: PurchaseOrder, supplier: Supplier, entity: BusinessEntity, totals: { net: number, vat: number, grandTotal: number }): Promise<{blobUrl: string, dataUri: string}> => {
-        const printMountPoint = document.createElement('div');
-        printMountPoint.style.position = 'absolute';
-        printMountPoint.style.left = '-9999px';
-        document.body.appendChild(printMountPoint);
-
-        const root = ReactDOM.createRoot(printMountPoint);
-        root.render(
-            <React.StrictMode>
-                <PurchaseOrderPrint 
-                    purchaseOrder={po} 
-                    supplier={supplier}
-                    entityDetails={entity}
-                    totals={totals}
-                />
-            </React.StrictMode>
-        );
-
-        await new Promise(resolve => setTimeout(resolve, 200));
-
-        try {
-            const elementToPrint = printMountPoint.children[0] as HTMLElement;
-            if (!elementToPrint) {
-                throw new Error("PDF print container not found during generation.");
-            }
-            const canvas = await html2canvas(elementToPrint, { scale: 2, useCORS: true });
-            const imgData = canvas.toDataURL('image/png');
-            
-            const pdf = new jsPDF('p', 'mm', 'a4', true);
-            const pdfWidth = pdf.internal.pageSize.getWidth();
-            const pdfHeight = pdf.internal.pageSize.getHeight();
-            
-            const imgProps = pdf.getImageProperties(imgData);
-            const imgHeight = (imgProps.height * pdfWidth) / imgProps.width;
-
-            let heightLeft = imgHeight;
-            let position = 0;
-
-            pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
-            heightLeft -= pdfHeight;
-
-            while (heightLeft >= 1) {
-                position -= pdfHeight;
-                pdf.addPage();
-                pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
-                heightLeft -= pdfHeight;
-            }
-
-            const blob = pdf.output('blob');
-            const dataUri = pdf.output('datauristring');
-            return { blobUrl: URL.createObjectURL(blob), dataUri };
-        } finally {
-            root.unmount();
-            document.body.removeChild(printMountPoint);
-        }
-    }, []);
-
-    const handleGeneratePdf = useCallback(async (po: PurchaseOrder) => {
-        const poSupplier = suppliers.find(s => s.id === po.supplierId);
-        const poEntity = businessEntities.find(e => e.id === po.entityId);
-
-        if (!po || !poSupplier || !poEntity) {
-            console.warn("Could not generate PDF, missing data for PO:", po);
-            return;
-        }
-
-        setIsGeneratingPdf(true);
-        try {
-            const { blobUrl, dataUri } = await generatePurchaseOrderPdf(po, poSupplier, poEntity, poTotals);
-            setPdfUrl(blobUrl);
-            const updatedPo = { ...po, pdfUrl: dataUri, pdfGeneratedAt: new Date().toISOString() };
-            setCurrentPo(updatedPo);
-            if (onUpdatePO) {
-                onUpdatePO(updatedPo);
-            }
-        } catch (error) {
-            console.error("Error generating PDF:", error);
-        } finally {
-            setIsGeneratingPdf(false);
-        }
-    }, [generatePurchaseOrderPdf, onUpdatePO, suppliers, businessEntities, poTotals]);
-
-    const loadFreshPoAndGeneratePdf = useCallback(async (poId: string, poForGeneration: PurchaseOrder) => {
-        setIsGeneratingPdf(true);
-        try {
-            const docRef = doc(db, 'brooks_purchaseOrders', poId);
-            const docSnap = await getDoc(docRef);
-
-            let poToUse: PurchaseOrder;
-            if (docSnap.exists()) {
-                poToUse = { id: docSnap.id, ...docSnap.data() } as PurchaseOrder;
-                setPurchaseOrders(prev => prev.map(p => p.id === poToUse.id ? poToUse : p));
-            } else {
-                poToUse = poForGeneration;
-            }
-            setCurrentPo(poToUse);
-            await handleGeneratePdf(poToUse);
-
-        } catch (error) {
-            console.error("Failed to load fresh PO and generate PDF", error);
-            setCurrentPo(poForGeneration);
-            await handleGeneratePdf(poForGeneration);
-        } finally {
-            setIsGeneratingPdf(false);
-        }
-    }, [handleGeneratePdf, setPurchaseOrders]);
-
-    const handleRefresh = () => {
-        if (currentPo) {
-            loadFreshPoAndGeneratePdf(currentPo.id, currentPo);
-        }
+        setLineItems([...lineItems, newItem]);
     };
 
-    useEffect(() => {
-        if (pdfUrl) {
-            return () => {
-                URL.revokeObjectURL(pdfUrl);
-            };
-        }
-    }, [pdfUrl]);
-
-    useEffect(() => {
-        if (isOpen && purchaseOrder && !initialPdfLoadDone.current) {
-            initialPdfLoadDone.current = true;
-            loadFreshPoAndGeneratePdf(purchaseOrder.id, purchaseOrder);
-        }
-
-        if (!isOpen) {
-            setCurrentPo(null);
-            setPdfUrl(null);
-            initialPdfLoadDone.current = false;
-        }
-    }, [isOpen, purchaseOrder, loadFreshPoAndGeneratePdf]);
-
-    if (!isOpen || !currentPo) return null;
-
-    const handleEmailSuccess = () => {
-        setIsEmailing(false);
-        if (onUpdatePO && currentPo) {
-            onUpdatePO(currentPo);
-        }
+    const handleDeleteLineItem = (itemId: string) => {
+        const updatedLineItems = lineItems.filter(item => item.id !== itemId);
+        setLineItems(updatedLineItems);
     };
     
-    const handleDownloadPdf = async () => {
-        if (!currentPo || !currentSupplier || !entityDetails) return;
-        
-        setIsGeneratingPdf(true);
-        const printMountPoint = document.createElement('div');
-        printMountPoint.style.position = 'absolute';
-        printMountPoint.style.left = '-9999px';
-        document.body.appendChild(printMountPoint);
+    const printData = useMemo(() => {
+        const supplier = suppliers.find(s => s.id === purchaseOrder.supplierId);
+        const entityDetails = businessEntities.find(e => e.id === purchaseOrder.entityId);
+        const totals = (lineItems || []).reduce((acc, item) => {
+            const taxRate = taxRatesMap.get(item.taxCodeId || null) || 0;
+            const itemTotal = (item.unitPrice || 0) * (item.quantity || 0);
+            const itemVat = itemTotal * (taxRate / 100);
+            acc.net += itemTotal;
+            acc.vat += itemVat;
+            return acc;
+        }, { net: 0, vat: 0 });
+        const grandTotal = totals.net + totals.vat;
 
-        const root = ReactDOM.createRoot(printMountPoint);
-        root.render(
-            <React.StrictMode>
-                <PurchaseOrderPrint 
-                    purchaseOrder={currentPo} 
-                    supplier={currentSupplier}
-                    entityDetails={entityDetails}
-                    totals={poTotals}
-                />
-            </React.StrictMode>
-        );
+        return {
+            supplier,
+            entityDetails,
+            totals: { ...totals, grandTotal }
+        };
+    }, [lineItems, purchaseOrder, suppliers, businessEntities, taxRatesMap]);
 
-        await new Promise(resolve => setTimeout(resolve, 200));
-    
-        try {
-            const elementToPrint = printMountPoint.children[0] as HTMLElement;
-            if (!elementToPrint) {
-                throw new Error("PDF print container not found for download.");
-            }
-            const canvas = await html2canvas(elementToPrint, { scale: 2, useCORS: true });
-            const imgData = canvas.toDataURL('image/png');
+    const poTotal = useMemo(() => 
+        (lineItems || []).reduce((acc, item) => {
+            const taxRate = taxRatesMap.get(item.taxCodeId || null) || 0;
+            const itemTotal = (item.unitPrice || 0) * (item.quantity || 0);
+            const itemVat = itemTotal * (taxRate / 100);
+            return acc + itemTotal + itemVat;
+        }, 0),
+    [lineItems, taxRatesMap]);
 
-            const pdf = new jsPDF('p', 'mm', 'a4', true);
-            const pdfWidth = pdf.internal.pageSize.getWidth();
-            const pdfHeight = pdf.internal.pageSize.getHeight();
-            
-            const imgProps = pdf.getImageProperties(imgData);
-            const imgHeight = (imgProps.height * pdfWidth) / imgProps.width;
+    if (!isOpen) return null;
 
-            let heightLeft = imgHeight;
-            let position = 0;
+    const isDraft = purchaseOrder.status === 'Draft';
 
-            pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
-            heightLeft -= pdfHeight;
-
-            while (heightLeft >= 1) {
-                position -= pdfHeight;
-                pdf.addPage();
-                pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
-                heightLeft -= pdfHeight;
-            }
-
-            pdf.save(`PO-${currentPo.id}.pdf`);
-        } catch (error) {
-            console.error("Error generating PDF for download:", error);
-        } finally {
-            root.unmount();
-            document.body.removeChild(printMountPoint);
-            setIsGeneratingPdf(false);
-        }
-    };
-
-    const currentSupplier = suppliers.find(s => s.id === currentPo.supplierId);
+    const deliveryAddress = printData.entityDetails ? `${printData.entityDetails.addressLine1}, ${printData.entityDetails.city}, ${printData.entityDetails.postcode}` : 'N/A';
 
     return (
-        <>
-            <div className="fixed inset-0 bg-gray-900 bg-opacity-75 z-[70] flex justify-center items-center p-4" onClick={onClose}>
-                <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
-                    <header className="flex-shrink-0 flex justify-between items-center p-4 border-b">
-                        <div className="flex items-center gap-4">
-                            <h2 className="text-xl font-bold text-gray-800">Purchase Order: #{currentPo.id}</h2>
-                            <span className={`px-2.5 py-1 text-xs font-semibold rounded-full ${
-                                currentPo.status === 'Draft' ? 'bg-gray-100 text-gray-700' :
-                                    currentPo.status === 'Ordered' ? 'bg-blue-100 text-blue-700' :
-                                        currentPo.status === 'Partially Received' ? 'bg-yellow-100 text-yellow-800' :
-                                            currentPo.status === 'Received' ? 'bg-green-100 text-green-700' :
-                                                'bg-red-100 text-red-700'
-                                }`}>{currentPo.status}</span>
+        <div className="fixed inset-0 bg-gray-900 bg-opacity-75 z-[70] flex justify-center items-center p-4">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl h-[90vh] flex flex-col">
+                <header className="flex justify-between items-center p-4 border-b bg-gray-50">
+                    <h2 className="text-xl font-bold flex items-center gap-2"><Package size={24}/>Purchase Order: {purchaseOrder.id}</h2>
+                    <button type="button" onClick={onClose}><X size={28} /></button>
+                </header>
+
+                <main className="flex-grow overflow-y-auto p-6">
+                     <div className="grid grid-cols-3 gap-x-6 gap-y-4 mb-6 text-sm">
+                        <div>
+                            <label className="font-bold text-gray-600 block">Supplier</label>
+                            <p>{printData.supplier?.name || 'N/A'}</p>
                         </div>
-                        <button type="button" onClick={onClose}><X size={24} /></button>
-                    </header>
-                    <main className="flex-grow bg-gray-100 overflow-hidden">
-                        {isGeneratingPdf && !pdfUrl && (
-                            <div className="w-full h-full flex justify-center items-center">
-                                <Loader2 size={32} className="animate-spin text-indigo-600" />
-                                <p className="ml-4 text-lg">Generating up-to-date PDF...</p>
-                            </div>
-                        )}
-                        {pdfUrl && <PDFViewer src={pdfUrl} />}
-                        {!isGeneratingPdf && !pdfUrl && (
-                            <div className="w-full h-full flex justify-center items-center flex-col">
-                                <Info size={32} className="text-gray-500" />
-                                <p className="mt-4 text-lg text-gray-600">Could not load PDF.</p>
-                                <button onClick={handleRefresh} className="mt-4 flex items-center justify-center py-2 px-4 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700">
-                                    <RefreshCw size={16} className="mr-2" /> Try Again
+                        <div>
+                            <label className="font-bold text-gray-600 block">Delivery Address</label>
+                            <p>{deliveryAddress}</p>
+                        </div>
+                        <div>
+                            <label className="font-bold text-gray-600 block">Order Date</label>
+                            <p>{purchaseOrder.orderDate}</p>
+                        </div>
+                        <div>
+                            <label className="font-bold text-gray-600 block">Supplier Reference</label>
+                            <p>{purchaseOrder.supplierReference || 'N/A'}</p>
+                        </div>
+                        <div>
+                            <label className="font-bold text-gray-600 block">Secondary Reference</label>
+                             <p>{purchaseOrder.secondarySupplierReference || 'N/A'}</p>
+                        </div>
+                        <div>
+                            <label className="font-bold text-gray-600 block">Vehicle Reg</label>
+                            <p className="font-mono">{purchaseOrder.vehicleRegistrationRef || 'N/A'}</p>
+                        </div>
+                    </div>
+
+                    <table className="w-full text-sm">
+                        <thead>
+                            <tr className="border-b">
+                                <th className="text-left p-2 w-1/4">Part No.</th>
+                                <th className="text-left p-2 w-2/5">Description</th>
+                                <th className="text-right p-2">Qty</th>
+                                <th className="text-right p-2">Unit Price</th>
+                                <th className="text-right p-2">Total</th>
+                                {isDraft && <th className="p-2"></th>}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {lineItems.map(item => (
+                                isDraft ? (
+                                    <EditableLineItemRow
+                                        key={item.id}
+                                        item={item}
+                                        onItemChange={handleLineItemChange}
+                                        onDeleteItem={handleDeleteLineItem}
+                                    />
+                                ) : (
+                                    <tr key={item.id} className="border-b hover:bg-gray-50">
+                                        <td className="p-2 align-top">{item.partNumber}</td>
+                                        <td className="p-2 align-top">{item.description}</td>
+                                        <td className="p-2 text-right align-top">{item.quantity}</td>
+                                        <td className="p-2 text-right align-top">{formatCurrency(item.unitPrice)}</td>
+                                        <td className="p-2 text-right font-semibold align-top">{formatCurrency((item.unitPrice || 0) * (item.quantity || 0))}</td>
+                                    </tr>
+                                )
+                            ))}
+                        </tbody>
+                    </table>
+                    {isDraft && (
+                        <div className="mt-4">
+                            <button onClick={handleAddLineItem} className="flex items-center gap-2 py-2 px-4 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700">
+                                <Plus size={16}/> Add Line Item
+                            </button>
+                        </div>
+                    )}
+                </main>
+
+                <footer className="flex-shrink-0 flex justify-between items-center p-4 border-t bg-gray-50">
+                    <div className="font-bold text-lg">Total: {formatCurrency(poTotal)}</div>
+                    <div className="flex items-center gap-2">
+                        <button type="button" onClick={onClose} className="py-2 px-4 bg-gray-300 rounded-lg font-semibold hover:bg-gray-400">Close</button>
+                        
+                        {isDraft ? (
+                            <>
+                                <button type="button" onClick={handleSave} className="flex items-center gap-2 py-2 px-4 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700">
+                                    <Save size={16}/> Save Changes
                                 </button>
-                            </div>
+                                <button type="button" onClick={handleOrderByPhone} className="flex items-center gap-2 py-2 px-4 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700">
+                                    <Phone size={16}/> Order by Phone
+                                </button>
+                                <button onClick={() => onSend(purchaseOrder.id)} className="flex items-center gap-2 py-2 px-4 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700">
+                                    <Send size={16}/> Send via Email
+                                </button>
+                            </>
+                        ) : (
+                            <button type="button" onClick={triggerPrint} className="flex items-center gap-2 py-2 px-4 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 text-sm font-semibold">
+                                <Printer size={14}/> Print
+                            </button>
                         )}
-                    </main>
-                    <footer className="flex-shrink-0 flex justify-between items-center gap-2 p-4 border-t bg-white">
-                        <div className='text-xs text-gray-500'>
-                            {lastUpdatedBy ? `Last status change to '${lastUpdatedBy.status}' by ${lastUpdatedBy.user} at ${lastUpdatedBy.timestamp}` : 'No history'}
-                        </div>
-                        <div className="flex gap-2">
-                            <button onClick={handleRefresh} className="flex items-center justify-center py-2 px-4 bg-gray-200 text-gray-800 font-semibold rounded-lg hover:bg-gray-300 transition-all" disabled={isGeneratingPdf}>
-                                {isGeneratingPdf ? <Loader2 size={16} className="mr-2 animate-spin" /> : <RefreshCw size={16} className="mr-2" />}
-                                {isGeneratingPdf ? 'Reloading...' : 'Reload'}
-                            </button>
-                            <button onClick={handleDownloadPdf} disabled={!pdfUrl || isGeneratingPdf} className="flex items-center justify-center py-2 px-4 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:bg-blue-300 transition-all">
-                                <Download size={16} className="mr-2" />
-                                Download PDF
-                            </button>
-                            <button onClick={() => setIsEmailing(true)} disabled={!currentPo.pdfUrl || isGeneratingPdf} className="flex items-center justify-center py-2 px-4 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 disabled:bg-green-300 transition-all">
-                                <Mail size={16} className="mr-2" />
-                                Email to Supplier
-                            </button>
-                            <button onClick={onClose} className="py-2 px-4 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700">Close</button>
-                        </div>
-                    </footer>
+                    </div>
+                </footer>
+
+                <div className="hidden">
+                    <div ref={componentToPrintRef}>
+                        {printData.supplier && printData.entityDetails && (
+                            <PurchaseOrderPrint 
+                                purchaseOrder={purchaseOrder} 
+                                supplier={printData.supplier} 
+                                entityDetails={printData.entityDetails} 
+                                totals={printData.totals}
+                            />
+                        )}
+                    </div>
                 </div>
             </div>
-            {isEmailing && currentSupplier && (
-                <EmailPurchaseOrderModal
-                    isOpen={isEmailing}
-                    onClose={() => setIsEmailing(false)}
-                    onSend={handleEmailSuccess}
-                    purchaseOrder={currentPo}
-                    supplier={currentSupplier}
-                />
-            )}
-        </>
+        </div>
     );
 };
+
+export default PurchaseOrderViewModal;

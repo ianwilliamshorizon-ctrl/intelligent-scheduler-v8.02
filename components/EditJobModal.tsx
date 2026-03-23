@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useData } from '../core/state/DataContext';
 import { useApp } from '../core/state/AppContext';
@@ -39,6 +38,7 @@ const EditJobModal: React.FC<{
     rentalBookings: T.RentalBooking[];
     onOpenRentalBooking: (booking: T.RentalBooking) => void;
     onOpenConditionReport: (booking: T.RentalBooking, mode: 'checkIn' | 'checkOut') => void;
+    forceRefresh: (collectionKey: string) => Promise<void>;
 }> = ({ 
     isOpen, 
     onClose, 
@@ -55,7 +55,8 @@ const EditJobModal: React.FC<{
     generatePurchaseOrderId,
     rentalBookings,
     onOpenRentalBooking,
-    onOpenConditionReport
+    onOpenConditionReport,
+    forceRefresh
 }) => {
     
     const data = useData();
@@ -86,6 +87,7 @@ const EditJobModal: React.FC<{
     const [isPrinting, setIsPrinting] = useState(false);
     const [printBlankSheet, setPrintBlankSheet] = useState(true);
     const componentToPrintRef = useRef<HTMLDivElement>(null);
+    const [isRaisingPOs, setIsRaisingPOs] = useState(false);
 
     const [partSearchTerm, setPartSearchTerm] = useState('');
     const [activePartSearch, setActivePartSearch] = useState<string | null>(null);
@@ -93,9 +95,9 @@ const EditJobModal: React.FC<{
     const [mediaModalTitle, setMediaModalTitle] = useState('');
     const [mediaModalData, setMediaModalData] = useState<T.CheckInPhoto[]>([]);
     const [onMediaSaveCallback, setOnMediaSaveCallback] = useState<((media: T.CheckInPhoto[]) => void) | null>(null);
-    const [isAddingPart, setIsAddingPart] = useState(false);
+    const [isPartModalOpen, setIsPartModalOpen] = useState(false);
+    const [partToEdit, setPartToEdit] = useState<Partial<T.Part> | null>(null);
     const [targetLineItemId, setTargetLineItemId] = useState<string | null>(null);
-    const [newPartDescription, setNewPartDescription] = useState('');
     const [isCreatingPackage, setIsCreatingPackage] = useState(false);
     const [isPackageModalOpen, setIsPackageModalOpen] = useState(false);
     const [suggestedPackage, setSuggestedPackage] = useState<Partial<T.ServicePackage> | null>(null);
@@ -230,24 +232,69 @@ const EditJobModal: React.FC<{
         });
     }, []);
 
-    const addPackage = (selection: any) => {
+    const addPackage = useCallback(async (selection: any) => {
         const packageId = selection?.value || selection?.id || selection;
         const pkg = safeServicePackages.find(p => p.id === packageId);
         if (!pkg) return;
-        handleCreateEstimateIfNeeded();
-        setEditableEstimate(prev => {
-            if (!prev) return null;
-            const newItems: T.EstimateLineItem[] = [];
-            const { net, vat } = calculatePackagePrices(pkg, safeTaxRates);
-            const mainPackageItem: T.EstimateLineItem = { id: crypto.randomUUID(), description: pkg.name || '', quantity: 1, unitPrice: net, unitCost: 0, isLabor: false, taxCodeId: pkg.taxCodeId || standardTaxRateId, servicePackageId: pkg.id, servicePackageName: pkg.name, isPackageComponent: false, isOptional: true, preCalculatedVat: pkg.taxCodeId === t99RateId ? vat : undefined };
-            newItems.push(mainPackageItem);
-            (pkg.costItems || []).forEach(costItem => {
-                const newItem: T.EstimateLineItem = { id: crypto.randomUUID(), description: costItem.description, quantity: costItem.quantity, unitPrice: 0, unitCost: costItem.unitCost, partNumber: costItem.partNumber, isLabor: costItem.isLabor, servicePackageId: pkg.id, servicePackageName: pkg.name, isPackageComponent: true, isOptional: true };
-                newItems.push(newItem);
-            });
-            return { ...prev, lineItems: [...(prev.lineItems || []), ...newItems] };
-        });
-    };
+    
+        const estimate = handleCreateEstimateIfNeeded();
+        let currentLineItems = estimate?.lineItems || [];
+    
+        const { net, vat } = calculatePackagePrices(pkg, safeTaxRates);
+        const mainPackageItem: T.EstimateLineItem = {
+            id: crypto.randomUUID(),
+            description: pkg.name || '',
+            quantity: 1,
+            unitPrice: net,
+            unitCost: 0,
+            isLabor: false,
+            taxCodeId: pkg.taxCodeId || standardTaxRateId,
+            servicePackageId: pkg.id,
+            servicePackageName: pkg.name,
+            isPackageComponent: false,
+            isOptional: true,
+            preCalculatedVat: pkg.taxCodeId === t99RateId ? vat : undefined,
+        };
+        currentLineItems.push(mainPackageItem);
+    
+        for (const costItem of (pkg.costItems || [])) {
+            let part = safeParts.find(p => p.partNumber === costItem.partNumber && p.partNumber);
+            if (!part && costItem.partNumber) {
+                const newPart: T.Part = {
+                    id: `new_${Date.now()}`,
+                    partNumber: costItem.partNumber,
+                    description: costItem.description,
+                    stockQuantity: 0,
+                    costPrice: costItem.unitCost || 0,
+                    salePrice: (costItem.unitCost || 0) * 1.2, // Default 20% markup
+                    taxCodeId: standardTaxRateId || '',
+                    defaultSupplierId: '',
+                    isStockItem: false
+                };
+                part = await handleSaveItem(setParts, newPart, 'brooks_parts');
+            }
+    
+            const newItem: T.EstimateLineItem = {
+                id: crypto.randomUUID(),
+                description: costItem.description,
+                quantity: costItem.quantity,
+                unitPrice: 0,
+                unitCost: part ? part.costPrice : costItem.unitCost,
+                partNumber: costItem.partNumber,
+                partId: part ? part.id : undefined,
+                isLabor: costItem.isLabor,
+                servicePackageId: pkg.id,
+                servicePackageName: pkg.name,
+                isPackageComponent: true,
+                isOptional: true,
+                supplierId: part ? part.defaultSupplierId : undefined,
+            };
+            currentLineItems.push(newItem);
+        }
+    
+        setEditableEstimate(prev => ({ ...prev!, lineItems: currentLineItems }));
+    
+    }, [safeServicePackages, handleCreateEstimateIfNeeded, safeTaxRates, standardTaxRateId, t99RateId, safeParts, handleSaveItem, setParts]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
@@ -366,76 +413,91 @@ const EditJobModal: React.FC<{
     }, [partSearchTerm, safeParts]);
 
     const handleRaisePurchaseOrders = useCallback(async () => {
-        if (!editableJob || !editableEstimate || !vehicle) return;
-        const itemsToOrder = (editableEstimate.lineItems || []).filter(li => !li.isLabor && !li.isPackageComponent && li.partId && !li.fromStock && !li.purchaseOrderLineItemId);
-        if (itemsToOrder.length === 0) {
-            setConfirmation({ isOpen: true, title: 'No Parts to Order', message: 'There are no new parts on this estimate that require ordering.', type: 'info' });
-            return;
+        if (!editableJob || !editableEstimate || !vehicle || isRaisingPOs) return;
+    
+        setIsRaisingPOs(true);
+        try {
+            const itemsToOrder = (editableEstimate.lineItems || []).filter(li => !li.isLabor && li.partId && !li.fromStock && !li.purchaseOrderLineItemId);
+    
+            if (itemsToOrder.length === 0) {
+                setConfirmation({ isOpen: true, title: 'No Parts to Order', message: 'There are no new parts on this estimate that require ordering.', type: 'info' });
+                return;
+            }
+    
+            const supplierGroups = new Map<string, T.EstimateLineItem[]>();
+            itemsToOrder.forEach(lineItem => {
+                const part = safeParts.find(p => p.id === lineItem.partId);
+                if (!part) return;
+                const supplierId = lineItem.supplierId || part.defaultSupplierId || 'UNKNOWN';
+                if (!supplierGroups.has(supplierId)) {
+                    supplierGroups.set(supplierId, []);
+                }
+                supplierGroups.get(supplierId)!.push(lineItem);
+            });
+    
+            const posToUpdate: T.PurchaseOrder[] = [];
+            const newPOs: T.PurchaseOrder[] = [];
+            const newPoIdsToLink: string[] = [];
+            let updatedLineItems = [...(editableEstimate.lineItems || [])];
+            const entity = safeBusinessEntities.find(e => e.id === editableJob.entityId);
+            const entityShortCode = entity?.shortCode || 'UNK';
+            const jobPoIds = editableJob.purchaseOrderIds || [];
+            const jobPOs = safePurchaseOrders.filter(po => jobPoIds.includes(po.id));
+    
+            supplierGroups.forEach((items, supplierId) => {
+                const existingDraftPO = jobPOs.find(po => po.status === 'Draft' && (po.supplierId === supplierId || (supplierId === 'UNKNOWN' && !po.supplierId)));
+                if (existingDraftPO) {
+                    const newPoLineItems: T.PurchaseOrderLineItem[] = items.map(item => {
+                        const newPoLineItemId = crypto.randomUUID();
+                        const part = safeParts.find(p => p.id === item.partId!)!;
+                        const originalIndex = updatedLineItems.findIndex(li => li.id === item.id);
+                        if (originalIndex !== -1) {
+                            updatedLineItems[originalIndex] = { ...updatedLineItems[originalIndex], purchaseOrderLineItemId: newPoLineItemId };
+                        }
+                        return { id: newPoLineItemId, partNumber: part.partNumber, description: part.description, quantity: item.quantity, unitPrice: part.costPrice, taxCodeId: part.taxCodeId };
+                    });
+                    const updatedPO = { ...existingDraftPO, lineItems: [...(existingDraftPO.lineItems || []), ...newPoLineItems] };
+                    posToUpdate.push(updatedPO);
+                } else {
+                    const newPoId = generatePurchaseOrderId(safePurchaseOrders.concat(newPOs), entityShortCode);
+                    newPoIdsToLink.push(newPoId);
+                    const poLineItems: T.PurchaseOrderLineItem[] = items.map(item => {
+                        const newPoLineItemId = crypto.randomUUID();
+                        const part = safeParts.find(p => p.id === item.partId!)!;
+                        const originalIndex = updatedLineItems.findIndex(li => li.id === item.id);
+                        if (originalIndex !== -1) {
+                            updatedLineItems[originalIndex] = { ...updatedLineItems[originalIndex], purchaseOrderLineItemId: newPoLineItemId };
+                        }
+                        return { id: newPoLineItemId, partNumber: part.partNumber, description: part.description, quantity: item.quantity, unitPrice: part.costPrice, taxCodeId: part.taxCodeId };
+                    });
+                    const newPo: T.PurchaseOrder = { id: newPoId, entityId: editableJob.entityId, supplierId: supplierId === 'UNKNOWN' ? undefined : supplierId, vehicleRegistrationRef: vehicle.registration, orderDate: formatDate(new Date()), status: 'Draft', lineItems: poLineItems, notes: `Generated from Job #${editableJob.id}` };
+                    newPOs.push(newPo);
+                }
+            });
+    
+            const allPOsToSave = [...newPOs, ...posToUpdate];
+            if (allPOsToSave.length > 0) {
+                const poSavePromises = allPOsToSave.map(po => handleSaveItem(data.setPurchaseOrders, po, 'brooks_purchaseOrders'));
+                await Promise.all(poSavePromises);
+                const newEstimateState = { ...editableEstimate, lineItems: updatedLineItems };
+                setEditableEstimate(newEstimateState);
+                await handleSaveItem(setEstimates, newEstimateState, 'brooks_estimates');
+                if (newPoIdsToLink.length > 0) {
+                    setEditableJob(prev => prev ? { ...prev, purchaseOrderIds: [...(prev.purchaseOrderIds || []), ...newPoIdsToLink] } : null);
+                }
+            }
+            setConfirmation({ isOpen: true, title: 'Purchase Orders Updated', message: `${newPOs.length} new purchase order(s) created and ${posToUpdate.length} existing draft PO(s) updated.`, type: 'success' });
+        } finally {
+            setIsRaisingPOs(false);
+            if (forceRefresh) {
+                await Promise.all([
+                    forceRefresh('jobs'),
+                    forceRefresh('purchaseOrders'),
+                    forceRefresh('estimates'),
+                ]);
+            }
         }
-        const supplierGroups = new Map<string, T.EstimateLineItem[]>();
-        itemsToOrder.forEach(lineItem => {
-            const part = safeParts.find(p => p.id === lineItem.partId);
-            if (!part) return;
-            const supplierId = lineItem.supplierId || part.defaultSupplierId || 'UNKNOWN';
-            if (!supplierGroups.has(supplierId)) {
-                supplierGroups.set(supplierId, []);
-            }
-            supplierGroups.get(supplierId)!.push(lineItem);
-        });
-
-        const posToUpdate: T.PurchaseOrder[] = [];
-        const newPOs: T.PurchaseOrder[] = [];
-        const newPoIdsToLink: string[] = [];
-        let updatedLineItems = [...(editableEstimate.lineItems || [])];
-        const entity = safeBusinessEntities.find(e => e.id === editableJob.entityId);
-        const entityShortCode = entity?.shortCode || 'UNK';
-        const jobPoIds = editableJob.purchaseOrderIds || [];
-        const jobPOs = safePurchaseOrders.filter(po => jobPoIds.includes(po.id));
-
-        supplierGroups.forEach((items, supplierId) => {
-            const existingDraftPO = jobPOs.find(po => po.status === 'Draft' && (po.supplierId === supplierId || (supplierId === 'UNKNOWN' && !po.supplierId)));
-            if (existingDraftPO) {
-                const newPoLineItems: T.PurchaseOrderLineItem[] = items.map(item => {
-                    const newPoLineItemId = crypto.randomUUID();
-                    const part = safeParts.find(p => p.id === item.partId!)!;
-                    const originalIndex = updatedLineItems.findIndex(li => li.id === item.id);
-                    if (originalIndex !== -1) {
-                        updatedLineItems[originalIndex] = { ...updatedLineItems[originalIndex], purchaseOrderLineItemId: newPoLineItemId };
-                    }
-                    return { id: newPoLineItemId, partNumber: part.partNumber, description: part.description, quantity: item.quantity, unitPrice: part.costPrice, taxCodeId: part.taxCodeId };
-                });
-                const updatedPO = { ...existingDraftPO, lineItems: [...(existingDraftPO.lineItems || []), ...newPoLineItems] };
-                posToUpdate.push(updatedPO);
-            } else {
-                const newPoId = generatePurchaseOrderId(safePurchaseOrders.concat(newPOs), entityShortCode);
-                newPoIdsToLink.push(newPoId);
-                const poLineItems: T.PurchaseOrderLineItem[] = items.map(item => {
-                    const newPoLineItemId = crypto.randomUUID();
-                    const part = safeParts.find(p => p.id === item.partId!)!;
-                    const originalIndex = updatedLineItems.findIndex(li => li.id === item.id);
-                    if (originalIndex !== -1) {
-                        updatedLineItems[originalIndex] = { ...updatedLineItems[originalIndex], purchaseOrderLineItemId: newPoLineItemId };
-                    }
-                    return { id: newPoLineItemId, partNumber: part.partNumber, description: part.description, quantity: item.quantity, unitPrice: part.costPrice, taxCodeId: part.taxCodeId };
-                });
-                const newPo: T.PurchaseOrder = { id: newPoId, entityId: editableJob.entityId, supplierId: supplierId === 'UNKNOWN' ? undefined : supplierId, vehicleRegistrationRef: vehicle.registration, orderDate: formatDate(new Date()), status: 'Draft', lineItems: poLineItems, notes: `Generated from Job #${editableJob.id}` };
-                newPOs.push(newPo);
-            }
-        });
-
-        const allPOsToSave = [...newPOs, ...posToUpdate];
-        if (allPOsToSave.length > 0) {
-            const poSavePromises = allPOsToSave.map(po => handleSaveItem(data.setPurchaseOrders, po, 'brooks_purchaseOrders'));
-            await Promise.all(poSavePromises);
-            const newEstimateState = { ...editableEstimate, lineItems: updatedLineItems };
-            setEditableEstimate(newEstimateState);
-            await handleSaveItem(setEstimates, newEstimateState, 'brooks_estimates');
-            if (newPoIdsToLink.length > 0) {
-                setEditableJob(prev => prev ? { ...prev, purchaseOrderIds: [...(prev.purchaseOrderIds || []), ...newPoIdsToLink] } : null);
-            }
-        }
-        setConfirmation({ isOpen: true, title: 'Purchase Orders Updated', message: `${newPOs.length} new purchase order(s) created and ${posToUpdate.length} existing draft PO(s) updated.`, type: 'success' });
-    }, [editableJob, editableEstimate, vehicle, safeParts, safeBusinessEntities, safePurchaseOrders, generatePurchaseOrderId, handleSaveItem, data.setPurchaseOrders, setEstimates, setConfirmation]);
+    }, [editableJob, editableEstimate, vehicle, safeParts, safeBusinessEntities, safePurchaseOrders, generatePurchaseOrderId, handleSaveItem, data.setPurchaseOrders, setEstimates, setConfirmation, isRaisingPOs, forceRefresh]);
 
     const handleSelectPart = (lineItemId: string, part: T.Part) => {
         handleLineItemChange(lineItemId, 'partNumber', part.partNumber);
@@ -453,18 +515,29 @@ const EditJobModal: React.FC<{
 
     const handleAddNewPartClick = (lineItemId: string, searchTerm: string) => {
         setTargetLineItemId(lineItemId);
-        setNewPartDescription(searchTerm);
-        setIsAddingPart(true);
+        setPartToEdit({ partNumber: '', description: searchTerm, isStockItem: false });
+        setIsPartModalOpen(true);
         setActivePartSearch(null);
     };
 
-    const handleSaveNewPart = async (part: T.Part) => {
+    const handleEditPart = (part: T.Part) => {
+        const fullPart = safeParts.find(p => p.id === part.id);
+        if (fullPart) {
+            setPartToEdit(fullPart);
+            setIsPartModalOpen(true);
+        }
+    };
+
+    const handleSavePart = async (part: T.Part) => {
         const savedPart = await handleSaveItem(setParts, part, 'brooks_parts');
         if (targetLineItemId) {
             handleSelectPart(targetLineItemId, savedPart);
         }
-        setIsAddingPart(false);
+        setIsPartModalOpen(false);
+        setPartToEdit(null);
         setTargetLineItemId(null);
+        forceRefresh('parts');
+        forceRefresh('estimates');
     };
     
     const handleCreatePackage = async () => {
@@ -687,7 +760,9 @@ const EditJobModal: React.FC<{
                                     vehicle={vehicle}
                                     customer={customer}
                                     onAddNewPart={handleAddNewPartClick}
+                                    onEditPart={handleEditPart}
                                     onRaisePurchaseOrders={handleRaisePurchaseOrders}
+                                    isRaisingPOs={isRaisingPOs}
                                     onCreatePackage={handleCreatePackage}
                                 />
                             )}
@@ -858,7 +933,16 @@ const EditJobModal: React.FC<{
             </div>
 
             {isMediaModalOpen && <MediaManagerModal isOpen={isMediaModalOpen} onClose={() => setIsMediaModalOpen(false)} title={mediaModalTitle} initialMedia={mediaModalData} onSave={(newMedia) => { if (onMediaSaveCallback) { onMediaSaveCallback(newMedia); } setIsMediaModalOpen(false); }} />}
-            {isAddingPart && <PartFormModal isOpen={isAddingPart} onClose={() => { setIsAddingPart(false); setTargetLineItemId(null); }} onSave={handleSaveNewPart} part={{ id: `new_${Date.now()}`, partNumber: '', description: newPartDescription, stockQuantity: 0, costPrice: 0, salePrice: 0, taxCodeId: standardTaxRateId || '', defaultSupplierId: '', isStockItem: false }} suppliers={safeSuppliers} taxRates={safeTaxRates} />}
+            {isPartModalOpen && (
+                 <PartFormModal 
+                    isOpen={isPartModalOpen} 
+                    onClose={() => { setIsPartModalOpen(false); setPartToEdit(null); setTargetLineItemId(null); }} 
+                    onSave={handleSavePart} 
+                    part={partToEdit || { id: `new_${Date.now()}`, partNumber: '', description: '', stockQuantity: 0, costPrice: 0, salePrice: 0, taxCodeId: standardTaxRateId || '', defaultSupplierId: '', isStockItem: false }}
+                    suppliers={safeSuppliers} 
+                    taxRates={safeTaxRates} 
+                />
+            )}
             {isPackageModalOpen && editableJob && <ServicePackageFormModal isOpen={isPackageModalOpen} onClose={() => setIsPackageModalOpen(false)} onSave={async (pkg) => { const savedPackage = await handleSaveItem(setServicePackages, pkg, 'brooks_servicePackages'); addPackage(savedPackage.id); setIsPackageModalOpen(false); }} servicePackage={suggestedPackage} taxRates={safeTaxRates} entityId={editableJob.entityId || ((safeBusinessEntities)[0]?.id || '')} businessEntities={safeBusinessEntities} parts={safeParts} />}
         </div>
     );

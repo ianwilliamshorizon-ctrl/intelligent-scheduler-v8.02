@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { EstimateLineItem, TaxRate, Part, PurchaseOrder, ServicePackage, Estimate, Vehicle, Supplier, Customer } from '../../../types';
-import { Trash2, PlusCircle, FileText, Clock, ChevronDown, ChevronUp, Plus, Image as ImageIcon, Search, ShoppingCart, Edit, Wand2, Info } from 'lucide-react';
+import { Trash2, PlusCircle, FileText, Clock, ChevronDown, ChevronUp, Plus, Image as ImageIcon, Search, ShoppingCart, Edit, Wand2, Info, Loader2 } from 'lucide-react';
 import { formatCurrency } from '../../../core/utils/formatUtils';
 import SearchableSelect from '../../SearchableSelect';
 import { getScoredServicePackages } from '../../../utils/servicePackageScoring';
@@ -62,12 +62,13 @@ interface EditableLineItemRowProps {
     onManageMedia: (itemId: string) => void; 
     onAddNewPart: (lineItemId: string, searchTerm: string) => void;
     onOpenSupplierSelection: (lineItemId: string) => void;
+    onEditPart: (part: Part) => void;
 }
 
 const MemoizedEditableLineItemRow = React.memo(({ 
     item, onLineItemChange, onRemoveLineItem, filteredParts, activePartSearch, onPartSearchChange, 
     onSetActivePartSearch, onSelectPart, isReadOnly, canViewPricing, onManageMedia, 
-    onAddNewPart, suppliers, onOpenSupplierSelection, purchaseOrders, packageTotal
+    onAddNewPart, suppliers, onOpenSupplierSelection, purchaseOrders, packageTotal, onEditPart
 }: EditableLineItemRowProps) => {
     const isPackageComponent = item.isPackageComponent;
     const isPackageHeader = !!item.servicePackageId && !item.isPackageComponent;
@@ -167,8 +168,13 @@ const MemoizedEditableLineItemRow = React.memo(({
                         </div>
                     )}
                 </div>
-                <div className="text-xs mt-1">
+                <div className="text-xs mt-1 flex items-center gap-2">
                     {lineItemStatus && <LineItemPOStatusBadge status={lineItemStatus} />}
+                     {!item.isLabor && item.partId && (
+                        <button onClick={() => onEditPart({id: item.partId} as Part)} className="text-gray-500 hover:text-indigo-600 p-0.5 rounded-full bg-gray-100 hover:bg-indigo-100">
+                            <Edit size={12} />
+                        </button>
+                    )}
                 </div>
             </div>
             
@@ -262,7 +268,9 @@ interface JobEstimateTabProps {
     customer?: Customer;
     onAddNewPart: (lineItemId: string, searchTerm: string) => void;
     onRaisePurchaseOrders: () => void;
+    isRaisingPOs: boolean;
     onCreatePackage: () => void;
+    onEditPart: (part: Part) => void;
 }
 
 export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
@@ -270,7 +278,7 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
     estimateBreakdown, isReadOnly, canViewPricing, taxRates, filteredParts, activePartSearch, servicePackages,
     totalNet, vatBreakdown, grandTotal, currentJobHours, onOpenPurchaseOrder, onCreateEstimate, onRaiseSupplementaryEstimate, onViewEstimate,
     onAddLineItem, onAddPackage, onLineItemChange, onRemoveLineItem, onPartSearchChange, onSetActivePartSearch, onSelectPart, onManageMedia,
-    vehicle, customer, onAddNewPart, suppliers, onRaisePurchaseOrders, onCreatePackage
+    vehicle, customer, onAddNewPart, suppliers, onRaisePurchaseOrders, isRaisingPOs, onCreatePackage, onEditPart
 }) => {
     const [expandedSuppEstIds, setExpandedSuppEstIds] = useState<Set<string>>(new Set());
     const [isSupplierSelectionOpen, setIsSupplierSelectionOpen] = useState(false);
@@ -279,10 +287,9 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
 
     const partsToOrderCount = useMemo(() => {
         if (!editableEstimate) return 0;
-        return editableEstimate.lineItems.filter((li: EstimateLineItem) => {
-            const isPackageHeader = !!li.servicePackageId && !li.isPackageComponent;
-            return !li.isLabor && !isPackageHeader && !li.fromStock && !li.purchaseOrderLineItemId;
-        }).length;
+        return editableEstimate.lineItems.filter((li: EstimateLineItem) => 
+            !li.isLabor && li.partId && !li.fromStock && !li.purchaseOrderLineItemId
+        ).length;
     }, [editableEstimate]);
 
     const toggleExpandSuppEst = (id: string) => {
@@ -408,9 +415,17 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
                                 <PlusCircle size={12}/> Raise Supplementary Estimate
                             </button>
                             {partsToOrderCount > 0 && (
-                                <button onClick={onRaisePurchaseOrders} className="text-xs flex items-center gap-1 bg-teal-100 text-teal-800 px-2 py-1 rounded font-semibold hover:bg-teal-200 border border-teal-300 relative">
-                                    <ShoppingCart size={12}/> Create Purchase Order(s)
-                                    <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center">{partsToOrderCount}</span>
+                                <button 
+                                    onClick={onRaisePurchaseOrders} 
+                                    className="text-xs flex items-center gap-1 bg-teal-100 text-teal-800 px-2 py-1 rounded font-semibold hover:bg-teal-200 border border-teal-300 relative disabled:opacity-50 disabled:cursor-not-allowed"
+                                    disabled={isRaisingPOs}
+                                >
+                                    {isRaisingPOs ? (
+                                        <><Loader2 size={12} className="animate-spin mr-1"/>Creating...</>
+                                    ) : (
+                                        <><ShoppingCart size={12}/> Create Purchase Order(s)</>
+                                    )}
+                                    {!isRaisingPOs && <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center">{partsToOrderCount}</span>}
                                 </button>
                             )}
                         </div>
@@ -456,6 +471,7 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
                                         onAddNewPart={onAddNewPart} 
                                         onOpenSupplierSelection={openSupplierSelection}
                                         packageTotal={packageTotal}
+                                        onEditPart={onEditPart}
                                     />
                                     <div className="pl-6 border-l-2 ml-2 space-y-1 mt-1">
                                         {children.map((child: any) => (
@@ -477,6 +493,7 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
                                                 onManageMedia={onManageMedia} 
                                                 onAddNewPart={onAddNewPart} 
                                                 onOpenSupplierSelection={openSupplierSelection}
+                                                onEditPart={onEditPart}
                                             />
                                         ))}
                                     </div>
@@ -484,10 +501,10 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
                             ))}
                             
                             {estimateBreakdown.standaloneLabor.length > 0 && <h5 className="font-bold text-gray-800 text-xs uppercase pt-2">Labor</h5>}
-                            {estimateBreakdown.standaloneLabor.map((item: any) => <MemoizedEditableLineItemRow key={item.id} canViewPricing={canViewPricing} isReadOnly={isReadOnly} item={item} taxRates={taxRates} suppliers={suppliers} purchaseOrders={purchaseOrders} onLineItemChange={onLineItemChange} onRemoveLineItem={onRemoveLineItem} filteredParts={filteredParts} activePartSearch={activePartSearch} onPartSearchChange={onPartSearchChange} onSetActivePartSearch={onSetActivePartSearch} onSelectPart={onSelectPart} onManageMedia={onManageMedia} onAddNewPart={onAddNewPart} onOpenSupplierSelection={openSupplierSelection}/>)}
+                            {estimateBreakdown.standaloneLabor.map((item: any) => <MemoizedEditableLineItemRow key={item.id} canViewPricing={canViewPricing} isReadOnly={isReadOnly} item={item} taxRates={taxRates} suppliers={suppliers} purchaseOrders={purchaseOrders} onLineItemChange={onLineItemChange} onRemoveLineItem={onRemoveLineItem} filteredParts={filteredParts} activePartSearch={activePartSearch} onPartSearchChange={onPartSearchChange} onSetActivePartSearch={onSetActivePartSearch} onSelectPart={onSelectPart} onManageMedia={onManageMedia} onAddNewPart={onAddNewPart} onOpenSupplierSelection={openSupplierSelection} onEditPart={onEditPart}/>)}
                             
                             {estimateBreakdown.standaloneParts.length > 0 && <h5 className="font-bold text-gray-800 text-xs uppercase pt-2">Parts</h5>}
-                            {estimateBreakdown.standaloneParts.map((item: any) => <MemoizedEditableLineItemRow key={item.id} canViewPricing={canViewPricing} isReadOnly={isReadOnly} item={item} taxRates={taxRates} suppliers={suppliers} purchaseOrders={purchaseOrders} onLineItemChange={onLineItemChange} onRemoveLineItem={onRemoveLineItem} filteredParts={filteredParts} activePartSearch={activePartSearch} onPartSearchChange={onPartSearchChange} onSetActivePartSearch={onSetActivePartSearch} onSelectPart={onSelectPart} onManageMedia={onManageMedia} onAddNewPart={onAddNewPart} onOpenSupplierSelection={openSupplierSelection}/>)}
+                            {estimateBreakdown.standaloneParts.map((item: any) => <MemoizedEditableLineItemRow key={item.id} canViewPricing={canViewPricing} isReadOnly={isReadOnly} item={item} taxRates={taxRates} suppliers={suppliers} purchaseOrders={purchaseOrders} onLineItemChange={onLineItemChange} onRemoveLineItem={onRemoveLineItem} filteredParts={filteredParts} activePartSearch={activePartSearch} onPartSearchChange={onPartSearchChange} onSetActivePartSearch={onSetActivePartSearch} onSelectPart={onSelectPart} onManageMedia={onManageMedia} onAddNewPart={onAddNewPart} onOpenSupplierSelection={openSupplierSelection} onEditPart={onEditPart}/>)}
                             
                             {!isReadOnly && (
                                 <div className="flex justify-between items-center pt-4 mt-4 border-t">

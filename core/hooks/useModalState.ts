@@ -4,8 +4,7 @@ import * as T from '../../types';
 export interface ModalState {
     isEditJobModalOpen: boolean;
     selectedJobId: string | null;
-    // Added missing jobModal state
-    jobModal: { isOpen: boolean; job: T.Job | Partial<T.Job> | null }; 
+    partModal: { isOpen: boolean; part: T.Part | Partial<T.Part> | null, targetLineItemId?: string | null }; 
     isSmartCreateOpen: boolean;
     smartCreateMode: 'job' | 'estimate';
     smartCreateDefaultDate: Date | null;
@@ -44,8 +43,7 @@ export interface ModalState {
 export interface ModalSetters {
     setIsEditJobModalOpen: React.Dispatch<React.SetStateAction<boolean>>;
     setSelectedJobId: React.Dispatch<React.SetStateAction<string | null>>;
-    // Added missing setter type
-    setJobModal: React.Dispatch<React.SetStateAction<{ isOpen: boolean; job: T.Job | Partial<T.Job> | null }>>;
+    setPartModal: React.Dispatch<React.SetStateAction<{ isOpen: boolean; part: T.Part | Partial<T.Part> | null, targetLineItemId?: string | null }>>;
     setIsSmartCreateOpen: React.Dispatch<React.SetStateAction<boolean>>;
     setSmartCreateMode: React.Dispatch<React.SetStateAction<'job' | 'estimate'>>;
     setSmartCreateDefaultDate: React.Dispatch<React.SetStateAction<Date | null>>;
@@ -84,8 +82,7 @@ export interface ModalSetters {
 const useModalState = (): [ModalState, ModalSetters] => {
     const [isEditJobModalOpen, setIsEditJobModalOpen] = useState(false);
     const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
-    // Added missing state hook
-    const [jobModal, setJobModal] = useState<{ isOpen: boolean; job: T.Job | Partial<T.Job> | null }>({ isOpen: false, job: null });
+    const [partModal, setPartModal] = useState<{ isOpen: boolean; part: T.Part | Partial<T.Part> | null, targetLineItemId?: string | null }>({ isOpen: false, part: null });
     const [isSmartCreateOpen, setIsSmartCreateOpen] = useState(false);
     const [smartCreateMode, setSmartCreateMode] = useState<'job' | 'estimate'>('job');
     const [smartCreateDefaultDate, setSmartCreateDefaultDate] = useState<Date | null>(null);
@@ -121,7 +118,7 @@ const useModalState = (): [ModalState, ModalSetters] => {
     const [vehicleHistoryReportModal, setVehicleHistoryReportModal] = useState<{ isOpen: boolean; vehicleId: string | null }>({ isOpen: false, vehicleId: null });
 
     const state = { 
-        isEditJobModalOpen, selectedJobId, jobModal, isSmartCreateOpen, smartCreateMode, smartCreateDefaultDate,
+        isEditJobModalOpen, selectedJobId, partModal, isSmartCreateOpen, smartCreateMode, smartCreateDefaultDate,
         poModal, batchPoModalOpen, viewPoModal, invoiceFormModal, viewInvoiceModal, salesInvoiceModal,
         rentalBookingModal, rentalConditionModal, rentalAgreementModal, rentalReturnReportModal,
         sorContractModal, ownerStatementModal, internalStatementModal, salesReportModal, addSaleVehicleModalOpen,
@@ -131,7 +128,7 @@ const useModalState = (): [ModalState, ModalSetters] => {
     };
 
     const setters = { 
-        setIsEditJobModalOpen, setSelectedJobId, setJobModal, setIsSmartCreateOpen, setSmartCreateMode, setSmartCreateDefaultDate, 
+        setIsEditJobModalOpen, setSelectedJobId, setPartModal, setIsSmartCreateOpen, setSmartCreateMode, setSmartCreateDefaultDate, 
         setPoModal, setBatchPoModalOpen, setViewPoModal, setInvoiceFormModal, setViewInvoiceModal,
         setSalesInvoiceModal, setRentalBookingModal, setRentalConditionModal, setRentalAgreementModal,
         setRentalReturnReportModal, setSorContractModal, setOwnerStatementModal, setInternalStatementModal,

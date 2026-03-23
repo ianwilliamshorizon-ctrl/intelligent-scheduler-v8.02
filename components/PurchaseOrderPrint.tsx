@@ -10,12 +10,12 @@ interface PurchaseOrderPrintProps {
     totals: { net: number; vat: number; grandTotal: number };
 }
 
-export const PurchaseOrderPrint: React.FC<PurchaseOrderPrintProps> = ({ 
+export const PurchaseOrderPrint = React.forwardRef<HTMLDivElement, PurchaseOrderPrintProps>(({ 
     purchaseOrder, 
     supplier, 
     entityDetails, 
     totals 
-}) => {
+}, ref) => {
     const printStyles = `
         body { margin: 0; padding: 0; background-color: #fff !important; }
         @page { size: A4; margin: 0; }
@@ -28,6 +28,7 @@ export const PurchaseOrderPrint: React.FC<PurchaseOrderPrintProps> = ({
 
     return (
         <div 
+            ref={ref}
             className="font-sans text-sm p-12 mx-auto"
             style={{ 
                 width: '210mm', 
@@ -141,4 +142,4 @@ export const PurchaseOrderPrint: React.FC<PurchaseOrderPrintProps> = ({
             </footer>
         </div>
     );
-};
+});
