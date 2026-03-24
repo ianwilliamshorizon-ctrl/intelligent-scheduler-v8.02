@@ -257,6 +257,22 @@ export interface Job {
     vehicleRegistration?: string;
     jobType?: 'MOT' | 'Standard';
 }
+export interface Lift { 
+    id: string; 
+    entityId: string;
+}
+
+export interface Purchase extends PurchaseOrder {
+    // Basic purchase structure, extending PO for now as per current data usage
+}
+
+export interface DiscountCode {
+    id: string;
+    code: string;
+    discountType: 'percentage' | 'fixed';
+    value: number;
+    expiryDate?: string;
+}
 
 /**
  * FINANCIAL & ACCOUNTING TYPES
@@ -580,4 +596,56 @@ export interface Prospect {
     interestedVehicleId?: string; // Links to SaleVehicle
     createdAt?: string;
     assignedUserId?: string;
+}
+
+export interface SaleOverheadPackage {
+    id: string;
+    name: string;
+}
+
+export interface AuditLogEntry {
+    id: string;
+    timestamp: string;
+    userId: string;
+    action: string;
+    details: string;
+    entityType?: string;
+    entityId?: string;
+}
+
+export interface Reminder {
+    id: string;
+    vehicleId: string;
+    customerId: string;
+    type: 'MOT' | 'Service' | 'Other';
+    date: string;
+    status: 'Pending' | 'Sent' | 'Failed';
+}
+
+export interface RentalVehicle {
+    id: string;
+    entityId: string;
+    make?: string;
+    model?: string;
+    registration?: string;
+}
+
+export interface StorageBooking {
+    id: string;
+    entityId: string;
+    vehicleId: string;
+    customerId: string;
+    startDate?: string;
+    endDate?: string;
+    status?: string;
+}
+
+export interface StorageLocation {
+    id: string;
+    name: string;
+}
+
+export interface BatteryCharger {
+    id: string;
+    name: string;
 }

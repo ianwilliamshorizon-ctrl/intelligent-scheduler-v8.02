@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useMemo, useCallback, useRef } from 'react';
+import { saveDocument } from '../db';
 import * as T from '../../types';
 import { usePersistentState, UsePersistentStateTuple } from './usePersistentState';
 import {
@@ -112,6 +113,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         const [, setState] = hook as unknown as UsePersistentStateTuple<T[]>;
 
+        // 1. Update local state
         setState(currentItems => {
             const existingIndex = currentItems.findIndex(item => item.id === record.id);
             if (existingIndex > -1) {
@@ -122,6 +124,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 return [...currentItems, record];
             }
         });
+
+        // 2. Persist to Firestore
+        try {
+            const col = collectionKey.startsWith('brooks_') ? collectionKey : `brooks_${collectionKey}`;
+            await saveDocument(col, record);
+        } catch (error) {
+            console.error(`[saveRecord Error] Failed to persist to ${collectionKey}:`, error);
+            throw error;
+        }
         
         return record;
     }, []);

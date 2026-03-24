@@ -552,8 +552,16 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({
                     updatedEstimate.lineItems.forEach((estItem, index) => {
                         const correspondingPoItem = poLineItems.find(poItem => poItem.jobLineItemId === estItem.id);
                         if (correspondingPoItem) {
-                            if (estItem.unitCost !== correspondingPoItem.unitPrice) {
-                                updatedEstimate.lineItems[index].unitCost = correspondingPoItem.unitPrice;
+                            if (
+                                estItem.unitCost !== correspondingPoItem.unitPrice ||
+                                estItem.partNumber !== correspondingPoItem.partNumber ||
+                                estItem.description !== correspondingPoItem.description ||
+                                estItem.quantity !== correspondingPoItem.quantity
+                            ) {
+                                (updatedEstimate.lineItems[index] as any).unitCost = correspondingPoItem.unitPrice;
+                                (updatedEstimate.lineItems[index] as any).partNumber = correspondingPoItem.partNumber;
+                                (updatedEstimate.lineItems[index] as any).description = correspondingPoItem.description;
+                                (updatedEstimate.lineItems[index] as any).quantity = correspondingPoItem.quantity;
                                 estimateUpdated = true;
                             }
                         }

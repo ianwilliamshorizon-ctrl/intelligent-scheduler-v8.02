@@ -59,14 +59,18 @@ async function runGeminiAction(request) {
     throw new HttpsError("internal", "AI service is not configured.");
   }
 
-  const prompt = request.data?.prompt;
+  let prompt = request.data?.prompt;
   if (!prompt) {
     throw new HttpsError("invalid-argument", 'The function must be called with a "prompt" argument.');
   }
 
+  // If the prompt is an object (e.g. a list of items), stringify it so Gemini can read it
+  if (typeof prompt !== 'string') {
+    prompt = JSON.stringify(prompt, null, 2);
+  }
+
   try {
     const genAI = new GoogleGenerativeAI(geminiApiKey);
-    // Explicitly using the confirmed gemini-2.5-flash model from your list
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
     const result = await model.generateContent(prompt);
     const text = result.response.text();

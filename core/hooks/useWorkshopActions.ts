@@ -44,26 +44,26 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
     ) => {
         const col = collectionOverride || getCollectionName(item);
 
-        let itemToSave: Type | null = null;
-            setter(prev => {
+        // 1. Update local state immediately for responsiveness
+        setter(prev => {
             const index = prev.findIndex(i => i.id === item.id);
             if (index >= 0) {
                 const newArr = [...prev];
-                const mergedItem = { ...newArr[index], ...item };
-                newArr[index] = mergedItem;
-                itemToSave = mergedItem;
+                newArr[index] = { ...newArr[index], ...item };
                 return newArr;
             } else {
-                itemToSave = item;
                 return [...prev, item];
             }
         });
-        if (itemToSave) {
-            await saveDocument(col, itemToSave);
-            return itemToSave;
+
+        // 2. Persist to Firestore (Independent of React batching)
+        try {
+            await saveDocument(col, item);
+            return item;
+        } catch (error) {
+            console.error(`[handleSaveItem Error] Failed to persist to ${col}:`, error);
+            throw error;
         }
-    
-        return item;
     };
 
     const handleDeleteJob = async (jobId: string) => {

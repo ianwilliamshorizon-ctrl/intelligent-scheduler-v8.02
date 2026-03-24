@@ -182,8 +182,8 @@ const MemoizedEditableLineItemRow = React.memo(({
             
             {canViewPricing ? (
                 <>
-                    <input type="number" step="0.01" value={item.unitCost || ''} onChange={e => onLineItemChange(item.id, 'unitCost', e.target.value)} className="col-span-2 p-1 border rounded text-right text-sm self-center" placeholder="Cost" disabled={isReadOnly || isPackageComponent}/>
-                    <input type="number" step="0.01" value={item.unitPrice} onChange={e => onLineItemChange(item.id, 'unitPrice', e.target.value)} className="col-span-2 p-1 border rounded text-right text-sm self-center" placeholder="Sell" disabled={isReadOnly || isPackageComponent}/>
+                    <input type="number" step="0.01" value={item.unitCost || ''} onChange={e => onLineItemChange(item.id, 'unitCost', e.target.value)} className="col-span-2 p-1 border rounded text-right text-sm self-center" placeholder="Cost" disabled={isReadOnly}/>
+<input type="number" step="0.01" value={item.unitPrice} onChange={e => onLineItemChange(item.id, 'unitPrice', e.target.value)} className="col-span-2 p-1 border rounded text-right text-sm self-center" placeholder="Sell" disabled={isReadOnly}/>
                 </>
             ) : (
                 <div className="col-span-4 p-1 text-right font-semibold text-gray-500 self-center">Hidden</div>
@@ -194,7 +194,7 @@ const MemoizedEditableLineItemRow = React.memo(({
                     type="button" 
                     onClick={() => onOpenSupplierSelection(item.id)} 
                     className="w-full p-1 border rounded text-sm text-center hover:bg-gray-50 disabled:bg-gray-200 disabled:cursor-not-allowed h-full" 
-                    disabled={isReadOnly || item.isLabor || (lineItemStatus && lineItemStatus !== 'To Order' && lineItemStatus !== 'Awaiting Order')}
+                    disabled={isReadOnly || item.isLabor || (lineItemStatus && ['Ordered', 'Received', 'Partially Received'].includes(lineItemStatus))}
                 >
                     {supplierShortCode}
                 </button>
@@ -421,9 +421,9 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
                                     disabled={isRaisingPOs}
                                 >
                                     {isRaisingPOs ? (
-                                        <><Loader2 size={12} className="animate-spin mr-1"/>Creating...</>
+                                        <><Loader2 size={12} className="animate-spin mr-1"/>Refreshing...</>
                                     ) : (
-                                        <><ShoppingCart size={12}/> Create Purchase Order(s)</>
+                                        <><ShoppingCart size={12}/> Refresh Purchase Orders</>
                                     )}
                                     {!isRaisingPOs && <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center">{partsToOrderCount}</span>}
                                 </button>

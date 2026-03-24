@@ -227,7 +227,17 @@ const EditJobModal: React.FC<{
             if (['quantity', 'unitPrice', 'unitCost'].includes(field as string)) {
                  processedValue = parseFloat(value) || 0;
             }
-            let updatedLineItems = (prev.lineItems || []).map(item => item.id === id ? { ...item, [field]: processedValue } : item);
+            let updatedLineItems = (prev.lineItems || []).map(item => {
+                if (item.id === id) {
+                    const newItem = { ...item, [field]: processedValue };
+                    // If the supplier changes, we MUST clear the PO link so it can be re-ordered/refreshed
+                    if (field === 'supplierId' && item.supplierId !== processedValue) {
+                        newItem.purchaseOrderLineItemId = undefined;
+                    }
+                    return newItem;
+                }
+                return item;
+            });
             return { ...prev, lineItems: updatedLineItems };
         });
     }, []);
@@ -454,7 +464,7 @@ const EditJobModal: React.FC<{
                         if (originalIndex !== -1) {
                             updatedLineItems[originalIndex] = { ...updatedLineItems[originalIndex], purchaseOrderLineItemId: newPoLineItemId };
                         }
-                        return { id: newPoLineItemId, partNumber: part.partNumber, description: part.description, quantity: item.quantity, unitPrice: part.costPrice, taxCodeId: part.taxCodeId };
+                        return { id: newPoLineItemId, partNumber: part.partNumber, description: part.description, quantity: item.quantity, unitPrice: item.unitCost || part.costPrice, taxCodeId: part.taxCodeId, jobLineItemId: item.id };
                     });
                     const updatedPO = { ...existingDraftPO, lineItems: [...(existingDraftPO.lineItems || []), ...newPoLineItems] };
                     posToUpdate.push(updatedPO);
@@ -468,7 +478,7 @@ const EditJobModal: React.FC<{
                         if (originalIndex !== -1) {
                             updatedLineItems[originalIndex] = { ...updatedLineItems[originalIndex], purchaseOrderLineItemId: newPoLineItemId };
                         }
-                        return { id: newPoLineItemId, partNumber: part.partNumber, description: part.description, quantity: item.quantity, unitPrice: part.costPrice, taxCodeId: part.taxCodeId };
+                        return { id: newPoLineItemId, partNumber: part.partNumber, description: part.description, quantity: item.quantity, unitPrice: item.unitCost || part.costPrice, taxCodeId: part.taxCodeId, jobLineItemId: item.id };
                     });
                     const newPo: T.PurchaseOrder = { id: newPoId, entityId: editableJob.entityId, supplierId: supplierId === 'UNKNOWN' ? undefined : supplierId, vehicleRegistrationRef: vehicle.registration, orderDate: formatDate(new Date()), status: 'Draft', lineItems: poLineItems, notes: `Generated from Job #${editableJob.id}` };
                     newPOs.push(newPo);
