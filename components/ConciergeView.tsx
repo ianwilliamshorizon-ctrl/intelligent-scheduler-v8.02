@@ -48,7 +48,12 @@ const ConciergeView: React.FC<ConciergeViewProps> = (props) => {
     };
 
     const filteredJobs = useMemo(() => {
-        let relevantJobs = jobs.filter(job => (selectedEntityId === 'all' || job.entityId === selectedEntityId) && job.status !== 'Archived');
+        let relevantJobs = jobs.filter(job => 
+            (selectedEntityId === 'all' || job.entityId === selectedEntityId) && 
+            job.status !== 'Archived' &&
+            // Only show cancelled jobs if they are ready for collection
+            (job.status !== 'Cancelled' || job.vehicleStatus === 'Awaiting Collection')
+        );
         
         if (currentUser.role === 'Engineer' && currentUser.engineerId) {
             relevantJobs = relevantJobs.filter(job => 

@@ -185,15 +185,30 @@ const PrintableJobCard: React.FC<PrintableJobCardProps> = ({
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
-                                {(estimates || []).length > 0 ? (
-                                    (estimates || []).flatMap(est => (est.lineItems || []).map((item: EstimateLineItem) => (
-                                        <tr key={item.id} className="text-sm">
-                                            <td className="px-4 py-3 font-mono text-[10px] text-gray-400 uppercase">{item.partNumber || (item.isLabor ? 'LABOUR' : 'PART')}</td>
-                                            <td className="px-4 py-3 text-gray-900 font-semibold">{item.description}</td>
-                                            <td className="px-4 py-3 text-right font-bold">{item.quantity}</td>
-                                            <td className="px-4 py-3"><div className="w-5 h-5 border-2 border-gray-300 rounded mx-auto bg-white"></div></td>
-                                        </tr>
-                                    )))
+                                 {(estimates || []).length > 0 ? (
+                                    (estimates || []).flatMap(est => (est.lineItems || []).map((item: EstimateLineItem) => {
+                                        const isPackageHeader = item.servicePackageId && !item.isPackageComponent;
+                                        const rowClass = isPackageHeader ? "bg-gray-100 font-black text-gray-950" : "text-sm";
+                                        
+                                        return (
+                                            <tr key={item.id} className={rowClass}>
+                                                <td className="px-4 py-3 font-mono text-[10px] text-gray-400 uppercase">
+                                                    {isPackageHeader ? 'PACKAGE' : (item.partNumber || (item.isLabor ? 'LABOUR' : 'PART'))}
+                                                </td>
+                                                <td className="px-4 py-3">
+                                                    <span className={isPackageHeader ? "text-lg uppercase tracking-tight" : "text-gray-900 font-semibold"}>
+                                                        {item.description}
+                                                    </span>
+                                                </td>
+                                                <td className="px-4 py-3 text-right font-bold">
+                                                    {!isPackageHeader && item.quantity}
+                                                </td>
+                                                <td className="px-4 py-3">
+                                                    {!isPackageHeader && <div className="w-5 h-5 border-2 border-gray-300 rounded mx-auto bg-white"></div>}
+                                                </td>
+                                            </tr>
+                                        );
+                                    }))
                                 ) : (
                                     <tr><td colSpan={4} className="px-4 py-10 text-center text-gray-400 italic">No line items linked to this job card.</td></tr>
                                 )}
@@ -333,7 +348,7 @@ const PrintableJobCard: React.FC<PrintableJobCardProps> = ({
                 @media print {
                     @page { 
                         size: A4 portrait;
-                        margin: 0mm; 
+                        margin: 15mm; 
                     }
                     body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
                     body * { 
@@ -347,15 +362,92 @@ const PrintableJobCard: React.FC<PrintableJobCardProps> = ({
                         left: 0 !important; 
                         top: 0 !important; 
                         width: 100% !important;
-                        height: 100% !important;
                     }
                     .printable-page { page-break-after: always; }
+
+                    /* Repeating Header/Footer Logic */
+                    .page-header-space { height: 15mm; }
+                    .page-footer-space { height: 10mm; }
+
+                    .page-header {
+                        position: fixed;
+                        top: 0;
+                        width: 100%;
+                        height: 15mm;
+                        display: none; /* Only show on subsequent pages */
+                        border-bottom: 1px solid #e5e7eb;
+                        align-items: center;
+                        justify-content: space-between;
+                        font-size: 10px;
+                        font-weight: bold;
+                        color: #6b7280;
+                    }
+
+                    .page-footer {
+                        position: fixed;
+                        bottom: 0px;
+                        width: 100%;
+                        height: 10mm;
+                        display: flex;
+                        align-items: center;
+                        border-top: 1px solid #e5e7eb;
+                        font-size: 9px;
+                        text-transform: uppercase;
+                        letter-spacing: 0.1em;
+                        color: #9ca3af;
+                    }
+
+                    /* Only show header from page 2 onwards by using a simple trick with first-page detection */
+                    .page-header { display: flex !important; visibility: hidden !important; }
+                    
+                }
+
+                @media print {
+                    .first-page-hide { display: none !important; }
                 }
             `}} />
-            <div className="rebuild-print-container">
-                {mainContent}
-                {filledInspectionSheet}
-                {blankInspectionSheet}
+            
+            <div className="rebuild-print-container font-sans">
+                {/* Fixed Repeating Footer */}
+                <div className="page-footer hidden print:flex items-center justify-between">
+                    <span>{entity?.name || 'Workshop Job Card'} - Job #{job.id}</span>
+                    <div className="flex gap-2">
+                        <span>Printed: {new Date().toLocaleDateString('en-GB')}</span>
+                    </div>
+                </div>
+
+                {/* Main Print Table to force margins and header/footer space */}
+                <table className="w-full">
+                    <thead className="hidden print:table-header-group">
+                        <tr>
+                            <td>
+                                <div className="h-[15mm] flex items-center justify-between border-b mb-4 opacity-0 print:opacity-100">
+                                    <div className="flex gap-4">
+                                        <span className="text-xs font-black text-gray-900">JOB SHEET #{job.id}</span>
+                                        <span className="bg-yellow-400 text-black px-2 py-0.5 rounded font-mono font-bold text-xs border border-black">{vehicle?.registration}</span>
+                                    </div>
+                                    <span className="text-[10px] text-gray-400 uppercase font-bold">{displayName}</span>
+                                </div>
+                            </td>
+                        </tr>
+                    </thead>
+                    
+                    <tbody>
+                        <tr>
+                            <td>
+                                <div className="rebuild-print-content">
+                                    {mainContent}
+                                    {filledInspectionSheet}
+                                    {blankInspectionSheet}
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+
+                    <tfoot className="hidden print:table-footer-group">
+                        <tr><td><div className="h-[10mm]"></div></td></tr>
+                    </tfoot>
+                </table>
             </div>
         </div>
     );

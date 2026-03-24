@@ -67,6 +67,7 @@ export interface User {
 export interface Role {
     id: string;
     name?: string;
+    baseRole?: 'Admin' | 'Dispatcher' | 'Engineer' | 'Sales' | 'Garage Concierge';
     defaultAllowedViews?: ViewType[];
     managedDataPermissions?: ManagedDataPermissions;
 }
@@ -172,6 +173,7 @@ export interface Job {
     isStandalone?: boolean;
     vehicleRegistration?: string;
     jobType?: 'MOT' | 'Standard';
+    collectedBy?: string;
 }
 export type VehicleStatus = 'On Site' | 'Off-Site (Partner)' | 'Awaiting Arrival' | 'Awaiting Collection' | 'Collected' | 'Cancelled';
 
@@ -225,40 +227,10 @@ export interface JobSegment {
     engineerCompletedAt?: string;
 }
 
-export interface Job {
-    id: string;
-    entityId?: string;
-    vehicleId: string;
-    customerId?: string;
-    description: string;
-    status: 'Booked In' | 'In Progress' | 'Awaiting Parts' | 'Complete' | 'Invoiced' | 'Closed' | 'Allocated' | 'Unallocated' | 'Pending QC' | 'Archived' | 'Cancelled' | 'Paused';
-    createdAt?: string; 
-    completedAt?: string; 
-    scheduledDate?: string;
-    notes?: string;
-    segments?: JobSegment[];
-    vehicleStatus?: string;
-    invoiceId?: string;
-    estimatedHours?: number;
-    partsStatus?: string;
-    purchaseOrderIds?: string[];
-    technicianObservations?: string[];
-    estimateId?: string;
-    inspectionTemplateId?: string;
-    keyNumber?: string;
-    damagePoints?: VehicleDamagePoint[];
-    tyreCheck?: TyreCheckData;
-    inspectionChecklist?: ChecklistSection[];
-    mileage?: number;
-    createdByUserId?: string;
-    lineItems?: EstimateLineItem[];
-    associatedJobId?: string;
-    isStandalone?: boolean;
-    vehicleRegistration?: string;
-    jobType?: 'MOT' | 'Standard';
-}
 export interface Lift { 
     id: string; 
+    name: string;
+    color?: string;
     entityId: string;
 }
 

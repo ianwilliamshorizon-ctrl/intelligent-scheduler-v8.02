@@ -69,12 +69,34 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
     const handleDeleteJob = async (jobId: string) => {
         const job = jobs.find(j => j.id === jobId);
         if (job) {
-             const updatedJob: T.Job = { ...job, status: 'Cancelled' };
+             // To give hours back to the scheduler, we must unallocate all segments
+             const unallocatedSegments = (job.segments || []).map(s => ({
+                 ...s,
+                 status: 'Unallocated' as const,
+                 engineerId: null,
+                 allocatedLift: null,
+                 scheduledStartSegment: null,
+                 date: null
+             }));
+
+             // If vehicle is already on site, move to Awaiting Collection since job is cancelled
+             const nextVehicleStatus = job.vehicleStatus === 'On Site' ? 'Awaiting Collection' : job.vehicleStatus;
+
+             const updatedJob: T.Job = { 
+                 ...job, 
+                 status: 'Cancelled',
+                 segments: unallocatedSegments,
+                 vehicleStatus: nextVehicleStatus
+             };
+             
              await handleSaveItem(setJobs, updatedJob, 'brooks_jobs');
+             
              setConfirmation({
                  isOpen: true,
                  title: 'Job Cancelled',
-                 message: `Job #${jobId} has been moved to Cancelled status.`,
+                 message: job.vehicleStatus === 'On Site' 
+                    ? `Job #${jobId} cancelled. Vehicle moved to 'Awaiting Collection' since it was on site.`
+                    : `Job #${jobId} has been cancelled and its scheduled hours have been released.`,
                  type: 'success'
              });
         }

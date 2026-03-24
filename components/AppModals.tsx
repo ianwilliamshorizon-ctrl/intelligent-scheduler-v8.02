@@ -610,6 +610,22 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                 />
             )}
 
+            {modals.inquiryModal.isOpen && (
+                <InquiryFormModal
+                    isOpen={modals.inquiryModal.isOpen}
+                    onClose={() => setters.setInquiryModal({ isOpen: false, inquiry: null })}
+                    onSave={(inq) => handleSaveItem(data.setInquiries, inq, 'brooks_inquiries')}
+                    inquiry={modals.inquiryModal.inquiry}
+                    users={users}
+                    customers={data.customers}
+                    vehicles={data.vehicles}
+                    estimates={data.estimates}
+                    onViewEstimate={(est) => setters.setEstimateViewModal({ isOpen: true, estimate: est })}
+                    onScheduleEstimate={(est, inqId) => setters.setScheduleJobFromEstimateModal({ isOpen: true, estimate: est, inquiryId: inqId })}
+                    onEditEstimate={(est) => setters.setEstimateFormModal({ isOpen: true, estimate: est })}
+                />
+            )}
+
             {modals.checkInJob && (
                 <CheckInModal 
                     isOpen={!!modals.checkInJob}
@@ -629,6 +645,7 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                     vehicle={data.vehicles.find(v => v.id === modals.checkOutJob!.vehicleId) || null}
                     customer={data.customers.find(c => c.id === modals.checkOutJob!.customerId) || null}
                     onUpdateInvoice={(inv) => handleSaveItem(data.setInvoices, inv, 'brooks_invoices')}
+                    taxRates={data.taxRates}
                 />
             )}
 

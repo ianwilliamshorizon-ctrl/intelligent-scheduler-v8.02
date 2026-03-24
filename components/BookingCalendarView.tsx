@@ -72,6 +72,8 @@ export const BookingCalendarView: React.FC<BookingCalendarViewProps> = ({ jobs, 
     const segmentsByDate = useMemo(() => {
         const map = new Map<string, { job: Job, segment: JobSegment }[]>();
         jobs.forEach(job => {
+            if (job.status === 'Cancelled') return;
+            
             job.segments.forEach(segment => {
                 if (segment.date) {
                     if (!map.has(segment.date)) {

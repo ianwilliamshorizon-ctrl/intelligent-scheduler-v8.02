@@ -42,6 +42,7 @@ export const WeeklyView: React.FC<{
             const dateStr = formatDate(day);
             let totalHours = 0;
             jobs.forEach(job => {
+                if (job.status === 'Cancelled') return;
                 if (selectedEntityId !== 'all' && job.entityId !== selectedEntityId) return;
                 job.segments.forEach(segment => {
                     if (segment.date === dateStr && segment.status !== 'Unallocated') {
@@ -62,6 +63,7 @@ export const WeeklyView: React.FC<{
         });
 
         jobs.forEach(job => {
+            if (job.status === 'Cancelled') return;
             if (selectedEntityId !== 'all' && job.entityId !== selectedEntityId) return;
             const uniqueDates = new Set(job.segments.map(s => s.date).filter(Boolean));
             uniqueDates.forEach(date => {

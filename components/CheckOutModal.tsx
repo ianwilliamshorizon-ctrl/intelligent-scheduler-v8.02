@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Job, Invoice, Vehicle, Customer } from '../types';
+import { Job, Invoice, Vehicle, Customer, TaxRate } from '../types';
 import { X, Save, LogOut, Car, User, FileText, AlertTriangle, KeyRound, CheckCircle } from 'lucide-react';
 import { formatCurrency } from '../core/utils/formatUtils';
 
@@ -12,9 +12,10 @@ interface CheckOutModalProps {
     vehicle: Vehicle | null;
     customer: Customer | null;
     onUpdateInvoice: (invoice: Invoice) => void;
+    taxRates: TaxRate[];
 }
 
-const CheckOutModal: React.FC<CheckOutModalProps> = ({ isOpen, onClose, onSave, job, invoice, vehicle, customer, onUpdateInvoice }) => {
+const CheckOutModal: React.FC<CheckOutModalProps> = ({ isOpen, onClose, onSave, job, invoice, vehicle, customer, onUpdateInvoice, taxRates }) => {
     const [collectedBy, setCollectedBy] = useState<string>('');
 
     useEffect(() => {
@@ -45,6 +46,44 @@ const CheckOutModal: React.FC<CheckOutModalProps> = ({ isOpen, onClose, onSave, 
     if (!isOpen || !job) return null;
 
     const isPaid = invoice?.status === 'Paid';
+
+    // Calculate Grand Total including VAT
+    const grandTotal = React.useMemo(() => {
+        if (!invoice) return 0;
+        
+        const safeTaxRates = Array.isArray(taxRates) ? taxRates : [];
+        const standardTaxRateId = safeTaxRates.find(t => t.code === 'T1')?.id;
+        const t99RateId = safeTaxRates.find(t => t.code === 'T99')?.id;
+        const taxRatesMap = new Map(safeTaxRates.map(t => [t.id, t]));
+
+        let netSum = 0;
+        let vatSum = 0;
+
+        const lineItems = Array.isArray(invoice.lineItems) ? invoice.lineItems : [];
+
+        lineItems.forEach(item => {
+            if (item.isPackageComponent) return;
+
+            const itemNet = (item.quantity || 0) * (item.unitPrice || 0);
+            netSum += itemNet;
+
+            if (item.taxCodeId === t99RateId) {
+                vatSum += (item.preCalculatedVat || 0) * (item.quantity || 1);
+            } else {
+                const taxCodeId = item.taxCodeId || standardTaxRateId;
+                if (!taxCodeId) return;
+
+                const taxRate = taxRatesMap.get(taxCodeId);
+                if (!taxRate) return;
+
+                if (taxRate.rate > 0) {
+                    vatSum += itemNet * (taxRate.rate / 100);
+                }
+            }
+        });
+
+        return netSum + vatSum;
+    }, [invoice, taxRates]);
 
     return (
         <div className="fixed inset-0 bg-gray-900 bg-opacity-75 z-[70] flex justify-center items-center p-4">
@@ -79,9 +118,12 @@ const CheckOutModal: React.FC<CheckOutModalProps> = ({ isOpen, onClose, onSave, 
                             <p className="flex items-center gap-2 font-bold"><FileText size={14}/> Invoice #{invoice.id}</p>
                             <div className="flex justify-between items-center mt-1">
                                 <span>Status: <span className={`font-semibold ${isPaid ? 'text-green-700' : 'text-red-700'}`}>{invoice.status}</span></span>
-                                <span className="font-bold text-lg">
-                                    {formatCurrency(invoice.lineItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0))}
-                                </span>
+                                <div className="text-right">
+                                    <span className="text-xs text-gray-500 block">Grand Total Due</span>
+                                    <span className="font-bold text-xl text-gray-900">
+                                        {formatCurrency(grandTotal)}
+                                    </span>
+                                </div>
                             </div>
                              {!isPaid && (
                                 <div className="mt-3 pt-3 border-t">

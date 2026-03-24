@@ -58,7 +58,7 @@ const AdminDispatcherDashboard: React.FC<{
     const today = getRelativeDate(0);
 
     const stats = useMemo(() => {
-        const entityJobs = jobs.filter(j => j.entityId === selectedEntityId);
+        const entityJobs = jobs.filter(j => j.entityId === selectedEntityId && j.status !== 'Cancelled');
         const jobsToday = entityJobs.flatMap(j => j.segments || []).filter(s => s.date === today && s.allocatedLift).length;
         const vehiclesOnSite = entityJobs.filter(j => j.vehicleStatus === 'On Site').length;
         const pendingQC = entityJobs.filter(j => j.status === 'Pending QC').length;
@@ -67,13 +67,13 @@ const AdminDispatcherDashboard: React.FC<{
     }, [jobs, selectedEntityId, today]);
 
     const openInquiries = useMemo(() => {
-        return inquiries.filter(i => i.status === 'Open' && (selectedEntityId === 'all' || i.entityId === selectedEntityId))
+        return inquiries.filter(i => (i.status === 'New' || i.status === 'In Progress') && (selectedEntityId === 'all' || i.entityId === selectedEntityId))
             .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
             .slice(0, 5);
     }, [inquiries, selectedEntityId]);
 
     const unallocatedJobList = useMemo(() => {
-        return jobs.filter(j => (selectedEntityId === 'all' || j.entityId === selectedEntityId) && (j.segments || []).some(s => s.status === 'Unallocated')).slice(0, 5);
+        return jobs.filter(j => (selectedEntityId === 'all' || j.entityId === selectedEntityId) && j.status !== 'Cancelled' && (j.segments || []).some(s => s.status === 'Unallocated')).slice(0, 5);
     }, [jobs, selectedEntityId]);
     
     const userRoleDef = roles.find(r => r.name === currentUser.role);
@@ -93,7 +93,7 @@ const AdminDispatcherDashboard: React.FC<{
         <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <StatCard title="Jobs Today" value={stats.jobsToday} icon={CalendarCheck} colorClass="bg-blue-500" onClick={() => setCurrentView('dispatch')} />
-                <StatCard title="Vehicles On Site" value={stats.vehiclesOnSite} icon={Car} colorClass="bg-green-500" onClick={() => setCurrentView('dispatch')} />
+                <StatCard title="Vehicles On Site" value={stats.vehiclesOnSite} icon={Car} colorClass="bg-green-500" onClick={() => setCurrentView('concierge')} />
                 <StatCard title="Pending QC" value={stats.pendingQC} icon={ClipboardCheck} colorClass="bg-orange-500" onClick={() => setCurrentView('concierge')} />
                 <StatCard title="Unallocated Jobs" value={stats.unallocatedJobs} icon={AlertCircle} colorClass="bg-red-500" onClick={() => setCurrentView('dispatch')} />
             </div>
@@ -111,10 +111,15 @@ const AdminDispatcherDashboard: React.FC<{
                 <Widget title="Open Inquiries" icon={MessageSquare}>
                     <div className="space-y-3">
                         {openInquiries.length > 0 ? openInquiries.map(inq => (
-                             <div key={inq.id} className="p-3 bg-red-50 rounded-lg border border-red-200 cursor-pointer hover:bg-red-100" onClick={() => onOpenInquiry(inq)}>
+                             <div 
+                                key={inq.id} 
+                                className="p-3 bg-red-50 rounded-lg border border-red-200 cursor-pointer hover:bg-red-100 hover:border-red-400 group transition-all duration-200 shadow-sm hover:shadow-md" 
+                                onClick={(e) => { e.stopPropagation(); onOpenInquiry(inq); }}
+                                title="Click to view inquiry"
+                             >
                                  <div className="flex justify-between items-start">
                                      <div>
-                                        <p className="font-semibold text-sm text-red-900">{inq.fromName}</p>
+                                        <p className="font-semibold text-sm text-red-900 group-hover:underline group-hover:text-red-700">{inq.fromName}</p>
                                         <p className="text-xs text-red-700">{inq.fromContact}</p>
                                      </div>
                                  </div>
@@ -128,8 +133,13 @@ const AdminDispatcherDashboard: React.FC<{
                         {unallocatedJobList.length > 0 ? unallocatedJobList.map(job => {
                              const vehicle = vehicles.find(v => v.id === job.vehicleId);
                              return (
-                                <div key={job.id} className="p-2 bg-gray-50 rounded-lg border cursor-pointer hover:bg-gray-100" onClick={() => onEditJob(job.id)}>
-                                    <p className="font-semibold text-sm">{vehicle?.registration} - {job.description}</p>
+                                <div 
+                                    key={job.id} 
+                                    className="p-3 bg-gray-50 rounded-lg border cursor-pointer hover:bg-gray-100 hover:border-indigo-400 group transition-all duration-200 shadow-sm hover:shadow-md" 
+                                    onClick={(e) => { e.stopPropagation(); onEditJob(job.id); }}
+                                    title="Click to edit job"
+                                >
+                                    <p className="font-semibold text-sm group-hover:underline group-hover:text-indigo-700">{vehicle?.registration} - {job.description}</p>
                                     <p className="text-xs text-gray-600">{job.estimatedHours} hours</p>
                                 </div>
                              )
