@@ -210,7 +210,13 @@ const MemoizedEditableLineItemRow = React.memo(({
                         <ImageIcon size={14}/>
                     </button>
                 )}
-                <button onClick={() => onRemoveLineItem(item.id)} className="text-red-500 hover:text-red-700 disabled:opacity-50" disabled={isReadOnly || isPackageComponent}><Trash2 size={14} /></button>
+                <button 
+                    onClick={() => onRemoveLineItem(item.id)} 
+                    className="text-red-500 hover:text-red-700 disabled:opacity-50" 
+                    disabled={isReadOnly || (lineItemStatus && ['Ordered', 'Received', 'Partially Received'].includes(lineItemStatus))}
+                >
+                    <Trash2 size={14} />
+                </button>
             </div>
         </div>
     );

@@ -4,7 +4,7 @@ import { useApp } from '../state/AppContext';
 import * as T from '../../types';
 import { generateSequenceId, saveDocument, deleteDocument } from '../db';
 import { formatDate, splitJobIntoSegments } from '../utils/dateUtils';
-import { calculateJobStatus } from '../utils/jobUtils';
+import { calculateJobStatus, calculateJobPartsStatus } from '../utils/jobUtils';
 import useToaster from '../../hooks/useToaster';
 
 export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => void) => {
@@ -165,8 +165,10 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
     };
 
     const handleSavePurchaseOrder = async (po: T.PurchaseOrder, updatedParts?: T.Part[], updatedEstimate?: T.Estimate) => {
+        // 1. Save the PO
         await handleSaveItem(setPurchaseOrders, po);
     
+        // 2. Refresh other locally changed records
         if (updatedParts && updatedParts.length > 0) {
             for (const part of updatedParts) {
                 await handleSaveItem(setParts, part);
@@ -175,6 +177,24 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
     
         if (updatedEstimate) {
             await handleSaveItem(setEstimates, updatedEstimate);
+        }
+
+        // 3. BIDIRECTIONAL: Sync the overall Job parts status
+        if (po.jobId) {
+            const job = jobs.find(j => j.id === po.jobId);
+            if (job) {
+                const estimate = updatedEstimate || estimates.find(e => e.id === job.estimateId);
+                // We need the absolute latest PO list to calculate accurately
+                const latestPOs = purchaseOrders.map(p => p.id === po.id ? po : p);
+                if (!purchaseOrders.some(p => p.id === po.id)) latestPOs.push(po);
+
+                const newPartsStatus = calculateJobPartsStatus(estimate || null, latestPOs);
+                
+                if (job.partsStatus !== newPartsStatus) {
+                    const updatedJob = { ...job, partsStatus: newPartsStatus };
+                    await handleSaveItem(setJobs, updatedJob, 'brooks_jobs');
+                }
+            }
         }
     };
 

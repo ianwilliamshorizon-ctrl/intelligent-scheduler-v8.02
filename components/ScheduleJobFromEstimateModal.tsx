@@ -171,7 +171,8 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
                 receivedQuantity: 0,
                 unitPrice: item.unitCost || 0,
                 taxCodeId: item.taxCodeId,
-                supplierId: supId
+                supplierId: supId,
+                jobLineItemId: item.id
             }));
 
             if (inquiryDraftPO) {

@@ -20,6 +20,7 @@ import PrintableJobCard from './PrintableJobCard';
 import InspectionChecklist from './InspectionChecklist';
 import { calculatePackagePrices } from '../core/utils/packageUtils';
 import { useDebouncedSave } from '../core/hooks/useDebouncedSave';
+import { calculateJobPartsStatus } from '../core/utils/jobUtils';
 
 const EditJobModal: React.FC<{
     isOpen: boolean;
@@ -156,6 +157,15 @@ const EditJobModal: React.FC<{
     }, [vehicle]);
 
     useEffect(() => {
+        if (editableJob && editableEstimate) {
+            const nextPartsStatus = calculateJobPartsStatus(editableEstimate, safePurchaseOrders);
+            if (editableJob.partsStatus !== nextPartsStatus) {
+                setEditableJob({ ...editableJob, partsStatus: nextPartsStatus });
+            }
+        }
+    }, [editableEstimate, safePurchaseOrders]);
+
+    useEffect(() => {
         if (isOpen && job) {
             const jobCopy = JSON.parse(JSON.stringify(job));
             const obs = jobCopy.technicianObservations || [];
@@ -230,17 +240,65 @@ const EditJobModal: React.FC<{
             let updatedLineItems = (prev.lineItems || []).map(item => {
                 if (item.id === id) {
                     const newItem = { ...item, [field]: processedValue };
-                    // If the supplier changes, we MUST clear the PO link so it can be re-ordered/refreshed
+                    
+                    // 1. Handle Supplier Changes (Removal from old PO)
                     if (field === 'supplierId' && item.supplierId !== processedValue) {
+                        if (item.purchaseOrderLineItemId) {
+                            data.setPurchaseOrders(prevPOs => {
+                                const oldPo = (prevPOs || []).find(po => po.lineItems?.some(li => li.id === item.purchaseOrderLineItemId));
+                                if (oldPo && ['Draft', 'Ordered'].includes(oldPo.status)) {
+                                    const newPoLineItems = (oldPo.lineItems || []).filter(li => li.id !== item.purchaseOrderLineItemId);
+                                    const updatedPO = { ...oldPo, lineItems: newPoLineItems };
+                                    handleSaveItem(data.setPurchaseOrders, updatedPO, 'brooks_purchaseOrders');
+                                    
+                                    const nextPOs = [...prevPOs];
+                                    const idx = nextPOs.findIndex(p => p.id === oldPo.id);
+                                    if (idx !== -1) nextPOs[idx] = updatedPO;
+                                    return nextPOs;
+                                }
+                                return prevPOs;
+                            });
+                        }
                         newItem.purchaseOrderLineItemId = undefined;
                     }
+                    
+                    // 2. BIDIRECTIONAL SYNC: Update linked PO line item
+                    if (newItem.purchaseOrderLineItemId && ['quantity', 'unitCost', 'partNumber', 'description'].includes(field as string)) {
+                        data.setPurchaseOrders(prevPOs => {
+                            const linkedPo = (prevPOs || []).find(po => po.lineItems?.some(li => li.id === newItem.purchaseOrderLineItemId));
+                            if (linkedPo && ['Draft', 'Ordered'].includes(linkedPo.status)) {
+                                const updatedPoLineItems = (linkedPo.lineItems || []).map(li => {
+                                    if (li.id === newItem.purchaseOrderLineItemId) {
+                                        return {
+                                            ...li,
+                                            quantity: field === 'quantity' ? processedValue : li.quantity,
+                                            unitPrice: field === 'unitCost' ? processedValue : li.unitPrice,
+                                            partNumber: field === 'partNumber' ? processedValue : li.partNumber,
+                                            description: field === 'description' ? processedValue : li.description
+                                        };
+                                    }
+                                    return li;
+                                });
+                                
+                                const updatedPO = { ...linkedPo, lineItems: updatedPoLineItems };
+                                handleSaveItem(data.setPurchaseOrders, updatedPO, 'brooks_purchaseOrders');
+                                
+                                const nextPOs = [...prevPOs];
+                                const idx = nextPOs.findIndex(p => p.id === linkedPo.id);
+                                if (idx !== -1) nextPOs[idx] = updatedPO;
+                                return nextPOs;
+                            }
+                            return prevPOs;
+                        });
+                    }
+                    
                     return newItem;
                 }
                 return item;
             });
             return { ...prev, lineItems: updatedLineItems };
         });
-    }, []);
+    }, [data.setPurchaseOrders, handleSaveItem]);
 
     const addPackage = useCallback(async (selection: any) => {
         const packageId = selection?.value || selection?.id || selection;
@@ -409,12 +467,24 @@ const EditJobModal: React.FC<{
         setEditableEstimate(prev => {
             if (!prev) return null;
             const itemToRemove = (prev.lineItems || []).find(i => i.id === id);
-            if (itemToRemove && itemToRemove.servicePackageId && !itemToRemove.isPackageComponent) {
-                return { ...prev, lineItems: (prev.lineItems || []).filter(item => item.servicePackageId !== itemToRemove.servicePackageId) };
+            
+            // BIDIRECTIONAL SYNC: If the item being removed is linked to a PO, remove it from the PO too
+            if (itemToRemove?.purchaseOrderLineItemId) {
+                const linkedPo = safePurchaseOrders.find(po => po.lineItems?.some(li => li.id === itemToRemove.purchaseOrderLineItemId));
+                if (linkedPo && ['Draft', 'Ordered'].includes(linkedPo.status)) {
+                    const updatedPoLineItems = (linkedPo.lineItems || []).filter(li => li.id !== itemToRemove.purchaseOrderLineItemId);
+                    handleSaveItem(data.setPurchaseOrders, { ...linkedPo, lineItems: updatedPoLineItems }, 'brooks_purchaseOrders');
+                }
             }
-            return { ...prev, lineItems: (prev.lineItems || []).filter(item => item.id !== id) };
+
+            if (itemToRemove && itemToRemove.servicePackageId && !itemToRemove.isPackageComponent) {
+                // If it's a package header, remove all children too
+                const newItems = (prev.lineItems || []).filter(li => li.id !== id && li.servicePackageId !== itemToRemove.servicePackageId);
+                return { ...prev, lineItems: newItems };
+            }
+            return { ...prev, lineItems: (prev.lineItems || []).filter(li => li.id !== id) };
         });
-    }, []);
+    }, [safePurchaseOrders, data.setPurchaseOrders, handleSaveItem]);
 
     const filteredParts = useMemo(() => {
         if (!partSearchTerm) return [];
@@ -424,79 +494,120 @@ const EditJobModal: React.FC<{
 
     const handleRaisePurchaseOrders = useCallback(async () => {
         if (!editableJob || !editableEstimate || !vehicle || isRaisingPOs) return;
-    
+
         setIsRaisingPOs(true);
         try {
-            const itemsToOrder = (editableEstimate.lineItems || []).filter(li => !li.isLabor && li.partId && !li.fromStock && !li.purchaseOrderLineItemId);
-    
-            if (itemsToOrder.length === 0) {
-                setConfirmation({ isOpen: true, title: 'No Parts to Order', message: 'There are no new parts on this estimate that require ordering.', type: 'info' });
+            // 1. Filter out non-material items (Labor, Stock, or Package Headers)
+            const materialLineItems = (editableEstimate.lineItems || []).filter(li => {
+                const isPart = (li.partId || li.description?.trim() || li.partNumber?.trim());
+                const isPackageHeader = (li.servicePackageId && !li.isPackageComponent);
+                return !li.isLabor && !li.fromStock && isPart && !isPackageHeader;
+            });
+
+            if (materialLineItems.length === 0) {
+                setConfirmation({ isOpen: true, title: 'No Parts to Order', message: 'There are no parts on this estimate that require ordering (ensure parts are not set as "From Stock").', type: 'info' });
                 return;
             }
-    
+
+            // 2. Identify all relevant POs for this job
+            const jobPoIds = new Set(editableJob.purchaseOrderIds || []);
+            const currentJobPOs = safePurchaseOrders.filter(po => jobPoIds.has(po.id) && po.status !== 'Cancelled');
+            
+            // 3. Group ALL material items by supplier (even those already linked)
             const supplierGroups = new Map<string, T.EstimateLineItem[]>();
-            itemsToOrder.forEach(lineItem => {
-                const part = safeParts.find(p => p.id === lineItem.partId);
-                if (!part) return;
-                const supplierId = lineItem.supplierId || part.defaultSupplierId || 'UNKNOWN';
-                if (!supplierGroups.has(supplierId)) {
-                    supplierGroups.set(supplierId, []);
-                }
-                supplierGroups.get(supplierId)!.push(lineItem);
+            materialLineItems.forEach(li => {
+                const part = li.partId ? safeParts.find(p => p.id === li.partId) : null;
+                const supplierId = li.supplierId || part?.defaultSupplierId || 'UNKNOWN';
+                if (!supplierGroups.has(supplierId)) supplierGroups.set(supplierId, []);
+                supplierGroups.get(supplierId)!.push(li);
             });
-    
+
             const posToUpdate: T.PurchaseOrder[] = [];
             const newPOs: T.PurchaseOrder[] = [];
             const newPoIdsToLink: string[] = [];
-            let updatedLineItems = [...(editableEstimate.lineItems || [])];
+            let updatedLineItemsMap = new Map((editableEstimate.lineItems || []).map(li => [li.id, li]));
+            
             const entity = safeBusinessEntities.find(e => e.id === editableJob.entityId);
             const entityShortCode = entity?.shortCode || 'UNK';
-            const jobPoIds = editableJob.purchaseOrderIds || [];
-            const jobPOs = safePurchaseOrders.filter(po => jobPoIds.includes(po.id));
-    
+
+            // 4. Process each supplier group (Syncing or Creating)
             supplierGroups.forEach((items, supplierId) => {
-                const existingDraftPO = jobPOs.find(po => po.status === 'Draft' && (po.supplierId === supplierId || (supplierId === 'UNKNOWN' && !po.supplierId)));
-                if (existingDraftPO) {
-                    const newPoLineItems: T.PurchaseOrderLineItem[] = items.map(item => {
-                        const newPoLineItemId = crypto.randomUUID();
-                        const part = safeParts.find(p => p.id === item.partId!)!;
-                        const originalIndex = updatedLineItems.findIndex(li => li.id === item.id);
-                        if (originalIndex !== -1) {
-                            updatedLineItems[originalIndex] = { ...updatedLineItems[originalIndex], purchaseOrderLineItemId: newPoLineItemId };
-                        }
-                        return { id: newPoLineItemId, partNumber: part.partNumber, description: part.description, quantity: item.quantity, unitPrice: item.unitCost || part.costPrice, taxCodeId: part.taxCodeId, jobLineItemId: item.id };
-                    });
-                    const updatedPO = { ...existingDraftPO, lineItems: [...(existingDraftPO.lineItems || []), ...newPoLineItems] };
+                const existingPO = currentJobPOs.find(po => 
+                    (po.status === 'Draft' || po.status === 'Ordered') && 
+                    (po.supplierId === supplierId || (supplierId === 'UNKNOWN' && !po.supplierId))
+                );
+
+                const newPoLineItems: T.PurchaseOrderLineItem[] = items.map(item => {
+                    // Reuse existing ID if already linked to this specific PO
+                    const existingPoLiId = (existingPO?.lineItems || []).find(li => li.id === item.purchaseOrderLineItemId)?.id;
+                    const newPoLineItemId = existingPoLiId || crypto.randomUUID();
+                    
+                    // Update binary link in our map
+                    const currentItem = updatedLineItemsMap.get(item.id);
+                    if (currentItem) {
+                        updatedLineItemsMap.set(item.id, { ...currentItem, purchaseOrderLineItemId: newPoLineItemId });
+                    }
+
+                    return { 
+                        id: newPoLineItemId, 
+                        partNumber: item.partNumber || '', 
+                        description: item.description || '', 
+                        quantity: item.quantity, 
+                        unitPrice: item.unitCost || 0, 
+                        taxCodeId: item.taxCodeId, 
+                        jobLineItemId: item.id,
+                        receivedQuantity: (existingPO?.lineItems || []).find(li => li.id === existingPoLiId)?.receivedQuantity || 0
+                    };
+                });
+
+                if (existingPO) {
+                    // FULL REPLACE: This fulfills "removing all the old content"
+                    const updatedPO = { ...existingPO, lineItems: newPoLineItems };
                     posToUpdate.push(updatedPO);
                 } else {
+                    // CREATE: "if a supplier has no po create one for me"
                     const newPoId = generatePurchaseOrderId(safePurchaseOrders.concat(newPOs), entityShortCode);
                     newPoIdsToLink.push(newPoId);
-                    const poLineItems: T.PurchaseOrderLineItem[] = items.map(item => {
-                        const newPoLineItemId = crypto.randomUUID();
-                        const part = safeParts.find(p => p.id === item.partId!)!;
-                        const originalIndex = updatedLineItems.findIndex(li => li.id === item.id);
-                        if (originalIndex !== -1) {
-                            updatedLineItems[originalIndex] = { ...updatedLineItems[originalIndex], purchaseOrderLineItemId: newPoLineItemId };
-                        }
-                        return { id: newPoLineItemId, partNumber: part.partNumber, description: part.description, quantity: item.quantity, unitPrice: item.unitCost || part.costPrice, taxCodeId: part.taxCodeId, jobLineItemId: item.id };
-                    });
-                    const newPo: T.PurchaseOrder = { id: newPoId, entityId: editableJob.entityId, supplierId: supplierId === 'UNKNOWN' ? undefined : supplierId, vehicleRegistrationRef: vehicle.registration, orderDate: formatDate(new Date()), status: 'Draft', lineItems: poLineItems, notes: `Generated from Job #${editableJob.id}` };
+                    const newPo: T.PurchaseOrder = { 
+                        id: newPoId, 
+                        entityId: editableJob.entityId, 
+                        supplierId: supplierId === 'UNKNOWN' ? undefined : supplierId, 
+                        vehicleRegistrationRef: vehicle.registration, 
+                        orderDate: formatDate(new Date()), 
+                        status: 'Draft', 
+                        lineItems: newPoLineItems, 
+                        notes: `Generated from Job #${editableJob.id}`,
+                        jobId: editableJob.id
+                    };
                     newPOs.push(newPo);
                 }
             });
-    
+
+            // 5. Save all changes
             const allPOsToSave = [...newPOs, ...posToUpdate];
             if (allPOsToSave.length > 0) {
-                const poSavePromises = allPOsToSave.map(po => handleSaveItem(data.setPurchaseOrders, po, 'brooks_purchaseOrders'));
-                await Promise.all(poSavePromises);
-                const newEstimateState = { ...editableEstimate, lineItems: updatedLineItems };
+                // Persistent Save
+                for (const po of allPOsToSave) {
+                    await handleSaveItem(data.setPurchaseOrders, po, 'brooks_purchaseOrders');
+                }
+
+                // Update Estimate Links
+                const finalLineItems = Array.from(updatedLineItemsMap.values());
+                const newEstimateState = { ...editableEstimate, lineItems: finalLineItems };
                 setEditableEstimate(newEstimateState);
                 await handleSaveItem(setEstimates, newEstimateState, 'brooks_estimates');
-                if (newPoIdsToLink.length > 0) {
-                    setEditableJob(prev => prev ? { ...prev, purchaseOrderIds: [...(prev.purchaseOrderIds || []), ...newPoIdsToLink] } : null);
-                }
+
+                // If new POs were created, link them to the job
+                const nextJob = { 
+                    ...editableJob, 
+                    purchaseOrderIds: [...new Set([...(editableJob.purchaseOrderIds || []), ...newPoIdsToLink])] 
+                };
+                setEditableJob(nextJob);
+                await handleSaveItem(setJobs, nextJob, 'brooks_jobs');
+
+                setConfirmation({ isOpen: true, title: 'Purchase Orders Synchronized', message: `Sync complete for ${supplierGroups.size} supplier(s). ${newPOs.length} new PO(s) created.`, type: 'success' });
             }
-            setConfirmation({ isOpen: true, title: 'Purchase Orders Updated', message: `${newPOs.length} new purchase order(s) created and ${posToUpdate.length} existing draft PO(s) updated.`, type: 'success' });
+
         } finally {
             setIsRaisingPOs(false);
             if (forceRefresh) {
@@ -716,6 +827,8 @@ const EditJobModal: React.FC<{
                             vehicle={vehicle}
                             customer={customer}
                             isReadOnly={isReadOnly}
+                            purchaseOrders={safePurchaseOrders}
+                            onOpenPurchaseOrder={onOpenPurchaseOrder}
                             onChange={handleChange}
                             onViewCustomer={() => customer && onViewCustomer(customer.id)}
                             onViewVehicle={() => vehicle && onViewVehicle(vehicle.id)}

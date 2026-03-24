@@ -89,7 +89,7 @@ const MemoizedEditableLineItemRow = React.memo(({
                         value={item.partNumber || ''} 
                         onChange={e => onLineItemChange(item.id, 'partNumber', e.target.value)} 
                         className="w-full p-1 border rounded disabled:bg-gray-200 text-sm" 
-                        disabled={isPackageComponent || item.isLabor} 
+                        disabled={item.isLabor} 
                     />
                     <div className="relative w-full">
                         <textarea 
@@ -106,7 +106,7 @@ const MemoizedEditableLineItemRow = React.memo(({
                             rows={1}
                             style={{ whiteSpace: 'pre-wrap', minHeight: '38px' }}
                             className="w-full p-1 border rounded disabled:bg-gray-200 text-sm resize-y-none overflow-hidden"
-                            disabled={isPackageComponent} 
+                            disabled={false} 
                         />
                          {activePartSearch === item.id && (
                             <div className="absolute z-20 top-full left-0 w-full bg-white border rounded shadow-lg max-h-60 overflow-y-auto mt-1">
@@ -126,7 +126,7 @@ const MemoizedEditableLineItemRow = React.memo(({
             </div>
             <input type="number" step="0.1" value={item.quantity} onChange={e => onLineItemChange(item.id, 'quantity', e.target.value)} className="col-span-1 p-1 border rounded text-right text-sm" />
             <input type="number" step="0.01" value={item.unitCost || ''} onChange={e => onLineItemChange(item.id, 'unitCost', e.target.value)} className="col-span-2 p-1 border rounded text-right text-sm" placeholder="Cost" />
-            <input type="number" step="0.01" value={item.unitPrice} onChange={e => onLineItemChange(item.id, 'unitPrice', e.target.value)} className="col-span-2 p-1 border rounded text-right text-sm" placeholder="Sell" disabled={isPackageComponent}/>
+            <input type="number" step="0.01" value={item.unitPrice} onChange={e => onLineItemChange(item.id, 'unitPrice', e.target.value)} className="col-span-2 p-1 border rounded text-right text-sm" placeholder="Sell" />
             <div className="col-span-1">
                 <button 
                     type="button" 
@@ -138,7 +138,7 @@ const MemoizedEditableLineItemRow = React.memo(({
                 </button>
             </div>
             <div className="col-span-1 flex justify-center items-center gap-1">
-                <button onClick={() => onRemoveLineItem(item.id)} className="text-red-500 hover:text-red-700 disabled:opacity-50 p-1" disabled={isPackageComponent}><Trash2 size={14} /></button>
+                <button onClick={() => onRemoveLineItem(item.id)} className="text-red-500 hover:text-red-700 disabled:opacity-50 p-1"><Trash2 size={14} /></button>
             </div>
          </div>
     );

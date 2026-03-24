@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import ReactDOM from 'react-dom/client';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
-import { PurchaseOrder, PurchaseOrderLineItem, Supplier, BusinessEntity, TaxRate, Part, Vehicle, Customer, Job, Estimate } from '../types';
+import { PurchaseOrder, PurchaseOrderLineItem, Supplier, BusinessEntity, TaxRate, Part, Vehicle, Customer, Job, Estimate, EstimateLineItem } from '../types';
 import { Save, PlusCircle, Trash2, X, CheckSquare, ArrowDownCircle, AlertTriangle, Info, Printer, Mail, Phone, Plus } from 'lucide-react';
 import { formatDate } from '../core/utils/dateUtils';
 import { formatCurrency } from '../utils/formatUtils';
@@ -435,9 +435,22 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({
             id: formData.id || generatePurchaseOrderId(allPurchaseOrders, entityShortCode),
             status: newStatus,
             jobId: formData.jobId,
-        };
+        } as PurchaseOrder;
         
-        saveAndLinkPo(payload as PurchaseOrder);
+        let updatedPartsFromResult: Part[] | undefined = undefined;
+        let updatedEstimateFromResult: Estimate | undefined = undefined;
+        let finalizedPayload = payload;
+
+        // Sync back to Job/Estimate if NOT received (bidirectional sync while in progress)
+        if (newStatus !== 'Received' && payload.jobId) {
+            const { updatedParts, updatedEstimate, updatedPO } = updateRecordsFromPO(payload);
+            updatedPartsFromResult = updatedParts;
+            updatedEstimateFromResult = updatedEstimate;
+            if (updatedPO) finalizedPayload = updatedPO;
+        }
+
+        saveAndLinkPo(finalizedPayload, updatedPartsFromResult, updatedEstimateFromResult);
+
         await forceRefresh('brooks_purchaseOrders');
         await forceRefresh('brooks_jobs');
         onClose();
@@ -567,6 +580,31 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({
                         }
                     });
 
+                    // 3. Handle NEW items added to the PO that aren't on the Job Card yet
+                    const newPoItems = poLineItems.filter(poItem => !poItem.jobLineItemId);
+                    if (newPoItems.length > 0) {
+                        newPoItems.forEach(newPoItem => {
+                            const newEstimateLineItemId = crypto.randomUUID();
+                            // Update the PO item link so it reflects back
+                            newPoItem.jobLineItemId = newEstimateLineItemId;
+                            
+                            const newEstItem: EstimateLineItem = {
+                                id: newEstimateLineItemId,
+                                description: newPoItem.description || '',
+                                partNumber: newPoItem.partNumber || '',
+                                quantity: newPoItem.quantity || 0,
+                                unitPrice: (newPoItem.unitPrice || 0) * 1.3, // Apply a default markup if adding from PO
+                                unitCost: newPoItem.unitPrice || 0,
+                                taxCodeId: newPoItem.taxCodeId || '',
+                                supplierId: newPoItem.supplierId || finalizedPO.supplierId || '',
+                                purchaseOrderLineItemId: newPoItem.id,
+                                fromStock: false
+                            };
+                            updatedEstimate!.lineItems.push(newEstItem);
+                            estimateUpdated = true;
+                        });
+                    }
+
                     if (!estimateUpdated) {
                         updatedEstimate = undefined; // Don't save if nothing changed
                     }
@@ -574,7 +612,7 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({
             }
         }
         
-        return { updatedParts, updatedEstimate };
+        return { updatedParts, updatedEstimate, updatedPO: finalizedPO };
     }
 
     const { totalNet, totalTax, grandTotal } = useMemo(() => {
