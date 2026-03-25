@@ -44,6 +44,7 @@ const EmailPurchaseOrderModal: React.FC<EmailPurchaseOrderModalProps> = ({ isOpe
                     <div className="p-4 border rounded-md mt-4 h-64 overflow-y-auto">
                         <p className="mb-4">Dear {supplier?.name},</p>
                         <p className="mb-4">Please find attached our purchase order #{purchaseOrder.id}.</p>
+                        {purchaseOrder.supplierReference && <p className="mb-2"><strong>Your Reference: {purchaseOrder.supplierReference}</strong></p>}
                         <p>This order is in relation to vehicle: <strong>{purchaseOrder.vehicleRegistrationRef}</strong>.</p>
                         <p className="mb-4">Please confirm receipt and provide an estimated delivery date.</p>
                         <p>If you have any questions, please don't hesitate to contact us.</p>

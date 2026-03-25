@@ -658,6 +658,7 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
                     }}
                     vehicle={{ customerId: formData.customerId }}
                     customers={customers}
+                    vehicles={vehicles}
                 />
             )}
         </FormModal>

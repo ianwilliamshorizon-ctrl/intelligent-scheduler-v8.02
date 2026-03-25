@@ -369,6 +369,7 @@ export const ManagementVehiclesTab: React.FC<ManagementVehiclesTabProps> = ({ se
                     estimates={estimates}
                     invoices={invoices}
                     onViewCustomer={onViewCustomer}
+                    vehicles={vehicles}
                 />
             )}
         </div>

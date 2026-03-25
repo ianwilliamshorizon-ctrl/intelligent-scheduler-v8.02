@@ -10,6 +10,7 @@ import { formatCurrency } from '../utils/formatUtils';
 import SearchableSelect from './SearchableSelect';
 import { generateEstimateNumber, generateJobId } from '../core/utils/numberGenerators';
 import { getCustomerDisplayName } from '../core/utils/customerUtils';
+import { lookupVehicleByVRM } from '../services/vehicleLookupService';
 
 interface SmartCreateJobModalProps {
     isOpen: boolean;
@@ -40,7 +41,7 @@ const SmartCreateJobModal: React.FC<SmartCreateJobModalProps> = ({
     defaultDate, 
     initialPrompt,
 }) => {
-    const { taxRates, jobs, businessEntities, estimates } = useData();
+    const { taxRates, jobs, businessEntities, estimates, parts } = useData();
     const { selectedEntityId, currentUser } = useApp();
 
     const [prompt, setPrompt] = useState(initialPrompt || '');
@@ -211,15 +212,31 @@ const SmartCreateJobModal: React.FC<SmartCreateJobModalProps> = ({
 
         try {
             const contextDate = defaultDate || formatDate(new Date());
-            let finalResult = await parseJobRequest(currentPrompt, servicePackages, contextDate);
+            let finalResult = await parseJobRequest(currentPrompt);
 
             // 1. Match Vehicle
             const registration = finalResult.vehicleRegistration?.toUpperCase().replace(/\s/g, '');
-            const found = vehicles.find(v => v.registration.toUpperCase().replace(/\s/g, '') === registration);
+            let found = vehicles.find(v => v.registration.toUpperCase().replace(/\s/g, '') === registration);
             
-            // Re-parse with vehicle context if needed
+            // If found, fetch latest technical data (VIN, MOT) to satisfy "front sheet" update requirement
+            if (found) {
+                try {
+                    const latestDetails = await lookupVehicleByVRM(found.registration);
+                    found = {
+                        ...found,
+                        vin: latestDetails.vin || found.vin,
+                        nextMotDate: latestDetails.nextMotDate || found.nextMotDate,
+                    };
+                } catch (apiErr) {
+                    console.warn('Vehicle technical data lookup failed during smart create:', apiErr);
+                }
+            }
+            
+            // Re-parse with vehicle context if needed - reducing arguments to match current API signature
             if (found && (!finalResult.servicePackageNames || finalResult.servicePackageNames.length === 0)) {
-                finalResult = await parseJobRequest(currentPrompt, servicePackages, contextDate, { make: found.make, model: found.model });
+                // We simplify the call to match the single-argument signature in geminiService.ts
+                const secondaryPrompt = `${currentPrompt} (Context: Vehicle is a ${found.make} ${found.model})`;
+                finalResult = await parseJobRequest(secondaryPrompt);
             }
 
             if (finalResult.scheduledDate) setSelectedDate(finalResult.scheduledDate);
@@ -344,7 +361,11 @@ const SmartCreateJobModal: React.FC<SmartCreateJobModalProps> = ({
                 estimateId: newEstimate.id,
                 notes: notes,
                 vehicleStatus: 'Awaiting Arrival',
-                partsStatus: lineItems.some(li => !li.isLabor && !li.isPackageComponent) ? 'Awaiting Order' : 'Not Required',
+                partsStatus: lineItems.some(li => 
+                    !li.isLabor && 
+                    !li.fromStock &&
+                    !(li.servicePackageId && !li.isPackageComponent)
+                ) ? 'Awaiting Order' : 'Not Required',
                 purchaseOrderIds: undefined,
                 isStandalone: isStandaloneMOT
             };
@@ -415,7 +436,11 @@ const SmartCreateJobModal: React.FC<SmartCreateJobModalProps> = ({
                     estimateId: newEstimate.id,
                     notes: notes,
                     vehicleStatus: 'Awaiting Arrival',
-                    partsStatus: 'Not Required',
+                    partsStatus: lineItems.some(li => 
+                    !li.isLabor && 
+                    !li.fromStock &&
+                    !(li.servicePackageId && !li.isPackageComponent)
+                ) ? 'Awaiting Order' : 'Not Required',
                     isStandalone: isStandaloneMOT
                 };
                 
@@ -453,9 +478,18 @@ const SmartCreateJobModal: React.FC<SmartCreateJobModalProps> = ({
             servicePackageId: pkg.id,
             servicePackageName: pkg.name,
         };
-        const childItems: EstimateLineItem[] = (pkg.costItems || []).map(ci => ({
-            ...ci, id: crypto.randomUUID(), unitPrice: 0, servicePackageId: pkg.id, servicePackageName: pkg.name, isPackageComponent: true
-        }));
+        const childItems: EstimateLineItem[] = (pkg.costItems || []).map(ci => {
+            const part = ci.partId ? (parts || []).find(p => p.id === ci.partId) : null;
+            return {
+                ...ci, 
+                id: crypto.randomUUID(), 
+                unitPrice: 0, 
+                servicePackageId: pkg.id, 
+                servicePackageName: pkg.name, 
+                isPackageComponent: true,
+                fromStock: ci.fromStock ?? (part?.isStockItem && part.stockQuantity > 0)
+            };
+        });
         setLineItems(prev => [...prev, headerItem, ...childItems]);
     };
 
@@ -563,11 +597,22 @@ const SmartCreateJobModal: React.FC<SmartCreateJobModalProps> = ({
                     <h3 className="font-bold text-gray-700 flex items-center gap-2 border-b pb-2"><Car size={16}/> Vehicle</h3>
                     {foundVehicle ? (
                         <div className="text-sm space-y-1">
-                            <p className="font-bold text-green-700 flex items-center gap-2">
-                                <Check size={14}/> {foundVehicle.registration}
-                            </p>
-                            <p className="text-gray-600">{foundVehicle.make} {foundVehicle.model}</p>
-                             {foundVehicle.vin && <p className="text-xs text-gray-500 font-mono">VIN: {foundVehicle.vin}</p>}
+                            <div className="p-2 bg-green-50 text-green-800 rounded text-sm mb-2 flex items-center gap-2">
+                                <Check size={14}/> <strong>{foundVehicle.registration}</strong>
+                            </div>
+                             <p className="text-gray-600 font-medium">{foundVehicle.make} {foundVehicle.model}</p>
+                             <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-gray-100">
+                                 <div>
+                                     <label className="text-[10px] uppercase font-bold text-gray-400">VIN Number</label>
+                                     <p className="text-xs font-mono bg-gray-50 p-1 rounded border overflow-hidden truncate" title={foundVehicle.vin}>{foundVehicle.vin || 'Not Set'}</p>
+                                 </div>
+                                 <div>
+                                     <label className="text-[10px] uppercase font-bold text-gray-400">Next MOT Date</label>
+                                     <p className={`text-xs p-1 rounded border ${foundVehicle.nextMotDate ? 'bg-indigo-50 text-indigo-700' : 'bg-red-50 text-red-700'}`}>
+                                         {foundVehicle.nextMotDate || 'Missing'}
+                                     </p>
+                                 </div>
+                             </div>
                         </div>
                     ) : (
                         <div className="space-y-2">
@@ -655,6 +700,7 @@ const SmartCreateJobModal: React.FC<SmartCreateJobModalProps> = ({
                             onSave={handleSaveNewVehicleAndCreate}
                             onCancel={() => setShowAddNewVehicle(false)}
                             customers={customers}
+                            vehicles={vehicles}
                             saveButtonText={`Save & Create ${isEstimateMode ? 'Estimate' : 'Job'}`}
                         />
                     </div>

@@ -40,6 +40,7 @@ import CustomerFormModal from './CustomerFormModal';
 import VehicleFormModal from './VehicleFormModal';
 import VehicleHistoryReportModal from './VehicleHistoryReportModal';
 import PartFormModal from './PartFormModal';
+import BatchUpdatePORefModal from './BatchUpdatePORefModal';
 
 
 const getNextSequence = (items: any[], entityShortCode: string, prefix: string, key: string): string => {
@@ -98,6 +99,25 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
     // Helper for saving
     const handleSaveItem = actions.handleSaveItem;
 
+    const handleBatchUpdatePoRef = async (updatedPos: T.PurchaseOrder[]) => {
+        setters.setBatchUpdatePoRefModalOpen(false);
+        
+        // Update local state in one go for immediate UI refresh
+        data.setPurchaseOrders(prev => {
+            const next = [...(prev || [])];
+            updatedPos.forEach(upd => {
+                const idx = next.findIndex(p => p.id === upd.id);
+                if (idx !== -1) next[idx] = upd;
+            });
+            return next;
+        });
+
+        // Persist to database in background
+        for (const upd of updatedPos) {
+            await actions.handleSaveItem(data.setPurchaseOrders, upd, 'brooks_purchaseOrders');
+        }
+    };
+
     return (
         <>
             <ConfirmationModal 
@@ -110,6 +130,16 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                 cancelText={confirmation.cancelText}
                 type={confirmation.type}
             />
+
+            {modals.batchUpdatePoRefModalOpen && (
+                <BatchUpdatePORefModal
+                    isOpen={modals.batchUpdatePoRefModalOpen}
+                    onClose={() => setters.setBatchUpdatePoRefModalOpen(false)}
+                    onSave={handleBatchUpdatePoRef}
+                    purchaseOrders={data.purchaseOrders}
+                    suppliers={data.suppliers}
+                />
+            )}
 
             {modals.isEditJobModalOpen && modals.selectedJobId && (
                 <EditJobModal
@@ -675,10 +705,13 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                     jobs={data.jobs}
                     estimates={data.estimates}
                     invoices={data.invoices}
+                    purchaseOrders={data.purchaseOrders}
                     onViewJob={(jobId) => { setters.setVehicleModal({ isOpen: false, vehicleId: null }); setters.setSelectedJobId(jobId); setters.setIsEditJobModalOpen(true); }}
                     onViewEstimate={(estimate) => { setters.setVehicleModal({ isOpen: false, vehicleId: null }); setters.setEstimateViewModal({ isOpen: true, estimate: estimate }); }}
                     onViewInvoice={(invoice) => { setters.setVehicleModal({ isOpen: false, vehicleId: null }); setters.setViewInvoiceModal({ isOpen: true, invoice: invoice }); }}
                     onViewCustomer={(customerId) => { setters.setVehicleModal({ isOpen: false, vehicleId: null }); setters.setCustomerModal({ isOpen: true, customerId: customerId }); }}
+                    onOpenPurchaseOrder={(po) => { setters.setVehicleModal({ isOpen: false, vehicleId: null }); setters.setViewPoModal({ isOpen: true, po }); }}
+                    vehicles={data.vehicles}
                 />
             )}
 

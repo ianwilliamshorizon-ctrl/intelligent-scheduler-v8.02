@@ -153,8 +153,153 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
         }
     };
 
+    const syncPurchaseOrdersFromEstimate = async (estimate: T.Estimate) => {
+        if (!estimate.jobId) return;
+
+        const linkedPOs = purchaseOrders.filter(po => po.jobId === estimate.jobId && po.status !== 'Cancelled');
+        const estimateLineItems = estimate.lineItems || [];
+        // Only sync items that are for parts, not optional, not labor, and not stock items
+        // Refinement: Allow MOT items if they are procured (not stock and have a supplier)
+        const activeItemsForPO = estimateLineItems.filter(li => 
+            !li.isLabor && 
+            !li.fromStock && 
+            !li.isOptional &&
+            !(li.servicePackageId && !li.isPackageComponent)
+        );
+
+        let poChanged = false;
+        const currentPOs = [...linkedPOs];
+
+        // 1. Update existing items or add new ones
+        for (const li of activeItemsForPO) {
+            let targetPO = currentPOs.find(po => 
+                po.lineItems.some(poi => (li.purchaseOrderLineItemId && poi.id === li.purchaseOrderLineItemId) || poi.jobLineItemId === li.id)
+            );
+
+            if (targetPO) {
+                // Don't update if already received
+                if (['Received', 'Finalized'].includes(targetPO.status)) continue;
+                
+                const poiIndex = targetPO.lineItems.findIndex(poi => (li.purchaseOrderLineItemId && poi.id === li.purchaseOrderLineItemId) || poi.jobLineItemId === li.id);
+                if (poiIndex !== -1) {
+                    const poi = targetPO.lineItems[poiIndex];
+                    if (poi.quantity !== li.quantity || poi.unitPrice !== li.unitCost || poi.description !== li.description) {
+                        targetPO.lineItems[poiIndex] = {
+                            ...poi,
+                            quantity: li.quantity,
+                            unitPrice: li.unitCost || 0,
+                            description: li.description || '',
+                            partNumber: li.partNumber || '',
+                            jobLineItemId: li.id
+                        };
+                        poChanged = true;
+                    }
+                }
+            } else {
+                // New item added to Job Card, need to find/create a PO
+                const supplierId = li.supplierId || '';
+                let existingPO = currentPOs.find(po => 
+                    po.supplierId === supplierId && 
+                    !['Received', 'Finalized', 'Cancelled'].includes(po.status)
+                );
+                
+                if (existingPO) {
+                    const newPoiId = crypto.randomUUID();
+                    existingPO.lineItems.push({
+                        id: newPoiId,
+                        jobLineItemId: li.id,
+                        description: li.description || '',
+                        partNumber: li.partNumber || '',
+                        quantity: li.quantity,
+                        unitPrice: li.unitCost || 0,
+                        receivedQuantity: 0,
+                        taxCodeId: li.taxCodeId || ''
+                    });
+                    li.purchaseOrderLineItemId = newPoiId;
+                    poChanged = true;
+                } else {
+                    const entity = businessEntities.find(e => e.id === estimate.entityId);
+                    const vehicle = vehicles.find(v => v.id === estimate.vehicleId);
+                    const newPOId = await generateSequenceId('944', entity?.shortCode || 'UNK');
+                    const newPoiId = crypto.randomUUID();
+                    const newPO: T.PurchaseOrder = {
+                        id: newPOId,
+                        entityId: estimate.entityId,
+                        supplierId: supplierId,
+                        vehicleRegistrationRef: vehicle?.registration || 'N/A',
+                        orderDate: formatDate(new Date()),
+                        status: 'Draft',
+                        jobId: estimate.jobId,
+                        createdByUserId: currentUser.id,
+                        lineItems: [{
+                            id: newPoiId,
+                            jobLineItemId: li.id,
+                            description: li.description || '',
+                            partNumber: li.partNumber || '',
+                            quantity: li.quantity,
+                            unitPrice: li.unitCost || 0,
+                            receivedQuantity: 0,
+                            taxCodeId: li.taxCodeId || ''
+                        }]
+                    };
+                    currentPOs.push(newPO);
+                    li.purchaseOrderLineItemId = newPoiId;
+                    poChanged = true;
+                    
+                    // Add to global state list so subsequent items in this loop can find it
+                    setPurchaseOrders(prev => [...prev, newPO]);
+                }
+            }
+        }
+
+        // 2. Remove items from POs if they were deleted from the Job Card (Estimate)
+        const activeEstLineItemIds = new Set(activeItemsForPO.map(li => li.id));
+        for (const po of currentPOs) {
+            if (['Received', 'Finalized'].includes(po.status)) continue;
+            
+            const originalCount = po.lineItems.length;
+            po.lineItems = po.lineItems.filter(poi => 
+                !poi.jobLineItemId || activeEstLineItemIds.has(poi.jobLineItemId)
+            );
+            
+            if (po.lineItems.length !== originalCount) {
+                poChanged = true;
+            }
+        }
+
+        // 3. Save updates
+        if (poChanged) {
+            let newPOIds: string[] = [];
+            for (const po of currentPOs) {
+                 await handleSaveItem(setPurchaseOrders, po);
+                 if (!linkedPOs.some(lpo => lpo.id === po.id)) {
+                     newPOIds.push(po.id);
+                 }
+            }
+
+            if (newPOIds.length > 0) {
+                 const job = jobs.find(j => j.id === estimate.jobId);
+                 if (job) {
+                     const updatedJob = {
+                         ...job,
+                         purchaseOrderIds: [...new Set([...(job.purchaseOrderIds || []), ...newPOIds])]
+                     };
+                     await handleSaveItem(setJobs, updatedJob, 'brooks_jobs');
+                 }
+            }
+
+            // Save estimate again to persist any new purchaseOrderLineItemId links
+            await handleSaveItem(setEstimates, estimate);
+        }
+    };
+
     const handleSaveEstimate = async (estimate: T.Estimate) => {
         const isNew = !estimates.some(e => e.id === estimate.id);
+        
+        if (estimate.jobId) {
+            await syncPurchaseOrdersFromEstimate(estimate);
+        }
+
         await handleSaveItem(setEstimates, estimate);
         
         if (estimate.status === 'Sent') await updateLinkedInquiryStatus(estimate.id, 'Sent');
@@ -243,7 +388,12 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
         };
 
         const createPOs = async (targetJobId: string, entityShortCode: string, itemsForPO: T.EstimateLineItem[]) => {
-            const partItems = itemsForPO.filter(li => !li.isLabor && !li.fromStock);
+            // Filter: non-labor, not from stock, and NOT an MOT service
+            const partItems = itemsForPO.filter(li => 
+                !li.isLabor && 
+                !li.fromStock &&
+                !(li.servicePackageId && !li.isPackageComponent)
+            );
             const poIds: string[] = [];
             if (partItems.length > 0) {
                 const partsBySupplier: Record<string, T.EstimateLineItem[]> = {};
@@ -604,6 +754,7 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
         handleQcApprove,
         handleReassignEngineer,
         handleUnscheduleSegment,
-        updateLinkedInquiryStatus
+        updateLinkedInquiryStatus,
+        syncPurchaseOrdersFromEstimate
     };
 };

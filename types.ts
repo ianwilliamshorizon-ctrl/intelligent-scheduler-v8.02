@@ -79,17 +79,27 @@ export interface Customer {
     id: string;
     forename: string;
     surname: string;
+    title?: string;
     companyName?: string;
     email?: string;
     phone?: string;
     mobile?: string;
     address?: string;
     addressLine1?: string;
+    addressLine2?: string;
     city?: string;
+    county?: string;
     postcode?: string;
     notes?: string;
+    category?: 'Retail' | 'Trade';
+    isBusinessCustomer?: boolean;
+    isCashCustomer?: boolean;
+    marketingConsent?: boolean;
+    serviceReminderConsent?: boolean;
+    communicationPreference?: 'Email' | 'SMS' | 'WhatsApp' | 'None';
     autoSendReminders?: boolean;
     searchField?: string;
+    createdDate?: string;
 }
 
 /**
@@ -182,6 +192,7 @@ export interface Vehicle {
     registration: string;
     make: string;
     model: string;
+    type?: string;
     year?: number;
     vin?: string;
     colour?: string;
@@ -253,8 +264,12 @@ export interface DiscountCode {
     id: string;
     code: string;
     discountType: 'percentage' | 'fixed';
+    type?: 'Percentage' | 'Fixed';
     value: number;
     expiryDate?: string;
+    isActive: boolean;
+    description: string;
+    applicability: 'All' | 'Labor' | 'Parts' | 'Packages';
 }
 
 /**
@@ -414,6 +429,8 @@ export interface Part {
 export interface Supplier { 
     id: string; 
     name?: string;
+    email?: string;
+    phone?: string;
     addressLine1?: string;
     addressLine2?: string;
     city?: string;
@@ -428,6 +445,7 @@ export interface Supplier {
 export interface BusinessEntity {
     id: string;
     name?: string;
+    email?: string;
     shortCode?: string;
     laborRate?: number;
     laborCostRate?: number;
@@ -461,10 +479,13 @@ export interface ServicePackage {
         unitCost: number;
         isStock?: boolean;
         isLabor?: boolean;
+        fromStock?: boolean;
+        partId?: string;
         partNumber?: string;
     }[]; 
     applicableMake?: string;
     applicableModel?: string;
+    applicableVariant?: string;
     applicableEngineSize?: number;
     taxCodeId?: string;
 }
@@ -546,6 +567,20 @@ export interface RentalBooking {
     totalPrice?: number;
     createdByUserId?: string;
 }
+export interface StorageBooking {
+    id: string;
+    entityId: string;
+    vehicleId: string;
+    customerId: string;
+    locationId: string;
+    slotIdentifier: string;
+    startDate: string;
+    endDate?: string | null;
+    weeklyRate: number;
+    notes?: string;
+    keyNumber?: number;
+    status?: 'Active' | 'Closed' | 'Cancelled';
+}
 export interface AbsenceRequest {
     id: string;
     userId: string;
@@ -556,12 +591,12 @@ export interface AbsenceRequest {
   }
   export interface SaleVehicle {
     id: string;
-    make: string;
-    model: string;
+    make?: string;
+    model?: string;
     registration?: string;
     vin?: string;
-    price: number;
-    status: 'Available' | 'Reserved' | 'Sold' | 'Internal';
+    price?: number;
+    status: 'Available' | 'Reserved' | 'Sold' | 'Internal' | 'For Sale';
     // Add these missing fields:
     vehicleId?: string; 
     entityId?: string;
@@ -573,6 +608,24 @@ export interface AbsenceRequest {
     images?: string[];
     createdAt?: string;
     updatedAt?: string;
+    saleType?: 'Sale or Return' | 'Stock';
+    purchasePrice?: number;
+    prepCosts?: any[];
+    overheads?: any[];
+    upsells?: any[];
+    nonRecoverableCosts?: any[];
+    depositAmount?: number;
+    depositDate?: string | null;
+    keyNumber?: number;
+    versions?: SaleVersion[];
+    activeVersionId?: string;
+}
+
+export interface SaleVersion {
+    versionId: string;
+    createdAt: string;
+    listPrice: number;
+    sorReturnPrice?: number;
 }
 
 export interface Prospect {
@@ -621,7 +674,7 @@ export interface RentalVehicle {
     registration?: string;
 }
 
-export interface StorageBooking {
+export interface StorageBookingSummary {
     id: string;
     entityId: string;
     vehicleId: string;

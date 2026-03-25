@@ -63,7 +63,8 @@ export const getInitialUsers = (): User[] => ([
 export const getInitialBusinessEntities = (): BusinessEntity[] => ([
     {
         id: 'ent_porsche', name: 'Brookspeed Porsche & Performance', shortCode: 'BPP', laborRate: 125, laborCostRate: 45,
-        addressLine1: '14-15 Test Lane', city: 'Southampton', postcode: 'SO16 9JX', vatNumber: 'GB 123 4567 89', type: 'Workshop'
+        addressLine1: '14-15 Test Lane', city: 'Southampton', postcode: 'SO16 9JX', vatNumber: 'GB 123 4567 89', type: 'Workshop',
+        logoUrl: '/logo.png'
     },
     { 
         id: 'ent_audi', name: 'Brookspeed Audi & VW', shortCode: 'BAV', laborRate: 110, laborCostRate: 40, type: 'Workshop'
@@ -119,19 +120,19 @@ export const getInitialVehicles = (): Vehicle[] => ([
 
 // --- Lifts & Engineers ---
 export const getInitialLifts = (): Lift[] => ([
-    { id: 'lift_p1', entityId: 'ent_porsche' },
-    { id: 'lift_p2', entityId: 'ent_porsche' },
-    { id: 'lift_p3', entityId: 'ent_porsche' },
-    { id: 'lift_p4', entityId: 'ent_porsche' },
-    { id: 'lift_p5', entityId: 'ent_porsche' },
-    { id: 'lift_p6', entityId: 'ent_porsche' },
-    { id: 'lift_mot_p', entityId: 'ent_porsche' },
-    { id: 'lift_a1', entityId: 'ent_audi' },
-    { id: 'lift_a2', entityId: 'ent_audi' },
-    { id: 'lift_a3', entityId: 'ent_audi' },
-    { id: 'lift_mot_a', entityId: 'ent_audi' },
-    { id: 'lift_t1', entityId: 'ent_trimming' },
-    { id: 'lift_t2', entityId: 'ent_trimming' },
+    { id: 'lift_p1', entityId: 'ent_porsche', name: 'Porsche Lift 1' },
+    { id: 'lift_p2', entityId: 'ent_porsche', name: 'Porsche Lift 2' },
+    { id: 'lift_p3', entityId: 'ent_porsche', name: 'Porsche Lift 3' },
+    { id: 'lift_p4', entityId: 'ent_porsche', name: 'Porsche Lift 4' },
+    { id: 'lift_p5', entityId: 'ent_porsche', name: 'Porsche Lift 5' },
+    { id: 'lift_p6', entityId: 'ent_porsche', name: 'Porsche Lift 6' },
+    { id: 'lift_mot_p', entityId: 'ent_porsche', name: 'Porsche MOT Bay' },
+    { id: 'lift_a1', entityId: 'ent_audi', name: 'Audi Lift 1' },
+    { id: 'lift_a2', entityId: 'ent_audi', name: 'Audi Lift 2' },
+    { id: 'lift_a3', entityId: 'ent_audi', name: 'Audi Lift 3' },
+    { id: 'lift_mot_a', entityId: 'ent_audi', name: 'Audi MOT Bay' },
+    { id: 'lift_t1', entityId: 'ent_trimming', name: 'Trimming Area 1' },
+    { id: 'lift_t2', entityId: 'ent_trimming', name: 'Trimming Area 2' },
 ]);
 
 export const getInitialEngineers = (): Engineer[] => ([
@@ -163,8 +164,8 @@ export const getInitialInvoices = (): Invoice[] => ([
 ]);
 
 export const getInitialEstimates = (): Estimate[] => ([
-    { id: 'est_1', entityId: 'ent_porsche', estimateNumber: 'BPP99100001', customerId: 'OCON0001', vehicleId: 'veh_1', issueDate: getRelativeDate(-2), expiryDate: getRelativeDate(28), status: 'Approved', lineItems: [{id:'li_1', description: 'Major Service Labor', quantity: 8, unitPrice: 125, isLabor: true}], jobId: 'BPP99200001', createdByUserId: 'user_admin' },
-    { id: 'est_2', entityId: 'ent_porsche', estimateNumber: 'BPP99100002', customerId: 'DUBO0001', vehicleId: 'veh_4', issueDate: getRelativeDate(-1), expiryDate: getRelativeDate(29), status: 'Sent', lineItems: [{id:'li_2', description: 'Brake Labor', quantity: 4, unitPrice: 125, isLabor: true}], createdByUserId: 'user_phil_f' },
+    { id: 'est_1', entityId: 'ent_porsche', estimateNumber: 'BPP99100001', customerId: 'OCON0001', vehicleId: 'veh_1', issueDate: getRelativeDate(-2), expiryDate: getRelativeDate(28), status: 'Approved', lineItems: [{id:'li_1', description: 'Major Service Labor', quantity: 8, unitPrice: 125, unitCost: 45, isLabor: true}], jobId: 'BPP99200001', createdByUserId: 'user_admin' },
+    { id: 'est_2', entityId: 'ent_porsche', estimateNumber: 'BPP99100002', customerId: 'DUBO0001', vehicleId: 'veh_4', issueDate: getRelativeDate(-1), expiryDate: getRelativeDate(29), status: 'Sent', lineItems: [{id:'li_2', description: 'Brake Labor', quantity: 4, unitPrice: 125, unitCost: 45, isLabor: true}], createdByUserId: 'user_phil_f' },
 ]);
 
 export const getInitialSuppliers = (): Supplier[] => ([
@@ -182,7 +183,7 @@ export const getInitialServicePackages = (): ServicePackage[] => ([
         totalPrice: 495, 
         applicableMake: 'Porsche',
         applicableModel: '911',
-        costItems: [{ id: 'c1', description: 'Labor', isLabor: true, quantity: 4, unitPrice: 0, unitCost: 45 }, {id:'c2', description:'Oil Filter', isLabor: false, quantity: 1, unitPrice: 0, unitCost: 25}]
+        costItems: [{ description: 'Labor', isLabor: true, quantity: 4, unitPrice: 0, unitCost: 45 }, {description:'Oil Filter', isLabor: false, quantity: 1, unitPrice: 0, unitCost: 25}]
     },
     { 
         id: 'pkg_2', 
@@ -191,7 +192,7 @@ export const getInitialServicePackages = (): ServicePackage[] => ([
         totalPrice: 54.85, 
         taxCodeId: 'tax_1', 
         // No make/model implies applicable to all
-        costItems: [{ id: 'c3', description: 'MOT Labor', isLabor: true, quantity: 1, unitPrice: 0, unitCost: 20 }]
+        costItems: [{ description: 'MOT Labor', isLabor: true, quantity: 1, unitPrice: 0, unitCost: 20 }]
     },
     { 
         id: 'pkg_3', 
@@ -201,12 +202,12 @@ export const getInitialServicePackages = (): ServicePackage[] => ([
         applicableMake: 'Porsche',
         applicableModel: '911',
         costItems: [
-            { id: 'c4', description: 'Major Service Labor', isLabor: true, quantity: 8, unitPrice: 0, unitCost: 45 }, 
-            {id:'c5', partId: 'part_1', partNumber: '99610722553', description: 'Oil Filter 996/997', isLabor: false, fromStock: false, quantity: 1, unitPrice: 0, unitCost: 22.50},
-            {id:'c6', partId: 'part_2', partNumber: '0W40MOB1', description: 'Mobil 1 0W-40 Oil (1L)', isLabor: false, fromStock: true, quantity: 8, unitPrice: 0, unitCost: 9.50},
-            {id:'c7', partId: 'part_3', partNumber: '99611013170', description: 'Air Filter 996/997', isLabor: false, fromStock: false, quantity: 1, unitPrice: 0, unitCost: 45.00},
-            {id:'c8', partId: 'part_4', partNumber: '99657221901', description: 'Pollen/Cabin Filter', isLabor: false, fromStock: false, quantity: 1, unitPrice: 0, unitCost: 30.00},
-            {id:'c9', partId: 'part_5', partNumber: '99917022490', description: 'Spark Plugs (Bosch)', isLabor: false, fromStock: false, quantity: 6, unitPrice: 0, unitCost: 15.00},
+            { description: 'Major Service Labor', isLabor: true, quantity: 8, unitPrice: 0, unitCost: 45 }, 
+            { partId: 'part_1', partNumber: '99610722553', description: 'Oil Filter 996/997', isLabor: false, fromStock: false, quantity: 1, unitPrice: 0, unitCost: 22.50},
+            { partId: 'part_2', partNumber: '0W40MOB1', description: 'Mobil 1 0W-40 Oil (1L)', isLabor: false, fromStock: true, quantity: 8, unitPrice: 0, unitCost: 9.50},
+            { partId: 'part_3', partNumber: '99611013170', description: 'Air Filter 996/997', isLabor: false, fromStock: false, quantity: 1, unitPrice: 0, unitCost: 45.00},
+            { partId: 'part_4', partNumber: '99657221901', description: 'Pollen/Cabin Filter', isLabor: false, fromStock: false, quantity: 1, unitPrice: 0, unitCost: 30.00},
+            { partId: 'part_5', partNumber: '99917022490', description: 'Spark Plugs (Bosch)', isLabor: false, fromStock: false, quantity: 6, unitPrice: 0, unitCost: 15.00},
         ]
     },
     { 
@@ -217,8 +218,8 @@ export const getInitialServicePackages = (): ServicePackage[] => ([
         applicableMake: 'Porsche',
         // Generic to Porsche
         costItems: [
-            { id: 'c10', description: 'Brake Fluid Change Labor', isLabor: true, quantity: 1, unitPrice: 0, unitCost: 45 },
-            { id: 'c11', partId: 'part_7', partNumber: 'BFDOT4', description: 'Brake Fluid DOT4 (1L)', isLabor: false, quantity: 1, unitPrice: 0, unitCost: 10 },
+            { description: 'Brake Fluid Change Labor', isLabor: true, quantity: 1, unitPrice: 0, unitCost: 45 },
+            { partId: 'part_7', partNumber: 'BFDOT4', description: 'Brake Fluid DOT4 (1L)', isLabor: false, quantity: 1, unitPrice: 0, unitCost: 10 },
         ]
     },
     { 
@@ -229,7 +230,7 @@ export const getInitialServicePackages = (): ServicePackage[] => ([
         applicableMake: 'Porsche',
         applicableModel: '911',
         costItems: [
-             { id: 'c12', description: 'Corner Weight & Geometry Setup', isLabor: true, quantity: 4, unitPrice: 0, unitCost: 45 }
+             { description: 'Corner Weight & Geometry Setup', isLabor: true, quantity: 4, unitPrice: 0, unitCost: 45 }
         ]
     },
 ]);
@@ -248,10 +249,10 @@ export const getInitialParts = (): Part[] => ([
 export const getInitialSaleVehicles = (): SaleVehicle[] => {
     return [
         { 
-            id: 'sale_1', entityId: 'ent_sales',
+            id: 'sale_1', entityId: 'ent_sales', make: 'Porsche', model: '911 GT3', price: 185000, status: 'Available'
         },
         { 
-            id: 'sale_2', entityId: 'ent_sales',
+            id: 'sale_2', entityId: 'ent_sales', make: 'Porsche', model: 'Cayman GT4', price: 85000, status: 'Reserved'
         }
     ];
 };
@@ -262,7 +263,7 @@ export const getInitialSaleOverheadPackages = (): SaleOverheadPackage[] => ([
 ]);
 
 export const getInitialStorageBookings = (): StorageBooking[] => ([
-    { id: 'sb_1', entityId: 'ent_storage', vehicleId: 'veh_3', customerId: 'CART0001' },
+    { id: 'sb_1', entityId: 'ent_storage', vehicleId: 'veh_3', customerId: 'CART0001', locationId: 'sl_1', slotIdentifier: 'A1', startDate: getRelativeDate(0), weeklyRate: 50 },
 ]);
 
 export const getInitialRentalVehicles = (): RentalVehicle[] => ([

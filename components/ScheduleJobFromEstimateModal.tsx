@@ -138,8 +138,12 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
     
         const itemsNeedingOrder = (estimateToConvert.lineItems || [])
             .map(item => {
-                if (item.isLabor || item.isOptional || !item.partId) return null;
+                if (item.isLabor || item.isOptional || item.fromStock || (item.servicePackageId && !item.isPackageComponent)) return null;
                 const part = parts.find(p => p.id === item.partId);
+                
+                // If it is from stock, no PO needed
+                if (item.fromStock) return null;
+
                 const requiredQty = item.quantity;
                 const stockQty = part?.stockQuantity || 0;
                 const orderQty = requiredQty - stockQty;

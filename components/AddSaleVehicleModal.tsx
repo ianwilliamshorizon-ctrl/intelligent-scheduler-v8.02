@@ -211,6 +211,7 @@ const AddSaleVehicleModal: React.FC<AddSaleVehicleModalProps> = ({
                                 onSave={handleNewVehicleSave}
                                 onCancel={handleBackToLookup}
                                 customers={customers}
+                                vehicles={vehicles}
                                 saveButtonText="Save Vehicle & Continue"
                             />
                         ) : vehicle ? (

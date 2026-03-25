@@ -10,6 +10,7 @@ export interface ModalState {
     smartCreateDefaultDate: Date | null;
     poModal: { isOpen: boolean; po: T.PurchaseOrder | null };
     batchPoModalOpen: boolean;
+    batchUpdatePoRefModalOpen: boolean;
     viewPoModal: { isOpen: boolean; po: T.PurchaseOrder | null };
     invoiceFormModal: { isOpen: boolean; invoice?: T.Invoice | Partial<T.Invoice> | null, job?: T.Job | null };
     viewInvoiceModal: { isOpen: boolean; invoice: T.Invoice | null };
@@ -49,6 +50,7 @@ export interface ModalSetters {
     setSmartCreateDefaultDate: React.Dispatch<React.SetStateAction<Date | null>>;
     setPoModal: React.Dispatch<React.SetStateAction<{ isOpen: boolean; po: T.PurchaseOrder | null }>>;
     setBatchPoModalOpen: React.Dispatch<React.SetStateAction<boolean>>;
+    setBatchUpdatePoRefModalOpen: React.Dispatch<React.SetStateAction<boolean>>;
     setViewPoModal: React.Dispatch<React.SetStateAction<{ isOpen: boolean; po: T.PurchaseOrder | null }>>;
     setInvoiceFormModal: React.Dispatch<React.SetStateAction<{ isOpen: boolean; invoice?: T.Invoice | Partial<T.Invoice> | null, job?: T.Job | null }>>;
     setViewInvoiceModal: React.Dispatch<React.SetStateAction<{ isOpen: boolean; invoice: T.Invoice | null }>>;
@@ -88,6 +90,7 @@ const useModalState = (): [ModalState, ModalSetters] => {
     const [smartCreateDefaultDate, setSmartCreateDefaultDate] = useState<Date | null>(null);
     const [poModal, setPoModal] = useState<{ isOpen: boolean; po: T.PurchaseOrder | null }>({ isOpen: false, po: null });
     const [batchPoModalOpen, setBatchPoModalOpen] = useState(false);
+    const [batchUpdatePoRefModalOpen, setBatchUpdatePoRefModalOpen] = useState(false);
     const [viewPoModal, setViewPoModal] = useState<{ isOpen: boolean; po: T.PurchaseOrder | null }>({ isOpen: false, po: null });
     const [invoiceFormModal, setInvoiceFormModal] = useState<{ isOpen: boolean; invoice?: T.Invoice | Partial<T.Invoice> | null, job?: T.Job | null }>({ isOpen: false, invoice: null, job: null });
     const [viewInvoiceModal, setViewInvoiceModal] = useState<{ isOpen: boolean; invoice: T.Invoice | null }>({ isOpen: false, invoice: null });
@@ -119,7 +122,7 @@ const useModalState = (): [ModalState, ModalSetters] => {
 
     const state = { 
         isEditJobModalOpen, selectedJobId, partModal, isSmartCreateOpen, smartCreateMode, smartCreateDefaultDate,
-        poModal, batchPoModalOpen, viewPoModal, invoiceFormModal, viewInvoiceModal, salesInvoiceModal,
+        poModal, batchPoModalOpen, batchUpdatePoRefModalOpen, viewPoModal, invoiceFormModal, viewInvoiceModal, salesInvoiceModal,
         rentalBookingModal, rentalConditionModal, rentalAgreementModal, rentalReturnReportModal,
         sorContractModal, ownerStatementModal, internalStatementModal, salesReportModal, addSaleVehicleModalOpen,
         manageSaleVehicleModal, prospectModal, estimateFormModal, estimateViewModal, scheduleJobFromEstimateModal,
@@ -129,7 +132,7 @@ const useModalState = (): [ModalState, ModalSetters] => {
 
     const setters = { 
         setIsEditJobModalOpen, setSelectedJobId, setPartModal, setIsSmartCreateOpen, setSmartCreateMode, setSmartCreateDefaultDate, 
-        setPoModal, setBatchPoModalOpen, setViewPoModal, setInvoiceFormModal, setViewInvoiceModal,
+        setPoModal, setBatchPoModalOpen, setBatchUpdatePoRefModalOpen, setViewPoModal, setInvoiceFormModal, setViewInvoiceModal,
         setSalesInvoiceModal, setRentalBookingModal, setRentalConditionModal, setRentalAgreementModal,
         setRentalReturnReportModal, setSorContractModal, setOwnerStatementModal, setInternalStatementModal,
         setSalesReportModal, setAddSaleVehicleModalOpen, setManageSaleVehicleModal, setProspectModal,

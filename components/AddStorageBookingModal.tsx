@@ -151,6 +151,7 @@ const AddStorageBookingModal: React.FC<AddStorageBookingModalProps> = ({ isOpen,
                             onSave={handleNewVehicleSave}
                             onCancel={handleBackToLookup}
                             customers={customers}
+                            vehicles={vehicles}
                             saveButtonText="Save & Continue to Booking"
                         />
                     )}

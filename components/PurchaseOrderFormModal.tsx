@@ -25,6 +25,7 @@ interface PurchaseOrderLineItemRowProps {
     isOrderedOrLater: boolean;
     isCredit: boolean;
     isNewItem: boolean;
+    isLockedByJob: boolean;
     onAddNewPart: (lineItemId: string, searchTerm: string) => void;
 }
 
@@ -38,6 +39,7 @@ const PurchaseOrderLineItemRow: React.FC<PurchaseOrderLineItemRowProps> = ({
     isOrderedOrLater,
     isCredit,
     isNewItem,
+    isLockedByJob,
     onAddNewPart,
 }) => {
     const [descriptionSearch, setDescriptionSearch] = useState(item.description || '');
@@ -95,7 +97,7 @@ const PurchaseOrderLineItemRow: React.FC<PurchaseOrderLineItemRowProps> = ({
                     onFocus={() => setShowResults(true)}
                     onBlur={() => setTimeout(() => setShowResults(false), 200)}
                     className="w-full p-1 border rounded disabled:bg-gray-100 disabled:cursor-not-allowed text-sm"
-                    disabled={fieldsDisabled}
+                    disabled={isFullyReceived || isPendingReturn}
                 />
                 {showResults && (
                     <div className="absolute z-20 w-full bg-white border rounded-md mt-1 max-h-60 overflow-y-auto shadow-lg">
@@ -113,8 +115,8 @@ const PurchaseOrderLineItemRow: React.FC<PurchaseOrderLineItemRowProps> = ({
                 )}
             </div>
 
-            <input type="text" placeholder="Part Number" value={item.partNumber || ''} onChange={e => onLineItemChange(item.id, 'partNumber', e.target.value)} className="col-span-2 p-1 border rounded disabled:bg-gray-100 disabled:cursor-not-allowed text-sm font-medium" disabled={fieldsDisabled} />
-            <input type="number" step="1" value={item.quantity ?? 0} onChange={e => onLineItemChange(item.id, 'quantity', e.target.value)} className={`col-span-1 p-1 border rounded text-right disabled:bg-gray-100 disabled:cursor-not-allowed text-sm ${isCredit ? 'text-red-600 font-bold' : ''}`} disabled={fieldsDisabled} />
+            <input type="text" placeholder="Part Number" value={item.partNumber || ''} onChange={e => onLineItemChange(item.id, 'partNumber', e.target.value)} className="col-span-2 p-1 border rounded disabled:bg-gray-100 disabled:cursor-not-allowed text-sm font-medium" disabled={isFullyReceived || isPendingReturn} />
+            <input type="number" step="1" value={item.quantity ?? 0} onChange={e => onLineItemChange(item.id, 'quantity', e.target.value)} className={`col-span-1 p-1 border rounded text-right disabled:bg-gray-100 disabled:cursor-not-allowed text-sm ${isCredit ? 'text-red-600 font-bold' : ''}`} disabled={fieldsDisabled || (isLockedByJob && !!item.jobLineItemId)} />
 
             <div className="col-span-1 relative">
                 <input
@@ -148,7 +150,11 @@ const PurchaseOrderLineItemRow: React.FC<PurchaseOrderLineItemRowProps> = ({
                 )}
             </div>
 
-            <input type="number" step="0.01" value={item.unitPrice ?? 0} onChange={e => onLineItemChange(item.id, 'unitPrice', e.target.value)} className="col-span-2 p-1 border rounded text-right text-sm" placeholder="Unit Cost"/>
+            <input type="number" step="0.01" value={item.unitPrice ?? 0} onChange={e => onLineItemChange(item.id, 'unitPrice', e.target.value)} className="col-span-2 p-1 border rounded text-right text-sm disabled:bg-gray-100" placeholder="Unit Cost" disabled={isFullyReceived || isPendingReturn}/>
+
+            <div className="col-span-1 text-right text-sm font-bold bg-gray-50 p-1 rounded border border-gray-100 flex items-center justify-end">
+                {formatCurrency((Number(item.quantity) || 0) * (Number(item.unitPrice) || 0))}
+            </div>
 
             <div className="col-span-1 flex justify-center items-center">
                 {canReceive && hasBeenReceived ? (
@@ -156,7 +162,12 @@ const PurchaseOrderLineItemRow: React.FC<PurchaseOrderLineItemRowProps> = ({
                         <AlertTriangle size={16} fill={isPendingReturn ? "currentColor" : "none"}/>
                     </button>
                 ) : (
-                    <button onClick={() => onRemoveLineItem(item.id)} className="text-red-500 hover:text-red-700 disabled:opacity-50 disabled:cursor-not-allowed" title="Delete Line Item" disabled={isOrderedOrLater && hasBeenReceived}>
+                    <button 
+                        onClick={() => onRemoveLineItem(item.id)} 
+                        className="text-red-500 hover:text-red-700 disabled:opacity-50 disabled:cursor-not-allowed" 
+                        title="Delete Line Item" 
+                        disabled={(isOrderedOrLater && hasBeenReceived) || (isLockedByJob && !!item.jobLineItemId)}
+                    >
                         <Trash2 size={14} />
                     </button>
                 )}
@@ -310,6 +321,7 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({
     const isReceivingDisabled = useMemo(() => formData.status === 'Draft', [formData.status]);
     const isOrderedOrLater = useMemo(() => ['Ordered', 'Partially Received', 'Received'].includes(formData.status || ''), [formData.status]);
     const isOriginalStatusReceived = useMemo(() => purchaseOrder?.status === 'Received', [purchaseOrder]);
+    const isLockedByJob = useMemo(() => !!formData.jobId, [formData.jobId]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
@@ -819,12 +831,12 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({
                         
                         <div className="grid grid-cols-12 gap-2 px-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
                             <div className="col-span-3">Description</div>
-                            <div className="col-span-2">Part Number</div>
+                            <div className="col-span-2 text-right lg:text-left">Part Number</div>
                             <div className="col-span-1 text-right">Qty</div>
                             <div className="col-span-1 text-right">Rec'd</div>
                             <div className="col-span-2 text-center">Supplier</div>
-                            <div className="col-span-2 text-right">Unit Cost</div>
-                            <div className="col-span-1"></div>
+                            <div className="col-span-2 text-right">Unit cost</div>
+                            <div className="col-span-1 text-right pr-2">Total</div>
                         </div>
 
                         {(formData.lineItems || []).map(item => (
@@ -839,10 +851,11 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({
                                 isOrderedOrLater={isOrderedOrLater}
                                 isCredit={formData.type === 'Credit'}
                                 isNewItem={!originalLineItemIds.has(item.id)}
+                                isLockedByJob={isLockedByJob}
                                 onAddNewPart={handleAddNewPartClick}
                             />
                         ))}
-                         {['Draft', 'Ordered', 'Partially Received'].includes(formData.status || '') && formData.type !== 'Credit' && (
+                         {['Draft', 'Ordered', 'Partially Received'].includes(formData.status || '') && formData.type !== 'Credit' && !isLockedByJob && (
                             <button onClick={addLineItem} className="text-indigo-600 font-semibold flex items-center gap-1 mt-2 hover:text-indigo-800">
                                 <PlusCircle size={16}/> Add New Line
                             </button>

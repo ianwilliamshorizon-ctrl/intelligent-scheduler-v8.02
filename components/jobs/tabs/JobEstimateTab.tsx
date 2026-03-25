@@ -291,10 +291,17 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
     const [lineItemForSupplier, setLineItemForSupplier] = useState<string | null>(null);
     const [selectedPackage, setSelectedPackage] = useState<ServicePackage | null>(null);
 
-    const partsToOrderCount = useMemo(() => {
+    const hasPartsToOrder = useMemo(() => {
+        if (!editableEstimate) return false;
+        return editableEstimate.lineItems.some((li: EstimateLineItem) => 
+            !li.isLabor && !li.fromStock && !(li.servicePackageId && !li.isPackageComponent)
+        );
+    }, [editableEstimate]);
+
+    const unlinkedPartsCount = useMemo(() => {
         if (!editableEstimate) return 0;
         return editableEstimate.lineItems.filter((li: EstimateLineItem) => 
-            !li.isLabor && li.partId && !li.fromStock && !li.purchaseOrderLineItemId
+            !li.isLabor && !li.fromStock && !li.purchaseOrderLineItemId && !(li.servicePackageId && !li.isPackageComponent)
         ).length;
     }, [editableEstimate]);
 
@@ -420,7 +427,7 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
                             <button onClick={onRaiseSupplementaryEstimate} className="text-xs flex items-center gap-1 bg-amber-100 text-amber-800 px-2 py-1 rounded font-semibold hover:bg-amber-200 border border-amber-300">
                                 <PlusCircle size={12}/> Raise Supplementary Estimate
                             </button>
-                            {partsToOrderCount > 0 && (
+                            {hasPartsToOrder && (
                                 <button 
                                     onClick={onRaisePurchaseOrders} 
                                     className="text-xs flex items-center gap-1 bg-teal-100 text-teal-800 px-2 py-1 rounded font-semibold hover:bg-teal-200 border border-teal-300 relative disabled:opacity-50 disabled:cursor-not-allowed"
@@ -431,7 +438,7 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
                                     ) : (
                                         <><ShoppingCart size={12}/> Refresh Purchase Orders</>
                                     )}
-                                    {!isRaisingPOs && <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center">{partsToOrderCount}</span>}
+                                    {!isRaisingPOs && unlinkedPartsCount > 0 && <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center">{unlinkedPartsCount}</span>}
                                 </button>
                             )}
                         </div>
@@ -553,7 +560,7 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
                             return (
                                 <button key={poId} type="button" onClick={() => onOpenPurchaseOrder(po)} className="w-full text-left border rounded-md bg-gray-50 text-xs hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
                                     <div className="p-2 flex justify-between items-center">
-                                        <div><p><strong>{poId}</strong> - {po?.supplierId ? (supplierMap.get(po.supplierId) || 'Unknown Supplier') : 'N/A'}</p><p>Status: <span className="font-semibold">{po.status}</span>{canViewPricing && <> - Total: <span className="font-semibold">{formatCurrency(poTotal)}</span></>} </p></div>
+                                        <div><p><strong>{poId}</strong> - {po?.supplierId ? (supplierMap.get(po.supplierId) || 'Unknown Supplier') : 'N/A'}</p><p>{po.supplierReference && <span className="font-semibold text-indigo-700 mr-2">Ref: {po.supplierReference}</span>}Status: <span className="font-semibold">{po.status}</span>{canViewPricing && <> - Total: <span className="font-semibold">{formatCurrency(poTotal)}</span></>} </p></div>
                                     </div>
                                 </button>
                             );

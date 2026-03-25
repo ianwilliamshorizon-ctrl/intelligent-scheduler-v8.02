@@ -62,7 +62,7 @@ const EditJobModal: React.FC<{
     
     const data = useData();
     const { currentUser, setConfirmation } = useApp();
-    const { handleSaveItem } = useWorkshopActions();
+    const { handleSaveItem, handleSaveEstimate, syncPurchaseOrdersFromEstimate } = useWorkshopActions();
 
     const {
         jobs, setJobs, vehicles, customers, estimates, setEstimates, suppliers, parts, setParts, servicePackages, taxRates, businessEntities, setServicePackages, engineers, inspectionTemplates
@@ -493,132 +493,28 @@ const EditJobModal: React.FC<{
     }, [partSearchTerm, safeParts]);
 
     const handleRaisePurchaseOrders = useCallback(async () => {
-        if (!editableJob || !editableEstimate || !vehicle || isRaisingPOs) return;
+        if (!editableJob || !editableEstimate || isRaisingPOs) return;
 
         setIsRaisingPOs(true);
         try {
-            // 1. Filter out non-material items (Labor, Stock, or Package Headers)
-            const materialLineItems = (editableEstimate.lineItems || []).filter(li => {
-                const isPart = (li.partId || li.description?.trim() || li.partNumber?.trim());
-                const isPackageHeader = (li.servicePackageId && !li.isPackageComponent);
-                return !li.isLabor && !li.fromStock && isPart && !isPackageHeader;
+             await syncPurchaseOrdersFromEstimate(editableEstimate);
+             setConfirmation({ 
+                isOpen: true, 
+                title: 'Purchase Orders Synchronized', 
+                message: `Refresh complete. Purchase orders have been updated from the latest job card details.`, 
+                type: 'success' 
             });
-
-            if (materialLineItems.length === 0) {
-                setConfirmation({ isOpen: true, title: 'No Parts to Order', message: 'There are no parts on this estimate that require ordering (ensure parts are not set as "From Stock").', type: 'info' });
-                return;
-            }
-
-            // 2. Identify all relevant POs for this job
-            const jobPoIds = new Set(editableJob.purchaseOrderIds || []);
-            const currentJobPOs = safePurchaseOrders.filter(po => jobPoIds.has(po.id) && po.status !== 'Cancelled');
-            
-            // 3. Group ALL material items by supplier (even those already linked)
-            const supplierGroups = new Map<string, T.EstimateLineItem[]>();
-            materialLineItems.forEach(li => {
-                const part = li.partId ? safeParts.find(p => p.id === li.partId) : null;
-                const supplierId = li.supplierId || part?.defaultSupplierId || 'UNKNOWN';
-                if (!supplierGroups.has(supplierId)) supplierGroups.set(supplierId, []);
-                supplierGroups.get(supplierId)!.push(li);
-            });
-
-            const posToUpdate: T.PurchaseOrder[] = [];
-            const newPOs: T.PurchaseOrder[] = [];
-            const newPoIdsToLink: string[] = [];
-            let updatedLineItemsMap = new Map((editableEstimate.lineItems || []).map(li => [li.id, li]));
-            
-            const entity = safeBusinessEntities.find(e => e.id === editableJob.entityId);
-            const entityShortCode = entity?.shortCode || 'UNK';
-
-            // 4. Process each supplier group (Syncing or Creating)
-            supplierGroups.forEach((items, supplierId) => {
-                const existingPO = currentJobPOs.find(po => 
-                    (po.status === 'Draft' || po.status === 'Ordered') && 
-                    (po.supplierId === supplierId || (supplierId === 'UNKNOWN' && !po.supplierId))
-                );
-
-                const newPoLineItems: T.PurchaseOrderLineItem[] = items.map(item => {
-                    // Reuse existing ID if already linked to this specific PO
-                    const existingPoLiId = (existingPO?.lineItems || []).find(li => li.id === item.purchaseOrderLineItemId)?.id;
-                    const newPoLineItemId = existingPoLiId || crypto.randomUUID();
-                    
-                    // Update binary link in our map
-                    const currentItem = updatedLineItemsMap.get(item.id);
-                    if (currentItem) {
-                        updatedLineItemsMap.set(item.id, { ...currentItem, purchaseOrderLineItemId: newPoLineItemId });
-                    }
-
-                    return { 
-                        id: newPoLineItemId, 
-                        partNumber: item.partNumber || '', 
-                        description: item.description || '', 
-                        quantity: item.quantity, 
-                        unitPrice: item.unitCost || 0, 
-                        taxCodeId: item.taxCodeId, 
-                        jobLineItemId: item.id,
-                        receivedQuantity: (existingPO?.lineItems || []).find(li => li.id === existingPoLiId)?.receivedQuantity || 0
-                    };
-                });
-
-                if (existingPO) {
-                    // FULL REPLACE: This fulfills "removing all the old content"
-                    const updatedPO = { ...existingPO, lineItems: newPoLineItems };
-                    posToUpdate.push(updatedPO);
-                } else {
-                    // CREATE: "if a supplier has no po create one for me"
-                    const newPoId = generatePurchaseOrderId(safePurchaseOrders.concat(newPOs), entityShortCode);
-                    newPoIdsToLink.push(newPoId);
-                    const newPo: T.PurchaseOrder = { 
-                        id: newPoId, 
-                        entityId: editableJob.entityId, 
-                        supplierId: supplierId === 'UNKNOWN' ? undefined : supplierId, 
-                        vehicleRegistrationRef: vehicle.registration, 
-                        orderDate: formatDate(new Date()), 
-                        status: 'Draft', 
-                        lineItems: newPoLineItems, 
-                        notes: `Generated from Job #${editableJob.id}`,
-                        jobId: editableJob.id
-                    };
-                    newPOs.push(newPo);
-                }
-            });
-
-            // 5. Save all changes
-            const allPOsToSave = [...newPOs, ...posToUpdate];
-            if (allPOsToSave.length > 0) {
-                // Persistent Save
-                for (const po of allPOsToSave) {
-                    await handleSaveItem(data.setPurchaseOrders, po, 'brooks_purchaseOrders');
-                }
-
-                // Update Estimate Links
-                const finalLineItems = Array.from(updatedLineItemsMap.values());
-                const newEstimateState = { ...editableEstimate, lineItems: finalLineItems };
-                setEditableEstimate(newEstimateState);
-                await handleSaveItem(setEstimates, newEstimateState, 'brooks_estimates');
-
-                // If new POs were created, link them to the job
-                const nextJob = { 
-                    ...editableJob, 
-                    purchaseOrderIds: [...new Set([...(editableJob.purchaseOrderIds || []), ...newPoIdsToLink])] 
-                };
-                setEditableJob(nextJob);
-                await handleSaveItem(setJobs, nextJob, 'brooks_jobs');
-
-                setConfirmation({ isOpen: true, title: 'Purchase Orders Synchronized', message: `Sync complete for ${supplierGroups.size} supplier(s). ${newPOs.length} new PO(s) created.`, type: 'success' });
-            }
-
         } finally {
             setIsRaisingPOs(false);
             if (forceRefresh) {
                 await Promise.all([
-                    forceRefresh('jobs'),
-                    forceRefresh('purchaseOrders'),
-                    forceRefresh('estimates'),
+                    forceRefresh('brooks_jobs'),
+                    forceRefresh('brooks_purchaseOrders'),
+                    forceRefresh('brooks_estimates'),
                 ]);
             }
         }
-    }, [editableJob, editableEstimate, vehicle, safeParts, safeBusinessEntities, safePurchaseOrders, generatePurchaseOrderId, handleSaveItem, data.setPurchaseOrders, setEstimates, setConfirmation, isRaisingPOs, forceRefresh]);
+    }, [editableJob, editableEstimate, syncPurchaseOrdersFromEstimate, setConfirmation, isRaisingPOs, forceRefresh]);
 
     const handleSelectPart = (lineItemId: string, part: T.Part) => {
         handleLineItemChange(lineItemId, 'partNumber', part.partNumber);
@@ -775,7 +671,7 @@ const EditJobModal: React.FC<{
                 estimateToSave.id = `est_${Date.now()}`;
                 newEstimateId = estimateToSave.id;
             }
-            await handleSaveItem(setEstimates, estimateToSave, 'brooks_estimates');
+            await handleSaveEstimate(estimateToSave);
             if (newEstimateId) { jobToSave.estimateId = newEstimateId; }
         }
         await handleSaveItem(setJobs, jobToSave, 'brooks_jobs');

@@ -68,7 +68,8 @@ const PrintablePurchaseOrderList: React.FC<PrintablePurchaseOrderListProps> = ({
                                 <th className="p-2 border border-gray-300">PO Number</th>
                                 <th className="p-2 border border-gray-300">Date</th>
                                 <th className="p-2 border border-gray-300">Supplier</th>
-                                <th className="p-2 border border-gray-300">Reference</th>
+                                <th className="p-2 border border-gray-300">Supplier Ref</th>
+                                <th className="p-2 border border-gray-300">Internal Ref</th>
                                 <th className="p-2 border border-gray-300">Status</th>
                                 <th className="p-2 border border-gray-300 text-right">Total (Net)</th>
                             </tr>
@@ -81,6 +82,7 @@ const PrintablePurchaseOrderList: React.FC<PrintablePurchaseOrderListProps> = ({
                                         <td className="p-2 border border-gray-300 font-mono">{po.id}</td>
                                         <td className="p-2 border border-gray-300">{po.orderDate}</td>
                                         <td className="p-2 border border-gray-300">{po.supplierId ? suppliers.get(po.supplierId) : 'N/A'}</td>
+                                        <td className="p-2 border border-gray-300">{po.supplierReference || '-'}</td>
                                         <td className="p-2 border border-gray-300">{po.vehicleRegistrationRef}</td>
                                         <td className="p-2 border border-gray-300">{po.status}</td>
                                         <td className="p-2 border border-gray-300 text-right">{formatCurrency(total)}</td>

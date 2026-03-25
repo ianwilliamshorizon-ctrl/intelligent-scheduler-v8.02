@@ -43,7 +43,8 @@ const PrintableTable = ({ data, suppliers: supplierMapData, startDate, endDate }
                     <th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'left' }}>PO Number</th>
                     <th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'left' }}>Date</th>
                     <th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'left' }}>Supplier</th>
-                    <th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'left' }}>Reference</th>
+                    <th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'left' }}>Supplier Ref</th>
+                    <th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'left' }}>Vehicle Ref</th>
                     <th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'left' }}>Status</th>
                     <th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'left' }}>Total</th>
                 </tr>
@@ -54,6 +55,7 @@ const PrintableTable = ({ data, suppliers: supplierMapData, startDate, endDate }
                         <td style={{ padding: '8px', border: '1px solid #ddd' }}>{po.id}</td>
                         <td style={{ padding: '8px', border: '1px solid #ddd' }}>{po.orderDate}</td>
                         <td style={{ padding: '8px', border: '1px solid #ddd' }}>{po.supplierId ? supplierMapData.get(po.supplierId) : 'N/A'}</td>
+                        <td style={{ padding: '8px', border: '1px solid #ddd' }}>{po.supplierReference || 'N/A'}</td>
                         <td style={{ padding: '8px', border: '1px solid #ddd' }}>{po.vehicleRegistrationRef}</td>
                         <td style={{ padding: '8px', border: '1px solid #ddd' }}>{po.status}</td>
                         <td style={{ padding: '8px', border: '1px solid #ddd' }}>{formatCurrency((po.lineItems || []).reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0))}</td>
@@ -70,11 +72,12 @@ const PrintableTableWithDetails = ({ data, suppliers: supplierMapData, startDate
         <p style={{marginBottom: '10px'}}>Date Range: {startDate} to {endDate}</p>
         {data.map(po => (
             <div key={po.id} style={{ border: '1px solid #ccc', borderRadius: '8px', marginBottom: '20px', pageBreakInside: 'avoid' }}>
-                <div style={{ padding: '10px', backgroundColor: '#f3f4f6', borderBottom: '1px solid #ccc', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', fontSize: '12px' }}>
+                <div style={{ padding: '10px', backgroundColor: '#f3f4f6', borderBottom: '1px solid #ccc', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '10px', fontSize: '12px' }}>
                     <div><strong>PO Number:</strong> {po.id}</div>
                     <div><strong>Date:</strong> {po.orderDate}</div>
                     <div><strong>Supplier:</strong> {po.supplierId ? supplierMapData.get(po.supplierId) : 'N/A'}</div>
-                    <div><strong>Reference:</strong> {po.vehicleRegistrationRef}</div>
+                    <div><strong>Supplier Ref:</strong> {po.supplierReference || 'N/A'}</div>
+                    <div><strong>Vehicle Ref:</strong> {po.vehicleRegistrationRef}</div>
                     <div><strong>Status:</strong> {po.status}</div>
                 </div>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px' }}>
@@ -127,6 +130,7 @@ const PurchaseOrdersView = ({ purchaseOrders, suppliers, onOpenPurchaseOrderModa
             const matchesSearch = filter === '' ||
                 po.id.toLowerCase().includes(lowerFilter) ||
                 (po.vehicleRegistrationRef || '').toLowerCase().includes(lowerFilter) ||
+                (po.supplierReference || '').toLowerCase().includes(lowerFilter) ||
                 (supplier || '').toLowerCase().includes(lowerFilter);
 
             const matchesStatus = statusFilter.length === 0 || statusFilter.includes(po.status);
@@ -290,7 +294,8 @@ const PurchaseOrdersView = ({ purchaseOrders, suppliers, onOpenPurchaseOrderModa
                                 <th className="p-3 text-left font-semibold text-gray-600">PO Number</th>
                                 <th className="p-3 text-left font-semibold text-gray-600">Date</th>
                                 <th className="p-3 text-left font-semibold text-gray-600">Supplier</th>
-                                <th className="p-3 text-left font-semibold text-gray-600">Reference</th>
+                                <th className="p-3 text-left font-semibold text-gray-600">Supplier Ref</th>
+                                <th className="p-3 text-left font-semibold text-gray-600">Vehicle Ref</th>
                                 <th className="p-3 text-left font-semibold text-gray-600">Status</th>
                                 <th className="p-3 text-right font-semibold text-gray-600">Total (Net)</th>
                                 <th className="p-3"></th>
@@ -302,6 +307,7 @@ const PurchaseOrdersView = ({ purchaseOrders, suppliers, onOpenPurchaseOrderModa
                                     <td className="p-3 font-mono"><a href="#" onClick={(e) => { e.preventDefault(); handleViewPo(po);}} className="text-indigo-600 hover:underline">{po.id}</a></td>
                                     <td className="p-3">{po.orderDate}</td>
                                     <td className="p-3">{po.supplierId ? supplierMap.get(po.supplierId) : 'N/A'}</td>
+                                    <td className="p-3">{po.supplierReference || '-'}</td>
                                     <td className="p-3">{po.vehicleRegistrationRef}</td>
                                     <td className="p-3">
                                          <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${

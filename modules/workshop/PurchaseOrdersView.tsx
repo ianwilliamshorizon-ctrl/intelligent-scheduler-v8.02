@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { PurchaseOrder } from '../../types';
-import { Edit, Trash2, Search, PlusCircle, Download, Printer, Eye } from 'lucide-react';
+import { Edit, Trash2, Search, PlusCircle, Download, Printer, Eye, RefreshCcw } from 'lucide-react';
 import { formatCurrency } from '../../core/utils/formatUtils';
 import { getRelativeDate } from '../../core/utils/dateUtils';
 import { useData } from '../../core/state/DataContext';
@@ -11,13 +11,14 @@ import PrintablePurchaseOrderList from '../../components/PrintablePurchaseOrderL
 import { StatusFilter } from '../../components/shared/StatusFilter';
 import useToaster from '../../hooks/useToaster';
 
-const PurchaseOrdersView = ({ onOpenPurchaseOrderModal, onViewPurchaseOrder, onExport, onOpenBatchAddModal }: { 
+const PurchaseOrdersView = ({ onOpenPurchaseOrderModal, onViewPurchaseOrder, onExport, onOpenBatchAddModal, onOpenBatchUpdateRefModal }: { 
     onOpenPurchaseOrderModal: (po: PurchaseOrder | null) => void, 
     onViewPurchaseOrder: (po: PurchaseOrder) => void,
-    onExport: (data: any[], filename: string) => void, 
-    onOpenBatchAddModal: () => void 
+    onExport: (data: any[], type: string) => void, 
+    onOpenBatchAddModal: () => void,
+    onOpenBatchUpdateRefModal: () => void
 }) => {
-    const { purchaseOrders, suppliers, businessEntities, setPurchaseOrders } = useData();
+    const { purchaseOrders, suppliers, businessEntities, setPurchaseOrders, forceRefresh } = useData();
     const { selectedEntityId } = useApp();
     const { showSuccess } = useToaster();
     const print = usePrint();
@@ -42,7 +43,8 @@ const PurchaseOrdersView = ({ onOpenPurchaseOrderModal, onViewPurchaseOrder, onE
 
             const matchesSearch = filter === '' ||
                 po.id.toLowerCase().includes(lowerFilter) ||
-                po.vehicleRegistrationRef.toLowerCase().includes(lowerFilter) ||
+                (po.vehicleRegistrationRef || '').toLowerCase().includes(lowerFilter) ||
+                (po.supplierReference || '').toLowerCase().includes(lowerFilter) ||
                 (supplier && supplier.toLowerCase().includes(lowerFilter));
 
             const matchesStatus = statusFilter.length === 0 || statusFilter.includes(po.status);
@@ -87,11 +89,17 @@ const PurchaseOrdersView = ({ onOpenPurchaseOrderModal, onViewPurchaseOrder, onE
             <header className="flex justify-between items-center mb-4 flex-shrink-0">
                 <h2 className="text-2xl font-bold text-gray-800">Purchase Orders (Last 30 Days)</h2>
                 <div className="flex gap-2">
-                    <button onClick={() => onExport(filteredPurchaseOrders, 'purchase_orders.csv')} className="flex items-center gap-2 py-2 px-4 bg-gray-600 text-white font-semibold rounded-lg shadow-md hover:bg-gray-700">
-                        <Download size={16}/> Export CSV
+                    <button onClick={() => onExport(filteredPurchaseOrders, 'purchases')} className="flex items-center gap-2 py-2 px-4 bg-gray-600 text-white font-semibold rounded-lg shadow-md hover:bg-gray-700">
+                        <Download size={16}/> Export for Accounts
                     </button>
                      <button onClick={handlePrintList} className="flex items-center gap-2 py-2 px-4 bg-gray-600 text-white font-semibold rounded-lg shadow-md hover:bg-gray-700">
                         <Printer size={16}/> Print List
+                    </button>
+                    <button onClick={() => forceRefresh('brooks_purchaseOrders')} className="flex items-center gap-2 py-2 px-4 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700">
+                        <RefreshCcw size={16}/> Refresh Data
+                    </button>
+                    <button onClick={onOpenBatchUpdateRefModal} className="flex items-center gap-2 py-2 px-4 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700">
+                        <RefreshCcw size={16}/> Batch Update Ref
                     </button>
                     <button onClick={() => onOpenPurchaseOrderModal(null)} className="flex items-center gap-2 py-2 px-4 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700">
                         <PlusCircle size={16}/> New Purchase Order
@@ -131,7 +139,8 @@ const PurchaseOrdersView = ({ onOpenPurchaseOrderModal, onViewPurchaseOrder, onE
                                 <th className="p-3 text-left font-semibold text-gray-600">PO Number</th>
                                 <th className="p-3 text-left font-semibold text-gray-600">Date</th>
                                 <th className="p-3 text-left font-semibold text-gray-600">Supplier</th>
-                                <th className="p-3 text-left font-semibold text-gray-600">Reference</th>
+                                <th className="p-3 text-left font-semibold text-gray-600">Supplier Ref</th>
+                                <th className="p-3 text-left font-semibold text-gray-600">Vehicle Ref</th>
                                 <th className="p-3 text-left font-semibold text-gray-600">Status</th>
                                 <th className="p-3 text-right font-semibold text-gray-600">Total (Net)</th>
                                 <th className="p-3"></th>
@@ -143,6 +152,7 @@ const PurchaseOrdersView = ({ onOpenPurchaseOrderModal, onViewPurchaseOrder, onE
                                     <td className="p-3 font-mono">{po.id}</td>
                                     <td className="p-3">{po.orderDate}</td>
                                     <td className="p-3">{po.supplierId ? supplierMap.get(po.supplierId) : 'N/A'}</td>
+                                    <td className="p-3">{po.supplierReference || '-'}</td>
                                     <td className="p-3">{po.vehicleRegistrationRef}</td>
                                     <td className="p-3">
                                          <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${

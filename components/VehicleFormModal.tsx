@@ -56,17 +56,20 @@ interface VehicleFormModalProps {
     jobs?: Job[];
     estimates?: Estimate[];
     invoices?: LocalInvoice[];
+    purchaseOrders?: T.PurchaseOrder[];
     onViewJob?: (jobId: string) => void;
     onViewEstimate?: (estimate: Estimate) => void;
     onViewInvoice?: (invoice: LocalInvoice) => void;
     onViewCustomer?: (customerId: string) => void;
+    onOpenPurchaseOrder?: (po: T.PurchaseOrder) => void;
     initialCustomerId?: string;
     initialRegistration?: string;
+    vehicles: Vehicle[];
 }
 
 const VehicleFormModal: React.FC<VehicleFormModalProps> = ({ 
-    isOpen, onClose, onSave, vehicle, customers, jobs, estimates, invoices, 
-    onViewJob, onViewEstimate, onViewInvoice, onViewCustomer, initialCustomerId, onSaveWithCustomer, initialRegistration
+    isOpen, onClose, onSave, vehicle, customers, jobs, estimates, invoices, purchaseOrders,
+    onViewJob, onViewEstimate, onViewInvoice, onViewCustomer, onOpenPurchaseOrder, initialCustomerId, onSaveWithCustomer, initialRegistration, vehicles
 }) => {
     const [formData, setFormData] = useState<any>({});
     const [isLookingUp, setIsLookingUp] = useState(false);
@@ -120,6 +123,7 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
                     }}
                     onCancel={onClose}
                     customers={customers}
+                    vehicles={vehicles}
                 />
             </FormModal>
         );
@@ -131,6 +135,13 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
     const vehicleJobs = useMemo(() => (jobs || []).filter(j => j.vehicleId === formData.id).sort((a,b) => (b.createdAt || '').localeCompare(a.createdAt || '')), [jobs, formData.id]);
     const vehicleEstimates = useMemo(() => (estimates || []).filter(e => e.vehicleId === formData.id).sort((a,b) => (b.issueDate || '').localeCompare(a.issueDate || '')), [estimates, formData.id]);
     const vehicleInvoices = useMemo(() => (invoices || []).filter(i => i.vehicleId === formData.id).sort((a,b) => (b.issueDate || '').localeCompare(a.issueDate || '')), [invoices, formData.id]);
+    const vehiclePurchases = useMemo(() => {
+        const reg = formData.registration?.toUpperCase().replace(/\s/g, '');
+        if (!reg) return [];
+        return (purchaseOrders || []).filter(po => 
+            po.vehicleRegistrationRef?.toUpperCase().replace(/\s/g, '') === reg
+        ).sort((a,b) => (b.orderDate || '').localeCompare(a.orderDate || ''));
+    }, [purchaseOrders, formData.registration]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value, type } = e.target;
@@ -213,6 +224,10 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
         value: c.id,
         label: `${c.forename} ${c.surname} ${c.companyName ? `(${c.companyName})` : ''} - ${c.postcode}`
     }));
+
+    const calculatePOTotal = (lineItems: any[]) => {
+        return (lineItems || []).reduce((sum, item) => sum + ((item.quantity || 0) * (item.unitPrice || 0)), 0);
+    };
 
     return (
         <FormModal isOpen={isOpen} onClose={onClose} onSave={handleSave} title={formData.id ? 'Edit Vehicle' : 'Add Vehicle'} maxWidth="max-w-7xl">
@@ -425,6 +440,19 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
                                             <span className="text-gray-500 font-mono">{job.createdAt}</span>
                                             <span className="truncate font-bold flex-1 px-2">{job.description}</span>
                                             <Eye size={14} className="text-gray-400" />
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            {vehiclePurchases.length > 0 && (
+                                <div className="space-y-1 mt-4">
+                                    <h5 className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest">Purchases / Parts Expenses</h5>
+                                    {vehiclePurchases.map(po => (
+                                        <div key={po.id} className="text-xs flex justify-between p-2 border rounded bg-indigo-50/30 hover:bg-indigo-100 cursor-pointer transition-colors" onClick={() => onOpenPurchaseOrder?.(po)}>
+                                            <span className="text-gray-500 font-mono">{po.orderDate}</span>
+                                            <span className="flex-1 px-2 font-bold text-indigo-900">PO #{po.id.slice(-6)}</span>
+                                            <span className="font-extrabold">{formatCurrency(calculatePOTotal(po.lineItems || []))}</span>
                                         </div>
                                     ))}
                                 </div>

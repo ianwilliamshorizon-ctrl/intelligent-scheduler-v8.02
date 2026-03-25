@@ -13,6 +13,7 @@ interface AddNewVehicleFormProps {
     onSave: (customer: Customer, vehicle: Vehicle) => void;
     onCancel: () => void;
     customers: Customer[];
+    vehicles: Vehicle[];
     saveButtonText?: string;
 }
 
@@ -30,7 +31,7 @@ const FormSelect = ({ label, children, ...props }: any) => (
     </div>
 );
 
-const AddNewVehicleForm: React.FC<AddNewVehicleFormProps> = ({ initialRegistration, onSave, onCancel, customers, saveButtonText = "Save & Continue" }) => {
+const AddNewVehicleForm: React.FC<AddNewVehicleFormProps> = ({ initialRegistration, onSave, onCancel, customers, vehicles, saveButtonText = "Save & Continue" }) => {
     const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
     const [customerData, setCustomerData] = useState({
         title: '',
@@ -53,6 +54,7 @@ const AddNewVehicleForm: React.FC<AddNewVehicleFormProps> = ({ initialRegistrati
         communicationPreference: 'Email',
     });
     const [vehicleData, setVehicleData] = useState({
+        id: '' as string | undefined,
         registration: initialRegistration,
         make: '',
         model: '',
@@ -72,6 +74,8 @@ const AddNewVehicleForm: React.FC<AddNewVehicleFormProps> = ({ initialRegistrati
     const [lookupError, setLookupError] = useState('');
     const [isLookingUpAddress, setIsLookingUpAddress] = useState(false);
     const [addressLookupError, setAddressLookupError] = useState('');
+    const [duplicateVehicle, setDuplicateVehicle] = useState<Vehicle | null>(null);
+    const [showDuplicatePrompt, setShowDuplicatePrompt] = useState(false);
 
     useEffect(() => {
         if (selectedCustomerId) {
@@ -130,25 +134,68 @@ const AddNewVehicleForm: React.FC<AddNewVehicleFormProps> = ({ initialRegistrati
             setLookupError('Please enter a registration or VIN to look up.');
             return;
         }
+
+        const cleanVrm = lookupValue.trim().toUpperCase().replace(/\s/g, '');
+        const existing = vehicles.find(v => v.registration.toUpperCase().replace(/\s/g, '') === cleanVrm);
+        
+        if (existing) {
+            setDuplicateVehicle(existing);
+            setShowDuplicatePrompt(true);
+            return;
+        }
+
+        await performLookup(lookupValue);
+    };
+
+    const performLookup = async (lookupValue: string, existingId?: string) => {
         setIsLookingUp(true);
         setLookupError('');
         try {
             const details = await lookupVehicleByVRM(lookupValue);
             setVehicleData(prev => ({
                 ...prev,
+                id: existingId || prev.id,
                 make: details.make || prev.make,
-                model: details.model || prev.model, // Keep existing or empty if DVLA doesn't provide
+                model: details.model || prev.model,
                 colour: details.colour || prev.colour,
                 fuelType: details.fuelType || prev.fuelType,
-                engineCapacity: details.engineCapacity ? details.engineCapacity.toString() : prev.engineCapacity,
-                nextMotDate: details.motExpiryDate || prev.nextMotDate,
-                manufactureDate: details.monthOfFirstRegistration ? `${details.monthOfFirstRegistration}-01` : prev.manufactureDate
+                engineCapacity: details.cc ? details.cc.toString() : prev.engineCapacity,
+                nextMotDate: details.nextMotDate || prev.nextMotDate,
+                vin: details.vin || prev.vin,
+                manufactureDate: details.manufactureDate || prev.manufactureDate,
+                transmissionType: (details.transmissionType as any) || prev.transmissionType
             }));
+
+            if (existingId) {
+                const existingV = vehicles.find(v => v.id === existingId);
+                if (existingV) {
+                    setSelectedCustomerId(existingV.customerId);
+                }
+            }
         } catch (error: any) {
             setLookupError(error.message);
         } finally {
             setIsLookingUp(false);
         }
+    };
+
+    const handleUseExisting = () => {
+        if (duplicateVehicle) {
+            setVehicleData(prev => ({
+                ...prev,
+                ...duplicateVehicle,
+                engineCapacity: duplicateVehicle.cc ? duplicateVehicle.cc.toString() : prev.engineCapacity,
+            }));
+            setSelectedCustomerId(duplicateVehicle.customerId);
+            // Also refresh from API to get latest MOT/VIN
+            performLookup(duplicateVehicle.registration, duplicateVehicle.id);
+        }
+        setShowDuplicatePrompt(false);
+    };
+
+    const handleAddNewWithSameReg = () => {
+        setShowDuplicatePrompt(false);
+        performLookup(vehicleData.registration);
     };
     
     const handleAddressLookup = async () => {
@@ -159,13 +206,18 @@ const AddNewVehicleForm: React.FC<AddNewVehicleFormProps> = ({ initialRegistrati
         setIsLookingUpAddress(true);
         setAddressLookupError('');
         try {
-            const details = await lookupAddressByPostcode(customerData.postcode);
-            setCustomerData(prev => ({
-                ...prev,
-                addressLine1: details.addressLine1,
-                addressLine2: details.addressLine2,
-                city: details.city,
-            }));
+            const results = await lookupAddressByPostcode(customerData.postcode);
+            if (results && results.length > 0) {
+                const details = results[0]; // Pick the first match
+                setCustomerData(prev => ({
+                    ...prev,
+                    addressLine1: details.summaryAddress || details.street || '',
+                    addressLine2: details.locality || '',
+                    city: details.postTown || '',
+                }));
+            } else {
+                setAddressLookupError('No addresses found for this postcode.');
+            }
         } catch (error: any) {
             setAddressLookupError(error.message);
         } finally {
@@ -252,7 +304,38 @@ const AddNewVehicleForm: React.FC<AddNewVehicleFormProps> = ({ initialRegistrati
     ];
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 relative">
+            {showDuplicatePrompt && (
+                <div className="absolute inset-0 z-50 bg-white/95 flex flex-col items-center justify-center p-6 text-center rounded-xl shadow-xl border">
+                    <Car size={48} className="text-amber-500 mb-4" />
+                    <h3 className="text-xl font-bold text-gray-800 mb-2">Vehicle Already Exists</h3>
+                    <p className="text-gray-600 mb-6 max-w-md">
+                        A vehicle with registration <strong>{duplicateVehicle?.registration}</strong> is already on record for 
+                        <strong> {customers.find(c => c.id === duplicateVehicle?.customerId)?.forename} {customers.find(c => c.id === duplicateVehicle?.customerId)?.surname}</strong>.
+                    </p>
+                    <div className="flex flex-col w-full gap-3">
+                        <button 
+                            onClick={handleUseExisting}
+                            className="w-full py-3 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 shadow-md"
+                        >
+                            Update & Use Existing Record
+                        </button>
+                        <button 
+                            onClick={handleAddNewWithSameReg}
+                            className="w-full py-3 bg-gray-100 text-gray-700 font-bold rounded-lg hover:bg-gray-200"
+                        >
+                            Create New Record with Same VRM
+                        </button>
+                        <button 
+                            onClick={() => setShowDuplicatePrompt(false)}
+                            className="w-full py-2 text-sm text-gray-400 font-semibold hover:text-gray-600"
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            )}
+
             <div className="p-4 border rounded-lg bg-gray-50">
                 <h3 className="font-semibold text-lg text-gray-800 flex items-center mb-4"><Car size={20} className="mr-2 text-indigo-600"/> Vehicle Details</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

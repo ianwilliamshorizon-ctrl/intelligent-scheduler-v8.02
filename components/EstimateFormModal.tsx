@@ -527,6 +527,7 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
     
         if (pkg.costItems) {
             pkg.costItems.forEach(costItem => {
+                const part = costItem.partId ? (parts || []).find(p => p.id === costItem.partId) : null;
                 newItems.push({ 
                     ...costItem, 
                     id: crypto.randomUUID(),
@@ -534,7 +535,8 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                     servicePackageId: pkg.id,
                     servicePackageName: pkg.name,
                     isPackageComponent: true,
-                    isOptional 
+                    isOptional,
+                    fromStock: costItem.fromStock ?? (part?.isStockItem && part.stockQuantity > 0)
                 });
             });
         }
@@ -1030,6 +1032,7 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                     }}
                     vehicle={initialVehicleData}
                     customers={customers}
+                    vehicles={vehicles}
                     initialCustomerId={formData.customerId} 
                 />
             )}
