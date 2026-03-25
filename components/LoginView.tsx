@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User, AppEnvironment } from '../types';
+import * as T from '../types';
 import { useApp } from '../core/state/AppContext';
 import { 
     LogIn, 
@@ -14,12 +14,13 @@ import {
 } from 'lucide-react';
 
 interface LoginViewProps {
-    users: User[];
+    users: T.User[];
     onLogin: (userId: string, password: string) => Promise<boolean>;
-    environment: AppEnvironment;
+    environment: T.AppEnvironment;
+    businessEntities: T.BusinessEntity[];
 }
 
-const LoginView: React.FC<LoginViewProps> = ({ users, onLogin, environment }) => {
+const LoginView: React.FC<LoginViewProps> = ({ users, onLogin, environment, businessEntities }) => {
     const { registerAuthorizedUser, resetPassword } = useApp();
     
     // Form States
@@ -29,7 +30,7 @@ const LoginView: React.FC<LoginViewProps> = ({ users, onLogin, environment }) =>
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
 
-    const activeEnv = (import.meta.env.VITE_APP_ENV as AppEnvironment) || environment;
+    const activeEnv = (import.meta.env.VITE_APP_ENV as T.AppEnvironment) || environment;
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -82,15 +83,15 @@ const LoginView: React.FC<LoginViewProps> = ({ users, onLogin, environment }) =>
 
     return (
         <div className={`min-h-screen flex items-center justify-center p-4 transition-colors duration-500 ${
-            activeEnv === 'Production' 
+            activeEnv === 'production' 
                 ? 'bg-gradient-to-br from-slate-900 to-slate-800' 
-                : activeEnv === 'UAT'
+                : activeEnv === 'uat'
                 ? 'bg-gradient-to-br from-slate-800 to-orange-900'
                 : 'bg-gradient-to-br from-slate-800 to-indigo-900'
         }`}>
             <div className="max-w-md w-full bg-white rounded-2xl shadow-2xl overflow-hidden animate-fade-in-up">
-                {activeEnv !== 'Production' && (
-                    <div className={`${activeEnv === 'UAT' ? 'bg-orange-500' : 'bg-blue-600'} text-white text-[10px] font-bold uppercase tracking-widest py-1 text-center flex items-center justify-center gap-1`}>
+                {activeEnv !== 'production' && (
+                    <div className={`${activeEnv === 'uat' ? 'bg-orange-500' : 'bg-blue-600'} text-white text-[10px] font-bold uppercase tracking-widest py-1 text-center flex items-center justify-center gap-1`}>
                         <AlertTriangle size={10} /> {activeEnv} Mode - Non-Secure Credentials Permitted <AlertTriangle size={10} />
                     </div>
                 )}
@@ -98,11 +99,15 @@ const LoginView: React.FC<LoginViewProps> = ({ users, onLogin, environment }) =>
                 <div className="bg-indigo-600 p-8 text-center relative overflow-hidden">
                     <div className="absolute top-0 left-0 w-full h-full bg-white/10 opacity-20 transform -skew-y-6 origin-top-left scale-150"></div>
                     <div className="relative z-10">
-                        <div className="mx-auto bg-white/20 w-16 h-16 rounded-full flex items-center justify-center mb-4 backdrop-blur-md shadow-lg">
-                            <ShieldCheck size={32} className="text-white" />
+                        <div className="mx-auto bg-white/20 w-24 h-24 rounded-2xl flex items-center justify-center mb-6 backdrop-blur-md shadow-xl border border-white/30 overflow-hidden transform hover:scale-110 transition-transform duration-300">
+                            {businessEntities[0]?.logoUrl ? (
+                                <img src={businessEntities[0].logoUrl} alt="Logo" className="w-full h-full object-contain p-2" />
+                            ) : (
+                                <ShieldCheck size={48} className="text-white" />
+                            )}
                         </div>
-                        <h1 className="text-3xl font-extrabold text-white tracking-tight">Brookspeed</h1>
-                        <p className="text-indigo-100 mt-2 font-medium">Intelligent Dispatch System</p>
+                        <h1 className="text-2xl font-black text-white tracking-widest uppercase">{businessEntities[0]?.name || 'Brookspeed'}</h1>
+                        <p className="text-indigo-100 mt-2 font-bold tracking-widest text-[10px] uppercase opacity-80">Intelligent Dispatch System</p>
                     </div>
                 </div>
                 
@@ -212,8 +217,8 @@ const LoginView: React.FC<LoginViewProps> = ({ users, onLogin, environment }) =>
                             Authorized Access Only &bull; v8.02
                         </p>
                         <div className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
-                            activeEnv === 'UAT' ? 'bg-orange-100 text-orange-800' : 
-                            activeEnv === 'Development' ? 'bg-blue-100 text-blue-800' :
+                            activeEnv === 'uat' ? 'bg-orange-100 text-orange-800' : 
+                            activeEnv === 'development' ? 'bg-blue-100 text-blue-800' :
                             'bg-green-100 text-green-800'
                         }`}>
                             {activeEnv} Environment

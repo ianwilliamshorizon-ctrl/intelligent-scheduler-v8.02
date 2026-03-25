@@ -184,7 +184,7 @@ const App = () => {
     }, [purchaseOrders, poToViewId, setters]);
 
     if (!isAuthenticated) {
-        return <LoginView users={users} onLogin={login} environment={appEnvironment} />;
+        return <LoginView users={users} onLogin={login} environment={appEnvironment} businessEntities={businessEntities} />;
     }
 
     const handleSaveItem = workshopActions.handleSaveItem;
@@ -250,7 +250,9 @@ const App = () => {
     };
 
     const modalActions = {
-        handleSaveItem, setCustomers, setVehicles,
+        handleSaveItem, setCustomers, setVehicles, setParts,
+        handleSavePart: (p: T.Part) => handleSaveItem(setParts, p, 'brooks_parts'),
+        handleEditPart: (p: T.Part) => handleSaveItem(setParts, p, 'brooks_parts'),
         handleSavePurchaseOrder: workshopActions.handleSavePurchaseOrder,
         handleSaveEstimate: workshopActions.handleSaveEstimate,
         handleApproveEstimate: workshopActions.handleApproveEstimate,

@@ -42,6 +42,7 @@ const NominalCodeRuleFormModal: React.FC<NominalCodeRuleFormModalProps> = ({ isO
             itemType: formData.itemType as NominalCodeItemType,
             keywords: formData.keywords || '',
             excludeKeywords: formData.excludeKeywords || '',
+            supplierKeywords: formData.supplierKeywords || '',
             nominalCodeId: formData.nominalCodeId
         } as NominalCodeRule);
     };
@@ -80,6 +81,12 @@ const NominalCodeRuleFormModal: React.FC<NominalCodeRuleFormModalProps> = ({ isO
                     <label className="block text-sm font-medium text-gray-700">Keywords (Include)</label>
                     <input name="keywords" value={formData.keywords || ''} onChange={handleChange} className="w-full p-2 border rounded" placeholder="Comma separated, e.g. brake, pads" />
                     <p className="text-xs text-gray-500 mt-1">Matches if description contains ANY of these words. Leave empty to match all items of this type.</p>
+                </div>
+
+                <div>
+                    <label className="block text-sm font-medium text-gray-700">Supplier Keywords (Optional)</label>
+                    <input name="supplierKeywords" value={formData.supplierKeywords || ''} onChange={handleChange} className="w-full p-2 border rounded" placeholder="Comma separated, e.g. Motest, Euro" />
+                    <p className="text-xs text-gray-500 mt-1">ONLY matches if the supplier name contains any of these. Useful for MOTs from specific stations.</p>
                 </div>
 
                 <div>

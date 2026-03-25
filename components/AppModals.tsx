@@ -607,6 +607,7 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                     customers={data.customers}
                     vehicles={data.vehicles}
                     taxRates={data.taxRates}
+                    suppliers={data.suppliers}
                 />
             )}
 

@@ -36,6 +36,7 @@ export const ManagementNominalCodesTab: React.FC<ManagementNominalCodesTabProps>
             rule.itemType.toLowerCase().includes(searchText) ||
             (entity?.name || '').toLowerCase().includes(searchText) ||
             (rule.keywords || '').toLowerCase().includes(searchText) ||
+            (rule.supplierKeywords || '').toLowerCase().includes(searchText) ||
             (code?.name || '').toLowerCase().includes(searchText) ||
             (code?.code || '').toLowerCase().includes(searchText)
         );
@@ -72,7 +73,7 @@ export const ManagementNominalCodesTab: React.FC<ManagementNominalCodesTabProps>
 
             <div>
                 <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-lg font-bold text-gray-700">Assignment Rules</h3>
+                    <h3 className="text-lg font-bold text-gray-700">Nominal Assignment Rules (v8.02)</h3>
                     <button onClick={() => { setSelectedRule(null); setIsRuleModalOpen(true); }} className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 shadow flex items-center gap-2 text-sm">
                         <PlusCircle size={16}/> Add Rule
                     </button>
@@ -85,6 +86,7 @@ export const ManagementNominalCodesTab: React.FC<ManagementNominalCodesTabProps>
                                 <th className="p-2">Type</th>
                                 <th className="p-2">Entity</th>
                                 <th className="p-2">Keywords (Include)</th>
+                                <th className="p-2">Supplier Keywords</th>
                                 <th className="p-2">Keywords (Exclude)</th>
                                 <th className="p-2">Assigned Code</th>
                                 <th className="p-2">Actions</th>
@@ -100,6 +102,7 @@ export const ManagementNominalCodesTab: React.FC<ManagementNominalCodesTabProps>
                                         <td className="p-2"><span className="px-2 py-0.5 bg-gray-200 rounded text-xs">{rule.itemType}</span></td>
                                         <td className="p-2 text-xs">{entity ? entity.name : (rule.entityId === 'all' ? 'All Entities' : 'Unknown')}</td>
                                         <td className="p-2 text-xs font-mono">{rule.keywords || '*'}</td>
+                                        <td className="p-2 text-xs font-mono text-indigo-700">{rule.supplierKeywords || '-'}</td>
                                         <td className="p-2 text-xs font-mono text-red-600">{rule.excludeKeywords || '-'}</td>
                                         <td className="p-2 text-xs font-semibold">{code ? `${code.code} - ${code.name}` : 'Unknown Code'}</td>
                                         <td className="p-2">

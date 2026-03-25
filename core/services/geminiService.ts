@@ -53,3 +53,11 @@ export const generateServicePackageName = async (prompt: string): Promise<string
     // Remove quotes if the AI included them
     return name.replace(/"/g, '').trim();
 };
+
+/**
+ * PARSE INQUIRY MESSAGE
+ * Uses the AI to extract structured info from an inquiry message
+ */
+export const parseInquiryMessage = async (prompt: string): Promise<any> => {
+    return parseJobRequest(prompt);
+};

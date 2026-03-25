@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Invoice, Purchase, NominalCode, NominalCodeRule, Customer, TaxRate, Vehicle } from '../types';
+import { Invoice, Purchase, NominalCode, NominalCodeRule, Customer, TaxRate, Vehicle, Supplier } from '../types';
 import { X, Download, Loader2 } from 'lucide-react';
 import { assignNominalCode } from '../services/nominalCodeService';
 import { formatDate } from '../core/utils/dateUtils';
@@ -30,6 +30,7 @@ interface NominalCodeExportModalProps {
   customers: Customer[];
   vehicles: Vehicle[];
   taxRates: TaxRate[];
+  suppliers: Supplier[];
 }
 
 const NominalCodeExportModal: React.FC<NominalCodeExportModalProps> = ({
@@ -41,7 +42,8 @@ const NominalCodeExportModal: React.FC<NominalCodeExportModalProps> = ({
   nominalCodeRules,
   customers,
   vehicles,
-  taxRates
+  taxRates,
+  suppliers
 }) => {
     const [processedItems, setProcessedItems] = useState<ProcessedItem[]>([]);
     const [startDate, setStartDate] = useState(() => formatDate(new Date(new Date().getFullYear(), new Date().getMonth(), 1)));
@@ -50,6 +52,7 @@ const NominalCodeExportModal: React.FC<NominalCodeExportModalProps> = ({
     const customerMap = useMemo(() => new Map(customers.map(c => [c.id, `${c.forename} ${c.surname}`])), [customers]);
     const vehicleMap = useMemo(() => new Map(vehicles.map(v => [v.id, v.registration])), [vehicles]);
     const taxRatesMap = useMemo(() => new Map(taxRates.map(t => [t.id, t])), [taxRates]);
+    const supplierMap = useMemo(() => new Map(suppliers.map(s => [s.id, s.name])), [suppliers]);
     const nominalCodeMap = useMemo(() => new Map(nominalCodes.map(nc => [nc.id, nc])), [nominalCodes]);
 
     useEffect(() => {
@@ -62,7 +65,8 @@ const NominalCodeExportModal: React.FC<NominalCodeExportModalProps> = ({
             invoices.forEach(invoice => {
                 const vehicleReg = invoice.vehicleId ? vehicleMap.get(invoice.vehicleId) || '' : '';
                 invoice.lineItems.forEach(lineItem => {
-                    const assignedCodeId = assignNominalCode(lineItem, invoice.entityId, nominalCodeRules);
+                    const supplierName = lineItem.supplierId ? supplierMap.get(lineItem.supplierId) : '';
+                    const assignedCodeId = assignNominalCode(lineItem, invoice.entityId, nominalCodeRules, supplierName);
                     const net = lineItem.quantity * lineItem.unitPrice;
                     const taxRate = taxRatesMap.get(lineItem.taxCodeId || '');
                     const vat = taxRate ? net * (taxRate.rate / 100) : 0;
@@ -85,7 +89,8 @@ const NominalCodeExportModal: React.FC<NominalCodeExportModalProps> = ({
         } else { // Purchases
             const purchases = items as Purchase[];
             purchases.forEach(purchase => {
-                const assignedCodeId = assignNominalCode(purchase, purchase.entityId, nominalCodeRules);
+                const supplierName = purchase.supplierId ? supplierMap.get(purchase.supplierId) : (purchase as any).supplierName || '';
+                const assignedCodeId = assignNominalCode(purchase, purchase.entityId, nominalCodeRules, supplierName);
                 const net = purchase.purchasePrice;
                 const taxRate = taxRatesMap.get(purchase.taxCodeId || '');
                 const vat = taxRate ? net * (taxRate.rate / 100) : 0;

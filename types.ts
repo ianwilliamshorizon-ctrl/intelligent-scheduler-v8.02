@@ -4,7 +4,7 @@ import { Timestamp } from 'firebase/firestore';
  * CORE SYSTEM TYPES
  */
 export type ViewType = string;
-export type AppEnvironment = 'development' | 'production' | 'staging';
+export type AppEnvironment = 'development' | 'production' | 'staging' | 'uat';
 export type UserRole = 'admin' | 'user' | 'Admin' | 'Engineer' | 'Dispatcher' | 'Director';
 
 /** 
@@ -234,8 +234,19 @@ export interface Lift {
     entityId: string;
 }
 
-export interface Purchase extends PurchaseOrder {
-    // Basic purchase structure, extending PO for now as per current data usage
+export interface Purchase {
+    id: string;
+    entityId: string;
+    name: string;
+    purchasePrice: number;
+    markupPercent?: number;
+    jobId?: string | null;
+    invoiceId?: string | null;
+    supplierId: string;
+    supplierReference?: string;
+    purchaseDate: string;
+    taxCodeId?: string;
+    nominalCodeId?: string;
 }
 
 export interface DiscountCode {
@@ -251,15 +262,23 @@ export interface DiscountCode {
  */
 export interface NominalCode { 
     id: string; 
-    code?: string;
+    code: string;
+    name: string;
+    secondaryCode?: string; // NEW: Added to support display in management tab
     description?: string;
 }
 
+export type NominalCodeItemType = 'Labor' | 'Part' | 'MOT' | 'Purchase' | 'CourtesyCar' | 'Storage';
+
 export interface NominalCodeRule { 
     id: string; 
-    priority?: number;
-    condition?: string;
-    nominalCodeId?: string;
+    priority: number;
+    entityId: string; // 'all' or entity ID
+    itemType: NominalCodeItemType;
+    keywords: string; // Comma separated
+    excludeKeywords: string; // Comma separated
+    supplierKeywords?: string; // NEW: Comma separated for supplier matching
+    nominalCodeId: string;
 }
 
 export interface TaxRate {

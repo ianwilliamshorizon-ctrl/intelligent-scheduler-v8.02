@@ -28,13 +28,15 @@ function getLineItemType(item: EstimateLineItem | PurchaseOrderLineItem): Nomina
 export const assignNominalCode = (
     item: EstimateLineItem | Purchase | PurchaseOrderLineItem,
     entityId: string,
-    rules: NominalCodeRule[]
+    rules: NominalCodeRule[],
+    supplierName?: string // NEW: Optional supplier name for matching
 ): string | null => {
     
-    const description = 'name' in item ? item.name : item.description;
+    const description = 'name' in item ? (item as any).name : (item as any).description;
     const itemType: NominalCodeItemType = 'name' in item ? 'Purchase' : getLineItemType(item as EstimateLineItem | PurchaseOrderLineItem);
     
     const lowercasedDescription = description.toLowerCase();
+    const lowercasedSupplier = (supplierName || '').toLowerCase();
     
     // 1. Filter rules that could possibly match
     const relevantRules = rules.filter(rule => 
@@ -49,10 +51,11 @@ export const assignNominalCode = (
     for (const rule of relevantRules) {
         const keywords = rule.keywords ? rule.keywords.toLowerCase().split(',').map(k => k.trim()).filter(Boolean) : [];
         const excludeKeywords = rule.excludeKeywords ? rule.excludeKeywords.toLowerCase().split(',').map(k => k.trim()).filter(Boolean) : [];
+        const supplierKeywords = rule.supplierKeywords ? rule.supplierKeywords.toLowerCase().split(',').map(k => k.trim()).filter(Boolean) : [];
         
-        let matches = keywords.length === 0; // If no keywords, it's a match by default (catch-all)
+        let matches = keywords.length === 0 && supplierKeywords.length === 0; // If no conditions, it's a catch-all
         
-        // Check for keyword matches
+        // Check for keyword matches (Description)
         if (keywords.length > 0) {
             if (keywords.some(keyword => lowercasedDescription.includes(keyword))) {
                 matches = true;
@@ -60,8 +63,17 @@ export const assignNominalCode = (
                 matches = false;
             }
         }
+
+        // Check for supplier keyword matches (Special logic: if rule has supplier keywords, it MUST match the supplier)
+        if (supplierKeywords.length > 0) {
+            if (supplierKeywords.some(keyword => lowercasedSupplier.includes(keyword))) {
+                matches = matches || keywords.length === 0; // If no description keywords, this is enough
+            } else {
+                matches = false; // Supplier didn't match, so this rule is out
+            }
+        }
         
-        // Check for exclusion keyword matches
+        // Check for exclusion keyword matches (Description)
         if (matches && excludeKeywords.length > 0) {
             if (excludeKeywords.some(keyword => lowercasedDescription.includes(keyword))) {
                 matches = false; // Excluded, so this rule doesn't match

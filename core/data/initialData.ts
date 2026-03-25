@@ -281,17 +281,17 @@ export const getInitialBatteryChargers = (): BatteryCharger[] => ([
 ]);
 
 export const getInitialNominalCodes = (): NominalCode[] => ([
-    { id: 'nc_4000', code: '4000' },
-    { id: 'nc_4001', code: '4001' },
-    { id: 'nc_4002', code: '4002' },
-    { id: 'nc_5000', code: '5000' },
+    { id: 'nc_4000', code: '4000', name: 'Parts Revenue' },
+    { id: 'nc_4001', code: '4001', name: 'Labor Revenue' },
+    { id: 'nc_4002', code: '4002', name: 'MOT Revenue' },
+    { id: 'nc_5000', code: '5000', name: 'Parts Purchases' },
 ]);
 
 export const getInitialNominalCodeRules = (): NominalCodeRule[] => ([
-    { id: 'ncr_1', priority: 10 },
-    { id: 'ncr_2', priority: 10 },
-    { id: 'ncr_3', priority: 100 },
-    { id: 'ncr_4', priority: 10 },
+    { id: 'ncr_1', priority: 10, entityId: 'all', itemType: 'Part', keywords: 'brake,pads', excludeKeywords: '', supplierKeywords: '', nominalCodeId: 'nc_4000' },
+    { id: 'ncr_2', priority: 10, entityId: 'all', itemType: 'Labor', keywords: 'technician', excludeKeywords: '', supplierKeywords: '', nominalCodeId: 'nc_4001' },
+    { id: 'ncr_3', priority: 100, entityId: 'all', itemType: 'MOT', keywords: '*', excludeKeywords: '', supplierKeywords: '', nominalCodeId: 'nc_4002' },
+    { id: 'ncr_4', priority: 10, entityId: 'all', itemType: 'Purchase', keywords: 'parts', excludeKeywords: '', supplierKeywords: '', nominalCodeId: 'nc_5000' },
 ]);
 
 export const getInitialPurchaseOrders = (): PurchaseOrder[] => ([

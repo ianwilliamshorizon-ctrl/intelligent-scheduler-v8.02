@@ -54,9 +54,9 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                 fromName: '',
                 fromContact: '',
                 message: '',
-                status: 'Open',
+                status: 'New',
                 actionNotes: '',
-                assignedToUserId: null,
+                takenByUserId: null,
                 linkedCustomerId: null,
                 linkedVehicleId: null,
                 linkedEstimateId: null,
@@ -274,16 +274,16 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Assigned To</label>
                         <SearchableSelect
-                            options={users.map(u => ({ id: u.id, label: u.name }))}
-                            value={formData.assignedToUserId || null}
-                            onChange={(value) => setFormData(p => ({ ...p, assignedToUserId: value }))}
+                            options={users.map(u => ({ id: u.id, label: u.name, value: u.id }))}
+                            defaultValue={formData.takenByUserId || null}
+                            onSelect={(value) => setFormData(p => ({ ...p, takenByUserId: value }))}
                             placeholder="Assign to staff member..."
                         />
                     </div>
                      <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                        <select name="status" value={formData.status || 'Open'} onChange={handleChange} className="w-full p-2 border rounded bg-white">
-                            <option>Open</option>
+                        <select name="status" value={formData.status || 'New'} onChange={handleChange} className="w-full p-2 border rounded bg-white">
+                            <option>New</option>
                             <option>In Progress</option>
                             <option>Sent</option>
                             <option>Approved</option>
@@ -312,9 +312,9 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                 </div>
                             ) : (
                                 <SearchableSelect
-                                    options={customers.map(c => ({ id: c.id, label: getCustomerDisplayName(c) }))}
-                                    value={formData.linkedCustomerId || null}
-                                    onChange={(value) => setFormData(p => ({ ...p, linkedCustomerId: value }))}
+                                    options={customers.map(c => ({ id: c.id, label: getCustomerDisplayName(c), value: c.id }))}
+                                    defaultValue={formData.linkedCustomerId || null}
+                                    onSelect={(value) => setFormData(p => ({ ...p, linkedCustomerId: value }))}
                                     placeholder="Link to an existing customer..."
                                 />
                             )}
@@ -332,9 +332,9 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                 </div>
                             ) : (
                                 <SearchableSelect
-                                    options={vehicles.map(v => ({ id: v.id, label: `${v.registration} - ${v.make} ${v.model}` }))}
-                                    value={formData.linkedVehicleId || null}
-                                    onChange={(value) => setFormData(p => ({ ...p, linkedVehicleId: value }))}
+                                    options={vehicles.map(v => ({ id: v.id, label: `${v.registration} - ${v.make} ${v.model}`, value: v.id }))}
+                                    defaultValue={formData.linkedVehicleId || null}
+                                    onSelect={(value) => setFormData(p => ({ ...p, linkedVehicleId: value }))}
                                     placeholder="Link to an existing vehicle..."
                                 />
                             )}
