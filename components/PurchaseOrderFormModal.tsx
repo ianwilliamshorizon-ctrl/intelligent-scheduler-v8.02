@@ -60,6 +60,7 @@ const PurchaseOrderLineItemRow: React.FC<PurchaseOrderLineItemRowProps> = ({
         onLineItemChange(item.id, 'description', part.description);
         onLineItemChange(item.id, 'unitPrice', part.costPrice);
         onLineItemChange(item.id, 'supplierId', part.defaultSupplierId);
+        onLineItemChange(item.id, 'partId', part.id);
         setDescriptionSearch(part.description);
         setShowResults(false);
     };
@@ -131,12 +132,13 @@ const PurchaseOrderLineItemRow: React.FC<PurchaseOrderLineItemRowProps> = ({
                 />
             </div>
 
-            <div className="col-span-2">
+            <div className="col-span-1">
                  <button 
                     type="button" 
                     onClick={() => setIsSupplierModalOpen(true)} 
-                    className="w-full p-1 border rounded text-sm text-center hover:bg-gray-50 disabled:bg-gray-200 disabled:cursor-not-allowed h-full" 
+                    className="w-full p-1 border rounded text-xs text-center hover:bg-gray-50 disabled:bg-gray-200 disabled:cursor-not-allowed h-full truncate" 
                     disabled={fieldsDisabled}
+                    title="Change Supplier"
                 >
                     {supplierShortCode}
                 </button>
@@ -581,20 +583,23 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({
                                 estItem.unitCost !== correspondingPoItem.unitPrice ||
                                 estItem.partNumber !== correspondingPoItem.partNumber ||
                                 estItem.description !== correspondingPoItem.description ||
-                                estItem.quantity !== correspondingPoItem.quantity
+                                estItem.quantity !== correspondingPoItem.quantity ||
+                                estItem.partId !== correspondingPoItem.partId
                             ) {
                                 (updatedEstimate.lineItems[index] as any).unitCost = correspondingPoItem.unitPrice;
                                 (updatedEstimate.lineItems[index] as any).partNumber = correspondingPoItem.partNumber;
                                 (updatedEstimate.lineItems[index] as any).description = correspondingPoItem.description;
                                 (updatedEstimate.lineItems[index] as any).quantity = correspondingPoItem.quantity;
+                                (updatedEstimate.lineItems[index] as any).partId = correspondingPoItem.partId;
                                 estimateUpdated = true;
                             }
                         }
                     });
 
                     // 3. Handle NEW items added to the PO that aren't on the Job Card yet
+                    // Only add if it's NOT a Credit/Return PO
                     const newPoItems = poLineItems.filter(poItem => !poItem.jobLineItemId);
-                    if (newPoItems.length > 0) {
+                    if (newPoItems.length > 0 && finalizedPO.type !== 'Credit') {
                         newPoItems.forEach(newPoItem => {
                             const newEstimateLineItemId = crypto.randomUUID();
                             // Update the PO item link so it reflects back

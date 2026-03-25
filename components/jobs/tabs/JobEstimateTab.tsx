@@ -77,18 +77,17 @@ const MemoizedEditableLineItemRow = React.memo(({
         if (item.isLabor || isPackageHeader) return null;
         if (item.fromStock) return 'From Stock';
 
-        if (item.purchaseOrderLineItemId) {
-            for (const po of purchaseOrders) {
-                if (po.lineItems.some(li => li.id === item.purchaseOrderLineItemId)) {
-                    switch (po.status) {
-                        case 'Draft': return 'Awaiting Order';
-                        case 'Ordered': return 'Ordered';
-                        case 'Partially Received': return 'Partially Received';
-                        case 'Received':
-                        case 'Finalized': return 'Received';
-                        default: return 'PO Linked';
-                    }
-                }
+        const poItem = purchaseOrders.flatMap(po => (po.lineItems || []).map(poi => ({ ...poi, poStatus: po.status })))
+            .find(poi => (item.purchaseOrderLineItemId && poi.id === item.purchaseOrderLineItemId) || poi.jobLineItemId === item.id);
+
+        if (poItem) {
+            switch (poItem.poStatus) {
+                case 'Draft': return 'Awaiting Order';
+                case 'Ordered': return 'Ordered';
+                case 'Partially Received': return 'Partially Received';
+                case 'Received':
+                case 'Finalized': return 'Received';
+                default: return 'PO Linked';
             }
         }
         
@@ -277,6 +276,7 @@ interface JobEstimateTabProps {
     isRaisingPOs: boolean;
     onCreatePackage: () => void;
     onEditPart: (part: Part) => void;
+    entityId?: string;
 }
 
 export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
@@ -284,24 +284,26 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
     estimateBreakdown, isReadOnly, canViewPricing, taxRates, filteredParts, activePartSearch, servicePackages,
     totalNet, vatBreakdown, grandTotal, currentJobHours, onOpenPurchaseOrder, onCreateEstimate, onRaiseSupplementaryEstimate, onViewEstimate,
     onAddLineItem, onAddPackage, onLineItemChange, onRemoveLineItem, onPartSearchChange, onSetActivePartSearch, onSelectPart, onManageMedia,
-    vehicle, customer, onAddNewPart, suppliers, onRaisePurchaseOrders, isRaisingPOs, onCreatePackage, onEditPart
+    vehicle, customer, onAddNewPart, suppliers, onRaisePurchaseOrders, isRaisingPOs, onCreatePackage, onEditPart,
+    entityId
 }) => {
     const [expandedSuppEstIds, setExpandedSuppEstIds] = useState<Set<string>>(new Set());
     const [isSupplierSelectionOpen, setIsSupplierSelectionOpen] = useState(false);
     const [lineItemForSupplier, setLineItemForSupplier] = useState<string | null>(null);
     const [selectedPackage, setSelectedPackage] = useState<ServicePackage | null>(null);
+    const [showAllEntities, setShowAllEntities] = useState(false);
 
     const hasPartsToOrder = useMemo(() => {
         if (!editableEstimate) return false;
         return editableEstimate.lineItems.some((li: EstimateLineItem) => 
-            !li.isLabor && !li.fromStock && !(li.servicePackageId && !li.isPackageComponent)
+            !li.fromStock && (!li.servicePackageId || li.isPackageComponent === true) && (li.unitCost || 0) > 0
         );
     }, [editableEstimate]);
 
     const unlinkedPartsCount = useMemo(() => {
         if (!editableEstimate) return 0;
         return editableEstimate.lineItems.filter((li: EstimateLineItem) => 
-            !li.isLabor && !li.fromStock && !li.purchaseOrderLineItemId && !(li.servicePackageId && !li.isPackageComponent)
+            !li.fromStock && !li.purchaseOrderLineItemId && (!li.servicePackageId || li.isPackageComponent === true) && (li.unitCost || 0) > 0
         ).length;
     }, [editableEstimate]);
 
@@ -343,7 +345,11 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
     };
     
     const sortedPackages = useMemo(() => {
-        const results = getScoredServicePackages(servicePackages, vehicle);
+        let pkgs = servicePackages;
+        if (!showAllEntities && entityId) {
+            pkgs = servicePackages.filter(p => !p.entityId || p.entityId === entityId);
+        }
+        const results = getScoredServicePackages(pkgs, vehicle);
         
         return results.map(({ pkg, matchType, color }) => ({
             id: pkg.id,
@@ -352,7 +358,7 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
             description: pkg.description || 'Service Package',
             badge: { text: matchType, className: color }
         }));
-    }, [servicePackages, vehicle]);
+    }, [servicePackages, vehicle, showAllEntities, entityId]);
 
     const customerInfoData = customer ? {
         phone: customer.phone || customer.mobile,
@@ -526,13 +532,22 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
                                         <button onClick={() => onAddLineItem(false)} className="flex items-center text-xs py-1 px-2 bg-green-100 text-green-700 rounded-md hover:bg-green-200"><PlusCircle size={14} className="mr-1" /> Add Part</button>
                                         <button onClick={onCreatePackage} className="flex items-center text-xs py-1 px-2 bg-teal-100 text-teal-700 rounded-md hover:bg-teal-200"><Wand2 size={14} className="mr-1" /> Create Package</button>
                                     </div>
-                                    <div className="flex items-center gap-2 w-64">
+                                    <div className="flex items-center gap-2">
                                         <SearchableSelect
                                             options={sortedPackages}
                                             onSelect={(packageId) => { if (packageId) handlePackageSelect(packageId); }}
                                             placeholder="Add Existing Package..."
                                             dropdownClassName="min-w-[450px] right-0"
                                         />
+                                        <label className="flex items-center gap-1.5 whitespace-nowrap text-[10px] text-gray-500 cursor-pointer select-none">
+                                            <input 
+                                                type="checkbox" 
+                                                checked={showAllEntities} 
+                                                onChange={(e) => setShowAllEntities(e.target.checked)}
+                                                className="w-3 h-3 rounded text-indigo-600 focus:ring-indigo-500 border-gray-300"
+                                            />
+                                            Show All Branches
+                                        </label>
                                     </div>
                                 </div>
                             )}

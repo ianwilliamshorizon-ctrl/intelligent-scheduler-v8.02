@@ -482,6 +482,7 @@ export interface ServicePackage {
         fromStock?: boolean;
         partId?: string;
         partNumber?: string;
+        supplierId?: string;
     }[]; 
     applicableMake?: string;
     applicableModel?: string;

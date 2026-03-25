@@ -66,42 +66,36 @@ export const calculateJobPartsStatus = (estimate: Estimate | null, purchaseOrder
     
     if (toOrderItems.length === 0) return 'Fully Received'; // All from stock
 
-    // 3. Check for Unordered Items
-    const unorderedItems = toOrderItems.filter(li => !li.purchaseOrderLineItemId);
-    
-    // Check if linked PO line items actually exist (cleaning broken links on the fly)
+    // 3. Link Estimate Items to PO Line Items (Bidirectional)
     const allPoItems = purchaseOrders.flatMap(po => (po.lineItems || []).map(li => ({ ...li, poStatus: po.status })));
     
-    const linkedItems = toOrderItems.filter(li => 
-        li.purchaseOrderLineItemId && allPoItems.some(poi => poi.id === li.purchaseOrderLineItemId && poi.poStatus !== 'Cancelled')
-    );
-    
-    const actuallyUnordered = toOrderItems.filter(li => 
-        !li.purchaseOrderLineItemId || !allPoItems.some(poi => poi.id === li.purchaseOrderLineItemId && poi.poStatus !== 'Cancelled')
-    );
-
-    if (actuallyUnordered.length > 0) return 'Awaiting Order';
-
-    // 4. Check Receipt Status of Linked Items
-    const statusMap = linkedItems.map(li => {
-        const poi = allPoItems.find(p => p.id === li.purchaseOrderLineItemId);
-        if (!poi) return 'Awaiting Order';
+    const linkedItemsInfo = toOrderItems.map(li => {
+        const poi = allPoItems.find(poi => 
+            (li.purchaseOrderLineItemId && poi.id === li.purchaseOrderLineItemId) || 
+            poi.jobLineItemId === li.id
+        );
+        
+        if (!poi) return { id: li.id, status: 'Unordered' };
         
         if (poi.poStatus === 'Received' || poi.poStatus === 'Finalized' || (poi.receivedQuantity || 0) >= poi.quantity) {
-            return 'Received';
+            return { id: li.id, status: 'Received' };
         }
         if ((poi.receivedQuantity || 0) > 0 || poi.poStatus === 'Partially Received') {
-            return 'Partially Received';
+            return { id: li.id, status: 'Partially Received' };
         }
-        if (poi.poStatus === 'Draft') return 'Draft';
-        if (poi.poStatus === 'Ordered') return 'Ordered';
-        return 'Awaiting Parts';
+        if (poi.poStatus === 'Draft') return { id: li.id, status: 'Draft' };
+        if (poi.poStatus === 'Ordered') return { id: li.id, status: 'Ordered' };
+        return { id: li.id, status: 'Awaiting Parts' };
     });
+    
+    // 4. Determine Overall Status
+    if (linkedItemsInfo.some(i => i.status === 'Unordered')) return 'Awaiting Order';
+    if (linkedItemsInfo.some(i => i.status === 'Draft')) return 'Awaiting Order';
+    if (linkedItemsInfo.every(i => i.status === 'Received')) return 'Fully Received';
+    if (linkedItemsInfo.some(i => i.status === 'Partially Received' || i.status === 'Received')) return 'Partially Received';
+    if (linkedItemsInfo.every(i => i.status === 'Ordered')) return 'Ordered';
 
-    if (statusMap.some(s => s === 'Draft')) return 'Awaiting Order';
-    if (statusMap.every(s => s === 'Received')) return 'Fully Received';
-    if (statusMap.some(s => s === 'Partially Received' || s === 'Received')) return 'Partially Received';
-    if (statusMap.every(s => s === 'Ordered')) return 'Ordered';
+    return 'Awaiting Parts';
 
     return 'Awaiting Parts';
 };

@@ -263,7 +263,7 @@ const EditJobModal: React.FC<{
                     }
                     
                     // 2. BIDIRECTIONAL SYNC: Update linked PO line item
-                    if (newItem.purchaseOrderLineItemId && ['quantity', 'unitCost', 'partNumber', 'description'].includes(field as string)) {
+                    if (newItem.purchaseOrderLineItemId && ['quantity', 'unitCost', 'partNumber', 'description', 'partId'].includes(field as string)) {
                         data.setPurchaseOrders(prevPOs => {
                             const linkedPo = (prevPOs || []).find(po => po.lineItems?.some(li => li.id === newItem.purchaseOrderLineItemId));
                             if (linkedPo && ['Draft', 'Ordered'].includes(linkedPo.status)) {
@@ -274,7 +274,8 @@ const EditJobModal: React.FC<{
                                             quantity: field === 'quantity' ? processedValue : li.quantity,
                                             unitPrice: field === 'unitCost' ? processedValue : li.unitPrice,
                                             partNumber: field === 'partNumber' ? processedValue : li.partNumber,
-                                            description: field === 'description' ? processedValue : li.description
+                                            description: field === 'description' ? processedValue : li.description,
+                                            partId: field === 'partId' ? processedValue : li.partId
                                         };
                                     }
                                     return li;
@@ -320,7 +321,7 @@ const EditJobModal: React.FC<{
             servicePackageId: pkg.id,
             servicePackageName: pkg.name,
             isPackageComponent: false,
-            isOptional: true,
+            isOptional: false,
             preCalculatedVat: pkg.taxCodeId === t99RateId ? vat : undefined,
         };
         currentLineItems.push(mainPackageItem);
@@ -343,19 +344,17 @@ const EditJobModal: React.FC<{
             }
     
             const newItem: T.EstimateLineItem = {
+                ...costItem,
                 id: crypto.randomUUID(),
-                description: costItem.description,
-                quantity: costItem.quantity,
                 unitPrice: 0,
                 unitCost: part ? part.costPrice : costItem.unitCost,
-                partNumber: costItem.partNumber,
                 partId: part ? part.id : undefined,
-                isLabor: costItem.isLabor,
                 servicePackageId: pkg.id,
                 servicePackageName: pkg.name,
                 isPackageComponent: true,
-                isOptional: true,
-                supplierId: part ? part.defaultSupplierId : undefined,
+                isOptional: false,
+                supplierId: part?.defaultSupplierId || costItem.supplierId,
+                fromStock: costItem.fromStock ?? (costItem.isLabor ? true : (part?.isStockItem && (part.stockQuantity || 0) > 0)),
             };
             currentLineItems.push(newItem);
         }
@@ -458,7 +457,7 @@ const EditJobModal: React.FC<{
         setEditableEstimate(prev => {
             if (!prev) return null;
             const entity = safeBusinessEntities.find(e => e.id === editableJob?.entityId);
-            const newItem: T.EstimateLineItem = { id: crypto.randomUUID(), description: isLabor ? 'Labor' : '', quantity: 1, unitPrice: isLabor ? (entity?.laborRate || 0) : 0, unitCost: isLabor ? (entity?.laborCostRate || 0) : 0, isLabor, taxCodeId: standardTaxRateId, isOptional: true };
+            const newItem: T.EstimateLineItem = { id: crypto.randomUUID(), description: isLabor ? 'Labor' : '', quantity: 1, unitPrice: isLabor ? (entity?.laborRate || 0) : 0, unitCost: isLabor ? (entity?.laborCostRate || 0) : 0, isLabor, fromStock: isLabor, taxCodeId: standardTaxRateId, isOptional: true };
             return { ...prev, lineItems: [...(prev.lineItems || []), newItem] };
         });
     };
@@ -497,6 +496,8 @@ const EditJobModal: React.FC<{
 
         setIsRaisingPOs(true);
         try {
+             // CRITICAL: Save current state first to avoid refresh clearing local items
+             await handleSaveEstimate(editableEstimate);
              await syncPurchaseOrdersFromEstimate(editableEstimate);
              setConfirmation({ 
                 isOpen: true, 
@@ -772,6 +773,7 @@ const EditJobModal: React.FC<{
                                     onAddPackage={addPackage}
                                     onLineItemChange={handleLineItemChange}
                                     onRemoveLineItem={removeLineItem}
+                                    entityId={editableJob?.entityId}
                                     onPartSearchChange={setPartSearchTerm}
                                     onSetActivePartSearch={setActivePartSearch}
                                     onSelectPart={handleSelectPart}

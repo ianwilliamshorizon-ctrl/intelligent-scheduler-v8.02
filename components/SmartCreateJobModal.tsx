@@ -362,9 +362,9 @@ const SmartCreateJobModal: React.FC<SmartCreateJobModalProps> = ({
                 notes: notes,
                 vehicleStatus: 'Awaiting Arrival',
                 partsStatus: lineItems.some(li => 
-                    !li.isLabor && 
                     !li.fromStock &&
-                    !(li.servicePackageId && !li.isPackageComponent)
+                    (!li.servicePackageId || li.isPackageComponent === true) &&
+                    (li.unitCost || 0) > 0
                 ) ? 'Awaiting Order' : 'Not Required',
                 purchaseOrderIds: undefined,
                 isStandalone: isStandaloneMOT
@@ -437,9 +437,9 @@ const SmartCreateJobModal: React.FC<SmartCreateJobModalProps> = ({
                     notes: notes,
                     vehicleStatus: 'Awaiting Arrival',
                     partsStatus: lineItems.some(li => 
-                    !li.isLabor && 
                     !li.fromStock &&
-                    !(li.servicePackageId && !li.isPackageComponent)
+                    (!li.servicePackageId || li.isPackageComponent === true) &&
+                    (li.unitCost || 0) > 0
                 ) ? 'Awaiting Order' : 'Not Required',
                     isStandalone: isStandaloneMOT
                 };
@@ -487,7 +487,7 @@ const SmartCreateJobModal: React.FC<SmartCreateJobModalProps> = ({
                 servicePackageId: pkg.id, 
                 servicePackageName: pkg.name, 
                 isPackageComponent: true,
-                fromStock: ci.fromStock ?? (part?.isStockItem && part.stockQuantity > 0)
+                fromStock: ci.fromStock ?? (ci.isLabor ? true : (part?.isStockItem && part.stockQuantity > 0))
             };
         });
         setLineItems(prev => [...prev, headerItem, ...childItems]);
@@ -501,6 +501,7 @@ const SmartCreateJobModal: React.FC<SmartCreateJobModalProps> = ({
             unitPrice: selectedEntity.laborRate || 0,
             unitCost: selectedEntity.laborCostRate || 0,
             isLabor: true,
+            fromStock: true,
             taxCodeId: standardTaxRateId
         }]);
     };
@@ -513,6 +514,7 @@ const SmartCreateJobModal: React.FC<SmartCreateJobModalProps> = ({
             unitPrice: 0,
             unitCost: 0,
             isLabor: false,
+            fromStock: false,
             taxCodeId: standardTaxRateId
         }]);
     };

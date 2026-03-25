@@ -7,10 +7,12 @@ import { formatDate, splitJobIntoSegments } from '../utils/dateUtils';
 import { calculateJobStatus, calculateJobPartsStatus } from '../utils/jobUtils';
 import useToaster from '../../hooks/useToaster';
 
+const syncingJobs = new Set<string>();
+
 export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => void) => {
     const data = useData();
     const { currentUser, setConfirmation } = useApp();
-    const { showSuccess } = useToaster();
+    const { showSuccess, showError } = useToaster();
     
     const { 
         jobs, setJobs,
@@ -25,7 +27,7 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
 
     const getCollectionName = (item: any): string => {
         if ('estimateNumber' in item) return 'brooks_estimates';
-        if ('vehicleRegistrationRef' in item) return 'brooks_purchaseOrders';
+        if ('vehicleRegistrationRef' in item || 'supplierId' in item || 'purchaseOrderLineItemId' in item) return 'brooks_purchaseOrders';
         if ('takenByUserId' in item) return 'brooks_inquiries';
         if ('segments' in item) return 'brooks_jobs';
         if ('costItems' in item) return 'brooks_servicePackages';
@@ -154,142 +156,142 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
     };
 
     const syncPurchaseOrdersFromEstimate = async (estimate: T.Estimate) => {
-        if (!estimate.jobId) return;
+        if (!estimate || !estimate.jobId) {
+            console.warn("⚠️ syncPurchaseOrdersFromEstimate: Missing estimate or jobId", estimate);
+            return;
+        }
 
-        const linkedPOs = purchaseOrders.filter(po => po.jobId === estimate.jobId && po.status !== 'Cancelled');
-        const estimateLineItems = estimate.lineItems || [];
-        // Only sync items that are for parts, not optional, not labor, and not stock items
-        // Refinement: Allow MOT items if they are procured (not stock and have a supplier)
-        const activeItemsForPO = estimateLineItems.filter(li => 
-            !li.isLabor && 
-            !li.fromStock && 
-            !li.isOptional &&
-            !(li.servicePackageId && !li.isPackageComponent)
-        );
+        if (syncingJobs.has(estimate.jobId)) {
+            console.log(`⏩ Sync already in progress for job ${estimate.jobId}, skipping.`);
+            return;
+        }
 
-        let poChanged = false;
-        const currentPOs = [...linkedPOs];
+        syncingJobs.add(estimate.jobId);
+        console.log(`🔄 Starting PO Sync for Job: ${estimate.jobId}`);
 
-        // 1. Update existing items or add new ones
-        for (const li of activeItemsForPO) {
-            let targetPO = currentPOs.find(po => 
-                po.lineItems.some(poi => (li.purchaseOrderLineItemId && poi.id === li.purchaseOrderLineItemId) || poi.jobLineItemId === li.id)
+        try {
+            const job = jobs.find(j => j.id === estimate.jobId);
+            const poIds = job?.purchaseOrderIds || [];
+            
+            const linkedPOs = purchaseOrders.filter(po => 
+                (po.jobId === estimate.jobId || poIds.includes(po.id)) && 
+                po.status !== 'Cancelled'
             );
 
-            if (targetPO) {
-                // Don't update if already received
-                if (['Received', 'Finalized'].includes(targetPO.status)) continue;
-                
-                const poiIndex = targetPO.lineItems.findIndex(poi => (li.purchaseOrderLineItemId && poi.id === li.purchaseOrderLineItemId) || poi.jobLineItemId === li.id);
-                if (poiIndex !== -1) {
-                    const poi = targetPO.lineItems[poiIndex];
-                    if (poi.quantity !== li.quantity || poi.unitPrice !== li.unitCost || poi.description !== li.description) {
-                        targetPO.lineItems[poiIndex] = {
-                            ...poi,
-                            quantity: li.quantity,
-                            unitPrice: li.unitCost || 0,
-                            description: li.description || '',
-                            partNumber: li.partNumber || '',
-                            jobLineItemId: li.id
-                        };
+            const activeItemsForPO = (estimate.lineItems || []).filter(li => 
+                !li.fromStock && 
+                (!li.servicePackageId || !!li.isPackageComponent) &&
+                !li.isLabor
+            );
+
+            console.log(`📊 Found ${activeItemsForPO.length} items candidate for PO. (Total items: ${estimate.lineItems?.length})`);
+
+            const itemsWithoutSupplier = activeItemsForPO.filter(li => !li.supplierId && !parts.find(p => p.id === li.partId)?.defaultSupplierId);
+            if (itemsWithoutSupplier.length > 0) {
+                console.warn(`⚠️ ${itemsWithoutSupplier.length} items have no supplier selected. They will be skipped unless assigned.`);
+            }
+
+            let poChanged = false;
+            // Use local copies to avoid state-clash
+            const currentPOs = JSON.parse(JSON.stringify(linkedPOs)) as T.PurchaseOrder[];
+            const linkedPOsBeforeIds = linkedPOs.map(po => po.id);
+
+            const entityId = estimate.entityId || job?.entityId;
+            const entity = businessEntities.find(e => e.id === entityId);
+            const entityShortCode = (entity?.shortCode || 'UNK').toUpperCase();
+            const vehicle = vehicles.find(v => v.id === estimate.vehicleId);
+
+            const getMaxPONumber = () => {
+                const prefix = `${entityShortCode}944`;
+                let max = 0;
+                purchaseOrders.forEach(po => {
+                    if (po.id.startsWith(prefix)) {
+                        const num = parseInt(po.id.substring(prefix.length), 10);
+                        if (!isNaN(num) && num > max) max = num;
+                    }
+                });
+                return max;
+            };
+
+            for (const li of activeItemsForPO) {
+                const resolvedSupplierId = li.supplierId || parts.find(p => p.id === li.partId)?.defaultSupplierId;
+                if (!resolvedSupplierId) continue; // Skip if still no supplier
+
+                let targetPO = currentPOs.find(po => 
+                    (po.lineItems || []).some(poi => (li.purchaseOrderLineItemId && poi.id === li.purchaseOrderLineItemId) || poi.jobLineItemId === li.id)
+                );
+
+                if (targetPO) {
+                    if (['Received', 'Finalized'].includes(targetPO.status)) continue;
+                    const poiIndex = (targetPO.lineItems || []).findIndex(poi => (li.purchaseOrderLineItemId && poi.id === li.purchaseOrderLineItemId) || poi.jobLineItemId === li.id);
+                    if (poiIndex !== -1 && targetPO.lineItems) {
+                        const poi = targetPO.lineItems[poiIndex];
+                        if (poi.quantity !== li.quantity || poi.unitPrice !== li.unitCost || poi.description !== li.description) {
+                            targetPO.lineItems[poiIndex] = { ...poi, quantity: li.quantity, unitPrice: li.unitCost || 0, description: li.description || '', partNumber: li.partNumber || '', jobLineItemId: li.id };
+                            poChanged = true;
+                        }
+                    }
+                } else {
+                    let existingDraftPO = currentPOs.find(po => po.supplierId === resolvedSupplierId && po.status === 'Draft');
+                    
+                    if (existingDraftPO) {
+                        const newPoiId = crypto.randomUUID();
+                        if (!existingDraftPO.lineItems) existingDraftPO.lineItems = [];
+                        existingDraftPO.lineItems.push({ id: newPoiId, jobLineItemId: li.id, description: li.description || '', partNumber: li.partNumber || '', quantity: li.quantity, unitPrice: li.unitCost || 0, receivedQuantity: 0, taxCodeId: li.taxCodeId || '' });
+                        li.purchaseOrderLineItemId = newPoiId;
                         poChanged = true;
+                        console.log(`➕ Added item to existing Draft PO: ${existingDraftPO.id}`);
+                    } else {
+                        const transId = await generateSequenceId('944', entityShortCode);
+                        const transNum = parseInt(transId.substring(transId.length - 6), 10);
+                        const arrayMax = getMaxPONumber();
+                        let finalPOId = transId;
+                        
+                        if (arrayMax >= transNum) {
+                            finalPOId = `${entityShortCode}944${String(arrayMax + 1).padStart(6, '0')}`;
+                        }
+
+                        const newPoiId = crypto.randomUUID();
+                        const newPO: T.PurchaseOrder = { id: finalPOId, entityId: entityId, supplierId: resolvedSupplierId, vehicleRegistrationRef: vehicle?.registration || 'N/A', orderDate: formatDate(new Date()), status: 'Draft', jobId: estimate.jobId, createdByUserId: currentUser.id, lineItems: [{ id: newPoiId, jobLineItemId: li.id, description: li.description || '', partNumber: li.partNumber || '', quantity: li.quantity, unitPrice: li.unitCost || 0, receivedQuantity: 0, taxCodeId: li.taxCodeId || '' }] };
+                        currentPOs.push(newPO);
+                        li.purchaseOrderLineItemId = newPoiId;
+                        poChanged = true;
+                        console.log(`🆕 Created New Draft PO: ${newPO.id} for supplier ${resolvedSupplierId}`);
                     }
                 }
-            } else {
-                // New item added to Job Card, need to find/create a PO
-                const supplierId = li.supplierId || '';
-                let existingPO = currentPOs.find(po => 
-                    po.supplierId === supplierId && 
-                    !['Received', 'Finalized', 'Cancelled'].includes(po.status)
-                );
-                
-                if (existingPO) {
-                    const newPoiId = crypto.randomUUID();
-                    existingPO.lineItems.push({
-                        id: newPoiId,
-                        jobLineItemId: li.id,
-                        description: li.description || '',
-                        partNumber: li.partNumber || '',
-                        quantity: li.quantity,
-                        unitPrice: li.unitCost || 0,
-                        receivedQuantity: 0,
-                        taxCodeId: li.taxCodeId || ''
-                    });
-                    li.purchaseOrderLineItemId = newPoiId;
-                    poChanged = true;
-                } else {
-                    const entity = businessEntities.find(e => e.id === estimate.entityId);
-                    const vehicle = vehicles.find(v => v.id === estimate.vehicleId);
-                    const newPOId = await generateSequenceId('944', entity?.shortCode || 'UNK');
-                    const newPoiId = crypto.randomUUID();
-                    const newPO: T.PurchaseOrder = {
-                        id: newPOId,
-                        entityId: estimate.entityId,
-                        supplierId: supplierId,
-                        vehicleRegistrationRef: vehicle?.registration || 'N/A',
-                        orderDate: formatDate(new Date()),
-                        status: 'Draft',
-                        jobId: estimate.jobId,
-                        createdByUserId: currentUser.id,
-                        lineItems: [{
-                            id: newPoiId,
-                            jobLineItemId: li.id,
-                            description: li.description || '',
-                            partNumber: li.partNumber || '',
-                            quantity: li.quantity,
-                            unitPrice: li.unitCost || 0,
-                            receivedQuantity: 0,
-                            taxCodeId: li.taxCodeId || ''
-                        }]
-                    };
-                    currentPOs.push(newPO);
-                    li.purchaseOrderLineItemId = newPoiId;
-                    poChanged = true;
-                    
-                    // Add to global state list so subsequent items in this loop can find it
-                    setPurchaseOrders(prev => [...prev, newPO]);
-                }
             }
-        }
 
-        // 2. Remove items from POs if they were deleted from the Job Card (Estimate)
-        const activeEstLineItemIds = new Set(activeItemsForPO.map(li => li.id));
-        for (const po of currentPOs) {
-            if (['Received', 'Finalized'].includes(po.status)) continue;
-            
-            const originalCount = po.lineItems.length;
-            po.lineItems = po.lineItems.filter(poi => 
-                !poi.jobLineItemId || activeEstLineItemIds.has(poi.jobLineItemId)
-            );
-            
-            if (po.lineItems.length !== originalCount) {
-                poChanged = true;
-            }
-        }
-
-        // 3. Save updates
-        if (poChanged) {
-            let newPOIds: string[] = [];
+            const activeEstLineItemIds = new Set(activeItemsForPO.map(li => li.id));
             for (const po of currentPOs) {
-                 await handleSaveItem(setPurchaseOrders, po);
-                 if (!linkedPOs.some(lpo => lpo.id === po.id)) {
-                     newPOIds.push(po.id);
-                 }
+                if (['Received', 'Finalized'].includes(po.status)) continue;
+                const originalCount = (po.lineItems || []).length;
+                po.lineItems = (po.lineItems || []).filter(poi => !poi.jobLineItemId || activeEstLineItemIds.has(poi.jobLineItemId));
+                if (po.lineItems.length !== originalCount) poChanged = true;
             }
 
-            if (newPOIds.length > 0) {
-                 const job = jobs.find(j => j.id === estimate.jobId);
-                 if (job) {
-                     const updatedJob = {
-                         ...job,
-                         purchaseOrderIds: [...new Set([...(job.purchaseOrderIds || []), ...newPOIds])]
-                     };
-                     await handleSaveItem(setJobs, updatedJob, 'brooks_jobs');
-                 }
+            if (poChanged) {
+                console.log("💾 saving synchronized purchase orders...");
+                const newPOIds: string[] = [];
+                for (const po of currentPOs) {
+                     await handleSaveItem(setPurchaseOrders, po, 'brooks_purchaseOrders');
+                     if (!linkedPOsBeforeIds.includes(po.id)) newPOIds.push(po.id);
+                }
+                const currentJob = jobs.find(j => j.id === estimate.jobId);
+                if (currentJob) {
+                    const existingPOIds = Array.isArray(currentJob.purchaseOrderIds) ? currentJob.purchaseOrderIds : [];
+                    const updatedJob = { ...currentJob, purchaseOrderIds: [...new Set([...existingPOIds, ...newPOIds])] };
+                    await handleSaveItem(setJobs, updatedJob, 'brooks_jobs');
+                }
+                await handleSaveItem(setEstimates, estimate, 'brooks_estimates');
+                console.log("✅ PO Sync Complete.");
+            } else {
+                console.log("ℹ️ No changes detected in PO synchronization.");
             }
-
-            // Save estimate again to persist any new purchaseOrderLineItemId links
-            await handleSaveItem(setEstimates, estimate);
+        } catch (err) {
+            console.error("❌ PO Sync Failed:", err);
+            showError("An error occurred while synchronizing purchase orders. Please check the console.");
+        } finally {
+            syncingJobs.delete(estimate.jobId);
         }
     };
 
@@ -390,9 +392,9 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
         const createPOs = async (targetJobId: string, entityShortCode: string, itemsForPO: T.EstimateLineItem[]) => {
             // Filter: non-labor, not from stock, and NOT an MOT service
             const partItems = itemsForPO.filter(li => 
-                !li.isLabor && 
                 !li.fromStock &&
-                !(li.servicePackageId && !li.isPackageComponent)
+                (!li.servicePackageId || li.isPackageComponent === true) &&
+                (li.unitCost || 0) > 0
             );
             const poIds: string[] = [];
             if (partItems.length > 0) {

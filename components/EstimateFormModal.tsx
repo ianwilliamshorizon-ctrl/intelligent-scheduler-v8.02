@@ -238,6 +238,7 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
     const [isMediaModalOpen, setIsMediaModalOpen] = useState(false);
     const [recentCustomerIds, setRecentCustomerIds] = useState<string[]>([]);
     const [selectedPackage, setSelectedPackage] = useState<ServicePackage | null>(null);
+    const [showAllEntities, setShowAllEntities] = useState(false);
 
     const [isLookupModalOpen, setIsLookupModalOpen] = useState(false);
     const [lookupTarget, setLookupTarget] = useState<'customer' | 'vehicle' | null>(null);
@@ -360,11 +361,14 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
         searchField: `${v.registration} ${v.make} ${v.model}`.toLowerCase()
     }));
 
-    const sortedPackages = (() => {
-        const allAvailable = Array.isArray(servicePackages) ? servicePackages : [];
-        const entityPackages = allAvailable; 
+    const sortedPackages = useMemo(() => {
+        let pkgs = Array.isArray(servicePackages) ? servicePackages : [];
+        if (!showAllEntities && formData.entityId) {
+            pkgs = pkgs.filter(p => !p.entityId || p.entityId === formData.entityId);
+        }
+        
         if (!currentVehicle) {
-            return entityPackages.map(pkg => ({
+            return pkgs.map(pkg => ({
                 ...pkg,
                 id: pkg.id,
                 label: pkg.name || 'Unnamed Package',
@@ -373,7 +377,7 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                 badge: { text: 'Generic', className: 'bg-gray-100 text-gray-800' }
             }));
         }
-        const scoredResults = getScoredServicePackages(entityPackages, currentVehicle);
+        const scoredResults = getScoredServicePackages(pkgs, currentVehicle);
         return scoredResults.map(({ pkg, matchType, color }) => ({
             ...pkg,
             id: pkg.id,
@@ -382,7 +386,7 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
             description: pkg.description || 'Service Package',
             badge: { text: matchType, className: color }
         }));
-    })();
+    }, [servicePackages, currentVehicle, showAllEntities, formData.entityId]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
 
@@ -886,14 +890,23 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                                     <button onClick={() => addLineItem(true)} className="flex items-center text-sm text-indigo-600 font-semibold hover:text-indigo-800"><PlusCircle size={16} className="mr-1" /> Add Labor</button>
                                     <button onClick={() => addLineItem(false)} className="flex items-center text-sm text-indigo-600 font-semibold hover:text-indigo-800"><PlusCircle size={16} className="mr-1" /> Add Part</button>
                                  </div>
-                                 <div className="w-64">
-                                    <SearchableSelect 
-                                        options={sortedPackages}
-                                        onSelect={handlePackageSelect}
-                                        placeholder="Search & Add Package..." 
-                                        dropdownClassName="min-w-[450px] right-0" 
-                                    />
-                                </div>
+                                 <div className="flex items-center gap-2">
+                                     <SearchableSelect 
+                                         options={sortedPackages}
+                                         onSelect={handlePackageSelect}
+                                         placeholder="Search & Add Package..." 
+                                         dropdownClassName="min-w-[450px] right-0" 
+                                     />
+                                     <label className="flex items-center gap-1.5 whitespace-nowrap text-[10px] text-gray-500 cursor-pointer select-none">
+                                        <input 
+                                            type="checkbox" 
+                                            checked={showAllEntities} 
+                                            onChange={(e) => setShowAllEntities(e.target.checked)}
+                                            className="w-3 h-3 rounded text-indigo-600 focus:ring-indigo-500 border-gray-300"
+                                        />
+                                        Show All
+                                     </label>
+                                 </div>
                             </div>
                         </div>
                     </Section>

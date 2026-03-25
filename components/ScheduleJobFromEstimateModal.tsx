@@ -137,20 +137,16 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
         const processedInquiryPoIds = new Set<string>();
     
         const itemsNeedingOrder = (estimateToConvert.lineItems || [])
+            .filter(item => 
+                !item.isOptional && 
+                !item.fromStock && 
+                (!item.servicePackageId || item.isPackageComponent === true) &&
+                (item.unitCost || 0) > 0
+            )
             .map(item => {
-                if (item.isLabor || item.isOptional || item.fromStock || (item.servicePackageId && !item.isPackageComponent)) return null;
                 const part = parts.find(p => p.id === item.partId);
-                
-                // If it is from stock, no PO needed
-                if (item.fromStock) return null;
-
-                const requiredQty = item.quantity;
-                const stockQty = part?.stockQuantity || 0;
-                const orderQty = requiredQty - stockQty;
-                if (orderQty <= 0) return null;
-                return { ...item, orderQuantity: orderQty, partInfo: part };
-            })
-            .filter(Boolean) as (EstimateLineItem & { orderQuantity: number, partInfo?: Part })[];
+                return { ...item, orderQuantity: item.quantity, partInfo: part };
+            });
 
         const partsBySupplier: Record<string, typeof itemsNeedingOrder> = {};
         itemsNeedingOrder.forEach(item => {
