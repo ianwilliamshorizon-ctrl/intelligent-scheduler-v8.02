@@ -39,6 +39,7 @@ export const getInitialRoles = (): Role[] => ([
     { id: 'role_engineer', name: 'Engineer', defaultAllowedViews: ['dashboard', 'concierge', 'workflow', 'absence', 'inquiries'] },
     { id: 'role_sales', name: 'Sales', defaultAllowedViews: ['dashboard', 'sales', 'estimates', 'absence', 'inquiries'] },
     { id: 'role_concierge', name: 'Garage Concierge', defaultAllowedViews: ['dashboard', 'concierge', 'inquiries', 'invoices', 'absence'] },
+    { id: 'role_director', name: 'Director', defaultAllowedViews: ['dashboard', 'directors-dashboard', 'dispatch', 'workflow', 'concierge', 'inquiries', 'communications', 'estimates', 'invoices', 'purchaseOrders', 'jobs', 'sales', 'storage', 'rentals', 'absence'] },
 ]);
 
 // --- Users ---

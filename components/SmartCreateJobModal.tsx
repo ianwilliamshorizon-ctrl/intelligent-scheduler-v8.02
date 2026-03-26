@@ -363,6 +363,7 @@ const SmartCreateJobModal: React.FC<SmartCreateJobModalProps> = ({
                 vehicleStatus: 'Awaiting Arrival',
                 partsStatus: lineItems.some(li => 
                     !li.fromStock &&
+                    !li.isLabor && // Filter labor
                     (!li.servicePackageId || li.isPackageComponent === true) &&
                     (li.unitCost || 0) > 0
                 ) ? 'Awaiting Order' : 'Not Required',
@@ -438,8 +439,10 @@ const SmartCreateJobModal: React.FC<SmartCreateJobModalProps> = ({
                     vehicleStatus: 'Awaiting Arrival',
                     partsStatus: lineItems.some(li => 
                     !li.fromStock &&
-                    (!li.servicePackageId || li.isPackageComponent === true) &&
-                    (li.unitCost || 0) > 0
+                    !li.isLabor && 
+                    li.type !== 'labor' &&
+                    !li.description?.toLowerCase().includes('labour') &&
+                    (!li.servicePackageId || li.isPackageComponent === true)
                 ) ? 'Awaiting Order' : 'Not Required',
                     isStandalone: isStandaloneMOT
                 };
@@ -479,14 +482,17 @@ const SmartCreateJobModal: React.FC<SmartCreateJobModalProps> = ({
             servicePackageName: pkg.name,
         };
         const childItems: EstimateLineItem[] = (pkg.costItems || []).map(ci => {
-            const part = ci.partId ? (parts || []).find(p => p.id === ci.partId) : null;
+            const part = (ci.partId ? parts.find(p => p.id === ci.partId) : null) || (ci.partNumber ? parts.find(p => p.partNumber === ci.partNumber) : null);
             return {
                 ...ci, 
                 id: crypto.randomUUID(), 
                 unitPrice: 0, 
+                unitCost: part ? part.costPrice : ci.unitCost,
+                partId: part ? part.id : ci.partId,
                 servicePackageId: pkg.id, 
                 servicePackageName: pkg.name, 
                 isPackageComponent: true,
+                supplierId: part?.defaultSupplierId || ci.supplierId,
                 fromStock: ci.fromStock ?? (ci.isLabor ? true : (part?.isStockItem && part.stockQuantity > 0))
             };
         });

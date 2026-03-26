@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Job, Vehicle, Customer, PurchaseOrder, User, VehicleStatus } from '../../types';
 import { Package as PackageIcon, PackageCheck, CheckCircle, ArrowRightCircle, Clock, Wrench, Edit, Wand2, LogIn, XCircle } from 'lucide-react';
 import { getCustomerDisplayName } from '../../core/utils/customerUtils';
@@ -63,8 +63,22 @@ export const DraggableJobCard: React.FC<{
         }
     };
     
-    const uniquePoIds = [...new Set(job.purchaseOrderIds || [])];
-    const associatedPOs = uniquePoIds.map(id => purchaseOrders.find(po => po.id === id)).filter(Boolean) as PurchaseOrder[];
+    const associatedPOs = useMemo(() => {
+        // Source of truth 1: job.purchaseOrderIds
+        const fromJobIds = (job.purchaseOrderIds || []).map(id => (purchaseOrders || []).find(po => po.id === id)).filter(Boolean) as PurchaseOrder[];
+        
+        // Source of truth 2: POs that explicitly reference this jobId
+        const fromPOJobId = (purchaseOrders || []).filter(po => po.jobId === job.id && po.status !== 'Cancelled');
+        
+        // Merge and deduplicate
+        const merged = [...fromJobIds];
+        fromPOJobId.forEach(po => {
+            if (!merged.find(m => m.id === po.id)) merged.push(po);
+        });
+        
+        return merged;
+    }, [job.id, job.purchaseOrderIds, purchaseOrders]);
+
     const isReadyForWorkshop = job.vehicleStatus === 'On Site' && (job.partsStatus === 'Fully Received' || job.partsStatus === 'Not Required');
     
     return (

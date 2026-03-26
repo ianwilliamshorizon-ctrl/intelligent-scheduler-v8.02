@@ -531,15 +531,18 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
     
         if (pkg.costItems) {
             pkg.costItems.forEach(costItem => {
-                const part = costItem.partId ? (parts || []).find(p => p.id === costItem.partId) : null;
+                const part = (costItem.partId ? (parts || []).find(p => p.id === costItem.partId) : null) || (costItem.partNumber ? (parts || []).find(p => p.partNumber === costItem.partNumber) : null);
                 newItems.push({ 
                     ...costItem, 
                     id: crypto.randomUUID(),
                     unitPrice: costItem.unitPrice || 0,
+                    unitCost: part ? part.costPrice : costItem.unitCost,
+                    partId: part ? part.id : costItem.partId,
                     servicePackageId: pkg.id,
                     servicePackageName: pkg.name,
                     isPackageComponent: true,
                     isOptional,
+                    supplierId: part?.defaultSupplierId || costItem.supplierId,
                     fromStock: costItem.fromStock ?? (part?.isStockItem && part.stockQuantity > 0)
                 });
             });
@@ -685,6 +688,7 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
     const vehicleInfoData = currentVehicle ? {
         type: `${currentVehicle.year || ''} ${currentVehicle.make || ''} ${currentVehicle.model || ''}`.trim(),
         colour: currentVehicle.colour,
+        'Year of Manufacture': currentVehicle.manufactureDate,
         vin: currentVehicle.vin,
         motDue: currentVehicle.nextMotDate,
     } : {};

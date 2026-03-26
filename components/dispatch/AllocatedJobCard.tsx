@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Job, JobSegment, Vehicle, Customer, Engineer, PurchaseOrder, User } from '../../types';
 import { Package as PackageIcon, KeyRound, PauseCircle, PlayCircle, UserCog, Trash2, Wand2, Edit, User as UserIcon, UserPlus } from 'lucide-react';
 import { getCustomerDisplayName } from '../../core/utils/customerUtils';
@@ -33,7 +33,21 @@ export const AllocatedJobCard: React.FC<{
     const topPercent = (segment.scheduledStartSegment || 0) * (100 / Math.max(1, TIME_SEGMENTS.length));
     const heightPercent = segmentsToRender * (100 / Math.max(1, TIME_SEGMENTS.length));
 
-    const associatedPOs = (job.purchaseOrderIds || []).map(id => (purchaseOrders || []).find(po => po.id === id)).filter(Boolean) as PurchaseOrder[];
+    const associatedPOs = useMemo(() => {
+        // Source of truth 1: job.purchaseOrderIds
+        const fromJobIds = (job.purchaseOrderIds || []).map(id => (purchaseOrders || []).find(po => po.id === id)).filter(Boolean) as PurchaseOrder[];
+        
+        // Source of truth 2: POs that explicitly reference this jobId
+        const fromPOJobId = (purchaseOrders || []).filter(po => po.jobId === job.id && po.status !== 'Cancelled');
+        
+        // Merge and deduplicate
+        const merged = [...fromJobIds];
+        fromPOJobId.forEach(po => {
+            if (!merged.find(m => m.id === po.id)) merged.push(po);
+        });
+        
+        return merged;
+    }, [job.id, job.purchaseOrderIds, purchaseOrders]);
     
     const [isPoMenuOpen, setIsPoMenuOpen] = useState(false);
     const poMenuRef = useRef<HTMLDivElement>(null);
@@ -92,6 +106,7 @@ export const AllocatedJobCard: React.FC<{
                             Make: vehicle?.make,
                             Model: vehicle?.model,
                             Year: vehicle?.year,
+                            'Year of Manufacture': vehicle?.manufactureDate,
                             VIN: vehicle?.vin,
                             'MOT Expires': vehicle?.motExpiryDate
                         }}
@@ -102,34 +117,48 @@ export const AllocatedJobCard: React.FC<{
                 </div>
                 <div className="flex items-center gap-1 flex-shrink-0">
                     {associatedPOs && associatedPOs.length > 0 && (
-                        <div className="relative" ref={poMenuRef}>
-                            <button
-                                onClick={(e) => { e.stopPropagation(); setIsPoMenuOpen(p => !p); }}
-                                className="flex items-center gap-1 p-0.5 rounded-sm hover:bg-white/20"
-                            >
-                                <PackageIcon size={12} />
-                                <span>{associatedPOs.length}</span>
-                            </button>
-                            {isPoMenuOpen && (
-                                <div className="absolute right-0 top-full mt-1 w-48 bg-white border rounded shadow-lg z-20 text-black animate-fade-in-up">
-                                    <div className="p-1 font-bold text-xs border-b bg-gray-50">Purchase Orders</div>
-                                    {associatedPOs.map(po => (
-                                        <button 
-                                            key={po.id} 
-                                            onClick={(e) => handleAction(e, () => { onOpenPurchaseOrder(po); setIsPoMenuOpen(false); })} 
-                                            className="w-full text-left p-1.5 text-xs hover:bg-indigo-50 font-mono flex justify-between items-center"
-                                        >
-                                            <span>{po.id}</span>
-                                            <span className={`px-1.5 py-0.5 text-[9px] font-semibold rounded-full ${getPoStatusColor(po.status, 'bg')} ${getPoStatusColor(po.status, 'text')}`}>
-                                                {po.status}
-                                            </span>
-                                        </button>
-                                    ))}
+                        <div className="flex gap-1">
+                            {associatedPOs.slice(0, 2).map(po => (
+                                <button 
+                                    key={po.id}
+                                    onClick={(e) => handleAction(e, () => onOpenPurchaseOrder(po))}
+                                    className={`flex items-center gap-1 px-2.5 py-0.5 rounded text-[10px] font-bold shadow-sm border border-white/20 ${getPoStatusColor(po.status, 'bg')} ${getPoStatusColor(po.status, 'text')}`}
+                                    title={`View PO #${po.id} (${po.status})`}
+                                >
+                                    <PackageIcon size={10} />
+                                    <span>{po.id.slice(-4)}</span>
+                                </button>
+                            ))}
+                            {associatedPOs.length > 2 && (
+                                <div className="relative" ref={poMenuRef}>
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); setIsPoMenuOpen(p => !p); }}
+                                        className="flex items-center gap-1 p-0.5 rounded-sm hover:bg-white/20 bg-white/20 text-[10px]"
+                                    >
+                                        <span>+{associatedPOs.length - 2}</span>
+                                    </button>
+                                    {isPoMenuOpen && (
+                                        <div className="absolute right-0 top-full mt-1 w-48 bg-white border rounded shadow-lg z-20 text-black animate-fade-in-up">
+                                            <div className="p-1 font-bold text-xs border-b bg-gray-50">Purchase Orders</div>
+                                            {associatedPOs.map(po => (
+                                                <button 
+                                                    key={po.id} 
+                                                    onClick={(e) => handleAction(e, () => { onOpenPurchaseOrder(po); setIsPoMenuOpen(false); })} 
+                                                    className="w-full text-left p-1.5 text-xs hover:bg-indigo-50 font-mono flex justify-between items-center"
+                                                >
+                                                    <span>{po.id}</span>
+                                                    <span className={`px-1.5 py-0.5 text-[9px] font-semibold rounded-full ${getPoStatusColor(po.status, 'bg')} ${getPoStatusColor(po.status, 'text')}`}>
+                                                        {po.status}
+                                                    </span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>
                     )}
-                    {job.keyNumber && <span className="flex items-center gap-1"><KeyRound size={12}/> {job.keyNumber}</span>}
+                    {job.keyNumber && <span className="flex items-center gap-1 bg-white/20 px-1 rounded"><KeyRound size={12}/> {job.keyNumber}</span>}
                 </div>
             </div>
             

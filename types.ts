@@ -334,6 +334,7 @@ export interface EstimateLineItem {
     preCalculatedVat?: number;     // Added for tax calculations
     
     type?: 'labor' | 'part' | 'package';
+    receivedQuantity?: number;
 }
 
 export interface Estimate {
@@ -456,6 +457,11 @@ export interface BusinessEntity {
     logoUrl?: string;
     type?: 'Workshop' | 'Sales' | 'Storage' | 'Rentals';
     dailyCapacityHours?: number;
+    bankAccountName?: string;
+    bankSortCode?: string;
+    bankAccountNumber?: string;
+    invoiceFooterText?: string;
+    logoImageId?: string;
 }
 
 export interface Engineer { 
@@ -507,6 +513,7 @@ export interface ChecklistSection {
     id: string;
     title: string;
     items: ChecklistItem[];
+    pageBreakBefore?: boolean;
 }
 
 export interface InspectionTemplate {

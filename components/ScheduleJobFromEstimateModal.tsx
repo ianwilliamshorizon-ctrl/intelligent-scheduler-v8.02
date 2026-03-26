@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Estimate, Customer, Vehicle, Job, BusinessEntity, AbsenceRequest, JobSegment, PurchaseOrder, Inquiry, Part, PurchaseOrderStatus, EstimateLineItem } from '../types';
 import { X, Calendar, CheckCircle, ChevronLeft, ChevronRight, AlertTriangle, Gauge, Clock } from 'lucide-react';
 import { formatDate, dateStringToDate, getRelativeDate, splitJobIntoSegments, addDays, findNextAvailableDate, formatReadableDate } from '../core/utils/dateUtils';
-import { generateJobId, generatePurchaseOrderId } from '../core/utils/numberGenerators';
+import { generateJobId } from '../core/utils/numberGenerators';
 import { BookingCalendarView } from './BookingCalendarView';
 import { MOTBookingModal } from './MOTBookingModal';
 import { TIME_SEGMENTS } from '../constants';
@@ -29,7 +29,7 @@ interface ScheduleJobFromEstimateModalProps {
 
 const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> = ({ isOpen, onClose, onConfirm, estimate, customer, vehicle, jobs, vehicles, maxDailyCapacityHours, businessEntities, customers, absenceRequests, onEditJob, inquiry, parts }) => {
     const { setConfirmation, currentUser } = useApp();
-    const { saveRecord, purchaseOrders } = useData();
+    const { saveRecord, purchaseOrders, servicePackages } = useData();
     const [scheduledDate, setScheduledDate] = useState(() => estimate.jobId ? getRelativeDate(0) : (estimate as any).requestedDate || getRelativeDate(0));
     const [suggestion, setSuggestion] = useState<{ suggestedDate: string; originalDate: string } | null>(null);
     const [currentMonth, setCurrentMonth] = useState(() => dateStringToDate(scheduledDate));
@@ -130,93 +130,7 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
 
     if (!isOpen) return null;
 
-    const preparePurchaseOrders = (job: Job, estimateToConvert: Estimate, inquiry?: Inquiry): PurchaseOrder[] => {
-        const allPOs = purchaseOrders || [];
-        const toCreate: PurchaseOrder[] = [];
-        const toUpdate: { [key: string]: PurchaseOrder } = {};
-        const processedInquiryPoIds = new Set<string>();
-    
-        const itemsNeedingOrder = (estimateToConvert.lineItems || [])
-            .filter(item => 
-                !item.isOptional && 
-                !item.fromStock && 
-                (!item.servicePackageId || item.isPackageComponent === true) &&
-                (item.unitCost || 0) > 0
-            )
-            .map(item => {
-                const part = parts.find(p => p.id === item.partId);
-                return { ...item, orderQuantity: item.quantity, partInfo: part };
-            });
-
-        const partsBySupplier: Record<string, typeof itemsNeedingOrder> = {};
-        itemsNeedingOrder.forEach(item => {
-            const supplierId = item.supplierId || item.partInfo?.defaultSupplierId || 'no_supplier';
-            if (!partsBySupplier[supplierId]) partsBySupplier[supplierId] = [];
-            partsBySupplier[supplierId].push(item);
-        });
-        
-        let poListForIdGeneration = [...allPOs];
-
-        Object.entries(partsBySupplier).forEach(([supplierId, items]) => {
-            const supId = supplierId === 'no_supplier' ? undefined : supplierId;
-            const inquiryDraftPO = inquiry?.linkedPurchaseOrderIds
-                ?.map(id => allPOs.find(p => p.id === id))
-                .find(po => po && po.status === 'Draft' && po.supplierId === supId);
-
-            const poLineItems = items.map(item => ({
-                id: crypto.randomUUID(),
-                partNumber: item.partNumber,
-                description: item.description,
-                quantity: item.orderQuantity,
-                receivedQuantity: 0,
-                unitPrice: item.unitCost || 0,
-                taxCodeId: item.taxCodeId,
-                supplierId: supId,
-                jobLineItemId: item.id
-            }));
-
-            if (inquiryDraftPO) {
-                if (!toUpdate[inquiryDraftPO.id]) {
-                    toUpdate[inquiryDraftPO.id] = { ...inquiryDraftPO };
-                }
-                const existingItems = toUpdate[inquiryDraftPO.id].lineItems || [];
-                toUpdate[inquiryDraftPO.id].lineItems = [...existingItems, ...poLineItems];
-                toUpdate[inquiryDraftPO.id].jobId = job.id;
-                toUpdate[inquiryDraftPO.id].status = 'Ordered';
-                processedInquiryPoIds.add(inquiryDraftPO.id);
-            } else {
-                const entity = businessEntities.find(e => e.id === job.entityId);
-                const entityShortCode = entity?.shortCode || 'UNK';
-                const vehicle = vehicles.find(v => v.id === job.vehicleId);
-                const newPOId = generatePurchaseOrderId(poListForIdGeneration, entityShortCode);
-
-                const newPO: PurchaseOrder = {
-                    id: newPOId,
-                    entityId: job.entityId,
-                    supplierId: supId,
-                    vehicleRegistrationRef: vehicle?.registration || 'N/A',
-                    orderDate: formatDate(new Date()),
-                    status: 'Ordered',
-                    jobId: job.id,
-                    createdByUserId: currentUser?.id || '',
-                    lineItems: poLineItems,
-                    notes: `Auto-generated from Estimate #${estimateToConvert.estimateNumber}`
-                };
-                toCreate.push(newPO);
-                poListForIdGeneration.push(newPO);
-            }
-        });
-
-        (inquiry?.linkedPurchaseOrderIds || []).forEach(poId => {
-            if (processedInquiryPoIds.has(poId)) return;
-            const po = allPOs.find(p => p.id === poId);
-            if (po && po.status === 'Draft') {
-                toUpdate[po.id] = { ...po, jobId: job.id, status: 'Ordered' };
-            }
-        });
-
-        return [...toCreate, ...Object.values(toUpdate)];
-    };
+    // Removed preparePurchaseOrders: Deferred to useWorkshopActions.syncPurchaseOrdersFromEstimate
 
     const handleConfirmClick = async () => {
         if (isMotRequired && !motBooking) {
@@ -290,16 +204,10 @@ Linked MOT Booking: #${motJobId} @ ${motBooking.time}`;
             mainJob.segments = splitJobIntoSegments(mainJob);
         }
 
-        const newPurchaseOrders = preparePurchaseOrders(mainJob, estimate, inquiry);
-        if (newPurchaseOrders.length > 0) {
-            mainJob.purchaseOrderIds = newPurchaseOrders.map(po => po.id);
-            mainJob.partsStatus = 'Awaiting Order';
-        } else {
-            mainJob.partsStatus = 'Not Required';
-        }
+        mainJob.partsStatus = 'Awaiting Order';
 
         const updatedEstimate: Estimate = { ...estimate, status: 'Converted to Job', jobId: mainJob.id };
-        onConfirm(mainJob, updatedEstimate, { isAlternative: false, originalDate: scheduledDate }, extraJobs, newPurchaseOrders);
+        onConfirm(mainJob, updatedEstimate, { isAlternative: false, originalDate: scheduledDate }, extraJobs);
     };
 
     const handleAcceptSuggestion = async () => {
@@ -317,14 +225,10 @@ Linked MOT Booking: #${motJobId} @ ${motBooking.time}`;
         let newJob: Job = { id: newJobId, entityId: estimate.entityId, vehicleId: estimate.vehicleId, customerId: estimate.customerId, description: `Work from Estimate #${estimate.estimateNumber}`, estimatedHours: laborHours, scheduledDate: suggestion.suggestedDate, status: 'Unallocated', createdAt: formatDate(new Date()), segments: [], estimateId: estimate.id, notes: estimate.notes, vehicleStatus: 'Awaiting Arrival', createdByUserId: '', };
         newJob.segments = splitJobIntoSegments(newJob);
 
-        const newPurchaseOrders = preparePurchaseOrders(newJob, estimate, inquiry);
-        if (newPurchaseOrders.length > 0) {
-            newJob.purchaseOrderIds = newPurchaseOrders.map(po => po.id);
-            newJob.partsStatus = 'Awaiting Order';
-        }
+        newJob.partsStatus = 'Awaiting Order';
 
         const updatedEstimate: Estimate = { ...estimate, status: 'Converted to Job', jobId: newJob.id };
-        onConfirm(newJob, updatedEstimate, { isAlternative: true, originalDate: suggestion.originalDate }, [], newPurchaseOrders);
+        onConfirm(newJob, updatedEstimate, { isAlternative: true, originalDate: suggestion.originalDate }, []);
     };
 
     const monthYearString = currentMonth.toLocaleString('default', { month: 'long', year: 'numeric', timeZone: 'UTC' });

@@ -6,10 +6,21 @@ import PurchaseOrderViewModal from './PurchaseOrderViewModal';
 import PurchaseOrderEditModal from './PurchaseOrderEditModal';
 import { useApp } from '../core/state/AppContext';
 import { formatCurrency } from '../core/utils/formatUtils';
+import { useWorkshopActions } from '../core/hooks/useWorkshopActions';
 
 const PurchaseOrdersTab: React.FC = () => {
     const { purchaseOrders, setPurchaseOrders, suppliers, parts, setParts } = useData();
     const { setConfirmation } = useApp();
+    const workshopActions = useWorkshopActions();
+    const handleDeletePo = (id: string) => {
+        setConfirmation({ 
+            isOpen: true, 
+            title: 'Delete Purchase Order', 
+            message: 'Are you sure you want to delete this purchase order?', 
+            onConfirm: () => workshopActions.handleDeletePurchaseOrder(id),
+            type: 'error'
+        });
+    };
     const [viewModalOpen, setViewModalOpen] = useState(false);
     const [editModalOpen, setEditModalOpen] = useState(false);
     const [selectedPo, setSelectedPo] = useState<T.PurchaseOrder | null>(null);
@@ -109,7 +120,7 @@ const PurchaseOrdersTab: React.FC = () => {
                                                 <Edit size={20} />
                                             </button>
                                         )}
-                                        <button onClick={() => { /* Placeholder for delete */ }} className="text-gray-500 hover:text-red-600 p-1">
+                                        <button onClick={() => handleDeletePo(po.id)} className="text-gray-500 hover:text-red-600 p-1">
                                             <Trash2 size={20} />
                                         </button>
                                     </td>

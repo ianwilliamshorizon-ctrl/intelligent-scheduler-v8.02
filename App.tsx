@@ -266,15 +266,11 @@ const App = () => {
     const renderCurrentView = () => {
         if (!currentUser) return null;
 
-        if (currentUser.role === 'Director') {
-            return <DirectorsDashboard />;
-        }
-
         switch (currentView) {
             case 'dashboard':
                 return <DashboardView {...commonProps} onCheckIn={(id) => setters.setCheckInJob((jobs || []).find(j => j.id === id) || null)} onOpenInquiry={(inq) => setters.setInquiryModal({isOpen: true, inquiry: inq})} />;
             case 'directors-dashboard':
-                if (currentUser.role === 'Admin') {
+                if (currentUser.role === 'Admin' || currentUser.role === 'Director') {
                     return <DirectorsDashboard />;
                 }
                 return <DashboardView {...commonProps} onCheckIn={(id) => setters.setCheckInJob((jobs || []).find(j => j.id === id) || null)} onOpenInquiry={(inq) => setters.setInquiryModal({isOpen: true, inquiry: inq})} />;

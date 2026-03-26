@@ -197,7 +197,7 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, customer, 
                     )}
 
                     <div className="invoice-content flex-grow flex flex-col z-10">
-                        <header className="border-b" style={{ paddingBottom: '25mm' }}>
+                        <header className="border-b" style={{ paddingBottom: '10mm' }}>
                             <div className="flex justify-between items-start">
                                 <div style={{ marginBottom: '5mm' }}>
                                     <h1 className="text-3xl font-bold text-gray-900">{entity?.name}</h1>
@@ -205,11 +205,6 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, customer, 
                                     <p>{entity?.city}, {entity?.postcode}</p>
                                     {entity?.vatNumber && <p className="mt-1">VAT No: {entity.vatNumber}</p>}
                                 </div>
-                                {entity?.logoImageId && (
-                                    <div style={{ width: '70mm', height: '35mm', display: 'flex', justifyContent: 'flex-end', marginRight: '15mm' }}>
-                                        <AsyncImage imageId={entity.logoImageId} className="max-w-full max-h-full object-contain" />
-                                    </div>
-                                )}
                             </div>
                             <div className="mt-6">
                                 <h2 className="text-2xl font-semibold text-gray-800">INVOICE</h2>
@@ -304,8 +299,9 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, customer, 
                             </div>
                         </main>
                         
-                        <footer className="mt-8 pt-4 border-t text-center text-xs text-gray-500">
-                            <p>{entity?.invoiceFooterText}</p>
+                        <footer className="mt-auto pt-4 border-t text-center text-[11px] text-gray-600">
+                            <p className="font-bold">Thank you for your business.</p>
+                            <p>{(entity?.invoiceFooterText || '').replace(/please pay in 30 days/gi, '').trim()}</p>
                         </footer>
                     </div>
                 </div>

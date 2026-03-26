@@ -22,8 +22,29 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
         parts, setParts,
         businessEntities, 
         vehicles, setVehicles,
-        customers
+        customers, servicePackages
     } = data;
+
+    const resolveSupplierId = useCallback((li: T.EstimateLineItem) => {
+        // 1. Explicitly set on line item
+        if (li.supplierId && li.supplierId !== '') return li.supplierId;
+
+        // 2. Default on Part record
+        const part = parts.find(p => p.id === li.partId || (p.partNumber === li.partNumber && p.partNumber));
+        if (part?.defaultSupplierId) return part.defaultSupplierId;
+
+        // 3. From original Service Package definition
+        if (li.servicePackageId) {
+            const pkg = servicePackages.find(p => p.id === li.servicePackageId);
+            const costItem = pkg?.costItems?.find(ci => 
+                (ci.partNumber === li.partNumber && li.partNumber) || 
+                (ci.description === li.description && li.description)
+            );
+            if (costItem?.supplierId) return costItem.supplierId;
+        }
+
+        return null;
+    }, [parts, servicePackages]);
 
     const getCollectionName = (item: any): string => {
         if ('estimateNumber' in item) return 'brooks_estimates';
@@ -140,12 +161,7 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
         
         setPurchaseOrders(prev => prev.filter(p => p.id !== purchaseOrderId));
     
-        setConfirmation({
-            isOpen: true,
-            title: 'Purchase Order Deleted',
-            message: `Purchase Order #${purchaseOrderId} has been permanently deleted.`,
-            type: 'success',
-        });
+        showSuccess(`Purchase Order #${purchaseOrderId} has been permanently deleted.`);
     };
 
     const updateLinkedInquiryStatus = async (estimateId: string, newStatus: T.Inquiry['status'], extraUpdates: Partial<T.Inquiry> = {}) => {
@@ -155,7 +171,18 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
         }
     };
 
-    const syncPurchaseOrdersFromEstimate = async (estimate: T.Estimate) => {
+    const getMaxPONumber = () => {
+        const poNumbers = (purchaseOrders || []).map(po => {
+            // Match digits from the end of the ID
+            const numPart = po.id.match(/\d+$/);
+            return numPart ? parseInt(numPart[0], 10) : 0;
+        });
+        const currentMax = Math.max(0, ...poNumbers);
+        // Ensure we at least start from a reasonable floor if collection is empty
+        return currentMax > 0 ? currentMax : 1000; 
+    };
+
+    const syncPurchaseOrdersFromEstimate = async (estimate: T.Estimate, options?: { forceNew?: boolean }) => {
         if (!estimate || !estimate.jobId) {
             console.warn("⚠️ syncPurchaseOrdersFromEstimate: Missing estimate or jobId", estimate);
             return;
@@ -167,119 +194,166 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
         }
 
         syncingJobs.add(estimate.jobId);
-        console.log(`🔄 Starting PO Sync for Job: ${estimate.jobId}`);
+        console.log(`🔄 Starting PO Sync for Job: ${estimate.jobId} (ForceNew: ${!!options?.forceNew})`);
 
         try {
             const job = jobs.find(j => j.id === estimate.jobId);
             const poIds = job?.purchaseOrderIds || [];
             
-            const linkedPOs = purchaseOrders.filter(po => 
-                (po.jobId === estimate.jobId || poIds.includes(po.id)) && 
-                po.status !== 'Cancelled'
-            );
+            // 1. Filter items that need ordering
+            const activeItemsForPO = (estimate.lineItems || []).filter(li => {
+                // Labor exclusion
+                if (li.isLabor || li.type === 'labor' || li.description?.toLowerCase().includes('labour')) return false;
+                
+                // Stock exclusion: Check both the item flag and the part's current status
+                const part = parts.find(p => p.id === li.partId || (p.partNumber === li.partNumber && p.partNumber));
+                const isActuallyStock = li.fromStock || (part?.isStockItem && part.stockQuantity > 0);
+                if (isActuallyStock) return false;
 
-            const activeItemsForPO = (estimate.lineItems || []).filter(li => 
-                !li.fromStock && 
-                (!li.servicePackageId || !!li.isPackageComponent) &&
-                !li.isLabor
-            );
+                // User requirement: Do not re-order items that are already received
+                if ((li.receivedQuantity || 0) > 0) return false;
 
-            console.log(`📊 Found ${activeItemsForPO.length} items candidate for PO. (Total items: ${estimate.lineItems?.length})`);
+                // User requirement: Do not re-order if already linked to an active (Ordered/Received) PO
+                if (li.purchaseOrderLineItemId) {
+                    const linkedPO = purchaseOrders.find(po => po.lineItems?.some(poi => poi.id === li.purchaseOrderLineItemId));
+                    if (linkedPO && linkedPO.status !== 'Draft' && linkedPO.status !== 'Cancelled') return false;
+                }
 
-            const itemsWithoutSupplier = activeItemsForPO.filter(li => !li.supplierId && !parts.find(p => p.id === li.partId)?.defaultSupplierId);
-            if (itemsWithoutSupplier.length > 0) {
-                console.warn(`⚠️ ${itemsWithoutSupplier.length} items have no supplier selected. They will be skipped unless assigned.`);
-            }
+                // Structure: Only package components or standalone items
+                if (li.servicePackageId && !li.isPackageComponent) return false;
 
+                return true;
+            });
+
+            console.log(`📊 Found ${activeItemsForPO.length} items candidate for PO.`);
+
+            // 2. Map to keep track of POs we are using/creating in this sync session
+            const sessionPOsBySupplier = new Map<string, T.PurchaseOrder>();
             let poChanged = false;
-            // Use local copies to avoid state-clash
-            const currentPOs = JSON.parse(JSON.stringify(linkedPOs)) as T.PurchaseOrder[];
-            const linkedPOsBeforeIds = linkedPOs.map(po => po.id);
+
+            // 3. Get existing PO pool ONLY if not forcing new
+            const existingLinkedPOs = !options?.forceNew 
+                ? purchaseOrders.filter(po => 
+                    (po.jobId === estimate.jobId || poIds.includes(po.id)) && 
+                    po.status === 'Draft'
+                )
+                : [];
 
             const entityId = estimate.entityId || job?.entityId;
             const entity = businessEntities.find(e => e.id === entityId);
             const entityShortCode = (entity?.shortCode || 'UNK').toUpperCase();
             const vehicle = vehicles.find(v => v.id === estimate.vehicleId);
 
-            const getMaxPONumber = () => {
-                const prefix = `${entityShortCode}944`;
-                let max = 0;
-                purchaseOrders.forEach(po => {
-                    if (po.id.startsWith(prefix)) {
-                        const num = parseInt(po.id.substring(prefix.length), 10);
-                        if (!isNaN(num) && num > max) max = num;
-                    }
-                });
-                return max;
-            };
-
             for (const li of activeItemsForPO) {
-                const resolvedSupplierId = li.supplierId || parts.find(p => p.id === li.partId)?.defaultSupplierId;
-                if (!resolvedSupplierId) continue; // Skip if still no supplier
+                const resolvedSupplierId = resolveSupplierId(li);
+                const sIdKey = (resolvedSupplierId && resolvedSupplierId !== '') ? resolvedSupplierId : 'PENDING_SUPPLIER';
+                
+                // If we are forcing new POs and it was linked to a Draft PO (which we've filtered for above), 
+                // clear it to ensure a fresh PO is created but only for those that need it
+                if (options?.forceNew) li.purchaseOrderLineItemId = undefined;
 
-                let targetPO = currentPOs.find(po => 
-                    (po.lineItems || []).some(poi => (li.purchaseOrderLineItemId && poi.id === li.purchaseOrderLineItemId) || poi.jobLineItemId === li.id)
-                );
+                let targetPO: T.PurchaseOrder | null = null;
+
+                // A. Check our session map first (to bundle items for same supplier together in one go)
+                targetPO = sessionPOsBySupplier.get(sIdKey) || null;
+
+                // B. If not in session map and not forcing new, look in existing POs
+                if (!targetPO && !options?.forceNew) {
+                    targetPO = existingLinkedPOs.find(po => {
+                        const poSupId = po.supplierId || 'PENDING_SUPPLIER';
+                        return poSupId === sIdKey;
+                    }) || null;
+                    
+                    if (targetPO) sessionPOsBySupplier.set(sIdKey, targetPO);
+                }
 
                 if (targetPO) {
-                    if (['Received', 'Finalized'].includes(targetPO.status)) continue;
-                    const poiIndex = (targetPO.lineItems || []).findIndex(poi => (li.purchaseOrderLineItemId && poi.id === li.purchaseOrderLineItemId) || poi.jobLineItemId === li.id);
-                    if (poiIndex !== -1 && targetPO.lineItems) {
-                        const poi = targetPO.lineItems[poiIndex];
-                        if (poi.quantity !== li.quantity || poi.unitPrice !== li.unitCost || poi.description !== li.description) {
-                            targetPO.lineItems[poiIndex] = { ...poi, quantity: li.quantity, unitPrice: li.unitCost || 0, description: li.description || '', partNumber: li.partNumber || '', jobLineItemId: li.id };
+                    // C. Add or update line item in target PO
+                    const poiIndex = (targetPO.lineItems || []).findIndex(poi => 
+                        (li.purchaseOrderLineItemId && poi.id === li.purchaseOrderLineItemId) || 
+                        poi.jobLineItemId === li.id
+                    );
+
+                    const newPoiData = {
+                        id: li.purchaseOrderLineItemId || crypto.randomUUID(),
+                        jobLineItemId: li.id,
+                        description: li.description || '',
+                        partNumber: li.partNumber || '',
+                        quantity: li.quantity,
+                        unitPrice: li.unitCost || 0,
+                        receivedQuantity: li.receivedQuantity || 0,
+                        taxCodeId: li.taxCodeId || ''
+                    };
+
+                    if (poiIndex !== -1) {
+                        const existingPoi = targetPO.lineItems[poiIndex];
+                        if (JSON.stringify(existingPoi) !== JSON.stringify(newPoiData)) {
+                            targetPO.lineItems[poiIndex] = newPoiData;
                             poChanged = true;
                         }
+                    } else {
+                        if (!targetPO.lineItems) targetPO.lineItems = [];
+                        targetPO.lineItems.push(newPoiData);
+                        li.purchaseOrderLineItemId = newPoiData.id;
+                        poChanged = true;
+                    }
+                    
+                    if (targetPO.jobId !== estimate.jobId) {
+                        targetPO.jobId = estimate.jobId;
+                        poChanged = true;
                     }
                 } else {
-                    let existingDraftPO = currentPOs.find(po => po.supplierId === resolvedSupplierId && po.status === 'Draft');
+                    // D. Create New PO for this supplier
+                    const nextNum = getMaxPONumber() + 1;
+                    const entityPrefix = entityShortCode || 'BRK';
                     
-                    if (existingDraftPO) {
-                        const newPoiId = crypto.randomUUID();
-                        if (!existingDraftPO.lineItems) existingDraftPO.lineItems = [];
-                        existingDraftPO.lineItems.push({ id: newPoiId, jobLineItemId: li.id, description: li.description || '', partNumber: li.partNumber || '', quantity: li.quantity, unitPrice: li.unitCost || 0, receivedQuantity: 0, taxCodeId: li.taxCodeId || '' });
-                        li.purchaseOrderLineItemId = newPoiId;
-                        poChanged = true;
-                        console.log(`➕ Added item to existing Draft PO: ${existingDraftPO.id}`);
-                    } else {
-                        const transId = await generateSequenceId('944', entityShortCode);
-                        const transNum = parseInt(transId.substring(transId.length - 6), 10);
-                        const arrayMax = getMaxPONumber();
-                        let finalPOId = transId;
-                        
-                        if (arrayMax >= transNum) {
-                            finalPOId = `${entityShortCode}944${String(arrayMax + 1).padStart(6, '0')}`;
-                        }
-
-                        const newPoiId = crypto.randomUUID();
-                        const newPO: T.PurchaseOrder = { id: finalPOId, entityId: entityId, supplierId: resolvedSupplierId, vehicleRegistrationRef: vehicle?.registration || 'N/A', orderDate: formatDate(new Date()), status: 'Draft', jobId: estimate.jobId, createdByUserId: currentUser.id, lineItems: [{ id: newPoiId, jobLineItemId: li.id, description: li.description || '', partNumber: li.partNumber || '', quantity: li.quantity, unitPrice: li.unitCost || 0, receivedQuantity: 0, taxCodeId: li.taxCodeId || '' }] };
-                        currentPOs.push(newPO);
-                        li.purchaseOrderLineItemId = newPoiId;
-                        poChanged = true;
-                        console.log(`🆕 Created New Draft PO: ${newPO.id} for supplier ${resolvedSupplierId}`);
-                    }
+                    // Logic to handle the 944 sequence correctly
+                    // If nextNum already looks like 944XXXXXX (from existing data), use it as is.
+                    // Otherwise (e.g. starting fresh), prepend 944.
+                    const finalNumStr = nextNum >= 944000000 ? String(nextNum) : `944${String(nextNum).padStart(6, '0')}`;
+                    const newPOId = `${entityPrefix}${finalNumStr}`;
+                    
+                    const newPoiId = crypto.randomUUID();
+                    const newPO: T.PurchaseOrder = { 
+                        id: newPOId, 
+                        entityId: entityId, 
+                        supplierId: sIdKey === 'PENDING_SUPPLIER' ? '' : sIdKey, 
+                        vehicleRegistrationRef: vehicle?.registration || 'N/A', 
+                        orderDate: formatDate(new Date()), 
+                        status: 'Draft', 
+                        jobId: estimate.jobId, 
+                        createdByUserId: currentUser.id, 
+                        lineItems: [{ 
+                            id: newPoiId, 
+                            jobLineItemId: li.id, 
+                            description: li.description || '', 
+                            partNumber: li.partNumber || '', 
+                            quantity: li.quantity, 
+                            unitPrice: li.unitCost || 0, 
+                            receivedQuantity: li.receivedQuantity || 0, 
+                            taxCodeId: li.taxCodeId || '' 
+                        }] 
+                    };
+                    li.purchaseOrderLineItemId = newPoiId;
+                    sessionPOsBySupplier.set(sIdKey, newPO);
+                    poChanged = true;
+                    console.log(`🆕 Created New Session PO: ${newPO.id} for supplier ${sIdKey}`);
                 }
             }
 
-            const activeEstLineItemIds = new Set(activeItemsForPO.map(li => li.id));
-            for (const po of currentPOs) {
-                if (['Received', 'Finalized'].includes(po.status)) continue;
-                const originalCount = (po.lineItems || []).length;
-                po.lineItems = (po.lineItems || []).filter(poi => !poi.jobLineItemId || activeEstLineItemIds.has(poi.jobLineItemId));
-                if (po.lineItems.length !== originalCount) poChanged = true;
-            }
-
-            if (poChanged) {
-                console.log("💾 saving synchronized purchase orders...");
-                const newPOIds: string[] = [];
-                for (const po of currentPOs) {
-                     await handleSaveItem(setPurchaseOrders, po, 'brooks_purchaseOrders');
-                     if (!linkedPOsBeforeIds.includes(po.id)) newPOIds.push(po.id);
+            // 4. Save all session POs that were adjusted
+            if (poChanged || sessionPOsBySupplier.size > 0) {
+                const allActivePOIds = new Set(poIds);
+                
+                for (const po of sessionPOsBySupplier.values()) {
+                    await handleSaveItem(setPurchaseOrders, po, 'brooks_purchaseOrders');
+                    allActivePOIds.add(po.id);
                 }
+
+                // 5. Update Job & Estimate
                 const currentJob = jobs.find(j => j.id === estimate.jobId);
                 if (currentJob) {
-                    const existingPOIds = Array.isArray(currentJob.purchaseOrderIds) ? currentJob.purchaseOrderIds : [];
-                    const updatedJob = { ...currentJob, purchaseOrderIds: [...new Set([...existingPOIds, ...newPOIds])] };
+                    const updatedJob = { ...currentJob, purchaseOrderIds: Array.from(allActivePOIds) };
                     await handleSaveItem(setJobs, updatedJob, 'brooks_jobs');
                 }
                 await handleSaveItem(setEstimates, estimate, 'brooks_estimates');
@@ -289,7 +363,7 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
             }
         } catch (err) {
             console.error("❌ PO Sync Failed:", err);
-            showError("An error occurred while synchronizing purchase orders. Please check the console.");
+            showError("An error occurred while synchronizing purchase orders.");
         } finally {
             syncingJobs.delete(estimate.jobId);
         }
@@ -388,20 +462,21 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
             status: 'Approved', 
             notes: notes ? `${estimate.notes || ''}\n${notes}` : estimate.notes 
         };
-
-        const createPOs = async (targetJobId: string, entityShortCode: string, itemsForPO: T.EstimateLineItem[]) => {
-            // Filter: non-labor, not from stock, and NOT an MOT service
+        // Unified PO creation helper for this hook
+        const createPOs = async (targetJobId: string, entityShortCode: string, itemsForPO: T.EstimateLineItem[], options?: { forceNew?: boolean }) => {
             const partItems = itemsForPO.filter(li => 
                 !li.fromStock &&
-                (!li.servicePackageId || li.isPackageComponent === true) &&
-                (li.unitCost || 0) > 0
+                !li.isLabor && 
+                li.type !== 'labor' &&
+                !li.description?.toLowerCase().includes('labour') &&
+                (!li.servicePackageId || li.isPackageComponent === true)
             );
             const poIds: string[] = [];
             if (partItems.length > 0) {
                 const partsBySupplier: Record<string, T.EstimateLineItem[]> = {};
                 partItems.forEach(item => {
-                    const partDef = parts.find(p => p.id === item.partId);
-                    const sId = item.supplierId || partDef?.defaultSupplierId || 'PENDING_SUPPLIER';
+                    const resolvedSupplierId = resolveSupplierId(item);
+                    const sId = resolvedSupplierId || 'PENDING_SUPPLIER';
                     if (!partsBySupplier[sId]) partsBySupplier[sId] = [];
                     partsBySupplier[sId].push(item);
                 });
@@ -429,7 +504,7 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
                             jobLineItemId: item.id
                         }))
                     };
-                    await handleSavePurchaseOrder(newPO);
+                    await saveDocument('brooks_purchaseOrders', newPO);
                     poIds.push(newPOId);
                 }
             }
@@ -440,9 +515,8 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
             const existingJob = jobs.find(j => j.id === estimate.jobId);
             if (existingJob) {
                 const entity = businessEntities.find(e => e.id === existingJob.entityId);
-                // Assign to global tracker
                 allGeneratedPOIds = await createPOs(existingJob.id, entity?.shortCode || 'UNK', approvedLineItems);
-        
+                
                 let jobToSave: T.Job | null = null;
                 setJobs(prevJobs => {
                     const jobIndex = prevJobs.findIndex(j => j.id === existingJob.id);
@@ -453,7 +527,7 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
                     const currentPOIds = new Set(job.purchaseOrderIds || []);
                     allGeneratedPOIds.forEach(id => currentPOIds.add(id));
                     const uniquePurchaseOrderIds = Array.from(currentPOIds);
-        
+                    
                     const existingLineItemIds = new Set((job.lineItems || []).map(li => li.id));
                     const newItemsFromEstimate = approvedLineItems.filter(item => !existingLineItemIds.has(item.id));
                     const updatedLineItems = [...(job.lineItems || []), ...newItemsFromEstimate];

@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { PurchaseOrder } from '../../types';
-import { Edit, Trash2, Search, PlusCircle, Download, Printer, Eye, RefreshCcw } from 'lucide-react';
+import { Edit, Trash2, Search, PlusCircle, Download, Printer, RefreshCcw } from 'lucide-react';
 import { formatCurrency } from '../../core/utils/formatUtils';
 import { getRelativeDate } from '../../core/utils/dateUtils';
 import { useData } from '../../core/state/DataContext';
@@ -9,19 +9,19 @@ import { useApp } from '../../core/state/AppContext';
 import { usePrint } from '../../core/hooks/usePrint';
 import PrintablePurchaseOrderList from '../../components/PrintablePurchaseOrderList';
 import { StatusFilter } from '../../components/shared/StatusFilter';
-import useToaster from '../../hooks/useToaster';
+import { useWorkshopActions } from '../../core/hooks/useWorkshopActions';
 
-const PurchaseOrdersView = ({ onOpenPurchaseOrderModal, onViewPurchaseOrder, onExport, onOpenBatchAddModal, onOpenBatchUpdateRefModal }: { 
+const PurchaseOrdersView = ({ onOpenPurchaseOrderModal, onExport, onOpenBatchUpdateRefModal }: { 
     onOpenPurchaseOrderModal: (po: PurchaseOrder | null) => void, 
     onViewPurchaseOrder: (po: PurchaseOrder) => void,
     onExport: (data: any[], type: string) => void, 
     onOpenBatchAddModal: () => void,
     onOpenBatchUpdateRefModal: () => void
 }) => {
-    const { purchaseOrders, suppliers, businessEntities, setPurchaseOrders, forceRefresh } = useData();
-    const { selectedEntityId } = useApp();
-    const { showSuccess } = useToaster();
+    const { purchaseOrders, suppliers, forceRefresh } = useData();
+    const { selectedEntityId, setConfirmation } = useApp();
     const print = usePrint();
+    const workshopActions = useWorkshopActions();
 
     const [filter, setFilter] = useState('');
     const [statusFilter, setStatusFilter] = useState<PurchaseOrder['status'][]>([]);
@@ -62,10 +62,13 @@ const PurchaseOrdersView = ({ onOpenPurchaseOrderModal, onViewPurchaseOrder, onE
     };
     
     const handleDeletePurchaseOrder = (id: string) => {
-        if (window.confirm('Are you sure you want to delete this purchase order?')) {
-            setPurchaseOrders(prev => prev.filter(po => po.id !== id));
-            showSuccess('Purchase order deleted successfully.');
-        }
+        setConfirmation({
+            isOpen: true,
+            title: 'Delete Purchase Order',
+            message: 'Are you sure you want to delete this purchase order? This will permanently remove it and unlink it from any jobs.',
+            onConfirm: () => workshopActions.handleDeletePurchaseOrder(id),
+            type: 'error'
+        });
     };
 
     const poStatusOptions: readonly PurchaseOrder['status'][] = ['Draft', 'Ordered', 'Partially Received', 'Received', 'Cancelled'];
@@ -166,7 +169,7 @@ const PurchaseOrdersView = ({ onOpenPurchaseOrderModal, onViewPurchaseOrder, onE
                                          <div className="flex gap-1 justify-end">
                                             <button onClick={() => onOpenPurchaseOrderModal(po)} className="p-1.5 text-indigo-600 hover:bg-indigo-100 rounded-full" title="Edit"><Edit size={16} /></button>
                                             <button onClick={() => handleDeletePurchaseOrder(po.id)} className="p-1.5 text-red-600 hover:bg-red-100 rounded-full" title="Delete"><Trash2 size={16} /></button>
-                                        </div>
+                                         </div>
                                     </td>
                                 </tr>
                             ))}

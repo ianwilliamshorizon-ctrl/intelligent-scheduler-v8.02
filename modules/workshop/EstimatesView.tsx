@@ -268,6 +268,7 @@ const EstimatesView: React.FC<EstimatesViewProps> = ({ onOpenEstimateModal, onVi
                                                         make: vehicle.make, 
                                                         model: vehicle.model, 
                                                         year: vehicle.year, 
+                                                        'Year of Manufacture': vehicle.manufactureDate,
                                                         vin: vehicle.vin, 
                                                         motExpiry: vehicle.motExpiryDate 
                                                     }}

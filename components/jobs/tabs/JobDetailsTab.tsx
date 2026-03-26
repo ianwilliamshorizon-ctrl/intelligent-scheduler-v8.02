@@ -64,6 +64,7 @@ const JobDetailsTab: React.FC<JobDetailsTabProps> = ({
     const vehicleInfoData = vehicle ? {
         type: `${vehicle.year || ''} ${vehicle.make || ''} ${vehicle.model || ''}`.trim() || 'N/A',
         colour: vehicle.colour || 'N/A',
+        'Year of Manufacture': vehicle.manufactureDate || 'N/A',
         vin: vehicle.vin || 'N/A',
         motDue: vehicle.nextMotDate || 'N/A',
     } : {};

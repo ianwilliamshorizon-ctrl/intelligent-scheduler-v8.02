@@ -21,6 +21,9 @@ import InspectionChecklist from './InspectionChecklist';
 import { calculatePackagePrices } from '../core/utils/packageUtils';
 import { useDebouncedSave } from '../core/hooks/useDebouncedSave';
 import { calculateJobPartsStatus } from '../core/utils/jobUtils';
+import { MOTBookingModal } from './MOTBookingModal';
+import { TIME_SEGMENTS } from '../constants';
+import { generateJobId } from '../core/utils/numberGenerators';
 
 const EditJobModal: React.FC<{
     isOpen: boolean;
@@ -102,6 +105,7 @@ const EditJobModal: React.FC<{
     const [isCreatingPackage, setIsCreatingPackage] = useState(false);
     const [isPackageModalOpen, setIsPackageModalOpen] = useState(false);
     const [suggestedPackage, setSuggestedPackage] = useState<Partial<T.ServicePackage> | null>(null);
+    const [isMotBookingOpen, setIsMotBookingOpen] = useState(false);
 
     const job = useMemo(() => (Array.isArray(jobs) ? jobs : []).find(j => j.id === selectedJobId), [jobs, selectedJobId]);
     const vehicle = useMemo(() => job ? (Array.isArray(vehicles) ? vehicles : []).find(v => v.id === job.vehicleId) : undefined, [job, vehicles]);
@@ -361,7 +365,87 @@ const EditJobModal: React.FC<{
     
         setEditableEstimate(prev => ({ ...prev!, lineItems: currentLineItems }));
     
+        // Check if the added package contains an MOT
+        const isMot = pkg.name?.toLowerCase().includes('mot') || pkg.costItems?.some(ci => ci.description?.toLowerCase().includes('mot'));
+        if (isMot) {
+            setIsMotBookingOpen(true);
+        }
     }, [safeServicePackages, handleCreateEstimateIfNeeded, safeTaxRates, standardTaxRateId, t99RateId, safeParts, handleSaveItem, setParts]);
+
+    const handleMotSelect = async (date: string, time: string, liftId: string) => {
+        if (!editableJob) return;
+        
+        const entity = safeBusinessEntities.find(e => e.id === editableJob.entityId);
+        const entityShortCode = entity?.shortCode || 'UNK';
+        const timeIndex = TIME_SEGMENTS.indexOf(time);
+        
+        const motJobId = `${editableJob.id}-MOT`;
+        // Check if MOT job already exists to avoid duplicates
+        if (safeJobs.some(j => j.id === motJobId)) {
+            setConfirmation({
+                isOpen: true,
+                title: 'MOT Already Scheduled',
+                message: 'A dedicated MOT job card already exists for this master job.',
+                type: 'warning'
+            });
+            return;
+        }
+
+        const motJob: T.Job = {
+            id: motJobId,
+            entityId: editableJob.entityId,
+            vehicleId: editableJob.vehicleId,
+            vehicleRegistration: vehicle?.registration || editableJob.vehicleRegistration, // Ensure reg is passed for calendar visibility
+            customerId: editableJob.customerId,
+            description: `MOT Test - ${vehicle?.registration || 'N/A'} (Linked to ${editableJob.id})`,
+            estimatedHours: 1,
+            scheduledDate: date,
+            status: 'Allocated',
+            createdAt: formatDate(new Date()),
+            createdByUserId: currentUser?.id || '',
+            segments: [],
+            vehicleStatus: 'Awaiting Arrival',
+            notes: `Linked to Master Job #${editableJob.id}. Do not invoice separately.`,
+            partsStatus: 'Not Required'
+        };
+
+        if (timeIndex !== -1) {
+            motJob.segments = [{
+                id: crypto.randomUUID(),
+                description: 'MOT',
+                segmentId: crypto.randomUUID(),
+                date: date,
+                duration: 1,
+                status: 'Allocated',
+                allocatedLift: liftId,
+                scheduledStartSegment: timeIndex,
+                engineerId: null
+            }];
+        }
+
+        await handleSaveItem(setJobs, motJob, 'brooks_jobs');
+        
+        // Ensure UI updates by forcing a refresh of the jobs collection
+        if (forceRefresh) {
+            await forceRefresh('brooks_jobs');
+        }
+        
+        // Update main job notes to reflect the link
+        setEditableJob(prev => {
+            if (!prev) return null;
+            return {
+                ...prev,
+                notes: `${prev.notes || ''}\n\nLinked MOT Booking: #${motJobId} @ ${time}`
+            };
+        });
+
+        setConfirmation({
+            isOpen: true,
+            title: 'MOT Job Created',
+            message: `A separate MOT job (${motJobId}) has been created and scheduled for ${date} at ${time}.`,
+            type: 'success'
+        });
+    };
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
@@ -965,6 +1049,15 @@ const EditJobModal: React.FC<{
                 />
             )}
             {isPackageModalOpen && editableJob && <ServicePackageFormModal isOpen={isPackageModalOpen} onClose={() => setIsPackageModalOpen(false)} onSave={async (pkg) => { const savedPackage = await handleSaveItem(setServicePackages, pkg, 'brooks_servicePackages'); addPackage(savedPackage.id); setIsPackageModalOpen(false); }} servicePackage={suggestedPackage} taxRates={safeTaxRates} entityId={editableJob.entityId || ((safeBusinessEntities)[0]?.id || '')} businessEntities={safeBusinessEntities} parts={safeParts} />}
+            {isMotBookingOpen && editableJob && (
+                <MOTBookingModal 
+                    isOpen={isMotBookingOpen}
+                    onClose={() => setIsMotBookingOpen(false)}
+                    onSelect={handleMotSelect}
+                    entityId={editableJob.entityId || ''}
+                    initialDate={editableJob.scheduledDate}
+                />
+            )}
         </div>
     );
 };

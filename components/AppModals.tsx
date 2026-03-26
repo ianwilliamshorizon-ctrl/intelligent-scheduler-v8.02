@@ -177,10 +177,32 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                     isOpen={true}
                     onClose={() => setters.setIsSmartCreateOpen(false)}
                     creationMode={modals.smartCreateMode}
-                    onJobCreate={(jobData) => { handleSaveItem(data.setJobs, { ...jobData, createdByUserId: currentUser.id }, 'brooks_jobs'); setters.setIsSmartCreateOpen(false); }}
-                    onVehicleAndJobCreate={(c, v, j) => { handleSaveItem(actions.setCustomers, c, 'brooks_customers'); handleSaveItem(actions.setVehicles, v, 'brooks_vehicles'); handleSaveItem(data.setJobs, { ...j, createdByUserId: currentUser.id }, 'brooks_jobs'); setters.setIsSmartCreateOpen(false); }}
-                    onEstimateCreate={(estData) => { handleSaveItem(data.setEstimates, estData, 'brooks_estimates'); setters.setIsSmartCreateOpen(false); }}
-                    onVehicleAndEstimateCreate={(c, v, e) => { handleSaveItem(actions.setCustomers, c, 'brooks_customers'); handleSaveItem(actions.setVehicles, v, 'brooks_vehicles'); handleSaveItem(data.setEstimates, e, 'brooks_estimates'); setters.setIsSmartCreateOpen(false); }}
+                    onJobCreate={async (jobData) => { 
+                        await handleSaveItem(data.setJobs, { ...jobData, createdByUserId: currentUser.id }, 'brooks_jobs'); 
+                        const est = data.estimates.find(e => e.id === jobData.estimateId);
+                        if (est) await workshopActions.syncPurchaseOrdersFromEstimate(est, { forceNew: true });
+                        setters.setIsSmartCreateOpen(false); 
+                    }}
+                    onVehicleAndJobCreate={async (c, v, j) => { 
+                        await handleSaveItem(actions.setCustomers, c, 'brooks_customers'); 
+                        await handleSaveItem(actions.setVehicles, v, 'brooks_vehicles'); 
+                        await handleSaveItem(data.setJobs, { ...j, createdByUserId: currentUser.id }, 'brooks_jobs'); 
+                        const est = data.estimates.find(e => e.id === j.estimateId);
+                        if (est) await workshopActions.syncPurchaseOrdersFromEstimate(est, { forceNew: true });
+                        setters.setIsSmartCreateOpen(false); 
+                    }}
+                    onEstimateCreate={async (estData) => { 
+                        await handleSaveItem(data.setEstimates, estData, 'brooks_estimates'); 
+                        if (estData.jobId) await workshopActions.syncPurchaseOrdersFromEstimate(estData, { forceNew: true });
+                        setters.setIsSmartCreateOpen(false); 
+                    }}
+                    onVehicleAndEstimateCreate={async (c, v, e) => { 
+                        await handleSaveItem(actions.setCustomers, c, 'brooks_customers'); 
+                        await handleSaveItem(actions.setVehicles, v, 'brooks_vehicles'); 
+                        await handleSaveItem(data.setEstimates, e, 'brooks_estimates'); 
+                        if (e.jobId) await workshopActions.syncPurchaseOrdersFromEstimate(e, { forceNew: true });
+                        setters.setIsSmartCreateOpen(false); 
+                    }}
                     vehicles={data.vehicles}
                     customers={data.customers}
                     servicePackages={data.servicePackages}
@@ -527,7 +549,7 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                     <ScheduleJobFromEstimateModal 
                         isOpen={true}
                         onClose={() => setters.setScheduleJobFromEstimateModal({isOpen: false, estimate: null})}
-                        onConfirm={async (job, est, options, extraJobs, newPurchaseOrders) => {
+                        onConfirm={async (job, est, options, extraJobs) => {
                             const originalEstimate = modals.scheduleJobFromEstimateModal.estimate;
                             if (!originalEstimate) return;
 
@@ -547,13 +569,6 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                                 }
                             }
 
-                            const purchaseOrdersToSave = newPurchaseOrders || [];
-                            if (purchaseOrdersToSave.length > 0) {
-                                for (const po of purchaseOrdersToSave) {
-                                    await handleSaveItem(data.setPurchaseOrders, { ...po, status: 'Draft', createdByUserId: po.createdByUserId || currentUser.id }, 'brooks_purchaseOrders');
-                                }
-                            }
-
                             const jobToSave = {
                                 ...job,
                                 createdByUserId: currentUser.id,
@@ -569,32 +584,29 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                             }
                             
                             await handleSaveItem(data.setEstimates, est, 'brooks_estimates');
+
+                            // SYNC PURCHASE ORDERS using the unified rules
+                            await workshopActions.syncPurchaseOrdersFromEstimate(est, { forceNew: true });
                             
                             if (inquiry) {
-                                const newPoIds = purchaseOrdersToSave.map(po => po.id);
-                                const allLinkedIds = [...new Set([...(inquiry.linkedPurchaseOrderIds || []), ...newPoIds])];
-                                const hasParts = allLinkedIds.length > 0;
                                 const updatedInquiry = {
                                     ...inquiry, 
-                                    status: hasParts ? 'In Progress' : 'Closed',
+                                    status: 'In Progress',
                                     linkedJobId: jobToSave.id,
-                                    linkedPurchaseOrderIds: allLinkedIds,
                                     actionNotes: (inquiry.actionNotes || '') + `
-[System]: Job #${jobToSave.id} scheduled for ${formatReadableDate(jobToSave.scheduledDate)}. ${hasParts ? 'Parts status updated.' : 'No parts required, inquiry closed.'}` 
+[System]: Job #${jobToSave.id} scheduled for ${formatReadableDate(jobToSave.scheduledDate)}. Parts synchronized.` 
                                 };
                                 await handleSaveItem(data.setInquiries, updatedInquiry, 'brooks_inquiries');
                             }
 
                             setters.setScheduleJobFromEstimateModal({isOpen: false, estimate: null});
                             
-                            const poCount = purchaseOrdersToSave.length;
-                            const poMessage = poCount > 0 ? `${poCount} Purchase Order(s) created.` : '';
                             const extraJobMsg = extraJobs && extraJobs.length > 0 ? ` plus ${extraJobs.length} linked job(s)` : '';
                             
                             setConfirmation({
                                 isOpen: true, 
                                 title: 'Job Scheduled', 
-                                message: `Job #${jobToSave.id} has been scheduled for ${formatReadableDate(jobToSave.scheduledDate)}${extraJobMsg}. ${poMessage}`,
+                                message: `Job #${jobToSave.id} has been scheduled for ${formatReadableDate(jobToSave.scheduledDate)}${extraJobMsg}. Purchase orders have been synchronized according to the latest rules.`,
                                 type: 'success'
                             });
                         }}
