@@ -102,7 +102,7 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({ onViewInvoice, onEditInvoic
         );
     };
     
-    const invoiceStatusOptions: readonly Invoice['status'][] = ['Draft', 'Sent', 'Part Paid', 'Paid', 'Overdue'];
+    const invoiceStatusOptions: readonly Invoice['status'][] = ['Draft', 'Sent', 'Part Paid', 'Paid', 'Overdue', 'Archived', 'Archived Not Paid'];
 
     return (
         <div className="w-full p-4 h-full flex flex-col">
@@ -181,6 +181,8 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({ onViewInvoice, onEditInvoic
                                             invoice.status === 'Overdue' ? 'bg-red-100 text-red-800' : 
                                             invoice.status === 'Part Paid' ? 'bg-amber-100 text-amber-800' : 
                                             invoice.status === 'Sent' ? 'bg-blue-100 text-blue-800' : 
+                                            invoice.status === 'Archived' ? 'bg-slate-300 text-slate-800' :
+                                            invoice.status === 'Archived Not Paid' ? 'bg-slate-200 text-slate-700 font-bold' :
                                             'bg-gray-100'}`}>{invoice.status}</span>
                                     </td>
                                     <td className="p-3 text-right font-semibold">

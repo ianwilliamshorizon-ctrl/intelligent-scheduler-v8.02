@@ -657,7 +657,10 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                 <InquiryFormModal
                     isOpen={modals.inquiryModal.isOpen}
                     onClose={() => setters.setInquiryModal({ isOpen: false, inquiry: null })}
-                    onSave={(inq) => handleSaveItem(data.setInquiries, inq, 'brooks_inquiries')}
+                    onSave={(inq) => { 
+                        handleSaveItem(data.setInquiries, inq, 'brooks_inquiries');
+                        setters.setInquiryModal({ isOpen: false, inquiry: null });
+                    }}
                     inquiry={modals.inquiryModal.inquiry}
                     users={users}
                     customers={data.customers}

@@ -105,29 +105,38 @@ const PrintableJobCard: React.FC<PrintableJobCardProps> = ({
 
     const mainContent = (
         <div className="bg-white font-sans text-sm text-gray-800 printable-page" style={pageStyle}>
-            <header className="flex justify-between items-start pb-4 border-b-2 border-gray-900 mb-6">
-                 <div>
-                    <h1 className="text-2xl font-black text-gray-900 uppercase tracking-tighter">
-                        {entity?.name || 'WORKSHOP JOB CARD'}
-                    </h1>
-                    <div className="flex items-center gap-2 mt-1">
-                        <span className="bg-indigo-600 text-white px-2 py-0.5 text-[10px] font-bold rounded uppercase">
-                            Technician Copy
-                        </span>
-                        <h2 className="text-lg font-bold text-gray-700 uppercase tracking-tight">
-                            Job Sheet #{job.id}
-                        </h2>
+            <header className="flex justify-between items-start pb-6 border-b-4 border-gray-900 mb-8">
+                 <div className="flex items-center gap-6">
+                    {entity?.logoUrl && (
+                        <img src={entity.logoUrl} alt="Logo" className="h-20 object-contain" />
+                    )}
+                    <div>
+                        <h1 className="text-3xl font-black text-gray-900 uppercase tracking-tighter leading-none">
+                            {entity?.name || 'WORKSHOP JOB CARD'}
+                        </h1>
+                        <div className="flex items-center gap-2 mt-2">
+                            <span className="bg-gray-900 text-white px-2 py-0.5 text-[10px] font-bold rounded uppercase tracking-widest">
+                                Technician Copy
+                            </span>
+                            <h2 className="text-xl font-bold text-indigo-700 uppercase tracking-tight">
+                                Job Sheet #{job.id}
+                            </h2>
+                        </div>
                     </div>
                 </div>
-                <div className="text-right">
-                    <p className="text-[10px] font-bold text-gray-400 uppercase">Printed Date</p>
-                    <p className="font-bold">{new Date().toLocaleDateString('en-GB')}</p>
-                    <p className="text-[10px] font-bold text-gray-400 uppercase mt-2">Key Number</p>
-                    <p className="font-bold text-xl text-indigo-700">{job.keyNumber || 'N/A'}</p>
+                <div className="text-right flex flex-col items-end">
+                    <div className="mb-4">
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Job Status</p>
+                        <p className="font-black text-lg text-indigo-600 uppercase">{job.status}</p>
+                    </div>
+                    <div>
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Key Number</p>
+                        <p className="font-black text-2xl text-gray-900">{job.keyNumber || 'N/A'}</p>
+                    </div>
                 </div>
             </header>
 
-            <main className="flex-grow space-y-6">
+            <main className="flex-grow space-y-8">
                 <section className="grid grid-cols-2 gap-8">
                     <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
                         <h3 className="text-[10px] font-black text-gray-400 uppercase mb-2 tracking-widest">Customer Information</h3>

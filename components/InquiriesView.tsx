@@ -169,6 +169,7 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
     const { selectedEntityId } = useApp();
     const [activeTab, setActiveTab] = useState<'active' | 'closed'>('active');
     const [searchTerm, setSearchTerm] = useState('');
+    const [dateFilter, setDateFilter] = useState<'7' | '30' | '90' | 'all'>('all');
 
     const [confirmState, setConfirmState] = useState<{
         isOpen: boolean;
@@ -239,6 +240,7 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
 
     const filteredInquiries = useMemo(() => {
         let filtered = inquiries.filter(i => selectedEntityId === 'all' || i.entityId === selectedEntityId);
+        
         if (searchTerm.trim()) {
             const low = searchTerm.toLowerCase();
             filtered = filtered.filter(i => 
@@ -246,8 +248,16 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                 i.message.toLowerCase().includes(low)
             );
         }
+
+        if (dateFilter !== 'all') {
+            const now = new Date();
+            const cutoff = new Date();
+            cutoff.setDate(now.getDate() - parseInt(dateFilter));
+            filtered = filtered.filter(i => new Date(i.createdAt) >= cutoff);
+        }
+
         return filtered;
-    }, [inquiries, selectedEntityId, searchTerm]);
+    }, [inquiries, selectedEntityId, searchTerm, dateFilter]);
 
     const activeInquiries = useMemo(() => {
         const columns: { [key in Inquiry['status']]?: Inquiry[] } = {
@@ -270,6 +280,22 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                     <h2 className="text-2xl font-bold text-gray-800">Inquiries</h2>
                 </div>
                 <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2 bg-white p-1 rounded-lg border shadow-sm">
+                        {(['7', '30', '90', 'all'] as const).map(days => (
+                            <button
+                                key={days}
+                                onClick={() => setDateFilter(days)}
+                                className={`px-3 py-1 text-xs font-bold rounded-md transition-all whitespace-nowrap ${
+                                    dateFilter === days 
+                                    ? 'bg-indigo-600 text-white shadow-sm' 
+                                    : 'text-gray-500 hover:bg-gray-100'
+                                }`}
+                            >
+                                {days === 'all' ? 'All Time' : `${days} Days`}
+                            </button>
+                        ))}
+                    </div>
+
                     <div className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16}/>
                         <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Search..." className="pl-9 pr-4 py-2 border rounded-lg text-sm w-48"/>

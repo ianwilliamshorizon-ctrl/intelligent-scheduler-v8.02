@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Job, JobSegment, Vehicle, Customer, Engineer, PurchaseOrder, User } from '../../types';
-import { Package as PackageIcon, KeyRound, PauseCircle, PlayCircle, UserCog, Trash2, Wand2, Edit, User as UserIcon, UserPlus } from 'lucide-react';
+import { Package as PackageIcon, KeyRound, PauseCircle, PlayCircle, UserCog, Trash2, Wand2, Edit, User as UserIcon, UserPlus, CheckCircle } from 'lucide-react';
 import { getCustomerDisplayName } from '../../core/utils/customerUtils';
 import { getPoStatusColor } from '../../core/utils/statusUtils';
 import { TIME_SEGMENTS, SEGMENT_DURATION_MINUTES } from '../../constants';
 import { HoverInfo } from '../shared/HoverInfo';
+
+import { JobActionsMenu } from '../shared/JobActionsMenu';
 
 export const AllocatedJobCard: React.FC<{
     job: Job;
@@ -64,11 +66,11 @@ export const AllocatedJobCard: React.FC<{
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, [poMenuRef]);
     
-    let statusColor = 'bg-blue-500';
-    if (segment.status === 'In Progress') statusColor = 'bg-yellow-500';
-    if (segment.status === 'Engineer Complete') statusColor = 'bg-orange-500';
-    if (segment.status === 'QC Complete') statusColor = 'bg-green-500';
-    if (segment.status === 'Paused') statusColor = 'bg-red-500';
+    let statusColor = 'bg-blue-100 text-blue-900 border-blue-200';
+    if (segment.status === 'In Progress') statusColor = 'bg-amber-100 text-amber-900 border-amber-200';
+    if (segment.status === 'Engineer Complete') statusColor = 'bg-orange-100 text-orange-900 border-orange-200';
+    if (segment.status === 'QC Complete') statusColor = 'bg-emerald-100 text-emerald-900 border-emerald-200';
+    if (segment.status === 'Paused') statusColor = 'bg-rose-100 text-rose-900 border-rose-200';
 
     const canStartOrPause = (currentUser.role === 'Engineer' && engineer?.id === currentUser.engineerId) || currentUser.role === 'Admin' || currentUser.role === 'Dispatcher';
     const canPerformActions = currentUser.role === 'Admin' || currentUser.role === 'Dispatcher';
@@ -82,6 +84,54 @@ export const AllocatedJobCard: React.FC<{
         }
     };
 
+    const isSmallCard = segment.duration <= 1;
+    const actions = useMemo(() => {
+        const list: any[] = [];
+        
+        // For small cards, add identifying info to the menu to keep card clear
+        if (isSmallCard) {
+            list.push({ 
+                id: 'info-customer', 
+                label: `Customer: ${getCustomerDisplayName(customer)}`, 
+                icon: UserIcon, 
+                onClick: () => {}, 
+                group: 'primary',
+                disabled: true 
+            });
+            list.push({ 
+                id: 'info-engineer', 
+                label: `Engineer: ${engineer?.name || 'Unassigned'}`, 
+                icon: engineer ? UserCog : UserPlus, 
+                onClick: () => {}, 
+                group: 'primary',
+                disabled: true 
+            });
+        }
+        
+        // Context-aware actions
+        if (canStartOrPause) {
+            if (segment.status === 'Allocated') {
+                list.push({ id: 'start', label: 'Start Work', icon: PlayCircle, onClick: () => onStartWork?.(job.id, segment.segmentId), group: 'primary', color: 'text-green-600' });
+            } else if (segment.status === 'In Progress') {
+                list.push({ id: 'pause', label: 'Pause Work', icon: PauseCircle, onClick: () => onPause(job.id, segment.segmentId), group: 'primary', color: 'text-orange-600' });
+                list.push({ id: 'complete', label: 'Mark as Complete', icon: CheckCircle, onClick: () => {}, group: 'primary', color: 'text-green-600', disabled: true }); // Need onComplete prop if available?
+            } else if (segment.status === 'Paused') {
+                list.push({ id: 'restart', label: 'Restart Work', icon: PlayCircle, onClick: () => onRestart(job.id, segment.segmentId), group: 'primary', color: 'text-green-600' });
+            }
+        }
+
+        if (canPerformActions) {
+            list.push({ id: 'assistant', label: 'Technical Assistant', icon: Wand2, onClick: () => onOpenAssistant(job.id), group: 'secondary' });
+            list.push({ id: 'edit', label: 'Edit Job', icon: Edit, onClick: () => onEdit(job.id), group: 'secondary' });
+            list.push({ id: 'reassign', label: 'Reassign Engineer', icon: UserCog, onClick: () => onReassign(job.id, segment.segmentId), group: 'secondary' });
+        }
+
+        if (canUnschedule) {
+            list.push({ id: 'unschedule', label: 'Move to Unallocated', icon: Trash2, onClick: () => onUnscheduleSegment(job.id, segment.segmentId), group: 'danger' });
+        }
+
+        return list;
+    }, [segment.status, job.id, segment.segmentId, canStartOrPause, canPerformActions, canUnschedule, onStartWork, onPause, onRestart, onOpenAssistant, onEdit, onReassign, onUnscheduleSegment, isSmallCard, customer, engineer]);
     return (
         <div
             draggable={canDrag}
@@ -91,7 +141,7 @@ export const AllocatedJobCard: React.FC<{
                 onDragStart(e, job.id, segment.segmentId);
             }}
             onDragEnd={onDragEnd}
-            className={`absolute left-2 right-2 p-1.5 rounded-lg text-white shadow-lg flex flex-col group ${canDrag ? 'cursor-grab' : 'cursor-default'} ${statusColor} allocated-job-container z-10 hover:z-50 hover:shadow-xl transition-all duration-200`}
+            className={`absolute left-2 right-2 p-1.5 rounded-lg shadow-sm border flex flex-col group ${canDrag ? 'cursor-grab' : 'cursor-default'} ${statusColor} allocated-job-container z-10 hover:z-50 hover:shadow-md transition-all duration-200`}
             style={{
                 top: `${topPercent}%`,
                 height: `${heightPercent}%`,
@@ -133,7 +183,7 @@ export const AllocatedJobCard: React.FC<{
                                 <div className="relative" ref={poMenuRef}>
                                     <button
                                         onClick={(e) => { e.stopPropagation(); setIsPoMenuOpen(p => !p); }}
-                                        className="flex items-center gap-1 p-0.5 rounded-sm hover:bg-white/20 bg-white/20 text-[10px]"
+                                        className="flex items-center gap-1 p-0.5 rounded-sm hover:bg-black/10 bg-black/5 text-[10px]"
                                     >
                                         <span>+{associatedPOs.length - 2}</span>
                                     </button>
@@ -158,74 +208,56 @@ export const AllocatedJobCard: React.FC<{
                             )}
                         </div>
                     )}
-                    {job.keyNumber && <span className="flex items-center gap-1 bg-white/20 px-1 rounded"><KeyRound size={12}/> {job.keyNumber}</span>}
+                    {job.keyNumber && <span className="flex items-center gap-1 bg-white/20 px-1 rounded font-bold text-[10px] text-gray-700 border border-gray-200"><KeyRound size={12}/> {job.keyNumber}</span>}
                 </div>
             </div>
             
             <div className="flex-grow my-0.5 min-h-0">
-                 <p className="text-xs truncate leading-tight">{job.description}</p>
-                 <HoverInfo
-                    title="Customer Details"
-                    data={{
-                        Name: getCustomerDisplayName(customer),
-                        Mobile: customer?.mobile,
-                        Phone: customer?.phone,
-                        Email: customer?.email
-                    }}
-                 >
-                    <p className="text-[10px] truncate leading-tight opacity-80">{getCustomerDisplayName(customer)}</p>
-                 </HoverInfo>
+                 <p className={`text-xs truncate leading-tight ${isSmallCard ? 'font-medium' : ''}`}>{job.description}</p>
+                 {!isSmallCard && (
+                     <HoverInfo
+                        title="Customer Details"
+                        data={{
+                            Name: getCustomerDisplayName(customer),
+                            Mobile: customer?.mobile,
+                            Phone: customer?.phone,
+                            Email: customer?.email
+                        }}
+                     >
+                        <p className="text-[10px] truncate leading-tight opacity-70 font-semibold">{getCustomerDisplayName(customer)}</p>
+                     </HoverInfo>
+                 )}
             </div>
             
-            <div className="flex justify-between items-end text-xs mt-auto pt-1 border-t border-white/20 flex-shrink-0">
-                 {engineer ? (
-                    <span className="font-semibold truncate max-w-[60px] flex items-center gap-1">
-                        <UserIcon size={12} />
-                        {engineer.name}
-                    </span>
-                 ) : (
-                     <span className="font-semibold truncate max-w-[60px] flex items-center gap-1 text-red-200">
-                         <UserPlus size={12} />
-                         Unassigned
-                     </span>
-                 )}
-                 <div className="flex items-center gap-0.5">
-                    {canStartOrPause && segment.status === 'Allocated' && <button onClick={(e) => handleAction(e, () => onStartWork && onStartWork(job.id, segment.segmentId))} title="Start Job" className="p-1 rounded bg-white/20 hover:bg-white/40 text-white"><PlayCircle size={14} /></button>}
-                    {canStartOrPause && segment.status === 'In Progress' && <button onClick={(e) => handleAction(e, () => onPause(job.id, segment.segmentId))} title="Pause Job" className="p-1 rounded bg-white/20 hover:bg-white/40 text-white"><PauseCircle size={14} /></button>}
-                    {canStartOrPause && segment.status === 'Paused' && <button onClick={(e) => handleAction(e, () => onRestart(job.id, segment.segmentId))} title="Restart Job" className="p-1 rounded bg-white/20 hover:bg-white/40 text-white"><PlayCircle size={14} /></button>}
-                    
-                    {canPerformActions && (
-                        <>
-                            <button onClick={(e) => handleAction(e, () => onOpenAssistant(job.id))} title="Technical Assistant" className="p-1 rounded bg-white/20 hover:bg-white/40 text-white"><Wand2 size={14} /></button>
-                            <button 
-                                onClick={(e) => handleAction(e, () => onEdit(job.id))} 
-                                title="Edit Job" 
-                                className="p-1 rounded bg-white/20 hover:bg-white/40 text-white"
-                            >
-                                <Edit size={14} />
-                            </button>
-
-                            <button 
-                                onClick={(e) => handleAction(e, () => onReassign(job.id, segment.segmentId))} 
-                                title="Re-assign Engineer" 
-                                className="p-1 rounded bg-white/20 hover:bg-white/40 text-white"
-                            >
-                                <UserCog size={14} />
-                            </button>
-
-                            {canUnschedule && (
-                                <button 
-                                    onClick={(e) => handleAction(e, () => onUnscheduleSegment(job.id, segment.segmentId))} 
-                                    title="Unschedule (Move back to Unallocated)" 
-                                    className="p-1 rounded bg-white/20 hover:bg-white/40 text-white hover:text-red-300"
-                                >
-                                    <Trash2 size={14} />
-                                </button>
-                            )}
-                        </>
+            {!isSmallCard && (
+                <div className="flex justify-between items-end text-xs mt-auto pt-1 border-t border-black/5 flex-shrink-0">
+                    {engineer ? (
+                        <span className="font-semibold truncate max-w-[60px] flex items-center gap-1">
+                            <UserIcon size={12} />
+                            {engineer.name}
+                        </span>
+                    ) : (
+                        <span className="font-semibold truncate max-w-[60px] flex items-center gap-1 text-rose-300">
+                            <UserPlus size={12} />
+                            Unassigned
+                        </span>
                     )}
+                    <div className="flex items-center gap-1">
+                        <JobActionsMenu actions={actions} size="sm" colorScheme="light" title={`Job #${job.id} Actions`} />
+                    </div>
                 </div>
-            </div>
+            )}
+
+            {isSmallCard && (
+                <div className="absolute bottom-1 right-1">
+                    <JobActionsMenu 
+                        actions={actions} 
+                        size="sm" 
+                        colorScheme="light" 
+                        title={`Job #${job.id} - ${engineer?.name || 'Unassigned'}`} 
+                    />
+                </div>
+            )}
         </div>
     );
 };

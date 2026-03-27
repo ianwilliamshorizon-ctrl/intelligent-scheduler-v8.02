@@ -489,6 +489,8 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
                                     <option>Part Paid</option>
                                     <option>Paid</option>
                                     <option>Overdue</option>
+                                    <option>Archived</option>
+                                    <option>Archived Not Paid</option>
                                 </select>
                             </div>
                             <div className="pt-2 border-t">

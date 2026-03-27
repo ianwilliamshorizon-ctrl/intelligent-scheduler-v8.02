@@ -4,6 +4,7 @@ import { ClipboardCheck, FileText, CheckCircle, Car, User as UserIcon, MessageSq
 import { formatReadableDate, getRelativeDate } from '../core/utils/dateUtils';
 import { TIME_SEGMENTS, SEGMENT_DURATION_MINUTES, END_HOUR, END_MINUTE } from '../constants';
 import { useData } from '../core/state/DataContext';
+import { useApp } from '../core/state/AppContext';
 import { getPoStatusColor } from '../core/utils/statusUtils';
 import { HoverInfo } from '../components/shared/HoverInfo';
 import LiveAssistant from './LiveAssistant'; // Make sure this path is correct
@@ -22,13 +23,14 @@ const WorkflowJobCard: React.FC<{
 }> = ({ job, vehicle, customer, children, statusColorClass, onEdit, onOpenAssistant, onOpenPurchaseOrder, purchaseOrders, today }) => {
     
     const { partsStatus } = job;
-    const cardBgClass = () => {
+    
+    const partsStatusColor = () => {
         switch (partsStatus) {
-            case 'Awaiting Order': return 'bg-red-50';
-            case 'Ordered': return 'bg-blue-50';
-            case 'Partially Received': return 'bg-amber-50';
-            case 'Fully Received': return 'bg-green-50';
-            default: return 'bg-white';
+            case 'Awaiting Order': return 'bg-rose-100 text-rose-800 border-rose-200';
+            case 'Ordered': return 'bg-sky-100 text-sky-800 border-sky-200';
+            case 'Partially Received': return 'bg-amber-100 text-amber-800 border-amber-200';
+            case 'Fully Received': return 'bg-emerald-100 text-emerald-800 border-emerald-200';
+            default: return 'bg-gray-100 text-gray-800 border-gray-200';
         }
     };
 
@@ -36,47 +38,67 @@ const WorkflowJobCard: React.FC<{
     
     return (
         <div 
-            className={`${cardBgClass()} p-3 rounded-lg shadow border-l-4 ${statusColorClass} cursor-pointer hover:shadow-md transition`}
+            className={`p-4 rounded-xl shadow-sm border ${statusColorClass} cursor-pointer hover:shadow-md hover:scale-[1.01] transition-all duration-200 relative overflow-hidden group mb-3`}
             onClick={() => onEdit(job.id)}
         >
-            <div className="flex justify-between items-start">
-                <div>
-                    <h3 className="text-xs text-gray-800">{job.description}</h3>
-                    <div className="flex items-center gap-3 text-xs text-gray-500 mt-1">
+            {/* Parts Status Badge */}
+            <div className={`absolute top-0 right-0 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest rounded-bl-lg shadow-sm ${partsStatusColor()}`}>
+                {partsStatus || 'No Parts'}
+            </div>
+
+            <div className="flex justify-between items-start mb-2">
+                <div className="min-w-0 pr-8">
+                    <h3 className="text-sm font-bold uppercase tracking-tight leading-tight mb-1 truncate text-gray-900">
+                        {job.description}
+                    </h3>
+                    <div className="flex items-center gap-2 text-xs font-semibold text-gray-500">
                         {vehicle && (
                              <HoverInfo title="Vehicle Details" data={{ make: vehicle.make, model: vehicle.model, year: vehicle.year, vin: vehicle.vin }}>
-                                <span className="flex items-center gap-1"><Car size={12}/> {vehicle.registration}</span>
+                                <span className="flex items-center gap-1.5"><Car size={13}/> {vehicle.registration}</span>
                             </HoverInfo>
                         )}
+                        <span className="opacity-40">•</span>
                        {customer && (
                             <HoverInfo title="Customer Details" data={{ name: `${customer.forename} ${customer.surname}`, phone: customer.mobile || customer.phone }}>
-                                <span className="flex items-center gap-1"><UserIcon size={12}/> {customer.forename} {customer.surname}</span>
+                                <span className="flex items-center gap-1.5 truncate"><UserIcon size={13}/> {customer.forename} {customer.surname}</span>
                            </HoverInfo>
                        )}
                     </div>
                 </div>
-                <div className="flex flex-col items-end gap-2">
-                    <span className="font-mono text-sm font-bold bg-gray-200 px-1.5 py-0.5 rounded">#{job.id}</span>
-                    <button onClick={(e) => { e.stopPropagation(); onOpenAssistant(job.id); }} className="p-1.5 bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200" title="Technical Assistant"><Wand2 size={14} /></button>
+                <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                    <span className="font-mono text-xs font-bold bg-white/50 px-2 py-0.5 rounded-full border border-gray-200 tracking-tighter text-gray-600">#{job.id}</span>
+                    <button 
+                        onClick={(e) => { e.stopPropagation(); onOpenAssistant(job.id); }} 
+                        className="p-1.5 bg-white/50 hover:bg-white text-indigo-600 border border-indigo-100 rounded-lg transition-colors shadow-xs"
+                        title="Technical Assistant"
+                    >
+                        <Wand2 size={14} />
+                    </button>
                 </div>
             </div>
 
             {associatedPOs && associatedPOs.length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-2 pt-1 border-t border-black/5">
+                <div className="flex flex-wrap gap-1.5 my-2 py-2 border-t border-gray-100">
                     {associatedPOs.map(po => (
                         <button
                             key={po.id}
                             onClick={(e) => { e.stopPropagation(); onOpenPurchaseOrder(po); }}
-                            className={`flex items-center gap-1 px-1.5 py-0.5 rounded border text-[9px] transition-colors ${getPoStatusColor(po.status, 'bg')} ${getPoStatusColor(po.status, 'text')} border-current opacity-90 hover:opacity-100`}
+                            className={`flex items-center gap-1 px-2 py-0.5 rounded-lg border text-[9px] font-black tracking-widest transition-all hover:scale-105 active:scale-95 shadow-sm ${getPoStatusColor(po.status, 'bg')} ${getPoStatusColor(po.status, 'text')} border-white/20`}
                             title={`View PO #${po.id} (${po.status})`}
                         >
                             <PackageIcon size={10} />
-                            <span className="font-mono font-semibold">{po.id}</span>
+                            <span className="font-mono">{po.id.slice(-6)}</span>
                         </button>
                     ))}
                 </div>
             )}
-            {children}
+            
+            <div className="space-y-2">
+                {children}
+            </div>
+            
+            {/* Status Visual Accent */}
+            <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/10"></div>
         </div>
     );
 };
@@ -99,8 +121,11 @@ interface WorkflowViewProps {
     onOpenPurchaseOrder: (po: PurchaseOrder) => void;
 }
 
-const WorkflowView: React.FC<WorkflowViewProps> = ({ jobs, vehicles, customers, engineers, onQcApprove, onGenerateInvoice, onEditJob, currentUser, onStartWork, onEngineerComplete, onPause, onRestart, onOpenPurchaseOrder }) => {
+import { JobActionsMenu } from './shared/JobActionsMenu';
+
+const WorkflowView: React.FC<WorkflowViewProps> = ({ jobs, vehicles, customers, engineers, onQcApprove, onGenerateInvoice, onEditJob, onOpenAssistant, onStartWork, onEngineerComplete, onPause, onRestart, onOpenPurchaseOrder }) => {
     const { purchaseOrders, saveRecord } = useData();
+    const { currentUser, users } = useApp();
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedEngineerId, setSelectedEngineerId] = useState<string>('all');
     const [assistantJobId, setAssistantJobId] = useState<string | null>(null);
@@ -119,7 +144,24 @@ const WorkflowView: React.FC<WorkflowViewProps> = ({ jobs, vehicles, customers, 
 
     const vehiclesById = useMemo(() => new Map(vehicles.map(v => [v.id, v])), [vehicles]);
     const customersById = useMemo(() => new Map(customers.map(c => [c.id, c])), [customers]);
-    const engineersById = useMemo(() => new Map(engineers.map(e => [e.id, e])), [engineers]);
+    
+    const allEngineers = useMemo(() => {
+        const dispatchers = users.filter(u => u.role === 'Dispatcher').map(u => ({ 
+            id: u.id, 
+            name: u.name || u.email || 'Dispatcher',
+            specialization: 'Dispatcher'
+        }));
+        const existingEngineerIds = new Set(engineers.map(e => e.id));
+        const combined = [...engineers];
+        dispatchers.forEach(d => {
+            if (!existingEngineerIds.has(d.id)) {
+                combined.push(d as Engineer);
+            }
+        });
+        return combined;
+    }, [engineers, users]);
+
+    const engineersById = useMemo(() => new Map(allEngineers.map(e => [e.id, e])), [allEngineers]);
     
     const isEngineerView = currentUser.role === 'Engineer';
 
@@ -161,11 +203,11 @@ const WorkflowView: React.FC<WorkflowViewProps> = ({ jobs, vehicles, customers, 
 
     }, [jobs, isEngineerView, currentUser.engineerId, selectedEngineerId, searchTerm, vehiclesById, customersById, purchaseOrders]);
     
-    const statusColumns: { title: string; jobs: Job[]; color: string; icon: React.ElementType }[] = [
-        { title: 'Allocated', jobs: workflowJobs.allocated, color: 'border-blue-500', icon: Clock },
-        { title: 'In Progress', jobs: workflowJobs.inProgress, color: 'border-yellow-500', icon: Wrench },
-        { title: 'Pending QC', jobs: workflowJobs.pendingQC, color: 'border-orange-500', icon: ClipboardCheck },
-        { title: 'Complete', jobs: workflowJobs.complete, color: 'border-green-500', icon: CheckCircle },
+    const statusColumns: { title: string; jobs: Job[]; color: string; bgColor: string; icon: React.ElementType }[] = [
+        { title: 'Allocated', jobs: workflowJobs.allocated, color: 'border-blue-200', bgColor: 'bg-blue-50 text-blue-900 border-blue-200', icon: Clock },
+        { title: 'In Progress', jobs: workflowJobs.inProgress, color: 'border-amber-200', bgColor: 'bg-amber-50 text-amber-900 border-amber-200', icon: Wrench },
+        { title: 'Pending QC', jobs: workflowJobs.pendingQC, color: 'border-orange-200', bgColor: 'bg-orange-50 text-orange-900 border-orange-200', icon: ClipboardCheck },
+        { title: 'Complete', jobs: workflowJobs.complete, color: 'border-emerald-200', bgColor: 'bg-emerald-50 text-emerald-900 border-emerald-200', icon: CheckCircle },
     ];
 
     const canControlJob = (engineerId?: string | null) => {
@@ -176,9 +218,14 @@ const WorkflowView: React.FC<WorkflowViewProps> = ({ jobs, vehicles, customers, 
 
     return (
         <div className="w-full h-full flex flex-col bg-gray-100 p-4">
-            <header className="flex-shrink-0 mb-4">
+            <header className="flex-shrink-0 mb-6">
                 <div className="flex justify-between items-center">
-                    <h2 className="text-xl font-bold text-gray-800">Workshop Workflow</h2>
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-200">
+                             <Wrench size={20} />
+                        </div>
+                        <h2 className="text-2xl font-black text-gray-900 tracking-tight">Workshop Workflow</h2>
+                    </div>
                     <div className="flex items-center gap-4">
                         <div className="relative">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16}/>
@@ -204,7 +251,7 @@ const WorkflowView: React.FC<WorkflowViewProps> = ({ jobs, vehicles, customers, 
                                     className="p-1.5 border border-gray-300 rounded-lg bg-white text-sm focus:ring-2 focus:ring-indigo-500"
                                 >
                                     <option value="all">All Engineers</option>
-                                    {engineers.map(eng => (
+                                    {allEngineers.map(eng => (
                                         <option key={eng.id} value={eng.id}>{eng.name}</option>
                                     ))}
                                 </select>
@@ -215,7 +262,7 @@ const WorkflowView: React.FC<WorkflowViewProps> = ({ jobs, vehicles, customers, 
             </header>
             <main className="flex-grow overflow-y-auto">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 h-full">
-                    {statusColumns.map(({ title, jobs, color, icon: Icon }) => (
+                    {statusColumns.map(({ title, jobs, color, bgColor, icon: Icon }) => (
                         <div key={title} className="bg-gray-200 rounded-lg flex flex-col">
                             <h3 className={`flex items-center gap-2 font-bold text-gray-700 p-3 border-b-2 ${color}`}>
                                 <Icon size={16}/> {title} ({jobs.length})
@@ -227,7 +274,7 @@ const WorkflowView: React.FC<WorkflowViewProps> = ({ jobs, vehicles, customers, 
                                         job={job}
                                         vehicle={vehiclesById.get(job.vehicleId)}
                                         customer={customersById.get(job.customerId)}
-                                        statusColorClass={color}
+                                        statusColorClass={bgColor}
                                         onEdit={onEditJob}
                                         onOpenAssistant={handleOpenAssistant}
                                         onOpenPurchaseOrder={onOpenPurchaseOrder}
@@ -251,6 +298,15 @@ const WorkflowView: React.FC<WorkflowViewProps> = ({ jobs, vehicles, customers, 
                                                 
                                                 const engineerName = engineersById.get(seg.engineerId!)?.name;
 
+                                                const segActions = [
+                                                    ...(seg.status === 'Allocated' ? [{ id: 'start', label: 'Start Work', icon: PlayCircle, onClick: () => onStartWork(job.id, seg.segmentId), group: 'primary' as const, color: 'text-green-600' }] : []),
+                                                    ...(seg.status === 'In Progress' ? [
+                                                        { id: 'pause', label: 'Pause Work', icon: PauseCircle, onClick: () => onPause(job.id, seg.segmentId), group: 'primary' as const, color: 'text-orange-600' },
+                                                        { id: 'complete', label: 'Complete Work', icon: CheckCircle, onClick: () => onEngineerComplete(job, seg.segmentId), group: 'primary' as const, color: 'text-green-600' }
+                                                    ] : []),
+                                                    ...(seg.status === 'Paused' ? [{ id: 'restart', label: 'Restart Work', icon: PlayCircle, onClick: () => onRestart(job.id, seg.segmentId), group: 'primary' as const, color: 'text-green-600' }] : []),
+                                                ];
+
                                                 return (
                                                      <div key={seg.segmentId} className="p-1.5 bg-gray-100 rounded-md">
                                                          <div className="flex justify-between items-center">
@@ -266,28 +322,9 @@ const WorkflowView: React.FC<WorkflowViewProps> = ({ jobs, vehicles, customers, 
                                                          </div>
                                                          {seg.date !== today && <div className="text-xs text-gray-600 font-semibold pt-1">{formatReadableDate(seg.date)}</div>}
                                                          
-                                                        {canControlJob(seg.engineerId) && (
-                                                            <div className="mt-2 flex items-center justify-between gap-2">
-                                                                {seg.status === 'Allocated' && (
-                                                                    <button onClick={(e) => { e.stopPropagation(); onStartWork(job.id, seg.segmentId); }} className="w-full flex items-center justify-center gap-2 py-1 px-2 bg-yellow-500 text-white font-semibold rounded-lg text-xs hover:bg-yellow-600 transition shadow">
-                                                                        <PlayCircle size={14} /> Start Work
-                                                                    </button>
-                                                                )}
-                                                                {seg.status === 'In Progress' && (
-                                                                    <>
-                                                                        <button onClick={(e) => { e.stopPropagation(); onPause(job.id, seg.segmentId); }} className="flex items-center justify-center gap-1 py-1 px-2 bg-orange-500 text-white font-semibold rounded-lg text-xs hover:bg-orange-600 transition shadow">
-                                                                            <PauseCircle size={14} /> Pause
-                                                                        </button>
-                                                                        <button onClick={(e) => { e.stopPropagation(); onEngineerComplete(job, seg.segmentId); }} className="w-full flex items-center justify-center gap-2 py-1 px-2 bg-green-600 text-white font-semibold rounded-lg text-xs hover:bg-green-700 transition shadow">
-                                                                            <CheckCircle size={14} /> Complete Work
-                                                                        </button>
-                                                                    </>
-                                                                )}
-                                                                {seg.status === 'Paused' && (
-                                                                     <button onClick={(e) => { e.stopPropagation(); onRestart(job.id, seg.segmentId); }} className="w-full flex items-center justify-center gap-2 py-1 px-2 bg-green-500 text-white font-semibold rounded-lg text-xs hover:bg-green-600 transition shadow">
-                                                                        <PlayCircle size={14} /> Restart Work
-                                                                    </button>
-                                                                )}
+                                                        {canControlJob(seg.engineerId) && segActions.length > 0 && (
+                                                            <div className="mt-2 flex items-center justify-end">
+                                                                <JobActionsMenu actions={segActions} size="sm" colorScheme="light" title="Segment Actions" />
                                                             </div>
                                                         )}
                                                      </div>
@@ -301,14 +338,14 @@ const WorkflowView: React.FC<WorkflowViewProps> = ({ jobs, vehicles, customers, 
                                             </div>
                                          )}
                                         {title === 'Pending QC' && !isEngineerView && (
-                                            <div className="mt-2 pt-2 border-t">
-                                                <button onClick={(e) => { e.stopPropagation(); onQcApprove(job.id); }} className="w-full py-1 text-xs bg-green-600 text-white font-semibold rounded-md hover:bg-green-700">Quality Sign-off</button>
+                                            <div className="mt-2 pt-2 border-t text-right">
+                                                <button onClick={(e) => { e.stopPropagation(); onQcApprove(job.id); }} className="px-3 py-1.5 text-xs bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 shadow-sm transition-all active:scale-95">Quality Sign-off</button>
                                             </div>
                                         )}
                                         {title === 'Complete' && !isEngineerView && (
-                                            <div className="mt-2 pt-2 border-t">
-                                                <button onClick={(e) => { e.stopPropagation(); onGenerateInvoice(job.id); }} className="w-full py-1 text-xs bg-purple-600 text-white font-semibold rounded-md hover:bg-purple-700">
-                                                    <FileText size={12} className="inline mr-1"/> Generate Invoice
+                                            <div className="mt-2 pt-2 border-t text-right">
+                                                <button onClick={(e) => { e.stopPropagation(); onGenerateInvoice(job.id); }} className="px-3 py-1.5 text-xs bg-purple-600 text-white font-bold rounded-lg hover:bg-purple-700 shadow-sm transition-all active:scale-95 flex items-center gap-1 ml-auto">
+                                                    <FileText size={12}/> Generate Invoice
                                                 </button>
                                             </div>
                                         )}

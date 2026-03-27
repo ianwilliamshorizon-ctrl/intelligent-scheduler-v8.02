@@ -50,7 +50,7 @@ const DispatchView: React.FC<DispatchViewProps> = ({
     onStartWork 
 }) => {
     const { jobs, setJobs, lifts, engineers, customers, vehicles, purchaseOrders, absenceRequests, businessEntities, estimates, parts } = useData();
-    const { selectedEntityId, currentUser } = useApp();
+    const { selectedEntityId, currentUser, users } = useApp();
     
     // -- View State --
     const [viewMode, setViewMode] = useState<'timeline' | 'week' | 'calendar'>('timeline');
@@ -88,7 +88,8 @@ const DispatchView: React.FC<DispatchViewProps> = ({
         selectedEntityId, 
         currentDate, 
         unallocatedDateFilter, 
-        showOnSiteOnly
+        showOnSiteOnly,
+        users
     });
 
     const { handleSavePurchaseOrder } = useWorkshopActions();

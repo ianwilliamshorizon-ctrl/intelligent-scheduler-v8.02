@@ -31,10 +31,12 @@ interface JobDetailsTabProps {
     onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => void;
     onViewCustomer: (customerId: string) => void;
     onViewVehicle: (vehicleId: string) => void;
+    allJobs: T.Job[];
+    onUpdateLinkedJob: (jobId: string, updates: Partial<T.Job>) => void;
 }
 
 const JobDetailsTab: React.FC<JobDetailsTabProps> = ({ 
-    editableJob, vehicle, customer, isReadOnly, purchaseOrders, onOpenPurchaseOrder, onChange, onViewCustomer, onViewVehicle 
+    editableJob, vehicle, customer, isReadOnly, purchaseOrders, onOpenPurchaseOrder, onChange, onViewCustomer, onViewVehicle, allJobs, onUpdateLinkedJob 
 }) => {
     const [isNotesModalOpen, setIsNotesModalOpen] = useState(false);
     const [isAssistantOpen, setIsAssistantOpen] = useState(false);
@@ -68,6 +70,11 @@ const JobDetailsTab: React.FC<JobDetailsTabProps> = ({
         vin: vehicle.vin || 'N/A',
         motDue: vehicle.nextMotDate || 'N/A',
     } : {};
+
+    const linkedMotJob = useMemo(() => {
+        if (!editableJob.associatedJobId) return null;
+        return (allJobs || []).find(j => j.id === editableJob.associatedJobId);
+    }, [allJobs, editableJob.associatedJobId]);
 
 
     return (
@@ -164,6 +171,34 @@ const JobDetailsTab: React.FC<JobDetailsTabProps> = ({
                     )}
                 </div>
             </TabSection>
+
+            {linkedMotJob && (
+                <TabSection title="Linked MOT Booking" icon={Wrench}>
+                    <div className="space-y-3">
+                        <div>
+                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">MOT Job Reference</label>
+                            <div className="flex items-center justify-between p-2 bg-indigo-50 border border-indigo-100 rounded-lg">
+                                <span className="font-mono font-bold text-indigo-700">#{linkedMotJob.id}</span>
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${linkedMotJob.status === 'Complete' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'}`}>
+                                    {linkedMotJob.status}
+                                </span>
+                            </div>
+                        </div>
+                        <div>
+                            <label htmlFor="mot-date" className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">MOT Test Date</label>
+                            <input 
+                                type="date" 
+                                id="mot-date"
+                                value={linkedMotJob.scheduledDate || ''} 
+                                onChange={(e) => onUpdateLinkedJob(linkedMotJob.id, { scheduledDate: e.target.value })}
+                                className="w-full p-2 border rounded-lg bg-white text-sm font-semibold focus:ring-2 focus:ring-indigo-500 transition-all shadow-sm"
+                                disabled={isReadOnly || linkedMotJob.status === 'Complete'}
+                            />
+                            <p className="text-[10px] text-gray-500 mt-1 italic">Note: Updates to this date will automatically shift the linked MOT slot.</p>
+                        </div>
+                    </div>
+                </TabSection>
+            )}
 
             <TabSection title="Job Status" icon={Briefcase}>
                 <div className="space-y-2">

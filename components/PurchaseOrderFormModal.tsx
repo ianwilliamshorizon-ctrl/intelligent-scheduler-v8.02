@@ -117,7 +117,7 @@ const PurchaseOrderLineItemRow: React.FC<PurchaseOrderLineItemRowProps> = ({
             </div>
 
             <input type="text" placeholder="Part Number" value={item.partNumber || ''} onChange={e => onLineItemChange(item.id, 'partNumber', e.target.value)} className="col-span-2 p-1 border rounded disabled:bg-gray-100 disabled:cursor-not-allowed text-sm font-medium" disabled={isFullyReceived || isPendingReturn} />
-            <input type="number" step="1" value={item.quantity ?? 0} onChange={e => onLineItemChange(item.id, 'quantity', e.target.value)} className={`col-span-1 p-1 border rounded text-right disabled:bg-gray-100 disabled:cursor-not-allowed text-sm ${isCredit ? 'text-red-600 font-bold' : ''}`} disabled={fieldsDisabled || (isLockedByJob && !!item.jobLineItemId)} />
+            <input type="number" step="1" value={item.quantity ?? 0} onChange={e => onLineItemChange(item.id, 'quantity', e.target.value)} className={`col-span-1 p-1 border rounded text-right disabled:bg-gray-100 disabled:cursor-not-allowed text-sm ${isCredit ? 'text-red-600 font-bold' : ''}`} disabled={fieldsDisabled || (isLockedByJob && !!item.jobLineItemId && isOrderedOrLater)} />
 
             <div className="col-span-1 relative">
                 <input
@@ -168,7 +168,7 @@ const PurchaseOrderLineItemRow: React.FC<PurchaseOrderLineItemRowProps> = ({
                         onClick={() => onRemoveLineItem(item.id)} 
                         className="text-red-500 hover:text-red-700 disabled:opacity-50 disabled:cursor-not-allowed" 
                         title="Delete Line Item" 
-                        disabled={(isOrderedOrLater && hasBeenReceived) || (isLockedByJob && !!item.jobLineItemId)}
+                        disabled={(isOrderedOrLater && hasBeenReceived) || (isLockedByJob && !!item.jobLineItemId && isOrderedOrLater)}
                     >
                         <Trash2 size={14} />
                     </button>
@@ -480,6 +480,7 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({
             onConfirm: async () => {
                 await handleDeletePurchaseOrder(formData.id!);
                 onClose();
+                setConfirmation(prev => ({ ...prev, isOpen: false }));
             },
         });
     };

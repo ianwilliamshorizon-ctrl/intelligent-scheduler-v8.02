@@ -55,12 +55,26 @@ export const TimelineView: React.FC<TimelineViewProps> = (props) => {
     } = props;
 
     const { jobs, engineers, customers, vehicles, purchaseOrders, saveRecord } = useData();
-    const { currentUser } = useApp();
+    const { currentUser, users } = useApp();
     const [assistantJobId, setAssistantJobId] = useState<string | null>(null);
 
     const vehiclesById = useMemo(() => new Map(vehicles.map(v => [v.id, v])), [vehicles]);
     const customersById = useMemo(() => new Map(customers.map(c => [c.id, c])), [customers]);
-    const engineersById = useMemo(() => new Map(engineers.map(e => [e.id, e])), [engineers]);
+    
+    const engineersById = useMemo(() => {
+        const map = new Map<string, any>(engineers.map(e => [e.id, e]));
+        // Also add users with role Dispatcher as fallback engineers
+        users.filter(u => u.role === 'Dispatcher').forEach(u => {
+            if (!map.has(u.id)) {
+                map.set(u.id, { 
+                    id: u.id, 
+                    name: u.name || u.email || 'Dispatcher',
+                    specialization: 'Dispatcher'
+                });
+            }
+        });
+        return map;
+    }, [engineers, users]);
 
     const handleOpenAssistant = (jobId: string) => setAssistantJobId(jobId);
     const handleCloseAssistant = () => setAssistantJobId(null);

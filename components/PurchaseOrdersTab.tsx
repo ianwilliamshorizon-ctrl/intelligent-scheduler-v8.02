@@ -17,7 +17,7 @@ const PurchaseOrdersTab: React.FC = () => {
             isOpen: true, 
             title: 'Delete Purchase Order', 
             message: 'Are you sure you want to delete this purchase order?', 
-            onConfirm: () => workshopActions.handleDeletePurchaseOrder(id),
+            onConfirm: async () => { await workshopActions.handleDeletePurchaseOrder(id); setConfirmation(prev => ({ ...prev, isOpen: false })); },
             type: 'error'
         });
     };

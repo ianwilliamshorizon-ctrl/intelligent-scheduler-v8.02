@@ -11,6 +11,7 @@ interface UseDispatchFiltersProps {
     currentDate: string;
     unallocatedDateFilter: 'all' | 'today' | '7days' | '14days';
     showOnSiteOnly: boolean;
+    users: any[];
 }
 
 export const useDispatchFilters = ({
@@ -21,15 +22,28 @@ export const useDispatchFilters = ({
     selectedEntityId,
     currentDate,
     unallocatedDateFilter,
-    showOnSiteOnly
+    showOnSiteOnly,
+    users
 }: UseDispatchFiltersProps) => {
 
     // Filter and sort engineers
     const entityEngineers = useMemo(() => {
-        return engineers
-            .filter(e => selectedEntityId === 'all' || e.entityId === selectedEntityId)
+        const filteredEngineers = engineers.filter(e => selectedEntityId === 'all' || e.entityId === selectedEntityId);
+        
+        // Find users with role 'Dispatcher' who aren't already represented in engineers
+        const dispatchersAsEngineers = users
+            .filter(u => u.role === 'Dispatcher' && (selectedEntityId === 'all' || u.preferredEntityId === selectedEntityId))
+            .filter(u => !filteredEngineers.some(e => e.id === u.id || (u.engineerId && e.id === u.engineerId)))
+            .map(u => ({
+                id: u.id,
+                name: u.name || u.email || 'Dispatcher',
+                entityId: u.preferredEntityId || selectedEntityId,
+                specialization: 'Dispatcher'
+            }));
+
+        return [...filteredEngineers, ...dispatchersAsEngineers]
             .sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { numeric: true }));
-    }, [engineers, selectedEntityId]);
+    }, [engineers, selectedEntityId, users]);
     
     const entityLifts = useMemo(() => {
         return lifts

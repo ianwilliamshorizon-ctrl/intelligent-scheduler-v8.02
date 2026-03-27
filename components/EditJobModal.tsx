@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useData } from '../core/state/DataContext';
 import { useApp } from '../core/state/AppContext';
 import * as T from '../types';
-import { X, Save, Car, User, FileText, Wrench, Package, DollarSign, Edit, Plus, Trash2, KeyRound, MessageSquare, ChevronUp, ChevronDown, ListChecks, PlusCircle, ClipboardCheck, CarFront, Image as ImageIcon, Ban, Expand, Loader2, Printer, CalendarDays } from 'lucide-react';
+import { X, Save, Car, User, FileText, Wrench, Package, DollarSign, Edit, Plus, Trash2, KeyRound, MessageSquare, ChevronUp, ChevronDown, ListChecks, PlusCircle, ClipboardCheck, CarFront, Image as ImageIcon, Ban, Expand, Loader2, Printer, CalendarDays, PlayCircle, PauseCircle, CheckCircle, RotateCcw, UserCheck, UserPlus, MoreHorizontal } from 'lucide-react';
 import { formatCurrency } from '../utils/formatUtils';
 import { formatDate, addDays } from '../core/utils/dateUtils';
 import { generateEstimateNumber } from '../core/utils/numberGenerators';
@@ -24,6 +24,8 @@ import { calculateJobPartsStatus } from '../core/utils/jobUtils';
 import { MOTBookingModal } from './MOTBookingModal';
 import { TIME_SEGMENTS } from '../constants';
 import { generateJobId } from '../core/utils/numberGenerators';
+import { JobActionsMenu } from './shared/JobActionsMenu';
+import AssignEngineerModal from './AssignEngineerModal';
 
 const EditJobModal: React.FC<{
     isOpen: boolean;
@@ -65,7 +67,13 @@ const EditJobModal: React.FC<{
     
     const data = useData();
     const { currentUser, setConfirmation } = useApp();
-    const { handleSaveItem, handleSaveEstimate, syncPurchaseOrdersFromEstimate } = useWorkshopActions();
+    const { 
+        handleSaveItem, 
+        handleSaveEstimate, 
+        syncPurchaseOrdersFromEstimate,
+        handleUpdateSegmentStatus,
+        handleReassignEngineer
+    } = useWorkshopActions();
 
     const {
         jobs, setJobs, vehicles, customers, estimates, setEstimates, suppliers, parts, setParts, servicePackages, taxRates, businessEntities, setServicePackages, engineers, inspectionTemplates
@@ -106,6 +114,8 @@ const EditJobModal: React.FC<{
     const [isPackageModalOpen, setIsPackageModalOpen] = useState(false);
     const [suggestedPackage, setSuggestedPackage] = useState<Partial<T.ServicePackage> | null>(null);
     const [isMotBookingOpen, setIsMotBookingOpen] = useState(false);
+    const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+    const [activeSegmentForAssignment, setActiveSegmentForAssignment] = useState<T.JobSegment | null>(null);
 
     const job = useMemo(() => (Array.isArray(jobs) ? jobs : []).find(j => j.id === selectedJobId), [jobs, selectedJobId]);
     const vehicle = useMemo(() => job ? (Array.isArray(vehicles) ? vehicles : []).find(v => v.id === job.vehicleId) : undefined, [job, vehicles]);
@@ -813,6 +823,14 @@ const EditJobModal: React.FC<{
                             onChange={handleChange}
                             onViewCustomer={() => customer && onViewCustomer(customer.id)}
                             onViewVehicle={() => vehicle && onViewVehicle(vehicle.id)}
+                            allJobs={safeJobs}
+                            onUpdateLinkedJob={async (id, updates) => {
+                                const targetJob = safeJobs.find(j => j.id === id);
+                                if (targetJob) {
+                                    await handleSaveItem(setJobs, { ...targetJob, ...updates }, 'brooks_jobs');
+                                    forceRefresh('jobs');
+                                }
+                            }}
                         />
                     </div>
 
@@ -960,24 +978,135 @@ const EditJobModal: React.FC<{
                                 </div>
                             )}
                             {activeTab === 'segments' && (
-                                <div>
-                                    <h3 className="text-md font-bold mb-3">Job Segments</h3>
-                                    <ul className="space-y-2">
-                                        {(Array.isArray(editableJob.segments) ? editableJob.segments : []).map(seg => {
+                                <div className="space-y-4">
+                                    <div className="flex justify-between items-center">
+                                        <h3 className="text-lg font-bold text-gray-800">Operational Timeline</h3>
+                                        <span className="text-xs bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full font-bold uppercase tracking-wider border border-indigo-100 italic">
+                                            {totalLaborHours} Total Estimation Hours
+                                        </span>
+                                    </div>
+                                    <div className="space-y-3">
+                                        {(Array.isArray(editableJob.segments) ? editableJob.segments : []).map((seg, idx) => {
                                             const engineer = safeEngineers.find(e => e.id === seg.engineerId);
+                                            const isComplete = seg.status === 'Engineer Complete' || seg.status === 'QC Complete';
+                                            const isInProgress = seg.status === 'In Progress';
+                                            const isPaused = seg.status === 'Paused';
+
+                                            const actions = [
+                                                {
+                                                    id: 'start',
+                                                    label: isPaused ? 'Resume Work' : 'Start Segment',
+                                                    icon: PlayCircle,
+                                                    onClick: () => handleUpdateSegmentStatus(editableJob.id, seg.segmentId, 'In Progress'),
+                                                    disabled: isComplete || isInProgress,
+                                                    group: 'primary' as const
+                                                },
+                                                {
+                                                    id: 'pause',
+                                                    label: 'Pause Work',
+                                                    icon: PauseCircle,
+                                                    onClick: () => handleUpdateSegmentStatus(editableJob.id, seg.segmentId, 'Paused'),
+                                                    disabled: !isInProgress,
+                                                    group: 'primary' as const
+                                                },
+                                                {
+                                                    id: 'complete',
+                                                    label: 'Mark Complete',
+                                                    icon: CheckCircle,
+                                                    onClick: () => handleUpdateSegmentStatus(editableJob.id, seg.segmentId, 'Engineer Complete'),
+                                                    disabled: isComplete,
+                                                    group: 'primary' as const
+                                                },
+                                                {
+                                                    id: 'assign',
+                                                    label: seg.engineerId ? 'Change Engineer' : 'Assign Engineer',
+                                                    icon: seg.engineerId ? UserCheck : UserPlus,
+                                                    onClick: () => {
+                                                        setActiveSegmentForAssignment(seg);
+                                                        setIsAssignModalOpen(true);
+                                                    },
+                                                    group: 'secondary' as const
+                                                },
+                                                {
+                                                    id: 'reset',
+                                                    label: 'Reset Segment',
+                                                    icon: RotateCcw,
+                                                    onClick: () => handleUpdateSegmentStatus(editableJob.id, seg.segmentId, 'Allocated'),
+                                                    disabled: seg.status === 'Allocated',
+                                                    group: 'danger' as const
+                                                }
+                                            ];
+
                                             return (
-                                                <li key={seg.segmentId} className="p-3 bg-gray-50 rounded-md border text-sm">
-                                                    <div className="font-semibold">Status: <span className="font-normal">{seg.status}</span></div>
-                                                    <div className="font-semibold">Engineer: <span className="font-normal">{engineer?.name || 'Unassigned'}</span></div>
-                                                    <div className="font-semibold">Date: <span className="font-normal">{seg.date ? formatDate(new Date(seg.date)) : 'Not Scheduled'}</span></div>
-                                                    <div className="font-semibold">Duration: <span className="font-normal">{seg.duration} hours</span></div>
-                                                </li>
+                                                <div key={seg.segmentId} className="group relative bg-white border border-gray-200 rounded-xl p-4 shadow-sm hover:shadow-md transition-all">
+                                                    <div className="flex items-center justify-between mb-3">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-sm border-2 ${
+                                                                isComplete ? 'bg-green-50 border-green-200 text-green-600' :
+                                                                isInProgress ? 'bg-blue-50 border-blue-200 text-blue-600 animate-pulse' :
+                                                                'bg-gray-50 border-gray-200 text-gray-400'
+                                                            }`}>
+                                                                {idx + 1}
+                                                            </div>
+                                                            <div>
+                                                                <h4 className="font-bold text-gray-900 group-hover:text-indigo-600 transition-colors uppercase tracking-tight">
+                                                                    {seg.description || `Segment ${idx + 1}`}
+                                                                </h4>
+                                                                <div className="flex items-center gap-2 text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-0.5">
+                                                                    <span>{seg.date ? formatDate(new Date(seg.date)) : 'TBA'}</span>
+                                                                    <span>•</span>
+                                                                    <span>{seg.duration} hrs</span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-tighter shadow-sm border ${
+                                                                seg.status === 'Engineer Complete' ? 'bg-green-100 text-green-800 border-green-200' :
+                                                                seg.status === 'In Progress' ? 'bg-blue-600 text-white border-blue-700' :
+                                                                seg.status === 'Paused' ? 'bg-orange-100 text-orange-800 border-orange-200' :
+                                                                'bg-gray-100 text-gray-700 border-gray-200'
+                                                            }`}>
+                                                                {seg.status}
+                                                            </span>
+                                                            <JobActionsMenu actions={actions} colorScheme="light" size="md" />
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <div className="grid grid-cols-2 gap-4 pt-3 border-t border-gray-50">
+                                                        <div className="flex flex-col">
+                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Technician</span>
+                                                            <div className="flex items-center gap-2">
+                                                                <div className="w-6 h-6 rounded-lg bg-gray-100 flex items-center justify-center">
+                                                                    <User size={12} className="text-gray-400" />
+                                                                </div>
+                                                                <span className="text-sm font-bold text-gray-700">
+                                                                    {engineer?.name || 'Waiting for Assignment'}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex flex-col">
+                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Location / Lift</span>
+                                                            <div className="flex items-center gap-2">
+                                                                <div className="w-6 h-6 rounded-lg bg-gray-100 flex items-center justify-center">
+                                                                    <Car size={12} className="text-gray-400" />
+                                                                </div>
+                                                                <span className="text-sm font-bold text-gray-700">
+                                                                    {seg.allocatedLift || 'General Bay'}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
                                             );
                                         })}
                                         {(!Array.isArray(editableJob.segments) || editableJob.segments.length === 0) && (
-                                            <p className="text-gray-500 italic">No segments for this job.</p>
+                                            <div className="text-center py-12 px-4 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
+                                                <CalendarDays size={48} className="mx-auto text-gray-300 mb-3" />
+                                                <h3 className="text-sm font-bold text-gray-900 mb-1">No Active Segments</h3>
+                                                <p className="text-xs text-gray-500 italic max-w-xs mx-auto">This job has no time segments allocated on the schedule timeline.</p>
+                                            </div>
                                         )}
-                                    </ul>
+                                    </div>
                                 </div>
                             )}
                         </div>
@@ -1056,6 +1185,27 @@ const EditJobModal: React.FC<{
                     onSelect={handleMotSelect}
                     entityId={editableJob.entityId || ''}
                     initialDate={editableJob.scheduledDate}
+                />
+            )}
+            {isAssignModalOpen && activeSegmentForAssignment && (
+                <AssignEngineerModal 
+                    isOpen={isAssignModalOpen}
+                    onClose={() => {
+                        setIsAssignModalOpen(false);
+                        setActiveSegmentForAssignment(null);
+                    }}
+                    engineers={safeEngineers}
+                    jobInfo={{ resourceName: activeSegmentForAssignment.description || 'Segment' }}
+                    initialStartSegmentIndex={activeSegmentForAssignment.scheduledStartSegment || 0}
+                    initialEngineerId={activeSegmentForAssignment.engineerId}
+                    timeSegments={TIME_SEGMENTS}
+                    onAssign={(engineerId) => {
+                        if (editableJob && activeSegmentForAssignment) {
+                            handleReassignEngineer(editableJob.id, activeSegmentForAssignment.segmentId, engineerId);
+                            setIsAssignModalOpen(false);
+                            setActiveSegmentForAssignment(null);
+                        }
+                    }}
                 />
             )}
         </div>

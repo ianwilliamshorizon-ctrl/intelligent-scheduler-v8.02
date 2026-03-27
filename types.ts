@@ -358,7 +358,7 @@ export interface Invoice {
     customerId: string;
     issueDate: string; 
     dueDate: string; 
-    status: 'Draft' | 'Sent' | 'Part Paid' | 'Paid' | 'Overdue';
+    status: 'Draft' | 'Sent' | 'Part Paid' | 'Paid' | 'Overdue' | 'Archived' | 'Archived Not Paid';
     lineItems: any[];
     payments: Payment[];
     notes?: string;

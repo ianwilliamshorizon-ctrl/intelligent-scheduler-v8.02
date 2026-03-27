@@ -66,7 +66,7 @@ const PurchaseOrdersView = ({ onOpenPurchaseOrderModal, onExport, onOpenBatchUpd
             isOpen: true,
             title: 'Delete Purchase Order',
             message: 'Are you sure you want to delete this purchase order? This will permanently remove it and unlink it from any jobs.',
-            onConfirm: () => workshopActions.handleDeletePurchaseOrder(id),
+            onConfirm: async () => { await workshopActions.handleDeletePurchaseOrder(id); setConfirmation(prev => ({ ...prev, isOpen: false })); },
             type: 'error'
         });
     };

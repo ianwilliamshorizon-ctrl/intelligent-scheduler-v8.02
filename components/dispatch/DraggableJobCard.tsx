@@ -1,8 +1,10 @@
 import React, { useMemo } from 'react';
 import { Job, Vehicle, Customer, PurchaseOrder, User, VehicleStatus } from '../../types';
-import { Package as PackageIcon, PackageCheck, CheckCircle, ArrowRightCircle, Clock, Wrench, Edit, Wand2, LogIn, XCircle } from 'lucide-react';
+import { Package as PackageIcon, PackageCheck, CheckCircle, ArrowRightCircle, Clock, Wrench, Edit, Wand2, LogIn, XCircle, Car } from 'lucide-react';
 import { getCustomerDisplayName } from '../../core/utils/customerUtils';
 import { getPoStatusColor } from '../../core/utils/statusUtils';
+
+import { JobActionsMenu } from '../shared/JobActionsMenu';
 
 export const DraggableJobCard: React.FC<{
     job: Job;
@@ -52,17 +54,18 @@ export const DraggableJobCard: React.FC<{
         const arePartsReady = job.partsStatus === 'Fully Received' || job.partsStatus === 'Not Required';
         const isReadyForWorkshop = isVehicleOnSite && arePartsReady;
         
-        if (isReadyForWorkshop) return 'bg-green-100 border-green-300';
+        if (isReadyForWorkshop) return 'bg-emerald-50 border-emerald-200 text-emerald-900 shadow-emerald-100';
         
         switch (job.partsStatus) {
-            case 'Awaiting Order': return 'bg-red-50 border-red-200';
-            case 'Ordered': return 'bg-blue-50 border-blue-200';
-            case 'Partially Received': return 'bg-amber-50 border-amber-200';
-            case 'Fully Received': case 'Not Required': return 'bg-purple-100 border-purple-300';
-            default: return 'bg-white border-gray-200';
+            case 'Awaiting Order': return 'bg-rose-50 border-rose-200 text-rose-900 shadow-rose-100';
+            case 'Ordered': return 'bg-sky-50 border-sky-200 text-sky-900 shadow-sky-100';
+            case 'Partially Received': return 'bg-amber-50 border-amber-200 text-amber-900 shadow-amber-100';
+            case 'Fully Received': case 'Not Required': return 'bg-indigo-50 border-indigo-200 text-indigo-900 shadow-indigo-100';
+            default: return 'bg-white border-gray-100 text-gray-800';
         }
     };
     
+    const isVibrant = getCardColorClasses().includes('text-white');
     const associatedPOs = useMemo(() => {
         // Source of truth 1: job.purchaseOrderIds
         const fromJobIds = (job.purchaseOrderIds || []).map(id => (purchaseOrders || []).find(po => po.id === id)).filter(Boolean) as PurchaseOrder[];
@@ -80,56 +83,77 @@ export const DraggableJobCard: React.FC<{
     }, [job.id, job.purchaseOrderIds, purchaseOrders]);
 
     const isReadyForWorkshop = job.vehicleStatus === 'On Site' && (job.partsStatus === 'Fully Received' || job.partsStatus === 'Not Required');
-    
+
+    const actions = useMemo(() => {
+        const list = [
+            { id: 'assistant', label: 'Technical Assistant', icon: Wand2, onClick: () => onOpenAssistant(job.id), group: 'primary' as const },
+            { id: 'edit', label: 'Edit Job', icon: Edit, onClick: () => onEdit(job.id), group: 'secondary' as const }
+        ];
+
+        if (job.vehicleStatus === 'Awaiting Arrival') {
+            list.unshift({ id: 'checkin', label: 'Check Vehicle In', icon: LogIn, onClick: () => onCheckIn(job.id), group: 'primary' as const });
+        }
+
+        return list;
+    }, [job.id, job.vehicleStatus, onOpenAssistant, onEdit, onCheckIn]);
+
     return (
         <div
             draggable={canDrag}
             onDragStart={(e) => canDrag && onDragStart(e, job.id, segmentToDrag.segmentId)}
             onDragEnd={onDragEnd}
-            className={`p-2.5 rounded-lg shadow-md border space-y-2 ${canDrag ? 'cursor-grab' : 'cursor-default'} draggable-job ${getCardColorClasses()}`}
+            className={`p-3.5 rounded-xl shadow-lg border relative overflow-hidden transition-all duration-200 hover:shadow-xl hover:scale-[1.01] mb-3 ${canDrag ? 'cursor-grab' : 'cursor-default'} draggable-job ${getCardColorClasses()}`}
             title={canDrag ? `Drag to schedule: ${job.description} (${segmentToDrag.duration}h)`: 'View job details'}
         >
-            <div className="flex justify-between items-start">
-                <h4 className="text-xs text-gray-800 flex-grow flex items-center gap-2">
-                    {isReadyForWorkshop && <span title="Ready for Workshop"><Wrench size={16} className="text-green-600" /></span>}
+            {/* Parts Status Accent */}
+            <div className={`absolute top-0 right-0 h-1.5 w-16 rounded-bl-lg ${partsStatusInfo?.color ? 'bg-white/20' : 'bg-white/10'}`} title={partsStatus || 'No Parts'}></div>
+
+            <div className="flex justify-between items-start mb-2">
+                <h4 className={`text-sm font-bold uppercase tracking-tight leading-tight flex-grow flex items-center gap-2 text-gray-900`}>
+                    {isReadyForWorkshop && <span title="Ready for Workshop"><Wrench size={18} className="text-emerald-600" /></span>}
                     {job.description}
                 </h4>
-                <span className="font-mono text-sm font-bold bg-gray-200 px-1.5 py-0.5 rounded ml-2 flex-shrink-0">#{job.id}</span>
+                <span className={`font-mono text-xs font-bold px-2 py-0.5 rounded-full border border-gray-200 text-gray-600 flex-shrink-0 ml-2`}>
+                    #{job.id}
+                </span>
             </div>
-            <div className="text-xs text-gray-600 space-y-1">
-                {/* @ts-ignore */}
-                <p><strong>Vehicle:</strong> {vehicle?.registration} - {vehicle?.make} {vehicle?.model}</p>
-                {/* @ts-ignore */}
-                <p><strong>Customer:</strong> {getCustomerDisplayName(customer)} ({customer?.mobile || customer?.phone})</p>
-                <p><strong>Job Length:</strong> {job.estimatedHours} hours ({unallocatedSegments.length} segment{unallocatedSegments.length > 1 ? 's' : ''})</p>
+            
+            <div className={`text-xs space-y-1.5 mb-3 text-gray-600`}>
+                <p className="flex items-center gap-2 font-bold text-gray-800"><Car size={13} className="opacity-70 text-gray-400"/> {vehicle?.registration} • {vehicle?.make} {vehicle?.model}</p>
+                <p title={getCustomerDisplayName(customer)} className="truncate font-semibold flex items-center gap-2">
+                    <LogIn size={13} className="opacity-70 text-gray-400"/> {getCustomerDisplayName(customer)}
+                </p>
+                <div className="flex items-center gap-2 opacity-80 font-semibold">
+                    <Clock size={13} className="text-gray-400" />
+                    <span>{job.estimatedHours}h ({unallocatedSegments.length} segs)</span>
+                </div>
             </div>
 
             {associatedPOs && associatedPOs.length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-1 pt-1 border-t border-black/5">
+                <div className={`flex flex-wrap gap-1.5 my-2 py-2 border-t border-gray-100`}>
                     {associatedPOs.map(po => (
                         <button
                             key={po.id}
                             onClick={(e) => { e.stopPropagation(); onOpenPurchaseOrder(po); }}
-                            className={`flex items-center gap-1 px-1.5 py-0.5 rounded border text-[10px] transition-colors ${getPoStatusColor(po.status, 'bg')} ${getPoStatusColor(po.status, 'text')} border-current opacity-90 hover:opacity-100`}
+                            className={`flex items-center gap-1 px-2 py-0.5 rounded-lg border text-[9px] font-black tracking-widest transition-all hover:scale-105 active:scale-95 shadow-sm ${getPoStatusColor(po.status, 'bg')} ${getPoStatusColor(po.status, 'text')} border-white/20`}
                             title={`View PO #${po.id} (${po.status})`}
                         >
                             <PackageIcon size={10} />
-                            <span className="font-mono font-semibold">{po.id}</span>
+                            <span className="font-mono">{po.id.slice(-6)}</span>
                         </button>
                     ))}
                 </div>
             )}
-             <div className="flex justify-between items-center pt-2 border-t mt-2">
-                <div className="flex items-center gap-4 text-xs">
-                     {partsStatusInfo && <span title={partsStatusInfo.title} className={`flex items-center gap-1 font-semibold ${partsStatusInfo.color}`}>{partsStatusInfo.icon && <partsStatusInfo.icon size={14}/>} {partsStatus}</span>}
-                    <span title={`Vehicle Status: ${currentVehicleStatus.text}`} className={`flex items-center gap-1 font-semibold ${currentVehicleStatus.color}`}>
-                        <currentVehicleStatus.icon size={14}/> {currentVehicleStatus.text}
+
+             <div className="flex justify-between items-center pt-2 border-t mt-2 border-gray-100">
+                <div className="flex items-center gap-3">
+                     {partsStatusInfo && <span title={partsStatusInfo.title} className={`flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider ${isVibrant ? 'text-white/80' : partsStatusInfo.color}`}>{partsStatusInfo.icon && <partsStatusInfo.icon size={12}/>} {partsStatus}</span>}
+                    <span title={`Vehicle Status: ${currentVehicleStatus.text}`} className={`flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-gray-500`}>
+                        <currentVehicleStatus.icon size={12}/> {currentVehicleStatus.text}
                     </span>
                 </div>
                 <div className="flex items-center gap-1">
-                    <button onClick={(e) => { e.stopPropagation(); onOpenAssistant(job.id); }} className="p-1.5 bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200" title="Technical Assistant"><Wand2 size={14} /></button>
-                    {job.vehicleStatus === 'Awaiting Arrival' && <button onClick={() => onCheckIn(job.id)} className="p-1.5 bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200" title="Check Vehicle In"><LogIn size={14} /></button>}
-                    <button onClick={() => onEdit(job.id)} className="p-1.5 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200" title="Edit Job"><Edit size={14} /></button>
+                    <JobActionsMenu actions={actions} size="sm" colorScheme="light" title={`Job #${job.id} Actions`} />
                 </div>
             </div>
         </div>

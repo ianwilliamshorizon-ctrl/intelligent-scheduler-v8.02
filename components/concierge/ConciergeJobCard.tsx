@@ -35,6 +35,16 @@ export const ConciergeJobCard: React.FC<ConciergeJobCardProps> = (props) => {
     const engineersById = useMemo(() => new Map(engineers.map(e => [e.id, e])), [engineers]);
     const segmentsToday = useMemo(() => (job.segments || []).filter(s => s.date === today && s.allocatedLift), [job.segments, today]);
 
+    const partsStatusColor = () => {
+        switch (partsStatus) {
+            case 'Awaiting Order': return { bg: 'bg-rose-100', text: 'text-rose-800 border-rose-200' };
+            case 'Ordered': return { bg: 'bg-sky-100', text: 'text-sky-800 border-sky-200' };
+            case 'Partially Received': return { bg: 'bg-amber-100', text: 'text-amber-800 border-amber-200' };
+            case 'Fully Received': return { bg: 'bg-emerald-100', text: 'text-emerald-800 border-emerald-200' };
+            default: return { bg: 'bg-gray-100', text: 'text-gray-800 border-gray-200' };
+        }
+    };
+
     const partsStatusInfo = {
         'Awaiting Order': { title: 'Awaiting Parts Order', color: 'text-red-600', icon: PackageIcon },
         'Ordered': { title: 'Parts Ordered', color: 'text-blue-600', icon: PackageIcon },
@@ -53,21 +63,23 @@ export const ConciergeJobCard: React.FC<ConciergeJobCardProps> = (props) => {
     const currentVehicleStatus = vehicleStatusInfo[vehicleStatus || 'Awaiting Arrival'];
 
     const getCardColorClasses = () => {
-        if (highlightAction === 'collect') return 'bg-purple-50 border-purple-300';
-        if (highlightAction === 'invoice') return 'bg-indigo-50 border-indigo-300';
-        if (highlightAction === 'checkIn') return 'bg-blue-50 border-blue-300';
+        if (highlightAction === 'collect') return 'bg-purple-100 border-purple-200 text-purple-900';
+        if (highlightAction === 'invoice') return 'bg-indigo-100 border-indigo-200 text-indigo-900';
+        if (highlightAction === 'checkIn') return 'bg-blue-100 border-blue-200 text-blue-900';
         
         switch (job.status) {
-            case 'Unallocated': return 'bg-slate-100 border-slate-400';
-            case 'Allocated': return 'bg-blue-50 border-blue-200';
-            case 'In Progress': return 'bg-yellow-50 border-yellow-200';
-            case 'Paused': return 'bg-red-50 border-red-200';
-            case 'Pending QC': return 'bg-orange-50 border-orange-200';
-            case 'Invoiced': return 'bg-green-50 border-green-200';
-            default: return 'bg-white border-gray-200';
+            case 'Unallocated': return 'bg-slate-50 border-slate-200 text-slate-800';
+            case 'Allocated': return 'bg-blue-50 border-blue-200 text-blue-900';
+            case 'In Progress': return 'bg-amber-50 border-amber-200 text-amber-900';
+            case 'Paused': return 'bg-rose-50 border-rose-200 text-rose-900';
+            case 'Pending QC': return 'bg-orange-50 border-orange-200 text-orange-900';
+            case 'Invoiced': return 'bg-emerald-50 border-emerald-200 text-emerald-900';
+            case 'Complete': return 'bg-emerald-50 border-emerald-200 text-emerald-900';
+            default: return 'bg-white border-gray-100 text-gray-800';
         }
     };
     
+    const isVibrant = getCardColorClasses().includes('text-white');
     const associatedPOs = (job.purchaseOrderIds || []).map(id => purchaseOrders.find(po => po.id === id)).filter(Boolean) as PurchaseOrder[];
     
     const canControl = (segment: JobSegment) => {
@@ -78,43 +90,51 @@ export const ConciergeJobCard: React.FC<ConciergeJobCardProps> = (props) => {
 
     return (
         <div
-            className={`p-2 rounded-lg shadow-sm border space-y-1.5 cursor-pointer hover:shadow-md transition-shadow ${getCardColorClasses()}`}
+            className={`p-3 rounded-xl shadow-lg border relative overflow-hidden transition-all duration-200 hover:shadow-xl hover:scale-[1.01] mb-3 ${getCardColorClasses()}`}
             onClick={() => onEdit(job.id)}
         >
+            {/* Parts Status Accent */}
+            <div className={`absolute top-0 right-0 h-1.5 w-12 rounded-bl-lg ${partsStatusColor()?.bg || 'bg-white/20'}`} title={partsStatus || 'No Parts'}></div>
+
             {/* Header */}
-            <div className="flex justify-between items-start">
-                <h4 className="text-gray-800 flex-grow text-xs flex items-center gap-1">
+            <div className="flex justify-between items-start mb-2">
+                <h4 className={`flex-grow text-sm font-bold uppercase tracking-tight leading-tight text-gray-900`}>
                     {job.description}
                 </h4>
-                <div className="flex flex-col items-end gap-0.5">
-                    <span className="font-mono text-sm font-bold bg-gray-200 px-1.5 py-0.5 rounded text-gray-800">#{job.id}</span>
+                <div className="flex flex-col items-end gap-1 flex-shrink-0 ml-2">
+                    <span className={`font-mono text-xs font-bold px-2 py-0.5 rounded-full border bg-white/50 border-gray-200 text-gray-600`}>
+                        #{job.id}
+                    </span>
                     {job.keyNumber && (
-                        <span className="flex items-center gap-0.5 text-[9px] font-bold bg-yellow-100 text-yellow-800 px-1 py-0.5 rounded border border-yellow-200">
-                            <KeyRound size={8} /> {job.keyNumber}
+                        <span className={`flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded border bg-amber-50 border-amber-200 text-amber-800`}>
+                            <KeyRound size={10} /> {job.keyNumber}
                         </span>
                     )}
                 </div>
             </div>
             
             {/* Details */}
-            <div className="text-[10px] text-gray-600 space-y-0.5">
-                <p className="flex items-center gap-1 font-medium"><Car size={10}/> {vehicle?.registration} - {vehicle?.make} {vehicle?.model}</p>
-                <p title={getCustomerDisplayName(customer)} className="truncate">{getCustomerDisplayName(customer)}</p>
-                <p>{job.estimatedHours} hours</p>
+            <div className={`text-xs space-y-1 mb-3 text-gray-600`}>
+                <p className="flex items-center gap-2 font-bold text-gray-800"><Car size={13} className="opacity-70 text-gray-400"/> {vehicle?.registration} • {vehicle?.make} {vehicle?.model}</p>
+                <p title={getCustomerDisplayName(customer)} className="truncate font-semibold flex items-center gap-2"><UserIcon size={13} className="opacity-70 text-gray-400"/> {getCustomerDisplayName(customer)}</p>
+                <div className="flex items-center gap-2 opacity-80 font-semibold">
+                    <Clock size={13} className="text-gray-400" />
+                    <span>{job.estimatedHours} hours estimated</span>
+                </div>
             </div>
 
              {/* Purchase Orders Links */}
              {associatedPOs.length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-1">
+                <div className="flex flex-wrap gap-1.5 my-2 py-2 border-t border-gray-100">
                     {associatedPOs.map(po => (
                         <button
                             key={po.id}
                             onClick={(e) => { e.stopPropagation(); onOpenPurchaseOrder(po); }}
-                            className={`flex items-center gap-1 px-1.5 py-0.5 rounded border text-[9px] transition-colors ${getPoStatusColor(po.status, 'bg')} ${getPoStatusColor(po.status, 'text')} border-current opacity-90 hover:opacity-100`}
+                            className={`flex items-center gap-1 px-2 py-0.5 rounded-lg border text-[9px] font-black tracking-widest transition-all hover:scale-105 active:scale-95 shadow-sm ${getPoStatusColor(po.status, 'bg')} ${getPoStatusColor(po.status, 'text')} border-white/20`}
                             title={`View PO #${po.id} (${po.status})`}
                         >
-                            <PackageIcon size={8} />
-                            <span className="font-mono font-semibold">{po.id}</span>
+                            <PackageIcon size={10} />
+                            <span className="font-mono">{po.id.slice(-6)}</span>
                         </button>
                     ))}
                 </div>
@@ -122,7 +142,7 @@ export const ConciergeJobCard: React.FC<ConciergeJobCardProps> = (props) => {
 
             {/* Segments for Today */}
             {segmentsToday.length > 0 && (
-                <div className="mt-1 pt-1 border-t text-[10px] space-y-0.5">
+                <div className={`mt-2 pt-2 border-t border-gray-100 text-xs space-y-1.5`}>
                     {segmentsToday.map(seg => {
                         let timeString = `${seg.duration} hrs`;
                         if (seg.scheduledStartSegment !== null) {
@@ -136,17 +156,19 @@ export const ConciergeJobCard: React.FC<ConciergeJobCardProps> = (props) => {
                         const controlEnabled = canControl(seg);
 
                         return (
-                            <div key={seg.segmentId} className={`p-1 rounded-md ${controlEnabled ? 'bg-indigo-100' : 'bg-gray-100'}`}>
-                                <div className="flex justify-between items-center">
-                                    <span className="font-semibold truncate">{engineersById.get(seg.engineerId!)?.name} on {seg.allocatedLift}</span>
-                                    <span className={`font-semibold ml-1 ${seg.status === 'Paused' ? 'text-orange-600 animate-pulse' : 'text-indigo-700'}`}>{seg.status === 'Paused' ? 'PAUSED' : timeString}</span>
+                            <div key={seg.segmentId} className={`p-2 rounded-xl transition-colors ${controlEnabled ? 'bg-indigo-50 border border-indigo-100' : 'bg-gray-50'}`}>
+                                <div className="flex justify-between items-center mb-1">
+                                    <span className="font-bold truncate text-gray-700">{engineersById.get(seg.engineerId!)?.name} on {seg.allocatedLift}</span>
+                                    <span className={`font-bold ${seg.status === 'Paused' ? 'text-rose-600 animate-pulse' : 'text-indigo-700'}`}>
+                                        {seg.status === 'Paused' ? 'PAUSED' : timeString}
+                                    </span>
                                 </div>
                                 {controlEnabled && (
-                                    <div className="mt-1 flex items-center justify-end gap-1">
-                                        {seg.status === 'Allocated' && onStartWork && <button onClick={(e) => { e.stopPropagation(); onStartWork(job.id, seg.segmentId); }} className="flex items-center gap-1 px-1.5 py-0.5 bg-green-600 text-white rounded hover:bg-green-700"><PlayCircle size={12} /> Start</button>}
-                                        {seg.status === 'Paused' && onRestart && <button onClick={(e) => { e.stopPropagation(); onRestart(job.id, seg.segmentId); }} className="flex items-center gap-1 px-1.5 py-0.5 bg-green-600 text-white rounded hover:bg-green-700"><Play size={12}/> Restart</button>}
-                                        {seg.status === 'In Progress' && onPause && <button onClick={(e) => { e.stopPropagation(); onPause(job.id, seg.segmentId); }} className="flex items-center gap-1 px-1.5 py-0.5 bg-orange-500 text-white rounded hover:bg-orange-600"><PauseCircle size={12}/> Pause</button>}
-                                        {seg.status === 'In Progress' && onEngineerComplete && <button onClick={(e) => { e.stopPropagation(); onEngineerComplete(job, seg.segmentId); }} className="flex items-center gap-1 px-1.5 py-0.5 bg-blue-600 text-white rounded hover:bg-blue-700"><CheckCircle size={12}/> Complete</button>}
+                                    <div className="flex items-center justify-end gap-1.5">
+                                        {seg.status === 'Allocated' && onStartWork && <button onClick={(e) => { e.stopPropagation(); onStartWork(job.id, seg.segmentId); }} className="flex items-center gap-1 px-2 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 shadow-sm text-[10px] font-bold uppercase tracking-tight transition-transform active:scale-95"><PlayCircle size={14} /> Start</button>}
+                                        {seg.status === 'Paused' && onRestart && <button onClick={(e) => { e.stopPropagation(); onRestart(job.id, seg.segmentId); }} className="flex items-center gap-1 px-2 py-1 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 shadow-sm text-[10px] font-bold uppercase tracking-tight transition-transform active:scale-95"><PlayCircle size={14}/> Restart</button>}
+                                        {seg.status === 'In Progress' && onPause && <button onClick={(e) => { e.stopPropagation(); onPause(job.id, seg.segmentId); }} className="flex items-center gap-1 px-2 py-1 bg-amber-600 text-white rounded-lg hover:bg-amber-700 shadow-sm text-[10px] font-bold uppercase tracking-tight transition-transform active:scale-95"><PauseCircle size={14}/> Pause</button>}
+                                        {seg.status === 'In Progress' && onEngineerComplete && <button onClick={(e) => { e.stopPropagation(); onEngineerComplete(job, seg.segmentId); }} className="flex items-center gap-1 px-2 py-1 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 shadow-sm text-[10px] font-bold uppercase tracking-tight border border-indigo-200 transition-transform active:scale-95"><CheckCircle size={14}/> Complete</button>}
                                     </div>
                                 )}
                             </div>
@@ -156,45 +178,44 @@ export const ConciergeJobCard: React.FC<ConciergeJobCardProps> = (props) => {
             )}
 
             {/* Footer */}
-            <div className="flex justify-between items-center pt-1 border-t mt-0.5">
-                 <div className="flex items-center gap-1 text-[9px]">
-                     {partsStatusInfo && <span title={partsStatusInfo.title} className={`flex items-center gap-0.5 font-semibold ${partsStatusInfo.color}`}>{partsStatusInfo.icon && <partsStatusInfo.icon size={10}/>} {partsStatus}</span>}
-                    <span title={`Vehicle Status: ${currentVehicleStatus.text}`} className={`flex items-center gap-0.5 font-semibold ${currentVehicleStatus.color}`}>
-                        <currentVehicleStatus.icon size={10}/> {currentVehicleStatus.text}
+            <div className={`flex justify-between items-center pt-2 border-t mt-2 border-gray-100`}>
+                 <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider">
+                    <span title={`Vehicle Status: ${currentVehicleStatus.text}`} className={`flex items-center gap-1 text-gray-500`}>
+                        <currentVehicleStatus.icon size={12}/> {currentVehicleStatus.text}
                     </span>
                 </div>
-                <div className="flex items-center gap-1">
-                    <button onClick={(e) => { e.stopPropagation(); onOpenAssistant(job.id); }} className="p-0.5 text-blue-600 hover:bg-blue-100 rounded" title="Assistant"><Wand2 size={12} /></button>
+                <div className="flex items-center gap-2">
+                    <button onClick={(e) => { e.stopPropagation(); onOpenAssistant(job.id); }} className={`p-1.5 rounded-lg transition-colors bg-gray-50 hover:bg-gray-100 text-indigo-600 border border-gray-200`} title="Assistant"><Wand2 size={14} /></button>
                     
                     {/* Check In Action */}
                     {highlightAction === 'checkIn' && (
-                        <button onClick={(e) => { e.stopPropagation(); onCheckIn(job.id); }} className="text-[10px] flex items-center gap-0.5 bg-blue-100 text-blue-800 px-1 py-0.5 rounded hover:bg-blue-200">
-                            <LogIn size={10} /> In
+                        <button onClick={(e) => { e.stopPropagation(); onCheckIn(job.id); }} className="text-[10px] font-bold uppercase tracking-tight flex items-center gap-1 bg-white text-blue-600 px-3 py-1 rounded-lg hover:bg-blue-50 border border-blue-100 shadow-xs transition-transform active:scale-95">
+                            <LogIn size={12} /> Check In
                         </button>
                     )}
                     
                     {/* Invoice Action */}
                     {highlightAction === 'invoice' && onGenerateInvoice && (
-                        <button onClick={(e) => { e.stopPropagation(); onGenerateInvoice(job.id); }} className="text-[10px] flex items-center gap-0.5 bg-indigo-100 text-indigo-800 px-1 py-0.5 rounded hover:bg-indigo-200">
-                            <FileText size={10} /> Inv
+                        <button onClick={(e) => { e.stopPropagation(); onGenerateInvoice(job.id); }} className="text-[10px] font-bold uppercase tracking-tight flex items-center gap-1 bg-white text-indigo-600 px-3 py-1 rounded-lg hover:bg-indigo-50 border border-indigo-100 shadow-xs transition-transform active:scale-95">
+                            <FileText size={12} /> Invoice
                         </button>
                     )}
 
-                    {/* FIXED Check Out Action - Matches ConciergeView Handover Logic */}
+                    {/* Check Out Action */}
                     {(highlightAction === 'collect' || vehicleStatus === 'Awaiting Collection' || (vehicleStatus === 'On Site' && !!job.invoiceId)) && onCollect && (
                         <button 
                             onClick={(e) => { e.stopPropagation(); onCollect(job.id); }} 
-                            className="text-[10px] flex items-center gap-1 bg-green-600 text-white px-2 py-0.5 rounded hover:bg-green-700 shadow-sm"
+                            className="text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 bg-emerald-600 text-white px-3 py-1.5 rounded-xl hover:bg-emerald-700 shadow-sm transition-all active:scale-95"
                         >
-                            <LogOut size={10} /> 
-                            <span className="font-bold">OUT</span>
+                            <LogOut size={12} /> 
+                            <span>COLLECT</span>
                         </button>
                     )}
 
-                    {/* QC Action (Only show if not in collect/invoice mode) */}
+                    {/* QC Action */}
                     {job.status === 'Pending QC' && highlightAction !== 'collect' && onQcApprove && (currentUser.role === 'Admin' || currentUser.role === 'Dispatcher') && (
-                        <button onClick={(e) => {e.stopPropagation(); onQcApprove(job.id);}} className="text-[10px] flex items-center gap-0.5 bg-orange-100 text-orange-800 px-1 py-0.5 rounded hover:bg-orange-200">
-                            <ClipboardCheck size={10}/> QC
+                        <button onClick={(e) => {e.stopPropagation(); onQcApprove(job.id);}} className="text-[10px] font-bold uppercase tracking-tight flex items-center gap-1 bg-white text-orange-600 px-3 py-1 rounded-lg hover:bg-orange-50 border border-orange-100 shadow-xs transition-transform active:scale-95">
+                            <ClipboardCheck size={12}/> Sign-off
                         </button>
                     )}
                 </div>
