@@ -39,7 +39,20 @@ export const JobActionsMenu: React.FC<JobActionsMenuProps> = ({
     title
 }) => {
     const [isOpen, setIsOpen] = useState(false);
+    const [direction, setDirection] = useState<'up' | 'down'>('down');
     const menuRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (isOpen && menuRef.current) {
+            const rect = menuRef.current.getBoundingClientRect();
+            const spaceBelow = window.innerHeight - rect.bottom;
+            if (spaceBelow < 260) { // If less than 260px below, open up
+                setDirection('up');
+            } else {
+                setDirection('down');
+            }
+        }
+    }, [isOpen]);
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -98,11 +111,12 @@ export const JobActionsMenu: React.FC<JobActionsMenuProps> = ({
 
             {isOpen && (
                 <div className={`
-                    absolute right-0 top-full mt-2 w-56 
+                    absolute right-0 w-56 
+                    ${direction === 'down' ? 'top-full mt-2' : 'bottom-full mb-2'}
                     bg-white/95 backdrop-blur-md 
                     rounded-xl shadow-2xl border border-gray-200/50 
-                    z-[1001] overflow-hidden 
-                    animate-in fade-in slide-in-from-top-2 duration-200
+                    z-[1010] overflow-hidden 
+                    animate-in fade-in ${direction === 'down' ? 'slide-in-from-top-2' : 'slide-in-from-bottom-2'} duration-200
                 `}>
                     {title && (
                         <div className="px-4 py-2 text-[10px] font-bold text-gray-400 uppercase tracking-widest bg-gray-50 border-b">

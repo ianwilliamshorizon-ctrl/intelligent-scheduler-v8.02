@@ -193,7 +193,7 @@ export const AllocatedJobCard: React.FC<{
                                         <span>+{associatedPOs.length - 2}</span>
                                     </button>
                                     {isPoMenuOpen && (
-                                        <div className="absolute right-0 top-full mt-1 w-48 bg-white border rounded shadow-lg z-20 text-black animate-fade-in-up">
+                                        <div className={`absolute right-0 ${window.innerHeight - (poMenuRef.current?.getBoundingClientRect().bottom || 0) < 180 ? 'bottom-full mb-1' : 'top-full mt-1'} w-48 bg-white border rounded shadow-lg z-20 text-black animate-fade-in-up`}>
                                             <div className="p-1 font-bold text-xs border-b bg-gray-50">Purchase Orders</div>
                                             {associatedPOs.map(po => (
                                                 <button 
