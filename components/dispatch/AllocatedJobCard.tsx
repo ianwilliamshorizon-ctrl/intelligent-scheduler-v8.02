@@ -171,48 +171,6 @@ export const AllocatedJobCard: React.FC<{
                     </div>
                 </div>
                 <div className="flex items-center gap-1 flex-shrink-0 pt-0.5">
-                    {associatedPOs && associatedPOs.length > 0 && (
-                        <div className="flex gap-1">
-                            {associatedPOs.slice(0, 2).map(po => (
-                                <button 
-                                    key={po.id}
-                                    onClick={(e) => handleAction(e, () => onOpenPurchaseOrder(po))}
-                                    className={`flex items-center gap-1 px-2.5 py-0.5 rounded text-[10px] font-bold shadow-sm border border-white/20 ${getPoStatusColor(po.status, 'bg')} ${getPoStatusColor(po.status, 'text')}`}
-                                    title={`View PO #${po.id} (${po.status})`}
-                                >
-                                    <PackageIcon size={10} />
-                                    <span>{po.id.slice(-4)}</span>
-                                </button>
-                            ))}
-                            {associatedPOs.length > 2 && (
-                                <div className="relative" ref={poMenuRef}>
-                                    <button
-                                        onClick={(e) => { e.stopPropagation(); setIsPoMenuOpen(p => !p); }}
-                                        className="flex items-center gap-1 p-0.5 rounded-sm hover:bg-black/10 bg-black/5 text-[10px]"
-                                    >
-                                        <span>+{associatedPOs.length - 2}</span>
-                                    </button>
-                                    {isPoMenuOpen && (
-                                        <div className={`absolute right-0 ${window.innerHeight - (poMenuRef.current?.getBoundingClientRect().bottom || 0) < 180 ? 'bottom-full mb-1' : 'top-full mt-1'} w-48 bg-white border rounded shadow-lg z-20 text-black animate-fade-in-up`}>
-                                            <div className="p-1 font-bold text-xs border-b bg-gray-50">Purchase Orders</div>
-                                            {associatedPOs.map(po => (
-                                                <button 
-                                                    key={po.id} 
-                                                    onClick={(e) => handleAction(e, () => { onOpenPurchaseOrder(po); setIsPoMenuOpen(false); })} 
-                                                    className="w-full text-left p-1.5 text-xs hover:bg-indigo-50 font-mono flex justify-between items-center"
-                                                >
-                                                    <span>{po.id}</span>
-                                                    <span className={`px-1.5 py-0.5 text-[9px] font-semibold rounded-full ${getPoStatusColor(po.status, 'bg')} ${getPoStatusColor(po.status, 'text')}`}>
-                                                        {po.status}
-                                                    </span>
-                                                </button>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-                    )}
                     {job.keyNumber && <span className="flex items-center gap-1 bg-white/20 px-1 rounded font-bold text-[10px] text-gray-700 border border-gray-200"><KeyRound size={12}/> {job.keyNumber}</span>}
                 </div>
             </div>
@@ -231,6 +189,24 @@ export const AllocatedJobCard: React.FC<{
                      >
                         <p className="text-[10px] truncate leading-tight opacity-70 font-semibold">{getCustomerDisplayName(customer)}</p>
                      </HoverInfo>
+                 )}
+                 {!isSmallCard && associatedPOs.length > 0 && (
+                     <div className="flex flex-wrap gap-1 mt-1">
+                         {associatedPOs.slice(0, 4).map(po => (
+                             <button
+                                 key={po.id}
+                                 onClick={(e) => handleAction(e, () => onOpenPurchaseOrder(po))}
+                                 className={`flex items-center gap-0.5 px-1 py-0.5 rounded text-[8px] font-black border border-white/20 transition-all hover:scale-105 ${getPoStatusColor(po.status, 'bg')} ${getPoStatusColor(po.status, 'text')}`}
+                                 title={`PO #${po.id} (${po.status})`}
+                             >
+                                 <PackageIcon size={8} />
+                                 {po.id.slice(-6)}
+                             </button>
+                         ))}
+                         {associatedPOs.length > 4 && (
+                             <span className="text-[8px] font-bold opacity-40 flex items-center">+{associatedPOs.length - 4} more</span>
+                         )}
+                     </div>
                  )}
             </div>
             
