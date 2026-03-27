@@ -462,6 +462,15 @@ export interface BusinessEntity {
     bankAccountNumber?: string;
     invoiceFooterText?: string;
     logoImageId?: string;
+    workingHours?: {
+        startHour: number;
+        endHour: number;
+        isOpenSaturday: boolean;
+        saturdayStartHour?: number;
+        saturdayEndHour?: number;
+        isOpenSunday: boolean;
+        region: 'england-and-wales' | 'scotland' | 'northern-ireland';
+    };
 }
 
 export interface Engineer { 
@@ -700,4 +709,10 @@ export interface StorageLocation {
 export interface BatteryCharger {
     id: string;
     name: string;
+}
+
+export interface DraggedSegmentData {
+    parentJobId: string;
+    segmentId: string;
+    duration: number;
 }

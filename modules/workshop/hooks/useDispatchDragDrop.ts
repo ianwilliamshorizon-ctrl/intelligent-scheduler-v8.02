@@ -107,46 +107,6 @@ export const useDispatchDragDrop = ({
         return false;
     }, [jobs, getEntityConfig, getMaxSlotsForDate]);
 
-    const createPOs = async (job: Job, entityCode: string, itemsForPO: EstimateLineItem[]) => {
-        const partItems = itemsForPO.filter(li => !li.isLabor && li.partId);
-        const poIds: string[] = [];
-        if (partItems.length > 0) {
-            const partsBySupplier: Record<string, EstimateLineItem[]> = {};
-            partItems.forEach(item => {
-                const partDef = parts.find(p => p.id === item.partId);
-                const sId = partDef?.defaultSupplierId || 'PENDING_SUPPLIER';
-                if (!partsBySupplier[sId]) partsBySupplier[sId] = [];
-                partsBySupplier[sId].push(item);
-            });
-
-            for (const [supplierId, items] of Object.entries(partsBySupplier)) {
-                const newPOId = await generateSequenceId('944', entityCode);
-                const vehicle = vehicles.find(v => v.id === job.vehicleId);
-                const newPO: PurchaseOrder = {
-                    id: newPOId, 
-                    entityId: job.entityId, 
-                    supplierId: supplierId === 'PENDING_SUPPLIER' ? '' : supplierId, 
-                    vehicleRegistrationRef: vehicle?.registration || 'N/A',
-                    orderDate: formatDate(new Date()), 
-                    status: 'Draft', 
-                    jobId: job.id,
-                    createdByUserId: currentUser.id,
-                    lineItems: items.map(item => ({ 
-                        id: crypto.randomUUID(), 
-                        partNumber: item.partNumber || '', 
-                        description: item.description || '', 
-                        quantity: item.quantity, 
-                        receivedQuantity: 0, 
-                        unitPrice: item.unitCost || 0, 
-                        taxCodeId: item.taxCodeId || '' 
-                    }))
-                };
-                await handleSavePurchaseOrder(newPO);
-                poIds.push(newPOId);
-            }
-        }
-        return poIds;
-    };
 
     const confirmJobSchedule = useCallback(async (jobId: string, segmentId: string, liftId: string, engineerId: string, startSegmentIndex: number) => {
         const job = jobs.find(j => j.id === jobId);
@@ -184,7 +144,9 @@ export const useDispatchDragDrop = ({
                 const hoursForThisDay = segmentsForThisDay * (SEGMENT_DURATION_MINUTES / 60);
 
                 newSegments.push({
+                    id: crypto.randomUUID(),
                     segmentId: loopCount === 1 ? segmentId : crypto.randomUUID(),
+                    description: job.description || 'Workshop Segment',
                     date: currentBookingDate,
                     scheduledStartSegment: safeStartIndex,
                     duration: hoursForThisDay,
@@ -207,14 +169,6 @@ export const useDispatchDragDrop = ({
             return;
         }
         
-        let poIds: string[] = [];
-        if (job.estimateId) {
-            const estimate = estimates.find(e => e.id === job.estimateId);
-            if (estimate) {
-                const entity = businessEntities.find(e => e.id === job.entityId);
-                poIds = await createPOs(job, entity?.shortCode || 'UNK', estimate.lineItems);
-            }
-        }
 
         setJobs(prev => prev.map(j => {
             if (j.id === jobId) {
@@ -223,13 +177,13 @@ export const useDispatchDragDrop = ({
                     scheduledDate: newSegments[0]?.date || j.scheduledDate, 
                     segments: newSegments, 
                     status: calculateJobStatus(newSegments), 
-                    purchaseOrderIds: [...(j.purchaseOrderIds || []), ...poIds]
+                    purchaseOrderIds: j.purchaseOrderIds
                 };
             }
             return j;
         }));
 
-    }, [jobs, lifts, currentDate, bankHolidays, getEntityConfig, getMaxSlotsForDate, checkCollisionOnDate, setJobs, createPOs, estimates]);
+    }, [jobs, lifts, currentDate, bankHolidays, getEntityConfig, getMaxSlotsForDate, checkCollisionOnDate, setJobs, estimates]);
 
     const handleDragStart = useCallback((e: React.DragEvent, parentJobId: string, segmentId: string) => {
         const job = jobs.find(j => j.id === parentJobId);
@@ -327,7 +281,9 @@ export const useDispatchDragDrop = ({
              setJobs(prev => prev.map(job => {
                 if (job.id === parentJobId) {
                     const newSegments: JobSegment[] = [{
+                         id: crypto.randomUUID(),
                          segmentId: crypto.randomUUID(),
+                         description: job.description || 'Unallocated Segment',
                          date: null,
                          duration: job.estimatedHours,
                          status: 'Unallocated',

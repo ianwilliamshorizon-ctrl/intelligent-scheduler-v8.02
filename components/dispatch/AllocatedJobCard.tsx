@@ -148,8 +148,8 @@ export const AllocatedJobCard: React.FC<{
                 minHeight: '40px', 
             }}
         >
-            <div className="flex justify-between items-start text-xs flex-shrink-0">
-                <div className="flex flex-col min-w-0 pr-1">
+            <div className="flex justify-between items-start gap-1 pb-1 text-xs flex-shrink-0 mb-1">
+                <div className="flex flex-col min-w-0 flex-grow">
                      <HoverInfo
                         title="Vehicle Details"
                         data={{
@@ -161,11 +161,16 @@ export const AllocatedJobCard: React.FC<{
                             'MOT Expires': vehicle?.motExpiryDate
                         }}
                     >
-                        <span className="font-bold truncate">{vehicle?.registration || 'Unknown Vehicle'}</span>
+                        <span className="font-bold truncate" title={vehicle?.registration}>{vehicle?.registration || 'Unknown Vehicle'}</span>
                     </HoverInfo>
-                    <span className="font-mono text-sm font-bold">#{job.id}</span>
+                    <div className="flex items-center gap-1.5 leading-tight">
+                        <span className="font-mono text-[10px] font-bold opacity-60">#{job.id}</span>
+                        {job.jobType === 'MOT' && (
+                            <span className="bg-emerald-500/20 text-emerald-800 text-[8px] px-1 rounded-sm font-bold uppercase tracking-tighter">MOT</span>
+                        )}
+                    </div>
                 </div>
-                <div className="flex items-center gap-1 flex-shrink-0">
+                <div className="flex items-center gap-1 flex-shrink-0 pt-0.5">
                     {associatedPOs && associatedPOs.length > 0 && (
                         <div className="flex gap-1">
                             {associatedPOs.slice(0, 2).map(po => (
