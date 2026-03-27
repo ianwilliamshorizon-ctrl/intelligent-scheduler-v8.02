@@ -200,7 +200,7 @@ export const AllocatedJobCard: React.FC<{
                                  title={`PO #${po.id} (${po.status})`}
                              >
                                  <PackageIcon size={8} />
-                                 {po.id.slice(-6)}
+                                 {po.id}
                              </button>
                          ))}
                          {associatedPOs.length > 4 && (
