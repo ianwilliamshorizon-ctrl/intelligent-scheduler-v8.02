@@ -164,7 +164,7 @@ export const AllocatedJobCard: React.FC<{
                         <span className="font-bold truncate" title={vehicle?.registration}>{vehicle?.registration || 'Unknown Vehicle'}</span>
                     </HoverInfo>
                     <div className="flex items-center gap-1.5 leading-tight">
-                        <span className="font-mono text-[10px] font-bold opacity-60">#{job.id}</span>
+                        <span className="font-mono text-[11px] font-black text-gray-900">#{job.id}</span>
                         {job.jobType === 'MOT' && (
                             <span className="bg-emerald-500/20 text-emerald-800 text-[8px] px-1 rounded-sm font-bold uppercase tracking-tighter">MOT</span>
                         )}
