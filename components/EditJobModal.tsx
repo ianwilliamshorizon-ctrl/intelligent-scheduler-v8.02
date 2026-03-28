@@ -26,6 +26,8 @@ import { TIME_SEGMENTS } from '../constants';
 import { generateJobId } from '../core/utils/numberGenerators';
 import { JobActionsMenu } from './shared/JobActionsMenu';
 import AssignEngineerModal from './AssignEngineerModal';
+import VehicleDamageReport from './VehicleDamageReport';
+import { getHexFromColorName } from '../utils/colorUtils';
 
 const EditJobModal: React.FC<{
     isOpen: boolean;
@@ -75,8 +77,8 @@ const EditJobModal: React.FC<{
         handleReassignEngineer
     } = useWorkshopActions();
 
-    const {
-        jobs, setJobs, vehicles, customers, estimates, setEstimates, suppliers, parts, setParts, servicePackages, taxRates, businessEntities, setServicePackages, engineers, inspectionTemplates
+    const { 
+        jobs, setJobs, vehicles, customers, estimates, setEstimates, suppliers, parts, setParts, servicePackages, taxRates, businessEntities, setServicePackages, engineers, inspectionTemplates, inspectionDiagrams
     } = data;
 
     const safeJobs = Array.isArray(jobs) ? jobs : [];
@@ -169,6 +171,16 @@ const EditJobModal: React.FC<{
         }
         return null;
     }, [vehicle]);
+
+    const matchedLibraryDiagram = useMemo(() => {
+        if (!vehicle || !inspectionDiagrams || vehicleImage) return null;
+        return inspectionDiagrams.find(d => 
+            d.make?.toLowerCase() === vehicle.make?.toLowerCase() && 
+            d.model?.toLowerCase() === vehicle.model?.toLowerCase()
+        ) || inspectionDiagrams.find(d => 
+            d.make?.toLowerCase() === vehicle.make?.toLowerCase()
+        ) || null;
+    }, [vehicle, inspectionDiagrams, vehicleImage]);
 
     useEffect(() => {
         if (editableJob && editableEstimate) {
@@ -909,17 +921,15 @@ const EditJobModal: React.FC<{
                                     </div>
 
                                     <div>
-                                        <h3 className="text-lg font-bold text-gray-800 mb-4">Vehicle Damage Report</h3>
-                                        <div className="relative w-full max-w-2xl mx-auto rounded-lg overflow-hidden shadow-md bg-gray-200 cursor-crosshair" onClick={handleAddDamagePoint}>
-                                            {vehicleImage ? (
-                                                <img src={vehicleImage.dataUrl} alt="Vehicle Diagram" className="w-full" />
-                                            ) : (
-                                                <div className="h-64 flex items-center justify-center"><p className="text-gray-500">No vehicle image available</p></div>
-                                            )}
-                                            {(editableJob.damagePoints || []).map(point => (
-                                                <div key={point.id} className="absolute w-6 h-6 rounded-full bg-red-500 bg-opacity-75 border-2 border-white shadow-lg cursor-pointer flex items-center justify-center" style={{ top: `${point.y}%`, left: `${point.x}%`, transform: 'translate(-50%, -50%)' }} title={point.notes} onClick={(e) => { e.stopPropagation(); handleDamagePointClick(point.id); }}></div>
-                                            ))}
-                                        </div>
+                                        <VehicleDamageReport 
+                                            activePoints={editableJob.damagePoints || []}
+                                            onUpdate={(points) => setEditableJob(prev => prev ? { ...prev, damagePoints: points } : null)}
+                                            isReadOnly={isReadOnly}
+                                            vehicleModel={`${vehicle?.make} ${vehicle?.model}`}
+                                            vehicleColor={vehicle?.colour}
+                                            imageId={vehicle?.inspectionDiagramId || matchedLibraryDiagram?.imageId}
+                                            imageUrl={vehicleImage?.dataUrl}
+                                        />
                                     </div>
 
                                     <div>

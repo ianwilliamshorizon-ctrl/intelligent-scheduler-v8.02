@@ -3,6 +3,8 @@ import { RentalBooking, Vehicle, RentalVehicle, DamagePoint } from '../types';
 import FormModal from './FormModal';
 import VehicleDamageReport from './VehicleDamageReport';
 import { Milestone, Fuel, FilePenLine, Car, Trash2 } from 'lucide-react';
+import { getHexFromColorName } from '../utils/colorUtils';
+import { useData } from '../core/state/DataContext';
 
 interface RentalCheckInCheckOutModalProps {
     isOpen: boolean;
@@ -15,6 +17,7 @@ interface RentalCheckInCheckOutModalProps {
 }
 
 const RentalCheckInCheckOutModal: React.FC<RentalCheckInCheckOutModalProps> = ({ isOpen, onClose, onSave, booking, mode, rentalVehicle, vehicle }) => {
+    const { inspectionDiagrams } = useData();
     const [mileage, setMileage] = useState('');
     const [fuelLevel, setFuelLevel] = useState(50);
     const [conditionNotes, setConditionNotes] = useState('');
@@ -60,12 +63,21 @@ const RentalCheckInCheckOutModal: React.FC<RentalCheckInCheckOutModalProps> = ({
     const diagramImageId = useMemo(() => {
         if (vehicle && Array.isArray(vehicle.images)) {
             const primaryVehicleImage = vehicle.images.find(img => img.isPrimaryDiagram);
-            if (primaryVehicleImage) {
-                return primaryVehicleImage.id;
-            }
+            if (primaryVehicleImage) return primaryVehicleImage.id;
         }
+        
+        // Lookup from library if no primary image
+        const libraryDiagram = (inspectionDiagrams || []).find(d => 
+            d.make?.toLowerCase() === vehicle.make?.toLowerCase() && 
+            d.model?.toLowerCase() === vehicle.model?.toLowerCase()
+        ) || (inspectionDiagrams || []).find(d => 
+            d.make?.toLowerCase() === vehicle.make?.toLowerCase()
+        );
+        
+        if (libraryDiagram) return libraryDiagram.imageId;
+
         return rentalVehicle.damageCheckImageId || null;
-    }, [vehicle, rentalVehicle]);
+    }, [vehicle, rentalVehicle, inspectionDiagrams]);
 
     return (
         <FormModal isOpen={isOpen} onClose={onClose} onSave={handleSave} title={`${mode === 'checkOut' ? 'Check Out' : 'Check In'} Vehicle: ${vehicle.registration}`} maxWidth="max-w-4xl">
@@ -112,6 +124,7 @@ const RentalCheckInCheckOutModal: React.FC<RentalCheckInCheckOutModalProps> = ({
                         onUpdate={setDamagePoints}
                         isReadOnly={false}
                         vehicleModel={vehicle.model}
+                        vehicleColor={vehicle.colour}
                         imageId={diagramImageId}
                         activeColorClass={`bg-[${rentalVehicle.damageMarkerColors[mode]}]`}
                         referencePoints={mode === 'checkIn' && booking.checkOutDetails ? {

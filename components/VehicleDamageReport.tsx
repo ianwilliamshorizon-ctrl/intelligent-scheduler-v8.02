@@ -4,6 +4,7 @@ import { VehicleDamagePoint } from '../types';
 import { XCircle } from 'lucide-react';
 import PorscheFrames from './PorscheFrames';
 import AsyncImage from './AsyncImage';
+import { getHexFromColorName, getMarkerColorClass } from '../utils/colorUtils';
 
 interface DamageMarkerProps {
     point: VehicleDamagePoint;
@@ -74,12 +75,22 @@ interface VehicleDamageReportProps {
     isReadOnly: boolean;
     vehicleModel?: string;
     imageId?: string | null;
+    imageUrl?: string | null;
     referencePoints?: { points: VehicleDamagePoint[], colorClass: string };
     activeColorClass?: string;
+    vehicleColor?: string;
 }
 
-const VehicleDamageReport: React.FC<VehicleDamageReportProps> = ({ activePoints, onUpdate, isReadOnly, vehicleModel, imageId, referencePoints, activeColorClass = 'bg-red-500' }) => {
+const VehicleDamageReport: React.FC<VehicleDamageReportProps> = ({ activePoints, onUpdate, isReadOnly, vehicleModel, imageId, imageUrl, referencePoints, activeColorClass, vehicleColor }) => {
     const containerRef = useRef<HTMLDivElement>(null);
+    
+    // Determine dynamic colors
+    const vehicleHex = getHexFromColorName(vehicleColor);
+    const dynamicMarkerClass = getMarkerColorClass(vehicleHex);
+    
+    // Favor explicitly passed class, then dynamic fallback, then hardcoded red as last resort
+    const effectiveActiveColorClass = activeColorClass || dynamicMarkerClass;
+    const effectiveReferenceColorClass = referencePoints?.colorClass || 'bg-blue-500';
 
     const handleContainerClick = (e: React.MouseEvent<HTMLDivElement>) => {
         if (isReadOnly || !containerRef.current) return;
@@ -115,15 +126,22 @@ const VehicleDamageReport: React.FC<VehicleDamageReportProps> = ({ activePoints,
                 ref={containerRef}
                 onClick={handleContainerClick}
             >
-                <div className="relative w-full bg-gray-100 rounded-lg border overflow-hidden">
-                    {imageId ? (
-                        <AsyncImage imageId={imageId} alt="Vehicle Diagram" className="w-full h-auto" />
-                    ) : (
-                        <PorscheFrames view="top" vehicleModel={vehicleModel} />
-                    )}
+                <div 
+                    className="relative w-full rounded-lg border overflow-hidden"
+                    style={{ backgroundColor: vehicleHex }}
+                >
+                    <div className="relative w-full mix-blend-multiply">
+                        {imageId ? (
+                            <AsyncImage imageId={imageId} alt="Vehicle Diagram" className="w-full h-auto" />
+                        ) : imageUrl ? (
+                            <img src={imageUrl} alt="Vehicle Diagram" className="w-full h-auto" />
+                        ) : (
+                            <PorscheFrames view="top" vehicleModel={vehicleModel} />
+                        )}
+                    </div>
                     
                     {referencePoints && referencePoints.points.map((point, index) => (
-                        <DamageMarker key={point.id} point={point} index={index} isReadOnly={true} colorClass={referencePoints.colorClass} />
+                        <DamageMarker key={point.id} point={point} index={index} isReadOnly={true} colorClass={effectiveReferenceColorClass} />
                     ))}
 
                     {activePoints.map((point, index) => (
@@ -134,7 +152,7 @@ const VehicleDamageReport: React.FC<VehicleDamageReportProps> = ({ activePoints,
                             onUpdate={handleUpdatePoint}
                             onRemove={handleRemovePoint}
                             isReadOnly={isReadOnly}
-                            colorClass={activeColorClass}
+                            colorClass={effectiveActiveColorClass}
                         />
                     ))}
                 </div>

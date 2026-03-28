@@ -322,9 +322,40 @@ const WorkflowView: React.FC<WorkflowViewProps> = ({ jobs, vehicles, customers, 
                                                          </div>
                                                          {seg.date !== today && <div className="text-xs text-gray-600 font-semibold pt-1">{formatReadableDate(seg.date)}</div>}
                                                          
-                                                        {canControlJob(seg.engineerId) && segActions.length > 0 && (
-                                                            <div className="mt-2 flex items-center justify-end">
-                                                                <JobActionsMenu actions={segActions} size="sm" colorScheme="light" title="Segment Actions" />
+                                                        {canControlJob(seg.engineerId) && (
+                                                            <div className="mt-2 flex items-center justify-end gap-1.5">
+                                                                {seg.status === 'Allocated' && (
+                                                                    <button 
+                                                                        onClick={(e) => { e.stopPropagation(); onStartWork(job.id, seg.segmentId); }} 
+                                                                        className="flex items-center gap-1 px-2 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 shadow-sm text-[10px] font-bold uppercase tracking-tight transition-transform active:scale-95"
+                                                                    >
+                                                                        <PlayCircle size={14} /> Start
+                                                                    </button>
+                                                                )}
+                                                                {seg.status === 'Paused' && (
+                                                                    <button 
+                                                                        onClick={(e) => { e.stopPropagation(); onRestart(job.id, seg.segmentId); }} 
+                                                                        className="flex items-center gap-1 px-2 py-1 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 shadow-sm text-[10px] font-bold uppercase tracking-tight transition-transform active:scale-95"
+                                                                    >
+                                                                        <PlayCircle size={14} /> Restart
+                                                                    </button>
+                                                                )}
+                                                                {seg.status === 'In Progress' && (
+                                                                    <button 
+                                                                        onClick={(e) => { e.stopPropagation(); onPause(job.id, seg.segmentId); }} 
+                                                                        className="flex items-center gap-1 px-2 py-1 bg-amber-600 text-white rounded-lg hover:bg-amber-700 shadow-sm text-[10px] font-bold uppercase tracking-tight transition-transform active:scale-95"
+                                                                    >
+                                                                        <PauseCircle size={14} /> Pause
+                                                                    </button>
+                                                                )}
+                                                                {seg.status === 'In Progress' && (
+                                                                    <button 
+                                                                        onClick={(e) => { e.stopPropagation(); onEngineerComplete(job, seg.segmentId); }} 
+                                                                        className="flex items-center gap-1 px-2 py-1 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 shadow-sm text-[10px] font-bold uppercase tracking-tight border border-indigo-200 transition-transform active:scale-95"
+                                                                    >
+                                                                        <CheckCircle size={14} /> Complete
+                                                                    </button>
+                                                                )}
                                                             </div>
                                                         )}
                                                      </div>

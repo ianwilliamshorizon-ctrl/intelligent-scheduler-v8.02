@@ -130,6 +130,8 @@ export interface VehicleImage {
     dataUrl?: string;
 }
 
+export type DamagePoint = VehicleDamagePoint;
+
 export interface InspectionDiagram {
     id: string;
     make: string;
@@ -583,7 +585,36 @@ export interface RentalBooking {
     notes?: string;
     totalPrice?: number;
     createdByUserId?: string;
+    checkOutDetails?: {
+        mileage: number;
+        fuelLevel: number;
+        conditionNotes: string;
+        timestamp: string;
+        damagePoints: VehicleDamagePoint[];
+    };
+    checkInDetails?: {
+        mileage: number;
+        fuelLevel: number;
+        conditionNotes: string;
+        timestamp: string;
+        damagePoints: VehicleDamagePoint[];
+    };
+    additionalCharges?: { id: string; description: string; amount: number; }[];
 }
+
+export interface RentalVehicle {
+    id: string;
+    entityId: string;
+    make?: string;
+    model?: string;
+    registration?: string;
+    damageCheckImageId?: string | null;
+    damageMarkerColors: {
+        checkOut: string;
+        checkIn: string;
+    };
+}
+
 export interface StorageBooking {
     id: string;
     entityId: string;
@@ -681,14 +712,6 @@ export interface Reminder {
     type: 'MOT' | 'Service' | 'Other';
     date: string;
     status: 'Pending' | 'Sent' | 'Failed';
-}
-
-export interface RentalVehicle {
-    id: string;
-    entityId: string;
-    make?: string;
-    model?: string;
-    registration?: string;
 }
 
 export interface StorageBookingSummary {

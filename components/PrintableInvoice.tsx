@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { Invoice, Customer, Vehicle, BusinessEntity, Job, TaxRate, EstimateLineItem, ChecklistSection, ServicePackage, InspectionTemplate } from '../types';
+import { useData } from '../core/state/DataContext';
 import { formatCurrency } from '../core/utils/formatUtils';
 import InspectionChecklist from './InspectionChecklist';
 import VehicleDamageReport from './VehicleDamageReport';
@@ -18,6 +19,7 @@ interface PrintableInvoiceProps {
 }
 
 const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, customer, vehicle, entity, job, taxRates, servicePackages, inspectionTemplates }) => {
+    const { inspectionDiagrams } = useData();
 
     const inspectionTemplate = useMemo(() => {
         if (!job?.inspectionTemplateId || !inspectionTemplates) return null;
@@ -100,8 +102,22 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, customer, 
 
     const diagramImageId = useMemo(() => {
         const images = Array.isArray(vehicle?.images) ? vehicle.images : [];
-        return images.find((img: any) => img.isPrimaryDiagram)?.id ?? null;
-    }, [vehicle]);
+        const primaryId = images.find((img: any) => img.isPrimaryDiagram)?.id;
+        if (primaryId) return primaryId;
+
+        // Library lookup fallback
+        if (vehicle) {
+            const libraryDiagram = (inspectionDiagrams || []).find(d => 
+                d.make?.toLowerCase() === vehicle.make?.toLowerCase() && 
+                d.model?.toLowerCase() === vehicle.model?.toLowerCase()
+            ) || (inspectionDiagrams || []).find(d => 
+                d.make?.toLowerCase() === vehicle.make?.toLowerCase()
+            );
+            if (libraryDiagram) return libraryDiagram.imageId;
+        }
+
+        return null;
+    }, [vehicle, inspectionDiagrams]);
 
     const hasTechnicianNotes = job && Array.isArray(job.technicianObservations) && job.technicianObservations.length > 0;
     
@@ -354,6 +370,7 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, customer, 
                                         onUpdate={()=>{}} 
                                         isReadOnly={true} 
                                         vehicleModel={vehicle?.model} 
+                                        vehicleColor={vehicle?.colour}
                                         imageId={diagramImageId}
                                     />
                                 </div>

@@ -11,6 +11,7 @@ interface JobInspectionTabProps {
     tyreData: TyreCheckData;
     damagePoints: VehicleDamagePoint[];
     vehicleModel?: string;
+    vehicleColor?: string;
     diagramImageId?: string | null;
     isReadOnly: boolean;
     onChecklistUpdate: (updatedChecklist: ChecklistSection[]) => void;
@@ -25,6 +26,7 @@ export const JobInspectionTab: React.FC<JobInspectionTabProps> = ({
     tyreData,
     damagePoints,
     vehicleModel,
+    vehicleColor,
     diagramImageId,
     isReadOnly,
     onChecklistUpdate,
@@ -103,6 +105,7 @@ export const JobInspectionTab: React.FC<JobInspectionTabProps> = ({
                 onUpdate={onDamageReportUpdate}
                 isReadOnly={isReadOnly}
                 vehicleModel={vehicleModel}
+                vehicleColor={vehicleColor}
                 imageId={diagramImageId}
             />
         </div>
