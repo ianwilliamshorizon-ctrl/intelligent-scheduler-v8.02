@@ -184,7 +184,10 @@ export const getInitialServicePackages = (): ServicePackage[] => ([
         totalPrice: 495, 
         applicableMake: 'Porsche',
         applicableModel: '911',
-        costItems: [{ description: 'Labor', isLabor: true, quantity: 4, unitPrice: 0, unitCost: 45 }, {description:'Oil Filter', isLabor: false, quantity: 1, unitPrice: 0, unitCost: 25}]
+        costItems: [
+            { id: 'li_pkg1_1', description: 'Labor', isLabor: true, quantity: 4, unitPrice: 0, unitCost: 45, taxCodeId: 'tax_2' }, 
+            { id: 'li_pkg1_2', description:'Oil Filter', isLabor: false, quantity: 1, unitPrice: 0, unitCost: 25, taxCodeId: 'tax_2'}
+        ]
     },
     { 
         id: 'pkg_2', 
@@ -193,7 +196,7 @@ export const getInitialServicePackages = (): ServicePackage[] => ([
         totalPrice: 54.85, 
         taxCodeId: 'tax_1', 
         // No make/model implies applicable to all
-        costItems: [{ description: 'MOT Labor', isLabor: true, quantity: 1, unitPrice: 0, unitCost: 20 }]
+        costItems: [{ id: 'li_mot_1', description: 'MOT Labor', isLabor: true, quantity: 1, unitPrice: 0, unitCost: 20, taxCodeId: 'tax_1' }]
     },
     { 
         id: 'pkg_3', 
@@ -203,12 +206,12 @@ export const getInitialServicePackages = (): ServicePackage[] => ([
         applicableMake: 'Porsche',
         applicableModel: '911',
         costItems: [
-            { description: 'Major Service Labor', isLabor: true, quantity: 8, unitPrice: 0, unitCost: 45 }, 
-            { partId: 'part_1', partNumber: '99610722553', description: 'Oil Filter 996/997', isLabor: false, fromStock: false, quantity: 1, unitPrice: 0, unitCost: 22.50},
-            { partId: 'part_2', partNumber: '0W40MOB1', description: 'Mobil 1 0W-40 Oil (1L)', isLabor: false, fromStock: true, quantity: 8, unitPrice: 0, unitCost: 9.50},
-            { partId: 'part_3', partNumber: '99611013170', description: 'Air Filter 996/997', isLabor: false, fromStock: false, quantity: 1, unitPrice: 0, unitCost: 45.00},
-            { partId: 'part_4', partNumber: '99657221901', description: 'Pollen/Cabin Filter', isLabor: false, fromStock: false, quantity: 1, unitPrice: 0, unitCost: 30.00},
-            { partId: 'part_5', partNumber: '99917022490', description: 'Spark Plugs (Bosch)', isLabor: false, fromStock: false, quantity: 6, unitPrice: 0, unitCost: 15.00},
+            { id: 'li_maj_1', description: 'Major Service Labor', isLabor: true, quantity: 8, unitPrice: 0, unitCost: 45, taxCodeId: 'tax_2' }, 
+            { id: 'li_maj_2', partId: 'part_1', partNumber: '99610722553', description: 'Oil Filter 996/997', isLabor: false, fromStock: false, quantity: 1, unitPrice: 0, unitCost: 22.50, taxCodeId: 'tax_2'},
+            { id: 'li_maj_3', partId: 'part_2', partNumber: '0W40MOB1', description: 'Mobil 1 0W-40 Oil (1L)', isLabor: false, fromStock: true, quantity: 8, unitPrice: 0, unitCost: 9.50, taxCodeId: 'tax_2'},
+            { id: 'li_maj_4', partId: 'part_3', partNumber: '99611013170', description: 'Air Filter 996/997', isLabor: false, fromStock: false, quantity: 1, unitPrice: 0, unitCost: 45.00, taxCodeId: 'tax_2'},
+            { id: 'li_maj_5', partId: 'part_4', partNumber: '99657221901', description: 'Pollen/Cabin Filter', isLabor: false, fromStock: false, quantity: 1, unitPrice: 0, unitCost: 30.00, taxCodeId: 'tax_2'},
+            { id: 'li_maj_6', partId: 'part_5', partNumber: '99917022490', description: 'Spark Plugs (Bosch)', isLabor: false, fromStock: false, quantity: 6, unitPrice: 0, unitCost: 15.00, taxCodeId: 'tax_2'},
         ]
     },
     { 
@@ -219,8 +222,8 @@ export const getInitialServicePackages = (): ServicePackage[] => ([
         applicableMake: 'Porsche',
         // Generic to Porsche
         costItems: [
-            { description: 'Brake Fluid Change Labor', isLabor: true, quantity: 1, unitPrice: 0, unitCost: 45 },
-            { partId: 'part_7', partNumber: 'BFDOT4', description: 'Brake Fluid DOT4 (1L)', isLabor: false, quantity: 1, unitPrice: 0, unitCost: 10 },
+            { id: 'li_bf_1', description: 'Brake Fluid Change Labor', isLabor: true, quantity: 1, unitPrice: 0, unitCost: 45, taxCodeId: 'tax_2' },
+            { id: 'li_bf_2', partId: 'part_7', partNumber: 'BFDOT4', description: 'Brake Fluid DOT4 (1L)', isLabor: false, quantity: 1, unitPrice: 0, unitCost: 10, taxCodeId: 'tax_2' },
         ]
     },
     { 
@@ -231,7 +234,7 @@ export const getInitialServicePackages = (): ServicePackage[] => ([
         applicableMake: 'Porsche',
         applicableModel: '911',
         costItems: [
-             { description: 'Corner Weight & Geometry Setup', isLabor: true, quantity: 4, unitPrice: 0, unitCost: 45 }
+             { id: 'li_track_1', description: 'Corner Weight & Geometry Setup', isLabor: true, quantity: 4, unitPrice: 0, unitCost: 45, taxCodeId: 'tax_2' }
         ]
     },
 ]);
@@ -268,7 +271,7 @@ export const getInitialStorageBookings = (): StorageBooking[] => ([
 ]);
 
 export const getInitialRentalVehicles = (): RentalVehicle[] => ([
-    { id: 'veh_2', entityId: 'ent_rentals' },
+    { id: 'veh_2', entityId: 'ent_rentals', damageMarkerColors: { checkOut: '#ef4444', checkIn: '#22c55e' } },
 ]);
 
 export const getInitialRentalBookings = (): RentalBooking[] => ([]);

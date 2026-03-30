@@ -10,7 +10,7 @@ import { useData } from '../core/state/DataContext';
 const ServicePackageFormModal = ({ isOpen, onClose, onSave, servicePackage, taxRates, entityId, businessEntities, parts }: { isOpen: boolean, onClose: () => void, onSave: (pkg: ServicePackage) => void, servicePackage: Partial<ServicePackage> | null, taxRates: TaxRate[], entityId: string, businessEntities: BusinessEntity[], parts: Part[] }) => {
     const [formData, setFormData] = useState<Partial<ServicePackage>>({});
     const { suppliers, saveRecord } = useData();
-    const supplierMap = useMemo(() => new Map(suppliers.map(s => [s.id, s.shortCode])), [suppliers]);
+
     const standardTaxRateId = useMemo(() => taxRates.find(t => t.code === 'T1')?.id, [taxRates]);
     const t99RateId = useMemo(() => taxRates.find(t => t.code === 'T99')?.id, [taxRates]);
     const defaultSupplierId = useMemo(() => (suppliers && suppliers.length > 0) ? suppliers[0].id : undefined, [suppliers]);
@@ -376,11 +376,18 @@ const ServicePackageFormModal = ({ isOpen, onClose, onSave, servicePackage, taxR
                                         </div>
                                     )}
                                 </div>
-                                <div className="col-span-1 flex items-center justify-center pt-1">
-                                    {!li.isLabor && li.supplierId && (
-                                        <span className="font-mono bg-gray-200 px-1 rounded text-xs">
-                                            {supplierMap.get(li.supplierId) || '???'}
-                                        </span>
+                                <div className="col-span-1">
+                                    {!li.isLabor && (
+                                        <select 
+                                            value={li.supplierId || ''} 
+                                            onChange={e => handleLineChange(li.id, 'supplierId', e.target.value)} 
+                                            className="w-full p-1 border rounded text-[10px] bg-white truncate"
+                                        >
+                                            <option value="">-</option>
+                                            {suppliers.map(s => (
+                                                <option key={s.id} value={s.id}>{s.shortCode || s.name}</option>
+                                            ))}
+                                        </select>
                                     )}
                                 </div>
                                 <div className="col-span-1"><input type="number" step="0.1" value={li.quantity} onChange={e=>handleLineChange(li.id, 'quantity', e.target.value)} placeholder="Qty" className="p-1 border rounded text-sm text-right w-full"/></div>

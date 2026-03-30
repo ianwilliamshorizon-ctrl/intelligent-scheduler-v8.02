@@ -731,29 +731,41 @@ const SmartCreateJobModal: React.FC<SmartCreateJobModalProps> = ({
                         <div className="flex-grow overflow-y-auto p-4 space-y-2">
                             {lineItems.length === 0 && <p className="text-center text-gray-400 italic py-10">No items added. Add packages or items to build the job.</p>}
                             {lineItems.map(item => (
-                                <div key={item.id} className={`flex items-center gap-2 p-2 rounded border text-sm ${item.isPackageComponent ? 'bg-gray-100 ml-4' : 'bg-white shadow-sm'}`}>
-                                    <input 
-                                        value={item.description} 
-                                        onChange={e => handleLineItemChange(item.id, 'description', e.target.value)}
-                                        className="flex-grow p-1 border rounded bg-transparent"
-                                        placeholder="Description"
-                                        disabled={!!item.isPackageComponent}
-                                    />
-                                    <div className="flex items-center gap-1 w-24">
+                                <div key={item.id} className={`flex items-center gap-3 p-2 rounded-lg border text-sm transition-all shadow-sm ${item.isPackageComponent ? 'bg-gray-100 ml-6' : 'bg-white border-gray-200'}`}>
+                                    <div className="flex-grow flex items-center gap-2">
+                                        {item.servicePackageId && !item.isPackageComponent && (
+                                            <div className="bg-indigo-600 text-white text-[9px] uppercase font-black px-1.5 py-0.5 rounded shadow-sm">Pkg</div>
+                                        )}
+                                        <input 
+                                            value={item.description} 
+                                            onChange={e => handleLineItemChange(item.id, 'description', e.target.value)}
+                                            className="w-full p-1 border-none bg-transparent focus:ring-0 font-medium"
+                                            placeholder="Description"
+                                        />
+                                    </div>
+                                    <div className="flex items-center gap-1 w-20">
                                         <input 
                                             type="number" 
+                                            step="0.1"
                                             value={item.quantity} 
-                                            onChange={e => handleLineItemChange(item.id, 'quantity', parseFloat(e.target.value))}
-                                            className="w-12 p-1 border rounded text-right"
-                                            disabled={!!item.servicePackageId && !item.isPackageComponent} // Package header qty locked usually
+                                            onChange={e => handleLineItemChange(item.id, 'quantity', parseFloat(e.target.value) || 0)}
+                                            className="w-full p-1 border rounded text-right bg-white/50 focus:ring-1 focus:ring-indigo-300"
                                         />
-                                        <span className="text-xs text-gray-500">{item.isLabor ? 'hrs' : 'qty'}</span>
+                                        <span className="text-[10px] text-gray-400 font-bold uppercase">{item.isLabor ? 'hrs' : 'qty'}</span>
                                     </div>
-                                    <div className="w-24 text-right font-mono">
-                                        {formatCurrency(item.unitPrice * item.quantity)}
+                                    <div className="flex items-center gap-1 w-28">
+                                        <span className="text-gray-400 font-mono text-xs">£</span>
+                                        <input 
+                                            type="number" 
+                                            step="0.01"
+                                            value={item.unitPrice} 
+                                            onChange={e => handleLineItemChange(item.id, 'unitPrice', parseFloat(e.target.value) || 0)}
+                                            className="w-full p-1 border rounded text-right bg-white/50 focus:ring-1 focus:ring-indigo-300 font-bold text-indigo-700"
+                                            placeholder="Sell"
+                                        />
                                     </div>
                                     {!item.isPackageComponent && (
-                                        <button onClick={() => handleRemoveLineItem(item.id)} className="text-red-400 hover:text-red-600"><Trash2 size={16}/></button>
+                                        <button onClick={() => handleRemoveLineItem(item.id)} className="text-gray-300 hover:text-red-500 transition-colors p-1"><Trash2 size={16}/></button>
                                     )}
                                 </div>
                             ))}

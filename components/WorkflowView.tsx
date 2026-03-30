@@ -83,11 +83,11 @@ const WorkflowJobCard: React.FC<{
                         <button
                             key={po.id}
                             onClick={(e) => { e.stopPropagation(); onOpenPurchaseOrder(po); }}
-                            className={`flex items-center gap-1 px-2 py-0.5 rounded-lg border text-[9px] font-black tracking-widest transition-all hover:scale-105 active:scale-95 shadow-sm ${getPoStatusColor(po.status, 'bg')} ${getPoStatusColor(po.status, 'text')} border-white/20`}
+                            className={`flex items-center gap-1 px-2 py-0.5 rounded-lg border text-[11px] font-black tracking-widest transition-all hover:scale-105 active:scale-95 shadow-sm ${getPoStatusColor(po.status, 'bg')} ${getPoStatusColor(po.status, 'text')} border-white/20`}
                             title={`View PO #${po.id} (${po.status})`}
                         >
                             <PackageIcon size={10} />
-                            <span className="font-mono">{po.id.slice(-6)}</span>
+                            <span className="font-mono">{po.id}</span>
                         </button>
                     ))}
                 </div>

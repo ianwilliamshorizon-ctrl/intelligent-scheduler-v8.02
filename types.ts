@@ -488,19 +488,10 @@ export interface ServicePackage {
     description?: string;
     totalPrice?: number;
     totalPriceNet?: number;
-    // Update this from any[] to a specific structure
-    costItems?: {
-        description: string;
-        quantity: number;
-        unitPrice: number;
-        unitCost: number;
-        isStock?: boolean;
-        isLabor?: boolean;
-        fromStock?: boolean;
-        partId?: string;
-        partNumber?: string;
-        supplierId?: string;
-    }[]; 
+    totalPriceVat?: number;
+    totalCost?: number;
+    isMixedVat?: boolean;
+    costItems?: EstimateLineItem[]; 
     applicableMake?: string;
     applicableModel?: string;
     applicableVariant?: string;

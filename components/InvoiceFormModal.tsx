@@ -22,47 +22,85 @@ const MemoizedEditableLineItemRow = React.memo(({ item, taxRates, onLineItemChan
     const isPackageComponent = item.isPackageComponent;
     const isPackageHeader = !!item.servicePackageId && !item.isPackageComponent;
 
+    if (isPackageHeader) {
+        return (
+            <div className={`grid grid-cols-12 gap-2 items-center p-2 rounded-lg border bg-indigo-50 border-indigo-200 shadow-sm mb-2`}>
+                <div className="col-span-4 flex items-center gap-2">
+                    <div className="bg-indigo-600 text-white text-[10px] uppercase font-black px-1.5 py-0.5 rounded">Pkg</div>
+                    <input 
+                        type="text" 
+                        value={item.description || ''} 
+                        onChange={e => onLineItemChange(item.id, 'description', e.target.value)}
+                        className="w-full bg-transparent border-none focus:ring-0 font-bold text-indigo-900"
+                    />
+                </div>
+                <input 
+                    type="number" 
+                    step="0.1" 
+                    value={item.quantity} 
+                    onChange={e => onLineItemChange(item.id, 'quantity', e.target.value)} 
+                    className="col-span-1 p-1 border border-indigo-100 rounded text-right bg-white text-sm" 
+                />
+                <div className="col-span-2 text-[10px] text-indigo-400 font-bold uppercase tracking-widest text-center">Package Total</div>
+                <input 
+                    type="number" 
+                    step="0.01" 
+                    value={item.unitPrice} 
+                    onChange={e => onLineItemChange(item.id, 'unitPrice', e.target.value)} 
+                    className="col-span-2 p-1 border border-indigo-100 rounded text-right bg-white font-bold text-indigo-800 text-sm" 
+                />
+                <select 
+                    value={item.taxCodeId || ''} 
+                    onChange={e => onLineItemChange(item.id, 'taxCodeId', e.target.value)} 
+                    className="col-span-2 p-1 border border-indigo-100 rounded text-xs bg-white"
+                >
+                    {(taxRates || []).map(t => <option key={t.id} value={t.id}>{t.code}</option>)}
+                </select>
+                <button onClick={() => onRemoveLineItem(item.id)} className="text-red-500 hover:text-red-700 justify-self-center bg-white p-1 rounded-full shadow-sm">
+                    <Trash2 size={14} />
+                </button>
+            </div>
+        );
+    }
+
     return (
-        <div className={`grid grid-cols-12 gap-2 items-center p-2 rounded-lg border ${isPackageComponent ? 'bg-gray-100' : 'bg-white'}`}>
+        <div className={`grid grid-cols-12 gap-2 items-center p-2 rounded-lg border ${isPackageComponent ? 'bg-gray-100 ml-4' : 'bg-white'}`}>
             <input 
                 type="text" 
                 placeholder="Description" 
                 value={item.description || ''} 
                 onChange={e => onLineItemChange(item.id, 'description', e.target.value)} 
-                className="col-span-4 p-1 border rounded" 
-                disabled={isPackageHeader || isPackageComponent} 
+                className="col-span-4 p-1 border rounded text-sm disabled:bg-gray-200" 
+                disabled={isPackageComponent} 
             />
             <input 
                 type="number" 
                 step="0.1" 
                 value={item.quantity} 
                 onChange={e => onLineItemChange(item.id, 'quantity', e.target.value)} 
-                className="col-span-1 p-1 border rounded text-right" 
-                disabled={isPackageHeader} 
+                className="col-span-1 p-1 border rounded text-right text-sm" 
             />
             <input 
                 type="number" 
                 step="0.01" 
                 value={item.unitCost || ''} 
                 onChange={e => onLineItemChange(item.id, 'unitCost', e.target.value)} 
-                className="col-span-2 p-1 border rounded text-right" 
+                className="col-span-2 p-1 border rounded text-right text-sm" 
                 placeholder="Cost Price" 
-                disabled={isPackageHeader}
             />
             <input 
                 type="number" 
                 step="0.01" 
                 value={item.unitPrice} 
                 onChange={e => onLineItemChange(item.id, 'unitPrice', e.target.value)} 
-                className="col-span-2 p-1 border rounded text-right" 
+                className="col-span-2 p-1 border rounded text-right text-sm" 
                 placeholder="Sale Price" 
-                disabled={isPackageHeader || isPackageComponent}
+                disabled={isPackageComponent && !item.unitPrice}
             />
             <select 
                 value={item.taxCodeId || ''} 
                 onChange={e => onLineItemChange(item.id, 'taxCodeId', e.target.value)} 
                 className="col-span-2 p-1 border rounded text-xs" 
-                disabled={isPackageHeader}
             >
                 <option value="">-- Tax --</option>
                 {(taxRates || []).map(t => <option key={t.id} value={t.id}>{t.code}</option>)}

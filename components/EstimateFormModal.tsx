@@ -57,14 +57,42 @@ const MemoizedEditableLineItemRow = React.memo(({
 
     if (isPackageHeader) {
         return (
-            <div className={`grid grid-cols-12 gap-2 items-center p-2 rounded-lg border bg-indigo-50 border-indigo-200`}>
-                <div className="col-span-5 font-bold text-indigo-800">{item.description}</div>
-                <div className="col-span-1 p-1 text-right text-sm">{item.quantity}</div>
-                <div className="col-span-2 p-1 text-right text-sm">-</div>
-                <div className="col-span-2 p-1 text-right text-sm font-semibold">{formatCurrency(item.unitPrice)}</div>
-                <div className="col-span-1 text-center text-sm text-gray-500">-</div>
+            <div className={`grid grid-cols-12 gap-2 items-center p-2 rounded-lg border bg-indigo-50 border-indigo-200 transition-all hover:shadow-md mb-2`}>
+                <div className="col-span-5 flex items-center gap-2">
+                    <div className="bg-indigo-600 text-white text-[10px] uppercase font-black px-1.5 py-0.5 rounded shadow-sm">Pkg</div>
+                    <input 
+                        type="text" 
+                        value={item.description || ''} 
+                        onChange={e => onLineItemChange(item.id, 'description', e.target.value)}
+                        className="w-full bg-transparent border-none focus:ring-0 font-bold text-indigo-900 placeholder:text-indigo-300"
+                        placeholder="Package Description"
+                    />
+                </div>
+                <div className="col-span-1">
+                    <input 
+                        type="number" 
+                        step="0.1" 
+                        value={item.quantity} 
+                        onChange={e => onLineItemChange(item.id, 'quantity', e.target.value)} 
+                        className="w-full p-1 border border-indigo-100 rounded text-right text-sm bg-white" 
+                    />
+                </div>
+                <div className="col-span-2 text-center text-[10px] text-indigo-400 font-bold uppercase tracking-widest bg-white/50 py-1 rounded">Package Total</div>
+                <div className="col-span-2">
+                    <input 
+                        type="number" 
+                        step="0.01" 
+                        value={item.unitPrice} 
+                        onChange={e => onLineItemChange(item.id, 'unitPrice', e.target.value)} 
+                        className="w-full p-1 border border-indigo-100 rounded text-right text-sm bg-white font-bold text-indigo-800" 
+                        placeholder="Sell" 
+                    />
+                </div>
+                <div className="col-span-1 text-center text-xs text-indigo-500 font-medium">
+                     {item.taxCodeId === 'tax_99' ? 'Mix' : 'T1'}
+                </div>
                 <div className="col-span-1 flex justify-center items-center gap-1">
-                    <button onClick={() => onRemoveLineItem(item.id)} className="text-red-500 hover:text-red-700 p-1"><Trash2 size={14} /></button>
+                    <button onClick={() => onRemoveLineItem(item.id)} className="text-red-500 hover:text-red-700 bg-white p-1 rounded-full shadow-sm hover:shadow transition-all"><Trash2 size={14} /></button>
                 </div>
             </div>
         );

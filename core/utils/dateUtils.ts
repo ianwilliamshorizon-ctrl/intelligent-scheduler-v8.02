@@ -113,7 +113,7 @@ export const getNextValidWorkingDate = (startDateStr: string, bankHolidays: stri
 };
 
 /** Splits a job into daily 8-hour segments - Fixed with engineerId */
-export const splitJobIntoSegments = (job: Pick<Job, 'estimatedHours' | 'scheduledDate'>): JobSegment[] => {
+export const splitJobIntoSegments = (job: Pick<Job, 'estimatedHours' | 'scheduledDate' | 'description'>): JobSegment[] => {
     const { estimatedHours, scheduledDate } = job;
     const segments: JobSegment[] = [];
     let remainingHours = estimatedHours;
@@ -128,12 +128,14 @@ export const splitJobIntoSegments = (job: Pick<Job, 'estimatedHours' | 'schedule
         }
 
         segments.push({
+            id: crypto.randomUUID(),
             segmentId: crypto.randomUUID(), 
+            description: job.description || 'Job Segment',
             duration: duration, 
             date: formatDate(currentDate),
-            scheduledStartSegment: null,
-            allocatedLift: null,
-            engineerId: null,
+            scheduledStartSegment: null as any,
+            allocatedLift: null as any,
+            engineerId: null as any,
             status: 'Unallocated',
         });
         

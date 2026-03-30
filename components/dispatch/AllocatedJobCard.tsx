@@ -192,20 +192,17 @@ export const AllocatedJobCard: React.FC<{
                  )}
                  {!isSmallCard && associatedPOs.length > 0 && (
                      <div className="flex flex-wrap gap-1 mt-1">
-                         {associatedPOs.slice(0, 4).map(po => (
+                         {associatedPOs.map(po => (
                              <button
                                  key={po.id}
                                  onClick={(e) => handleAction(e, () => onOpenPurchaseOrder(po))}
-                                 className={`flex items-center gap-0.5 px-1 py-0.5 rounded text-[8px] font-black border border-white/20 transition-all hover:scale-105 ${getPoStatusColor(po.status, 'bg')} ${getPoStatusColor(po.status, 'text')}`}
+                                 className={`flex items-center gap-0.5 px-1 py-0.5 rounded text-[10px] font-black border border-white/20 transition-all hover:scale-105 ${getPoStatusColor(po.status, 'bg')} ${getPoStatusColor(po.status, 'text')}`}
                                  title={`PO #${po.id} (${po.status})`}
                              >
-                                 <PackageIcon size={8} />
+                                 <PackageIcon size={10} />
                                  {po.id}
                              </button>
                          ))}
-                         {associatedPOs.length > 4 && (
-                             <span className="text-[8px] font-bold opacity-40 flex items-center">+{associatedPOs.length - 4} more</span>
-                         )}
                      </div>
                  )}
             </div>
