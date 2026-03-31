@@ -34,15 +34,36 @@
 
 /* --- 3. Dynamic Print Engine (The "Blank Page" Fixer) --- */
 @media print {
+  body {
+    background-color: white !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* CRITICAL: Hide the entire app UI when printing so only the document remains */
+  #root, .no-print {
+    display: none !important;
+  }
+
+  #print-mount-point-wrapper, .rebuild-print-container {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+
+  #print-mount-point-wrapper {
+    width: 100% !important;
+  }
+
   * {
-    /* Critical for v4: Forces colors and backgrounds to render */
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
 
   /* Forces the main container to grow naturally for multiple pages */
   .printable-page, .invoice-section {
-    display: block !important;
+    display: flex !important;
+    flex-direction: column;
     height: auto !important;
     overflow: visible !important;
     background-color: white !important;
@@ -53,16 +74,36 @@
     display: block !important;
     break-before: page !important;
     margin: 0 !important;
-    /* Adds margin so content doesn't start too high */
-    padding-top: 20mm !important; 
+    padding-top: 5mm !important; 
   }
 
-  /* Prevents tables or rows from being cut in half across pages */
   .page-break-inside-avoid {
     break-inside: avoid !important;
   }
 
-  /* Hide UI elements like scrollbars or buttons during print */
+  /* Footer Page Numbers */
+  .footer-page-number::after {
+    content: "Page " counter(page);
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  thead, .print-header-group {
+    display: table-header-group !important;
+  }
+
+  tfoot, .print-footer-group {
+    display: table-footer-group !important;
+  }
+
+  .print-header-padding, .footer-spacing {
+    display: block;
+    width: 100%;
+  }
+
   ::-webkit-scrollbar {
     display: none !important;
   }

@@ -1,6 +1,5 @@
 import React, { useMemo } from 'react';
-import { Invoice, Customer, Vehicle, BusinessEntity, Job, TaxRate, EstimateLineItem, ChecklistSection, ServicePackage, InspectionTemplate } from '../types';
-import { useData } from '../core/state/DataContext';
+import { Invoice, Customer, Vehicle, BusinessEntity, Job, TaxRate, EstimateLineItem, ChecklistSection, ServicePackage, InspectionTemplate, InspectionDiagram } from '../types';
 import { formatCurrency } from '../core/utils/formatUtils';
 import InspectionChecklist from './InspectionChecklist';
 import VehicleDamageReport from './VehicleDamageReport';
@@ -16,10 +15,10 @@ interface PrintableInvoiceProps {
     taxRates: TaxRate[];
     servicePackages: ServicePackage[];
     inspectionTemplates: InspectionTemplate[];
+    inspectionDiagrams: InspectionDiagram[];
 }
 
-const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, customer, vehicle, entity, job, taxRates, servicePackages, inspectionTemplates }) => {
-    const { inspectionDiagrams } = useData();
+const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, customer, vehicle, entity, job, taxRates, servicePackages, inspectionTemplates, inspectionDiagrams }) => {
 
     const inspectionTemplate = useMemo(() => {
         if (!job?.inspectionTemplateId || !inspectionTemplates) return null;
@@ -177,31 +176,6 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, customer, 
             WebkitPrintColorAdjust: 'exact',
             printColorAdjust: 'exact'
         }}>
-            <style dangerouslySetInnerHTML={{ __html: `
-                @media print {
-                    @page { 
-                        size: A4 portrait;
-                        margin: 0mm;
-                    }
-                    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-                    body * { 
-                        visibility: hidden; 
-                    }
-                    .rebuild-print-container, .rebuild-print-container * { 
-                        visibility: visible !important; 
-                    }
-                    .rebuild-print-container { 
-                        position: absolute !important; 
-                        left: 0 !important; 
-                        top: 0 !important; 
-                        width: 100% !important;
-                    }
-                    .printable-page { 
-                        page-break-after: always; 
-                    }
-                }
-            `}} />
-
             <div className="rebuild-print-container bg-gray-100 font-sans text-sm text-gray-800">
                 <div className="printable-page invoice-section" style={{ ...pageStyle, display: 'flex', flexDirection: 'column' }}>
                     

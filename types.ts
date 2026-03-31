@@ -352,6 +352,7 @@ export interface Estimate {
     jobId?: string;
     entityId?: string;
     createdByUserId?: string;
+    media?: any[];
 }
 
 export interface Invoice {

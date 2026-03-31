@@ -102,7 +102,7 @@ export const DraggableJobCard: React.FC<{
             draggable={canDrag}
             onDragStart={(e) => canDrag && onDragStart(e, job.id, segmentToDrag.segmentId)}
             onDragEnd={onDragEnd}
-            className={`p-3.5 rounded-xl shadow-lg border relative overflow-hidden transition-all duration-200 hover:shadow-xl hover:scale-[1.01] mb-3 ${canDrag ? 'cursor-grab' : 'cursor-default'} draggable-job ${getCardColorClasses()}`}
+            className={`p-3.5 rounded-xl shadow-lg border relative transition-all duration-200 hover:shadow-xl hover:scale-[1.01] mb-3 ${canDrag ? 'cursor-grab' : 'cursor-default'} draggable-job ${getCardColorClasses()}`}
             title={canDrag ? `Drag to schedule: ${job.description} (${segmentToDrag.duration}h)`: 'View job details'}
         >
             {/* Parts Status Accent */}

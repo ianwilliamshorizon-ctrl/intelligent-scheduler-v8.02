@@ -477,19 +477,9 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
 
             let processedValue = value;
 
-            if (field === 'unitPrice' && targetItem.unitPrice === 0 && (Number(value) || 0) > 0) {
-                const grossPrice = Number(value) || 0;
-                const taxCodeId = targetItem.taxCodeId || standardTaxRateId;
-                const taxRateInfo = taxRates.find(t => t.id === taxCodeId);
-                const rate = taxRateInfo ? taxRateInfo.rate : 20;
-
-                if (rate > 0) {
-                    processedValue = grossPrice / (1 + (rate / 100));
-                } else {
-                    processedValue = grossPrice;
-                }
-            } else if (['quantity', 'unitPrice', 'unitCost'].includes(field as string)) {
-                processedValue = Number(value) || 0;
+            if (['quantity', 'unitPrice', 'unitCost'].includes(field as string)) {
+                // Allow empty strings so the user can clear the input for typing
+                processedValue = value === '' ? '' : (Number(value) || 0);
             }
 
             const updatedLineItems = lineItems.map(item =>

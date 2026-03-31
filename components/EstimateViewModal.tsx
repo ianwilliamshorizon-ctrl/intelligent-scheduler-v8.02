@@ -124,9 +124,10 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
     const resolvedEntity = useMemo(() => {
         if (entityDetails) return entityDetails;
         if (estimate.entityId) {
-            return businessEntities.find(e => e.id === estimate.entityId);
+            const found = businessEntities.find(e => e.id === estimate.entityId);
+            if (found) return found;
         }
-        return undefined;
+        return businessEntities[0];
     }, [entityDetails, estimate.entityId, businessEntities]);
 
     const absencesByDate = useMemo(() => {
@@ -412,7 +413,7 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                 <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
                     <header className="flex-shrink-0 flex justify-between items-center p-4 border-b bg-gray-50 rounded-t-xl">
                         <div>
-                            <h2 className="text-xl font-bold text-gray-800">{isSupplementary ? 'Supplementary ' : ''}Estimate #{estimate.estimateNumber}</h2>
+                            <h2 className="text-xl font-bold text-gray-800">Estimate #{estimate.estimateNumber}</h2>
                              {isCustomerMode ? (
                                 <div className="flex items-center gap-2 mt-1">
                                     <span className="text-xs bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">Customer View</span>
@@ -521,7 +522,7 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                         ) : (
                             <div className="flex justify-center">
                                 <div className="bg-white shadow-lg scale-90 origin-top">
-                                    <PrintableEstimate estimate={{...estimate, lineItems: estimate.lineItems}} customer={customer} vehicle={vehicle} entityDetails={resolvedEntity} taxRates={taxRates} parts={parts} isInternal={false} canViewPricing={canViewPricing} totals={dynamicTotals}/>
+                                    <PrintableEstimate estimate={{...estimate, lineItems: estimate.lineItems}} customer={customer} vehicle={vehicle} entityDetails={resolvedEntity} taxRates={taxRates} parts={parts} isInternal={localViewMode === 'internal'} canViewPricing={canViewPricing} totals={dynamicTotals}/>
                                 </div>
                             </div>
                         )}

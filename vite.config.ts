@@ -24,10 +24,6 @@ export default defineConfig(({ mode }) => {
         tailwindcss(), // Move Tailwind to the top of the array
         react()
       ], 
-      define: {
-        'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-        'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY)
-      },
       resolve: {
         alias: {
           '@': path.resolve(__dirname, './src'), // Ensure this points to your source folder

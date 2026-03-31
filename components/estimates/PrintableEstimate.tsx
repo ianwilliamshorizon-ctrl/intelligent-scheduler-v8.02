@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { Estimate, Customer, Vehicle, BusinessEntity, TaxRate, Part, EstimateLineItem } from '../../types';
 import { formatCurrency } from '../../utils/formatUtils';
-import { EstimateTable, getDisplayDate } from './EstimateShared';
+import { getDisplayDate } from './EstimateShared';
 
 interface PrintableEstimateProps {
     estimate: Estimate;
@@ -16,124 +16,174 @@ interface PrintableEstimateProps {
 }
 
 export const PrintableEstimate: React.FC<PrintableEstimateProps> = ({ estimate, customer, vehicle, entityDetails, parts, isInternal, canViewPricing, totals }) => {
-    const partsMap = useMemo(() => new Map(parts.map(p => [p.id, p])), [parts]);
-    
-    // Group Items into Essentials and Optionals
-    const { essentialRows, optionalRows } = useMemo(() => {
-        const essentials: any[] = [];
-        const optionals: any[] = [];
-        const allItems = estimate.lineItems || [];
-        
-        // Helper to structure rows
-        const processItems = (items: EstimateLineItem[], targetArray: any[]) => {
-            const packageHeaders = items.filter(item => item.servicePackageId && !item.isPackageComponent);
-            const processedPackageIds = new Set();
+    // Simplifed Body (Classic Table feel but clean)
+    const allItems = estimate.lineItems || [];
+    const essentialItems = allItems.filter(i => !i.isOptional);
+    const optionalItems = allItems.filter(i => i.isOptional);
 
-            packageHeaders.forEach(header => {
-                const children = allItems.filter(item => item.isPackageComponent && item.servicePackageId === header.servicePackageId);
-                targetArray.push({ header, children });
-                processedPackageIds.add(header.servicePackageId);
-            });
+    const pageStyle = {
+        width: '210mm',
+        minHeight: '297mm',
+        boxSizing: 'border-box' as const,
+        backgroundColor: '#ffffff !important', // Force white
+        margin: '0 auto',
+        display: 'block' as const,
+        color: '#000000 !important' // Force black text
+    };
 
-            items.forEach(item => {
-                if (!item.servicePackageId && !item.isPackageComponent) {
-                    targetArray.push({ standalone: item });
-                }
-            });
-        };
-
-        const essentialItems = allItems.filter(i => !i.isOptional);
-        const optionalItemsList = allItems.filter(i => i.isOptional);
-
-        processItems(essentialItems, essentials);
-        processItems(optionalItemsList, optionals);
-
-        return { essentialRows: essentials, optionalRows: optionals };
-    }, [estimate.lineItems]);
+    const renderLine = (item: EstimateLineItem, isChild = false) => {
+        const net = (item.quantity || 0) * (item.unitPrice || 0);
+        const isPackage = item.servicePackageId && !item.isPackageComponent;
+        return (
+            <tr key={item.id} style={{ borderBottom: '1px solid #f1f5f9' }} className={isChild ? "bg-gray-50/30" : ""}>
+                <td style={{ padding: '10px 4px', fontSize: isChild ? '11px' : '12px' }}>
+                    <div style={{ fontWeight: isPackage ? '800' : '500', color: isPackage ? '#000' : '#334155' }}>
+                        {isChild ? <span className="text-gray-300 mr-2">—</span> : null}
+                        {item.description}
+                        {isInternal && item.partNumber && <span className="ml-2 text-[9px] text-gray-400 font-mono tracking-tighter uppercase">[{item.partNumber}]</span>}
+                    </div>
+                </td>
+                <td style={{ padding: '10px 4px', textAlign: 'center', fontSize: '11px', color: '#64748b' }}>{item.quantity}</td>
+                <td style={{ padding: '10px 4px', textAlign: 'right', fontSize: '11px', color: '#64748b' }}>{canViewPricing ? formatCurrency(item.unitPrice) : '---'}</td>
+                <td style={{ padding: '10px 4px', textAlign: 'right', fontWeight: '700', fontSize: '12px', color: '#000' }}>{canViewPricing ? formatCurrency(net) : '---'}</td>
+            </tr>
+        );
+    };
 
     return (
-        <div style={{ 
-            backgroundColor: '#ffffff', 
-            WebkitPrintColorAdjust: 'exact',
-            printColorAdjust: 'exact'
-        }}>
-            <style dangerouslySetInnerHTML={{ __html: `
-                @media print {
-                    @page { 
-                        size: A4 portrait;
-                        margin: 10mm; 
-                    }
-                    body * { 
-                        visibility: hidden; 
-                    }
-                    .rebuild-print-container, .rebuild-print-container * { 
-                        visibility: visible !important; 
-                    }
-                    .rebuild-print-container { 
-                        position: absolute !important; 
-                        left: 0 !important; 
-                        top: 0 !important; 
-                        width: 100% !important;
-                    }
-                }
-            `}} />
-            <div className="rebuild-print-container bg-white font-sans text-sm text-gray-800 printable-page" style={{ width: '210mm', padding: '15mm', boxSizing: 'border-box' }}>
-                 <header className="pb-6 border-b mb-6">
-                    <div style={{ marginBottom: '5mm', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                        <div>
-                            <h1 className="text-3xl font-bold text-gray-900">{entityDetails?.name}</h1>
-                            <p>{entityDetails?.addressLine1}</p>
-                            <p>{entityDetails?.city}, {entityDetails?.postcode}</p>
-                        </div>
-                        <div className="text-right">
-                            <h2 className="text-2xl font-semibold text-gray-800">ESTIMATE</h2>
-                            <p className="text-lg">#{estimate?.estimateNumber}</p>
-                            <p className="mt-1">Date: {getDisplayDate(estimate.issueDate)}</p>
-                        </div>
-                    </div>
-                </header>
-                
-                <main>
-                    <section style={{ marginBottom: '2rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
-                        <div>
-                            <h3 className="text-xs font-bold text-gray-500 uppercase mb-1">Customer</h3>
-                            <p className="font-bold text-gray-900 text-base">{customer?.forename} {customer?.surname}</p>
-                        </div>
-                        <div>
-                            <h3 className="text-xs font-bold text-gray-500 uppercase mb-1">Vehicle</h3>
-                            <p className="font-bold text-gray-900 text-base">{vehicle?.registration}</p>
-                            <p>{vehicle?.make} {vehicle?.model}</p>
-                        </div>
-                    </section>
-
-                    <section>
-                        <h3 className="font-bold text-gray-800 mb-2 border-b pb-1">Proposed Work</h3>
-                        <EstimateTable items={essentialRows} isInternal={isInternal} canViewPricing={canViewPricing} partsMap={partsMap} />
-                    </section>
-
-                    {optionalRows.length > 0 && (
-                        <section className="mt-8 page-break-inside-avoid">
-                            <div className="flex items-center gap-2 mb-2 border-b pb-1">
-                                <h3 className="font-bold text-indigo-800">Optional Extras & Recommendations</h3>
-                                <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">Optional</span>
+        <div className="rebuild-print-container" style={{ ...pageStyle, display: 'block', padding: '0' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead className="print-header-group">
+                    <tr>
+                        <td>
+                             {/* HEADING REPEATS ON EVERY PAGE */}
+                            <div className="print-header-padding" style={{ height: '10mm' }}></div>
+                            <div id="estimate-print-header" style={{ paddingBottom: '20px', marginBottom: '20px', borderBottom: '2px solid #000', margin: '0 15mm 20px 15mm' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                    <div style={{ flex: 1 }}>
+                                        {entityDetails?.logoUrl && (
+                                            <img src={entityDetails.logoUrl} alt="Logo" style={{ height: '50px', marginBottom: '8px', objectFit: 'contain' }} />
+                                        ) || (
+                                            <div style={{ fontSize: '20px', fontWeight: '900', color: '#000', marginBottom: '8px' }}>BROOKSPEED</div>
+                                        )}
+                                        <h1 style={{ fontSize: '20px', fontWeight: '900', color: '#000', margin: '0 0 2px 0' }}>
+                                            {entityDetails?.name || 'BROOKSPEED'}
+                                        </h1>
+                                        <div style={{ fontSize: '10px', color: '#000', fontWeight: '500' }}>
+                                            <p>{entityDetails?.addressLine1}, {entityDetails?.city}, {entityDetails?.postcode}</p>
+                                            <div style={{ marginTop: '5px', display: 'flex', gap: '15px' }}>
+                                                {entityDetails?.vatNumber && <p>VAT: {entityDetails.vatNumber}</p>}
+                                                {entityDetails?.email && <p>{entityDetails.email}</p>}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div style={{ textAlign: 'right' }}>
+                                        <h2 style={{ fontSize: '28px', fontWeight: '900', color: '#f1f5f9', margin: 0, lineHeight: 1 }}>ESTIMATE</h2>
+                                        <div style={{ marginTop: '12px' }}>
+                                            <p style={{ fontFamily: 'monospace', fontSize: '14px', fontWeight: 'bold', color: '#000' }}>#{estimate?.estimateNumber}</p>
+                                            <p style={{ marginTop: '2px', fontSize: '11px', color: '#6b7280' }}>Date: {getDisplayDate(estimate.issueDate)}</p>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
-                            <EstimateTable items={optionalRows} isInternal={isInternal} canViewPricing={canViewPricing} partsMap={partsMap} />
-                        </section>
-                    )}
-                </main>
+                        </td>
+                    </tr>
+                </thead>
 
-                {canViewPricing && (
-                    <footer style={{ marginTop: 'auto', paddingTop: '2rem', borderTop: '1px solid #e5e7eb', pageBreakInside: 'avoid' }}>
-                        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                            <div style={{ width: '250px', fontSize: '14px' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}><span>Net Total</span><span style={{ fontWeight: '600' }}>{formatCurrency(totals.totalNet)}</span></div>
-                                {totals.vatBreakdown.map((b: any) => (<div key={b.name} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', color: '#6b7280' }}><span>VAT @ {b.rate}%</span><span>{formatCurrency(b.vat)}</span></div>))}
-                                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderTop: '1px solid #d1d5db', marginTop: '8px', fontWeight: 'bold', fontSize: '16px' }}><span>Grand Total</span><span>{formatCurrency(totals.grandTotal)}</span></div>
-                            </div>
-                        </div>
-                    </footer>
-                )}
-            </div>
+                <tbody>
+                    <tr>
+                        <td style={{ padding: '0 15mm' }}>
+                            <main style={{ paddingBottom: '30px' }}>
+                                <div className="grid grid-cols-2 gap-10 mb-8 pb-6 border-b border-gray-100">
+                                    <div>
+                                        <h3 className="text-[8px] font-bold text-gray-400 uppercase tracking-widest mb-1">Customer</h3>
+                                        <p className="text-sm font-bold" style={{ color: '#000' }}>{customer?.forename} {customer?.surname}</p>
+                                        <p className="text-gray-600 text-[11px]">{customer?.addressLine1}, {customer?.city}, {customer?.postcode}</p>
+                                    </div>
+                                    <div>
+                                        <h3 className="text-[8px] font-bold text-gray-400 uppercase tracking-widest mb-1">Vehicle</h3>
+                                        <p className="text-base font-black font-mono bg-black text-white px-2 py-0.5 inline-block rounded">{vehicle?.registration}</p>
+                                        <p className="text-gray-600 font-bold mt-1 text-[11px]">{vehicle?.make} {vehicle?.model} {vehicle?.year ? `(${vehicle.year})` : ''}</p>
+                                    </div>
+                                </div>
+
+                                <table className="w-full text-left" style={{ borderCollapse: 'collapse', marginBottom: '20px' }}>
+                                    <thead className="bg-gray-50 border-y-2 border-gray-200">
+                                        <tr>
+                                            <th className="p-2.5 text-[9px] uppercase tracking-widest font-bold text-gray-500">Description of Work</th>
+                                            <th className="p-2.5 text-[9px] uppercase tracking-widest font-bold text-gray-500 text-center w-14">Qty</th>
+                                            <th className="p-2.5 text-[9px] uppercase tracking-widest font-bold text-gray-500 text-right w-24">Unit Price</th>
+                                            <th className="p-2.5 text-[9px] uppercase tracking-widest font-bold text-gray-500 text-right w-24">Total</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {essentialItems.map(item => renderLine(item))}
+                                    </tbody>
+                                </table>
+
+                                {optionalItems.length > 0 && (
+                                    <div className="mt-8 page-break-inside-avoid">
+                                        <div className="bg-indigo-50 p-2 px-4 rounded-t-lg border-t border-x border-indigo-100">
+                                            <h3 className="text-[9px] font-black text-indigo-700 uppercase tracking-widest">Recommended Additional Work</h3>
+                                        </div>
+                                        <table className="w-full text-left bg-indigo-50/20 border-x border-b border-indigo-100 rounded-b-lg">
+                                            <tbody>
+                                                {optionalItems.map(item => renderLine(item))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+
+                                <div className="mt-8 flex justify-end page-break-inside-avoid">
+                                    <div className="w-72 space-y-2.5 bg-gray-50 p-5 rounded-xl border border-gray-100">
+                                        {canViewPricing ? (
+                                            <>
+                                                <div className="flex justify-between text-gray-400 font-bold uppercase text-[9px]">
+                                                    <span>Subtotal Net</span>
+                                                    <span className="text-gray-900">{formatCurrency(totals.totalNet)}</span>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    {totals.vatBreakdown.map((b: any) => (
+                                                        <div key={b.name} className="flex justify-between text-[10px] text-gray-400">
+                                                            <span>{b.rate === 'Mixed' ? b.name : `VAT @ ${b.rate}%`}</span>
+                                                            <span>{formatCurrency(b.vat)}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                                <div className="flex justify-between items-center pt-4 border-t border-gray-200 mt-1">
+                                                    <span className="text-gray-900 font-black uppercase text-xs">Total Estimated</span>
+                                                    <span className="text-xl font-black text-black">{formatCurrency(totals.grandTotal)}</span>
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <p className="text-center italic text-gray-400 text-xs">Pricing Hidden</p>
+                                        )}
+                                    </div>
+                                </div>
+                            </main>
+                        </td>
+                    </tr>
+                </tbody>
+
+                <tfoot className="print-footer-group">
+                    <tr>
+                        <td>
+                            <div className="footer-spacing" style={{ height: '10mm' }}></div>
+                             <footer style={{ margin: '0 15mm 10mm 15mm', paddingBottom: '10mm' }}>
+                                <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '9px', color: '#94a3b8' }}>
+                                    <div style={{ fontStyle: 'italic' }}>
+                                        <p>This estimate is valid for 30 days. Final costs subject to actual parts and labor.</p>
+                                    </div>
+                                    <div className="footer-page-number" style={{ fontStyle: 'normal', fontWeight: 'bold' }}></div>
+                                </div>
+                                <div style={{ marginTop: '8px', textAlign: 'center', fontSize: '8px', color: '#cbd5e1', fontWeight: 'bold', letterSpacing: '0.1em' }}>
+                                    BROOKSPEED PRODUCTION SYSTEM v8.02
+                                </div>
+                            </footer>
+                        </td>
+                    </tr>
+                </tfoot>
+            </table>
         </div>
     );
 };

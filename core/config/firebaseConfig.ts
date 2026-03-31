@@ -58,7 +58,6 @@ export const db = FIREBASE_DATABASE_ID === '(default)'
     : getFirestore(app, FIREBASE_DATABASE_ID);
 
 export const auth = getAuth(app);
-export const GEMINI_API_KEY = getEnvKey('VITE_GEMINI_API_KEY');
 
 if (currentEnvironment === 'Production') {
     console.log("🚀 [SYSTEM] BROOKSPEED PRODUCTION INITIALIZED");

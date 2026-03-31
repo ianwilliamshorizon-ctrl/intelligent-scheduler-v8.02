@@ -230,6 +230,7 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                     vehicles={data.vehicles}
                     customers={data.customers}
                     setJobs={data.setJobs}
+                    servicePackages={data.servicePackages}
                     onViewPurchaseOrder={(po) => { setters.setPoModal({isOpen: false, po: null}); setters.setViewPoModal({isOpen: true, po: po }); }}
                     generatePurchaseOrderId={generatePurchaseOrderId}
                     forceRefresh={data.forceRefresh}
@@ -314,6 +315,7 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                     taxRates={data.taxRates}
                     servicePackages={data.servicePackages}
                     inspectionTemplates={data.inspectionTemplates}
+                    inspectionDiagrams={data.inspectionDiagrams}
                     onUpdateInvoice={(inv) => handleSaveItem(data.setInvoices, inv, 'brooks_invoices')}
                     onInvoiceAction={(id) => actions.handleMarkJobAsAwaitingCollection(id)}
                 />

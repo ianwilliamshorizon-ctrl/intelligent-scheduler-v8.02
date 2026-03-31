@@ -42,7 +42,7 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({ onViewInvoice, onEditInvoic
         return (lineItems || []).reduce((sum, item) => {
             if (item.isPackageComponent) return sum;
             const net = (item.quantity || 0) * (item.unitPrice || 0);
-            const rate = taxRatesMap.get(item.taxCodeId || standardTaxRateId) || standardTaxRate;
+            const rate = taxRatesMap.get(item.taxCodeId || standardTaxRateId) ?? standardTaxRate;
             const vat = net * (rate / 100);
             return sum + net + vat;
         }, 0);

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import ReactDOM from 'react-dom/client';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
-import { PurchaseOrder, PurchaseOrderLineItem, Supplier, BusinessEntity, TaxRate, Part, Vehicle, Customer, Job, Estimate, EstimateLineItem } from '../types';
+import { PurchaseOrder, PurchaseOrderLineItem, Supplier, BusinessEntity, TaxRate, Part, Vehicle, Customer, Job, Estimate, EstimateLineItem, ServicePackage } from '../types';
 import { Save, PlusCircle, Trash2, X, CheckSquare, ArrowDownCircle, AlertTriangle, Info, Printer, Mail, Phone, Plus } from 'lucide-react';
 import { formatDate } from '../core/utils/dateUtils';
 import { formatCurrency } from '../utils/formatUtils';
@@ -14,6 +14,8 @@ import EmailPurchaseOrderModal from './EmailPurchaseOrderModal';
 import { useWorkshopActions } from '../core/hooks/useWorkshopActions';
 import { useApp } from '../core/state/AppContext';
 import SupplierSelectionModal from './SupplierSelectionModal';
+import SearchableSelect from './SearchableSelect';
+import { calculatePackagePrices } from '../core/utils/packageUtils';
 
 interface PurchaseOrderLineItemRowProps {
     item: PurchaseOrderLineItem;
@@ -198,13 +200,14 @@ interface PurchaseOrderFormModalProps {
     vehicles: Vehicle[];
     customers: Customer[];
     setJobs: React.Dispatch<React.SetStateAction<Job[]>>;
+    servicePackages: ServicePackage[];
     generatePurchaseOrderId: (allPurchaseOrders: PurchaseOrder[], entityShortCode: string) => string;
     forceRefresh: (collectionKey: string) => Promise<void>;
 }
 
 const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ 
     isOpen, onClose, onSave, onSavePart, purchaseOrder, suppliers, taxRates, businessEntities, allPurchaseOrders, selectedEntityId, parts, setParts, estimates, 
-    onViewPurchaseOrder, jobId, jobs, vehicles, customers, setJobs, generatePurchaseOrderId, forceRefresh 
+    onViewPurchaseOrder, jobId, jobs, vehicles, customers, setJobs, servicePackages, generatePurchaseOrderId, forceRefresh 
 }) => {
     const { setConfirmation } = useApp();
     const { handleDeletePurchaseOrder } = useWorkshopActions();
@@ -347,17 +350,54 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({
         }));
     }, []);
     
-    const addLineItem = () => {
+    const addLineItem = (isLabor: boolean = false) => {
         const newItem: PurchaseOrderLineItem = { 
             id: crypto.randomUUID(), 
-            partNumber: '',
-            description: '', 
+            partNumber: isLabor ? 'LABOUR' : '',
+            description: isLabor ? 'Subcontracted Labour' : '', 
             quantity: 1, 
             unitPrice: 0, 
             taxCodeId: standardTaxRate?.id || '',
             supplierId: formData.supplierId || ''
         };
         setFormData(prev => ({ ...prev, lineItems: [...(prev.lineItems || []), newItem] }));
+    };
+
+    const addPackage = (pkg: ServicePackage) => {
+        if (!pkg) return;
+        const { net } = calculatePackagePrices(pkg, taxRates);
+    
+        const newItems: PurchaseOrderLineItem[] = [];
+        
+        // Add the main package header if it has a price (rare on PO but possible for fixed-price subcon packages)
+        if (net > 0) {
+            newItems.push({
+                id: crypto.randomUUID(),
+                description: pkg.name || 'Service Package',
+                partNumber: 'PACKAGE',
+                quantity: 1,
+                unitPrice: net,
+                taxCodeId: pkg.taxCodeId || standardTaxRate?.id || '',
+                supplierId: formData.supplierId || ''
+            });
+        }
+    
+        if (pkg.costItems) {
+            pkg.costItems.forEach(costItem => {
+                const part = (costItem.partId ? (parts || []).find(p => p.id === costItem.partId) : null) || (costItem.partNumber ? (parts || []).find(p => p.partNumber === costItem.partNumber) : null);
+                newItems.push({ 
+                    id: crypto.randomUUID(),
+                    description: costItem.description || '',
+                    partNumber: costItem.partNumber || '',
+                    quantity: costItem.quantity || 1,
+                    unitPrice: costItem.unitCost || 0,
+                    taxCodeId: costItem.taxCodeId || standardTaxRate?.id || '',
+                    supplierId: part?.defaultSupplierId || costItem.supplierId || formData.supplierId || ''
+                });
+            });
+        }
+    
+        setFormData(prev => ({ ...prev, lineItems: [...(prev.lineItems || []), ...newItems] }));
     };
 
     const removeLineItem = useCallback((id: string) => {
@@ -861,10 +901,27 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({
                                 onAddNewPart={handleAddNewPartClick}
                             />
                         ))}
-                         {['Draft', 'Ordered', 'Partially Received'].includes(formData.status || '') && formData.type !== 'Credit' && !isLockedByJob && (
-                            <button onClick={addLineItem} className="text-indigo-600 font-semibold flex items-center gap-1 mt-2 hover:text-indigo-800">
-                                <PlusCircle size={16}/> Add New Line
-                            </button>
+                        {['Draft', 'Ordered', 'Partially Received'].includes(formData.status || '') && formData.type !== 'Credit' && (
+                            <div className="flex justify-between items-center pt-2">
+                                <div className="flex gap-4">
+                                    <button onClick={() => addLineItem(true)} className="text-indigo-600 font-semibold flex items-center gap-1.5 hover:text-indigo-800 text-sm">
+                                        <PlusCircle size={16}/> Add Labor
+                                    </button>
+                                    <button onClick={() => addLineItem(false)} className="text-indigo-600 font-semibold flex items-center gap-1.5 hover:text-indigo-800 text-sm">
+                                        <PlusCircle size={16}/> Add Part
+                                    </button>
+                                </div>
+                                <div className="w-80">
+                                    <SearchableSelect 
+                                        options={servicePackages.map(pkg => ({ label: pkg.name, value: pkg.id, description: pkg.description || 'Service Package' }))}
+                                        onSelect={(val) => {
+                                            const pkg = servicePackages.find(p => p.id === val);
+                                            if (pkg) addPackage(pkg);
+                                        }}
+                                        placeholder="Search & Add Service Package..."
+                                    />
+                                </div>
+                            </div>
                         )}
                     </div>
 

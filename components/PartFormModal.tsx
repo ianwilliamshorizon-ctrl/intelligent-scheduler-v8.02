@@ -32,8 +32,9 @@ const PartFormModal: React.FC<PartFormModalProps> = ({ isOpen, onClose, onSave, 
         if (isCheckbox) {
             processedValue = (e.target as HTMLInputElement).checked;
         } else if (isNumeric) {
-            processedValue = parseFloat(value);
-            if (isNaN(processedValue)) {
+            // Allow empty string for clearing the input
+            processedValue = value === '' ? '' : parseFloat(value);
+            if (processedValue !== '' && isNaN(processedValue as number)) {
                 processedValue = 0;
             }
         }
@@ -69,15 +70,15 @@ const PartFormModal: React.FC<PartFormModalProps> = ({ isOpen, onClose, onSave, 
                         </div>
                         <div>
                             <label htmlFor="salePrice" className="block text-sm font-medium text-gray-700">Sale Price</label>
-                            <input type="number" id="salePrice" name="salePrice" value={formData.salePrice || 0} onChange={handleChange} placeholder="Sale Price" className="mt-1 p-2 w-full border rounded" />
+                            <input type="number" id="salePrice" name="salePrice" value={formData.salePrice ?? ''} onChange={handleChange} placeholder="Sale Price" className="mt-1 p-2 w-full border rounded" />
                         </div>
                         <div>
                             <label htmlFor="costPrice" className="block text-sm font-medium text-gray-700">Cost Price</label>
-                            <input type="number" id="costPrice" name="costPrice" value={formData.costPrice || 0} onChange={handleChange} placeholder="Cost Price" className="mt-1 p-2 w-full border rounded" />
+                            <input type="number" id="costPrice" name="costPrice" value={formData.costPrice ?? ''} onChange={handleChange} placeholder="Cost Price" className="mt-1 p-2 w-full border rounded" />
                         </div>
                         <div>
                             <label htmlFor="stockQuantity" className="block text-sm font-medium text-gray-700">Stock Quantity</label>
-                            <input type="number" id="stockQuantity" name="stockQuantity" value={formData.stockQuantity || 0} onChange={handleChange} placeholder="Stock Quantity" className="mt-1 p-2 w-full border rounded" />
+                            <input type="number" id="stockQuantity" name="stockQuantity" value={formData.stockQuantity ?? ''} onChange={handleChange} placeholder="Stock Quantity" className="mt-1 p-2 w-full border rounded" />
                         </div>
                          <div>
                             <label htmlFor="defaultSupplierId" className="block text-sm font-medium text-gray-700">Default Supplier</label>
