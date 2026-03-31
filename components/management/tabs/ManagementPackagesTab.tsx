@@ -6,6 +6,7 @@ import { formatCurrency } from '../../../utils/formatUtils';
 import ServicePackageFormModal from '../../ServicePackageFormModal';
 import { useManagementTable } from '../hooks/useManagementTable';
 import { useApp } from '../../../core/state/AppContext';
+import { AlertCircle, Zap, Percent, PoundSterling, Check } from 'lucide-react';
 
 interface ManagementPackagesTabProps {
     searchTerm: string;
@@ -31,6 +32,13 @@ export const ManagementPackagesTab: React.FC<ManagementPackagesTabProps> = ({ se
     const [sortField, setSortField] = useState<SortField>('name');
     const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
     const [entityFilter, setEntityFilter] = useState<string>('all');
+    
+    // Bulk Update State
+    const [isBulkPanelOpen, setIsBulkPanelOpen] = useState(false);
+    const [bulkKeyword, setBulkKeyword] = useState('');
+    const [bulkAdjustment, setBulkAdjustment] = useState<number>(0);
+    const [adjustmentType, setAdjustmentType] = useState<'percentage' | 'fixed'>('percentage');
+    const [isUpdating, setIsUpdating] = useState(false);
 
     const filteredAndSortedPackages = useMemo(() => {
         let results = (servicePackages || []).filter(p => 
@@ -81,6 +89,67 @@ export const ManagementPackagesTab: React.FC<ManagementPackagesTabProps> = ({ se
         });
     };
 
+    const handleBulkUpdate = async () => {
+        if (!bulkKeyword.trim()) {
+            onShowStatus('Please enter a keyword to target.', 'error');
+            return;
+        }
+
+        const matchingPackages = servicePackages.filter(p => 
+            (p.name || '').toLowerCase().includes(bulkKeyword.toLowerCase()) || 
+            (p.description || '').toLowerCase().includes(bulkKeyword.toLowerCase()) ||
+            (p.costItems || []).some(item => (item.description || '').toLowerCase().includes(bulkKeyword.toLowerCase()))
+        );
+
+        if (matchingPackages.length === 0) {
+            onShowStatus(`No packages found with keyword "${bulkKeyword}"`, 'info');
+            return;
+        }
+
+        setConfirmation({
+            isOpen: true,
+            title: 'Confirm Bulk Price Adjustment',
+            message: `You are about to adjust prices for ${matchingPackages.length} packages containing "${bulkKeyword}" by ${bulkAdjustment}${adjustmentType === 'percentage' ? '%' : ' (Fixed)'}. This will modify both Net and Total prices. Continue?`,
+            type: 'warning',
+            onConfirm: async () => {
+                setIsUpdating(true);
+                try {
+                    for (const p of matchingPackages) {
+                        const currentPrice = p.totalPrice || 0;
+                        const currentPriceNet = p.totalPriceNet || 0;
+                        let newPrice = currentPrice;
+                        let newPriceNet = currentPriceNet;
+
+                        if (adjustmentType === 'percentage') {
+                            const factor = 1 + (bulkAdjustment / 100);
+                            newPrice = currentPrice * factor;
+                            newPriceNet = currentPriceNet * factor;
+                        } else {
+                            newPrice = currentPrice + bulkAdjustment;
+                            newPriceNet = currentPriceNet + bulkAdjustment;
+                        }
+
+                        const updatedPkg = {
+                            ...p,
+                            totalPrice: Math.round(newPrice * 100) / 100,
+                            totalPriceNet: Math.round(newPriceNet * 100) / 100
+                        };
+                        await updateItem(updatedPkg);
+                    }
+                    onShowStatus(`Successfully adjusted ${matchingPackages.length} packages.`, 'success');
+                    setIsBulkPanelOpen(false);
+                    setBulkKeyword('');
+                    setBulkAdjustment(0);
+                } catch (e) {
+                    onShowStatus('Failed to perform bulk update.', 'error');
+                } finally {
+                    setIsUpdating(false);
+                    setConfirmation({ isOpen: false, title: '', message: '' });
+                }
+            }
+        });
+    };
+
     const toggleSort = (field: SortField) => {
         if (sortField === field) {
             setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
@@ -92,7 +161,7 @@ export const ManagementPackagesTab: React.FC<ManagementPackagesTabProps> = ({ se
 
     return (
         <div className="p-4">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 bg-gray-50 p-4 rounded-xl border border-gray-100 shadow-sm">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 bg-gray-50 p-4 rounded-xl border border-gray-100 shadow-sm relative overflow-hidden">
                 <div className="flex flex-wrap items-center gap-4">
                     <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border shadow-sm">
                         <Filter size={16} className="text-gray-400" />
@@ -136,13 +205,83 @@ export const ManagementPackagesTab: React.FC<ManagementPackagesTabProps> = ({ se
                     )}
                 </div>
 
-                <button 
-                    onClick={() => { setSelectedPackage(null); setIsModalOpen(true); }} 
-                    className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 shadow-md flex items-center gap-2 transition-all font-semibold active:transform active:scale-95"
-                >
-                    <PlusCircle size={18}/> Add Service Package
-                </button>
+                <div className="flex items-center gap-2">
+                    <button 
+                        onClick={() => setIsBulkPanelOpen(!isBulkPanelOpen)}
+                        className={`px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition-all ${isBulkPanelOpen ? 'bg-amber-100 text-amber-700 border border-amber-200' : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200'}`}
+                    >
+                        <Zap size={18}/> Bulk Price Adjust
+                    </button>
+                    <button 
+                        onClick={() => { setSelectedPackage(null); setIsModalOpen(true); }} 
+                        className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 shadow-md flex items-center gap-2 transition-all font-semibold active:transform active:scale-95"
+                    >
+                        <PlusCircle size={18}/> Add Service Package
+                    </button>
+                </div>
             </div>
+
+            {/* Bulk Update Panel */}
+            {isBulkPanelOpen && (
+                <div className="mb-6 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-100 rounded-xl p-5 shadow-inner animate-in slide-in-from-top duration-300">
+                    <div className="flex items-start gap-4">
+                        <div className="p-2 bg-amber-100 text-amber-600 rounded-full mt-1">
+                            <AlertCircle size={20} />
+                        </div>
+                        <div className="flex-grow">
+                            <h3 className="text-amber-800 font-bold mb-1">Global Price Adjustment</h3>
+                            <p className="text-amber-700/80 text-sm mb-4">Target multiple packages by name, description, or contents to increase or decrease prices instantly.</p>
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div className="space-y-1">
+                                    <label className="text-xs font-bold text-amber-800 uppercase tracking-wider">1. Keyword Filter</label>
+                                    <input 
+                                        type="text" 
+                                        placeholder="e.g. 'Oil' or 'Service'"
+                                        value={bulkKeyword}
+                                        onChange={(e) => setBulkKeyword(e.target.value)}
+                                        className="w-full bg-white border-amber-200 rounded-lg p-2 text-sm focus:ring-amber-500 focus:border-amber-500"
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-xs font-bold text-amber-800 uppercase tracking-wider">2. Adjustment Value</label>
+                                    <div className="flex bg-white rounded-lg border border-amber-200 overflow-hidden">
+                                        <button 
+                                            onClick={() => setAdjustmentType('percentage')}
+                                            className={`p-2 flex-grow flex items-center justify-center transition-colors ${adjustmentType === 'percentage' ? 'bg-amber-500 text-white' : 'text-amber-400 hover:bg-amber-50'}`}
+                                        >
+                                            <Percent size={16} />
+                                        </button>
+                                        <button 
+                                            onClick={() => setAdjustmentType('fixed')}
+                                            className={`p-2 flex-grow flex items-center justify-center transition-colors ${adjustmentType === 'fixed' ? 'bg-amber-500 text-white' : 'text-amber-400 hover:bg-amber-50'}`}
+                                        >
+                                            <PoundSterling size={16} />
+                                        </button>
+                                        <input 
+                                            type="number" 
+                                            placeholder="0.00"
+                                            value={bulkAdjustment === 0 ? '' : bulkAdjustment}
+                                            onChange={(e) => setBulkAdjustment(parseFloat(e.target.value) || 0)}
+                                            className="w-24 text-right border-none focus:ring-0 outline-none p-2 text-sm font-mono font-bold"
+                                        />
+                                    </div>
+                                    <div className="text-[10px] text-amber-600 mt-1 italic italic">Use negative numbers to decrease prices.</div>
+                                </div>
+                                <div className="flex items-end">
+                                    <button 
+                                        onClick={handleBulkUpdate}
+                                        disabled={isUpdating || !bulkKeyword}
+                                        className="w-full bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white font-bold py-2 rounded-lg shadow-lg flex items-center justify-center gap-2 transition-all transform active:scale-95"
+                                    >
+                                        {isUpdating ? 'Updating...' : <><Check size={18}/> Apply Adjustment</>}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
                 <div className="overflow-y-auto max-h-[60vh]">

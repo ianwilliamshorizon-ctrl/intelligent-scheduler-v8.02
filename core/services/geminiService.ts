@@ -45,13 +45,27 @@ export const parseJobRequest = async (prompt: string): Promise<any> => {
 };
 
 /**
- * GENERATE SERVICE PACKAGE NAME
- * Simple helper to get a clean name string
+ * GENERATE SERVICE PACKAGE DETAILS
+ * Using AI to generate a clean name and description for a package
  */
-export const generateServicePackageName = async (prompt: string): Promise<string> => {
-    const name = await generateContent(prompt);
-    // Remove quotes if the AI included them
-    return name.replace(/"/g, '').trim();
+export const generateServicePackageName = async (lineItems: any[], make: string, model: string, cc?: string | number): Promise<{ name: string; description: string }> => {
+    const itemsText = (lineItems || []).map(item => `${item.description} (qty: ${item.quantity})`).join(', ');
+    const vehicleInfo = `${make} ${model}${cc ? ` ${cc}` : ''}`;
+    const prompt = `Based on these items: ${itemsText}, and this vehicle: ${vehicleInfo}, generate a concise name and a short description for a service package. Return ONLY JSON in this format: {"name": "...", "description": "..."}`;
+    
+    try {
+        const result = await parseJobRequest(prompt);
+        return {
+            name: result.name || `${make} ${model} Service`,
+            description: result.description || "Set of services and parts."
+        };
+    } catch (error) {
+        console.error("Error generating service package info:", error);
+        return {
+            name: `${make} ${model} Service`,
+            description: "Custom service package based on estimate items."
+        };
+    }
 };
 
 /**

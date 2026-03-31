@@ -46,7 +46,7 @@ const EstimatesView = ({ onOpenEstimateModal, onViewEstimate, onSmartCreateClick
     const taxRatesMap = useMemo(() => new Map(taxRates.map(t => [t.id, t.rate])), [taxRates]);
     const standardTaxRateId = useMemo(() => taxRates.find(t => t.code === 'T1')?.id, [taxRates]);
 
-    const estimateStatusOptions: readonly Estimate['status'][] = ['Draft', 'Sent', 'Approved', 'Declined', 'Converted to Job', 'Closed'];
+    const estimateStatusOptions: readonly Estimate['status'][] = ['Draft', 'Sent', 'Approved', 'Rejected', 'Converted to Job', 'Closed'];
 
     const filteredEstimates = useMemo(() => {
         const thirtyDaysAgo = getRelativeDate(-30);
@@ -277,7 +277,7 @@ const EstimatesView = ({ onOpenEstimateModal, onViewEstimate, onSmartCreateClick
                                         <td className="p-3">
                                             <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${
                                                 estimate.status === 'Approved' ? 'bg-green-100 text-green-800' :
-                                                estimate.status === 'Declined' ? 'bg-red-100 text-red-800' :
+                                                estimate.status === 'Rejected' ? 'bg-red-100 text-red-800' :
                                                 estimate.status === 'Converted to Job' ? 'bg-purple-100 text-purple-800' :
                                                 estimate.status === 'Closed' ? 'bg-gray-300 text-gray-800' :
                                                 'bg-gray-100'}`}>{estimate.status}</span>
