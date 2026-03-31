@@ -28,9 +28,8 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({ isOpen, title, me
         e.stopPropagation();
         if (onConfirm) {
             onConfirm();
-        } else {
-            onClose();
         }
+        onClose();
     };
 
     return (

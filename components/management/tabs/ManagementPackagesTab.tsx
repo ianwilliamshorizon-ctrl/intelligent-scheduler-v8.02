@@ -85,6 +85,7 @@ export const ManagementPackagesTab: React.FC<ManagementPackagesTabProps> = ({ se
             onConfirm: () => {
                 deleteItem(pkg.id);
                 onShowStatus(`Deleted "${pkg.name}" successfully.`, 'success');
+                setConfirmation({ isOpen: false, title: '', message: '' });
             }
         });
     };
@@ -140,10 +141,9 @@ export const ManagementPackagesTab: React.FC<ManagementPackagesTabProps> = ({ se
                     setIsBulkPanelOpen(false);
                     setBulkKeyword('');
                     setBulkAdjustment(0);
-                } catch (e) {
-                    onShowStatus('Failed to perform bulk update.', 'error');
                 } finally {
                     setIsUpdating(false);
+                    // Explicitly close first to ensure immediate feedback as requested by user
                     setConfirmation({ isOpen: false, title: '', message: '' });
                 }
             }
