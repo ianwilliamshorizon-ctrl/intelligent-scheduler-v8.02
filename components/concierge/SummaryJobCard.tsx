@@ -27,6 +27,8 @@ interface SummaryJobCardProps {
 export const SummaryJobCard: React.FC<SummaryJobCardProps> = (props) => {
     const { job, vehicle, engineers } = props;
     const [isHovered, setIsHovered] = useState(false);
+    const [popOutPosition, setPopOutPosition] = useState<'top' | 'bottom'>('top');
+    const cardRef = React.useRef<HTMLDivElement>(null);
 
     const engineerNames = (job.segments || [])
         .map(s => engineers.find(e => e.id === s.engineerId)?.name)
@@ -35,14 +37,30 @@ export const SummaryJobCard: React.FC<SummaryJobCardProps> = (props) => {
     // De-duplicate engineer names
     const uniqueEngineers = Array.from(new Set(engineerNames));
 
+    const handleMouseEnter = () => {
+        if (cardRef.current) {
+            const rect = cardRef.current.getBoundingClientRect();
+            // If the card is in the top 40% of the viewport, show pop-out below it
+            if (rect.top < window.innerHeight * 0.4) {
+                setPopOutPosition('bottom');
+            } else {
+                setPopOutPosition('top');
+            }
+        }
+        setIsHovered(true);
+    };
+
+    const hasServicePackages = job.lineItems && job.lineItems.some(item => item.isPackage);
+
     return (
         <div 
+            ref={cardRef}
             className="relative mb-2 group"
-            onMouseEnter={() => setIsHovered(true)}
+            onMouseEnter={handleMouseEnter}
             onMouseLeave={() => setIsHovered(false)}
         >
             <div 
-                className="p-2 bg-white border rounded-lg shadow-sm hover:shadow-md hover:border-indigo-400 cursor-pointer transition-all duration-200 border-gray-200"
+                className={`p-2 bg-white border rounded-lg shadow-sm hover:shadow-md hover:border-indigo-400 cursor-pointer transition-all duration-200 ${hasServicePackages ? 'border-l-4 border-l-indigo-500' : 'border-gray-200'}`}
                 onClick={() => props.onEdit(job.id)}
             >
                 <div className="flex justify-between items-center text-[9px] font-bold mb-1">
@@ -72,12 +90,22 @@ export const SummaryJobCard: React.FC<SummaryJobCardProps> = (props) => {
                             </div>
                         </div>
                     )}
+
+                    {hasServicePackages && (
+                        <div className="flex flex-wrap gap-0.5 mt-1">
+                            {job.lineItems!.filter(item => item.isPackage).map((pkg, idx) => (
+                                <span key={idx} className="bg-indigo-50 text-indigo-700 text-[8px] px-1 py-0 rounded font-black border border-indigo-100 uppercase tracking-tighter">
+                                    {pkg.servicePackageName || pkg.description}
+                                </span>
+                            ))}
+                        </div>
+                    )}
                 </div>
             </div>
 
             {isHovered && (
-                <div className="absolute z-50 left-1/2 -translate-x-1/2 bottom-full mb-2 w-72 pointer-events-none transform transition-all duration-200 animate-in fade-in slide-in-from-bottom-2">
-                    <div className="pointer-events-auto shadow-2xl rounded-xl ring-4 ring-black/5 ring-offset-0 scale-95 origin-bottom">
+                <div className={`absolute z-50 left-1/2 -translate-x-1/2 ${popOutPosition === 'top' ? 'bottom-full mb-2' : 'top-full mt-2'} w-72 pointer-events-none transform transition-all duration-200 animate-in fade-in ${popOutPosition === 'top' ? 'slide-in-from-bottom-2' : 'slide-in-from-top-2'}`}>
+                    <div className={`pointer-events-auto shadow-2xl rounded-xl ring-4 ring-black/5 ring-offset-0 scale-95 origin-${popOutPosition === 'top' ? 'bottom' : 'top'}`}>
                          <ConciergeJobCard {...props} />
                     </div>
                 </div>
