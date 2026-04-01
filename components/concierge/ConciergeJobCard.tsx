@@ -140,6 +140,19 @@ export const ConciergeJobCard: React.FC<ConciergeJobCardProps> = (props) => {
                 </div>
             )}
 
+            {/* Service Packages */}
+            {job.lineItems && job.lineItems.some(item => item.isPackage) && (
+                <div className="mt-2 pt-2 border-t border-gray-100">
+                    <div className="flex flex-wrap gap-1">
+                        {job.lineItems.filter(item => item.isPackage).map((pkg, idx) => (
+                            <span key={idx} className="bg-indigo-50 text-indigo-700 text-[10px] px-2 py-0.5 rounded-full font-bold border border-indigo-100 flex items-center gap-1">
+                                <PackageIcon size={10} /> {pkg.servicePackageName || pkg.description}
+                            </span>
+                        ))}
+                    </div>
+                </div>
+            )}
+
             {/* Segments for Today */}
             {segmentsToday.length > 0 && (
                 <div className={`mt-2 pt-2 border-t border-gray-100 text-xs space-y-1.5`}>

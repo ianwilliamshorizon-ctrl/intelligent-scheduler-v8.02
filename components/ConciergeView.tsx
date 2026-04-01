@@ -7,6 +7,7 @@ import { getCustomerDisplayName } from '../core/utils/customerUtils';
 import { getRelativeDate } from '../core/utils/dateUtils';
 import PauseReasonModal from './PauseReasonModal';
 import { ConciergeJobCard } from './concierge/ConciergeJobCard';
+import { SummaryJobCard } from './concierge/SummaryJobCard';
 import { KanbanColumn } from './concierge/KanbanColumn';
 import LiveAssistant from './LiveAssistant';
 
@@ -31,6 +32,7 @@ const ConciergeView: React.FC<ConciergeViewProps> = (props) => {
     const [pauseData, setPauseData] = useState<{ jobId: string, segmentId: string } | null>(null);
     const [arrivalFilter, setArrivalFilter] = useState<'today' | '7days' | '14days'>('today');
     const [assistantJobId, setAssistantJobId] = useState<string | null>(null);
+    const [viewMode, setViewMode] = useState<'standard' | 'summary'>('standard');
 
     const vehiclesById = useMemo(() => new Map(vehicles.map(v => [v.id, v])), [vehicles]);
     const customersById = useMemo(() => new Map(customers.map(c => [c.id, c])), [customers]);
@@ -138,22 +140,28 @@ const ConciergeView: React.FC<ConciergeViewProps> = (props) => {
         }
     };
     
-    const renderJobCard = (job: Job, highlight?: 'checkIn' | 'invoice' | 'collect') => (
-        <ConciergeJobCard
-            key={job.id}
-            job={job}
-            vehicle={vehiclesById.get(job.vehicleId)}
-            customer={customersById.get(job.customerId)}
-            purchaseOrders={purchaseOrders}
-            engineers={engineers}
-            currentUser={currentUser}
-            {...props}
-            onPause={handlePauseClick}
-            onEdit={props.onEditJob}
-            highlightAction={highlight}
-            onOpenAssistant={handleOpenAssistant}
-        />
-    );
+    const renderJobCard = (job: Job, highlight?: 'checkIn' | 'invoice' | 'collect') => {
+        const commonProps = {
+            key: job.id,
+            job,
+            vehicle: vehiclesById.get(job.vehicleId),
+            customer: customersById.get(job.customerId),
+            purchaseOrders,
+            engineers,
+            currentUser,
+            ...props,
+            onPause: handlePauseClick,
+            onEdit: props.onEditJob,
+            highlightAction: highlight,
+            onOpenAssistant: handleOpenAssistant,
+        };
+
+        if (viewMode === 'summary') {
+            return <SummaryJobCard {...commonProps} />;
+        }
+
+        return <ConciergeJobCard {...commonProps} />;
+    };
 
     const arrivalsTitle = useMemo(() => {
         if (arrivalFilter === 'today') return "Due Today / Arrivals";
@@ -164,9 +172,23 @@ const ConciergeView: React.FC<ConciergeViewProps> = (props) => {
     return (
         <div className="w-full h-full flex flex-col p-4 bg-gray-50">
             <header className="flex justify-between items-center mb-3 flex-shrink-0">
-                <h2 className="text-xl font-bold text-gray-800">
-                    {currentUser.role === 'Engineer' ? 'My Job Stream' : 'Service Stream'}
-                </h2>
+                <div className="flex items-center gap-6">
+                    <h2 className="text-xl font-bold text-gray-800">
+                        {currentUser.role === 'Engineer' ? 'My Job Stream' : 'Service Stream'}
+                    </h2>
+                    
+                    <div className="flex bg-gray-200 rounded-lg p-1">
+                        {(['standard', 'summary'] as const).map(mode => (
+                            <button
+                                key={mode}
+                                onClick={() => setViewMode(mode)}
+                                className={`px-4 py-1 text-xs font-black uppercase tracking-widest rounded-md transition ${viewMode === mode ? 'bg-indigo-600 shadow text-white' : 'text-gray-600 hover:text-gray-800'}`}
+                            >
+                                {mode}
+                            </button>
+                        ))}
+                    </div>
+                </div>
                 <div className="flex items-center gap-4">
                     <div className="flex bg-gray-200 rounded-lg p-1">
                         {(['today', '7days', '14days'] as const).map(opt => (
