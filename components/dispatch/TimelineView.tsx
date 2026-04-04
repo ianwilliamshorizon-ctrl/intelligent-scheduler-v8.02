@@ -5,6 +5,7 @@ import { useData } from '../../core/state/DataContext';
 import { useApp } from '../../core/state/AppContext';
 import { DraggableJobCard } from './DraggableJobCard';
 import { AllocatedJobCard } from './AllocatedJobCard';
+import { SummaryJobCard } from '../shared/SummaryJobCard';
 import { TIME_SEGMENTS } from '../../constants';
 import LiveAssistant from '../LiveAssistant';
 
@@ -52,11 +53,13 @@ export const TimelineView: React.FC<TimelineViewProps> = (props) => {
         unallocatedJobs, allocatedSegmentsByLift, unallocatedDateFilter, setUnallocatedDateFilter, 
         showOnSiteOnly, setShowOnSiteOnly, onEditJob, onCheckIn, onOpenPurchaseOrder, 
         onStartWork, onPause, onRestart, onReassign, onUnscheduleSegment, 
+        onOpenAssistant
     } = props;
 
     const { jobs, engineers, customers, vehicles, purchaseOrders, saveRecord } = useData();
     const { currentUser, users } = useApp();
     const [assistantJobId, setAssistantJobId] = useState<string | null>(null);
+    const [viewMode, setViewMode] = useState<'standard' | 'summary'>('standard');
 
     const vehiclesById = useMemo(() => new Map(vehicles.map(v => [v.id, v])), [vehicles]);
     const customersById = useMemo(() => new Map(customers.map(c => [c.id, c])), [customers]);
@@ -112,17 +115,17 @@ export const TimelineView: React.FC<TimelineViewProps> = (props) => {
                             {totalUnallocatedHours.toFixed(1)}h
                         </span>
                     </div>
-                    <div className="flex gap-1 p-1 bg-gray-200 rounded-lg mt-2">
-                        {(['all', 'today', '7days', '14days'] as const).map(opt => (
-                            <button
-                                key={opt}
-                                onClick={() => setUnallocatedDateFilter(opt)}
-                                className={`w-full py-1 rounded-md font-semibold text-xs transition capitalize ${unallocatedDateFilter === opt ? 'bg-white shadow' : 'text-gray-600'}`}
-                            >
-                                {opt}
-                            </button>
-                        ))}
-                    </div>
+                        <div className="flex bg-gray-200 rounded-lg mt-2 p-1">
+                            {(['standard', 'summary'] as const).map(mode => (
+                                <button
+                                    key={mode}
+                                    onClick={() => setViewMode(mode)}
+                                    className={`w-full py-1 rounded-md font-black uppercase text-[9px] tracking-widest transition-all ${viewMode === mode ? 'bg-indigo-600 shadow text-white' : 'text-gray-500 hover:text-gray-800'}`}
+                                >
+                                    {mode}
+                                </button>
+                            ))}
+                        </div>
                      <div className="flex items-center gap-2 mt-2">
                         <input
                             type="checkbox"
@@ -137,22 +140,37 @@ export const TimelineView: React.FC<TimelineViewProps> = (props) => {
                     </div>
                 </div>
                 <div className="flex-grow p-3 space-y-3 overflow-y-auto">
-                    {unallocatedJobs.map(job => (
-                        <DraggableJobCard
-                            key={job.id}
-                            job={job}
-                            vehicle={vehiclesById.get(job.vehicleId)}
-                            customer={customersById.get(job.customerId)}
-                            purchaseOrders={purchaseOrders}
-                            onDragStart={onDragStart}
-                            onDragEnd={onDragEnd}
-                            onEdit={onEditJob}
-                            onCheckIn={onCheckIn}
-                            onOpenPurchaseOrder={onOpenPurchaseOrder}
-                            currentUser={currentUser}
-                            onOpenAssistant={handleOpenAssistant}
-                        />
-                    ))}
+                    {unallocatedJobs.map(job => {
+                        const commonProps = {
+                            job,
+                            vehicle: vehiclesById.get(job.vehicleId),
+                            customer: customersById.get(job.customerId),
+                            purchaseOrders: purchaseOrders || [],
+                            engineers: engineers,
+                            currentUser,
+                            onEdit: onEditJob,
+                            onOpenAssistant: handleOpenAssistant,
+                            onOpenPurchaseOrder,
+                            onStartWork,
+                            onPause,
+                            onRestart,
+                            onCheckIn,
+                            onQcApprove: (id: string) => {}, // Not used here
+                        };
+
+                        if (viewMode === 'summary') {
+                            return <SummaryJobCard key={job.id} {...commonProps} />;
+                        }
+
+                        return (
+                            <DraggableJobCard
+                                key={job.id}
+                                {...commonProps}
+                                onDragStart={onDragStart}
+                                onDragEnd={onDragEnd}
+                            />
+                        );
+                    })}
                 </div>
             </div>
 

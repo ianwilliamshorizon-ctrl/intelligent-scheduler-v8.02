@@ -7,6 +7,7 @@ import { useData } from '../core/state/DataContext';
 import { useApp } from '../core/state/AppContext';
 import { getPoStatusColor } from '../core/utils/statusUtils';
 import { HoverInfo } from '../components/shared/HoverInfo';
+import { SummaryJobCard } from './shared/SummaryJobCard';
 import LiveAssistant from './LiveAssistant'; // Make sure this path is correct
 
 const WorkflowJobCard: React.FC<{
@@ -121,14 +122,13 @@ interface WorkflowViewProps {
     onOpenPurchaseOrder: (po: PurchaseOrder) => void;
 }
 
-import { JobActionsMenu } from './shared/JobActionsMenu';
-
 const WorkflowView: React.FC<WorkflowViewProps> = ({ jobs, vehicles, customers, engineers, onQcApprove, onGenerateInvoice, onEditJob, onOpenAssistant, onStartWork, onEngineerComplete, onPause, onRestart, onOpenPurchaseOrder }) => {
     const { purchaseOrders, saveRecord } = useData();
     const { currentUser, users } = useApp();
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedEngineerId, setSelectedEngineerId] = useState<string>('all');
     const [assistantJobId, setAssistantJobId] = useState<string | null>(null);
+    const [viewMode, setViewMode] = useState<'standard' | 'summary'>('standard');
 
     const handleOpenAssistant = (jobId: string) => setAssistantJobId(jobId);
     const handleCloseAssistant = () => setAssistantJobId(null);
@@ -216,15 +216,159 @@ const WorkflowView: React.FC<WorkflowViewProps> = ({ jobs, vehicles, customers, 
         return currentUser.role === 'Admin' || currentUser.role === 'Dispatcher';
     };
 
+    const renderJobCard = (job: Job, bgColor: string, title?: string) => {
+        const commonProps = {
+            job,
+            vehicle: vehiclesById.get(job.vehicleId),
+            customer: customersById.get(job.customerId),
+            purchaseOrders: purchaseOrders || [],
+            engineers: allEngineers,
+            currentUser,
+            onEdit: onEditJob,
+            onOpenAssistant: handleOpenAssistant,
+            onOpenPurchaseOrder,
+            onStartWork,
+            onEngineerComplete,
+            onPause: (id: string, sId: string) => onPause(id, sId),
+            onRestart,
+            onCheckIn: (id: string) => {}, // Not used here but needed by SummaryJobCard Props
+            onQcApprove,
+        };
+
+        if (viewMode === 'summary') {
+            return <SummaryJobCard key={job.id} {...commonProps} />;
+        }
+
+        return (
+            <WorkflowJobCard
+                key={job.id}
+                job={job}
+                vehicle={commonProps.vehicle}
+                customer={commonProps.customer}
+                statusColorClass={bgColor}
+                onEdit={onEditJob}
+                onOpenAssistant={handleOpenAssistant}
+                onOpenPurchaseOrder={onOpenPurchaseOrder}
+                purchaseOrders={purchaseOrders || []}
+                today={today}
+            >
+                <div className="mt-2 text-xs space-y-1">
+                    {(job.segments || []).filter(s => s.allocatedLift).map(seg => {
+                        const startSegmentIndex = seg.scheduledStartSegment;
+                        let timeString = `${seg.duration} hrs`;
+                        if (startSegmentIndex !== null && startSegmentIndex !== undefined) {
+                            const startTime = TIME_SEGMENTS[startSegmentIndex];
+                            const numberOfSegments = seg.duration ? seg.duration * (60 / SEGMENT_DURATION_MINUTES) : 0;
+                            const endSegmentIndex = startSegmentIndex + numberOfSegments;
+                            let endTime = `${(END_HOUR % 12 === 0 ? 12 : END_HOUR % 12)}:${String(END_MINUTE).padStart(2,'0')} PM`;
+                            if (endSegmentIndex < TIME_SEGMENTS.length) {
+                                endTime = TIME_SEGMENTS[endSegmentIndex];
+                            }
+                            timeString = `${startTime} - ${endTime}`;
+                        }
+                        
+                        const engineerName = engineersById.get(seg.engineerId!)?.name;
+
+                        return (
+                             <div key={seg.segmentId} className="p-1.5 bg-gray-100 rounded-md">
+                                 <div className="flex justify-between items-center">
+                                    <div className="flex items-center gap-2">
+                                        {engineerName ? (
+                                            <span className="font-semibold flex items-center gap-1.5"><UserIcon size={12}/>{engineerName}</span>
+                                        ) : (
+                                            <span className="font-semibold flex items-center gap-1.5 text-red-600"><UserPlus size={12}/>Unassigned</span>
+                                        )}
+                                        <span className="text-gray-500">on {seg.allocatedLift}</span>
+                                    </div>
+                                     <span className={`font-semibold ${seg.status === 'Paused' ? 'text-orange-600 animate-pulse' : 'text-indigo-700'}`}>{seg.status === 'Paused' ? 'PAUSED' : timeString}</span>
+                                 </div>
+                                 {seg.date !== today && <div className="text-xs text-gray-600 font-semibold pt-1">{formatReadableDate(seg.date)}</div>}
+                                 
+                                {canControlJob(seg.engineerId) && (
+                                    <div className="mt-2 flex items-center justify-end gap-1.5">
+                                        {seg.status === 'Allocated' && (
+                                            <button 
+                                                onClick={(e) => { e.stopPropagation(); onStartWork(job.id, seg.segmentId); }} 
+                                                className="flex items-center gap-1 px-2 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 shadow-sm text-[10px] font-bold uppercase tracking-tight transition-transform active:scale-95"
+                                            >
+                                                <PlayCircle size={14} /> Start
+                                            </button>
+                                        )}
+                                        {seg.status === 'Paused' && (
+                                            <button 
+                                                onClick={(e) => { e.stopPropagation(); onRestart(job.id, seg.segmentId); }} 
+                                                className="flex items-center gap-1 px-2 py-1 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 shadow-sm text-[10px] font-bold uppercase tracking-tight transition-transform active:scale-95"
+                                            >
+                                                <PlayCircle size={14} /> Restart
+                                            </button>
+                                        )}
+                                        {seg.status === 'In Progress' && (
+                                            <button 
+                                                onClick={(e) => { e.stopPropagation(); onPause(job.id, seg.segmentId); }} 
+                                                className="flex items-center gap-1 px-2 py-1 bg-amber-600 text-white rounded-lg hover:bg-amber-700 shadow-sm text-[10px] font-bold uppercase tracking-tight transition-transform active:scale-95"
+                                            >
+                                                <PauseCircle size={14} /> Pause
+                                            </button>
+                                        )}
+                                        {seg.status === 'In Progress' && (
+                                            <button 
+                                                onClick={(e) => { e.stopPropagation(); onEngineerComplete(job, seg.segmentId); }} 
+                                                className="flex items-center gap-1 px-2 py-1 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 shadow-sm text-[10px] font-bold uppercase tracking-tight border border-indigo-200 transition-transform active:scale-95"
+                                            >
+                                                <CheckCircle size={14} /> Complete
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
+                             </div>
+                        );
+                    })}
+                </div>
+                 {job.technicianObservations && job.technicianObservations.length > 0 && (
+                    <div className="mt-2 pt-2 border-t">
+                         <p className="text-xs font-bold text-gray-600 flex items-center gap-1"><MessageSquare size={12}/> Observations:</p>
+                         <p className="text-xs text-gray-600 truncate">{job.technicianObservations.join(', ')}</p>
+                    </div>
+                 )}
+                {title === 'Pending QC' && !isEngineerView && (
+                    <div className="mt-2 pt-2 border-t text-right">
+                        <button onClick={(e) => { e.stopPropagation(); onQcApprove(job.id); }} className="px-3 py-1.5 text-xs bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 shadow-sm transition-all active:scale-95">Quality Sign-off</button>
+                    </div>
+                )}
+                {title === 'Complete' && !isEngineerView && (
+                    <div className="mt-2 pt-2 border-t text-right">
+                        <button onClick={(e) => { e.stopPropagation(); onGenerateInvoice(job.id); }} className="px-3 py-1.5 text-xs bg-purple-600 text-white font-bold rounded-lg hover:bg-purple-700 shadow-sm transition-all active:scale-95 flex items-center gap-1 ml-auto">
+                            <FileText size={12}/> Generate Invoice
+                        </button>
+                    </div>
+                )}
+            </WorkflowJobCard>
+        );
+    };
+
     return (
         <div className="w-full h-full flex flex-col bg-gray-100 p-4">
             <header className="flex-shrink-0 mb-6">
                 <div className="flex justify-between items-center">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-200">
-                             <Wrench size={20} />
+                    <div className="flex items-center gap-6">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-200">
+                                 <Wrench size={20} />
+                            </div>
+                            <h2 className="text-2xl font-black text-gray-900 tracking-tight">Workshop Workflow</h2>
                         </div>
-                        <h2 className="text-2xl font-black text-gray-900 tracking-tight">Workshop Workflow</h2>
+                        
+                        <div className="flex bg-white shadow-sm border border-gray-200 rounded-lg p-1 ml-4">
+                            {(['standard', 'summary'] as const).map(mode => (
+                                <button
+                                    key={mode}
+                                    onClick={() => setViewMode(mode)}
+                                    className={`px-4 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-md transition-all ${viewMode === mode ? 'bg-indigo-600 shadow-md text-white' : 'text-gray-500 hover:text-gray-800'}`}
+                                >
+                                    {mode}
+                                </button>
+                            ))}
+                        </div>
                     </div>
                     <div className="flex items-center gap-4">
                         <div className="relative">
@@ -268,120 +412,7 @@ const WorkflowView: React.FC<WorkflowViewProps> = ({ jobs, vehicles, customers, 
                                 <Icon size={16}/> {title} ({jobs.length})
                             </h3>
                             <div className="p-3 space-y-3 overflow-y-auto">
-                                {jobs.map(job => (
-                                    <WorkflowJobCard
-                                        key={job.id}
-                                        job={job}
-                                        vehicle={vehiclesById.get(job.vehicleId)}
-                                        customer={customersById.get(job.customerId)}
-                                        statusColorClass={bgColor}
-                                        onEdit={onEditJob}
-                                        onOpenAssistant={handleOpenAssistant}
-                                        onOpenPurchaseOrder={onOpenPurchaseOrder}
-                                        purchaseOrders={purchaseOrders || []}
-                                        today={today}
-                                    >
-                                        <div className="mt-2 text-xs space-y-1">
-                                            {(job.segments || []).filter(s => s.allocatedLift).map(seg => {
-                                                const startSegmentIndex = seg.scheduledStartSegment;
-                                                let timeString = `${seg.duration} hrs`;
-                                                if (startSegmentIndex !== null && startSegmentIndex !== undefined) {
-                                                    const startTime = TIME_SEGMENTS[startSegmentIndex];
-                                                    const numberOfSegments = seg.duration ? seg.duration * (60 / SEGMENT_DURATION_MINUTES) : 0;
-                                                    const endSegmentIndex = startSegmentIndex + numberOfSegments;
-                                                    let endTime = `${(END_HOUR % 12 === 0 ? 12 : END_HOUR % 12)}:${String(END_MINUTE).padStart(2,'0')} PM`;
-                                                    if (endSegmentIndex < TIME_SEGMENTS.length) {
-                                                        endTime = TIME_SEGMENTS[endSegmentIndex];
-                                                    }
-                                                    timeString = `${startTime} - ${endTime}`;
-                                                }
-                                                
-                                                const engineerName = engineersById.get(seg.engineerId!)?.name;
-
-                                                const segActions = [
-                                                    ...(seg.status === 'Allocated' ? [{ id: 'start', label: 'Start Work', icon: PlayCircle, onClick: () => onStartWork(job.id, seg.segmentId), group: 'primary' as const, color: 'text-green-600' }] : []),
-                                                    ...(seg.status === 'In Progress' ? [
-                                                        { id: 'pause', label: 'Pause Work', icon: PauseCircle, onClick: () => onPause(job.id, seg.segmentId), group: 'primary' as const, color: 'text-orange-600' },
-                                                        { id: 'complete', label: 'Complete Work', icon: CheckCircle, onClick: () => onEngineerComplete(job, seg.segmentId), group: 'primary' as const, color: 'text-green-600' }
-                                                    ] : []),
-                                                    ...(seg.status === 'Paused' ? [{ id: 'restart', label: 'Restart Work', icon: PlayCircle, onClick: () => onRestart(job.id, seg.segmentId), group: 'primary' as const, color: 'text-green-600' }] : []),
-                                                ];
-
-                                                return (
-                                                     <div key={seg.segmentId} className="p-1.5 bg-gray-100 rounded-md">
-                                                         <div className="flex justify-between items-center">
-                                                            <div className="flex items-center gap-2">
-                                                                {engineerName ? (
-                                                                    <span className="font-semibold flex items-center gap-1.5"><UserIcon size={12}/>{engineerName}</span>
-                                                                ) : (
-                                                                    <span className="font-semibold flex items-center gap-1.5 text-red-600"><UserPlus size={12}/>Unassigned</span>
-                                                                )}
-                                                                <span className="text-gray-500">on {seg.allocatedLift}</span>
-                                                            </div>
-                                                             <span className={`font-semibold ${seg.status === 'Paused' ? 'text-orange-600 animate-pulse' : 'text-indigo-700'}`}>{seg.status === 'Paused' ? 'PAUSED' : timeString}</span>
-                                                         </div>
-                                                         {seg.date !== today && <div className="text-xs text-gray-600 font-semibold pt-1">{formatReadableDate(seg.date)}</div>}
-                                                         
-                                                        {canControlJob(seg.engineerId) && (
-                                                            <div className="mt-2 flex items-center justify-end gap-1.5">
-                                                                {seg.status === 'Allocated' && (
-                                                                    <button 
-                                                                        onClick={(e) => { e.stopPropagation(); onStartWork(job.id, seg.segmentId); }} 
-                                                                        className="flex items-center gap-1 px-2 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 shadow-sm text-[10px] font-bold uppercase tracking-tight transition-transform active:scale-95"
-                                                                    >
-                                                                        <PlayCircle size={14} /> Start
-                                                                    </button>
-                                                                )}
-                                                                {seg.status === 'Paused' && (
-                                                                    <button 
-                                                                        onClick={(e) => { e.stopPropagation(); onRestart(job.id, seg.segmentId); }} 
-                                                                        className="flex items-center gap-1 px-2 py-1 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 shadow-sm text-[10px] font-bold uppercase tracking-tight transition-transform active:scale-95"
-                                                                    >
-                                                                        <PlayCircle size={14} /> Restart
-                                                                    </button>
-                                                                )}
-                                                                {seg.status === 'In Progress' && (
-                                                                    <button 
-                                                                        onClick={(e) => { e.stopPropagation(); onPause(job.id, seg.segmentId); }} 
-                                                                        className="flex items-center gap-1 px-2 py-1 bg-amber-600 text-white rounded-lg hover:bg-amber-700 shadow-sm text-[10px] font-bold uppercase tracking-tight transition-transform active:scale-95"
-                                                                    >
-                                                                        <PauseCircle size={14} /> Pause
-                                                                    </button>
-                                                                )}
-                                                                {seg.status === 'In Progress' && (
-                                                                    <button 
-                                                                        onClick={(e) => { e.stopPropagation(); onEngineerComplete(job, seg.segmentId); }} 
-                                                                        className="flex items-center gap-1 px-2 py-1 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 shadow-sm text-[10px] font-bold uppercase tracking-tight border border-indigo-200 transition-transform active:scale-95"
-                                                                    >
-                                                                        <CheckCircle size={14} /> Complete
-                                                                    </button>
-                                                                )}
-                                                            </div>
-                                                        )}
-                                                     </div>
-                                                );
-                                            })}
-                                        </div>
-                                         {job.technicianObservations && job.technicianObservations.length > 0 && (
-                                            <div className="mt-2 pt-2 border-t">
-                                                 <p className="text-xs font-bold text-gray-600 flex items-center gap-1"><MessageSquare size={12}/> Observations:</p>
-                                                 <p className="text-xs text-gray-600 truncate">{job.technicianObservations.join(', ')}</p>
-                                            </div>
-                                         )}
-                                        {title === 'Pending QC' && !isEngineerView && (
-                                            <div className="mt-2 pt-2 border-t text-right">
-                                                <button onClick={(e) => { e.stopPropagation(); onQcApprove(job.id); }} className="px-3 py-1.5 text-xs bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 shadow-sm transition-all active:scale-95">Quality Sign-off</button>
-                                            </div>
-                                        )}
-                                        {title === 'Complete' && !isEngineerView && (
-                                            <div className="mt-2 pt-2 border-t text-right">
-                                                <button onClick={(e) => { e.stopPropagation(); onGenerateInvoice(job.id); }} className="px-3 py-1.5 text-xs bg-purple-600 text-white font-bold rounded-lg hover:bg-purple-700 shadow-sm transition-all active:scale-95 flex items-center gap-1 ml-auto">
-                                                    <FileText size={12}/> Generate Invoice
-                                                </button>
-                                            </div>
-                                        )}
-                                    </WorkflowJobCard>
-                                ))}
+                                {jobs.map(job => renderJobCard(job, bgColor, title))}
                             </div>
                         </div>
                     ))}

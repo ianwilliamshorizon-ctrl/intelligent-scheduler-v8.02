@@ -20,7 +20,7 @@
     "@types/recharts": "^1.8.29",
     "@vitejs/plugin-react": "^4.2.1",
     "cors": "^2.8.6",
-    "date-fns": "^4.1.0",
+    "date-fns": "^3.6.0",
     "firebase": "latest",
     "firebase-admin": "^10.3.0",
     "firebase-functions": "^4.9.0",

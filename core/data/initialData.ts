@@ -4,7 +4,7 @@ import {
     Supplier, Estimate, TaxRate, ServicePackage, Part, SaleVehicle, SaleOverheadPackage,
     StorageBooking, RentalVehicle, RentalBooking, StorageLocation, BatteryCharger, EstimateLineItem,
     User, NominalCode, NominalCodeRule, PurchaseOrder, Purchase, AbsenceRequest, Prospect, Inquiry,
-    Reminder, AuditLogEntry, Role, InspectionDiagram, InspectionTemplate, DiscountCode
+    Reminder, AuditLogEntry, Role, InspectionDiagram, InspectionTemplate, DiscountCode, FinancialBaseline
 } from '../../types';
 import { getRelativeDate, formatDate, splitJobIntoSegments } from '../utils/dateUtils';
 import { generateCustomerId } from '../utils/customerUtils';
@@ -34,11 +34,11 @@ export const initialChecklistData = [
 
 // --- Roles ---
 export const getInitialRoles = (): Role[] => ([
-    { id: 'role_admin', name: 'Admin', defaultAllowedViews: ['dashboard', 'dispatch', 'workflow', 'concierge', 'inquiries', 'communications', 'estimates', 'invoices', 'purchaseOrders', 'jobs', 'sales', 'storage', 'rentals', 'absence'] },
-    { id: 'role_dispatcher', name: 'Dispatcher', defaultAllowedViews: ['dashboard', 'dispatch', 'workflow', 'concierge', 'inquiries', 'communications', 'estimates', 'invoices', 'purchaseOrders', 'jobs', 'sales', 'storage', 'rentals', 'absence'] },
-    { id: 'role_engineer', name: 'Engineer', defaultAllowedViews: ['dashboard', 'concierge', 'workflow', 'absence', 'inquiries'] },
-    { id: 'role_sales', name: 'Sales', defaultAllowedViews: ['dashboard', 'sales', 'estimates', 'absence', 'inquiries'] },
-    { id: 'role_concierge', name: 'Garage Concierge', defaultAllowedViews: ['dashboard', 'concierge', 'inquiries', 'invoices', 'absence'] },
+    { id: 'role_admin', name: 'Admin', defaultAllowedViews: ['dashboard', 'directors-dashboard', 'dispatch', 'workflow', 'concierge', 'inquiries', 'communications', 'estimates', 'invoices', 'purchaseOrders', 'jobs', 'sales', 'storage', 'rentals', 'absence'] },
+    { id: 'role_dispatcher', name: 'Dispatcher', defaultAllowedViews: ['dashboard', 'directors-dashboard', 'dispatch', 'workflow', 'concierge', 'inquiries', 'communications', 'estimates', 'invoices', 'purchaseOrders', 'jobs', 'sales', 'storage', 'rentals', 'absence'] },
+    { id: 'role_engineer', name: 'Engineer', defaultAllowedViews: ['dashboard', 'directors-dashboard', 'concierge', 'workflow', 'absence', 'inquiries'] },
+    { id: 'role_sales', name: 'Sales', defaultAllowedViews: ['dashboard', 'directors-dashboard', 'sales', 'estimates', 'absence', 'inquiries'] },
+    { id: 'role_concierge', name: 'Garage Concierge', defaultAllowedViews: ['dashboard', 'directors-dashboard', 'concierge', 'inquiries', 'invoices', 'absence'] },
     { id: 'role_director', name: 'Director', defaultAllowedViews: ['dashboard', 'directors-dashboard', 'dispatch', 'workflow', 'concierge', 'inquiries', 'communications', 'estimates', 'invoices', 'purchaseOrders', 'jobs', 'sales', 'storage', 'rentals', 'absence'] },
 ]);
 
@@ -363,6 +363,44 @@ export const getInitialInspectionTemplates = (): InspectionTemplate[] => {
 };
 
 export const getInitialDiscountCodes = (): DiscountCode[] => ([]);
+export const getInitialFinancialBaselines = (): FinancialBaseline[] => ([
+    {
+        id: 'fb_2024_10',
+        entityId: 'ent_1',
+        month: '2024-10',
+        salaries: 12000,
+        rentRates: 2500,
+        utilities: 600,
+        nonBudgetedCosts: 0,
+        otherOverheads: 500,
+        historicalRevenue: 45000,
+        historicalCostOfSales: 18000
+    },
+    {
+        id: 'fb_2024_11',
+        entityId: 'ent_1',
+        month: '2024-11',
+        salaries: 12000,
+        rentRates: 2500,
+        utilities: 650,
+        nonBudgetedCosts: 450,
+        otherOverheads: 500,
+        historicalRevenue: 48500,
+        historicalCostOfSales: 19500
+    },
+    {
+        id: 'fb_2024_12',
+        entityId: 'ent_1',
+        month: '2024-12',
+        salaries: 12500,
+        rentRates: 2500,
+        utilities: 700,
+        nonBudgetedCosts: 0,
+        otherOverheads: 800,
+        historicalRevenue: 52000,
+        historicalCostOfSales: 21000
+    }
+]);
 
 // --- Consolidated Export ---
 const initialDataValue = {
@@ -400,6 +438,7 @@ const initialDataValue = {
     inspectionTemplates: getInitialInspectionTemplates(),
     inspectionChecklists: initialChecklistData,
     discountCodes: getInitialDiscountCodes(),
+    financialBaselines: getInitialFinancialBaselines(),
 };
 
 export const initialData = initialDataValue;

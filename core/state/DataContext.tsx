@@ -12,7 +12,7 @@ import {
     getInitialNominalCodes, getInitialNominalCodeRules, getInitialPurchases,
     getInitialAbsenceRequests, getInitialProspects, getInitialInquiries,
     getInitialReminders, getInitialAuditLog, getInitialRoles, getInitialInspectionDiagrams,
-    getInitialInspectionTemplates, getInitialDiscountCodes
+    getInitialInspectionTemplates, getInitialDiscountCodes, getInitialFinancialBaselines
 } from '../data/initialData';
 
 // Defines the shape of the context, including all data collections and setters.
@@ -49,6 +49,7 @@ interface DataContextType {
     inspectionDiagrams: T.InspectionDiagram[]; setInspectionDiagrams: React.Dispatch<React.SetStateAction<T.InspectionDiagram[]>>;
     inspectionTemplates: T.InspectionTemplate[]; setInspectionTemplates: React.Dispatch<React.SetStateAction<T.InspectionTemplate[]>>;
     discountCodes: T.DiscountCode[]; setDiscountCodes: React.Dispatch<React.SetStateAction<T.DiscountCode[]>>;
+    financialBaselines: T.FinancialBaseline[]; setFinancialBaselines: React.Dispatch<React.SetStateAction<T.FinancialBaseline[]>>;
     forceRefresh: (collectionKey: keyof any) => Promise<void>;
     isDataLoaded: boolean; // Flag to indicate if all data has been loaded.
     saveRecord: <T extends { id: string }>(collectionKey: string, record: T) => Promise<T>;
@@ -91,6 +92,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         brooks_inspectionDiagrams: usePersistentState<T.InspectionDiagram[]>('brooks_inspectionDiagrams', getInitialInspectionDiagrams),
         brooks_inspectionTemplates: usePersistentState<T.InspectionTemplate[]>('brooks_inspectionTemplates', getInitialInspectionTemplates),
         brooks_discountCodes: usePersistentState<T.DiscountCode[]>('brooks_discountCodes', getInitialDiscountCodes),
+        brooks_financialBaselines: usePersistentState<T.FinancialBaseline[]>('brooks_financialBaselines', getInitialFinancialBaselines),
     };
     
     const stateHooksRef = useRef(stateHooks);

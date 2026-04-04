@@ -270,10 +270,7 @@ const App = () => {
             case 'dashboard':
                 return <DashboardView {...commonProps} onCheckIn={(id) => setters.setCheckInJob((jobs || []).find(j => j.id === id) || null)} onOpenInquiry={(inq) => setters.setInquiryModal({isOpen: true, inquiry: inq})} />;
             case 'directors-dashboard':
-                if (currentUser.role === 'Admin' || currentUser.role === 'Director') {
-                    return <DirectorsDashboard />;
-                }
-                return <DashboardView {...commonProps} onCheckIn={(id) => setters.setCheckInJob((jobs || []).find(j => j.id === id) || null)} onOpenInquiry={(inq) => setters.setInquiryModal({isOpen: true, inquiry: inq})} />;
+                return <DirectorsDashboard />;
             case 'dispatch':
                 return <DispatchView {...commonProps} setDefaultDateForModal={(date: Date | null) => setters.setSmartCreateDefaultDate(date)} setIsSmartCreateOpen={setters.setIsSmartCreateOpen} setSmartCreateMode={setters.setSmartCreateMode} setSelectedJobId={setters.setSelectedJobId} setIsEditModalOpen={setters.setIsEditJobModalOpen} onOpenPurchaseOrder={(po) => setters.setPoModal({isOpen: true, po})} onReassignEngineer={workshopActions.handleReassignEngineer} onCheckIn={(id) => setters.setCheckInJob((jobs || []).find(j => j.id === id) || null)} onUnscheduleSegment={workshopActions.handleUnscheduleSegment} />;
             case 'workflow':

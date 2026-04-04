@@ -241,6 +241,13 @@ const DispatchView: React.FC<DispatchViewProps> = ({
                     weekStart={weekStart}
                     onEditJob={(id) => { setSelectedJobId(id); setIsEditModalOpen(true); }}
                     onOpenAssistant={(id) => { setSelectedJobId(id); onOpenAssistant(id); }}
+                    onCheckIn={(id) => { setSelectedJobId(id); onCheckIn(id); }}
+                    onOpenPurchaseOrder={onOpenPurchaseOrder}
+                    onStartWork={onStartWork}
+                    onPause={onPause}
+                    onRestart={onRestart}
+                    onQcApprove={() => {}} // Not applicable in this view
+                    onEngineerComplete={() => {}} // Not applicable in this view
                 />
             )}
             

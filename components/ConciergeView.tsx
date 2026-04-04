@@ -7,7 +7,7 @@ import { getCustomerDisplayName } from '../core/utils/customerUtils';
 import { getRelativeDate } from '../core/utils/dateUtils';
 import PauseReasonModal from './PauseReasonModal';
 import { ConciergeJobCard } from './concierge/ConciergeJobCard';
-import { SummaryJobCard } from './concierge/SummaryJobCard';
+import { SummaryJobCard } from './shared/SummaryJobCard';
 import { KanbanColumn } from './concierge/KanbanColumn';
 import LiveAssistant from './LiveAssistant';
 

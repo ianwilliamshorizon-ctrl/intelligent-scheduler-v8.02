@@ -2,12 +2,19 @@ import React, { useState } from 'react';
 import { useData } from '../../core/state/DataContext';
 import { generateContent } from '../../core/services/geminiService';
 
-const AIAssistant: React.FC = () => {
+interface AIAssistantProps {
+    financialData?: {
+        totals: any;
+        chartData: any[];
+    };
+}
+
+const AIAssistant: React.FC<AIAssistantProps> = ({ financialData }) => {
     const [isLoading, setIsLoading] = useState(false);
     const [prompt, setPrompt] = useState('');
     const [result, setResult] = useState('');
 
-    const { jobs, estimates, invoices, customers, vehicles, businessEntities } = useData();
+    const { businessEntities } = useData();
 
     const formatMessage = (text: string) => {
         return text.split('\n').map((line, i) => {
@@ -31,15 +38,31 @@ const AIAssistant: React.FC = () => {
         setIsLoading(true);
         setResult('');
 
-        const dataContext = JSON.stringify({ jobs, estimates, invoices, customers, vehicles, businessEntities });
-        const fullPrompt = `Based on the following data, answer the question: "${currentPrompt}"\n\nData:\n${dataContext}`;
+        // OPTIMIZATION: Use the dashboard's pre-calculated strategic data
+        const summary = {
+            currentOverview: financialData?.totals || {},
+            strategicTrends: (financialData?.chartData || []).slice(-3), // Last 3 months context
+            businessScale: {
+                entities: businessEntities.map(e => ({ name: e.name, capacity: e.dailyCapacityHours }))
+            }
+        };
+
+        const fullPrompt = `You are the Brookspeed Strategic Dashboard AI. 
+        Analyze the following financial summary and trends for the director.
+        
+        Strategic Context:
+        ${JSON.stringify(summary, null, 2)}
+        
+        Director's Question: "${currentPrompt}"
+        
+        Provide a sharp, data-driven insight. Use bold text for key figures.`;
 
         try {
             const text = await generateContent(fullPrompt);
             setResult(text);
         } catch (error) {
             console.error("AI Assistant Error:", error);
-            setResult("Sorry, I encountered an error. Please try again later.");
+            setResult("I encountered an issue processing the full dataset. Please try a more specific question.");
         } finally {
             setIsLoading(false);
         }

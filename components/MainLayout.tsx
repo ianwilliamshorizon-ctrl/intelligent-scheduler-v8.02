@@ -58,7 +58,7 @@ const MainLayout: React.FC<{
 
     const navItems = [
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-        { id: 'directors-dashboard', label: 'Directors', icon: Building },
+        { id: 'directors-dashboard', label: 'Summary', icon: Building },
         { id: 'dispatch', label: 'Dispatch', icon: Calendar },
         { id: 'workflow', label: 'Workflow', icon: GitPullRequest },
         { id: 'concierge', label: 'Service Stream', icon: Wrench },

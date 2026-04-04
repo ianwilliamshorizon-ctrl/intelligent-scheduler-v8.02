@@ -35,6 +35,31 @@ const ActionButton: React.FC<{ title: string; icon: React.ElementType; onClick: 
     </button>
 );
 
+const SummaryMetrics: React.FC<{
+    jobs: T.Job[];
+    selectedEntityId: string;
+    today: string;
+    setCurrentView: (view: string) => void;
+}> = ({ jobs, selectedEntityId, today, setCurrentView }) => {
+    const stats = useMemo(() => {
+        const entityJobs = jobs.filter(j => (selectedEntityId === 'all' || j.entityId === selectedEntityId) && j.status !== 'Cancelled');
+        const jobsToday = entityJobs.flatMap(j => j.segments || []).filter(s => s.date === today && s.allocatedLift).length;
+        const vehiclesOnSite = entityJobs.filter(j => j.vehicleStatus === 'On Site').length;
+        const pendingQC = entityJobs.filter(j => j.status === 'Pending QC').length;
+        const unallocatedJobs = entityJobs.filter(j => (j.segments || []).some(s => s.status === 'Unallocated')).length;
+        return { jobsToday, vehiclesOnSite, pendingQC, unallocatedJobs };
+    }, [jobs, selectedEntityId, today]);
+
+    return (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+            <StatCard title="Jobs Today" value={stats.jobsToday} icon={CalendarCheck} colorClass="bg-blue-500" onClick={() => setCurrentView('dispatch')} />
+            <StatCard title="Vehicles On Site" value={stats.vehiclesOnSite} icon={Car} colorClass="bg-green-500" onClick={() => setCurrentView('concierge')} />
+            <StatCard title="Pending QC" value={stats.pendingQC} icon={ClipboardCheck} colorClass="bg-orange-500" onClick={() => setCurrentView('concierge')} />
+            <StatCard title="Unallocated Jobs" value={stats.unallocatedJobs} icon={AlertCircle} colorClass="bg-red-500" onClick={() => setCurrentView('dispatch')} />
+        </div>
+    );
+};
+
 const Widget: React.FC<{ title: string; icon: React.ElementType; children: React.ReactNode; }> = ({ title, icon: Icon, children }) => (
     <div className="bg-white rounded-xl shadow-md flex flex-col h-full animate-fade-in-up">
         <h3 className="text-lg font-bold p-4 flex items-center gap-2 text-gray-800 border-b">
@@ -91,12 +116,7 @@ const AdminDispatcherDashboard: React.FC<{
 
     return (
         <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <StatCard title="Jobs Today" value={stats.jobsToday} icon={CalendarCheck} colorClass="bg-blue-500" onClick={() => setCurrentView('dispatch')} />
-                <StatCard title="Vehicles On Site" value={stats.vehiclesOnSite} icon={Car} colorClass="bg-green-500" onClick={() => setCurrentView('concierge')} />
-                <StatCard title="Pending QC" value={stats.pendingQC} icon={ClipboardCheck} colorClass="bg-orange-500" onClick={() => setCurrentView('concierge')} />
-                <StatCard title="Unallocated Jobs" value={stats.unallocatedJobs} icon={AlertCircle} colorClass="bg-red-500" onClick={() => setCurrentView('dispatch')} />
-            </div>
+            <SummaryMetrics jobs={jobs} selectedEntityId={selectedEntityId} today={today} setCurrentView={setCurrentView} />
 
             <div className="mt-6">
                 <h3 className="text-lg font-bold text-gray-800 mb-3">Quick Actions</h3>
@@ -160,7 +180,7 @@ const EngineerDashboard: React.FC<{
     onRestartWork: (jobId: string, segmentId: string) => void;
 }> = (props) => {
     const { onStartWork, onPause, onEngineerComplete, onEditJob, onOpenAssistant, onRestartWork } = props;
-    const { currentUser, setCurrentView } = useApp();
+    const { currentUser, setCurrentView, selectedEntityId } = useApp();
     const { jobs, vehicles, lifts } = useData();
     const today = getRelativeDate(0);
 
@@ -175,8 +195,9 @@ const EngineerDashboard: React.FC<{
     
     return (
         <div className="space-y-6">
+             <SummaryMetrics jobs={jobs} selectedEntityId={selectedEntityId || 'all'} today={today} setCurrentView={setCurrentView} />
              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                 <StatCard title="My Jobs Today" value={myJobsToday.length} icon={Wrench} colorClass="bg-indigo-500" onClick={() => setCurrentView('concierge')} />
+                  <StatCard title="My Jobs Today" value={myJobsToday.length} icon={Wrench} colorClass="bg-indigo-500" onClick={() => setCurrentView('concierge')} />
             </div>
             <Widget title="My Jobs for Today" icon={CalendarCheck}>
                 <div className="space-y-4">
@@ -209,7 +230,17 @@ const EngineerDashboard: React.FC<{
     );
 };
 
-const SalesDashboard = () => <div className="text-center p-8 bg-white rounded-lg shadow-md">Sales Dashboard coming soon.</div>;
+const SalesDashboard = () => {
+    const { jobs } = useData();
+    const { selectedEntityId, setCurrentView } = useApp();
+    const today = getRelativeDate(0);
+    return (
+        <div className="space-y-6">
+            <SummaryMetrics jobs={jobs} selectedEntityId={selectedEntityId} today={today} setCurrentView={setCurrentView} />
+            <div className="text-center p-8 bg-white rounded-lg shadow-md">Sales Dashboard coming soon.</div>
+        </div>
+    );
+};
 
 const ConciergeDashboard: React.FC<{
     onCheckIn: (jobId: string) => void;
@@ -229,6 +260,7 @@ const ConciergeDashboard: React.FC<{
 
     return (
         <div className="space-y-6">
+            <SummaryMetrics jobs={jobs} selectedEntityId={selectedEntityId} today={today} setCurrentView={setCurrentView} />
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                  <StatCard title="Arrivals Today" value={arrivalsToday.length} icon={LogIn} colorClass="bg-cyan-500" onClick={() => setCurrentView('concierge')} />
             </div>

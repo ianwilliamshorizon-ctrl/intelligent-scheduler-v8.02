@@ -731,3 +731,17 @@ export interface DraggedSegmentData {
     segmentId: string;
     duration: number;
 }
+
+export interface FinancialBaseline {
+    id: string;
+    entityId: string;
+    month: string; // "YYYY-MM"
+    salaries: number;
+    rentRates: number;
+    utilities: number;
+    nonBudgetedCosts: number;
+    otherOverheads: number;
+    // Overrides for months prior to system go-live
+    historicalRevenue?: number;
+    historicalCostOfSales?: number;
+}
