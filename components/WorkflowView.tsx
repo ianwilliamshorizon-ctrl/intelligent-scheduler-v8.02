@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { Job, Vehicle, Customer, Engineer, User, PurchaseOrder } from '../types';
 import { ClipboardCheck, FileText, CheckCircle, Car, User as UserIcon, MessageSquare, Clock, Wrench, PlayCircle, Search, X, PauseCircle, Wand2, Package as PackageIcon, UserPlus } from 'lucide-react';
 import { formatReadableDate, getRelativeDate } from '../core/utils/dateUtils';
@@ -123,7 +123,18 @@ interface WorkflowViewProps {
 }
 
 const WorkflowView: React.FC<WorkflowViewProps> = ({ jobs, vehicles, customers, engineers, onQcApprove, onGenerateInvoice, onEditJob, onOpenAssistant, onStartWork, onEngineerComplete, onPause, onRestart, onOpenPurchaseOrder }) => {
-    const { purchaseOrders, saveRecord } = useData();
+    const { purchaseOrders, saveRecord, forceRefresh } = useData();
+    
+    // Auto-refresh data every 30 seconds to keep all users in sync
+    useEffect(() => {
+        const interval = setInterval(() => {
+            // We refresh the core entities used in this view
+            forceRefresh('brooks_jobs' as any);
+            forceRefresh('brooks_vehicles' as any);
+            forceRefresh('brooks_customers' as any);
+        }, 30000); 
+        return () => clearInterval(interval);
+    }, [forceRefresh]);
     const { currentUser, users } = useApp();
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedEngineerId, setSelectedEngineerId] = useState<string>('all');

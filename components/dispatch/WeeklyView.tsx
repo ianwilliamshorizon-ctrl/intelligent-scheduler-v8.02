@@ -9,6 +9,8 @@ import { getCustomerDisplayName } from '../../core/utils/customerUtils';
 import { CAPACITY_THRESHOLD_WARNING } from '../../constants';
 import { SummaryJobCard } from '../shared/SummaryJobCard';
 
+import { JobHoverPopout } from '../shared/JobHoverPopout';
+
 const getCapacityInfo = (totalHours: number, maxHours: number) => {
     if (maxHours <= 0) return { status: 'Normal', classes: 'bg-gray-100 text-gray-800' };
     const loadPercentage = totalHours / maxHours;
@@ -168,18 +170,36 @@ export const WeeklyView: React.FC<WeeklyViewProps> = (props) => {
                                 }
 
                                 return (
-                                    <div
+                                    <JobHoverPopout
                                         key={job.id}
-                                        onClick={() => onEditJob(job.id)}
-                                        className="p-3 bg-white border border-gray-200 rounded-lg cursor-pointer hover:border-indigo-400 hover:shadow-md transition-all group relative overflow-hidden"
+                                        job={job}
+                                        vehicle={vehicle}
+                                        customer={customer}
+                                        purchaseOrders={purchaseOrders || []}
+                                        engineers={engineers}
+                                        currentUser={currentUser}
+                                        onEdit={onEditJob}
+                                        onCheckIn={onCheckIn}
+                                        onOpenPurchaseOrder={onOpenPurchaseOrder}
+                                        onOpenAssistant={onOpenAssistant}
+                                        onStartWork={onStartWork}
+                                        onPause={onPause}
+                                        onRestart={onRestart}
+                                        onQcApprove={onQcApprove}
+                                        onEngineerComplete={onEngineerComplete}
                                     >
-                                        <div className="absolute top-0 left-0 w-1 h-full bg-indigo-500" />
-                                        <p className="font-black text-xs text-gray-900 mb-1 tracking-tight group-hover:text-indigo-600 transition-colors uppercase">{vehicle?.registration}</p>
-                                        <p className="text-[10px] text-gray-500 line-clamp-2 leading-tight uppercase font-medium">{job.description}</p>
-                                        <div className="mt-2 text-[9px] text-gray-400 font-bold uppercase truncate">
-                                            {getCustomerDisplayName(customer)}
+                                        <div
+                                            onClick={() => onEditJob(job.id)}
+                                            className="p-3 bg-white border border-gray-200 rounded-lg cursor-pointer hover:border-indigo-400 hover:shadow-md transition-all group relative overflow-hidden"
+                                        >
+                                            <div className="absolute top-0 left-0 w-1 h-full bg-indigo-500" />
+                                            <p className="font-black text-xs text-gray-900 mb-1 tracking-tight group-hover:text-indigo-600 transition-colors uppercase">{vehicle?.registration}</p>
+                                            <p className="text-[10px] text-gray-500 line-clamp-2 leading-tight uppercase font-medium">{job.description}</p>
+                                            <div className="mt-2 text-[9px] text-gray-400 font-bold uppercase truncate">
+                                                {getCustomerDisplayName(customer)}
+                                            </div>
                                         </div>
-                                    </div>
+                                    </JobHoverPopout>
                                 );
                             })}
                         </div>

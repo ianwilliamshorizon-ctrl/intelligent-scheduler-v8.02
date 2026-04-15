@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect } from 'react';
 import * as T from '../types';
 import { useApp } from '../core/state/AppContext';
 import { useData } from '../core/state/DataContext';
@@ -11,7 +11,7 @@ import {
     ClipboardCheck, Wand2
 } from 'lucide-react';
 
-// --- Reusable Components ---
+import { SummaryJobCard } from './shared/SummaryJobCard';
 
 const StatCard: React.FC<{ title: string; value: string | number; icon: React.ElementType; colorClass: string; onClick?: () => void }> = ({ title, value, icon: Icon, colorClass, onClick }) => (
     <div 
@@ -77,8 +77,13 @@ const AdminDispatcherDashboard: React.FC<{
     onEditJob: (jobId: string) => void;
     onOpenInquiry: (inquiry: Inquiry) => void;
     onOpenAssistant: (jobId: string) => void;
-}> = ({ onEditJob, onOpenInquiry, onOpenAssistant }) => {
-    const { jobs, inquiries, vehicles, customers, roles } = useData();
+    onCheckIn: (jobId: string) => void;
+    onStartWork: (jobId: string, segmentId: string) => void;
+    onPause: (jobId: string, segmentId: string, reason: string) => void;
+    onRestartWork: (jobId: string, segmentId: string) => void;
+    onEngineerComplete: (job: Job, segmentId: string) => void;
+}> = ({ onEditJob, onOpenInquiry, onOpenAssistant, onCheckIn, onStartWork, onPause, onRestartWork, onEngineerComplete }) => {
+    const { jobs, inquiries, vehicles, customers, roles, engineers, purchaseOrders } = useData();
     const { selectedEntityId, setCurrentView, currentUser } = useApp();
     const today = getRelativeDate(0);
 
@@ -150,20 +155,26 @@ const AdminDispatcherDashboard: React.FC<{
                 </Widget>
                 <Widget title="Unallocated Job Queue" icon={Clock}>
                     <div className="space-y-3">
-                        {unallocatedJobList.length > 0 ? unallocatedJobList.map(job => {
-                             const vehicle = vehicles.find(v => v.id === job.vehicleId);
-                             return (
-                                <div 
-                                    key={job.id} 
-                                    className="p-3 bg-gray-50 rounded-lg border cursor-pointer hover:bg-gray-100 hover:border-indigo-400 group transition-all duration-200 shadow-sm hover:shadow-md" 
-                                    onClick={(e) => { e.stopPropagation(); onEditJob(job.id); }}
-                                    title="Click to edit job"
-                                >
-                                    <p className="font-semibold text-sm group-hover:underline group-hover:text-indigo-700">{vehicle?.registration} - {job.description}</p>
-                                    <p className="text-xs text-gray-600">{job.estimatedHours} hours</p>
-                                </div>
-                             )
-                        }) : <p className="text-sm text-gray-500 text-center py-8">No unallocated jobs.</p>}
+                        {unallocatedJobList.length > 0 ? unallocatedJobList.map(job => (
+                             <SummaryJobCard 
+                                key={job.id}
+                                job={job}
+                                vehicle={vehicles.find(v => v.id === job.vehicleId)}
+                                customer={customers.find(c => c.id === job.customerId)}
+                                purchaseOrders={purchaseOrders}
+                                engineers={engineers}
+                                currentUser={currentUser}
+                                onEdit={onEditJob}
+                                onCheckIn={onCheckIn}
+                                onOpenPurchaseOrder={() => {}}
+                                onOpenAssistant={onOpenAssistant}
+                                onStartWork={onStartWork}
+                                onPause={onPause}
+                                onRestart={onRestartWork}
+                                onQcApprove={() => {}}
+                                onEngineerComplete={onEngineerComplete}
+                             />
+                        )) : <p className="text-sm text-gray-500 text-center py-8">No unallocated jobs.</p>}
                     </div>
                 </Widget>
             </div>
@@ -171,26 +182,21 @@ const AdminDispatcherDashboard: React.FC<{
     );
 };
 
-const EngineerDashboard: React.FC<{
-    onStartWork: (jobId: string, segmentId: string) => void;
-    onPause: (jobId: string, segmentId: string, reason: string) => void;
-    onEngineerComplete: (job: Job, segmentId: string) => void;
-    onEditJob: (jobId: string) => void;
-    onOpenAssistant: (jobId: string) => void;
-    onRestartWork: (jobId: string, segmentId: string) => void;
-}> = (props) => {
-    const { onStartWork, onPause, onEngineerComplete, onEditJob, onOpenAssistant, onRestartWork } = props;
+const EngineerDashboard: React.FC<DashboardViewProps> = (props) => {
+    const { onStartWork, onPause, onEngineerComplete, onEditJob, onOpenAssistant, onRestartWork, onCheckIn } = props;
     const { currentUser, setCurrentView, selectedEntityId } = useApp();
-    const { jobs, vehicles, lifts } = useData();
+    const { jobs, vehicles, lifts, customers, purchaseOrders, engineers } = useData();
     const today = getRelativeDate(0);
 
     const myJobsToday = useMemo(() => {
         if (!currentUser.engineerId) return [];
-        return jobs.flatMap(job => 
-            (job.segments || []).map(seg => ({ job, seg }))
-        ).filter(({ job, seg }) => 
-            seg.engineerId === currentUser.engineerId && seg.date === today && seg.allocatedLift
-        ).sort((a,b) => (a.seg.scheduledStartSegment || 99) - (b.seg.scheduledStartSegment || 99));
+        return jobs.filter(job => 
+            (job.segments || []).some(seg => seg.engineerId === currentUser.engineerId && seg.date === today)
+        ).sort((a, b) => {
+            const segA = a.segments?.find(s => s.engineerId === currentUser.engineerId && s.date === today);
+            const segB = b.segments?.find(s => s.engineerId === currentUser.engineerId && s.date === today);
+            return (segA?.scheduledStartSegment || 99) - (segB?.scheduledStartSegment || 99);
+        });
     }, [jobs, currentUser.engineerId, today]);
     
     return (
@@ -200,54 +206,92 @@ const EngineerDashboard: React.FC<{
                   <StatCard title="My Jobs Today" value={myJobsToday.length} icon={Wrench} colorClass="bg-indigo-500" onClick={() => setCurrentView('concierge')} />
             </div>
             <Widget title="My Jobs for Today" icon={CalendarCheck}>
-                <div className="space-y-4">
-                    {myJobsToday.length > 0 ? myJobsToday.map(({ job, seg }) => {
-                        const vehicle = vehicles.find(v => v.id === job.vehicleId);
-                        const lift = lifts.find(l => l.id === seg.allocatedLift);
-                        return (
-                            <div key={seg.segmentId} className="p-3 bg-gray-50 rounded-lg border">
-                                <div className="flex justify-between items-start">
-                                    <div>
-                                        <p className="font-bold">{vehicle?.registration} - {job.description}</p>
-                                        <p className="text-sm text-gray-600">On {lift?.name}</p>
-                                    </div>
-                                    <span className={`text-xs font-semibold px-2 py-1 rounded-full ${seg.status === 'In Progress' || seg.status === 'Paused' ? 'bg-yellow-100 text-yellow-800' : 'bg-blue-100 text-blue-800'}`}>{seg.status}</span>
-                                </div>
-                                <div className="flex justify-end gap-2 mt-3 pt-3 border-t">
-                                    <button onClick={() => onOpenAssistant(job.id)} title="Technical Assistant" className="text-sm font-semibold p-2 bg-purple-100 text-purple-700 rounded-md hover:bg-purple-200"><Wand2 size={14} /></button>
-                                    <button onClick={() => onEditJob(job.id)} className="text-sm font-semibold py-1 px-3 bg-gray-200 rounded-md hover:bg-gray-300">View Details</button>
-                                    {seg.status === 'Allocated' && <button onClick={() => onStartWork(job.id, seg.segmentId)} className="text-sm font-semibold py-1 px-3 bg-green-500 text-white rounded-md hover:bg-green-600 flex items-center gap-1"><PlayCircle size={14}/> Start</button>}
-                                    {seg.status === 'Paused' && <button onClick={() => onRestartWork(job.id, seg.segmentId)} className="text-sm font-semibold py-1 px-3 bg-green-500 text-white rounded-md hover:bg-green-600 flex items-center gap-1"><Play size={14}/> Restart</button>}
-                                    {seg.status === 'In Progress' && <button onClick={() => onPause(job.id, seg.segmentId, 'Paused by user')} className="text-sm font-semibold py-1 px-3 bg-orange-500 text-white rounded-md hover:bg-orange-600 flex items-center gap-1"><PauseCircle size={14}/> Pause</button>}
-                                    {seg.status === 'In Progress' && <button onClick={() => onEngineerComplete(job, seg.segmentId)} className="text-sm font-semibold py-1 px-3 bg-blue-500 text-white rounded-md hover:bg-blue-600 flex items-center gap-1"><CheckCircle size={14}/> Complete</button>}
-                                </div>
-                            </div>
-                        )
-                    }) : <p className="text-sm text-gray-500 text-center py-8">You have no jobs scheduled for today.</p>}
+                <div className="space-y-2">
+                    {myJobsToday.length > 0 ? myJobsToday.map((job) => (
+                        <SummaryJobCard 
+                            key={job.id}
+                            job={job}
+                            vehicle={vehicles.find(v => v.id === job.vehicleId)}
+                            customer={customers.find(c => c.id === job.customerId)}
+                            purchaseOrders={purchaseOrders}
+                            engineers={engineers}
+                            currentUser={currentUser}
+                            onEdit={onEditJob}
+                            onCheckIn={onCheckIn}
+                            onOpenPurchaseOrder={() => {}}
+                            onOpenAssistant={onOpenAssistant}
+                            onStartWork={onStartWork}
+                            onPause={(jId, sId) => onPause(jId, sId, 'Paused from dashboard')}
+                            onRestart={onRestartWork}
+                            onQcApprove={() => {}}
+                            onEngineerComplete={onEngineerComplete}
+                        />
+                    )) : <p className="text-sm text-gray-500 text-center py-8">You have no jobs scheduled for today.</p>}
                 </div>
             </Widget>
         </div>
     );
 };
 
-const SalesDashboard = () => {
-    const { jobs } = useData();
-    const { selectedEntityId, setCurrentView } = useApp();
+const SalesDashboard: React.FC<DashboardViewProps> = (props) => {
+    const { jobs, vehicles, customers, purchaseOrders, engineers } = useData();
+    const { selectedEntityId, setCurrentView, currentUser } = useApp();
     const today = getRelativeDate(0);
+
+    const jobsToday = useMemo(() => {
+        return jobs.filter(j => 
+            (selectedEntityId === 'all' || j.entityId === selectedEntityId) && 
+            j.status !== 'Cancelled' &&
+            (j.segments || []).some(s => s.date === today)
+        ).sort((a,b) => (a.scheduledDate || '').localeCompare(b.scheduledDate || ''));
+    }, [jobs, selectedEntityId, today]);
+
     return (
         <div className="space-y-6">
             <SummaryMetrics jobs={jobs} selectedEntityId={selectedEntityId} today={today} setCurrentView={setCurrentView} />
-            <div className="text-center p-8 bg-white rounded-lg shadow-md">Sales Dashboard coming soon.</div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <Widget title="Scheduled for Today" icon={CalendarCheck}>
+                    <div className="space-y-2">
+                        {jobsToday.length > 0 ? jobsToday.map(job => (
+                             <SummaryJobCard 
+                                key={job.id}
+                                job={job}
+                                vehicle={vehicles.find(v => v.id === job.vehicleId)}
+                                customer={customers.find(c => c.id === job.customerId)}
+                                purchaseOrders={purchaseOrders}
+                                engineers={engineers}
+                                currentUser={currentUser}
+                                onEdit={props.onEditJob}
+                                onCheckIn={props.onCheckIn}
+                                onOpenPurchaseOrder={() => {}}
+                                onOpenAssistant={props.onOpenAssistant}
+                                onStartWork={props.onStartWork}
+                                onPause={(jId, sId) => props.onPause(jId, sId, 'Paused from dashboard')}
+                                onRestart={props.onRestartWork}
+                                onQcApprove={() => {}}
+                                onEngineerComplete={props.onEngineerComplete}
+                            />
+                        )) : <p className="text-sm text-gray-500 text-center py-8">No jobs scheduled for today.</p>}
+                    </div>
+                </Widget>
+                <Widget title="Quick Support" icon={Users}>
+                    <div className="p-4 bg-indigo-50 rounded-xl border border-indigo-100 flex flex-col items-center justify-center text-center gap-4">
+                        <Users size={48} className="text-indigo-400 opacity-50" />
+                        <div>
+                            <p className="font-bold text-indigo-900">Need help with a job?</p>
+                            <p className="text-sm text-indigo-700">Use the context-aware assistant on any job card for technical info or service package details.</p>
+                        </div>
+                        <button onClick={() => setCurrentView('inquiries')} className="px-6 py-2 bg-indigo-600 text-white rounded-lg font-bold shadow-md hover:bg-indigo-700 transition">View Inquiries</button>
+                    </div>
+                </Widget>
+            </div>
         </div>
     );
 };
 
-const ConciergeDashboard: React.FC<{
-    onCheckIn: (jobId: string) => void;
-    onEditJob: (jobId: string) => void;
-}> = ({ onCheckIn, onEditJob }) => {
-    const { jobs, vehicles } = useData();
-    const { selectedEntityId, setCurrentView } = useApp();
+const ConciergeDashboard: React.FC<DashboardViewProps> = (props) => {
+    const { jobs, vehicles, customers, purchaseOrders, engineers } = useData();
+    const { selectedEntityId, setCurrentView, currentUser } = useApp();
     const today = getRelativeDate(0);
 
     const arrivalsToday = useMemo(() => {
@@ -261,26 +305,29 @@ const ConciergeDashboard: React.FC<{
     return (
         <div className="space-y-6">
             <SummaryMetrics jobs={jobs} selectedEntityId={selectedEntityId} today={today} setCurrentView={setCurrentView} />
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                 <StatCard title="Arrivals Today" value={arrivalsToday.length} icon={LogIn} colorClass="bg-cyan-500" onClick={() => setCurrentView('concierge')} />
-            </div>
             <Widget title="Today's Arrivals" icon={LogIn}>
-                <div className="space-y-3">
-                    {arrivalsToday.length > 0 ? arrivalsToday.map(job => {
-                        const vehicle = vehicles.find(v => v.id === job.vehicleId);
-                        return (
-                            <div key={job.id} className="p-3 bg-gray-50 rounded-lg border flex justify-between items-center">
-                                <div>
-                                    <p className="font-bold">{vehicle?.registration} - {job.description}</p>
-                                    <p className="text-sm text-gray-600">{job.id}</p>
-                                </div>
-                                <div className="flex gap-2">
-                                     <button onClick={() => onEditJob(job.id)} className="text-sm font-semibold py-1 px-3 bg-gray-200 rounded-md hover:bg-gray-300">Details</button>
-                                     <button onClick={() => onCheckIn(job.id)} className="text-sm font-semibold py-1 px-3 bg-blue-500 text-white rounded-md hover:bg-blue-600 flex items-center gap-1"><LogIn size={14}/> Check In</button>
-                                </div>
-                            </div>
-                        )
-                    }) : <p className="text-sm text-gray-500 text-center py-8">No vehicles are awaiting arrival today.</p>}
+                <div className="space-y-2">
+                    {arrivalsToday.length > 0 ? arrivalsToday.map(job => (
+                         <SummaryJobCard 
+                            key={job.id}
+                            job={job}
+                            vehicle={vehicles.find(v => v.id === job.vehicleId)}
+                            customer={customers.find(c => c.id === job.customerId)}
+                            purchaseOrders={purchaseOrders}
+                            engineers={engineers}
+                            currentUser={currentUser}
+                            onEdit={props.onEditJob}
+                            onCheckIn={props.onCheckIn}
+                            onOpenPurchaseOrder={() => {}}
+                            onOpenAssistant={props.onOpenAssistant}
+                            onStartWork={props.onStartWork}
+                            onPause={(jId, sId) => props.onPause(jId, sId, 'Paused from dashboard')}
+                            onRestart={props.onRestartWork}
+                            onQcApprove={() => {}}
+                            onEngineerComplete={props.onEngineerComplete}
+                            highlightAction="checkIn"
+                        />
+                    )) : <p className="text-sm text-gray-500 text-center py-8">No vehicles are awaiting arrival today.</p>}
                 </div>
             </Widget>
         </div>
@@ -301,7 +348,19 @@ interface DashboardViewProps {
 
 const DashboardView: React.FC<DashboardViewProps> = (props) => {
     const { currentUser } = useApp();
-    const { roles } = useData();
+    const { roles, forceRefresh } = useData();
+    
+    // Auto-refresh data every 30 seconds to keep all users in sync
+    useEffect(() => {
+        const interval = setInterval(() => {
+            // We refresh the core entities used in this view
+            forceRefresh('brooks_jobs' as any);
+            forceRefresh('brooks_vehicles' as any);
+            forceRefresh('brooks_customers' as any);
+            forceRefresh('brooks_inquiries' as any);
+        }, 30000); 
+        return () => clearInterval(interval);
+    }, [forceRefresh]);
     const today = getRelativeDate(0);
 
     const getGreeting = () => {
@@ -319,13 +378,13 @@ const DashboardView: React.FC<DashboardViewProps> = (props) => {
         switch (baseRole) {
             case 'Admin':
             case 'Dispatcher':
-                return <AdminDispatcherDashboard onEditJob={props.onEditJob} onOpenInquiry={props.onOpenInquiry as any} onOpenAssistant={props.onOpenAssistant}/>;
+                return <AdminDispatcherDashboard {...props} onOpenInquiry={props.onOpenInquiry as any} />;
             case 'Engineer':
                 return <EngineerDashboard {...props} />;
             case 'Sales':
-                return <SalesDashboard />;
+                return <SalesDashboard {...props} />;
             case 'Garage Concierge':
-                return <ConciergeDashboard onCheckIn={props.onCheckIn} onEditJob={props.onEditJob} />;
+                return <ConciergeDashboard {...props} />;
             default:
                 return <p>No dashboard configured for your role.</p>;
         }

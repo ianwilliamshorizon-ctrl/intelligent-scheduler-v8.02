@@ -46,6 +46,23 @@ export interface MotTest {
 export interface ManagedDataPermissions {
     isSuperAdmin: boolean;
     canSeeDirectorsDashboard: boolean;
+    canManageCustomers?: boolean;
+    canManageVehicles?: boolean;
+    canManageInspectionDiagrams?: boolean;
+    canManageInspectionTemplates?: boolean;
+    canManageStaff?: boolean;
+    canManageRoles?: boolean;
+    canManageEntities?: boolean;
+    canManageLifts?: boolean;
+    canManageBatteryChargers?: boolean;
+    canManageSuppliers?: boolean;
+    canManageParts?: boolean;
+    canManageServicePackages?: boolean;
+    canManageNominalCodes?: boolean;
+    canManageTaxCodes?: boolean;
+    canManageDiscountCodes?: boolean;
+    canManageBackups?: boolean;
+    canManageStorageLocations?: boolean;
     canEditSuppliers?: boolean;
     canDeleteSuppliers?: boolean;
     canViewFinancials?: boolean;
@@ -245,6 +262,7 @@ export interface Lift {
     name: string;
     color?: string;
     entityId: string;
+    type?: 'Standard' | 'MOT';
 }
 
 export interface Purchase {
@@ -718,7 +736,9 @@ export interface StorageBookingSummary {
 
 export interface StorageLocation {
     id: string;
+    entityId: string;
     name: string;
+    capacity: number;
 }
 
 export interface BatteryCharger {

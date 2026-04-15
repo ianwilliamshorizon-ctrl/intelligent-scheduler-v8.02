@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { useData } from '../../core/state/DataContext';
 import { Job, Vehicle, Customer, PurchaseOrder, User, JobSegment, Engineer, VehicleStatus } from '../../types';
 import { Package as PackageIcon, PackageCheck, CheckCircle, ArrowRightCircle, Clock, KeyRound, Car, Wand2, LogIn, ClipboardCheck, FileText, LogOut, PlayCircle, Play, PauseCircle, User as UserIcon, XCircle } from 'lucide-react';
 import { getCustomerDisplayName } from '../../core/utils/customerUtils';
@@ -21,7 +22,7 @@ interface ConciergeJobCardProps {
     onCollect?: (jobId: string) => void;
     onQcApprove?: (jobId: string) => void;
     onStartWork?: (jobId: string, segmentId: string) => void;
-    onPause: (jobId: string, segmentId: string) => void;
+    onPause: (jobId: string, segmentId: string, reason?: string) => void;
     onRestart?: (jobId: string, segmentId: string) => void;
     onEngineerComplete?: (job: Job, segmentId: string) => void;
     highlightAction?: 'checkIn' | 'invoice' | 'collect';
@@ -29,6 +30,7 @@ interface ConciergeJobCardProps {
 
 export const ConciergeJobCard: React.FC<ConciergeJobCardProps> = (props) => {
     const { job, vehicle, customer, purchaseOrders, engineers, currentUser, onEdit, onCheckIn, onOpenPurchaseOrder, onOpenAssistant, onGenerateInvoice, onCollect, onQcApprove, onStartWork, onPause, onRestart, onEngineerComplete, highlightAction } = props;
+    const { roles } = useData();
     
     const { partsStatus, vehicleStatus } = job;
     const today = getRelativeDate(0);
@@ -85,7 +87,9 @@ export const ConciergeJobCard: React.FC<ConciergeJobCardProps> = (props) => {
     const canControl = (segment: JobSegment) => {
         if (!segment.engineerId) return false;
         if (currentUser.role === 'Engineer') return segment.engineerId === currentUser.engineerId;
-        return currentUser.role === 'Admin' || currentUser.role === 'Dispatcher';
+        // Expand to include Sales and Garage Concierge for better visibility across the team
+        return ['Admin', 'Dispatcher', 'Sales', 'Garage Concierge'].includes(currentUser.role) || 
+               ['Admin', 'Dispatcher', 'Sales', 'Garage Concierge'].includes(roles.find(r => r.name === currentUser.role)?.baseRole || '');
     };
 
     return (

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useApp } from '../core/state/AppContext';
 import { useData } from '../core/state/DataContext';
 import { Job, PurchaseOrder } from '../types';
@@ -26,7 +26,18 @@ interface ConciergeViewProps {
 }
 
 const ConciergeView: React.FC<ConciergeViewProps> = (props) => {
-    const { jobs, customers, vehicles, purchaseOrders, invoices, engineers, saveRecord } = useData();
+    const { jobs, customers, vehicles, purchaseOrders, invoices, engineers, saveRecord, forceRefresh } = useData();
+    
+    // Auto-refresh data every 30 seconds to keep all users in sync
+    useEffect(() => {
+        const interval = setInterval(() => {
+            // We refresh the core entities used in this view
+            forceRefresh('brooks_jobs' as any);
+            forceRefresh('brooks_vehicles' as any);
+            forceRefresh('brooks_customers' as any);
+        }, 30000); 
+        return () => clearInterval(interval);
+    }, [forceRefresh]);
     const { selectedEntityId, currentUser } = useApp();
     const [searchTerm, setSearchTerm] = useState('');
     const [pauseData, setPauseData] = useState<{ jobId: string, segmentId: string } | null>(null);

@@ -6,6 +6,7 @@ import { getPoStatusColor } from '../../core/utils/statusUtils';
 import { TIME_SEGMENTS, SEGMENT_DURATION_MINUTES } from '../../constants';
 import { HoverInfo } from '../shared/HoverInfo';
 
+import { JobHoverPopout } from '../shared/JobHoverPopout';
 import { JobActionsMenu } from '../shared/JobActionsMenu';
 
 export const AllocatedJobCard: React.FC<{
@@ -26,7 +27,10 @@ export const AllocatedJobCard: React.FC<{
     onUnscheduleSegment: (jobId: string, segmentId: string) => void;
     currentUser: User;
     onOpenAssistant: (jobId: string) => void;
-}> = ({ job, segment, vehicle, customer, engineer, purchaseOrders, onDragStart, onDragEnd, onEdit, onStartWork, onPause, onRestart, onReassign, onOpenPurchaseOrder, onUnscheduleSegment, currentUser, onOpenAssistant }) => {
+    engineers?: Engineer[];
+    onQcApprove?: (jobId: string) => void;
+    onEngineerComplete?: (job: Job, segmentId: string) => void;
+}> = ({ job, segment, vehicle, customer, engineer, purchaseOrders, onDragStart, onDragEnd, onEdit, onStartWork, onPause, onRestart, onReassign, onOpenPurchaseOrder, onUnscheduleSegment, currentUser, onOpenAssistant, engineers = [], onQcApprove = () => {}, onEngineerComplete = () => {} }) => {
     
     const segments = segment.duration * (60 / SEGMENT_DURATION_MINUTES);
     const maxSegmentsAvailable = TIME_SEGMENTS.length - (segment.scheduledStartSegment || 0);
@@ -133,109 +137,127 @@ export const AllocatedJobCard: React.FC<{
         return list;
     }, [segment.status, job.id, segment.segmentId, canStartOrPause, canPerformActions, canUnschedule, onStartWork, onPause, onRestart, onOpenAssistant, onEdit, onReassign, onUnscheduleSegment, isSmallCard, customer, engineer]);
     return (
-        <div
-            draggable={canDrag}
-            onDragStart={(e) => {
-                if (!canDrag) return;
-                e.stopPropagation();
-                onDragStart(e, job.id, segment.segmentId);
-            }}
-            onDragEnd={onDragEnd}
-            className={`absolute left-2 right-2 p-1.5 rounded-lg shadow-sm border flex flex-col group ${canDrag ? 'cursor-grab' : 'cursor-default'} ${statusColor} allocated-job-container z-10 hover:z-50 hover:shadow-md transition-all duration-200`}
-            style={{
-                top: `${topPercent}%`,
-                height: `${heightPercent}%`,
-                minHeight: '40px', 
-            }}
+        <JobHoverPopout
+            job={job}
+            vehicle={vehicle}
+            customer={customer}
+            purchaseOrders={purchaseOrders}
+            engineers={engineers}
+            currentUser={currentUser}
+            onEdit={onEdit}
+            onCheckIn={() => {}}
+            onOpenPurchaseOrder={onOpenPurchaseOrder}
+            onOpenAssistant={onOpenAssistant}
+            onStartWork={onStartWork}
+            onPause={onPause}
+            onRestart={onRestart}
+            onQcApprove={onQcApprove}
+            onEngineerComplete={onEngineerComplete}
         >
-            <div className="flex justify-between items-start gap-1 pb-1 text-xs flex-shrink-0 mb-1">
-                <div className="flex flex-col min-w-0 flex-grow">
-                     <HoverInfo
-                        title="Vehicle Details"
-                        data={{
-                            Make: vehicle?.make,
-                            Model: vehicle?.model,
-                            Year: vehicle?.year,
-                            'Year of Manufacture': vehicle?.manufactureDate,
-                            VIN: vehicle?.vin,
-                            'MOT Expires': vehicle?.motExpiryDate
-                        }}
-                    >
-                        <span className="font-bold truncate" title={vehicle?.registration}>{vehicle?.registration || 'Unknown Vehicle'}</span>
-                    </HoverInfo>
-                    <div className="flex items-center gap-1.5 leading-tight">
-                        <span className="font-mono text-[11px] font-black text-gray-900">#{job.id}</span>
-                        {job.jobType === 'MOT' && (
-                            <span className="bg-emerald-500/20 text-emerald-800 text-[8px] px-1 rounded-sm font-bold uppercase tracking-tighter">MOT</span>
-                        )}
+            <div
+                draggable={canDrag}
+                onDragStart={(e) => {
+                    if (!canDrag) return;
+                    e.stopPropagation();
+                    onDragStart(e, job.id, segment.segmentId);
+                }}
+                onDragEnd={onDragEnd}
+                className={`absolute left-0 right-0 p-1.5 rounded-lg shadow-sm border flex flex-col group ${canDrag ? 'cursor-grab' : 'cursor-default'} ${statusColor} allocated-job-container z-10 hover:z-50 hover:shadow-md transition-all duration-200`}
+                style={{
+                    top: `${topPercent}%`,
+                    height: `${heightPercent}%`,
+                    minHeight: '40px', 
+                }}
+            >
+                <div className="flex justify-between items-start gap-1 pb-1 text-xs flex-shrink-0 mb-1">
+                    <div className="flex flex-col min-w-0 flex-grow">
+                        <HoverInfo
+                            title="Vehicle Details"
+                            data={{
+                                Make: vehicle?.make,
+                                Model: vehicle?.model,
+                                Year: vehicle?.year,
+                                'Year of Manufacture': vehicle?.manufactureDate,
+                                VIN: vehicle?.vin,
+                                'MOT Expires': vehicle?.motExpiryDate
+                            }}
+                        >
+                            <span className="font-bold truncate" title={vehicle?.registration}>{vehicle?.registration || 'Unknown Vehicle'}</span>
+                        </HoverInfo>
+                        <div className="flex items-center gap-1.5 leading-tight">
+                            <span className="font-mono text-[11px] font-black text-gray-900">#{job.id}</span>
+                            {job.jobType === 'MOT' && (
+                                <span className="bg-emerald-500/20 text-emerald-800 text-[8px] px-1 rounded-sm font-bold uppercase tracking-tighter">MOT</span>
+                            )}
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-1 flex-shrink-0 pt-0.5">
+                        {job.keyNumber && <span className="flex items-center gap-1 bg-white/20 px-1 rounded font-bold text-[10px] text-gray-700 border border-gray-200"><KeyRound size={12}/> {job.keyNumber}</span>}
                     </div>
                 </div>
-                <div className="flex items-center gap-1 flex-shrink-0 pt-0.5">
-                    {job.keyNumber && <span className="flex items-center gap-1 bg-white/20 px-1 rounded font-bold text-[10px] text-gray-700 border border-gray-200"><KeyRound size={12}/> {job.keyNumber}</span>}
-                </div>
-            </div>
-            
-            <div className="flex-grow my-0.5 min-h-0">
-                 <p className={`text-xs truncate leading-tight ${isSmallCard ? 'font-medium' : ''}`}>{job.description}</p>
-                 {!isSmallCard && (
-                     <HoverInfo
-                        title="Customer Details"
-                        data={{
-                            Name: getCustomerDisplayName(customer),
-                            Mobile: customer?.mobile,
-                            Phone: customer?.phone,
-                            Email: customer?.email
-                        }}
-                     >
-                        <p className="text-[10px] truncate leading-tight opacity-70 font-semibold">{getCustomerDisplayName(customer)}</p>
-                     </HoverInfo>
-                 )}
-                 {!isSmallCard && associatedPOs.length > 0 && (
-                     <div className="flex flex-wrap gap-1 mt-1">
-                         {associatedPOs.map(po => (
-                             <button
-                                 key={po.id}
-                                 onClick={(e) => handleAction(e, () => onOpenPurchaseOrder(po))}
-                                 className={`flex items-center gap-0.5 px-1 py-0.5 rounded text-[10px] font-black border border-white/20 transition-all hover:scale-105 ${getPoStatusColor(po.status, 'bg')} ${getPoStatusColor(po.status, 'text')}`}
-                                 title={`PO #${po.id} (${po.status})`}
-                             >
-                                 <PackageIcon size={10} />
-                                 {po.id}
-                             </button>
-                         ))}
-                     </div>
-                 )}
-            </div>
-            
-            {!isSmallCard && (
-                <div className="flex justify-between items-end text-xs mt-auto pt-1 border-t border-black/5 flex-shrink-0">
-                    {engineer ? (
-                        <span className="font-semibold truncate max-w-[60px] flex items-center gap-1">
-                            <UserIcon size={12} />
-                            {engineer.name}
-                        </span>
-                    ) : (
-                        <span className="font-semibold truncate max-w-[60px] flex items-center gap-1 text-rose-300">
-                            <UserPlus size={12} />
-                            Unassigned
-                        </span>
+                
+                <div className="flex-grow my-0.5 min-h-0">
+                    <p className={`text-xs truncate leading-tight ${isSmallCard ? 'font-medium' : ''}`}>{job.description}</p>
+                    {!isSmallCard && (
+                        <HoverInfo
+                            title="Customer Details"
+                            data={{
+                                Name: getCustomerDisplayName(customer),
+                                Mobile: customer?.mobile,
+                                Phone: customer?.phone,
+                                Email: customer?.email
+                            }}
+                        >
+                            <p className="text-[10px] truncate leading-tight opacity-70 font-semibold">{getCustomerDisplayName(customer)}</p>
+                        </HoverInfo>
                     )}
-                    <div className="flex items-center gap-1">
-                        <JobActionsMenu actions={actions} size="sm" colorScheme="light" title={`Job #${job.id} Actions`} />
+                    {!isSmallCard && associatedPOs.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                            {associatedPOs.map(po => (
+                                <button
+                                    key={po.id}
+                                    onClick={(e) => handleAction(e, () => onOpenPurchaseOrder(po))}
+                                    className={`flex items-center gap-0.5 px-1 py-0.5 rounded text-[10px] font-black border border-white/20 transition-all hover:scale-105 ${getPoStatusColor(po.status, 'bg')} ${getPoStatusColor(po.status, 'text')}`}
+                                    title={`PO #${po.id} (${po.status})`}
+                                >
+                                    <PackageIcon size={10} />
+                                    {po.id}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
+                
+                {!isSmallCard && (
+                    <div className="flex justify-between items-end text-xs mt-auto pt-1 border-t border-black/5 flex-shrink-0">
+                        {engineer ? (
+                            <span className="font-semibold truncate max-w-[60px] flex items-center gap-1">
+                                <UserIcon size={12} />
+                                {engineer.name}
+                            </span>
+                        ) : (
+                            <span className="font-semibold truncate max-w-[60px] flex items-center gap-1 text-rose-300">
+                                <UserPlus size={12} />
+                                Unassigned
+                            </span>
+                        )}
+                        <div className="flex items-center gap-1">
+                            <JobActionsMenu actions={actions} size="sm" colorScheme="light" title={`Job #${job.id} Actions`} />
+                        </div>
                     </div>
-                </div>
-            )}
+                )}
 
-            {isSmallCard && (
-                <div className="absolute bottom-1 right-1">
-                    <JobActionsMenu 
-                        actions={actions} 
-                        size="sm" 
-                        colorScheme="light" 
-                        title={`Job #${job.id} - ${engineer?.name || 'Unassigned'}`} 
-                    />
-                </div>
-            )}
-        </div>
+                {isSmallCard && (
+                    <div className="absolute bottom-1 right-1">
+                        <JobActionsMenu 
+                            actions={actions} 
+                            size="sm" 
+                            colorScheme="light" 
+                            title={`Job #${job.id} - ${engineer?.name || 'Unassigned'}`} 
+                        />
+                    </div>
+                )}
+            </div>
+        </JobHoverPopout>
     );
 };

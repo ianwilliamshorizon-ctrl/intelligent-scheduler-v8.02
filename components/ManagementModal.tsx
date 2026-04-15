@@ -10,7 +10,7 @@ import {
 import { 
     X, Settings, Database, User as UserIcon, Car, Wrench, Package, Briefcase, 
     ShieldCheck, Users, Truck, AlertTriangle, RefreshCw, CarFront, List, Info, CheckCircle, Server, Save,
-    ArrowUpCircle, BatteryCharging, ClipboardCheck, Search, Banknote, Tag, Lock, Eye, BarChart2
+    ArrowUpCircle, BatteryCharging, ClipboardCheck, Search, Banknote, Tag, Lock, Eye, BarChart2, Warehouse
 } from 'lucide-react';
 
 // Extracted Tab Views
@@ -19,7 +19,8 @@ import {
     ManagementStaffTab, ManagementRolesTab, ManagementEntitiesTab,
     ManagementSuppliersTab, ManagementPartsTab, ManagementPackagesTab,
     ManagementNominalCodesTab, ManagementTaxCodesTab, ManagementLiftsTab, ManagementBatteryChargersTab,
-    ManagementInspectionTemplatesTab,ManagementDiscountCodesTab
+    ManagementInspectionTemplatesTab,ManagementDiscountCodesTab,
+    ManagementStorageLocationsTab
 } from './management/ManagementViews';
 import { ManagementBackupTab } from './management/tabs/ManagementBackupTab';
 
@@ -91,6 +92,7 @@ const ManagementModal: React.FC<ManagementModalProps> = ({
         { id: 'nominalCodes', label: 'Nominal Codes', icon: List, render: () => <ManagementNominalCodesTab searchTerm={searchTerm} onShowStatus={showStatus} />, permission: 'canManageNominalCodes' },
         { id: 'taxCodes', label: 'Tax Codes', icon: Banknote, render: () => <ManagementTaxCodesTab searchTerm={searchTerm} onShowStatus={showStatus} />, permission: 'canManageTaxCodes' },
         { id: 'discountCodes', label: 'Discount Codes', icon: Tag, render: () => <ManagementDiscountCodesTab />, permission: 'canManageDiscountCodes' },
+        { id: 'storageLocations', label: 'Storage Locations', icon: Warehouse, render: () => <ManagementStorageLocationsTab searchTerm={searchTerm} onShowStatus={showStatus} />, permission: 'canManageStorageLocations' },
         { id: 'backup', label: 'Backup & Restore', icon: Database, render: () => <ManagementBackupTab backupSchedule={backupSchedule} setBackupSchedule={setBackupSchedule} onManualBackup={onManualBackup} onShowStatus={showStatus} />, permission: 'canManageBackups' },
     ], [searchTerm, backupSchedule, onManualBackup, setBackupSchedule, setCurrentView, onClose, onViewCustomer]); // Added onViewCustomer to dependency array
 

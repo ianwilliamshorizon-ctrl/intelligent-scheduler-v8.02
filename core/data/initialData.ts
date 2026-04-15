@@ -121,19 +121,19 @@ export const getInitialVehicles = (): Vehicle[] => ([
 
 // --- Lifts & Engineers ---
 export const getInitialLifts = (): Lift[] => ([
-    { id: 'lift_p1', entityId: 'ent_porsche', name: 'Porsche Lift 1' },
-    { id: 'lift_p2', entityId: 'ent_porsche', name: 'Porsche Lift 2' },
-    { id: 'lift_p3', entityId: 'ent_porsche', name: 'Porsche Lift 3' },
-    { id: 'lift_p4', entityId: 'ent_porsche', name: 'Porsche Lift 4' },
-    { id: 'lift_p5', entityId: 'ent_porsche', name: 'Porsche Lift 5' },
-    { id: 'lift_p6', entityId: 'ent_porsche', name: 'Porsche Lift 6' },
-    { id: 'lift_mot_p', entityId: 'ent_porsche', name: 'Porsche MOT Bay' },
-    { id: 'lift_a1', entityId: 'ent_audi', name: 'Audi Lift 1' },
-    { id: 'lift_a2', entityId: 'ent_audi', name: 'Audi Lift 2' },
-    { id: 'lift_a3', entityId: 'ent_audi', name: 'Audi Lift 3' },
-    { id: 'lift_mot_a', entityId: 'ent_audi', name: 'Audi MOT Bay' },
-    { id: 'lift_t1', entityId: 'ent_trimming', name: 'Trimming Area 1' },
-    { id: 'lift_t2', entityId: 'ent_trimming', name: 'Trimming Area 2' },
+    { id: 'lift_p1', entityId: 'ent_porsche', name: 'Porsche Lift 1', type: 'Standard' },
+    { id: 'lift_p2', entityId: 'ent_porsche', name: 'Porsche Lift 2', type: 'Standard' },
+    { id: 'lift_p3', entityId: 'ent_porsche', name: 'Porsche Lift 3', type: 'Standard' },
+    { id: 'lift_p4', entityId: 'ent_porsche', name: 'Porsche Lift 4', type: 'Standard' },
+    { id: 'lift_p5', entityId: 'ent_porsche', name: 'Porsche Lift 5', type: 'Standard' },
+    { id: 'lift_p6', entityId: 'ent_porsche', name: 'Porsche Lift 6', type: 'Standard' },
+    { id: 'lift_mot_p', entityId: 'ent_porsche', name: 'Porsche MOT Bay', type: 'MOT' },
+    { id: 'lift_a1', entityId: 'ent_audi', name: 'Audi Lift 1', type: 'Standard' },
+    { id: 'lift_a2', entityId: 'ent_audi', name: 'Audi Lift 2', type: 'Standard' },
+    { id: 'lift_a3', entityId: 'ent_audi', name: 'Audi Lift 3', type: 'Standard' },
+    { id: 'lift_mot_a', entityId: 'ent_audi', name: 'Audi MOT Bay', type: 'MOT' },
+    { id: 'lift_t1', entityId: 'ent_trimming', name: 'Trimming Area 1', type: 'Standard' },
+    { id: 'lift_t2', entityId: 'ent_trimming', name: 'Trimming Area 2', type: 'Standard' },
 ]);
 
 export const getInitialEngineers = (): Engineer[] => ([
@@ -276,7 +276,7 @@ export const getInitialRentalVehicles = (): RentalVehicle[] => ([
 
 export const getInitialRentalBookings = (): RentalBooking[] => ([]);
 export const getInitialStorageLocations = (): StorageLocation[] => ([
-    { id: 'sl_1', name: 'Main Warehouse' },
+    { id: 'sl_1', entityId: 'ent_storage', name: 'Main Warehouse', capacity: 20 },
 ]);
 
 export const getInitialBatteryChargers = (): BatteryCharger[] => ([

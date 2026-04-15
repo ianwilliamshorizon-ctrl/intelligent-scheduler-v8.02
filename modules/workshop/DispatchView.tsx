@@ -49,7 +49,18 @@ const DispatchView: React.FC<DispatchViewProps> = ({
     onUnscheduleSegment, 
     onStartWork 
 }) => {
-    const { jobs, setJobs, lifts, engineers, customers, vehicles, purchaseOrders, absenceRequests, businessEntities, estimates, parts } = useData();
+    const { jobs, setJobs, lifts, engineers, customers, vehicles, purchaseOrders, absenceRequests, businessEntities, estimates, parts, forceRefresh } = useData();
+    
+    // Auto-refresh data every 30 seconds to keep all users in sync
+    useEffect(() => {
+        const interval = setInterval(() => {
+            // We refresh the core entities used in this view
+            forceRefresh('brooks_jobs' as any);
+            forceRefresh('brooks_vehicles' as any);
+            forceRefresh('brooks_customers' as any);
+        }, 30000); 
+        return () => clearInterval(interval);
+    }, [forceRefresh]);
     const { selectedEntityId, currentUser, users } = useApp();
     
     // -- View State --

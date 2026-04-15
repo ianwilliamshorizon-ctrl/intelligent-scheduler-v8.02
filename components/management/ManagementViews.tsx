@@ -14,3 +14,4 @@ export * from './tabs/ManagementLiftsTab';
 export * from './tabs/ManagementBatteryChargersTab';
 export * from './tabs/ManagementInspectionTemplatesTab';
 export * from './tabs/ManagementDiscountCodesTab';
+export * from './tabs/ManagementStorageLocationsTab';
