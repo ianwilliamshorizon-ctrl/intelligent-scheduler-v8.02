@@ -3,9 +3,10 @@ import ReactDOM from 'react-dom/client';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { Invoice, Customer, Vehicle, BusinessEntity, Job, TaxRate, ServicePackage, InspectionTemplate, InspectionDiagram } from '../types';
-import { X, Printer, CheckCircle, Download, Loader2 } from 'lucide-react';
+import { X, Printer, CheckCircle, Download, Loader2, Wallet } from 'lucide-react';
 import { usePrint } from '../core/hooks/usePrint';
 import PrintableInvoice from './PrintableInvoice';
+import PaymentModal from './PaymentModal';
 
 interface InvoiceModalProps {
     isOpen: boolean;
@@ -26,6 +27,7 @@ interface InvoiceModalProps {
 const InvoiceModal: React.FC<InvoiceModalProps> = ({ isOpen, onClose, invoice, customer, vehicle, entity, job, taxRates, servicePackages, inspectionTemplates, inspectionDiagrams, onUpdateInvoice, onInvoiceAction }) => {
     const print = usePrint();
     const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+    const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
 
     const handlePrint = () => {
         if (job && onInvoiceAction) {
@@ -97,12 +99,34 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ isOpen, onClose, invoice, c
     };
     
     const handleMarkAsPaid = () => {
+        setIsPaymentModalOpen(true);
+    };
+
+    const handleSavePayment = (payment: any) => {
         if (invoice) {
-            onUpdateInvoice({ ...invoice, status: 'Paid' });
+            const updatedPayments = [...(invoice.payments || []), payment];
+            const totalPaid = updatedPayments.reduce((sum, p) => sum + p.amount, 0);
+            
+            // Calculate total amount from line items if not present
+            const calculatedTotal = invoice.totalAmount || (invoice.lineItems || []).reduce((sum, item) => sum + (item.totalPrice || 0), 0);
+            
+            let newStatus = invoice.status;
+            if (totalPaid >= calculatedTotal) {
+                newStatus = 'Paid';
+            } else if (totalPaid > 0) {
+                newStatus = 'Part Paid';
+            }
+
+            onUpdateInvoice({ 
+                ...invoice, 
+                payments: updatedPayments,
+                status: newStatus,
+                totalAmount: calculatedTotal // Ensure it's saved for future
+            });
+            
             if (job && onInvoiceAction) {
                 onInvoiceAction(job.id);
             }
-            onClose();
         }
     };
 
@@ -144,6 +168,16 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ isOpen, onClose, invoice, c
                     </div>
                 </main>
             </div>
+
+            {isPaymentModalOpen && (
+                <PaymentModal
+                    isOpen={isPaymentModalOpen}
+                    onClose={() => setIsPaymentModalOpen(false)}
+                    onSave={handleSavePayment}
+                    invoice={invoice}
+                    totalAmount={invoice.totalAmount || (invoice.lineItems || []).reduce((sum, item) => sum + (item.totalPrice || 0), 0)}
+                />
+            )}
         </div>
     );
 };

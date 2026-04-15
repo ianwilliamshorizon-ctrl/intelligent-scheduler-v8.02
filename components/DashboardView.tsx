@@ -8,7 +8,7 @@ import { Job, Inquiry } from '../types';
 import {
     LayoutGrid, BarChart, Users, FileText, Briefcase, Car, CalendarCheck, CheckCircle, Clock,
     LogIn, PlayCircle, PauseCircle, Tag, MessageSquare, Wrench, UserCheck, AlertCircle, Play,
-    ClipboardCheck, Wand2, Warehouse
+    ClipboardCheck, Wand2
 } from 'lucide-react';
 
 import { SummaryJobCard } from './shared/SummaryJobCard';
@@ -175,11 +175,7 @@ const AdminDispatcherDashboard: React.FC<{
                                 onQcApprove={() => {}}
                                 onEngineerComplete={onEngineerComplete}
                                 storageLocations={storageLocations}
-                                onUpdateJob={(updatedJob) => {
-                                    const location = (storageLocations || []).find(l => l.id === updatedJob.storageLocationId);
-                                    const finalJob = location ? applyStorageRateToJob(updatedJob, location) : updatedJob;
-                                    saveRecord('jobs', finalJob);
-                                }}
+                                onUpdateJob={(updatedJob) => saveRecord('jobs', updatedJob)}
                              />
                         )) : <p className="text-sm text-gray-500 text-center py-8">No unallocated jobs.</p>}
                     </div>
@@ -233,11 +229,7 @@ const EngineerDashboard: React.FC<DashboardViewProps> = (props) => {
                             onQcApprove={() => {}}
                             onEngineerComplete={onEngineerComplete}
                             storageLocations={storageLocations}
-                            onUpdateJob={(updatedJob) => {
-                                const location = (storageLocations || []).find(l => l.id === updatedJob.storageLocationId);
-                                const finalJob = location ? applyStorageRateToJob(updatedJob, location) : updatedJob;
-                                saveRecord('jobs', finalJob);
-                            }}
+                            onUpdateJob={(updatedJob) => saveRecord('jobs', updatedJob)}
                         />
                     )) : <p className="text-sm text-gray-500 text-center py-8">You have no jobs scheduled for today.</p>}
                 </div>
@@ -284,11 +276,7 @@ const SalesDashboard: React.FC<DashboardViewProps> = (props) => {
                                 onQcApprove={() => {}}
                                 onEngineerComplete={props.onEngineerComplete}
                                 storageLocations={storageLocations}
-                                onUpdateJob={(updatedJob) => {
-                                    const location = (storageLocations || []).find(l => l.id === updatedJob.storageLocationId);
-                                    const finalJob = location ? applyStorageRateToJob(updatedJob, location) : updatedJob;
-                                    saveRecord('jobs', finalJob);
-                                }}
+                                onUpdateJob={(updatedJob) => saveRecord('jobs', updatedJob)}
                             />
                         )) : <p className="text-sm text-gray-500 text-center py-8">No jobs scheduled for today.</p>}
                     </div>
@@ -346,11 +334,7 @@ const ConciergeDashboard: React.FC<DashboardViewProps> = (props) => {
                             onEngineerComplete={props.onEngineerComplete}
                             highlightAction="checkIn"
                             storageLocations={storageLocations}
-                            onUpdateJob={(updatedJob) => {
-                                const location = (storageLocations || []).find(l => l.id === updatedJob.storageLocationId);
-                                const finalJob = location ? applyStorageRateToJob(updatedJob, location) : updatedJob;
-                                saveRecord('jobs', finalJob);
-                            }}
+                            onUpdateJob={(updatedJob) => saveRecord('jobs', updatedJob)}
                         />
                     )) : <p className="text-sm text-gray-500 text-center py-8">No vehicles are awaiting arrival today.</p>}
                 </div>

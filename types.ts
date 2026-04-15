@@ -137,7 +137,6 @@ export interface VehicleDamagePoint {
     id: string;
     x: number;
     y: number;
-    notes: string;
 }
 
 export interface VehicleImage {
@@ -383,17 +382,22 @@ export interface Invoice {
     status: 'Draft' | 'Sent' | 'Part Paid' | 'Paid' | 'Overdue' | 'Archived' | 'Archived Not Paid';
     lineItems: any[];
     payments: Payment[];
+    totalNet?: number;
+    totalVat?: number;
+    totalAmount?: number;
     notes?: string;
     entityId?: string;
     jobId?: string;
     createdByUserId?: string;
     saleVehicleId?: string;
+    storageBookingId?: string;
 }
 
 export interface Payment {
     amount: number;
     date: string; 
-    method: 'Card' | 'Bank Transfer' | 'Cash' | 'Other';
+    method: 'Card' | 'Bank Transfer' | 'Cash' | 'BACS' | 'Other';
+    notes?: string;
 }
 
 /**
@@ -433,6 +437,13 @@ export interface PurchaseOrder {
     pdfUrl?: string;
     pdfGeneratedAt?: string;
     createdByUserId?: string;
+}
+
+export interface ChargingEvent {
+    id: string;
+    chargerId: string;
+    startDate: string;
+    endDate: string | null;
 }
 
 export interface Part { 
@@ -484,6 +495,7 @@ export interface BusinessEntity {
     bankAccountNumber?: string;
     invoiceFooterText?: string;
     logoImageId?: string;
+    defaultWeeklyStorageRate?: number;
     workingHours?: {
         startHour: number;
         endHour: number;
@@ -517,6 +529,8 @@ export interface ServicePackage {
     applicableVariant?: string;
     applicableEngineSize?: number;
     taxCodeId?: string;
+    isStorageCharge?: boolean;
+    storageBookingId?: string;
 }
 
 /**
@@ -639,6 +653,9 @@ export interface StorageBooking {
     notes?: string;
     keyNumber?: number;
     status?: 'Active' | 'Closed' | 'Cancelled';
+    lastBilledDate?: string | null;
+    invoiceIds?: string[];
+    chargingHistory?: ChargingEvent[];
 }
 export interface AbsenceRequest {
     id: string;
@@ -746,6 +763,8 @@ export interface StorageLocation {
 export interface BatteryCharger {
     id: string;
     name: string;
+    locationDescription?: string;
+    entityId?: string;
 }
 
 export interface DraggedSegmentData {

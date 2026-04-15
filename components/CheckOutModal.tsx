@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Job, Invoice, Vehicle, Customer, TaxRate } from '../types';
 import { X, Save, LogOut, Car, User, FileText, AlertTriangle, KeyRound, CheckCircle } from 'lucide-react';
 import { formatCurrency } from '../core/utils/formatUtils';
+import PaymentModal from './PaymentModal';
 
 interface CheckOutModalProps {
     isOpen: boolean;
@@ -17,6 +18,7 @@ interface CheckOutModalProps {
 
 const CheckOutModal: React.FC<CheckOutModalProps> = ({ isOpen, onClose, onSave, job, invoice, vehicle, customer, onUpdateInvoice, taxRates }) => {
     const [collectedBy, setCollectedBy] = useState<string>('');
+    const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
 
     useEffect(() => {
         if (job) {
@@ -38,8 +40,30 @@ const CheckOutModal: React.FC<CheckOutModalProps> = ({ isOpen, onClose, onSave, 
     };
     
     const handleMarkAsPaid = () => {
+        setIsPaymentModalOpen(true);
+    };
+
+    const handleSavePayment = (payment: any) => {
         if (invoice) {
-            onUpdateInvoice({ ...invoice, status: 'Paid' });
+            const updatedPayments = [...(invoice.payments || []), payment];
+            const totalPaid = updatedPayments.reduce((sum, p) => sum + p.amount, 0);
+            
+            // Re-calculate the grand total to ensure status is correct
+            const calculatedTotal = grandTotal; 
+            
+            let newStatus = invoice.status;
+            if (totalPaid >= calculatedTotal) {
+                newStatus = 'Paid';
+            } else if (totalPaid > 0) {
+                newStatus = 'Part Paid';
+            }
+
+            onUpdateInvoice({ 
+                ...invoice, 
+                payments: updatedPayments,
+                status: newStatus,
+                totalAmount: calculatedTotal
+            });
         }
     };
 
@@ -157,6 +181,16 @@ const CheckOutModal: React.FC<CheckOutModalProps> = ({ isOpen, onClose, onSave, 
                     </button>
                 </footer>
             </div>
+
+            {isPaymentModalOpen && invoice && (
+                <PaymentModal
+                    isOpen={isPaymentModalOpen}
+                    onClose={() => setIsPaymentModalOpen(false)}
+                    onSave={handleSavePayment}
+                    invoice={invoice}
+                    totalAmount={grandTotal}
+                />
+            )}
         </div>
     );
 };

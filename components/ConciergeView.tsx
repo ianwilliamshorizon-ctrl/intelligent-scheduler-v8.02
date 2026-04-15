@@ -9,7 +9,6 @@ import PauseReasonModal from './PauseReasonModal';
 import { ConciergeJobCard } from './concierge/ConciergeJobCard';
 import { SummaryJobCard } from './shared/SummaryJobCard';
 import { KanbanColumn } from './concierge/KanbanColumn';
-import { applyStorageRateToJob } from '../core/utils/jobUtils';
 import LiveAssistant from './LiveAssistant';
 
 interface ConciergeViewProps {
@@ -167,11 +166,7 @@ const ConciergeView: React.FC<ConciergeViewProps> = (props) => {
             highlightAction: highlight,
             onOpenAssistant: handleOpenAssistant,
             storageLocations: storageLocations || [],
-            onUpdateJob: (updatedJob: Job) => {
-                const location = (storageLocations || []).find(l => l.id === updatedJob.storageLocationId);
-                const finalJob = location ? applyStorageRateToJob(updatedJob, location) : updatedJob;
-                saveRecord('jobs', finalJob);
-            },
+            onUpdateJob: (updatedJob: Job) => saveRecord('jobs', updatedJob),
         };
 
         if (viewMode === 'summary') {

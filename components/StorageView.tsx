@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useData } from '../core/state/DataContext';
 import { StorageBooking, Vehicle, Customer, BusinessEntity, StorageLocation, BatteryCharger, ChargingEvent, Invoice, TaxRate } from '../types';
-import { Warehouse, PlusCircle, Car, MoreHorizontal, Save, Trash2, BatteryCharging, FileText, Calendar, Check, ChevronDown, ChevronUp, User, Clock, DollarSign, LogOut, KeyRound, Search, X, CheckSquare } from 'lucide-react';
+import { Warehouse, PlusCircle, Car, MoreHorizontal, Save, Trash2, BatteryCharging, FileText, Calendar, Check, ChevronDown, ChevronUp, User, Clock, DollarSign, LogOut, KeyRound, Search, X, CheckSquare, MapPin, AlertCircle } from 'lucide-react';
 import { formatDate, dateStringToDate, daysBetween, addDays } from '../core/utils/dateUtils';
 import { formatCurrency } from '../utils/formatUtils';
 import AddStorageBookingModal from './AddStorageBookingModal';
@@ -11,7 +11,9 @@ import { generateInvoiceId } from '../core/utils/numberGenerators';
 
 // --- MODALS ---
 
-const ManageStorageBookingModal = ({ isOpen, onClose, onSave, onGenerateInvoice, onBookOutVehicle, onViewInvoice, booking, vehicle, customer, batteryChargers, invoices }: {
+const ManageStorageBookingModal = ({ 
+    isOpen, onClose, onSave, onGenerateInvoice, onBookOutVehicle, onViewInvoice, booking, vehicle, customer, batteryChargers, invoices, storageLocations, storageBookings 
+}: {
     isOpen: boolean;
     onClose: () => void;
     onSave: (booking: StorageBooking) => void;
@@ -23,6 +25,8 @@ const ManageStorageBookingModal = ({ isOpen, onClose, onSave, onGenerateInvoice,
     customer: Customer | null;
     batteryChargers: BatteryCharger[];
     invoices: Invoice[];
+    storageLocations: StorageLocation[];
+    storageBookings: StorageBooking[];
 }) => {
     const [formData, setFormData] = useState<StorageBooking>(booking);
     const [isCharging, setIsCharging] = useState(false);
@@ -125,6 +129,69 @@ const ManageStorageBookingModal = ({ isOpen, onClose, onSave, onGenerateInvoice,
                         </div>
                     </Section>
 
+                    <Section title="Location & Moving" icon={MapPin}>
+                        <div className="space-y-4 text-sm">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="font-semibold text-[10px] uppercase tracking-wider text-gray-500">Target Storage Facility</label>
+                                    <select 
+                                        value={formData.locationId} 
+                                        onChange={e => {
+                                            const newLocId = e.target.value;
+                                            const newLoc = storageLocations.find(l => l.id === newLocId);
+                                            setFormData({
+                                                ...formData, 
+                                                locationId: newLocId, 
+                                                weeklyRate: newLoc?.weeklyRate || formData.weeklyRate,
+                                                slotIdentifier: '' // Reset slot when location changes
+                                            });
+                                        }}
+                                        className="w-full p-2 border border-gray-200 rounded-lg mt-1 font-bold bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
+                                        disabled={isClosed}
+                                    >
+                                        {storageLocations.map(loc => (
+                                            <option key={loc.id} value={loc.id}>{loc.name} (£{loc.weeklyRate || 0}/wk)</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="font-semibold text-[10px] uppercase tracking-wider text-gray-500">Target Slot</label>
+                                    <select 
+                                        value={formData.slotIdentifier} 
+                                        onChange={e => setFormData({...formData, slotIdentifier: e.target.value})}
+                                        className="w-full p-2 border border-gray-200 rounded-lg mt-1 font-bold bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
+                                        disabled={isClosed || !formData.locationId}
+                                    >
+                                        <option value="">-- Select Slot --</option>
+                                        {formData.locationId && Array.from({ length: storageLocations.find(l => l.id === formData.locationId)?.capacity || 0 }, (_, i) => {
+                                            const loc = storageLocations.find(l => l.id === formData.locationId);
+                                            const prefix = loc?.name.substring(0, 2).toUpperCase() || 'ST';
+                                            const slotId = `${prefix}-${String(i + 1).padStart(2, '0')}`;
+                                            
+                                            const isOccupied = storageBookings.some(b => 
+                                                b.id !== formData.id && 
+                                                b.locationId === formData.locationId && 
+                                                b.slotIdentifier === slotId && 
+                                                !b.endDate
+                                            );
+
+                                            if (isOccupied) return null;
+                                            return <option key={slotId} value={slotId}>{slotId}</option>;
+                                        }).filter(Boolean)}
+                                    </select>
+                                </div>
+                            </div>
+                            {formData.locationId !== booking.locationId && (
+                                <div className="flex items-start gap-2 bg-amber-50 p-2.5 rounded-lg border border-amber-200">
+                                    <AlertCircle size={14} className="text-amber-500 mt-0.5 shrink-0" />
+                                    <p className="text-[10px] text-amber-800 font-bold uppercase tracking-tight leading-tight">
+                                        Changing Facility: The weekly rate will automatically update to £{(storageLocations.find(l => l.id === formData.locationId)?.weeklyRate || 0)}/wk.
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                    </Section>
+
                     <Section title="Battery Charging Log" icon={BatteryCharging}>
                         <div className={`space-y-2 text-sm max-h-40 overflow-y-auto pr-2 ${isClosed ? 'opacity-60' : ''}`}>
                              {(formData.chargingHistory || []).map(event => (
@@ -180,6 +247,8 @@ const ManageStorageBookingModal = ({ isOpen, onClose, onSave, onGenerateInvoice,
                                             'Part Paid': 'bg-amber-200 text-amber-800',
                                             Paid: 'bg-green-200 text-green-800',
                                             Overdue: 'bg-red-200 text-red-800',
+                                            Archived: 'bg-gray-400 text-white',
+                                            'Archived Not Paid': 'bg-gray-400 text-white italic'
                                         };
                                         return (
                                             <li key={id} className="flex items-center gap-2">
@@ -574,6 +643,8 @@ const StorageView: React.FC<StorageViewProps> = ({ entity, onSaveBooking, onBook
                     customer={customersById.get(currentBookingForModal.customerId) || null}
                     batteryChargers={batteryChargers}
                     invoices={invoices}
+                    storageLocations={storageLocations}
+                    storageBookings={storageBookings}
                 />
             )}
         </div>

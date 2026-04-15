@@ -30,6 +30,7 @@ import ConciergeView from './components/ConciergeView';
 import CommunicationsView from './components/CommunicationsView';
 import AbsenceView from './components/AbsenceView';
 import InquiriesView from './components/InquiriesView';
+import AgedDebtorsReport from './components/AgedDebtorsReport';
 import ManagementModal from './components/ManagementModal';
 import LoginView from './components/LoginView';
 import HelpCentre from './components/HelpCentre';
@@ -298,6 +299,8 @@ const App = () => {
                 return <InquiriesView onOpenInquiryModal={(inq) => setters.setInquiryModal({isOpen: true, inquiry: inq})} onConvert={(inq) => {}} onViewEstimate={(est) => setters.setEstimateViewModal({isOpen: true, estimate: est})} onScheduleEstimate={(est, inquiryId) => setters.setScheduleJobFromEstimateModal({isOpen: true, estimate: est, inquiryId})} onOpenPurchaseOrder={(po) => setters.setPoModal({isOpen: true, po})} onEditEstimate={(est) => setters.setEstimateFormModal({isOpen: true, estimate: est})} onMergeEstimate={workshopActions.handleMergeEstimateToJob} />;
             case 'absence':
                 return <AbsenceView currentUser={currentUser} users={users} absenceRequests={absenceRequests} setAbsenceRequests={setAbsenceRequests} />;
+            case 'aged-debtors':
+                return <AgedDebtorsReport />;
             default:
                 return <DashboardView {...commonProps} onCheckIn={(id) => setters.setCheckInJob((jobs || []).find(j => j.id === id) || null)} onOpenInquiry={(inq) => setters.setInquiryModal({isOpen: true, inquiry: inq})} />;
         }

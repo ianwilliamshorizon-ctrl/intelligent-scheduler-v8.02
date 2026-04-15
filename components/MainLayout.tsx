@@ -4,7 +4,7 @@ import { useData } from '../core/state/DataContext';
 import { 
     Menu, LogOut, Settings, Building2, UserCheck, LayoutDashboard, 
     Calendar, Wrench, Briefcase, FileText, ShoppingCart, Car, 
-    Archive, Truck, MessageSquare, Phone, CalendarDays, GitPullRequest, Search, X, HelpCircle, Building
+    Archive, Truck, MessageSquare, Phone, CalendarDays, GitPullRequest, Search, X, HelpCircle, Building, AlertCircle, BarChart3
 } from 'lucide-react';
 import * as T from '../types';
 
@@ -66,6 +66,7 @@ const MainLayout: React.FC<{
         { id: 'estimates', label: 'Estimates', icon: FileText },
         { id: 'invoices', label: 'Invoices', icon: FileText },
         { id: 'purchaseOrders', label: 'Purchase Orders', icon: ShoppingCart },
+        { id: 'aged-debtors', label: 'Aged Debtors', icon: BarChart3 },
         { id: 'sales', label: 'Car Sales', icon: Car },
         { id: 'storage', label: 'Vehicle Storage', icon: Archive },
         { id: 'rentals', label: 'Rentals', icon: Truck },
