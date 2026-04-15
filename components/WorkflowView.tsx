@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { Job, Vehicle, Customer, Engineer, User, PurchaseOrder } from '../types';
-import { ClipboardCheck, FileText, CheckCircle, Car, User as UserIcon, MessageSquare, Clock, Wrench, PlayCircle, Search, X, PauseCircle, Wand2, Package as PackageIcon, UserPlus } from 'lucide-react';
+import { Job, Vehicle, Customer, Engineer, User, PurchaseOrder, StorageLocation } from '../types';
+import { ClipboardCheck, FileText, CheckCircle, Car, User as UserIcon, MessageSquare, Clock, Wrench, PlayCircle, Search, X, PauseCircle, Wand2, Package as PackageIcon, UserPlus, Warehouse } from 'lucide-react';
 import { formatReadableDate, getRelativeDate } from '../core/utils/dateUtils';
 import { TIME_SEGMENTS, SEGMENT_DURATION_MINUTES, END_HOUR, END_MINUTE } from '../constants';
 import { useData } from '../core/state/DataContext';
@@ -8,6 +8,7 @@ import { useApp } from '../core/state/AppContext';
 import { getPoStatusColor } from '../core/utils/statusUtils';
 import { HoverInfo } from '../components/shared/HoverInfo';
 import { SummaryJobCard } from './shared/SummaryJobCard';
+import { applyStorageRateToJob } from '../core/utils/jobUtils';
 import LiveAssistant from './LiveAssistant'; // Make sure this path is correct
 
 const WorkflowJobCard: React.FC<{
@@ -20,8 +21,10 @@ const WorkflowJobCard: React.FC<{
     onOpenAssistant: (jobId: string) => void;
     onOpenPurchaseOrder: (po: PurchaseOrder) => void;
     purchaseOrders: PurchaseOrder[];
+    storageLocations?: StorageLocation[];
+    onUpdateJob?: (job: Job) => void;
     today: string;
-}> = ({ job, vehicle, customer, children, statusColorClass, onEdit, onOpenAssistant, onOpenPurchaseOrder, purchaseOrders, today }) => {
+}> = ({ job, vehicle, customer, children, statusColorClass, onEdit, onOpenAssistant, onOpenPurchaseOrder, purchaseOrders, storageLocations, onUpdateJob, today }) => {
     
     const { partsStatus } = job;
     
@@ -100,6 +103,22 @@ const WorkflowJobCard: React.FC<{
             
             {/* Status Visual Accent */}
             <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/10"></div>
+
+            {/* Storage Location Selector */}
+            <div className="absolute bottom-0 right-0 px-2 py-0.5 bg-white/80 border-l border-t border-gray-100 rounded-tl-lg flex items-center gap-1">
+                <Warehouse size={10} className={job.storageLocationId ? "text-amber-500 font-bold" : "text-gray-400"} />
+                <select 
+                    value={job.storageLocationId || ''} 
+                    onChange={(e) => onUpdateJob?.({ ...job, storageLocationId: e.target.value })}
+                    onClick={(e) => e.stopPropagation()}
+                    className={`text-[9px] font-bold border-none bg-transparent p-0 focus:ring-0 cursor-pointer ${job.storageLocationId ? 'text-amber-700' : 'text-gray-500 font-normal italic'}`}
+                >
+                    <option value="">No Storage</option>
+                    {storageLocations?.map(loc => (
+                        <option key={loc.id} value={loc.id}>{loc.name}</option>
+                    ))}
+                </select>
+            </div>
         </div>
     );
 };
@@ -123,7 +142,7 @@ interface WorkflowViewProps {
 }
 
 const WorkflowView: React.FC<WorkflowViewProps> = ({ jobs, vehicles, customers, engineers, onQcApprove, onGenerateInvoice, onEditJob, onOpenAssistant, onStartWork, onEngineerComplete, onPause, onRestart, onOpenPurchaseOrder }) => {
-    const { purchaseOrders, saveRecord, forceRefresh } = useData();
+    const { purchaseOrders, saveRecord, forceRefresh, storageLocations } = useData();
     
     // Auto-refresh data every 30 seconds to keep all users in sync
     useEffect(() => {
@@ -244,6 +263,12 @@ const WorkflowView: React.FC<WorkflowViewProps> = ({ jobs, vehicles, customers, 
             onRestart,
             onCheckIn: (id: string) => {}, // Not used here but needed by SummaryJobCard Props
             onQcApprove,
+            storageLocations: storageLocations || [],
+            onUpdateJob: (updatedJob: Job) => {
+                const location = (storageLocations || []).find(l => l.id === updatedJob.storageLocationId);
+                const finalJob = location ? applyStorageRateToJob(updatedJob, location) : updatedJob;
+                saveRecord('jobs', finalJob);
+            },
         };
 
         if (viewMode === 'summary') {
@@ -261,6 +286,8 @@ const WorkflowView: React.FC<WorkflowViewProps> = ({ jobs, vehicles, customers, 
                 onOpenAssistant={handleOpenAssistant}
                 onOpenPurchaseOrder={onOpenPurchaseOrder}
                 purchaseOrders={purchaseOrders || []}
+                storageLocations={storageLocations || []}
+                onUpdateJob={commonProps.onUpdateJob}
                 today={today}
             >
                 <div className="mt-2 text-xs space-y-1">

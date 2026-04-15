@@ -215,15 +215,6 @@ const EntityFormModal: React.FC<EntityFormModalProps> = ({ isOpen, onClose, onSa
                     </>
                 )}
 
-                {formData.type === 'Storage' && (
-                    <>
-                        <h3 className="text-lg font-semibold text-gray-800 border-b pb-2 my-4">Storage Settings</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <EntityFormInput label="Storage Capacity (slots)" name="storageCapacity" type="number" value={formData.storageCapacity || ''} onChange={handleChange} />
-                            <EntityFormInput label="Default Weekly Rate (£)" name="defaultWeeklyStorageRate" type="number" step="0.01" value={formData.defaultWeeklyStorageRate || ''} onChange={handleChange} />
-                        </div>
-                    </>
-                )}
 
                 <h3 className="text-lg font-semibold text-gray-800 border-b pb-2 my-4">Company & Invoice Details</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

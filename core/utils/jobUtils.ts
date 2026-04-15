@@ -1,4 +1,4 @@
-import { Job, JobSegment, Estimate, PurchaseOrder } from '../../types';
+import { Job, JobSegment, Estimate, PurchaseOrder, StorageLocation } from '../../types';
 
 /**
  * Calculates the overall job status based on the status of its segments.
@@ -50,8 +50,6 @@ export const calculateJobStatus = (segments: JobSegment[]): Job['status'] => {
 export const calculateJobPartsStatus = (estimate: Estimate | null, purchaseOrders: PurchaseOrder[]): string => {
     if (!estimate || !estimate.lineItems || estimate.lineItems.length === 0) return 'Not Required';
 
-    // 1. Identify "Material Line Items" that actually require a part
-    // Skip Labor, Skip items with no identification, Skip Service Package headers
     const materialItems = estimate.lineItems.filter(li => {
         const isPart = (li.partId || li.description?.trim() || li.partNumber?.trim());
         const isPackageHeader = (li.servicePackageId && !li.isPackageComponent);
@@ -60,13 +58,11 @@ export const calculateJobPartsStatus = (estimate: Estimate | null, purchaseOrder
     
     if (materialItems.length === 0) return 'Not Required';
 
-    // 2. Separate into Stock items and Ordered items
     const fromStockItems = materialItems.filter(li => li.fromStock);
     const toOrderItems = materialItems.filter(li => !li.fromStock);
     
-    if (toOrderItems.length === 0) return 'Fully Received'; // All from stock
+    if (toOrderItems.length === 0) return 'Fully Received';
 
-    // 3. Link Estimate Items to PO Line Items (Bidirectional)
     const allPoItems = purchaseOrders.flatMap(po => (po.lineItems || []).map(li => ({ ...li, poStatus: po.status })));
     
     const linkedItemsInfo = toOrderItems.map(li => {
@@ -88,7 +84,6 @@ export const calculateJobPartsStatus = (estimate: Estimate | null, purchaseOrder
         return { id: li.id, status: 'Awaiting Parts' };
     });
     
-    // 4. Determine Overall Status
     if (linkedItemsInfo.some(i => i.status === 'Unordered')) return 'Awaiting Order';
     if (linkedItemsInfo.some(i => i.status === 'Draft')) return 'Awaiting Order';
     if (linkedItemsInfo.every(i => i.status === 'Received')) return 'Fully Received';
@@ -96,6 +91,42 @@ export const calculateJobPartsStatus = (estimate: Estimate | null, purchaseOrder
     if (linkedItemsInfo.every(i => i.status === 'Ordered')) return 'Ordered';
 
     return 'Awaiting Parts';
+};
 
-    return 'Awaiting Parts';
+/**
+ * Automatically applies the storage rate from a storage location to a job's line items.
+ */
+export const applyStorageRateToJob = (job: Job, location: StorageLocation): Job => {
+    const updatedJob = { ...job };
+    const lineItems = [...(updatedJob.lineItems || [])];
+    
+    // Check if we already have a storage line item
+    const storageItemIndex = lineItems.findIndex(li => 
+        (li.description || '').toLowerCase().includes('storage') && !li.isLabor
+    );
+    
+    const rate = location.weeklyRate || 0;
+    const description = `Vehicle Storage - ${location.name}`;
+    
+    if (storageItemIndex > -1) {
+        // Update existing item
+        lineItems[storageItemIndex] = {
+            ...lineItems[storageItemIndex],
+            unitPrice: rate,
+            description: description
+        };
+    } else if (rate > 0) {
+        // Add new item if rate > 0
+        lineItems.push({
+            id: `li_storage_${Date.now()}`,
+            description: description,
+            quantity: 1,
+            unitPrice: rate,
+            unitCost: 0,
+            isLabor: false
+        });
+    }
+    
+    updatedJob.lineItems = lineItems;
+    return updatedJob;
 };

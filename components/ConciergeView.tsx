@@ -9,6 +9,7 @@ import PauseReasonModal from './PauseReasonModal';
 import { ConciergeJobCard } from './concierge/ConciergeJobCard';
 import { SummaryJobCard } from './shared/SummaryJobCard';
 import { KanbanColumn } from './concierge/KanbanColumn';
+import { applyStorageRateToJob } from '../core/utils/jobUtils';
 import LiveAssistant from './LiveAssistant';
 
 interface ConciergeViewProps {
@@ -26,7 +27,7 @@ interface ConciergeViewProps {
 }
 
 const ConciergeView: React.FC<ConciergeViewProps> = (props) => {
-    const { jobs, customers, vehicles, purchaseOrders, invoices, engineers, saveRecord, forceRefresh } = useData();
+    const { jobs, customers, vehicles, purchaseOrders, invoices, engineers, saveRecord, forceRefresh, storageLocations } = useData();
     
     // Auto-refresh data every 30 seconds to keep all users in sync
     useEffect(() => {
@@ -165,6 +166,12 @@ const ConciergeView: React.FC<ConciergeViewProps> = (props) => {
             onEdit: props.onEditJob,
             highlightAction: highlight,
             onOpenAssistant: handleOpenAssistant,
+            storageLocations: storageLocations || [],
+            onUpdateJob: (updatedJob: Job) => {
+                const location = (storageLocations || []).find(l => l.id === updatedJob.storageLocationId);
+                const finalJob = location ? applyStorageRateToJob(updatedJob, location) : updatedJob;
+                saveRecord('jobs', finalJob);
+            },
         };
 
         if (viewMode === 'summary') {

@@ -203,6 +203,7 @@ export interface Job {
     vehicleRegistration?: string;
     jobType?: 'MOT' | 'Standard';
     collectedBy?: string;
+    storageLocationId?: string;
 }
 export type VehicleStatus = 'On Site' | 'Off-Site (Partner)' | 'Awaiting Arrival' | 'Awaiting Collection' | 'Collected' | 'Cancelled';
 
@@ -739,6 +740,7 @@ export interface StorageLocation {
     entityId: string;
     name: string;
     capacity: number;
+    weeklyRate?: number;
 }
 
 export interface BatteryCharger {

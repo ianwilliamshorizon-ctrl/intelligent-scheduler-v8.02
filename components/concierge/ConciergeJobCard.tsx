@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { useData } from '../../core/state/DataContext';
-import { Job, Vehicle, Customer, PurchaseOrder, User, JobSegment, Engineer, VehicleStatus } from '../../types';
-import { Package as PackageIcon, PackageCheck, CheckCircle, ArrowRightCircle, Clock, KeyRound, Car, Wand2, LogIn, ClipboardCheck, FileText, LogOut, PlayCircle, Play, PauseCircle, User as UserIcon, XCircle } from 'lucide-react';
+import { Job, Vehicle, Customer, PurchaseOrder, User, JobSegment, Engineer, VehicleStatus, StorageLocation } from '../../types';
+import { Package as PackageIcon, PackageCheck, CheckCircle, ArrowRightCircle, Clock, KeyRound, Car, Wand2, LogIn, ClipboardCheck, FileText, LogOut, PlayCircle, Play, PauseCircle, User as UserIcon, XCircle, Warehouse } from 'lucide-react';
 import { getCustomerDisplayName } from '../../core/utils/customerUtils';
 import { getRelativeDate } from '../../core/utils/dateUtils';
 import { TIME_SEGMENTS, SEGMENT_DURATION_MINUTES, END_HOUR, END_MINUTE } from '../../constants';
@@ -25,11 +25,19 @@ interface ConciergeJobCardProps {
     onPause: (jobId: string, segmentId: string, reason?: string) => void;
     onRestart?: (jobId: string, segmentId: string) => void;
     onEngineerComplete?: (job: Job, segmentId: string) => void;
+    storageLocations?: StorageLocation[];
+    onUpdateJob?: (job: Job) => void;
     highlightAction?: 'checkIn' | 'invoice' | 'collect';
 }
 
 export const ConciergeJobCard: React.FC<ConciergeJobCardProps> = (props) => {
-    const { job, vehicle, customer, purchaseOrders, engineers, currentUser, onEdit, onCheckIn, onOpenPurchaseOrder, onOpenAssistant, onGenerateInvoice, onCollect, onQcApprove, onStartWork, onPause, onRestart, onEngineerComplete, highlightAction } = props;
+    const { 
+        job, vehicle, customer, purchaseOrders, engineers, currentUser, 
+        onEdit, onCheckIn, onOpenPurchaseOrder, onOpenAssistant, 
+        onGenerateInvoice, onCollect, onQcApprove, onStartWork, 
+        onPause, onRestart, onEngineerComplete, highlightAction,
+        storageLocations, onUpdateJob 
+    } = props;
     const { roles } = useData();
     
     const { partsStatus, vehicleStatus } = job;
@@ -200,6 +208,22 @@ export const ConciergeJobCard: React.FC<ConciergeJobCardProps> = (props) => {
                     <span title={`Vehicle Status: ${currentVehicleStatus.text}`} className={`flex items-center gap-1 text-gray-500`}>
                         <currentVehicleStatus.icon size={12}/> {currentVehicleStatus.text}
                     </span>
+                    
+                    {/* Storage Location Selector */}
+                    <div className="flex items-center gap-1.5 px-2 py-0.5 bg-white/50 border border-black/5 rounded-lg ml-1">
+                        <Warehouse size={11} className={job.storageLocationId ? "text-amber-500" : "text-gray-400"} />
+                        <select 
+                            value={job.storageLocationId || ''} 
+                            onChange={(e) => onUpdateJob?.({ ...job, storageLocationId: e.target.value })}
+                            onClick={(e) => e.stopPropagation()}
+                            className={`text-[9px] font-bold border-none bg-transparent p-0 focus:ring-0 cursor-pointer ${job.storageLocationId ? 'text-amber-700' : 'text-gray-500 font-normal italic'}`}
+                        >
+                            <option value="">No Storage</option>
+                            {storageLocations?.map(loc => (
+                                <option key={loc.id} value={loc.id}>{loc.name}</option>
+                            ))}
+                        </select>
+                    </div>
                 </div>
                 <div className="flex items-center gap-2">
                     <button onClick={(e) => { e.stopPropagation(); onOpenAssistant(job.id); }} className={`p-1.5 rounded-lg transition-colors bg-gray-50 hover:bg-gray-100 text-indigo-600 border border-gray-200`} title="Assistant"><Wand2 size={14} /></button>

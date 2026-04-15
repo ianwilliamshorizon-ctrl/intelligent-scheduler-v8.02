@@ -46,6 +46,7 @@ export const ManagementStorageLocationsTab: React.FC<ManagementStorageLocationsT
                         <tr>
                             <th className="p-3 font-semibold text-gray-600">Name</th>
                             <th className="p-3 font-semibold text-gray-600">Capacity (Slots)</th>
+                            <th className="p-3 font-semibold text-gray-600">Weekly Rate</th>
                             <th className="p-3 font-semibold text-gray-600">Business Entity</th>
                             <th className="p-3 font-semibold text-gray-600">Actions</th>
                         </tr>
@@ -54,7 +55,7 @@ export const ManagementStorageLocationsTab: React.FC<ManagementStorageLocationsT
                         {Object.keys(locationsByEntity).sort().map(entityName => (
                             <React.Fragment key={entityName}>
                                 <tr className="bg-gray-50 border-b border-gray-200">
-                                    <td colSpan={4} className="p-2 font-bold text-gray-700 pl-4">{entityName}</td>
+                                    <td colSpan={5} className="p-2 font-bold text-gray-700 pl-4">{entityName}</td>
                                 </tr>
                                 {locationsByEntity[entityName]
                                     .sort((a, b) => a.name.localeCompare(b.name))
@@ -64,6 +65,7 @@ export const ManagementStorageLocationsTab: React.FC<ManagementStorageLocationsT
                                             <MapPin size={16} className="text-gray-400"/> {loc.name}
                                         </td>
                                         <td className="p-3 text-gray-600 font-bold">{loc.capacity}</td>
+                                        <td className="p-3 text-gray-600 font-bold">£{(loc.weeklyRate || 0).toFixed(2)}</td>
                                         <td className="p-3 text-gray-600">{entityName}</td>
                                         <td className="p-3 flex gap-2">
                                             <button onClick={() => { setSelectedLocation(loc); setIsModalOpen(true); }} className="text-indigo-600 hover:text-indigo-800 p-1 rounded hover:bg-indigo-50">
@@ -83,7 +85,7 @@ export const ManagementStorageLocationsTab: React.FC<ManagementStorageLocationsT
                         ))}
                         {filteredLocations.length === 0 && (
                             <tr>
-                                <td colSpan={4} className="p-8 text-center text-gray-500">No storage locations found.</td>
+                                <td colSpan={5} className="p-8 text-center text-gray-500">No storage locations found.</td>
                             </tr>
                         )}
                     </tbody>

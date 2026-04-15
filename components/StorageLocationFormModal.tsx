@@ -19,7 +19,8 @@ const StorageLocationFormModal: React.FC<StorageLocationFormModalProps> = ({ isO
             setFormData(location || {
                 name: '',
                 entityId: businessEntities.filter(e => e.type === 'Storage')[0]?.id || '',
-                capacity: 10
+                capacity: 10,
+                weeklyRate: 0
             });
         }
     }, [isOpen, location, businessEntities]);
@@ -32,18 +33,27 @@ const StorageLocationFormModal: React.FC<StorageLocationFormModalProps> = ({ isO
         }));
     };
 
+    const isFormValid = formData.name && formData.entityId && formData.capacity !== undefined && formData.capacity > 0;
+
     const handleSave = () => {
-        if (!formData.name || !formData.entityId || formData.capacity === undefined) return;
+        if (!isFormValid) return;
         onSave({
             id: formData.id || `sl_${Date.now()}`,
-            name: formData.name,
-            entityId: formData.entityId,
-            capacity: formData.capacity
+            name: formData.name!,
+            entityId: formData.entityId!,
+            capacity: formData.capacity!,
+            weeklyRate: formData.weeklyRate || 0
         } as StorageLocation);
     };
 
     return (
-        <FormModal isOpen={isOpen} onClose={onClose} onSave={handleSave} title={location ? "Edit Storage Location" : "Add Storage Location"}>
+        <FormModal 
+            isOpen={isOpen} 
+            onClose={onClose} 
+            onSave={handleSave} 
+            title={location ? "Edit Storage Location" : "Add Storage Location"}
+            saveDisabled={!isFormValid}
+        >
             <div className="space-y-4">
                 <div>
                     <label className="block text-sm font-medium text-gray-700">Location Name</label>
@@ -85,6 +95,20 @@ const StorageLocationFormModal: React.FC<StorageLocationFormModalProps> = ({ isO
                         required 
                     />
                     <p className="text-xs text-gray-500 mt-1">Numerical identifier for slots will be generated based on this (e.g. 1-20).</p>
+                </div>
+
+                <div>
+                    <label className="block text-sm font-medium text-gray-700">Default Weekly Rate (£)</label>
+                    <input 
+                        type="number"
+                        name="weeklyRate" 
+                        value={formData.weeklyRate || ''} 
+                        onChange={handleChange} 
+                        className="w-full p-2 border rounded" 
+                        min="0"
+                        placeholder="0.00"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Default rate applied when a vehicle is booked into this location.</p>
                 </div>
             </div>
         </FormModal>

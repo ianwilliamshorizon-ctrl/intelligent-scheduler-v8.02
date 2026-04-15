@@ -8,10 +8,11 @@ import { Job, Inquiry } from '../types';
 import {
     LayoutGrid, BarChart, Users, FileText, Briefcase, Car, CalendarCheck, CheckCircle, Clock,
     LogIn, PlayCircle, PauseCircle, Tag, MessageSquare, Wrench, UserCheck, AlertCircle, Play,
-    ClipboardCheck, Wand2
+    ClipboardCheck, Wand2, Warehouse
 } from 'lucide-react';
 
 import { SummaryJobCard } from './shared/SummaryJobCard';
+import { applyStorageRateToJob } from '../core/utils/jobUtils';
 
 const StatCard: React.FC<{ title: string; value: string | number; icon: React.ElementType; colorClass: string; onClick?: () => void }> = ({ title, value, icon: Icon, colorClass, onClick }) => (
     <div 
@@ -83,7 +84,7 @@ const AdminDispatcherDashboard: React.FC<{
     onRestartWork: (jobId: string, segmentId: string) => void;
     onEngineerComplete: (job: Job, segmentId: string) => void;
 }> = ({ onEditJob, onOpenInquiry, onOpenAssistant, onCheckIn, onStartWork, onPause, onRestartWork, onEngineerComplete }) => {
-    const { jobs, inquiries, vehicles, customers, roles, engineers, purchaseOrders } = useData();
+    const { jobs, inquiries, vehicles, customers, roles, engineers, purchaseOrders, storageLocations, saveRecord } = useData();
     const { selectedEntityId, setCurrentView, currentUser } = useApp();
     const today = getRelativeDate(0);
 
@@ -173,6 +174,12 @@ const AdminDispatcherDashboard: React.FC<{
                                 onRestart={onRestartWork}
                                 onQcApprove={() => {}}
                                 onEngineerComplete={onEngineerComplete}
+                                storageLocations={storageLocations}
+                                onUpdateJob={(updatedJob) => {
+                                    const location = (storageLocations || []).find(l => l.id === updatedJob.storageLocationId);
+                                    const finalJob = location ? applyStorageRateToJob(updatedJob, location) : updatedJob;
+                                    saveRecord('jobs', finalJob);
+                                }}
                              />
                         )) : <p className="text-sm text-gray-500 text-center py-8">No unallocated jobs.</p>}
                     </div>
@@ -185,7 +192,7 @@ const AdminDispatcherDashboard: React.FC<{
 const EngineerDashboard: React.FC<DashboardViewProps> = (props) => {
     const { onStartWork, onPause, onEngineerComplete, onEditJob, onOpenAssistant, onRestartWork, onCheckIn } = props;
     const { currentUser, setCurrentView, selectedEntityId } = useApp();
-    const { jobs, vehicles, lifts, customers, purchaseOrders, engineers } = useData();
+    const { jobs, vehicles, lifts, customers, purchaseOrders, engineers, storageLocations, saveRecord } = useData();
     const today = getRelativeDate(0);
 
     const myJobsToday = useMemo(() => {
@@ -225,6 +232,12 @@ const EngineerDashboard: React.FC<DashboardViewProps> = (props) => {
                             onRestart={onRestartWork}
                             onQcApprove={() => {}}
                             onEngineerComplete={onEngineerComplete}
+                            storageLocations={storageLocations}
+                            onUpdateJob={(updatedJob) => {
+                                const location = (storageLocations || []).find(l => l.id === updatedJob.storageLocationId);
+                                const finalJob = location ? applyStorageRateToJob(updatedJob, location) : updatedJob;
+                                saveRecord('jobs', finalJob);
+                            }}
                         />
                     )) : <p className="text-sm text-gray-500 text-center py-8">You have no jobs scheduled for today.</p>}
                 </div>
@@ -234,7 +247,7 @@ const EngineerDashboard: React.FC<DashboardViewProps> = (props) => {
 };
 
 const SalesDashboard: React.FC<DashboardViewProps> = (props) => {
-    const { jobs, vehicles, customers, purchaseOrders, engineers } = useData();
+    const { jobs, vehicles, customers, purchaseOrders, engineers, storageLocations, saveRecord } = useData();
     const { selectedEntityId, setCurrentView, currentUser } = useApp();
     const today = getRelativeDate(0);
 
@@ -270,6 +283,12 @@ const SalesDashboard: React.FC<DashboardViewProps> = (props) => {
                                 onRestart={props.onRestartWork}
                                 onQcApprove={() => {}}
                                 onEngineerComplete={props.onEngineerComplete}
+                                storageLocations={storageLocations}
+                                onUpdateJob={(updatedJob) => {
+                                    const location = (storageLocations || []).find(l => l.id === updatedJob.storageLocationId);
+                                    const finalJob = location ? applyStorageRateToJob(updatedJob, location) : updatedJob;
+                                    saveRecord('jobs', finalJob);
+                                }}
                             />
                         )) : <p className="text-sm text-gray-500 text-center py-8">No jobs scheduled for today.</p>}
                     </div>
@@ -290,7 +309,7 @@ const SalesDashboard: React.FC<DashboardViewProps> = (props) => {
 };
 
 const ConciergeDashboard: React.FC<DashboardViewProps> = (props) => {
-    const { jobs, vehicles, customers, purchaseOrders, engineers } = useData();
+    const { jobs, vehicles, customers, purchaseOrders, engineers, storageLocations, saveRecord } = useData();
     const { selectedEntityId, setCurrentView, currentUser } = useApp();
     const today = getRelativeDate(0);
 
@@ -326,6 +345,12 @@ const ConciergeDashboard: React.FC<DashboardViewProps> = (props) => {
                             onQcApprove={() => {}}
                             onEngineerComplete={props.onEngineerComplete}
                             highlightAction="checkIn"
+                            storageLocations={storageLocations}
+                            onUpdateJob={(updatedJob) => {
+                                const location = (storageLocations || []).find(l => l.id === updatedJob.storageLocationId);
+                                const finalJob = location ? applyStorageRateToJob(updatedJob, location) : updatedJob;
+                                saveRecord('jobs', finalJob);
+                            }}
                         />
                     )) : <p className="text-sm text-gray-500 text-center py-8">No vehicles are awaiting arrival today.</p>}
                 </div>

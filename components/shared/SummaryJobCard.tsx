@@ -1,6 +1,7 @@
 import React from 'react';
 import { Job, Vehicle, Customer, PurchaseOrder, User, Engineer } from '../../types';
-import { KeyRound, Wrench } from 'lucide-react';
+import { KeyRound, Wrench, Warehouse, MapPin } from 'lucide-react';
+import { StorageLocation } from '../../types';
 import { JobHoverPopout } from './JobHoverPopout';
 
 interface SummaryJobCardProps {
@@ -21,6 +22,8 @@ interface SummaryJobCardProps {
     onEngineerComplete?: (job: Job, segmentId: string) => void;
     onPause: (jobId: string, segmentId: string, reason?: string) => void;
     onRestart: (jobId: string, segmentId: string) => void;
+    storageLocations?: StorageLocation[];
+    onUpdateJob?: (job: Job) => void;
     highlightAction?: 'checkIn' | 'invoice' | 'collect';
 }
 
@@ -78,6 +81,24 @@ export const SummaryJobCard: React.FC<SummaryJobCardProps> = (props) => {
                             ))}
                         </div>
                     )}
+
+                    {/* Storage Location Selector */}
+                    <div className="mt-1 flex items-center justify-between border-t border-gray-100 pt-1">
+                         <div className="flex items-center gap-1">
+                             <Warehouse size={10} className={job.storageLocationId ? "text-amber-500 font-bold" : "text-gray-300"} />
+                             <select 
+                                value={job.storageLocationId || ''} 
+                                onChange={(e) => props.onUpdateJob?.({ ...job, storageLocationId: e.target.value })}
+                                onClick={(e) => e.stopPropagation()} // Prevent card click
+                                className={`text-[8px] font-bold border-none bg-transparent p-0 focus:ring-0 cursor-pointer ${job.storageLocationId ? 'text-amber-700' : 'text-gray-400 font-normal italic'}`}
+                             >
+                                <option value="">No Location</option>
+                                {props.storageLocations?.map(loc => (
+                                    <option key={loc.id} value={loc.id}>{loc.name}</option>
+                                ))}
+                             </select>
+                         </div>
+                    </div>
                 </div>
             </div>
         </JobHoverPopout>

@@ -1,14 +1,14 @@
 
 import React, { useMemo, useState } from 'react';
 import { Job, PurchaseOrder, Vehicle, Customer, Engineer, User } from '../../types';
-import { Gauge, Settings2 } from 'lucide-react';
+import { Gauge, Settings2, Warehouse } from 'lucide-react';
 import { useData } from '../../core/state/DataContext';
 import { useApp } from '../../core/state/AppContext';
 import { addDays, formatDate } from '../../core/utils/dateUtils';
 import { getCustomerDisplayName } from '../../core/utils/customerUtils';
 import { CAPACITY_THRESHOLD_WARNING } from '../../constants';
 import { SummaryJobCard } from '../shared/SummaryJobCard';
-
+import { applyStorageRateToJob } from '../../core/utils/jobUtils';
 import { JobHoverPopout } from '../shared/JobHoverPopout';
 
 const getCapacityInfo = (totalHours: number, maxHours: number) => {
@@ -43,7 +43,7 @@ export const WeeklyView: React.FC<WeeklyViewProps> = (props) => {
         onQcApprove, onEngineerComplete 
     } = props;
 
-    const { jobs, vehicles, customers, businessEntities, engineers, purchaseOrders } = useData();
+    const { jobs, vehicles, customers, businessEntities, engineers, purchaseOrders, storageLocations, saveRecord } = useData();
     const { selectedEntityId, currentUser } = useApp();
     const [viewMode, setViewMode] = useState<'standard' | 'summary'>('standard');
 
@@ -165,6 +165,12 @@ export const WeeklyView: React.FC<WeeklyViewProps> = (props) => {
                                             onRestart={onRestart}
                                             onQcApprove={onQcApprove}
                                             onEngineerComplete={onEngineerComplete}
+                                            storageLocations={storageLocations}
+                                            onUpdateJob={(updatedJob) => {
+                                                const location = (storageLocations || []).find(l => l.id === updatedJob.storageLocationId);
+                                                const finalJob = location ? applyStorageRateToJob(updatedJob, location) : updatedJob;
+                                                saveRecord('jobs', finalJob);
+                                            }}
                                         />
                                     );
                                 }
@@ -197,6 +203,27 @@ export const WeeklyView: React.FC<WeeklyViewProps> = (props) => {
                                             <p className="text-[10px] text-gray-500 line-clamp-2 leading-tight uppercase font-medium">{job.description}</p>
                                             <div className="mt-2 text-[9px] text-gray-400 font-bold uppercase truncate">
                                                 {getCustomerDisplayName(customer)}
+                                            </div>
+                                            {/* Storage Location Selector */}
+                                            <div className="mt-2 pt-2 border-t border-gray-100 flex items-center gap-1">
+                                                <Warehouse size={10} className={job.storageLocationId ? "text-amber-500" : "text-gray-300"} />
+                                                <select 
+                                                    value={job.storageLocationId || ''} 
+                                                    onChange={(e) => { 
+                                                        e.stopPropagation(); 
+                                                        const newJob = { ...job, storageLocationId: e.target.value };
+                                                        const location = (storageLocations || []).find(l => l.id === newJob.storageLocationId);
+                                                        const finalJob = location ? applyStorageRateToJob(newJob, location) : newJob;
+                                                        saveRecord('jobs', finalJob); 
+                                                    }}
+                                                    onClick={(e) => e.stopPropagation()}
+                                                    className={`text-[8px] font-bold border-none bg-transparent p-0 focus:ring-0 cursor-pointer ${job.storageLocationId ? 'text-amber-700' : 'text-gray-500 font-normal italic'}`}
+                                                >
+                                                    <option value="">No Storage</option>
+                                                    {storageLocations?.map(loc => (
+                                                        <option key={loc.id} value={loc.id}>{loc.name}</option>
+                                                    ))}
+                                                </select>
                                             </div>
                                         </div>
                                     </JobHoverPopout>
