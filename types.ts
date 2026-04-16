@@ -480,6 +480,16 @@ export interface Supplier {
 /**
  * BUSINESS & ENTITY TYPES
  */
+export interface WorkingHoursConfig {
+    startHour: number;
+    endHour: number;
+    isOpenSaturday: boolean;
+    saturdayStartHour?: number;
+    saturdayEndHour?: number;
+    isOpenSunday: boolean;
+    region: 'england-and-wales' | 'scotland' | 'northern-ireland';
+}
+
 export interface BusinessEntity {
     id: string;
     name?: string;
@@ -488,9 +498,11 @@ export interface BusinessEntity {
     laborRate?: number;
     laborCostRate?: number;
     addressLine1?: string;
+    addressLine2?: string;
     city?: string;
     postcode?: string;
     vatNumber?: string;
+    companyNumber?: string;
     logoUrl?: string;
     type?: 'Workshop' | 'Sales' | 'Storage' | 'Rentals';
     dailyCapacityHours?: number;
@@ -500,15 +512,23 @@ export interface BusinessEntity {
     invoiceFooterText?: string;
     logoImageId?: string;
     defaultWeeklyStorageRate?: number;
-    workingHours?: {
-        startHour: number;
-        endHour: number;
-        isOpenSaturday: boolean;
-        saturdayStartHour?: number;
-        saturdayEndHour?: number;
-        isOpenSunday: boolean;
-        region: 'england-and-wales' | 'scotland' | 'northern-ireland';
-    };
+    color?: string;
+    
+    // Reminder Templates
+    motReminderEmailTemplate?: string;
+    motReminderSmsTemplate?: string;
+    serviceReminderEmailTemplate?: string;
+    serviceReminderSmsTemplate?: string;
+    winterCheckReminderEmailTemplate?: string;
+    winterCheckReminderSmsTemplate?: string;
+    
+    // Terms and Conditions
+    courtesyCarTermsAndConditions?: string;
+    rentalTermsAndConditions?: string;
+    sorTermsAndConditions?: string;
+    storageTermsAndConditions?: string;
+    
+    workingHours?: WorkingHoursConfig;
 }
 
 export interface Engineer { 

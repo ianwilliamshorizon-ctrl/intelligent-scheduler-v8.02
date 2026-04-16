@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Estimate, Customer, Vehicle, Job, BusinessEntity, AbsenceRequest, JobSegment, PurchaseOrder, Inquiry, Part, PurchaseOrderStatus, EstimateLineItem } from '../types';
 import { X, Calendar, CheckCircle, ChevronLeft, ChevronRight, AlertTriangle, Gauge, Clock, Printer } from 'lucide-react';
 import { formatDate, dateStringToDate, getRelativeDate, splitJobIntoSegments, addDays, findNextAvailableDate, formatReadableDate } from '../core/utils/dateUtils';
@@ -247,7 +247,8 @@ Linked MOT Booking: #${motJobId} @ ${motBooking.time}`;
 
     if (isSuccess && createdJobFinal) {
         return (
-            <FormModal isOpen={isOpen} onClose={onClose} title="Job Scheduled Successfully" maxWidth="max-w-md">
+            <>
+                <FormModal isOpen={isOpen} onClose={onClose} title="Job Scheduled Successfully" maxWidth="max-w-md">
                 <div className="p-8 text-center space-y-6">
                     <div className="flex justify-center">
                         <div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center animate-bounce">
@@ -288,6 +289,7 @@ Linked MOT Booking: #${motJobId} @ ${motBooking.time}`;
                             entity={entityForEstimate}
                             customer={customer}
                             vehicle={vehicle}
+                            estimate={estimate}
                         />
                     )}
                 </div>

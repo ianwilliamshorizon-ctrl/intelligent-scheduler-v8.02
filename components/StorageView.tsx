@@ -430,6 +430,7 @@ const StorageView: React.FC<StorageViewProps> = ({ entity, onSaveBooking, onBook
                 dueDate: formatDate(addDays(new Date(), 14)),
                 status: 'Draft',
                 lineItems: [{ id: crypto.randomUUID(), description: `Vehicle Storage for ${vehicle?.registration} (${formatDate(billingStartDate)} to ${formatDate(billingEndDate)})`, quantity: durationWeeks, unitPrice: booking.weeklyRate, isLabor: false, taxCodeId: taxRates.find(t=>t.code==='T1')?.id, isStorageCharge: true }],
+                payments: [],
                 vehicleId: booking.vehicleId,
             };
             
@@ -630,6 +631,7 @@ const StorageView: React.FC<StorageViewProps> = ({ entity, onSaveBooking, onBook
                             dueDate: formatDate(addDays(new Date(), 14)),
                             status: 'Draft',
                             lineItems: [{ id: crypto.randomUUID(), description: `Vehicle Storage for ${vehicle?.registration} (${formatDate(billingStartDate)} to ${formatDate(billingEndDate)})`, quantity: durationWeeks, unitPrice: booking.weeklyRate, isLabor: false, taxCodeId: taxRates.find(t=>t.code==='T1')?.id, isStorageCharge: true }],
+                            payments: [],
                             notes: `Interim storage invoice.`,
                             vehicleId: booking.vehicleId,
                         };

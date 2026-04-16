@@ -104,22 +104,6 @@ export const DraggableJobCard: React.FC<{
     }, [job.id, job.vehicleStatus, onOpenAssistant, onEdit, onCheckIn]);
 
     return (
-        <JobHoverPopout
-            job={job}
-            vehicle={vehicle}
-            customer={customer}
-            purchaseOrders={purchaseOrders}
-            engineers={engineers}
-            currentUser={currentUser}
-            onEdit={onEdit}
-            onCheckIn={onCheckIn}
-            onOpenPurchaseOrder={onOpenPurchaseOrder}
-            onOpenAssistant={onOpenAssistant}
-            onStartWork={onStartWork}
-            onPause={onPause}
-            onRestart={onRestart}
-            onQcApprove={onQcApprove}
-        >
             <div
                 draggable={canDrag}
                 onDragStart={(e) => canDrag && onDragStart(e, job.id, segmentToDrag.segmentId)}
@@ -179,6 +163,5 @@ export const DraggableJobCard: React.FC<{
                     </div>
                 </div>
             </div>
-        </JobHoverPopout>
     );
 };

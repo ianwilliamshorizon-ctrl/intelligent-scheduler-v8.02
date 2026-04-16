@@ -318,34 +318,34 @@ const FinancialReporting: React.FC = () => {
                                 </div>
 
                                 <div className={`overflow-x-auto ${isExpanded ? 'block' : 'hidden print:block'}`}>
-                                    <table className="w-full text-left border-collapse">
+                                    <table className="w-full text-left border-collapse print:border-2 print:border-gray-800">
                                         <thead className="print:table-header-group">
                                             <tr className="bg-white">
-                                                <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gray-400 border-b border-gray-100 print:py-2">Date</th>
-                                                <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gray-400 border-b border-gray-100 print:py-2">Ref #</th>
-                                                <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gray-400 border-b border-gray-100 print:py-2">Customer</th>
-                                                {groupBy === 'method' && <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gray-400 border-b border-gray-100 print:py-2">Entity</th>}
-                                                {groupBy === 'entity' && <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gray-400 border-b border-gray-100 print:py-2">Method</th>}
-                                                <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gray-400 border-b border-gray-100 text-right print:py-2">Amount</th>
-                                                {reportMode === 'aged' && <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gray-400 border-b border-gray-100 text-right print:py-2">Balance</th>}
-                                                <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gray-400 border-b border-gray-100 print:py-2 text-center">Status</th>
+                                                <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gray-400 border-b border-gray-100 print:py-2 print:text-black print:px-2 print:border-b-2 print:border-gray-800">Date</th>
+                                                <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gray-400 border-b border-gray-100 print:py-2 print:text-black print:px-2 print:border-b-2 print:border-gray-800">Ref #</th>
+                                                <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gray-400 border-b border-gray-100 print:py-2 print:text-black print:px-2 print:border-b-2 print:border-gray-800">Customer</th>
+                                                {groupBy === 'method' && <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gray-400 border-b border-gray-100 print:py-2 print:text-black print:px-2 print:border-b-2 print:border-gray-800">Entity</th>}
+                                                {groupBy === 'entity' && <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gray-400 border-b border-gray-100 print:py-2 print:text-black print:px-2 print:border-b-2 print:border-gray-800">Method</th>}
+                                                <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gray-400 border-b border-gray-100 text-right print:py-2 print:text-black print:px-2 print:border-b-2 print:border-gray-800">Amount</th>
+                                                {reportMode === 'aged' && <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gray-400 border-b border-gray-100 text-right print:py-2 print:text-black print:px-2 print:border-b-2 print:border-gray-800">Balance</th>}
+                                                <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gray-400 border-b border-gray-100 print:py-2 text-center print:text-black print:px-2 print:border-b-2 print:border-gray-800">Status</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-50 print:table-row-group">
                                             {group.items.map((inv) => (
                                                 <React.Fragment key={inv.id}>
-                                                    <tr className="hover:bg-gray-50/50 transition-colors print:hover:bg-transparent">
-                                                        <td className="px-6 py-4 text-xs font-bold text-gray-500 border-b border-gray-50 print:py-2">{inv.issueDate}</td>
-                                                        <td className="px-6 py-4 font-bold text-gray-900 border-b border-gray-50 print:py-2">{inv.id}</td>
-                                                        <td className="px-6 py-4 font-bold text-gray-700 border-b border-gray-50 truncate max-w-[150px] print:py-2">{inv.customerName}</td>
-                                                        {groupBy === 'method' && <td className="px-6 py-4 text-[10px] font-black text-gray-500 uppercase border-b border-gray-50 print:py-2">{inv.entityName}</td>}
-                                                        {groupBy === 'entity' && <td className="px-6 py-4 text-[10px] font-black text-indigo-600 uppercase border-b border-gray-50 print:py-2">{inv.primaryMethod}</td>}
-                                                        <td className="px-6 py-4 text-right font-black text-gray-900 border-b border-gray-50 print:py-2">{formatCurrency(inv.totalAmount)}</td>
+                                                    <tr className="hover:bg-gray-50/50 transition-colors print:hover:bg-transparent print:border-b-2 print:border-gray-300">
+                                                        <td className="px-6 py-4 text-xs font-bold text-gray-500 border-b border-gray-50 print:py-2 print:text-black print:px-2">{inv.issueDate}</td>
+                                                        <td className="px-6 py-4 font-bold text-gray-900 border-b border-gray-50 print:py-2 print:px-2">{inv.id}</td>
+                                                        <td className="px-6 py-4 font-bold text-gray-700 border-b border-gray-50 truncate max-w-[150px] print:py-2 print:px-2">{inv.customerName}</td>
+                                                        {groupBy === 'method' && <td className="px-6 py-4 text-[10px] font-black text-gray-500 uppercase border-b border-gray-50 print:py-2 print:px-2">{inv.entityName}</td>}
+                                                        {groupBy === 'entity' && <td className="px-6 py-4 text-[10px] font-black text-indigo-600 uppercase border-b border-gray-50 print:py-2 print:px-2">{inv.primaryMethod}</td>}
+                                                        <td className="px-6 py-4 text-right font-black text-gray-900 border-b border-gray-50 print:py-2 print:px-2">{formatCurrency(inv.totalAmount)}</td>
                                                         {reportMode === 'aged' && (
                                                             <td className="px-6 py-4 text-right font-black text-rose-600 border-b border-gray-50 print:py-2">{formatCurrency(inv.balance)}</td>
                                                         )}
-                                                        <td className="px-6 py-4 border-b border-gray-50 print:py-2 text-center">
-                                                            <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-tight print:border print:border-gray-200 ${
+                                                        <td className="px-6 py-4 border-b border-gray-50 print:py-2 text-center print:px-2">
+                                                            <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-tight print:border print:border-gray-800 print:text-black ${
                                                                 inv.status === 'Paid' ? 'bg-green-100 text-green-700' :
                                                                 inv.status === 'Overdue' ? 'bg-rose-100 text-rose-700' :
                                                                 inv.status === 'Part Paid' ? 'bg-amber-100 text-amber-700' :

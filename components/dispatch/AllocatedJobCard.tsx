@@ -56,6 +56,7 @@ export const AllocatedJobCard: React.FC<{
     }, [job.id, job.purchaseOrderIds, purchaseOrders]);
     
     const [isPoMenuOpen, setIsPoMenuOpen] = useState(false);
+    const [isActionsMenuOpen, setIsActionsMenuOpen] = useState(false);
     const poMenuRef = useRef<HTMLDivElement>(null);
     const canDrag = currentUser.role === 'Admin' || currentUser.role === 'Dispatcher';
     const canUnschedule = currentUser.role === 'Admin' || currentUser.role === 'Dispatcher';
@@ -137,23 +138,6 @@ export const AllocatedJobCard: React.FC<{
         return list;
     }, [segment.status, job.id, segment.segmentId, canStartOrPause, canPerformActions, canUnschedule, onStartWork, onPause, onRestart, onOpenAssistant, onEdit, onReassign, onUnscheduleSegment, isSmallCard, customer, engineer]);
     return (
-        <JobHoverPopout
-            job={job}
-            vehicle={vehicle}
-            customer={customer}
-            purchaseOrders={purchaseOrders}
-            engineers={engineers}
-            currentUser={currentUser}
-            onEdit={onEdit}
-            onCheckIn={() => {}}
-            onOpenPurchaseOrder={onOpenPurchaseOrder}
-            onOpenAssistant={onOpenAssistant}
-            onStartWork={onStartWork}
-            onPause={onPause}
-            onRestart={onRestart}
-            onQcApprove={onQcApprove}
-            onEngineerComplete={onEngineerComplete}
-        >
             <div
                 draggable={canDrag}
                 onDragStart={(e) => {
@@ -162,7 +146,7 @@ export const AllocatedJobCard: React.FC<{
                     onDragStart(e, job.id, segment.segmentId);
                 }}
                 onDragEnd={onDragEnd}
-                className={`absolute left-0 right-0 p-1.5 rounded-lg shadow-sm border flex flex-col group ${canDrag ? 'cursor-grab' : 'cursor-default'} ${statusColor} allocated-job-container z-10 hover:z-50 hover:shadow-md transition-all duration-200`}
+                className={`absolute left-0 right-0 p-1.5 rounded-lg shadow-sm border flex flex-col group ${canDrag ? 'cursor-grab' : 'cursor-default'} ${statusColor} allocated-job-container ${isActionsMenuOpen ? 'z-[100]' : 'z-10'} hover:z-50 hover:shadow-md transition-all duration-200`}
                 style={{
                     top: `${topPercent}%`,
                     height: `${heightPercent}%`,
@@ -242,7 +226,7 @@ export const AllocatedJobCard: React.FC<{
                             </span>
                         )}
                         <div className="flex items-center gap-1">
-                            <JobActionsMenu actions={actions} size="sm" colorScheme="light" title={`Job #${job.id} Actions`} />
+                            <JobActionsMenu actions={actions} size="sm" colorScheme="light" title={`Job #${job.id} Actions`} onOpenChange={setIsActionsMenuOpen} />
                         </div>
                     </div>
                 )}
@@ -254,10 +238,10 @@ export const AllocatedJobCard: React.FC<{
                             size="sm" 
                             colorScheme="light" 
                             title={`Job #${job.id} - ${engineer?.name || 'Unassigned'}`} 
+                            onOpenChange={setIsActionsMenuOpen}
                         />
                     </div>
                 )}
             </div>
-        </JobHoverPopout>
     );
 };

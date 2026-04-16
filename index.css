@@ -111,12 +111,23 @@
 
 /* Hide print containers from screen view */
 .rebuild-print-container-hidden {
-  display: none;
+  position: absolute !important;
+  top: -9999px !important;
+  left: -9999px !important;
+  visibility: hidden !important;
+  height: 0 !important;
+  overflow: hidden !important;
 }
 
 @media print {
   .rebuild-print-container-hidden {
     display: block !important;
+    visibility: visible !important;
+    position: relative !important;
+    top: 0 !important;
+    left: 0 !important;
+    height: auto !important;
+    overflow: visible !important;
   }
 }
 

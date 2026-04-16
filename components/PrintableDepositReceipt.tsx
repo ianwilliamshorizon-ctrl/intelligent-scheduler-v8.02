@@ -1,5 +1,4 @@
-import React from 'react';
-import { Customer, Vehicle, BusinessEntity, Job } from '../types';
+import { Customer, Vehicle, BusinessEntity, Job, Estimate } from '../types';
 import { formatCurrency } from '../core/utils/formatUtils';
 import { formatDate } from '../core/utils/dateUtils';
 
@@ -8,9 +7,13 @@ interface PrintableDepositReceiptProps {
     customer?: Customer | null;
     vehicle?: Vehicle | null;
     entity?: BusinessEntity | null;
+    estimate?: Estimate | null;
 }
 
-const PrintableDepositReceipt: React.FC<PrintableDepositReceiptProps> = ({ job, customer, vehicle, entity }) => {
+const PrintableDepositReceipt: React.FC<PrintableDepositReceiptProps> = ({ job, customer, vehicle, entity, estimate }) => {
+    const estimateTotal = estimate?.lineItems?.reduce((sum, item) => sum + (item.totalPrice || 0), 0) || 0;
+    const remainingBalance = estimateTotal - (job.depositAmount || 0);
+
     return (
         <div className="p-12 max-w-[800px] mx-auto bg-white min-h-[1050px] font-sans text-gray-900 print:p-0">
             {/* Header */}
@@ -54,52 +57,96 @@ const PrintableDepositReceipt: React.FC<PrintableDepositReceiptProps> = ({ job, 
                 </div>
             </div>
 
-            {/* Receipt Table */}
-            <div className="border border-gray-100 rounded-xl overflow-hidden mb-12">
-                <table className="w-full text-left">
-                    <thead>
-                        <tr className="bg-gray-50 text-[10px] font-black uppercase tracking-widest text-gray-400 border-b">
-                            <th className="px-6 py-4">Description</th>
-                            <th className="px-6 py-4">Method</th>
-                            <th className="px-6 py-4 text-right">Amount Received</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-50">
-                        <tr>
-                            <td className="px-6 py-6">
-                                <p className="font-bold text-gray-900">Security Deposit for Job #{job.id}</p>
-                                <p className="text-xs text-gray-500 mt-1">{job.description}</p>
-                            </td>
-                            <td className="px-6 py-6">
-                                <span className="px-2 py-1 bg-indigo-50 text-indigo-700 rounded text-[10px] font-black uppercase tracking-tighter">
-                                    {job.depositMethod || 'BACS'}
-                                </span>
-                            </td>
-                            <td className="px-6 py-6 text-right font-black text-xl text-indigo-600">
-                                {formatCurrency(job.depositAmount || 0)}
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
+            {/* Estimate Detail Table */}
+            {estimate && (
+                <div className="mb-12">
+                    <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em] mb-3 pb-1 border-b">Estimate Summary</h3>
+                    <div className="border border-gray-100 rounded-xl overflow-hidden">
+                        <table className="w-full text-left text-sm">
+                            <thead>
+                                <tr className="bg-gray-50 text-[10px] font-black uppercase tracking-widest text-gray-400 border-b">
+                                    <th className="px-6 py-3">Service Item</th>
+                                    <th className="px-6 py-3 text-right">Price</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-50">
+                                {estimate.lineItems?.map((item, idx) => (
+                                    <tr key={idx}>
+                                        <td className="px-6 py-3 text-gray-700 font-medium">{item.description}</td>
+                                        <td className="px-6 py-3 text-right text-gray-900">{formatCurrency(item.totalPrice || 0)}</td>
+                                    </tr>
+                                ))}
+                                <tr className="bg-gray-50/50">
+                                    <td className="px-6 py-3 font-bold text-gray-900">Estimate Total (Inc. VAT)</td>
+                                    <td className="px-6 py-3 text-right font-black text-gray-900">{formatCurrency(estimateTotal)}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+
+            {/* Deposit Transaction Table */}
+            <div className="mb-12">
+                <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em] mb-3 pb-1 border-b">Deposit Transaction</h3>
+                <div className="border border-indigo-100 rounded-xl overflow-hidden bg-indigo-50/20">
+                    <table className="w-full text-left">
+                        <thead>
+                            <tr className="bg-indigo-600/5 text-[10px] font-black uppercase tracking-widest text-indigo-400 border-b border-indigo-100">
+                                <th className="px-6 py-4">Transaction Details</th>
+                                <th className="px-6 py-4">Method</th>
+                                <th className="px-6 py-4 text-right">Deposit Paid</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td className="px-6 py-6">
+                                    <p className="font-bold text-gray-900 text-lg">Deposit Applied to Job #{job.id}</p>
+                                    <p className="text-xs text-gray-500 mt-1 uppercase tracking-wider font-bold">{job.description}</p>
+                                </td>
+                                <td className="px-6 py-6">
+                                    <span className="px-2 py-1 bg-indigo-600 text-white rounded text-[10px] font-black uppercase tracking-tighter shadow-sm">
+                                        {job.depositMethod || 'BACS'}
+                                    </span>
+                                </td>
+                                <td className="px-6 py-6 text-right font-black text-2xl text-indigo-600">
+                                    {formatCurrency(job.depositAmount || 0)}
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
 
-            {/* Total Section */}
-            <div className="flex justify-end mb-12">
-                <div className="bg-gray-900 text-white p-8 rounded-2xl min-w-[320px] shadow-xl">
-                    <div className="flex justify-between items-center border-b border-gray-700 pb-4 mb-4">
-                        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest text-indigo-400">Remaining Balance (Est)</span>
-                        <span className="text-2xl font-black">{formatCurrency((job.estimatedHours || 0) * (entity?.laborRate || 0) - (job.depositAmount || 0))} *</span>
+            {/* Summary Section */}
+            <div className="flex justify-between items-start gap-12 mb-12">
+                <div className="flex-grow max-w-sm italic text-[10px] text-gray-400 leading-relaxed">
+                    <p>Total estimated costs were calculated at the time of scheduling. 
+                    This deposit has been deducted from your total. The remaining balance shown 
+                    is due upon completion of the work unless alternative arrangements are in place.</p>
+                </div>
+                <div className="bg-gray-900 text-white p-8 rounded-2xl min-w-[340px] shadow-xl">
+                    <div className="space-y-4">
+                        <div className="flex justify-between items-center text-xs opacity-60">
+                            <span>Estimated Total</span>
+                            <span>{formatCurrency(estimateTotal)}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-xs text-indigo-400">
+                            <span>Deposit Paid Today</span>
+                            <span>- {formatCurrency(job.depositAmount || 0)}</span>
+                        </div>
+                        <div className="h-px bg-gray-700" />
+                        <div className="flex justify-between items-center">
+                            <span className="text-xs font-bold uppercase tracking-widest text-gray-400">Balance Remaining</span>
+                            <span className="text-3xl font-black text-white">{formatCurrency(remainingBalance)}</span>
+                        </div>
                     </div>
-                    <p className="text-[9px] text-gray-400 italic leading-relaxed">
-                        * The remaining balance is an estimate based on the quoted labour hours. 
-                        Final invoicing will reflect actual parts and time used.
-                    </p>
                 </div>
             </div>
 
             {/* Footer */}
-            <div className="mt-auto pt-12 border-t border-gray-100 italic text-[10px] text-gray-400 leading-relaxed">
-                <p>This deposit serves as a formal guarantee for the scheduling of the work described above. Deposits are generally non-refundable unless agreed otherwise in writing. Thank you for choosing {entity?.name || 'Brookspeed'}.</p>
+            <div className="mt-auto pt-12 border-t border-gray-100 text-[10px] text-gray-400 leading-relaxed">
+                <p className="italic">This deposit serves as a formal guarantee for the scheduling of the work described above. Deposits are generally non-refundable unless agreed otherwise in writing. Thank you for choosing {entity?.name || 'Brookspeed'}.</p>
                 
                 <div className="mt-8 flex justify-between items-center font-bold font-mono">
                     <div className="space-y-1">
@@ -109,7 +156,7 @@ const PrintableDepositReceipt: React.FC<PrintableDepositReceiptProps> = ({ job, 
                     </div>
                     <div className="text-center">
                         <div className="h-10 w-10 bg-gray-50 border border-gray-100 rounded mx-auto mb-1 flex items-center justify-center">
-                            <div className="w-1.5 h-1.5 bg-gray-200 rounded-full animate-pulse" />
+                            <div className="w-1.5 h-1.5 bg-gray-200 rounded-full" />
                         </div>
                         <p className="uppercase tracking-[0.3em] text-[8px]">Authenticated</p>
                     </div>

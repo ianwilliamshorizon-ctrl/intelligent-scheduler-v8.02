@@ -10,6 +10,7 @@ interface SummaryJobCardProps {
     customer?: Customer;
     purchaseOrders: PurchaseOrder[];
     engineers: Engineer[];
+    storageLocations: StorageLocation[];
     currentUser: User;
     onEdit: (jobId: string) => void;
     onCheckIn: (jobId: string) => void;

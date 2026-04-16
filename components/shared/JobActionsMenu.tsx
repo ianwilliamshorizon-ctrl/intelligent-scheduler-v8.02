@@ -29,6 +29,7 @@ interface JobActionsMenuProps {
     size?: 'sm' | 'md' | 'lg';
     disabled?: boolean;
     title?: string;
+    onOpenChange?: (isOpen: boolean) => void;
 }
 
 export const JobActionsMenu: React.FC<JobActionsMenuProps> = ({ 
@@ -36,7 +37,8 @@ export const JobActionsMenu: React.FC<JobActionsMenuProps> = ({
     colorScheme = 'glass', 
     size = 'sm',
     disabled = false,
-    title
+    title,
+    onOpenChange
 }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [direction, setDirection] = useState<'up' | 'down'>('down');
@@ -58,6 +60,7 @@ export const JobActionsMenu: React.FC<JobActionsMenuProps> = ({
         const handleClickOutside = (event: MouseEvent) => {
             if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
                 setIsOpen(false);
+                onOpenChange?.(false);
             }
         };
 
@@ -101,7 +104,12 @@ export const JobActionsMenu: React.FC<JobActionsMenuProps> = ({
         <div className="relative" ref={menuRef}>
             <button
                 type="button"
-                onClick={(e) => { e.stopPropagation(); setIsOpen(!isOpen); }}
+                onClick={(e) => { 
+                    e.stopPropagation(); 
+                    const nextState = !isOpen;
+                    setIsOpen(nextState); 
+                    onOpenChange?.(nextState);
+                }}
                 disabled={disabled}
                 className={`rounded-md transition-all active:scale-95 ${sizeClasses[size]} ${buttonTheme[colorScheme]} cursor-pointer`}
                 title="Management Actions"
