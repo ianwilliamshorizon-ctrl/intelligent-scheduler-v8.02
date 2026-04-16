@@ -363,36 +363,36 @@ const WorkflowView: React.FC<WorkflowViewProps> = ({ jobs, vehicles, customers, 
 
     return (
         <div className="w-full h-full flex flex-col bg-gray-100 p-4">
-            <header className="flex-shrink-0 mb-6">
-                <div className="flex justify-between items-center">
-                    <div className="flex items-center gap-6">
+            <header className="flex-shrink-0 mb-6 bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
+                <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full xl:w-auto">
                         <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-200">
+                            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-100 flex-shrink-0">
                                  <Wrench size={20} />
                             </div>
-                            <h2 className="text-2xl font-black text-gray-900 tracking-tight">Workshop Workflow</h2>
+                            <h2 className="text-xl md:text-2xl font-black text-gray-900 tracking-tight whitespace-nowrap">Workshop Workflow</h2>
                         </div>
                         
-                        <div className="flex bg-white shadow-sm border border-gray-200 rounded-lg p-1 ml-4">
+                        <div className="flex bg-gray-100 border border-gray-200 rounded-lg p-1 w-full sm:w-auto overflow-x-auto">
                             {(['standard', 'summary'] as const).map(mode => (
                                 <button
                                     key={mode}
                                     onClick={() => setViewMode(mode)}
-                                    className={`px-4 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-md transition-all ${viewMode === mode ? 'bg-indigo-600 shadow-md text-white' : 'text-gray-500 hover:text-gray-800'}`}
+                                    className={`flex-1 sm:flex-none px-4 py-1.5 text-[9px] md:text-[10px] font-black uppercase tracking-widest rounded-md transition-all whitespace-nowrap ${viewMode === mode ? 'bg-white shadow-sm text-indigo-600' : 'text-gray-500 hover:text-gray-800'}`}
                                 >
                                     {mode}
                                 </button>
                             ))}
                         </div>
                     </div>
-                    <div className="flex items-center gap-4">
-                        <div className="relative">
+                    <div className="flex flex-col sm:flex-row items-center gap-3 w-full xl:w-auto">
+                        <div className="relative w-full sm:w-64">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16}/>
                             <input
                                 value={searchTerm}
                                 onChange={e => setSearchTerm(e.target.value)}
-                                placeholder="Search by job, vehicle, or customer..."
-                                className="w-64 p-1.5 pl-9 border rounded-lg bg-white text-sm"
+                                placeholder="Search tasks..."
+                                className="w-full p-2 pl-9 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold text-gray-700 focus:ring-2 focus:ring-indigo-500 transition-all outline-none"
                             />
                              {searchTerm && (
                                 <button onClick={() => setSearchTerm('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
@@ -401,13 +401,12 @@ const WorkflowView: React.FC<WorkflowViewProps> = ({ jobs, vehicles, customers, 
                             )}
                         </div>
                         {!isEngineerView && (
-                            <div className="flex items-center gap-2">
-                                <label htmlFor="engineer-filter" className="text-sm font-medium text-gray-700">Filter by Engineer:</label>
+                            <div className="flex items-center gap-2 w-full sm:w-auto">
                                 <select
                                     id="engineer-filter"
                                     value={selectedEngineerId}
                                     onChange={(e) => setSelectedEngineerId(e.target.value)}
-                                    className="p-1.5 border border-gray-300 rounded-lg bg-white text-sm focus:ring-2 focus:ring-indigo-500"
+                                    className="w-full sm:w-auto p-2 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold text-gray-700 focus:ring-2 focus:ring-indigo-500 transition-all outline-none"
                                 >
                                     <option value="all">All Engineers</option>
                                     {allEngineers.map(eng => (
@@ -420,7 +419,7 @@ const WorkflowView: React.FC<WorkflowViewProps> = ({ jobs, vehicles, customers, 
                 </div>
             </header>
             <main className="flex-grow overflow-y-auto">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 h-full">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 h-full">
                     {statusColumns.map(({ title, jobs, color, bgColor, icon: Icon }) => (
                         <div key={title} className="bg-gray-200 rounded-lg flex flex-col">
                             <h3 className={`flex items-center gap-2 font-bold text-gray-700 p-3 border-b-2 ${color}`}>

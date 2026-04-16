@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Estimate, Customer, Vehicle, Job, BusinessEntity, AbsenceRequest, JobSegment, PurchaseOrder, Inquiry, Part, PurchaseOrderStatus, EstimateLineItem } from '../types';
-import { X, Calendar, CheckCircle, ChevronLeft, ChevronRight, AlertTriangle, Gauge, Clock } from 'lucide-react';
+import { X, Calendar, CheckCircle, ChevronLeft, ChevronRight, AlertTriangle, Gauge, Clock, Printer } from 'lucide-react';
 import { formatDate, dateStringToDate, getRelativeDate, splitJobIntoSegments, addDays, findNextAvailableDate, formatReadableDate } from '../core/utils/dateUtils';
 import { generateJobId } from '../core/utils/numberGenerators';
 import { BookingCalendarView } from './BookingCalendarView';
@@ -8,6 +8,10 @@ import { MOTBookingModal } from './MOTBookingModal';
 import { TIME_SEGMENTS } from '../constants';
 import { useApp } from '../core/state/AppContext';
 import { useData } from '../core/state/DataContext';
+import { useReactToPrint } from 'react-to-print';
+import PrintableDepositReceipt from './PrintableDepositReceipt';
+import { formatCurrency } from '../core/utils/formatUtils';
+import FormModal from './FormModal';
 
 interface ScheduleJobFromEstimateModalProps {
     isOpen: boolean;
@@ -23,7 +27,7 @@ interface ScheduleJobFromEstimateModalProps {
     customers: Customer[];
     absenceRequests: AbsenceRequest[];
     onEditJob: (jobId: string) => void;
-    inquiry?: Inquiry;
+    inquiry?: Inquiry | null;
     parts: Part[];
 }
 
@@ -41,6 +45,19 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
             item.description.toLowerCase().includes('mot') && !item.isOptional
         ), 
     [estimate.lineItems]);
+
+    const [depositAmount, setDepositAmount] = useState<number>(0);
+    const [depositMethod, setDepositMethod] = useState<string>('BACS');
+    const [hasDeposit, setHasDeposit] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isSuccess, setIsSuccess] = useState(false);
+    const [createdJobFinal, setCreatedJobFinal] = useState<Job | null>(null);
+
+    const depositReceiptRef = useRef<HTMLDivElement>(null);
+    const triggerPrintDepositReceipt = useReactToPrint({
+        contentRef: depositReceiptRef,
+        documentTitle: `DepositReceipt_${createdJobFinal?.id}`,
+    });
 
     useEffect(() => {
         if (isOpen) {
@@ -130,8 +147,6 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
 
     if (!isOpen) return null;
 
-    // Removed preparePurchaseOrders: Deferred to useWorkshopActions.syncPurchaseOrdersFromEstimate
-
     const handleConfirmClick = async () => {
         if (isMotRequired && !motBooking) {
             setConfirmation({
@@ -172,7 +187,9 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
             if (isMotOnlyEstimate) {
                 const motJobId = generateJobId(jobs, entityShortCode);
                 mainJob = {
-                    id: motJobId, entityId: estimate.entityId, vehicleId: estimate.vehicleId, customerId: estimate.customerId, description: `MOT Test`, estimatedHours: 1, scheduledDate: motBooking.date, status: 'Allocated', createdAt: formatDate(new Date()), createdByUserId: '', estimateId: estimate.id, vehicleStatus: 'Awaiting Arrival', partsStatus: 'Not Required', notes: estimate.notes || '', segments: []
+                    id: motJobId, entityId: estimate.entityId, vehicleId: estimate.vehicleId, customerId: estimate.customerId, description: `MOT Test`, estimatedHours: 1, scheduledDate: motBooking.date, status: 'Allocated', createdAt: formatDate(new Date()), createdByUserId: '', estimateId: estimate.id, vehicleStatus: 'Awaiting Arrival', partsStatus: 'Not Required', notes: estimate.notes || '', segments: [],
+                    depositAmount: hasDeposit ? depositAmount : undefined,
+                    depositMethod: hasDeposit ? depositMethod : undefined,
                 };
                 if (timeIndex !== -1) {
                     mainJob.segments = [{ id: crypto.randomUUID(), description: 'MOT', segmentId: crypto.randomUUID(), date: motBooking.date, duration: 1, status: 'Allocated', allocatedLift: motBooking.liftId, scheduledStartSegment: timeIndex, engineerId: null }];
@@ -184,6 +201,8 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
                 const mainJobId = generateJobId(jobs, entityShortCode);
                 mainJob = {
                     id: mainJobId, entityId: estimate.entityId, vehicleId: estimate.vehicleId, customerId: estimate.customerId, description: `Work from Estimate #${estimate.estimateNumber}`, estimatedHours: laborHours, scheduledDate: scheduledDate, status: 'Unallocated', createdAt: formatDate(new Date()), segments: [], estimateId: estimate.id, notes: estimate.notes || '', vehicleStatus: 'Awaiting Arrival', createdByUserId: '',
+                    depositAmount: hasDeposit ? depositAmount : undefined,
+                    depositMethod: hasDeposit ? depositMethod : undefined,
                 };
                 mainJob.segments = splitJobIntoSegments(mainJob);
 
@@ -200,15 +219,82 @@ Linked MOT Booking: #${motJobId} @ ${motBooking.time}`;
             }
         } else {
             const mainJobId = generateJobId(jobs, entityShortCode);
-            mainJob = { id: mainJobId, entityId: estimate.entityId, vehicleId: estimate.vehicleId, customerId: estimate.customerId, description: `Work from Estimate #${estimate.estimateNumber}`, estimatedHours: laborHours, scheduledDate: scheduledDate, status: 'Unallocated', createdAt: formatDate(new Date()), segments: [], estimateId: estimate.id, notes: estimate.notes || '', vehicleStatus: 'Awaiting Arrival', createdByUserId: '', };
+            mainJob = { id: mainJobId, entityId: estimate.entityId, vehicleId: estimate.vehicleId, customerId: estimate.customerId, description: `Work from Estimate #${estimate.estimateNumber}`, estimatedHours: laborHours, scheduledDate: scheduledDate, status: 'Unallocated', createdAt: formatDate(new Date()), segments: [], estimateId: estimate.id, notes: estimate.notes || '', vehicleStatus: 'Awaiting Arrival', createdByUserId: '',
+                depositAmount: hasDeposit ? depositAmount : undefined,
+                depositMethod: hasDeposit ? depositMethod : undefined,
+             };
             mainJob.segments = splitJobIntoSegments(mainJob);
         }
 
         mainJob.partsStatus = 'Awaiting Order';
 
         const updatedEstimate: Estimate = { ...estimate, status: 'Converted to Job', jobId: mainJob.id };
-        onConfirm(mainJob, updatedEstimate, { isAlternative: false, originalDate: scheduledDate }, extraJobs);
+        setIsSubmitting(true);
+        try {
+            await onConfirm(mainJob, updatedEstimate, { isAlternative: false, originalDate: scheduledDate }, extraJobs);
+            setCreatedJobFinal(mainJob);
+            setIsSuccess(true);
+        } catch (error) {
+            console.error(error);
+        } finally {
+            setIsSubmitting(false);
+        }
     };
+
+    const handlePrintReceipt = () => {
+        triggerPrintDepositReceipt();
+    };
+
+    if (isSuccess && createdJobFinal) {
+        return (
+            <FormModal isOpen={isOpen} onClose={onClose} title="Job Scheduled Successfully" maxWidth="max-w-md">
+                <div className="p-8 text-center space-y-6">
+                    <div className="flex justify-center">
+                        <div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center animate-bounce">
+                            <CheckCircle size={48} />
+                        </div>
+                    </div>
+                    <div>
+                        <h3 className="text-2xl font-black text-gray-900 mb-2">Success!</h3>
+                        <p className="text-gray-500">Job <span className="font-bold text-indigo-600">#{createdJobFinal.id}</span> has been scheduled.</p>
+                    </div>
+
+                    {hasDeposit && (
+                        <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-6 space-y-4">
+                            <p className="text-sm text-indigo-800 font-medium">A deposit of <span className="font-black">{formatCurrency(depositAmount)}</span> has been recorded.</p>
+                            <button 
+                                onClick={handlePrintReceipt}
+                                className="w-full flex items-center justify-center gap-2 bg-indigo-600 text-white font-black py-3 px-6 rounded-lg hover:bg-indigo-700 transition-all shadow-lg hover:shadow-indigo-200"
+                            >
+                                <Printer size={20} />
+                                PRINT DEPOSIT RECEIPT
+                            </button>
+                        </div>
+                    )}
+
+                    <button 
+                        onClick={onClose}
+                        className="w-full py-3 text-gray-400 font-bold hover:text-gray-600 transition-colors"
+                    >
+                        Close Window
+                    </button>
+                </div>
+            </FormModal>
+            <div className="rebuild-print-container-hidden">
+                <div ref={depositReceiptRef}>
+                    {createdJobFinal && (
+                        <PrintableDepositReceipt 
+                            job={createdJobFinal}
+                            entity={entityForEstimate}
+                            customer={customer}
+                            vehicle={vehicle}
+                        />
+                    )}
+                </div>
+            </div>
+        </>
+        );
+    }
 
     const handleAcceptSuggestion = async () => {
         if (!suggestion) return;
@@ -316,6 +402,47 @@ Linked MOT Booking: #${motJobId} @ ${motBooking.time}`;
                                     </button>
                                 </div>
                                 )}
+
+                                <div className="border-t pt-4 space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <label className="text-sm font-bold text-gray-700">Take Deposit?</label>
+                                        <button 
+                                            type="button" 
+                                            onClick={() => setHasDeposit(!hasDeposit)}
+                                            className={`w-12 h-6 rounded-full transition-colors relative ${hasDeposit ? 'bg-indigo-600' : 'bg-gray-300'}`}
+                                        >
+                                            <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${hasDeposit ? 'left-7' : 'left-1'}`} />
+                                        </button>
+                                    </div>
+
+                                    {hasDeposit && (
+                                        <div className="space-y-3 animate-fade-in">
+                                            <div>
+                                                <label className="block text-xs font-black uppercase text-gray-500 mb-1">Deposit Amount (£)</label>
+                                                <input 
+                                                    type="number" 
+                                                    value={depositAmount || ''} 
+                                                    onChange={e => setDepositAmount(Number(e.target.value))}
+                                                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm font-bold"
+                                                    placeholder="0.00"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-black uppercase text-gray-500 mb-1">Method</label>
+                                                <select 
+                                                    value={depositMethod} 
+                                                    onChange={e => setDepositMethod(e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm"
+                                                >
+                                                    <option value="BACS">BACS / Transfer</option>
+                                                    <option value="Card">Credit/Debit Card</option>
+                                                    <option value="Cash">Cash</option>
+                                                    <option value="Other">Other</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
 
                             <div className="lg:col-span-9 flex flex-col h-full">

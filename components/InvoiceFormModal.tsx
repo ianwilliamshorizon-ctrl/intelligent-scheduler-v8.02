@@ -190,12 +190,29 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
                 initialData = { ...invoice };
             } else if (job) {
                 const linkedEstimate = mainEstimate;
+                
+                // Carry over line items from estimate
+                let initialLineItems = linkedEstimate ? (linkedEstimate.lineItems || []).filter(li => !li.isOptional) : [];
+                
+                // Add deposit as a negative line item if present on the job
+                if (job.depositAmount && job.depositAmount > 0) {
+                    initialLineItems.push({
+                        id: crypto.randomUUID(),
+                        description: `DEPOSIT PAID (${job.depositMethod || 'BACS'}) - THANK YOU`,
+                        quantity: 1,
+                        unitPrice: -job.depositAmount,
+                        unitCost: 0,
+                        isLabor: false,
+                        taxCodeId: standardTaxRateId || 'T1'
+                    } as InvoiceLineItem);
+                }
+
                 initialData = {
                     jobId: job.id,
                     customerId: linkedEstimate?.customerId || job.customerId,
                     vehicleId: linkedEstimate?.vehicleId || job.vehicleId,
                     entityId: job.entityId,
-                    lineItems: linkedEstimate ? (linkedEstimate.lineItems || []).filter(li => !li.isOptional) : [],
+                    lineItems: initialLineItems,
                     status: 'Draft',
                     issueDate: formatDate(new Date()), 
                     dueDate: formatDate(addDays(new Date(), 30)),
@@ -561,8 +578,19 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
                                 )}
                             </div>
                             <div>
-                                <label className="font-semibold text-gray-700">Notes</label>
-                                <textarea name="notes" value={formData.notes || ''} onChange={handleChange} rows={4} className="w-full p-2 border rounded mt-1" />
+                                <label className="font-semibold text-gray-700">Workshop Notes</label>
+                                <textarea name="notes" value={formData.notes || ''} onChange={handleChange} rows={2} className="w-full p-2 border rounded mt-1 text-sm bg-gray-50" />
+                            </div>
+                            <div>
+                                <label className="font-semibold text-gray-700 text-indigo-700">Finance Notes (Internal)</label>
+                                <textarea 
+                                    name="financeNotes" 
+                                    value={formData.financeNotes || ''} 
+                                    onChange={handleChange} 
+                                    rows={4} 
+                                    placeholder="Add payment issues, collection reminders, or credit terms here..."
+                                    className="w-full p-2 border border-indigo-200 rounded mt-1 text-sm bg-indigo-50/30 focus:ring-2 focus:ring-indigo-500 outline-none" 
+                                />
                             </div>
                         </div>
                     </Section>

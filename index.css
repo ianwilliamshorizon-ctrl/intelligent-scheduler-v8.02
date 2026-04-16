@@ -40,8 +40,8 @@
     padding: 0 !important;
   }
 
-  /* CRITICAL: Hide the entire app UI when printing so only the document remains */
-  #root, .no-print {
+  /* CRITICAL: Hide non-print elements */
+  .no-print {
     display: none !important;
   }
 
@@ -109,6 +109,17 @@
   }
 }
 
+/* Hide print containers from screen view */
+.rebuild-print-container-hidden {
+  display: none;
+}
+
+@media print {
+  .rebuild-print-container-hidden {
+    display: block !important;
+  }
+}
+
 /* --- 4. Dashboard & Interaction UI --- */
 ::-webkit-scrollbar {
   width: 8px;
@@ -152,4 +163,16 @@
 .timeline-slot.drag-over {
   background-color: rgba(59, 130, 246, 0.1) !important;
   box-shadow: inset 0 0 0 2px #3b82f6;
+}
+/* --- 5. Responsive Extensions --- */
+@layer utilities {
+  .text-responsive {
+    font-size: clamp(0.75rem, 2vw + 1rem, 1.25rem);
+  }
+}
+
+html, body {
+  overflow-x: hidden;
+  position: relative;
+  width: 100%;
 }

@@ -29,6 +29,39 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ isOpen, onClose, invoice, c
     const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
 
+    // Calculate Grand Total including VAT (Mirroring PrintableInvoice logic)
+    const grandTotal = React.useMemo(() => {
+        if (!invoice) return 0;
+        if (invoice.totalAmount) return invoice.totalAmount;
+
+        const safeTaxRates = Array.isArray(taxRates) ? taxRates : [];
+        const standardTaxRateId = safeTaxRates.find(t => t.code === 'T1')?.id;
+        const t99RateId = safeTaxRates.find(t => t.code === 'T99')?.id;
+        const taxRatesMap = new Map(safeTaxRates.map(t => [t.id, t]));
+
+        let total = 0;
+        const lineItems = Array.isArray(invoice.lineItems) ? invoice.lineItems : [];
+
+        lineItems.forEach(item => {
+            if (item.isPackageComponent) return;
+
+            const net = (item.quantity || 0) * (item.unitPrice || 0);
+            total += net;
+
+            if (item.taxCodeId === t99RateId) {
+                total += (item.preCalculatedVat || 0) * (item.quantity || 1);
+            } else {
+                const taxCodeId = item.taxCodeId || standardTaxRateId;
+                const taxRate = taxCodeId ? taxRatesMap.get(taxCodeId) : null;
+                if (taxRate && taxRate.rate > 0) {
+                    total += net * (taxRate.rate / 100);
+                }
+            }
+        });
+
+        return total;
+    }, [invoice, taxRates]);
+
     const handlePrint = () => {
         if (job && onInvoiceAction) {
             onInvoiceAction(job.id);
@@ -102,13 +135,13 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ isOpen, onClose, invoice, c
         setIsPaymentModalOpen(true);
     };
 
-    const handleSavePayment = (payment: any) => {
+    const handleSavePayment = (payment: any, financeNotes?: string) => {
         if (invoice) {
             const updatedPayments = [...(invoice.payments || []), payment];
             const totalPaid = updatedPayments.reduce((sum, p) => sum + p.amount, 0);
             
             // Calculate total amount from line items if not present
-            const calculatedTotal = invoice.totalAmount || (invoice.lineItems || []).reduce((sum, item) => sum + (item.totalPrice || 0), 0);
+            const calculatedTotal = grandTotal;
             
             let newStatus = invoice.status;
             if (totalPaid >= calculatedTotal) {
@@ -121,7 +154,8 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ isOpen, onClose, invoice, c
                 ...invoice, 
                 payments: updatedPayments,
                 status: newStatus,
-                totalAmount: calculatedTotal // Ensure it's saved for future
+                totalAmount: calculatedTotal,
+                financeNotes: financeNotes || invoice.financeNotes
             });
             
             if (job && onInvoiceAction) {
@@ -154,10 +188,15 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ isOpen, onClose, invoice, c
                             <span>Download PDF</span>
                         </button>
                         {invoice.status !== 'Paid' && (
-                            <button onClick={handleMarkAsPaid} className="flex items-center py-2 px-4 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 shadow-sm">
-                                <CheckCircle size={16} className="mr-2"/> Mark as Paid
+                            <button 
+                                onClick={handleMarkAsPaid} 
+                                className="flex items-center py-2 px-6 bg-green-600 text-white font-bold rounded-lg shadow-sm hover:bg-green-700 transition-all gap-2"
+                            >
+                                <Wallet size={16} />
+                                <span>Record Payment</span>
                             </button>
                         )}
+                        
                         <div className="w-px h-8 bg-gray-300 mx-1"></div>
                         <button onClick={onClose} className="p-1 hover:bg-gray-200 rounded-full transition-colors"><X size={28} className="text-gray-400 hover:text-gray-800" /></button>
                     </div>
@@ -175,7 +214,7 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ isOpen, onClose, invoice, c
                     onClose={() => setIsPaymentModalOpen(false)}
                     onSave={handleSavePayment}
                     invoice={invoice}
-                    totalAmount={invoice.totalAmount || (invoice.lineItems || []).reduce((sum, item) => sum + (item.totalPrice || 0), 0)}
+                    totalAmount={grandTotal}
                 />
             )}
         </div>

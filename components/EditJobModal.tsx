@@ -28,6 +28,8 @@ import { JobActionsMenu } from './shared/JobActionsMenu';
 import AssignEngineerModal from './AssignEngineerModal';
 import VehicleDamageReport from './VehicleDamageReport';
 import { getHexFromColorName } from '../utils/colorUtils';
+import { usePrint } from '../core/hooks/usePrint';
+import PrintableDepositReceipt from './PrintableDepositReceipt';
 
 const EditJobModal: React.FC<{
     isOpen: boolean;
@@ -100,7 +102,26 @@ const EditJobModal: React.FC<{
     const [editableEstimate, setEditableEstimate] = useState<T.Estimate | null>(null);
     const [isPrinting, setIsPrinting] = useState(false);
     const [printBlankSheet, setPrintBlankSheet] = useState(true);
+    const depositReceiptRef = useRef<HTMLDivElement>(null);
+    const triggerPrintDepositReceipt = useReactToPrint({
+        contentRef: depositReceiptRef,
+        documentTitle: `DepositReceipt_${editableJob?.id}`,
+    });
+
     const componentToPrintRef = useRef<HTMLDivElement>(null);
+    const triggerPrintJobCard = useReactToPrint({
+        contentRef: componentToPrintRef,
+        documentTitle: `JobCard_${editableJob?.id}`,
+    });
+
+    useEffect(() => {
+        const handlePrintEvent = (e: any) => {
+            triggerPrintDepositReceipt();
+        };
+
+        window.addEventListener('print-deposit-receipt', handlePrintEvent);
+        return () => window.removeEventListener('print-deposit-receipt', handlePrintEvent);
+    }, [triggerPrintDepositReceipt]);
     const [isRaisingPOs, setIsRaisingPOs] = useState(false);
 
     const [partSearchTerm, setPartSearchTerm] = useState('');
@@ -137,16 +158,10 @@ const EditJobModal: React.FC<{
         return safeEstimates.filter(e => e.jobId === job.id && e.id !== mainId);
     }, [safeEstimates, job, mainEstimate]);
 
-    const handlePrint = useReactToPrint({
-        contentRef: componentToPrintRef,
-        documentTitle: `JobCard_${editableJob?.id}`,
-        onAfterPrint: () => setIsPrinting(false),
-    });
-
     const triggerPrint = useCallback(() => {
         if (editableJob && vehicle && customer) {
             setIsPrinting(true);
-            handlePrint();
+            triggerPrintJobCard();
         } else {
             setConfirmation({
                 isOpen: true,
@@ -155,7 +170,7 @@ const EditJobModal: React.FC<{
                 type: 'warning'
             });
         }
-    }, [editableJob, vehicle, customer, handlePrint, setConfirmation]);
+    }, [editableJob, vehicle, customer, triggerPrintJobCard, setConfirmation]);
 
     const canViewPricing = useMemo(() => {
         if (!currentUser) return false;
@@ -1158,7 +1173,7 @@ const EditJobModal: React.FC<{
                 </footer>
             </div>
 
-            <div className="hidden">
+            <div className="rebuild-print-container-hidden">
                 <div ref={componentToPrintRef}>
                     {editableJob && vehicle && customer && (
                         <PrintableJobCard
@@ -1171,6 +1186,16 @@ const EditJobModal: React.FC<{
                             taxRates={safeTaxRates}
                             printBlankInspectionSheet={printBlankSheet}
                             inspectionTemplates={safeInspectionTemplates}
+                        />
+                    )}
+                </div>
+                <div ref={depositReceiptRef}>
+                    {editableJob && vehicle && customer && (
+                        <PrintableDepositReceipt 
+                            job={editableJob}
+                            entity={businessEntity}
+                            customer={customer}
+                            vehicle={vehicle}
                         />
                     )}
                 </div>

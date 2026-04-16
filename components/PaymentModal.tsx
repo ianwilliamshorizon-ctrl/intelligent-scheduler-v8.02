@@ -1,28 +1,31 @@
 import React, { useState, useEffect } from 'react';
 import { X, DollarSign, Wallet, CreditCard, Landmark, FileText, AlertCircle } from 'lucide-react';
 import { Invoice, Payment } from '../types';
-import { formatCurrency } from '../utils/formatUtils';
+import { formatCurrency } from '../core/utils/formatUtils';
 
 interface PaymentModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSave: (payment: Payment) => void;
+    onSave: (payment: Payment, financeNotes?: string) => void;
     invoice: Invoice;
     totalAmount: number;
 }
 
 const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onSave, invoice, totalAmount }) => {
-    const existingPaymentsTotal = (invoice.payments || []).reduce((sum, p) => sum + p.amount, 0);
-    const balance = totalAmount - existingPaymentsTotal;
+    const existingPaymentsTotal = (invoice?.payments || []).reduce((sum, p) => sum + (p.amount || 0), 0);
+    const safeTotal = totalAmount || 0;
+    const balance = Math.max(0, safeTotal - existingPaymentsTotal);
     
     const [amount, setAmount] = useState<number>(balance);
     const [method, setMethod] = useState<Payment['method']>('BACS');
     const [notes, setNotes] = useState('');
+    const [financeNotes, setFinanceNotes] = useState(invoice?.financeNotes || '');
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
 
     useEffect(() => {
         setAmount(balance);
-    }, [balance, isOpen]);
+        setFinanceNotes(invoice?.financeNotes || '');
+    }, [balance, isOpen, invoice]);
 
     if (!isOpen) return null;
 
@@ -33,7 +36,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onSave, in
             method,
             date,
             notes: notes.trim() || undefined
-        });
+        }, financeNotes.trim());
         onClose();
     };
 
@@ -132,12 +135,26 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onSave, in
                         </div>
 
                         <div>
-                            <label className="block text-xs font-black uppercase tracking-widest text-gray-500 mb-1.5">Notes / Reference</label>
-                            <textarea 
+                            <label className="block text-xs font-black uppercase tracking-widest text-gray-500 mb-1.5">Payment Reference / Note (for this payment)</label>
+                            <input 
+                                type="text"
                                 value={notes}
                                 onChange={(e) => setNotes(e.target.value)}
-                                placeholder="Why is this a part payment? OR Check #, Auth Code..."
-                                className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none min-h-[80px] resize-none text-sm font-medium"
+                                placeholder="Check #, Auth Code, etc."
+                                className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-medium"
+                            />
+                        </div>
+
+                        <div className="pt-2 border-t border-gray-100">
+                            <label className="block text-xs font-black uppercase tracking-widest text-indigo-500 mb-1.5 flex items-center gap-1.5">
+                                <FileText size={12} />
+                                Invoice Finance Notes (Internal)
+                            </label>
+                            <textarea 
+                                value={financeNotes}
+                                onChange={(e) => setFinanceNotes(e.target.value)}
+                                placeholder="Why is this a part payment? Re-collection date? Credit agreement?"
+                                className="w-full px-4 py-2.5 bg-indigo-50/30 border border-indigo-100 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none min-h-[100px] resize-none text-sm font-medium"
                             />
                         </div>
                     </div>

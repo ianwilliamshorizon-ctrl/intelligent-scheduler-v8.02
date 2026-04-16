@@ -3,7 +3,7 @@ import React, { useState, useMemo } from 'react';
 import { useData } from '../../core/state/DataContext';
 import { useApp } from '../../core/state/AppContext';
 import { Invoice, Customer, Vehicle, EstimateLineItem } from '../../types';
-import { Eye, Search, Download, PlusCircle, Edit, CalendarDays } from 'lucide-react';
+import { Eye, Search, Download, PlusCircle, Edit, CalendarDays, BarChart3 } from 'lucide-react';
 import { formatCurrency } from '../../core/utils/formatUtils';
 import { formatDate, getRelativeDate } from '../../core/utils/dateUtils';
 import { getCustomerDisplayName } from '../../core/utils/customerUtils';
@@ -14,6 +14,7 @@ interface InvoicesViewProps {
     onEditInvoice: (invoice: Invoice) => void;
     onOpenExportModal: (type: 'invoices', items: any[]) => void;
     onCreateAdhocInvoice: () => void;
+    onViewAgedDebtors: () => void;
 }
 
 const dateFilterOptions = {
@@ -25,7 +26,13 @@ const dateFilterOptions = {
 
 type DateFilterOption = keyof typeof dateFilterOptions;
 
-const InvoicesView: React.FC<InvoicesViewProps> = ({ onViewInvoice, onEditInvoice, onOpenExportModal, onCreateAdhocInvoice }) => {
+const InvoicesView: React.FC<InvoicesViewProps> = ({ 
+    onViewInvoice, 
+    onEditInvoice, 
+    onOpenExportModal, 
+    onCreateAdhocInvoice,
+    onViewAgedDebtors
+}) => {
     const { invoices, customers, vehicles, businessEntities, taxRates } = useData();
     const { selectedEntityId } = useApp();
     const [filter, setFilter] = useState('');
@@ -106,14 +113,20 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({ onViewInvoice, onEditInvoic
 
     return (
         <div className="w-full p-4 h-full flex flex-col">
-            <header className="flex justify-between items-center mb-4 flex-shrink-0">
-                <h2 className="text-2xl font-bold text-gray-800">Invoices <span className="text-gray-500 font-medium text-lg">({dateFilterOptions[dateFilter]})</span></h2>
-                 <div className="flex items-center gap-2">
-                    <button onClick={() => onOpenExportModal('invoices', filteredInvoices)} className="flex items-center gap-2 py-2 px-4 bg-gray-600 text-white font-semibold rounded-lg shadow-md hover:bg-gray-700">
-                        <Download size={16}/> Export for Accounts
+            <header className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6 flex-shrink-0">
+                <h2 className="text-xl md:text-2xl font-black text-gray-900 tracking-tight">Invoices <span className="text-gray-400 font-bold text-sm md:text-lg">({dateFilterOptions[dateFilter]})</span></h2>
+                 <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
+                    <button 
+                        onClick={onViewAgedDebtors}
+                        className="flex-1 md:flex-none flex items-center justify-center gap-2 py-2 px-4 bg-indigo-50 text-indigo-700 font-bold rounded-lg border border-indigo-100 hover:bg-indigo-100 transition-colors text-xs md:text-sm whitespace-nowrap"
+                    >
+                        <BarChart3 size={16}/> Financial Reporting
                     </button>
-                    <button onClick={onCreateAdhocInvoice} className="flex items-center gap-2 py-2 px-4 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700">
-                        <PlusCircle size={16}/> Create Ad-hoc Invoice
+                    <button onClick={() => onOpenExportModal('invoices', filteredInvoices)} className="flex-1 md:flex-none flex items-center justify-center gap-2 py-2 px-4 bg-gray-600 text-white font-semibold rounded-lg shadow-md hover:bg-gray-700 text-xs md:text-sm whitespace-nowrap">
+                        <Download size={16}/> Export
+                    </button>
+                    <button onClick={onCreateAdhocInvoice} className="flex-1 md:flex-none flex items-center justify-center gap-2 py-2 px-4 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 text-xs md:text-sm whitespace-nowrap">
+                        <PlusCircle size={16}/> New Invoice
                     </button>
                 </div>
             </header>

@@ -137,6 +137,7 @@ export interface VehicleDamagePoint {
     id: string;
     x: number;
     y: number;
+    notes?: string;
 }
 
 export interface VehicleImage {
@@ -203,6 +204,8 @@ export interface Job {
     jobType?: 'MOT' | 'Standard';
     collectedBy?: string;
     storageLocationId?: string;
+    depositAmount?: number;
+    depositMethod?: string;
 }
 export type VehicleStatus = 'On Site' | 'Off-Site (Partner)' | 'Awaiting Arrival' | 'Awaiting Collection' | 'Collected' | 'Cancelled';
 
@@ -386,6 +389,7 @@ export interface Invoice {
     totalVat?: number;
     totalAmount?: number;
     notes?: string;
+    financeNotes?: string;
     entityId?: string;
     jobId?: string;
     createdByUserId?: string;

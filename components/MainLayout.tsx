@@ -66,7 +66,7 @@ const MainLayout: React.FC<{
         { id: 'estimates', label: 'Estimates', icon: FileText },
         { id: 'invoices', label: 'Invoices', icon: FileText },
         { id: 'purchaseOrders', label: 'Purchase Orders', icon: ShoppingCart },
-        { id: 'aged-debtors', label: 'Aged Debtors', icon: BarChart3 },
+        { id: 'financials', label: 'Financial Reporting', icon: BarChart3 },
         { id: 'sales', label: 'Car Sales', icon: Car },
         { id: 'storage', label: 'Vehicle Storage', icon: Archive },
         { id: 'rentals', label: 'Rentals', icon: Truck },

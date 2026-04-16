@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Job, Invoice, Vehicle, Customer, TaxRate } from '../types';
-import { X, Save, LogOut, Car, User, FileText, AlertTriangle, KeyRound, CheckCircle } from 'lucide-react';
+import { X, Save, LogOut, Car, User, FileText, AlertTriangle, KeyRound, CheckCircle, Wallet } from 'lucide-react';
 import { formatCurrency } from '../core/utils/formatUtils';
 import PaymentModal from './PaymentModal';
 
@@ -43,7 +43,7 @@ const CheckOutModal: React.FC<CheckOutModalProps> = ({ isOpen, onClose, onSave, 
         setIsPaymentModalOpen(true);
     };
 
-    const handleSavePayment = (payment: any) => {
+    const handleSavePayment = (payment: any, financeNotes?: string) => {
         if (invoice) {
             const updatedPayments = [...(invoice.payments || []), payment];
             const totalPaid = updatedPayments.reduce((sum, p) => sum + p.amount, 0);
@@ -62,7 +62,8 @@ const CheckOutModal: React.FC<CheckOutModalProps> = ({ isOpen, onClose, onSave, 
                 ...invoice, 
                 payments: updatedPayments,
                 status: newStatus,
-                totalAmount: calculatedTotal
+                totalAmount: calculatedTotal,
+                financeNotes: financeNotes || invoice.financeNotes
             });
         }
     };
@@ -74,6 +75,7 @@ const CheckOutModal: React.FC<CheckOutModalProps> = ({ isOpen, onClose, onSave, 
     // Calculate Grand Total including VAT
     const grandTotal = React.useMemo(() => {
         if (!invoice) return 0;
+        if (invoice.totalAmount) return invoice.totalAmount;
         
         const safeTaxRates = Array.isArray(taxRates) ? taxRates : [];
         const standardTaxRateId = safeTaxRates.find(t => t.code === 'T1')?.id;
@@ -150,12 +152,26 @@ const CheckOutModal: React.FC<CheckOutModalProps> = ({ isOpen, onClose, onSave, 
                                 </div>
                             </div>
                              {!isPaid && (
-                                <div className="mt-3 pt-3 border-t">
+                                <div className="mt-3 pt-3 border-t space-y-2">
+                                    <div className="flex gap-2">
+                                         <button 
+                                            onClick={() => handleSavePayment({ amount: (grandTotal || 0) - (invoice.payments?.reduce((s, p) => s + p.amount, 0) || 0), method: 'BACS', date: new Date().toISOString().split('T')[0], notes: 'Full Payment (Quick Pay)' })} 
+                                            className="flex-1 flex items-center justify-center py-2 px-3 bg-gray-700 text-white font-black uppercase tracking-widest rounded-lg hover:bg-gray-800 text-[10px] transition-all shadow-sm"
+                                        >
+                                            PAID FULL BACS
+                                        </button>
+                                         <button 
+                                            onClick={() => handleSavePayment({ amount: (grandTotal || 0) - (invoice.payments?.reduce((s, p) => s + p.amount, 0) || 0), method: 'Card', date: new Date().toISOString().split('T')[0], notes: 'Full Payment (Quick Pay)' })} 
+                                            className="flex-1 flex items-center justify-center py-2 px-3 bg-gray-700 text-white font-black uppercase tracking-widest rounded-lg hover:bg-gray-800 text-[10px] transition-all shadow-sm"
+                                        >
+                                            PAID FULL CARD
+                                        </button>
+                                    </div>
                                     <button 
                                         onClick={handleMarkAsPaid} 
-                                        className="w-full flex items-center justify-center gap-2 py-2 px-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700"
+                                        className="w-full flex items-center justify-center gap-2 py-2 px-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition-all text-sm uppercase tracking-wider shadow-md"
                                     >
-                                        <CheckCircle size={16} /> Mark Invoice as Paid
+                                        <Wallet size={16} /> Other Payment Method
                                     </button>
                                 </div>
                             )}

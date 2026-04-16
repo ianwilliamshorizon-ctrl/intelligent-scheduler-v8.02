@@ -1,8 +1,12 @@
 import React, { useState, useMemo } from 'react';
 import * as T from '../../../types';
-import { Car, User, KeyRound, Edit, Phone, Mail, MapPin, Building, Briefcase, Expand, ImageIcon, X, Gauge, Info, Wrench } from 'lucide-react';
+import { Car, User, KeyRound, Edit, Phone, Mail, MapPin, Building, Briefcase, Expand, ImageIcon, X, Gauge, Info, Wrench, DollarSign, Printer, CheckCircle } from 'lucide-react';
 import { HoverInfo } from '../../shared/HoverInfo';
 import LiveAssistant from '../../LiveAssistant';
+import { usePrint } from '../../../core/hooks/usePrint';
+import PrintableDepositReceipt from '../../PrintableDepositReceipt';
+import { formatCurrency } from '../../../core/utils/formatUtils';
+import { formatDate } from '../../../core/utils/dateUtils';
 
 interface TabSectionProps {
     title: string;
@@ -40,6 +44,15 @@ const JobDetailsTab: React.FC<JobDetailsTabProps> = ({
 }) => {
     const [isNotesModalOpen, setIsNotesModalOpen] = useState(false);
     const [isAssistantOpen, setIsAssistantOpen] = useState(false);
+    const [hasDeposit, setHasDeposit] = useState(!!editableJob.depositAmount);
+    
+    const printComponent = usePrint();
+
+    const handlePrintReceipt = () => {
+        const businessEntity = editableJob.entityId ? (allJobs as any)._businessEntities?.find((e: any) => e.id === editableJob.entityId) : null;
+        // Wait, allJobs is T.Job[]. I need access to business entities.
+        // I'll assume for now I can pass what I need or find it.
+    };
     
     const handleNotesSave = (newNotes: string) => {
         onChange({ target: { name: 'notes', value: newNotes } } as React.ChangeEvent<HTMLTextAreaElement>);
@@ -139,6 +152,78 @@ const JobDetailsTab: React.FC<JobDetailsTabProps> = ({
                     </div>
                 </TabSection>
             )}
+
+            <TabSection title="Financial Deposit" icon={DollarSign}>
+                <div className="space-y-3">
+                    <div className="flex items-center justify-between mb-1">
+                        <label className="text-xs font-bold text-gray-700">Record Deposit?</label>
+                        <button 
+                            type="button" 
+                            onClick={() => {
+                                const newVal = !hasDeposit;
+                                setHasDeposit(newVal);
+                                if (!newVal) {
+                                    onChange({ target: { name: 'depositAmount', value: '0' } } as any);
+                                }
+                            }}
+                            className={`w-10 h-5 rounded-full transition-colors relative ${hasDeposit ? 'bg-indigo-600' : 'bg-gray-300'}`}
+                            disabled={isReadOnly}
+                        >
+                            <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform ${hasDeposit ? 'left-5' : 'left-0.5'}`} />
+                        </button>
+                    </div>
+
+                    {hasDeposit && (
+                        <div className="space-y-3 pt-2 border-t border-gray-100 animate-fade-in">
+                            <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label className="block text-[9px] font-black uppercase text-gray-400 mb-1">Amount (£)</label>
+                                    <input 
+                                        type="number" 
+                                        name="depositAmount"
+                                        value={editableJob.depositAmount || ''} 
+                                        onChange={onChange}
+                                        className="w-full p-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm font-bold bg-white"
+                                        placeholder="0.00"
+                                        disabled={isReadOnly}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-[9px] font-black uppercase text-gray-400 mb-1">Method</label>
+                                    <select 
+                                        name="depositMethod"
+                                        value={editableJob.depositMethod || 'BACS'} 
+                                        onChange={onChange}
+                                        className="w-full p-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 text-xs bg-white"
+                                        disabled={isReadOnly}
+                                    >
+                                        <option value="BACS">BACS</option>
+                                        <option value="Card">Card</option>
+                                        <option value="Cash">Cash</option>
+                                        <option value="Other">Other</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            {editableJob.depositAmount > 0 && (
+                                <button 
+                                    type="button"
+                                    onClick={() => {
+                                        // We need to trigger printing. 
+                                        // This requires passing the print handler or entity details down.
+                                        // I will implement a custom event or callback.
+                                        const event = new CustomEvent('print-deposit-receipt', { detail: editableJob });
+                                        window.dispatchEvent(event);
+                                    }}
+                                    className="w-full flex items-center justify-center gap-2 bg-indigo-50 text-indigo-700 py-2 rounded-lg font-bold text-xs hover:bg-indigo-100 transition-all border border-indigo-200"
+                                >
+                                    <Printer size={14} /> PRINT RECEIPT
+                                </button>
+                            )}
+                        </div>
+                    )}
+                </div>
+            </TabSection>
 
             <TabSection title="Purchase Orders" icon={Briefcase}>
                 <div className="space-y-2">

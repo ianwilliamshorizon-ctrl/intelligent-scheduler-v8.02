@@ -34,12 +34,12 @@ export const initialChecklistData = [
 
 // --- Roles ---
 export const getInitialRoles = (): Role[] => ([
-    { id: 'role_admin', name: 'Admin', defaultAllowedViews: ['dashboard', 'directors-dashboard', 'dispatch', 'workflow', 'concierge', 'inquiries', 'communications', 'estimates', 'invoices', 'purchaseOrders', 'jobs', 'sales', 'storage', 'rentals', 'absence'] },
-    { id: 'role_dispatcher', name: 'Dispatcher', defaultAllowedViews: ['dashboard', 'directors-dashboard', 'dispatch', 'workflow', 'concierge', 'inquiries', 'communications', 'estimates', 'invoices', 'purchaseOrders', 'jobs', 'sales', 'storage', 'rentals', 'absence'] },
+    { id: 'role_admin', name: 'Admin', defaultAllowedViews: ['dashboard', 'directors-dashboard', 'dispatch', 'workflow', 'concierge', 'inquiries', 'communications', 'estimates', 'invoices', 'aged-debtors', 'purchaseOrders', 'jobs', 'sales', 'storage', 'rentals', 'absence'] },
+    { id: 'role_dispatcher', name: 'Dispatcher', defaultAllowedViews: ['dashboard', 'directors-dashboard', 'dispatch', 'workflow', 'concierge', 'inquiries', 'communications', 'estimates', 'invoices', 'aged-debtors', 'purchaseOrders', 'jobs', 'sales', 'storage', 'rentals', 'absence'] },
     { id: 'role_engineer', name: 'Engineer', defaultAllowedViews: ['dashboard', 'directors-dashboard', 'concierge', 'workflow', 'absence', 'inquiries'] },
     { id: 'role_sales', name: 'Sales', defaultAllowedViews: ['dashboard', 'directors-dashboard', 'sales', 'estimates', 'absence', 'inquiries'] },
-    { id: 'role_concierge', name: 'Garage Concierge', defaultAllowedViews: ['dashboard', 'directors-dashboard', 'concierge', 'inquiries', 'invoices', 'absence'] },
-    { id: 'role_director', name: 'Director', defaultAllowedViews: ['dashboard', 'directors-dashboard', 'dispatch', 'workflow', 'concierge', 'inquiries', 'communications', 'estimates', 'invoices', 'purchaseOrders', 'jobs', 'sales', 'storage', 'rentals', 'absence'] },
+    { id: 'role_concierge', name: 'Garage Concierge', defaultAllowedViews: ['dashboard', 'directors-dashboard', 'concierge', 'inquiries', 'invoices', 'aged-debtors', 'absence'] },
+    { id: 'role_director', name: 'Director', defaultAllowedViews: ['dashboard', 'directors-dashboard', 'dispatch', 'workflow', 'concierge', 'inquiries', 'communications', 'estimates', 'invoices', 'aged-debtors', 'purchaseOrders', 'jobs', 'sales', 'storage', 'rentals', 'absence'] },
 ]);
 
 // --- Users ---

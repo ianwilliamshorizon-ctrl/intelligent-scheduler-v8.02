@@ -601,7 +601,7 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                                 await handleSaveItem(data.setInquiries, updatedInquiry, 'brooks_inquiries');
                             }
 
-                            setters.setScheduleJobFromEstimateModal({isOpen: false, estimate: null});
+                            // Modal handles its own closing/success state now
                             
                             const extraJobMsg = extraJobs && extraJobs.length > 0 ? ` plus ${extraJobs.length} linked job(s)` : '';
                             
