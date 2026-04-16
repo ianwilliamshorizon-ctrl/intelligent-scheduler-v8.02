@@ -13,9 +13,10 @@ interface PrintableEstimateProps {
     isInternal: boolean;
     canViewPricing: boolean;
     totals: { totalNet: number; grandTotal: number; vatBreakdown: any[] };
+    depositAmount?: number;
 }
 
-export const PrintableEstimate: React.FC<PrintableEstimateProps> = ({ estimate, customer, vehicle, entityDetails, parts, isInternal, canViewPricing, totals }) => {
+export const PrintableEstimate: React.FC<PrintableEstimateProps> = ({ estimate, customer, vehicle, entityDetails, parts, isInternal, canViewPricing, totals, depositAmount }) => {
     // Simplifed Body (Classic Table feel but clean)
     const allItems = estimate.lineItems || [];
     const essentialItems = allItems.filter(i => !i.isOptional);
@@ -78,7 +79,9 @@ export const PrintableEstimate: React.FC<PrintableEstimateProps> = ({ estimate, 
                                         </div>
                                     </div>
                                     <div style={{ textAlign: 'right' }}>
-                                        <h2 style={{ fontSize: '28px', fontWeight: '900', color: '#f1f5f9', margin: 0, lineHeight: 1 }}>ESTIMATE</h2>
+                                        <h2 style={{ fontSize: '28px', fontWeight: '900', color: '#f1f5f9', margin: 0, lineHeight: 1 }}>
+                                            {depositAmount && depositAmount > 0 ? 'DEPOSIT RECEIPT' : 'ESTIMATE'}
+                                        </h2>
                                         <div style={{ marginTop: '12px' }}>
                                             <p style={{ fontFamily: 'monospace', fontSize: '14px', fontWeight: 'bold', color: '#000' }}>#{estimate?.estimateNumber}</p>
                                             <p style={{ marginTop: '2px', fontSize: '11px', color: '#6b7280' }}>Date: {getDisplayDate(estimate.issueDate)}</p>
@@ -154,6 +157,18 @@ export const PrintableEstimate: React.FC<PrintableEstimateProps> = ({ estimate, 
                                                     <span className="text-gray-900 font-black uppercase text-xs">Total Estimated</span>
                                                     <span className="text-xl font-black text-black">{formatCurrency(totals.grandTotal)}</span>
                                                 </div>
+                                                {typeof depositAmount === 'number' && depositAmount > 0 && (
+                                                    <div className="space-y-2 mt-4 pt-4 border-t-2 border-indigo-600">
+                                                        <div className="flex justify-between text-indigo-600 font-bold uppercase text-[10px] bg-indigo-50 p-2 rounded -mx-2">
+                                                            <span>Deposit Received</span>
+                                                            <span>{formatCurrency(depositAmount)}</span>
+                                                        </div>
+                                                        <div className="flex justify-between items-center pt-1">
+                                                            <span className="text-gray-900 font-black uppercase text-xs">Total Balance Due</span>
+                                                            <span className="text-xl font-black text-indigo-700">{formatCurrency(totals.grandTotal - depositAmount)}</span>
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </>
                                         ) : (
                                             <p className="text-center italic text-gray-400 text-xs">Pricing Hidden</p>

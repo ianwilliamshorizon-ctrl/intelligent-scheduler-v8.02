@@ -59,6 +59,21 @@ export const JobHoverPopout: React.FC<JobHoverPopoutProps> = (props) => {
         }, 100); // 100ms grace period to move to the popout
     };
 
+    const wrappedProps = {
+        ...props,
+        onEdit: (jobId: string) => { setIsHovered(false); props.onEdit(jobId); },
+        onCheckIn: (jobId: string) => { setIsHovered(false); props.onCheckIn(jobId); },
+        onOpenPurchaseOrder: (po: PurchaseOrder) => { setIsHovered(false); props.onOpenPurchaseOrder(po); },
+        onOpenAssistant: (jobId: string) => { setIsHovered(false); props.onOpenAssistant(jobId); },
+        onGenerateInvoice: props.onGenerateInvoice ? (jobId: string) => { setIsHovered(false); props.onGenerateInvoice!(jobId); } : undefined,
+        onCollect: props.onCollect ? (jobId: string) => { setIsHovered(false); props.onCollect!(jobId); } : undefined,
+        onQcApprove: (jobId: string) => { setIsHovered(false); props.onQcApprove(jobId); },
+        onStartWork: (jobId: string, segmentId: string) => { setIsHovered(false); props.onStartWork(jobId, segmentId); },
+        onEngineerComplete: props.onEngineerComplete ? (job: Job, segmentId: string) => { setIsHovered(false); props.onEngineerComplete!(job, segmentId); } : undefined,
+        onPause: (jobId: string, segmentId: string, reason?: string) => { setIsHovered(false); props.onPause(jobId, segmentId, reason); },
+        onRestart: (jobId: string, segmentId: string) => { setIsHovered(false); props.onRestart(jobId, segmentId); },
+    };
+
     const portalContent = isHovered && (
         <div 
             className="fixed z-[9999] pointer-events-auto"
@@ -86,7 +101,7 @@ export const JobHoverPopout: React.FC<JobHoverPopoutProps> = (props) => {
             onMouseLeave={handleMouseLeave}
         >
             <div className={`shadow-[0_20px_50px_rgba(0,0,0,0.3)] rounded-xl ring-4 ring-black/5 ring-offset-0 animate-in fade-in zoom-in-95 duration-200 origin-${popOutPosition === 'top' ? 'bottom' : 'top'}`}>
-                 <ConciergeJobCard {...props} />
+                 <ConciergeJobCard {...wrappedProps} />
             </div>
         </div>
     );

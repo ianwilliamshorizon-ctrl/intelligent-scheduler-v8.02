@@ -29,7 +29,7 @@ import AssignEngineerModal from './AssignEngineerModal';
 import VehicleDamageReport from './VehicleDamageReport';
 import { getHexFromColorName } from '../utils/colorUtils';
 import { usePrint } from '../core/hooks/usePrint';
-import PrintableDepositReceipt from './PrintableDepositReceipt';
+import { PrintableEstimate } from './estimates/PrintableEstimate';
 
 const EditJobModal: React.FC<{
     isOpen: boolean;
@@ -102,17 +102,44 @@ const EditJobModal: React.FC<{
     const [editableEstimate, setEditableEstimate] = useState<T.Estimate | null>(null);
     const [isPrinting, setIsPrinting] = useState(false);
     const [printBlankSheet, setPrintBlankSheet] = useState(true);
+    const print = usePrint();
+
     const depositReceiptRef = useRef<HTMLDivElement>(null);
-    const triggerPrintDepositReceipt = useReactToPrint({
-        contentRef: depositReceiptRef,
-        documentTitle: `DepositReceipt_${editableJob?.id}`,
-    });
+    const triggerPrintDepositReceipt = () => {
+        const estToPrint = (editableEstimate || mainEstimate || { id: 'temp', estimateNumber: 'DEPOSIT', issueDate: new Date().toISOString(), lineItems: editableJob?.lineItems || [] });
+        print(
+            <PrintableEstimate 
+                estimate={estToPrint as React.ComponentProps<typeof PrintableEstimate>['estimate']}
+                customer={customer}
+                vehicle={vehicle}
+                entityDetails={businessEntity}
+                taxRates={safeTaxRates}
+                parts={[]}
+                isInternal={false}
+                canViewPricing={true}
+                depositAmount={Number(editableJob?.depositAmount || 0)}
+                totals={{ totalNet, grandTotal, vatBreakdown }}
+            />
+        );
+    };
 
     const componentToPrintRef = useRef<HTMLDivElement>(null);
-    const triggerPrintJobCard = useReactToPrint({
-        contentRef: componentToPrintRef,
-        documentTitle: `JobCard_${editableJob?.id}`,
-    });
+    const triggerPrintJobCard = () => {
+        if (!editableJob) return;
+        print(
+            <PrintableJobCard
+                job={editableJob}
+                estimates={mainEstimate ? [mainEstimate, ...supplementaryEstimates] : supplementaryEstimates}
+                customer={customer}
+                vehicle={vehicle}
+                entity={businessEntity}
+                engineers={safeEngineers}
+                taxRates={safeTaxRates}
+                printBlankInspectionSheet={printBlankSheet}
+                inspectionTemplates={safeInspectionTemplates}
+            />
+        );
+    };
 
     useEffect(() => {
         const handlePrintEvent = (e: any) => {
@@ -736,7 +763,10 @@ const EditJobModal: React.FC<{
     
     const { totalNet, grandTotal, vatBreakdown } = useMemo(() => {
         const breakdown: { [key: string]: { net: number; vat: number; rate: number | string; name: string; } } = {};
-        const safeLineItems = Array.isArray(editableEstimate?.lineItems) ? editableEstimate.lineItems : [];
+        const safeLineItems = (editableEstimate?.lineItems?.length ? editableEstimate.lineItems : 
+                              (mainEstimate?.lineItems?.length ? mainEstimate.lineItems : 
+                              (editableJob?.lineItems || [])));
+        
         if (safeLineItems.length === 0) return { totalNet: 0, grandTotal: 0, vatBreakdown: [] };
     
         let currentTotalNet = 0;
@@ -764,7 +794,7 @@ const EditJobModal: React.FC<{
         const finalVatBreakdown = Object.values(breakdown).filter(b => b.net !== 0 || b.vat !== 0);
         const totalVat = finalVatBreakdown.reduce((sum, b) => sum + b.vat, 0);
         return { totalNet: currentTotalNet, grandTotal: currentTotalNet + totalVat, vatBreakdown: finalVatBreakdown };
-    }, [editableEstimate, taxRatesMap, standardTaxRateId, t99RateId]);
+    }, [editableEstimate, mainEstimate, editableJob, taxRatesMap, standardTaxRateId, t99RateId]);
 
     const supplierMap = useMemo(() => new Map(safeSuppliers.map(s => [s.id, s.name])), [safeSuppliers]);
 
@@ -1173,32 +1203,8 @@ const EditJobModal: React.FC<{
                 </footer>
             </div>
 
-            <div className="rebuild-print-container-hidden">
-                <div ref={componentToPrintRef}>
-                    {editableJob && vehicle && customer && (
-                        <PrintableJobCard
-                            job={editableJob}
-                            estimates={mainEstimate ? [mainEstimate, ...supplementaryEstimates] : supplementaryEstimates}
-                            customer={customer}
-                            vehicle={vehicle}
-                            entity={businessEntity}
-                            engineers={safeEngineers}
-                            taxRates={safeTaxRates}
-                            printBlankInspectionSheet={printBlankSheet}
-                            inspectionTemplates={safeInspectionTemplates}
-                        />
-                    )}
-                </div>
-                <div ref={depositReceiptRef}>
-                    {editableJob && vehicle && customer && (
-                        <PrintableDepositReceipt 
-                            job={editableJob}
-                            entity={businessEntity}
-                            customer={customer}
-                            vehicle={vehicle}
-                        />
-                    )}
-                </div>
+            {/* Print Containers (Hidden as they are handled by usePrint) */}
+            <div className="hidden">
             </div>
 
             {isMediaModalOpen && <MediaManagerModal isOpen={isMediaModalOpen} onClose={() => setIsMediaModalOpen(false)} title={mediaModalTitle} initialMedia={mediaModalData} onSave={(newMedia) => { if (onMediaSaveCallback) { onMediaSaveCallback(newMedia); } setIsMediaModalOpen(false); }} />}

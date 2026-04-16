@@ -4,7 +4,6 @@ import { Car, User, KeyRound, Edit, Phone, Mail, MapPin, Building, Briefcase, Ex
 import { HoverInfo } from '../../shared/HoverInfo';
 import LiveAssistant from '../../LiveAssistant';
 import { usePrint } from '../../../core/hooks/usePrint';
-import PrintableDepositReceipt from '../../PrintableDepositReceipt';
 import { formatCurrency } from '../../../core/utils/formatUtils';
 import { formatDate } from '../../../core/utils/dateUtils';
 

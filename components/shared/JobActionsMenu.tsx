@@ -76,10 +76,17 @@ export const JobActionsMenu: React.FC<JobActionsMenuProps> = ({
     }, [isOpen]);
 
     const handleActionClick = (e: React.MouseEvent, action: JobAction) => {
+        e.preventDefault();
         e.stopPropagation();
         if (action.disabled) return;
-        action.onClick();
+        
         setIsOpen(false);
+        onOpenChange?.(false);
+        
+        // Use timeout to ensure menu closes before complex actions (like opening a modal) block the thread
+        setTimeout(() => {
+            action.onClick();
+        }, 10);
     };
 
     const groupedActions = {

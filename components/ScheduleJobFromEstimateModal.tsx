@@ -8,8 +8,8 @@ import { MOTBookingModal } from './MOTBookingModal';
 import { TIME_SEGMENTS } from '../constants';
 import { useApp } from '../core/state/AppContext';
 import { useData } from '../core/state/DataContext';
-import { useReactToPrint } from 'react-to-print';
-import PrintableDepositReceipt from './PrintableDepositReceipt';
+import { usePrint } from '../core/hooks/usePrint';
+import { PrintableEstimate } from './estimates/PrintableEstimate';
 import { formatCurrency } from '../core/utils/formatUtils';
 import FormModal from './FormModal';
 
@@ -53,11 +53,28 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
     const [isSuccess, setIsSuccess] = useState(false);
     const [createdJobFinal, setCreatedJobFinal] = useState<Job | null>(null);
 
-    const depositReceiptRef = useRef<HTMLDivElement>(null);
-    const triggerPrintDepositReceipt = useReactToPrint({
-        contentRef: depositReceiptRef,
-        documentTitle: `DepositReceipt_${createdJobFinal?.id}`,
-    });
+    const print = usePrint();
+    const triggerPrintDepositReceipt = () => {
+        if (!createdJobFinal) return;
+        print(
+            <PrintableEstimate 
+                estimate={estimate}
+                customer={customer}
+                vehicle={vehicle}
+                entityDetails={businessEntities.find(e => e.id === createdJobFinal.entityId)}
+                taxRates={[]}
+                parts={parts}
+                isInternal={false}
+                canViewPricing={true}
+                depositAmount={Number(depositAmount || 0)}
+                totals={{ 
+                    totalNet: (estimate.lineItems || []).reduce((sum, item) => sum + ((item.quantity || 1) * (item.unitPrice || 0)), 0),
+                    grandTotal: (estimate.lineItems || []).reduce((sum, item) => sum + ((item.quantity || 1) * (item.unitPrice || 0)), 0),
+                    vatBreakdown: [] 
+                }}
+            />
+        );
+    };
 
     useEffect(() => {
         if (isOpen) {
@@ -281,19 +298,7 @@ Linked MOT Booking: #${motJobId} @ ${motBooking.time}`;
                     </button>
                 </div>
             </FormModal>
-            <div className="rebuild-print-container-hidden">
-                <div ref={depositReceiptRef}>
-                    {createdJobFinal && (
-                        <PrintableDepositReceipt 
-                            job={createdJobFinal}
-                            entity={entityForEstimate}
-                            customer={customer}
-                            vehicle={vehicle}
-                            estimate={estimate}
-                        />
-                    )}
-                </div>
-            </div>
+            {/* Print components are handled globally by usePrint now */}
         </>
         );
     }

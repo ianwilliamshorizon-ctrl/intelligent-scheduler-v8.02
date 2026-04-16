@@ -1,4 +1,4 @@
-import { Customer, Vehicle, BusinessEntity, Job, Estimate } from '../types';
+import { Customer, Vehicle, BusinessEntity, Job, Estimate, EstimateLineItem } from '../types';
 import { formatCurrency } from '../core/utils/formatUtils';
 import { formatDate } from '../core/utils/dateUtils';
 
@@ -8,14 +8,34 @@ interface PrintableDepositReceiptProps {
     vehicle?: Vehicle | null;
     entity?: BusinessEntity | null;
     estimate?: Estimate | null;
+    estimates?: Estimate[] | null;
 }
 
-const PrintableDepositReceipt: React.FC<PrintableDepositReceiptProps> = ({ job, customer, vehicle, entity, estimate }) => {
-    const estimateTotal = estimate?.lineItems?.reduce((sum, item) => sum + (item.totalPrice || 0), 0) || 0;
+const PrintableDepositReceipt: React.FC<PrintableDepositReceiptProps> = ({ job, customer, vehicle, entity, estimate, estimates }) => {
+    let lineItemsToUse: EstimateLineItem[] = [];
+    if (estimates && estimates.length > 0) {
+        lineItemsToUse = estimates.flatMap(e => e.lineItems || []);
+    } else if (estimate?.lineItems?.length) {
+        lineItemsToUse = estimate.lineItems;
+    } else if (job?.lineItems?.length) {
+        lineItemsToUse = job.lineItems;
+    }
+    const hasEstimate = lineItemsToUse.length > 0;
+    const estimateTotal = lineItemsToUse.reduce((sum, item) => sum + ((item.quantity || 1) * (item.unitPrice || 0)), 0);
     const remainingBalance = estimateTotal - (job.depositAmount || 0);
 
     return (
-        <div className="p-12 max-w-[800px] mx-auto bg-white min-h-[1050px] font-sans text-gray-900 print:p-0">
+        <div className="p-12 max-w-[800px] mx-auto bg-white min-h-[1050px] font-sans text-gray-900 print:p-0 rebuild-print-container">
+            {/* DEBUG BLOCK - We will remove this once we see the issue */}
+            <div className="bg-red-100 p-4 mb-4 text-xs font-mono text-red-900 border border-red-500 rounded">
+                <p><strong>DEBUG INFO:</strong></p>
+                <p>lineItemsToUse Length: {lineItemsToUse.length}</p>
+                <p>estimates Array Length: {estimates?.length || 0}</p>
+                <p>estimate Passed?: {estimate ? 'YES' : 'NO'}</p>
+                <p>estimate line items: {estimate?.lineItems?.length || 0}</p>
+                <p>job.lineItems: {job?.lineItems?.length || 0}</p>
+            </div>
+            
             {/* Header */}
             <div className="flex justify-between items-start mb-12">
                 <div>
@@ -58,7 +78,7 @@ const PrintableDepositReceipt: React.FC<PrintableDepositReceiptProps> = ({ job, 
             </div>
 
             {/* Estimate Detail Table */}
-            {estimate && (
+            {hasEstimate && (
                 <div className="mb-12">
                     <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em] mb-3 pb-1 border-b">Estimate Summary</h3>
                     <div className="border border-gray-100 rounded-xl overflow-hidden">
@@ -70,10 +90,10 @@ const PrintableDepositReceipt: React.FC<PrintableDepositReceiptProps> = ({ job, 
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-50">
-                                {estimate.lineItems?.map((item, idx) => (
+                                {lineItemsToUse.map((item, idx) => (
                                     <tr key={idx}>
                                         <td className="px-6 py-3 text-gray-700 font-medium">{item.description}</td>
-                                        <td className="px-6 py-3 text-right text-gray-900">{formatCurrency(item.totalPrice || 0)}</td>
+                                        <td className="px-6 py-3 text-right text-gray-900">{formatCurrency((item.quantity || 1) * (item.unitPrice || 0))}</td>
                                     </tr>
                                 ))}
                                 <tr className="bg-gray-50/50">

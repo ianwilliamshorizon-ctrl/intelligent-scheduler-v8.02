@@ -56,7 +56,7 @@ export const TimelineView: React.FC<TimelineViewProps> = (props) => {
         onOpenAssistant
     } = props;
 
-    const { jobs, engineers, customers, vehicles, purchaseOrders, saveRecord } = useData();
+    const { jobs, engineers, customers, vehicles, purchaseOrders, saveRecord, storageLocations } = useData();
     const { currentUser, users } = useApp();
     const [assistantJobId, setAssistantJobId] = useState<string | null>(null);
     const [viewMode, setViewMode] = useState<'standard' | 'summary'>('standard');
@@ -147,6 +147,7 @@ export const TimelineView: React.FC<TimelineViewProps> = (props) => {
                             customer: customersById.get(job.customerId),
                             purchaseOrders: purchaseOrders || [],
                             engineers: engineers,
+                            storageLocations: storageLocations || [],
                             currentUser,
                             onEdit: onEditJob,
                             onOpenAssistant: handleOpenAssistant,

@@ -246,7 +246,7 @@ const FinancialReporting: React.FC = () => {
             </section>
 
             {/* Report Content */}
-            <div ref={componentRef} className="rebuild-print-container space-y-4 print:p-0 print:m-0">
+            <div ref={componentRef} className="rebuild-print-container space-y-4 print:p-8 print:m-0">
                 <div className="hidden print:flex flex-col mb-8 border-b-4 border-gray-900 pb-4">
                     <h1 className="text-3xl font-black text-gray-900 uppercase tracking-tighter">
                         Financial Reporting - {reportMode === 'aged' ? 'Aged Debtors' : 'Transaction Analysis'}

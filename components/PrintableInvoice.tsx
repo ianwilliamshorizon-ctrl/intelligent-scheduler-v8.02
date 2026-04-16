@@ -284,7 +284,19 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, customer, 
                                             <span>{formatCurrency(b.vat)}</span>
                                         </div>
                                     ))}
-                                    <div className="flex justify-between font-bold text-lg mt-2 pt-2 border-t"><span>Total Due</span><span>{formatCurrency(totals?.grandTotal)}</span></div>
+                                    <div className="flex justify-between font-bold text-lg mt-2 pt-2 border-t"><span>Total Invoice Amount</span><span>{formatCurrency(totals?.grandTotal)}</span></div>
+                                    {invoice.payments && invoice.payments.length > 0 && (
+                                        <div className="mt-4 space-y-1 pt-4 border-t-2 border-dashed border-gray-200">
+                                            <div className="flex justify-between text-xs text-gray-500 font-bold uppercase">
+                                                <span>Total Payments Received</span>
+                                                <span className="text-green-600">-{formatCurrency(invoice.payments.reduce((sum, p) => sum + (p.amount || 0), 0))}</span>
+                                            </div>
+                                            <div className="flex justify-between font-black text-xl text-indigo-700 pt-1">
+                                                <span>Balance Outstanding</span>
+                                                <span>{formatCurrency(Math.max(0, (totals?.grandTotal || 0) - invoice.payments.reduce((sum, p) => sum + (p.amount || 0), 0)))}</span>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </main>
