@@ -146,7 +146,7 @@ export const AllocatedJobCard: React.FC<{
                     onDragStart(e, job.id, segment.segmentId);
                 }}
                 onDragEnd={onDragEnd}
-                className={`absolute left-0 right-0 p-1.5 rounded-lg shadow-sm border flex flex-col group ${canDrag ? 'cursor-grab' : 'cursor-default'} ${statusColor} allocated-job-container ${isActionsMenuOpen ? 'z-[100]' : 'z-10'} hover:z-50 hover:shadow-md transition-all duration-200`}
+                className={`absolute left-0 right-0 p-1.5 rounded-lg shadow-sm border flex flex-col group ${canDrag ? 'cursor-grab' : 'cursor-default'} ${statusColor} allocated-job-container ${isActionsMenuOpen ? 'z-[999]' : 'z-10'} hover:z-50 hover:shadow-md transition-all duration-200`}
                 style={{
                     top: `${topPercent}%`,
                     height: `${heightPercent}%`,

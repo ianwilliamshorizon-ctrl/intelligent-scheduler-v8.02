@@ -25,6 +25,7 @@ export const DraggableJobCard: React.FC<{
     onRestart?: (jobId: string, segmentId: string) => void;
     onQcApprove?: (jobId: string) => void;
 }> = ({ job, vehicle, customer, purchaseOrders, onDragStart, onDragEnd, onEdit, onCheckIn, onOpenPurchaseOrder, currentUser, onOpenAssistant, engineers = [], onStartWork = () => {}, onPause = () => {}, onRestart = () => {}, onQcApprove = () => {} }) => {
+    const [isActionsMenuOpen, setIsActionsMenuOpen] = React.useState(false);
     const unallocatedSegments = (job.segments || []).filter(s => s.status === 'Unallocated');
 
     if (unallocatedSegments.length === 0) return null;
@@ -108,7 +109,7 @@ export const DraggableJobCard: React.FC<{
                 draggable={canDrag}
                 onDragStart={(e) => canDrag && onDragStart(e, job.id, segmentToDrag.segmentId)}
                 onDragEnd={onDragEnd}
-                className={`p-3.5 rounded-xl shadow-lg border relative transition-all duration-200 hover:shadow-xl hover:scale-[1.01] mb-3 ${canDrag ? 'cursor-grab' : 'cursor-default'} draggable-job ${getCardColorClasses()}`}
+                className={`p-3.5 rounded-xl shadow-lg border relative transition-all duration-200 hover:shadow-xl hover:scale-[1.01] mb-3 ${canDrag ? 'cursor-grab' : 'cursor-default'} draggable-job ${getCardColorClasses()} ${isActionsMenuOpen ? 'z-[999]' : 'z-10'}`}
                 title={canDrag ? `Drag to schedule: ${job.description} (${segmentToDrag.duration}h)`: 'View job details'}
             >
                 {/* Parts Status Accent */}
@@ -159,7 +160,7 @@ export const DraggableJobCard: React.FC<{
                         </span>
                     </div>
                     <div className="flex items-center gap-1">
-                        <JobActionsMenu actions={actions} size="sm" colorScheme="light" title={`Job #${job.id} Actions`} />
+                        <JobActionsMenu actions={actions} size="sm" colorScheme="light" title={`Job #${job.id} Actions`} onOpenChange={setIsActionsMenuOpen} />
                     </div>
                 </div>
             </div>
