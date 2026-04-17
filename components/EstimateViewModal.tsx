@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import EmailEstimateModal from './EmailEstimateModal';
 import { formatCurrency } from '../utils/formatUtils';
-import { formatDate, getRelativeDate, dateStringToDate, addDays } from '../core/utils/dateUtils';
+import { formatDate, getRelativeDate, dateStringToDate, addDays, getNextWorkingDay } from '../core/utils/dateUtils';
 import { usePrint } from '../core/hooks/usePrint';
 import { useData } from '../core/state/DataContext';
 import { BookingCalendarView } from './BookingCalendarView';
@@ -88,6 +88,27 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
     const isAlreadyApproved = estimate.status === 'Approved';
 
     useEffect(() => {
+        if (!isOpen) return;
+        
+        const initialSelection = new Set<string>();
+        const seenGroups = new Set<string>();
+        
+        // CUSTOMER REQUEST: Assume all items are clicked by default
+        (estimate.lineItems || []).forEach(item => {
+            if (item.isOptional) {
+                if (!item.optionGroupId) {
+                    initialSelection.add(item.id);
+                } else if (!seenGroups.has(item.optionGroupId)) {
+                    // Pre-select the first occurrence in an option group (Default option)
+                    initialSelection.add(item.id);
+                    seenGroups.add(item.optionGroupId);
+                }
+            }
+        });
+        setSelectedOptionalItems(initialSelection);
+    }, [isOpen, estimate.id]);
+
+    useEffect(() => {
         if (isConfirmingApproval && mainRef.current) {
             setTimeout(() => {
                 mainRef.current?.scrollTo({ top: mainRef.current.scrollHeight, behavior: 'smooth' });
@@ -110,15 +131,15 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
 
     const laborHours = useMemo(() => {
         return (estimate.lineItems || [])
-            .filter(item => item.isLabor && !item.isOptional)
-            .reduce((sum, item) => sum + (item.quantity || 0), 0);
+            .filter(item => (item.isLabor || item.type === 'labor' || item.partNumber === 'LABOUR') && !item.isOptional)
+            .reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
     }, [estimate.lineItems]);
 
     const projectedLaborHours = useMemo(() => {
         return (estimate.lineItems || [])
-            .filter(item => item.isLabor)
+            .filter(item => (item.isLabor || item.type === 'labor' || item.partNumber === 'LABOUR'))
             .filter(item => !item.isOptional || selectedOptionalItems.has(item.id))
-            .reduce((sum, item) => sum + (item.quantity || 0), 0);
+            .reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
     }, [estimate.lineItems, selectedOptionalItems]);
 
     const resolvedEntity = useMemo(() => {
@@ -157,9 +178,14 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
         const absenceHours = absencesByDate.get(approvalDate) || 0;
         const maxHours = resolvedEntity.dailyCapacityHours || 0;
         const effectiveCapacity = Math.max(0, maxHours - absenceHours);
-        const newTotalLoad = allocatedHours + projectedLaborHours;
-        const remainingHours = effectiveCapacity - newTotalLoad;
+
+        // Account for job splitting: only calculate the load this specific date would take
+        // If the job starts on this day, how many hours does it take ON THIS DAY?
+        // Let's assume the user is checking the START day capacity.
+        const durationOnThisDay = Math.min(projectedLaborHours, 8); // Simplification: assume 8h segments
+        const newTotalLoad = allocatedHours + durationOnThisDay;
         const loadPercentage = effectiveCapacity > 0 ? newTotalLoad / effectiveCapacity : (newTotalLoad > 0 ? 1.1 : 0);
+        const remainingHours = effectiveCapacity - newTotalLoad;
 
         let statusColor = 'bg-green-100 border-green-200 text-green-800';
         if (remainingHours < 0) {
@@ -198,24 +224,42 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                 }
             }
             
-            const dailyHours = jobs
-                .flatMap(job => job.segments || [])
-                .filter(segment => segment.date === preferredStartDate && segment.status !== 'Unallocated')
-                .reduce((sum, segment) => sum + segment.duration, 0);
-
+            // Calculate load based on job splitting across a potential sequence
             const maxCapacity = resolvedEntity?.dailyCapacityHours || 40;
-            const totalProjectedHours = dailyHours + laborHours;
-            const loadPercentage = maxCapacity > 0 ? totalProjectedHours / maxCapacity : 0;
+            let currentDay = preferredStartDate;
+            let remainingHours = projectedLaborHours;
+            let maxDailyLoad = 0;
 
-            if (loadPercentage > 0.5) {
-                setCapacityWarning('This is a high-demand day. We will do our best to accommodate your request or offer an alternative date upon confirmation.');
+            // Check up to 5 days to find the peak load created by this job
+            for (let i = 0; i < 5 && remainingHours > 0; i++) {
+                const dailyHours = jobs
+                    .flatMap(job => job.segments || [])
+                    .filter(segment => segment.date === currentDay && segment.status !== 'Unallocated')
+                    .reduce((sum, segment) => sum + segment.duration, 0);
+
+                const hoursForThisDay = Math.min(remainingHours, 8);
+                const totalProjectedHours = dailyHours + hoursForThisDay;
+                const loadPercentage = maxCapacity > 0 ? totalProjectedHours / maxCapacity : 0;
+                
+                if (loadPercentage > maxDailyLoad) {
+                    maxDailyLoad = loadPercentage;
+                }
+
+                remainingHours -= hoursForThisDay;
+                currentDay = getNextWorkingDay(currentDay);
+            }
+
+            if (maxDailyLoad > 0.85) {
+                setCapacityWarning('This date range is very busy. We will do our best to accommodate your request or offer an alternative date upon confirmation.');
+            } else if (maxDailyLoad > 0.6) {
+                setCapacityWarning('This is a high-demand period. We will do our best to accommodate your request.');
             } else {
                 setCapacityWarning(null);
             }
         } else {
             setCapacityWarning(null);
         }
-    }, [preferredStartDate, isConfirmingApproval, jobs, resolvedEntity, laborHours, minBookingDate, preferredEndDate]);
+    }, [preferredStartDate, isConfirmingApproval, jobs, resolvedEntity, projectedLaborHours, minBookingDate, preferredEndDate]);
 
     const memoizedItemsAndTotals = useMemo(() => {
         const allItems = estimate.lineItems || [];
@@ -277,10 +321,26 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
 
     const handleToggleOptional = (itemId: string) => {
         if (!isInteractive && !isApproving) return;
+        
+        const toggledItem = (estimate.lineItems || []).find(i => i.id === itemId);
+        
         setSelectedOptionalItems(prev => {
             const newSet = new Set(prev);
-            if (newSet.has(itemId)) newSet.delete(itemId);
-            else newSet.add(itemId);
+            
+            if (newSet.has(itemId)) {
+                newSet.delete(itemId);
+            } else {
+                // If this is part of a mutual option group (e.g. Option 1 vs 2),
+                // deselect any other items currently active in that same group.
+                if (toggledItem?.optionGroupId) {
+                    (estimate.lineItems || []).forEach(item => {
+                        if (item.isOptional && item.optionGroupId === toggledItem.optionGroupId && item.id !== itemId) {
+                            newSet.delete(item.id);
+                        }
+                    });
+                }
+                newSet.add(itemId);
+            }
             return newSet;
         });
     };
@@ -295,14 +355,13 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                 entityDetails={resolvedEntity}
                 taxRates={taxRates}
                 parts={parts}
-                isInternal={asInternal}
                 canViewPricing={canViewPricing}
                 totals={dynamicTotals}
             />
         );
     };
 
-    const handleDownloadPdf = async (internal: boolean) => {
+    const handleDownloadPdf = async () => {
         setIsGeneratingPdf(true);
         const printMountPoint = document.createElement('div');
         printMountPoint.style.position = 'absolute';
@@ -320,7 +379,6 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                     entityDetails={resolvedEntity}
                     taxRates={taxRates}
                     parts={parts}
-                    isInternal={internal}
                     canViewPricing={canViewPricing}
                     totals={dynamicTotals}
                 />
@@ -349,7 +407,7 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                 heightLeft -= pdfHeight;
             }
 
-            pdf.save(`Estimate-${estimate.estimateNumber}${internal ? '-INTERNAL' : ''}.pdf`);
+            pdf.save(`Estimate-${estimate.estimateNumber}.pdf`);
         } catch (error) {
             console.error("Error generating PDF:", error);
             alert("Failed to generate PDF. Try using the 'Print' button and saving as PDF.");
@@ -360,7 +418,7 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
         }
     };
     
-    const handleEmailSuccess = () => {
+    const handleEmailSuccess = (recipients: string) => {
         onEmailSuccess({ ...estimate, status: 'Sent' });
         setIsEmailing(false);
     };
@@ -392,16 +450,22 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
 
     const groupItems = (items: EstimateLineItem[]) => {
         const packages: { header: EstimateLineItem, children: EstimateLineItem[] }[] = [];
-        const standalone: EstimateLineItem[] = [];
-        const headers = items.filter(i => i.servicePackageId && !i.isPackageComponent);
-        const children = items.filter(i => i.isPackageComponent);
-        headers.forEach(header => {
-            packages.push({ header, children: children.filter(c => c.servicePackageId === header.servicePackageId) });
+        const labor: EstimateLineItem[] = [];
+        const partsItems: EstimateLineItem[] = [];
+        
+        const topLevelItems = items.filter(i => !i.isPackageComponent);
+        const allChildren = items.filter(i => i.isPackageComponent);
+
+        topLevelItems.forEach(item => {
+            if (item.servicePackageId) {
+                packages.push({ header: item, children: allChildren.filter(c => c.servicePackageId === item.servicePackageId) });
+            } else if (item.isLabor || item.type === 'labor' || item.partNumber === 'LABOUR' || item.partNumber === 'MOT') {
+                labor.push(item);
+            } else {
+                partsItems.push(item);
+            }
         });
-        items.forEach(item => {
-            if (!item.servicePackageId) standalone.push(item);
-        });
-        return { packages, standalone };
+        return { packages, labor, parts: partsItems };
     };
 
     const essentialGroups = useMemo(() => groupItems(essentialItems), [essentialItems]);
@@ -427,10 +491,9 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                              )}
                         </div>
                         <div className="flex items-center gap-3">
-                            <div className="flex bg-gray-200 rounded-lg p-1">
-                                <button onClick={() => setLocalViewMode('internal')} className={`px-3 py-1.5 rounded-md text-sm font-semibold transition-all ${localViewMode === 'internal' ? 'bg-white shadow text-gray-800' : 'text-gray-600 hover:text-gray-800'}`}>Internal</button>
-                                <button onClick={() => setLocalViewMode('customer')} className={`px-3 py-1.5 rounded-md text-sm font-semibold transition-all flex items-center gap-1 ${localViewMode === 'customer' ? 'bg-indigo-600 shadow text-white' : 'text-gray-600 hover:text-gray-800'}`}><Monitor size={14}/> Customer</button>
-                            </div>
+                            <button onClick={() => setLocalViewMode(isCustomerMode ? 'internal' : 'customer')} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${isCustomerMode ? 'bg-indigo-50 text-indigo-700' : 'bg-gray-100 text-gray-600'}`}>
+                                {isCustomerMode ? <><Printer size={14}/> Switch to PDF Preview</> : <><Monitor size={14}/> Switch to Interactive View</>}
+                            </button>
                             <button onClick={onClose}><X size={24} className="text-gray-400 hover:text-gray-600" /></button>
                         </div>
                     </header>
@@ -473,15 +536,30 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                                         <h3 className="text-lg font-bold text-gray-800 mb-3 pb-2 border-b-2 border-gray-100 flex items-center gap-2">
                                             <CheckCircle size={20} className="text-green-600"/> Essential Work
                                         </h3>
-                                        <div className="space-y-3">
+                                        <div className="space-y-4">
                                             {essentialGroups.packages.map(pkg => (
                                                 <CustomerServicePackage key={pkg.header.id} header={pkg.header} childrenItems={pkg.children} isSelected={true} onToggle={() => {}} canViewPricing={canViewPricing} isInteractive={false}/>
                                             ))}
-                                            {essentialGroups.standalone.length > 0 && (
-                                                <div className="border rounded-lg overflow-hidden bg-white shadow-sm">
-                                                    {essentialGroups.standalone.map(item => (
-                                                        <SelectableEstimateItemRow key={item.id} item={item} isSelected={false} onToggle={() => {}} canInteract={false} canViewPricing={canViewPricing} isOptional={false}/>
-                                                    ))}
+                                            
+                                            {essentialGroups.labor.length > 0 && (
+                                                <div className="space-y-2">
+                                                    <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Labour</h4>
+                                                    <div className="border rounded-lg overflow-hidden bg-white shadow-sm">
+                                                        {essentialGroups.labor.map(item => (
+                                                            <SelectableEstimateItemRow key={item.id} item={item} isSelected={false} onToggle={() => {}} canInteract={false} canViewPricing={canViewPricing} isOptional={false}/>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {essentialGroups.parts.length > 0 && (
+                                                <div className="space-y-2">
+                                                    <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Parts & Materials</h4>
+                                                    <div className="border rounded-lg overflow-hidden bg-white shadow-sm">
+                                                        {essentialGroups.parts.map(item => (
+                                                            <SelectableEstimateItemRow key={item.id} item={item} isSelected={false} onToggle={() => {}} canInteract={false} canViewPricing={canViewPricing} isOptional={false}/>
+                                                        ))}
+                                                    </div>
                                                 </div>
                                             )}
                                         </div>
@@ -500,11 +578,25 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                                              {optionalGroups.packages.map(pkg => (
                                                 <CustomerServicePackage key={pkg.header.id} header={pkg.header} childrenItems={pkg.children} isSelected={selectedOptionalItems.has(pkg.header.id)} onToggle={() => handleToggleOptional(pkg.header.id)} canViewPricing={canViewPricing} isInteractive={isInteractive || isApproving}/>
                                             ))}
-                                            {optionalGroups.standalone.length > 0 && (
-                                                <div className="border border-indigo-200 rounded-lg overflow-hidden bg-white shadow-sm">
-                                                    {optionalGroups.standalone.map(item => (
-                                                        <SelectableEstimateItemRow key={item.id} item={item} isSelected={selectedOptionalItems.has(item.id)} onToggle={() => handleToggleOptional(item.id)} canInteract={isInteractive || isApproving} canViewPricing={canViewPricing} isOptional={true}/>
-                                                     ))}
+                                             {optionalGroups.labor.length > 0 && (
+                                                <div className="space-y-2">
+                                                    <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest ml-1">Labour Recommendations</h4>
+                                                    <div className="border-2 border-indigo-200/50 rounded-lg overflow-hidden bg-indigo-50/30 shadow-sm">
+                                                        {optionalGroups.labor.map(item => (
+                                                            <SelectableEstimateItemRow key={item.id} item={item} isSelected={selectedOptionalItems.has(item.id)} onToggle={() => handleToggleOptional(item.id)} canInteract={isInteractive || isApproving} canViewPricing={canViewPricing} isOptional={true}/>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {optionalGroups.parts.length > 0 && (
+                                                <div className="space-y-2">
+                                                    <h4 className="text-[10px] font-black text-amber-500 uppercase tracking-widest ml-1">Part Recommendations</h4>
+                                                    <div className="border-2 border-amber-200/50 rounded-lg overflow-hidden bg-amber-50/30 shadow-sm">
+                                                        {optionalGroups.parts.map(item => (
+                                                            <SelectableEstimateItemRow key={item.id} item={item} isSelected={selectedOptionalItems.has(item.id)} onToggle={() => handleToggleOptional(item.id)} canInteract={isInteractive || isApproving} canViewPricing={canViewPricing} isOptional={true}/>
+                                                        ))}
+                                                    </div>
                                                 </div>
                                             )}
                                         </div>
@@ -522,7 +614,7 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                         ) : (
                             <div className="flex justify-center">
                                 <div className="bg-white shadow-lg scale-90 origin-top">
-                                    <PrintableEstimate estimate={{...estimate, lineItems: estimate.lineItems}} customer={customer} vehicle={vehicle} entityDetails={resolvedEntity} taxRates={taxRates} parts={parts} isInternal={localViewMode === 'internal'} canViewPricing={canViewPricing} totals={dynamicTotals}/>
+                                    <PrintableEstimate estimate={{...estimate, lineItems: estimate.lineItems}} customer={customer} vehicle={vehicle} entityDetails={resolvedEntity} taxRates={taxRates} parts={parts} canViewPricing={canViewPricing} totals={dynamicTotals}/>
                                 </div>
                             </div>
                         )}
@@ -578,14 +670,10 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                                     {currentUser.role !== 'Engineer' && (
                                         <button onClick={() => setIsEmailing(true)} className="flex items-center py-2 px-4 bg-gray-800 text-white font-semibold rounded-lg hover:bg-gray-900 transition"><Mail size={16} className="mr-2"/> Email Link</button>
                                     )}
-                                    <div className="flex bg-gray-100 rounded-lg p-1">
-                                        <button onClick={() => handlePrint(false)} className="flex items-center py-1.5 px-3 rounded text-sm font-semibold hover:bg-white hover:shadow transition">
-                                            <Printer size={16} className="mr-2"/> Customer Print
-                                        </button>
-                                        <div className="w-px bg-gray-300 my-1 mx-1"></div>
-                                        <button onClick={() => handlePrint(true)} className="flex items-center py-1.5 px-3 rounded text-sm font-semibold hover:bg-white hover:shadow transition">Internal Print</button>
-                                    </div>
-                                    <button onClick={() => handleDownloadPdf(false)} disabled={isGeneratingPdf} className="flex items-center py-2 px-4 bg-gray-100 text-gray-700 font-semibold rounded-lg hover:bg-gray-200 disabled:opacity-50 transition">
+                                    <button onClick={() => handlePrint()} className="flex items-center py-2 px-4 bg-gray-100 text-gray-700 font-semibold rounded-lg hover:bg-gray-200 transition">
+                                        <Printer size={16} className="mr-2"/> Print Estimate
+                                    </button>
+                                    <button onClick={() => handleDownloadPdf()} disabled={isGeneratingPdf} className="flex items-center py-2 px-4 bg-gray-100 text-gray-700 font-semibold rounded-lg hover:bg-gray-200 disabled:opacity-50 transition">
                                         {isGeneratingPdf ? <Loader2 size={16} className="mr-2 animate-spin"/> : <Download size={16} className="mr-2" />} PDF
                                     </button>
                                 </div>

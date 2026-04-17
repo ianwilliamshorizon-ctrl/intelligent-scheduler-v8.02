@@ -10,21 +10,75 @@ interface PrintableEstimateProps {
     entityDetails?: BusinessEntity;
     taxRates: TaxRate[];
     parts: Part[];
-    isInternal: boolean;
     canViewPricing: boolean;
     totals: { totalNet: number; grandTotal: number; vatBreakdown: any[] };
     depositAmount?: number;
 }
 
-export const PrintableEstimate: React.FC<PrintableEstimateProps> = ({ estimate, customer, vehicle, entityDetails, parts, isInternal, canViewPricing, totals, depositAmount }) => {
+export const PrintableEstimate: React.FC<PrintableEstimateProps> = ({ estimate, customer, vehicle, entityDetails, parts, canViewPricing, totals, depositAmount }) => {
     // Simplifed Body (Classic Table feel but clean)
     const allItems = estimate.lineItems || [];
     const essentialItems = allItems.filter(i => !i.isOptional);
     const optionalItems = allItems.filter(i => i.isOptional);
 
+    const groupedEssential = useMemo(() => {
+        const labor: EstimateLineItem[] = [];
+        const partsItems: EstimateLineItem[] = [];
+        const packages: { header: EstimateLineItem; children: EstimateLineItem[] }[] = [];
+        
+        const topLevel = essentialItems.filter(i => !i.isPackageComponent);
+        const childMap = new Map<string, EstimateLineItem[]>();
+        
+        essentialItems.forEach(i => {
+            if (i.isPackageComponent && i.servicePackageId) {
+                const list = childMap.get(i.servicePackageId) || [];
+                list.push(i);
+                childMap.set(i.servicePackageId, list);
+            }
+        });
+
+        topLevel.forEach(item => {
+            if (item.servicePackageId) {
+                packages.push({ header: item, children: childMap.get(item.servicePackageId) || [] });
+            } else if (item.isLabor || item.type === 'labor' || item.partNumber === 'LABOUR' || item.partNumber === 'MOT') {
+                labor.push(item);
+            } else {
+                partsItems.push(item);
+            }
+        });
+        return { labor, parts: partsItems, packages };
+    }, [essentialItems]);
+
+    const groupedOptional = useMemo(() => {
+        const labor: EstimateLineItem[] = [];
+        const partsItems: EstimateLineItem[] = [];
+        const packages: { header: EstimateLineItem; children: EstimateLineItem[] }[] = [];
+        
+        const topLevel = optionalItems.filter(i => !i.isPackageComponent);
+        const childMap = new Map<string, EstimateLineItem[]>();
+        
+        optionalItems.forEach(i => {
+            if (i.isPackageComponent && i.servicePackageId) {
+                const list = childMap.get(i.servicePackageId) || [];
+                list.push(i);
+                childMap.set(i.servicePackageId, list);
+            }
+        });
+
+        topLevel.forEach(item => {
+            if (item.servicePackageId) {
+                packages.push({ header: item, children: childMap.get(item.servicePackageId) || [] });
+            } else if (item.isLabor || item.type === 'labor' || item.partNumber === 'LABOUR' || item.partNumber === 'MOT') {
+                labor.push(item);
+            } else {
+                partsItems.push(item);
+            }
+        });
+        return { labor, parts: partsItems, packages };
+    }, [optionalItems]);
+
     const pageStyle = {
         width: '210mm',
-        minHeight: '297mm',
         boxSizing: 'border-box' as const,
         backgroundColor: '#ffffff !important', // Force white
         margin: '0 auto',
@@ -35,13 +89,21 @@ export const PrintableEstimate: React.FC<PrintableEstimateProps> = ({ estimate, 
     const renderLine = (item: EstimateLineItem, isChild = false) => {
         const net = (item.quantity || 0) * (item.unitPrice || 0);
         const isPackage = item.servicePackageId && !item.isPackageComponent;
+        
+        const rowStyle: React.CSSProperties = {
+            borderBottom: '1px solid #f1f5f9',
+            backgroundColor: isPackage ? '#f1f5f9' : (isChild ? '#fafafa' : 'transparent'),
+            breakInside: 'avoid'
+        };
+
         return (
-            <tr key={item.id} style={{ borderBottom: '1px solid #f1f5f9' }} className={isChild ? "bg-gray-50/30" : ""}>
-                <td style={{ padding: '10px 4px', fontSize: isChild ? '11px' : '12px' }}>
+            <tr key={item.id} style={rowStyle}>
+                <td style={{ padding: isPackage ? '12px 10px' : '10px 10px', fontSize: isChild ? '11px' : '12px' }}>
                     <div style={{ fontWeight: isPackage ? '800' : '500', color: isPackage ? '#000' : '#334155' }}>
                         {isChild ? <span className="text-gray-300 mr-2">—</span> : null}
+                        {item.optionLabel && <span style={{ color: '#4f46e5', fontWeight: '900', fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.05em', marginRight: '8px' }}>{item.optionLabel}</span>}
                         {item.description}
-                        {isInternal && item.partNumber && <span className="ml-2 text-[9px] text-gray-400 font-mono tracking-tighter uppercase">[{item.partNumber}]</span>}
+                        {item.partNumber && <span className="ml-2 text-[9px] text-gray-400 font-mono tracking-tighter uppercase">[{item.partNumber}]</span>}
                     </div>
                 </td>
                 <td style={{ padding: '10px 4px', textAlign: 'center', fontSize: '11px', color: '#64748b' }}>{item.quantity}</td>
@@ -50,6 +112,14 @@ export const PrintableEstimate: React.FC<PrintableEstimateProps> = ({ estimate, 
             </tr>
         );
     };
+
+    const renderSectionHeader = (title: string) => (
+        <tr className="bg-gray-100/50">
+            <td colSpan={4} style={{ padding: '8px 10px', borderBottom: '2px solid #e2e8f0' }}>
+                <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">{title}</span>
+            </td>
+        </tr>
+    );
 
     return (
         <div className="rebuild-print-container" style={{ ...pageStyle, display: 'block', padding: '0' }}>
@@ -79,7 +149,7 @@ export const PrintableEstimate: React.FC<PrintableEstimateProps> = ({ estimate, 
                                         </div>
                                     </div>
                                     <div style={{ textAlign: 'right' }}>
-                                        <h2 style={{ fontSize: '28px', fontWeight: '900', color: '#f1f5f9', margin: 0, lineHeight: 1 }}>
+                                        <h2 style={{ fontSize: '32px', fontWeight: '900', color: '#475569', margin: 0, lineHeight: 1 }}>
                                             {depositAmount && depositAmount > 0 ? 'DEPOSIT RECEIPT' : 'ESTIMATE'}
                                         </h2>
                                         <div style={{ marginTop: '12px' }}>
@@ -105,7 +175,7 @@ export const PrintableEstimate: React.FC<PrintableEstimateProps> = ({ estimate, 
                                     </div>
                                     <div>
                                         <h3 className="text-[8px] font-bold text-gray-400 uppercase tracking-widest mb-1">Vehicle</h3>
-                                        <p className="text-base font-black font-mono bg-black text-white px-2 py-0.5 inline-block rounded">{vehicle?.registration}</p>
+                                        <p className="text-base font-black font-mono bg-[#FFD700] text-black border border-black/10 px-2 py-0.5 inline-block rounded shadow-sm">{vehicle?.registration}</p>
                                         <p className="text-gray-600 font-bold mt-1 text-[11px]">{vehicle?.make} {vehicle?.model} {vehicle?.year ? `(${vehicle.year})` : ''}</p>
                                     </div>
                                 </div>
@@ -120,7 +190,37 @@ export const PrintableEstimate: React.FC<PrintableEstimateProps> = ({ estimate, 
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {essentialItems.map(item => renderLine(item))}
+                                        {groupedEssential.packages.length > 0 && (
+                                            <>
+                                                {renderSectionHeader("Service Packages")}
+                                                {groupedEssential.packages.map(pkg => (
+                                                    <React.Fragment key={pkg.header.id}>
+                                                        {renderLine(pkg.header)}
+                                                        {pkg.children.map(child => renderLine(child, true))}
+                                                    </React.Fragment>
+                                                ))}
+                                            </>
+                                        )}
+                                        
+                                        {groupedEssential.labor.length > 0 && (
+                                            <>
+                                                {renderSectionHeader("Labour")}
+                                                {groupedEssential.labor.map(item => renderLine(item))}
+                                            </>
+                                        )}
+
+                                        {groupedEssential.parts.length > 0 && (
+                                            <>
+                                                {renderSectionHeader("Parts & Materials")}
+                                                {groupedEssential.parts.map(item => renderLine(item))}
+                                            </>
+                                        )}
+
+                                        {essentialItems.length === 0 && (
+                                            <tr>
+                                                <td colSpan={4} className="p-8 text-center text-gray-400 italic text-xs">No essential items listed</td>
+                                            </tr>
+                                        )}
                                     </tbody>
                                 </table>
 
@@ -131,7 +231,31 @@ export const PrintableEstimate: React.FC<PrintableEstimateProps> = ({ estimate, 
                                         </div>
                                         <table className="w-full text-left bg-indigo-50/20 border-x border-b border-indigo-100 rounded-b-lg">
                                             <tbody>
-                                                {optionalItems.map(item => renderLine(item))}
+                                                {groupedOptional.packages.length > 0 && (
+                                                    <>
+                                                        {renderSectionHeader("Service Packages")}
+                                                        {groupedOptional.packages.map(pkg => (
+                                                            <React.Fragment key={pkg.header.id}>
+                                                                {renderLine(pkg.header)}
+                                                                {pkg.children.map(child => renderLine(child, true))}
+                                                            </React.Fragment>
+                                                        ))}
+                                                    </>
+                                                )}
+                                                
+                                                {groupedOptional.labor.length > 0 && (
+                                                    <>
+                                                        {renderSectionHeader("Labour")}
+                                                        {groupedOptional.labor.map(item => renderLine(item))}
+                                                    </>
+                                                )}
+
+                                                {groupedOptional.parts.length > 0 && (
+                                                    <>
+                                                        {renderSectionHeader("Parts & Materials")}
+                                                        {groupedOptional.parts.map(item => renderLine(item))}
+                                                    </>
+                                                )}
                                             </tbody>
                                         </table>
                                     </div>

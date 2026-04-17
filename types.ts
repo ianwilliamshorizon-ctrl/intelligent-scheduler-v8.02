@@ -358,6 +358,8 @@ export interface EstimateLineItem {
     
     type?: 'labor' | 'part' | 'package';
     receivedQuantity?: number;
+    optionGroupId?: string;        // For grouping mutual options (e.g. Option 1 vs Option 2)
+    optionLabel?: string;          // e.g. "Option 1", "Option 2"
 }
 
 export interface Estimate {
@@ -574,6 +576,7 @@ export interface ChecklistSection {
     title: string;
     items: ChecklistItem[];
     pageBreakBefore?: boolean;
+    comments?: string;
 }
 
 export interface InspectionTemplate {

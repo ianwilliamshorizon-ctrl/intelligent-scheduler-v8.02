@@ -150,6 +150,25 @@ const MemoizedEditableLineItemRow = React.memo(({
                             </div>
                         )}
                     </div>
+                    {item.isOptional && (
+                        <div className="flex gap-1">
+                            <input 
+                                type="text" 
+                                placeholder="Group (e.g. EXHAUST)" 
+                                value={item.optionGroupId || ''} 
+                                onChange={e => onLineItemChange(item.id, 'optionGroupId', e.target.value)} 
+                                className="w-1/2 p-1 border border-indigo-200 rounded text-[10px] bg-indigo-50 font-bold" 
+                                title="Items with same Group ID are mutually exclusive"
+                            />
+                            <input 
+                                type="text" 
+                                placeholder="Label (e.g. Option 1)" 
+                                value={item.optionLabel || ''} 
+                                onChange={e => onLineItemChange(item.id, 'optionLabel', e.target.value)} 
+                                className="w-1/2 p-1 border border-slate-200 rounded text-[10px] bg-slate-50" 
+                            />
+                        </div>
+                    )}
                 </div>
             </div>
             <input type="number" step="0.1" value={item.quantity} onChange={e => onLineItemChange(item.id, 'quantity', e.target.value)} className="col-span-1 p-1 border rounded text-right text-sm" />

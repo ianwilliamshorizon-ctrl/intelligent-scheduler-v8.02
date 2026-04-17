@@ -13,10 +13,14 @@
         background-color: white !important;
         z-index: 99999 !important;
         visibility: visible !important;
+        /* Reset any oklch variables that might be leaking from Tailwind v4 */
+        --background: #ffffff;
+        --foreground: #020617;
     }
     
     #print-mount-point-wrapper * {
         visibility: visible !important;
+        border-color: #000000 !important; /* Force black borders for print */
     }
 
     /* Standard Page Setup */
@@ -34,17 +38,19 @@
         width: 100% !important;
     }
 
-    /* Content Layout - Avoid overriding borders/shadows if they are intentional */
-    .printable-page, .pdf-page-section, .invoice-section {
+    /* Content Layout */
+    .printable-page {
         display: block !important;
-        width: 100% !important;
+        width: 210mm !important;
         min-height: 296mm !important;
-        margin: 0 !important;
-        padding: 0 !important;
+        margin: 0 auto !important;
+        padding: 15mm !important; /* Restore padding */
         box-sizing: border-box !important;
         background: white !important;
         page-break-after: always !important;
         break-after: page !important;
+        position: relative !important;
+        border: 1px solid #eee; /* Light border for screen preview, hidden in real print usually */
     }
 
     /* Ensure tables don't break mid-row gracefully */
@@ -52,6 +58,7 @@
         page-break-inside: auto !important;
         break-inside: auto !important;
         border-collapse: collapse !important;
+        width: 100% !important;
     }
 
     tr {

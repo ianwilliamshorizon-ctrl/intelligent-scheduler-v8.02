@@ -42,7 +42,7 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
     const [motBooking, setMotBooking] = useState<{ date: string; time: string; liftId: string } | null>(null);
     const isMotRequired = useMemo(() => 
         estimate.lineItems.some(item => 
-            item.description.toLowerCase().includes('mot') && !item.isOptional
+            (item.description.toLowerCase().includes('mot') || item.partNumber === 'MOT')
         ), 
     [estimate.lineItems]);
 
@@ -64,7 +64,6 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
                 entityDetails={businessEntities.find(e => e.id === createdJobFinal.entityId)}
                 taxRates={[]}
                 parts={parts}
-                isInternal={false}
                 canViewPricing={true}
                 depositAmount={Number(depositAmount || 0)}
                 totals={{ 
@@ -88,8 +87,18 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
     
     const laborHours = useMemo(() => {
         const hours = (estimate?.lineItems || [])
-            .filter(item => item.isLabor && !item.isOptional)
-            .reduce((sum, item) => sum + item.quantity, 0);
+            .filter(item => {
+                const isItemLabor = item.isLabor || 
+                                   item.type === 'labor' || 
+                                   item.partNumber === 'LABOUR' || 
+                                   item.partNumber === 'MOT' ||
+                                   item.description?.toLowerCase().includes('labour');
+                
+                // We default to including all items for duration planning, 
+                // matching the "remove to adjust price" customer flow.
+                return isItemLabor;
+            })
+            .reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
         return hours === 0 ? 1 : hours;
     }, [estimate.lineItems]);
     
@@ -127,7 +136,9 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
             .filter(s => s.date === scheduledDate && s.status !== 'Cancelled')
             .reduce((sum, s) => sum + s.duration, 0);
         
-        const newTotalLoad = currentLoad + laborHours;
+        // Multi-day split logic: only show the load for the FIRST segment (or total if < 8h)
+        const durationForThisDay = Math.min(laborHours, 8);
+        const newTotalLoad = currentLoad + durationForThisDay;
         const remainingCapacity = effectiveCapacity - newTotalLoad;
         const loadPercentage = effectiveCapacity > 0 ? newTotalLoad / effectiveCapacity : (newTotalLoad > 0 ? 1.1 : 0);
 
@@ -138,7 +149,7 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
             statusColor = 'bg-amber-100 border-amber-200 text-amber-800';
         }
 
-        return { maxCapacity, absenceHours, effectiveCapacity, currentLoad, remainingCapacity, statusColor };
+        return { maxCapacity, absenceHours, effectiveCapacity, currentLoad, remainingCapacity, statusColor, durationForThisDay, isSplit: laborHours > 8 };
     }, [scheduledDate, jobsForEntity, laborHours, entityForEstimate, maxDailyCapacityHours, absencesByDate]);
 
     const handleMonthChange = (offset: number) => {
@@ -186,10 +197,16 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
         const absenceHours = absencesByDate.get(scheduledDate) || 0;
         const effectiveCapacity = Math.max(0, baseCapacity - absenceHours);
 
-        const hasOtherLabor = estimate.lineItems.some(item => item.isLabor && !item.isOptional && !item.description.toLowerCase().includes('mot'));
+        const hasOtherLabor = estimate.lineItems.some(item => 
+            (item.isLabor || item.type === 'labor' || item.partNumber === 'LABOUR') && 
+            !item.isOptional && 
+            !item.description.toLowerCase().includes('mot') &&
+            item.partNumber !== 'MOT'
+        );
         const isMotOnlyEstimate = motBooking && !hasOtherLabor;
 
-        if (dailyHours + laborHours > effectiveCapacity && !motBooking) {
+        const startDuration = Math.min(laborHours, 8);
+        if (dailyHours + startDuration > effectiveCapacity && !motBooking) {
             const alternativeDate = findNextAvailableDate(scheduledDate, laborHours, jobsForEntity, baseCapacity);
             setSuggestion({ suggestedDate: alternativeDate, originalDate: scheduledDate });
             return;
@@ -379,7 +396,13 @@ Linked MOT Booking: #${motJobId} @ ${motBooking.time}`;
                                         </div>
 
                                         <div className="flex justify-between"><span>Current Load:</span> <span>{dailyStats.currentLoad.toFixed(1)} hrs</span></div>
-                                        <div className="flex justify-between font-semibold border-t border-black/10 pt-1 mt-1"><span>New Job:</span> <span>+ {laborHours.toFixed(1)} hrs</span></div>
+                                        <div className="flex justify-between font-semibold border-t border-black/10 pt-1 mt-1">
+                                            <span>New Job:</span> 
+                                            <span className="flex flex-col items-end">
+                                                <span>+ {dailyStats.durationForThisDay.toFixed(1)} hrs</span>
+                                                {dailyStats.isSplit && <span className="text-[9px] text-gray-400 italic font-normal">(Split: {laborHours.toFixed(1)} total)</span>}
+                                            </span>
+                                        </div>
                                         <div className="flex justify-between font-bold text-base mt-1"><span>Remaining:</span> <span>{dailyStats.remainingCapacity.toFixed(1)} hrs</span></div>
                                     </div>
                                     {dailyStats.remainingCapacity < 0 && (

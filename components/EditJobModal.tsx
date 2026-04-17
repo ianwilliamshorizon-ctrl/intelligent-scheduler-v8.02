@@ -115,7 +115,6 @@ const EditJobModal: React.FC<{
                 entityDetails={businessEntity}
                 taxRates={safeTaxRates}
                 parts={[]}
-                isInternal={false}
                 canViewPricing={true}
                 depositAmount={Number(editableJob?.depositAmount || 0)}
                 totals={{ totalNet, grandTotal, vatBreakdown }}
@@ -605,7 +604,7 @@ const EditJobModal: React.FC<{
         setEditableEstimate(prev => {
             if (!prev) return null;
             const entity = safeBusinessEntities.find(e => e.id === editableJob?.entityId);
-            const newItem: T.EstimateLineItem = { id: crypto.randomUUID(), description: isLabor ? 'Labor' : '', quantity: 1, unitPrice: isLabor ? (entity?.laborRate || 0) : 0, unitCost: isLabor ? (entity?.laborCostRate || 0) : 0, isLabor, fromStock: isLabor, taxCodeId: standardTaxRateId, isOptional: true };
+            const newItem: T.EstimateLineItem = { id: crypto.randomUUID(), description: isLabor ? 'Labor' : '', quantity: 1, unitPrice: isLabor ? (entity?.laborRate || 0) : 0, unitCost: isLabor ? (entity?.laborCostRate || 0) : 0, isLabor, fromStock: isLabor, taxCodeId: standardTaxRateId, isOptional: false };
             return { ...prev, lineItems: [...(prev.lineItems || []), newItem] };
         });
     };
@@ -806,9 +805,18 @@ const EditJobModal: React.FC<{
     }, [job, safePurchaseOrders]);
 
     const totalLaborHours = useMemo(() => {
-        if (!editableEstimate) return 0;
-        return (editableEstimate.lineItems || []).filter(li => li.isLabor).reduce((sum, li) => sum + Number(li.quantity || 0), 0);
-    }, [editableEstimate]);
+        if (!editableEstimate) return job?.estimatedHours || 0;
+        return (editableEstimate.lineItems || [])
+            .filter(li => {
+                const isLabor = li.isLabor || 
+                               li.type === 'labor' || 
+                               li.partNumber === 'LABOUR' || 
+                               li.partNumber === 'MOT' ||
+                               li.description?.toLowerCase().includes('labour');
+                return isLabor;
+            })
+            .reduce((sum, li) => sum + Number(li.quantity || 0), 0);
+    }, [editableEstimate, job?.estimatedHours]);
 
     const handleSaveMain = async () => {
         if (!editableJob) { onClose(); return; }

@@ -85,14 +85,21 @@ export const SelectableEstimateItemRow: React.FC<{
                          e.stopPropagation();
                          if (canInteract) onToggle();
                     }}
-                    className={`h-5 w-5 rounded border flex items-center justify-center ${isSelected ? 'bg-indigo-600 border-indigo-600' : 'bg-white border-gray-300'} ${canInteract ? 'cursor-pointer' : 'cursor-not-allowed'}`}
+                    className={`h-5 w-5 rounded-md border-2 flex items-center justify-center ${isSelected ? 'bg-indigo-600 border-indigo-600 shadow-sm' : 'bg-white border-gray-300'} ${canInteract ? 'cursor-pointer' : 'cursor-not-allowed'}`}
                 >
-                     {isSelected && <CheckSquare size={14} className="text-white" />}
+                     {isSelected ? <CheckSquare size={14} className="text-white" /> : (item.optionGroupId ? <div className="w-2 h-2 rounded-full bg-gray-200" /> : null)}
                 </div>
             )}
         </div>
-        <div className={`col-span-7 ${isOptional && isSelected ? 'font-semibold text-indigo-900' : ''}`}>{item.description}</div>
-        <div className="col-span-2 text-right">{item.quantity} {item.isLabor ? 'hr(s)' : ''}</div>
-        <div className="col-span-2 text-right font-medium">{canViewPricing ? formatCurrency(item.unitPrice * item.quantity) : ''}</div>
+        <div className={`col-span-7 flex flex-col ${isOptional && isSelected ? 'font-semibold text-indigo-900' : ''}`}>
+            {item.optionLabel && (
+                <span className={`text-[9px] font-black uppercase tracking-widest mb-0.5 ${isSelected ? 'text-indigo-600' : 'text-gray-400'}`}>
+                    {item.optionLabel}
+                </span>
+            )}
+            <span>{item.description}</span>
+        </div>
+        <div className="col-span-2 text-right text-sm text-gray-500">{item.quantity} {item.isLabor ? 'hr(s)' : ''}</div>
+        <div className="col-span-2 text-right font-black text-slate-900">{canViewPricing ? formatCurrency(item.unitPrice * item.quantity) : ''}</div>
     </div>
 );

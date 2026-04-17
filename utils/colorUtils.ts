@@ -75,3 +75,10 @@ export const getContrastingMarkerColor = (bgHex: string): string => {
 export const getMarkerColorClass = (bgHex: string): string => {
     return isColorDark(bgHex) ? 'bg-yellow-400 text-black border-black' : 'bg-red-600 text-white border-white';
 };
+
+/**
+ * Returns a hex color for the marker based on background darkness.
+ */
+export const getMarkerHexColor = (bgHex: string): string => {
+    return isColorDark(bgHex) ? '#facc15' : '#dc2626'; // yellow-400 and red-600 hex
+};

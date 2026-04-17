@@ -9,11 +9,11 @@ interface InspectionChecklistProps {
     isReadOnly: boolean;
 }
 
-const statusConfig: Record<ChecklistItemStatus, { icon: React.ElementType, color: string, label: string }> = {
-    ok: { icon: Check, color: 'bg-green-500', label: 'OK' },
-    attention: { icon: AlertTriangle, color: 'bg-yellow-500', label: 'Needs Attention' },
-    urgent: { icon: XCircle, color: 'bg-red-500', label: 'Urgent' },
-    na: { icon: HelpCircle, color: 'bg-gray-400', label: 'N/A' },
+const statusConfig: Record<ChecklistItemStatus, { icon: React.ElementType, color: string, hexColor: string, label: string }> = {
+    ok: { icon: Check, color: 'bg-green-500', hexColor: '#22c55e', label: 'OK' },
+    attention: { icon: AlertTriangle, color: 'bg-yellow-500', hexColor: '#eab308', label: 'Needs Attention' },
+    urgent: { icon: XCircle, color: 'bg-red-500', hexColor: '#ef4444', label: 'Urgent' },
+    na: { icon: HelpCircle, color: 'bg-gray-400', hexColor: '#9ca3af', label: 'N/A' },
 };
 
 const InspectionChecklist: React.FC<InspectionChecklistProps> = ({ checklistData, onUpdate, isReadOnly }) => {
@@ -45,8 +45,8 @@ const InspectionChecklist: React.FC<InspectionChecklistProps> = ({ checklistData
             {checklistData.map((section) => {
                 return (
                     <React.Fragment key={section.id}>
-                        <div className="border rounded-lg bg-white shadow-sm page-break-inside-avoid break-inside-avoid">
-                            <h3 className="text-md font-bold p-3 bg-gray-100 border-b">{section.title}</h3>
+                        <div className="border rounded-lg bg-white shadow-sm page-break-inside-avoid break-inside-avoid" style={{ border: isReadOnly ? '1pt solid #000' : undefined }}>
+                            <h3 className="text-md font-bold p-3 bg-gray-100 border-b" style={{ backgroundColor: isReadOnly ? '#f3f4f6' : undefined, borderBottom: isReadOnly ? '1pt solid #000' : undefined }}>{section.title}</h3>
                             <div className="divide-y">
                                 {section.items.map((item) => (
                                     <div key={item.id} className="p-2 grid grid-cols-12 gap-2 items-center page-break-inside-avoid break-inside-avoid">
@@ -60,7 +60,8 @@ const InspectionChecklist: React.FC<InspectionChecklistProps> = ({ checklistData
                                                         key={status}
                                                         type="button"
                                                         onClick={() => !isReadOnly && handleItemChange(section.id, item.id, 'status', status)}
-                                                        className={`w-8 h-8 flex items-center justify-center rounded-full text-white transition-transform duration-150 ${item.status === status ? 'ring-2 ring-offset-1 ring-indigo-500 scale-110' : 'opacity-50 hover:opacity-100'} ${config.color}`}
+                                                        className={`w-8 h-8 flex items-center justify-center rounded-full text-white transition-transform duration-150 ${item.status === status ? 'ring-2 ring-offset-1 ring-indigo-500 scale-110' : 'opacity-50 hover:opacity-100'} ${!isReadOnly ? config.color : ''}`}
+                                                        style={{ backgroundColor: isReadOnly ? config.hexColor : undefined }}
                                                         title={config.label}
                                                         disabled={isReadOnly}
                                                     >
@@ -83,7 +84,7 @@ const InspectionChecklist: React.FC<InspectionChecklistProps> = ({ checklistData
                                 ))}
                             </div>
                             {section.comments !== undefined && (
-                                <div className="p-3 border-t bg-gray-50 page-break-inside-avoid break-inside-avoid">
+                                <div className="p-3 border-t bg-gray-50 page-break-inside-avoid break-inside-avoid" style={{ borderTop: isReadOnly ? '1pt solid #000' : undefined, backgroundColor: isReadOnly ? '#f9fafb' : undefined }}>
                                     <label className="text-xs font-semibold text-gray-600 block mb-1">Section Notes</label>
                                     <textarea
                                         value={section.comments}

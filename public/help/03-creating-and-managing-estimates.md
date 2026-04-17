@@ -1,5 +1,7 @@
 # Standard Operating Procedure: Creating and Managing Estimates
 
+![Intelligent Workflow Preview](/workflow_preview.png)
+
 **Objective:** To standardize the process of creating, editing, and managing estimates for customers, ensuring accuracy in pricing and a clear audit trail.
 
 ---
@@ -22,52 +24,62 @@
             *   Search for an existing part from your inventory. The part number, description, and price will be auto-filled.
         *   **Adding Service Packages:** Use the **"Search & Add Package"** dropdown to find and add pre-defined service packages. This will add the main package line and all its component parts to the estimate.
 
-    *   **Step 3: Review Totals and Save**
-        *   As you add items, the **Totals Summary** section will update in real-time, showing the subtotal, VAT, and grand total.
+    *   **Step 3: Intelligence & Capacity Preview**
+        *   The system automatically scans for labor keywords and part numbers (e.g., 'LABOUR', 'MOT') to calculate total duration.
+        *   If the total labor exceeds **8 hours**, the system will automatically forecast the load across multiple days for planning purposes.
+        
+    *   **Step 4: Review Totals and Save**
+        *   As you add items, the **Totals Summary** section will update in real-time.
         *   Add any internal notes in the **Notes** section.
-        *   Click **"Save"** to create the estimate. It will be in **'Draft'** status.
+        *   Click **"Save"** to create the estimate.
 
 ---
 
-## 2. Managing an Estimate
+## 2. Interactive Customer Portal
+
+The system provides a premium, interactive experience for customers to review and approve work.
+
+1.  **Sending the Estimate**: Use the **"Email Link"** button to send a secure, interactive link to the customer. You can edit recipients to include multiple contacts.
+2.  **Customer Mode**:
+    *   Customers see a categorized view (Service Packages, Labour, Parts).
+    *   **Automated Selection**: "Optional" recommendations are selected by default to encourage conversions. Customers can deselect items to adjust the price.
+    *   **Capacity Warning**: If a customer selects a date that is near capacity (based on the 8h daily limit), they will see a "High Demand" alert.
+    *   **Digital Approval**: Customers can sign off on work and provide preferred booking dates directly through the portal.
+
+---
+
+## 3. Managing an Estimate
 
 Once an estimate is created, it goes through a lifecycle.
 
 ### Editing an Estimate
-
 1.  Find the estimate in the **Estimates** list.
 2.  Click on it to open the edit modal.
 3.  You can modify any part of the estimate, including adding or removing line items, changing quantities and prices, and updating notes.
 4.  Click **"Save Changes"**.
 
 ### Changing the Estimate Status
-
-The status of an estimate tracks its progress:
-
-*   **Draft:** The initial state. The estimate is being worked on and is not yet visible to the customer.
-*   **Sent:** The estimate has been sent to the customer for approval.
-*   **Approved:** The customer has agreed to the work. At this point, you can convert the estimate into a job.
-*   **Declined:** The customer has rejected the estimate.
-*   **Converted to Job:** The estimate has been used to create a new job in the system. The estimate becomes read-only.
-*   **Closed:** The estimate is no longer active.
-
-To change the status, open the estimate and select the new status from the dropdown menu.
+The status tracks progress: **Draft**, **Sent**, **Approved**, **Declined**, **Converted to Job**, or **Closed**.
 
 ---
 
-## 3. Converting an Estimate to a Job
+## 4. Converting to Job & Intelligent Scheduling
 
-When a customer approves an estimate, you can convert it into a job to schedule the work.
+When a customer approves an estimate, the system handles the transition to the workshop schedule with advanced logic:
 
-1.  Open the approved estimate.
-2.  Click the **"Convert to Job"** button.
-3.  The system will automatically create a new job, copying over the customer, vehicle, and all the line items from the estimate.
-4.  You will be taken to the **Job Edit** screen to schedule the work and assign technicians.
+1.  **Multi-Day Splitting**:
+    *   For jobs exceeding **8 hours**, the system automatically splits the work into daily segments.
+    *   An 11-hour job will be scheduled as 8 hours on day one and 3 hours on the next working day.
+2.  **Scheduling Tool**:
+    *   Click **"Schedule Job"** from the Approved estimate.
+    *   Use the **"Find Next Available Date"** tool, which accounts for the multi-day split and current workshop capacity.
+    *   The calendar will visually distribute the segments across the required days.
 
 ---
 
 **Best Practices:**
 
-*   **Use Service Packages:** For common jobs, always use service packages to ensure consistency and speed up the estimating process.
-*   **Detailed Descriptions:** Provide clear and detailed descriptions for all labor and parts to avoid confusion.
-*   **Keep Statuses Updated:** Maintain accurate estimate statuses to have a clear view of your sales pipeline.
+*   **8-Hour Planning Rule**: Remember that the system planning is based on an 8-hour workday per engineer. Long jobs will naturally span across multiple days on your dashboard.
+*   **Use Option Groups**: Group alternative parts (e.g., different tire brands) so the customer can select their preferred option in the interactive portal.
+*   **Monitor High Demand**: Pay attention to capacity warnings when customers request dates; it indicates the workshop is nearing its 8h/day limit.
+*   **Detailed Descriptions**: Provide clear descriptions for all labor to ensure the customer understands the value of 'Essential' vs 'Recommended' work.

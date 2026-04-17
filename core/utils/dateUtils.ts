@@ -229,7 +229,8 @@ export const findNextAvailableDate = (
             .filter(segment => segment.date === dateString && segment.status !== 'Cancelled')
             .reduce((sum, segment) => sum + (Number(segment.duration) || 0), 0);
 
-        if (dailyHours + jobHours <= actualCapacity) {
+        const hoursToFitOnFirstDay = Math.min(jobHours, 8);
+        if (dailyHours + hoursToFitOnFirstDay <= actualCapacity) {
             return dateString;
         }
 

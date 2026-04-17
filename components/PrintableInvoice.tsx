@@ -4,7 +4,6 @@ import { formatCurrency } from '../core/utils/formatUtils';
 import InspectionChecklist from './InspectionChecklist';
 import VehicleDamageReport from './VehicleDamageReport';
 import TyreCheck from './TyreCheck';
-import AsyncImage from './AsyncImage';
 
 interface PrintableInvoiceProps {
     invoice: Invoice;
@@ -25,134 +24,59 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, customer, 
         return inspectionTemplates.find(t => t.id === job.inspectionTemplateId);
     }, [job?.inspectionTemplateId, inspectionTemplates]);
 
-    const inspectionTitle = useMemo(() => {
-        return inspectionTemplate?.name ?? 'Inspection Report';
-    }, [inspectionTemplate]);
-
     const totals = useMemo(() => {
         if (!invoice) return { subtotal: 0, grandTotal: 0, vatBreakdown: [] };
-
         const safeTaxRates = Array.isArray(taxRates) ? taxRates : [];
-        const standardTaxRateId = safeTaxRates.find(t => t.code === 'T1')?.id;
-        const t99RateId = safeTaxRates.find(t => t.code === 'T99')?.id;
         const taxRatesMap = new Map(safeTaxRates.map(t => [t.id, t]));
-
         const vatBreakdown: { [key: string]: { net: number; vat: number; rate: number | string; name: string; } } = {};
         let subtotal = 0;
-
-        const lineItems = Array.isArray(invoice.lineItems) ? invoice.lineItems : [];
-
-        lineItems.forEach(item => {
+        (invoice.lineItems || []).forEach(item => {
             if (item.isPackageComponent) return;
-
             const itemNet = (item.quantity || 0) * (item.unitPrice || 0);
             subtotal += itemNet;
-
-            if (item.taxCodeId === t99RateId) {
-                const taxCodeId = t99RateId;
-                if (!vatBreakdown[taxCodeId]) {
-                    vatBreakdown[taxCodeId] = { net: 0, vat: 0, rate: 'Mixed', name: 'Mixed VAT' };
-                }
-                vatBreakdown[taxCodeId].net += itemNet;
+            const taxCodeId = item.taxCodeId;
+            if (!taxCodeId) return;
+            const taxRate = taxRatesMap.get(taxCodeId);
+            if (!taxRate) return;
+            if (!vatBreakdown[taxCodeId]) {
+                vatBreakdown[taxCodeId] = { net: 0, vat: 0, rate: taxRate.rate, name: taxRate.name };
+            }
+            vatBreakdown[taxCodeId].net += itemNet;
+            if (taxRate.code === 'T99') {
                 vatBreakdown[taxCodeId].vat += (item.preCalculatedVat || 0) * (item.quantity || 1);
-            } else {
-                const taxCodeId = item.taxCodeId || standardTaxRateId;
-                if (!taxCodeId) return;
-
-                const taxRate = taxRatesMap.get(taxCodeId);
-                if (!taxRate) return;
-
-                if (!vatBreakdown[taxCodeId]) {
-                    vatBreakdown[taxCodeId] = { net: 0, vat: 0, rate: taxRate.rate, name: taxRate.name };
-                }
-
-                vatBreakdown[taxCodeId].net += itemNet;
-                if (taxRate.rate > 0) {
-                    vatBreakdown[taxCodeId].vat += itemNet * (taxRate.rate / 100);
-                }
+            } else if (taxRate.rate > 0) {
+                vatBreakdown[taxCodeId].vat += itemNet * (taxRate.rate / 100);
             }
         });
-
         const finalVatBreakdown = Object.values(vatBreakdown).filter(b => b.net > 0 || b.vat > 0);
         const totalVat = finalVatBreakdown.reduce((sum, b) => sum + b.vat, 0);
-
         return { subtotal, grandTotal: subtotal + totalVat, vatBreakdown: finalVatBreakdown };
     }, [invoice, taxRates]);
 
     const groupedItems = useMemo(() => {
-        const rows: { header?: EstimateLineItem, children?: EstimateLineItem[], standalone?: EstimateLineItem }[] = [];
-        const allItems = Array.isArray(invoice?.lineItems) ? invoice.lineItems : [];
-        
-        const packageHeaders = allItems.filter((item: EstimateLineItem) => item.servicePackageId && !item.isPackageComponent);
-        
-        packageHeaders.forEach((header: EstimateLineItem) => {
-            const children = allItems.filter((item: EstimateLineItem) => item.isPackageComponent && item.servicePackageId === header.servicePackageId);
-            rows.push({ header, children });
-        });
-
-        allItems.forEach((item: EstimateLineItem) => {
-            if (!item.servicePackageId && !item.isPackageComponent) {
-                rows.push({ standalone: item });
+        const labor: EstimateLineItem[] = [];
+        const partsItems: EstimateLineItem[] = [];
+        const packages: { header: EstimateLineItem; children: EstimateLineItem[] }[] = [];
+        const allItems = invoice?.lineItems || [];
+        const topLevelItems = allItems.filter(i => !i.isPackageComponent);
+        const allChildren = allItems.filter(i => i.isPackageComponent);
+        topLevelItems.forEach(item => {
+            if (item.servicePackageId) {
+                packages.push({ header: item, children: allChildren.filter(c => c.servicePackageId === item.servicePackageId) });
+            } else if (item.isLabor || item.type === 'labor' || item.partNumber === 'LABOUR' || item.partNumber === 'MOT') {
+                labor.push(item);
+            } else {
+                partsItems.push(item);
             }
         });
-        
-        return rows;
+        return { labor, parts: partsItems, packages };
     }, [invoice?.lineItems]);
-
-    const diagramImageId = useMemo(() => {
-        const images = Array.isArray(vehicle?.images) ? vehicle.images : [];
-        const primaryId = images.find((img: any) => img.isPrimaryDiagram)?.id;
-        if (primaryId) return primaryId;
-
-        // Library lookup fallback
-        if (vehicle) {
-            const libraryDiagram = (inspectionDiagrams || []).find(d => 
-                d.make?.toLowerCase() === vehicle.make?.toLowerCase() && 
-                d.model?.toLowerCase() === vehicle.model?.toLowerCase()
-            ) || (inspectionDiagrams || []).find(d => 
-                d.make?.toLowerCase() === vehicle.make?.toLowerCase()
-            );
-            if (libraryDiagram) return libraryDiagram.imageId;
-        }
-
-        return null;
-    }, [vehicle, inspectionDiagrams]);
-
-    const hasTechnicianNotes = job && Array.isArray(job.technicianObservations) && job.technicianObservations.length > 0;
-    
-    const hasAnyInspectionData = job && (
-        (Array.isArray(job.inspectionChecklist) && job.inspectionChecklist.some((s: any) => s.items?.some((i: any) => i.status !== 'na'))) ||
-        (job.tyreCheck && Object.values(job.tyreCheck).some((t: any) => t.indicator !== 'na')) ||
-        (Array.isArray(job.damagePoints) && job.damagePoints.length > 0)
-    );
-    
-    const hasDamageReport = job && Array.isArray(job.damagePoints) && job.damagePoints.length > 0;
-
-    const pageStyle = {
-        width: '210mm',
-        minHeight: '297mm',
-        padding: '10mm',
-        boxSizing: 'border-box' as const,
-        backgroundColor: 'white',
-        position: 'relative' as const,
-    };
-
-    const renderHeader = (title: string) => (
-        <div className="flex justify-between items-center mb-6 border-b pb-2">
-             <h2 className="text-2xl font-bold text-gray-800">{title}</h2>
-             <div className="text-right text-sm">
-                 <p><strong>Ref:</strong> {invoice.id}</p>
-                 <p><strong>Job:</strong> {job?.id}</p>
-             </div>
-        </div>
-    );
 
     const inspectionPages = useMemo(() => {
         if (!job?.inspectionChecklist) return [];
         const templateSections = inspectionTemplate?.sections || [];
         const pages: { sections: ChecklistSection[] }[] = [];
         let currentPage: { sections: ChecklistSection[] } = { sections: [] };
-
         job.inspectionChecklist.forEach(section => {
             const templateSection = templateSections.find(t => t.id === section.id);
             if (templateSection?.pageBreakBefore && currentPage.sections.length > 0) {
@@ -162,209 +86,233 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, customer, 
                 currentPage.sections.push(section);
             }
         });
-
-        if (currentPage.sections.length > 0) {
-            pages.push(currentPage);
-        }
-
+        if (currentPage.sections.length > 0) pages.push(currentPage);
         return pages;
     }, [job?.inspectionChecklist, inspectionTemplate]);
 
+    const hasTechnicianNotes = job && Array.isArray(job.technicianObservations) && job.technicianObservations.length > 0;
+    const hasDamageReport = job && Array.isArray(job.damagePoints) && job.damagePoints.length > 0;
+
+    // --- Styling Consts (EXACTLY AS ESTIMATE) ---
+    const pageStyle = {
+        width: '210mm',
+        boxSizing: 'border-box' as const,
+        backgroundColor: '#ffffff !important', 
+        margin: '0 auto',
+        display: 'block' as const,
+        color: '#000000 !important'
+    };
+
+    const renderLine = (item: EstimateLineItem, isChild = false) => {
+        const net = (item.quantity || 0) * (item.unitPrice || 0);
+        const isPackage = item.servicePackageId && !item.isPackageComponent;
+        
+        const rowStyle: React.CSSProperties = {
+            borderBottom: '1px solid #f1f5f9',
+            backgroundColor: isPackage ? '#f1f5f9' : (isChild ? '#fafafa' : 'transparent'),
+            breakInside: 'avoid'
+        };
+
+        return (
+            <tr key={item.id} style={rowStyle}>
+                <td style={{ padding: isPackage ? '12px 10px' : '10px 10px', fontSize: isChild ? '11px' : '12px' }}>
+                    <div style={{ fontWeight: isPackage ? '800' : '500', color: isPackage ? '#000' : '#334155' }}>
+                        {isChild ? <span style={{ color: '#ccc', marginRight: '8px' }}>—</span> : null}
+                        {item.description}
+                        {item.partNumber && item.partNumber !== 'LABOUR' && (
+                            <span style={{ marginLeft: '8px', fontSize: '9px', color: '#94a3b8', fontFamily: 'monospace', textTransform: 'uppercase' }}>
+                                [{item.partNumber}]
+                            </span>
+                        )}
+                    </div>
+                </td>
+                <td style={{ padding: '10px 4px', textAlign: 'center', fontSize: '11px', color: '#64748b' }}>{item.quantity}</td>
+                <td style={{ padding: '10px 4px', textAlign: 'right', fontSize: '11px', color: '#64748b' }}>{formatCurrency(item.unitPrice)}</td>
+                <td style={{ padding: '10px 4px', textAlign: 'right', fontWeight: '700', fontSize: '12px', color: '#000' }}>{formatCurrency(net)}</td>
+            </tr>
+        );
+    };
+
+    const renderSectionHeader = (title: string) => (
+        <tr style={{ backgroundColor: '#f8fafc' }}>
+            <td colSpan={4} style={{ padding: '8px 10px', borderBottom: '2px solid #e2e8f0' }}>
+                <span style={{ fontSize: '10px', fontWeight: '900', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{title}</span>
+            </td>
+        </tr>
+    );
+
     return (
-        <div style={{ 
-            backgroundColor: '#ffffff', 
-            WebkitPrintColorAdjust: 'exact',
-            printColorAdjust: 'exact'
-        }}>
-            <div className="rebuild-print-container bg-gray-100 font-sans text-sm text-gray-800">
-                <div className="printable-page invoice-section" style={{ ...pageStyle, display: 'flex', flexDirection: 'column' }}>
-                    
-                    {invoice.status === 'Paid' && (
-                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 border-[12px] border-green-600 p-8 opacity-15 rounded-2xl -rotate-[25deg] pointer-events-none z-0">
-                            <h1 className="text-9xl font-black text-green-600 m-0 leading-none">PAID</h1>
-                            <p className="text-center text-2xl text-green-600 font-bold uppercase tracking-widest mt-2">{invoice.issueDate}</p>
-                        </div>
-                    )}
+        <div className="rebuild-print-container" style={pageStyle}>
+            <style dangerouslySetInnerHTML={{ __html: `
+                @media print {
+                    thead { display: table-header-group; }
+                    tfoot { display: table-footer-group; }
+                    .printable-section { break-before: page; padding-top: 20px; }
+                }
+                * { -webkit-print-color-adjust: exact !important; color-adjust: exact !important; }
+            ` }} />
 
-                    <div className="invoice-content flex-grow flex flex-col z-10">
-                        <header className="border-b" style={{ paddingBottom: '10mm' }}>
-                            <div className="flex justify-between items-start">
-                                <div style={{ marginBottom: '5mm' }}>
-                                    <h1 className="text-3xl font-bold text-gray-900">{entity?.name}</h1>
-                                    <p>{entity?.addressLine1}</p>
-                                    <p>{entity?.city}, {entity?.postcode}</p>
-                                    {entity?.vatNumber && <p className="mt-1">VAT No: {entity.vatNumber}</p>}
-                                </div>
-                            </div>
-                            <div className="mt-6">
-                                <h2 className="text-2xl font-semibold text-gray-800">INVOICE</h2>
-                                <p>#{invoice?.id}</p>
-                                <p className="mt-2">Date: {invoice?.issueDate}</p>
-                                <p>Due: {invoice?.dueDate}</p>
-                            </div>
-                        </header>
-                        <main className="space-y-4 my-6 flex-grow">
-                            <section className="grid grid-cols-2 gap-6">
-                                <div>
-                                    <h3 className="text-xs font-semibold text-gray-500 uppercase">Bill To</h3>
-                                    <p className="font-bold text-gray-800">{customer?.forename} {customer?.surname}</p>
-                                    <p>{customer?.addressLine1}</p>
-                                    <p>{customer?.city}, {customer?.postcode}</p>
-                                </div>
-                                <div>
-                                    <h3 className="text-xs font-semibold text-gray-500 uppercase">Vehicle Details</h3>
-                                    <p className="font-bold text-gray-800">{vehicle?.make} {vehicle?.model}</p>
-                                    <p>Reg: <span className="font-mono">{vehicle?.registration}</span></p>
-                                    {job?.mileage && <p>Mileage: <span className="font-mono">{job.mileage.toLocaleString()} miles</span></p>}
-                                    <p>Job Ref: <span className="font-mono">{job?.id}</span></p>
-                                </div>
-                            </section>
-                            <section className="mt-6">
-                                <div className="grid grid-cols-12 gap-2 items-center text-xs font-semibold text-gray-500 px-1.5 py-1 border-y bg-gray-50">
-                                    <div className="col-span-7">Description</div>
-                                    <div className="col-span-1 text-right">Qty</div>
-                                    <div className="col-span-2 text-right">Unit Price (Net)</div>
-                                    <div className="col-span-2 text-right">Total (Net)</div>
-                                </div>
-                                {groupedItems.map((row, index) => {
-                                    if (row.standalone) {
-                                        const item = row.standalone;
-                                        const net = (item.quantity || 0) * (item.unitPrice || 0);
-                                        return (
-                                            <div key={`standalone-${item.id}`} className="grid grid-cols-12 gap-2 items-center px-1.5 py-1.5 text-sm">
-                                                <div className="col-span-7">{item.description}</div>
-                                                <div className="col-span-1 text-right">{item.quantity}</div>
-                                                <div className="col-span-2 text-right">{formatCurrency(item.unitPrice)}</div>
-                                                <div className="col-span-2 text-right">{formatCurrency(net)}</div>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                    <tr>
+                        <td>
+                            <div style={{ height: '10mm' }}></div>
+                            <div style={{ paddingBottom: '20px', marginBottom: '20px', borderBottom: '2px solid #000', margin: '0 15mm 20px 15mm' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                    <div style={{ flex: 1 }}>
+                                        <div style={{ fontSize: '20px', fontWeight: '900', color: '#000', marginBottom: '8px' }}>{entity?.name || 'BROOKSPEED'}</div>
+                                        <div style={{ fontSize: '10px', color: '#000', fontWeight: '500', lineHeight: '1.4' }}>
+                                            <p>{entity?.addressLine1}, {entity?.city}, {entity?.postcode}</p>
+                                            <div style={{ marginTop: '5px', display: 'flex', gap: '15px' }}>
+                                                {entity?.vatNumber && <p>VAT: {entity.vatNumber}</p>}
+                                                {entity?.email && <p>{entity.email}</p>}
                                             </div>
-                                        );
-                                    } else if (row.header && row.children) {
-                                        const header = row.header;
-                                        const net = (header.quantity || 0) * (header.unitPrice || 0);
-                                        return (
-                                            <React.Fragment key={`pkg-${header.id}`}>
-                                                <div className="h-2"></div>
-                                                <div className="grid grid-cols-12 gap-2 items-center px-1.5 py-1.5 text-sm bg-gray-100 font-bold">
-                                                    <div className="col-span-7">{header.description}</div>
-                                                    <div className="col-span-1 text-right">{header.quantity}</div>
-                                                    <div className="col-span-2 text-right">{formatCurrency(header.unitPrice)}</div>
-                                                    <div className="col-span-2 text-right">{formatCurrency(net)}</div>
-                                                </div>
-                                                {row.children.map(child => (
-                                                    <div key={`child-${child.id}`} className="grid grid-cols-12 gap-2 items-center pl-6 pr-1.5 py-1 text-xs text-gray-600">
-                                                        <div className="col-span-7">- {child.description}</div>
-                                                        <div className="col-span-1 text-right">{child.quantity}</div>
-                                                        <div className="col-span-2 text-right italic">Included</div>
-                                                        <div className="col-span-2 text-right"></div>
-                                                    </div>
+                                        </div>
+                                        {/* Invoice Ref on LEFT */}
+                                        <div style={{ marginTop: '15px', borderLeft: '3px solid #000', paddingLeft: '12px' }}>
+                                            <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#000' }}>Invoice: #{invoice?.id}</div>
+                                            <div style={{ fontSize: '12px', color: '#444' }}>Date: {invoice?.issueDate}</div>
+                                        </div>
+                                    </div>
+                                    <div style={{ textAlign: 'right' }}>
+                                        <h2 style={{ fontSize: '42px', fontWeight: '900', color: '#334155', margin: 0, opacity: 0.8 }}>INVOICE</h2>
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    <tr>
+                        <td style={{ padding: '0 15mm' }}>
+                            <main style={{ paddingBottom: '30px' }}>
+                                {/* CLIENT & VEHICLE BAR */}
+                                <div style={{ display: 'flex', gap: '40px', marginBottom: '30px', paddingBottom: '20px', borderBottom: '1px solid #f1f5f9' }}>
+                                    <div style={{ flex: 1 }}>
+                                        <h3 style={{ fontSize: '8px', fontWeight: 'bold', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '4px' }}>Customer</h3>
+                                        <p style={{ fontSize: '14px', fontWeight: 'bold', color: '#000' }}>{customer?.forename} {customer?.surname}</p>
+                                        <p style={{ fontSize: '11px', color: '#64748b' }}>{customer?.addressLine1}, {customer?.city}, {customer?.postcode}</p>
+                                    </div>
+                                    <div style={{ flex: 1 }}>
+                                        <h3 style={{ fontSize: '8px', fontWeight: 'bold', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '4px' }}>Vehicle</h3>
+                                        <p style={{ display: 'inline-block', fontSize: '16px', fontWeight: '900', backgroundColor: '#FFD700', color: '#000', padding: '2px 8px', borderRadius: '4px', border: '1px solid rgba(0,0,0,0.1)' }}>{vehicle?.registration}</p>
+                                        <p style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748b', marginTop: '4px' }}>{vehicle?.make} {vehicle?.model} {job?.mileage ? `| ${job.mileage.toLocaleString()} miles` : ''}</p>
+                                    </div>
+                                </div>
+
+                                {/* LINE ITEMS TABLE */}
+                                <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '30px' }}>
+                                    <thead style={{ backgroundColor: '#f8fafc', borderBottom: '2px solid #e2e8f0', borderTop: '2px solid #e2e8f0' }}>
+                                        <tr>
+                                            <th style={{ padding: '10px', textAlign: 'left', fontSize: '9px', fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase' }}>Description of Work</th>
+                                            <th style={{ padding: '10px', textAlign: 'center', fontSize: '9px', fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase', width: '60px' }}>Qty</th>
+                                            <th style={{ padding: '10px', textAlign: 'right', fontSize: '9px', fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase', width: '100px' }}>Unit</th>
+                                            <th style={{ padding: '10px', textAlign: 'right', fontSize: '9px', fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase', width: '100px' }}>Total</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {groupedItems.packages.length > 0 && (
+                                            <>
+                                                {renderSectionHeader("Service Packages")}
+                                                {groupedItems.packages.map(pkg => (
+                                                    <React.Fragment key={pkg.header.id}>
+                                                        {renderLine(pkg.header)}
+                                                        {pkg.children.map(child => renderLine(child, true))}
+                                                    </React.Fragment>
                                                 ))}
-                                            </React.Fragment>
-                                        );
-                                    }
-                                    return null;
-                                })}
-                            </section>
+                                            </>
+                                        )}
+                                        {groupedItems.labor.length > 0 && (
+                                            <>
+                                                {renderSectionHeader("Labour")}
+                                                {groupedItems.labor.map(item => renderLine(item))}
+                                            </>
+                                        )}
+                                        {groupedItems.parts.length > 0 && (
+                                            <>
+                                                {renderSectionHeader("Parts & Materials")}
+                                                {groupedItems.parts.map(item => renderLine(item))}
+                                            </>
+                                        )}
+                                    </tbody>
+                                </table>
 
-                            <div className="mt-4 pt-4 border-t flex justify-between page-break-inside-avoid">
-                                <div>
-                                    {entity?.bankAccountName && (
-                                        <div className="text-xs text-gray-600">
-                                            <h4 className="font-semibold text-gray-800">Payment Details:</h4>
-                                            <p>Account Name: {entity.bankAccountName}</p>
-                                            <p>Sort Code: {entity.bankSortCode}</p>
-                                            <p>Account No: {entity.bankAccountNumber}</p>
+                                {/* TOTALS BLOCK */}
+                                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px' }}>
+                                    <div style={{ width: '280px', backgroundColor: '#f8fafc', padding: '20px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#64748b', marginBottom: '8px' }}>
+                                            <span>Subtotal Net</span>
+                                            <span style={{ color: '#000', fontWeight: 'bold' }}>{formatCurrency(totals.subtotal)}</span>
                                         </div>
-                                    )}
-                                </div>
-                                <div className="w-64 text-sm">
-                                    <div className="flex justify-between"><span>Subtotal</span><span className="font-semibold">{formatCurrency(totals?.subtotal)}</span></div>
-                                    {Array.isArray(totals?.vatBreakdown) && totals.vatBreakdown.map((b: any) => (
-                                        <div key={b.name} className="flex justify-between text-gray-600">
-                                            <span>{b.rate === 'Mixed' ? b.name : `VAT @ ${b.rate}%`}</span>
-                                            <span>{formatCurrency(b.vat)}</span>
-                                        </div>
-                                    ))}
-                                    <div className="flex justify-between font-bold text-lg mt-2 pt-2 border-t"><span>Total Invoice Amount</span><span>{formatCurrency(totals?.grandTotal)}</span></div>
-                                    {invoice.payments && invoice.payments.length > 0 && (
-                                        <div className="mt-4 space-y-1 pt-4 border-t-2 border-dashed border-gray-200">
-                                            <div className="flex justify-between text-xs text-gray-500 font-bold uppercase">
-                                                <span>Total Payments Received</span>
-                                                <span className="text-green-600">-{formatCurrency(invoice.payments.reduce((sum, p) => sum + (p.amount || 0), 0))}</span>
+                                        {totals.vatBreakdown.map(b => (
+                                            <div key={b.name} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>
+                                                <span>{b.name} ({b.rate}%)</span>
+                                                <span>{formatCurrency(b.vat)}</span>
                                             </div>
-                                            <div className="flex justify-between font-black text-xl text-indigo-700 pt-1">
-                                                <span>Balance Outstanding</span>
-                                                <span>{formatCurrency(Math.max(0, (totals?.grandTotal || 0) - invoice.payments.reduce((sum, p) => sum + (p.amount || 0), 0)))}</span>
-                                            </div>
+                                        ))}
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '20px', fontWeight: '900', color: '#000', marginTop: '15px', paddingTop: '15px', borderTop: '2px solid #e2e8f0' }}>
+                                            <span>TOTAL</span>
+                                            <span>{formatCurrency(totals.grandTotal)}</span>
                                         </div>
-                                    )}
+                                    </div>
                                 </div>
-                            </div>
-                        </main>
-                        
-                        <footer className="mt-auto pt-4 border-t text-center text-[11px] text-gray-600">
-                            <p className="font-bold">Thank you for your business.</p>
-                            <p>{(entity?.invoiceFooterText || '').replace(/please pay in 30 days/gi, '').trim()}</p>
-                        </footer>
-                    </div>
-                </div>
 
-                {hasTechnicianNotes && (
-                    <div className="printable-page pdf-page-section" style={{ ...pageStyle, pageBreakBefore: 'always', breakBefore: 'page' }}>
-                        {renderHeader('Technician Report')}
-                        <section className="mb-8">
-                            <h3 className="text-lg font-bold text-gray-700 mb-3 bg-gray-100 p-2 rounded">Notes & Observations</h3>
-                            <ul className="list-disc list-inside space-y-2 ml-2">
-                                {job.technicianObservations.map((obs: string, i: number) => (
-                                    <li key={i} className="text-gray-800">{obs}</li>
+                                {/* ADDITIONAL REPORTS APPENDED TO THE END OF TBODY TD */}
+                                {hasTechnicianNotes && (
+                                    <div className="printable-section">
+                                        <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '15px', borderBottom: '2px solid #000', paddingBottom: '8px' }}>Technician Observations</h3>
+                                        <div style={{ fontSize: '12px', lineHeight: '1.6', color: '#334155' }}>
+                                            {job.technicianObservations?.map((obs, i) => (
+                                                <div key={i} style={{ marginBottom: '10px', paddingLeft: '15px', position: 'relative' }}>
+                                                    <span style={{ position: 'absolute', left: 0, color: '#94a3b8' }}>•</span> {obs}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {inspectionPages.map((page, idx) => (
+                                    <div key={idx} className="printable-section">
+                                        <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '15px', borderBottom: '2px solid #000', paddingBottom: '8px' }}>Inspection Report</h3>
+                                        <InspectionChecklist checklistData={page.sections} onUpdate={()=>{}} isReadOnly={true} />
+                                    </div>
                                 ))}
-                            </ul>
-                        </section>
-                    </div>
-                )}
 
-                {hasAnyInspectionData && inspectionPages.length > 0 && (
-                    <React.Fragment>
-                        {inspectionPages.map((page, pageIndex) => (
-                            <div key={`inspection-page-${pageIndex}`} className="printable-page pdf-page-section" style={{ ...pageStyle, pageBreakBefore: 'always', breakBefore: 'page', marginTop: '30mm' }}>
-                                {renderHeader(inspectionTitle)}
-                                <section>
-                                    <InspectionChecklist checklistData={page.sections} onUpdate={() => { }} isReadOnly={true} />
-                                </section>
-                            </div>
-                        ))}
-                    </React.Fragment>
-                )}
+                                {job?.tyreCheck && (
+                                    <div className="printable-section">
+                                        <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '15px', borderBottom: '2px solid #000', paddingBottom: '8px' }}>Tyre Safety Check</h3>
+                                        <TyreCheck tyreData={job.tyreCheck} onUpdate={()=>{}} isReadOnly={true} />
+                                    </div>
+                                )}
 
-                {job?.tyreCheck && (
-                    <div className="printable-page pdf-page-section" style={{ ...pageStyle, pageBreakBefore: 'always', breakBefore: 'page', marginTop: '30mm' }}>
-                        {renderHeader(`${inspectionTitle}: Tyre Check`)}
-                        <section>
-                            <div className="mb-6 page-break-inside-avoid"><TyreCheck tyreData={job.tyreCheck} onUpdate={()=>{}} isReadOnly={true} /></div>
-                        </section>
-                    </div>
-                )}
+                                {hasDamageReport && (
+                                    <div className="printable-section">
+                                        <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '15px', borderBottom: '2px solid #000', paddingBottom: '8px' }}>Vehicle Condition Report</h3>
+                                        <VehicleDamageReport activePoints={job.damagePoints || []} onUpdate={()=>{}} isReadOnly={true} vehicleModel={vehicle?.model} vehicleColor={vehicle?.colour} imageId={null} />
+                                    </div>
+                                )}
+                            </main>
+                        </td>
+                    </tr>
+                </tbody>
 
-                {hasDamageReport && (
-                    <div className="printable-page pdf-page-section" style={{ ...pageStyle, pageBreakBefore: 'always', breakBefore: 'page', marginTop: '30mm' }}>
-                        {renderHeader(`${inspectionTitle}: Bodywork Report`)}
-                        <section>
-                            <div className="mb-6 break-inside-avoid page-break-inside-avoid">
-                                <h4 className="font-bold text-gray-600 mb-2 ml-1">Bodywork Inspection</h4>
-                                <div className="border rounded-lg bg-white overflow-hidden p-4">
-                                    <VehicleDamageReport 
-                                        activePoints={job.damagePoints || []} 
-                                        onUpdate={()=>{}} 
-                                        isReadOnly={true} 
-                                        vehicleModel={vehicle?.model} 
-                                        vehicleColor={vehicle?.colour}
-                                        imageId={diagramImageId}
-                                    />
+                <tfoot>
+                    <tr>
+                        <td>
+                            <div style={{ height: '10mm' }}></div>
+                            <footer style={{ margin: '0 15mm 10mm 15mm', paddingBottom: '10mm' }}>
+                                <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '9px', color: '#94a3b8' }}>
+                                    <div style={{ fontStyle: 'italic' }}>
+                                        <p>Thank you for choosing {entity?.name}. Business Registered: {entity?.name} - {entity?.vatNumber}</p>
+                                    </div>
+                                    <div style={{ fontStyle: 'normal', fontWeight: 'bold' }}>Page 1</div>
                                 </div>
-                            </div>
-                        </section>
-                    </div>
-                )}
-            </div>
+                            </footer>
+                        </td>
+                    </tr>
+                </tfoot>
+            </table>
         </div>
     );
 };

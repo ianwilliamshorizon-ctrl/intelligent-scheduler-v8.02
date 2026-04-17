@@ -103,7 +103,7 @@ const DispatchView: React.FC<DispatchViewProps> = ({
         users
     });
 
-    const { handleSavePurchaseOrder } = useWorkshopActions();
+    const { handleSavePurchaseOrder, handleSaveItem } = useWorkshopActions();
 
     // -- Drag & Drop Logic via Hook --
     const {
@@ -116,7 +116,7 @@ const DispatchView: React.FC<DispatchViewProps> = ({
         handleDragEnd,
         confirmJobSchedule
     } = useDispatchDragDrop({
-        jobs, lifts, businessEntities, currentDate, setJobs, setAssignModalData, bankHolidays, estimates, parts, vehicles, currentUser, handleSavePurchaseOrder
+        jobs, lifts, businessEntities, currentDate, setJobs, setAssignModalData, bankHolidays, estimates, parts, vehicles, currentUser, handleSavePurchaseOrder, handleSaveItem
     });
 
     const handleAssignConfirm = (engineerId: string, startSegmentIndex: number) => {

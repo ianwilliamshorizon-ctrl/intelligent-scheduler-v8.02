@@ -632,9 +632,9 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                 <ScheduleConfirmationEmailModal 
                     isOpen={modals.scheduleEmailModal.isOpen}
                     onClose={() => setters.setScheduleEmailModal({isOpen: false, data: null})}
-                    onSend={() => {
+                    onSend={(recipients) => {
                         setters.setScheduleEmailModal({isOpen: false, data: null});
-                        setConfirmation({isOpen: true, title: 'Email Sent', message: 'Booking confirmation email sent.', type: 'success'});
+                        setConfirmation({isOpen: true, title: 'Email Sent', message: `Booking confirmation email sent to ${recipients}.`, type: 'success'});
                     }}
                     data={modals.scheduleEmailModal.data}
                 />

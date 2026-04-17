@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import ReactDOM from 'react-dom/client';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { Invoice, Customer, Vehicle, BusinessEntity, Job, TaxRate, ServicePackage, InspectionTemplate, InspectionDiagram } from '../types';
-import { X, Printer, CheckCircle, Download, Loader2, Wallet } from 'lucide-react';
+import { X, Printer, CheckCircle, Download, Loader2, Wallet, Mail } from 'lucide-react';
 import { usePrint } from '../core/hooks/usePrint';
 import PrintableInvoice from './PrintableInvoice';
 import PaymentModal from './PaymentModal';
+import EmailInvoiceModal from './EmailInvoiceModal';
 
 interface InvoiceModalProps {
     isOpen: boolean;
@@ -28,9 +29,10 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ isOpen, onClose, invoice, c
     const print = usePrint();
     const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+    const [isEmailing, setIsEmailing] = useState(false);
 
     // Calculate Grand Total including VAT (Mirroring PrintableInvoice logic)
-    const grandTotal = React.useMemo(() => {
+    const grandTotal = useMemo(() => {
         if (!invoice) return 0;
         if (invoice.totalAmount) return invoice.totalAmount;
 
@@ -85,7 +87,9 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ isOpen, onClose, invoice, c
 
             const root = ReactDOM.createRoot(printMountPoint);
             root.render(
-                <PrintableInvoice {...{ invoice, customer, vehicle, entity, job, taxRates, servicePackages, inspectionTemplates, inspectionDiagrams }} />
+                <React.StrictMode>
+                    <PrintableInvoice {...{ invoice, customer, vehicle, entity, job, taxRates, servicePackages, inspectionTemplates, inspectionDiagrams }} />
+                </React.StrictMode>
             );
 
             // Wait for render, images and state settles
@@ -96,7 +100,20 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ isOpen, onClose, invoice, c
                 useCORS: true, 
                 allowTaint: true,
                 logging: false,
-                backgroundColor: '#ffffff'
+                backgroundColor: '#ffffff',
+                onclone: (clonedDoc) => {
+                    // CRITICAL: Aggressively remove oklch from all styles to prevent crash
+                    const styles = clonedDoc.querySelectorAll('style');
+                    styles.forEach(s => {
+                        s.innerHTML = s.innerHTML.replace(/oklch\([^)]+\)/g, '#000000');
+                    });
+                    const rootStyle = clonedDoc.createElement('style');
+                    rootStyle.innerHTML = `
+                        :root { color-scheme: light !important; }
+                        * { -webkit-print-color-adjust: exact !important; color-adjust: exact !important; }
+                    `;
+                    clonedDoc.head.appendChild(rootStyle);
+                }
             });
 
             const imgData = canvas.toDataURL('image/png');
@@ -112,7 +129,7 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ isOpen, onClose, invoice, c
             heightLeft -= pdfHeight;
 
             while (heightLeft > 0) {
-                position = heightLeft - canvasHeightOnPdf;
+                position -= pdfHeight;
                 pdf.addPage();
                 pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, canvasHeightOnPdf);
                 heightLeft -= pdfHeight;
@@ -164,60 +181,87 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ isOpen, onClose, invoice, c
         }
     };
 
+    const handleEmailSuccess = (recipients: string) => {
+        if (invoice) {
+            onUpdateInvoice({ ...invoice, status: invoice.status === 'Draft' ? 'Sent' : invoice.status });
+        }
+        setIsEmailing(false);
+    };
+
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 bg-gray-900 bg-opacity-75 z-[70] flex justify-center items-center p-4">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[95vh] flex flex-col">
-                <header className="flex-shrink-0 flex justify-between items-center p-4 border-b bg-gray-50 rounded-t-xl">
-                    <h2 className="text-xl font-bold text-indigo-700">Invoice #{invoice.id}</h2>
-                    <div className="flex items-center gap-3">
-                        <button 
-                            onClick={handlePrint} 
-                            className="flex items-center py-2 px-4 bg-gray-600 text-white font-semibold rounded-lg hover:bg-gray-700 shadow-sm transition-colors"
-                        >
-                            <Printer size={16} className="mr-2"/> 
-                            <span>Print</span>
-                        </button>
-                        <button 
-                            onClick={handleDownloadPdf} 
-                            disabled={isGeneratingPdf} 
-                            className="flex items-center py-2 px-4 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 shadow-sm disabled:opacity-50 transition-colors"
-                        >
-                            {isGeneratingPdf ? <Loader2 size={16} className="mr-2 animate-spin"/> : <Download size={16} className="mr-2"/>}
-                            <span>Download PDF</span>
-                        </button>
-                        {invoice.status !== 'Paid' && (
+        <>
+            <div className="fixed inset-0 bg-gray-900 bg-opacity-75 z-[70] flex justify-center items-center p-4">
+                <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[95vh] flex flex-col">
+                    <header className="flex-shrink-0 flex justify-between items-center p-4 border-b bg-gray-50 rounded-t-xl">
+                        <h2 className="text-xl font-bold text-indigo-700">Invoice #{invoice.id}</h2>
+                        <div className="flex items-center gap-3">
                             <button 
-                                onClick={handleMarkAsPaid} 
-                                className="flex items-center py-2 px-6 bg-green-600 text-white font-bold rounded-lg shadow-sm hover:bg-green-700 transition-all gap-2"
+                                onClick={() => setIsEmailing(true)}
+                                className="flex items-center py-2 px-4 bg-gray-100 text-gray-700 font-semibold rounded-lg hover:bg-gray-200 transition-colors"
                             >
-                                <Wallet size={16} />
-                                <span>Record Payment</span>
+                                <Mail size={16} className="mr-2"/> 
+                                <span>Email</span>
                             </button>
-                        )}
-                        
-                        <div className="w-px h-8 bg-gray-300 mx-1"></div>
-                        <button onClick={onClose} className="p-1 hover:bg-gray-200 rounded-full transition-colors"><X size={28} className="text-gray-400 hover:text-gray-800" /></button>
-                    </div>
-                </header>
-                <main className="flex-grow overflow-y-auto bg-gray-100 p-8">
-                    <div className="scale-90 origin-top shadow-xl">
-                        <PrintableInvoice {...{ invoice, customer, vehicle, entity, job, taxRates, servicePackages, inspectionTemplates, inspectionDiagrams }} />
-                    </div>
-                </main>
-            </div>
+                            <button 
+                                onClick={handlePrint} 
+                                className="flex items-center py-2 px-4 bg-gray-600 text-white font-semibold rounded-lg hover:bg-gray-700 shadow-sm transition-colors"
+                            >
+                                <Printer size={16} className="mr-2"/> 
+                                <span>Print</span>
+                            </button>
+                            <button 
+                                onClick={handleDownloadPdf} 
+                                disabled={isGeneratingPdf} 
+                                className="flex items-center py-2 px-4 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 shadow-sm disabled:opacity-50 transition-colors"
+                            >
+                                {isGeneratingPdf ? <Loader2 size={16} className="mr-2 animate-spin"/> : <Download size={16} className="mr-2"/>}
+                                <span>Download PDF</span>
+                            </button>
+                            {invoice.status !== 'Paid' && (
+                                <button 
+                                    onClick={handleMarkAsPaid} 
+                                    className="flex items-center py-2 px-6 bg-green-600 text-white font-bold rounded-lg shadow-sm hover:bg-green-700 transition-all gap-2"
+                                >
+                                    <Wallet size={16} />
+                                    <span>Record Payment</span>
+                                </button>
+                            )}
+                            
+                            <div className="w-px h-8 bg-gray-300 mx-1"></div>
+                            <button onClick={onClose} className="p-1 hover:bg-gray-200 rounded-full transition-colors"><X size={28} className="text-gray-400 hover:text-gray-800" /></button>
+                        </div>
+                    </header>
+                    <main className="flex-grow overflow-y-auto bg-gray-100 p-8">
+                        <div className="scale-90 origin-top shadow-xl">
+                            <PrintableInvoice {...{ invoice, customer, vehicle, entity, job, taxRates, servicePackages, inspectionTemplates, inspectionDiagrams }} />
+                        </div>
+                    </main>
+                </div>
 
-            {isPaymentModalOpen && (
-                <PaymentModal
-                    isOpen={isPaymentModalOpen}
-                    onClose={() => setIsPaymentModalOpen(false)}
-                    onSave={handleSavePayment}
-                    invoice={invoice}
+                {isPaymentModalOpen && (
+                    <PaymentModal
+                        isOpen={isPaymentModalOpen}
+                        onClose={() => setIsPaymentModalOpen(false)}
+                        onSave={handleSavePayment}
+                        invoice={invoice}
+                        totalAmount={grandTotal}
+                    />
+                )}
+            </div>
+            {isEmailing && (
+                <EmailInvoiceModal 
+                    isOpen={isEmailing} 
+                    onClose={() => setIsEmailing(false)} 
+                    onSend={handleEmailSuccess} 
+                    invoice={invoice} 
+                    customer={customer} 
+                    vehicle={vehicle}
                     totalAmount={grandTotal}
                 />
             )}
-        </div>
+        </>
     );
 };
 

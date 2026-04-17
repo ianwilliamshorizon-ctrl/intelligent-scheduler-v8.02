@@ -69,12 +69,19 @@ const TyreCheck: React.FC<TyreCheckProps> = ({ tyreData, onUpdate, isReadOnly })
                                 {Object.keys(statusConfig).map(s => {
                                     const status = s as ChecklistItemStatus;
                                     const config = statusConfig[status];
+                                    const hexColors: Record<ChecklistItemStatus, string> = {
+                                        ok: '#22c55e',
+                                        attention: '#eab308',
+                                        urgent: '#ef4444',
+                                        na: '#9ca3af'
+                                    };
                                     return (
                                         <button
                                             key={status}
                                             type="button"
                                             onClick={() => !isReadOnly && handleUpdate(location, 'indicator', status)}
-                                            className={`w-8 h-8 flex items-center justify-center rounded-full text-white transition-transform duration-150 ${data.indicator === status ? 'ring-2 ring-offset-1 ring-indigo-500 scale-110' : 'opacity-50 hover:opacity-100'} ${config.color}`}
+                                            className={`w-8 h-8 flex items-center justify-center rounded-full text-white transition-transform duration-150 ${data.indicator === status ? 'ring-2 ring-offset-1 ring-indigo-500 scale-110' : 'opacity-50 hover:opacity-100'} ${!isReadOnly ? config.color : ''}`}
+                                            style={{ backgroundColor: isReadOnly ? hexColors[status] : undefined }}
                                             title={config.label}
                                             disabled={isReadOnly}
                                         >

@@ -19,6 +19,7 @@ interface UseDispatchDragDropProps {
     vehicles: Vehicle[];
     currentUser: User;
     handleSavePurchaseOrder: (po: PurchaseOrder) => Promise<void>;
+    handleSaveItem: (setter: any, item: any, collection: string) => Promise<any>;
     estimates: Estimate[];
 }
 
@@ -34,6 +35,7 @@ export const useDispatchDragDrop = ({
     vehicles,
     currentUser,
     handleSavePurchaseOrder,
+    handleSaveItem,
     estimates
 }: UseDispatchDragDropProps) => {
     
@@ -170,20 +172,17 @@ export const useDispatchDragDrop = ({
         }
         
 
-        setJobs(prev => prev.map(j => {
-            if (j.id === jobId) {
-                return { 
-                    ...j, 
-                    scheduledDate: newSegments[0]?.date || j.scheduledDate, 
-                    segments: newSegments, 
-                    status: calculateJobStatus(newSegments), 
-                    purchaseOrderIds: j.purchaseOrderIds
-                };
-            }
-            return j;
-        }));
+        const updatedJob: Job = { 
+            ...job, 
+            scheduledDate: newSegments[0]?.date || job.scheduledDate, 
+            segments: newSegments, 
+            status: calculateJobStatus(newSegments), 
+            purchaseOrderIds: job.purchaseOrderIds
+        };
 
-    }, [jobs, lifts, currentDate, bankHolidays, getEntityConfig, getMaxSlotsForDate, checkCollisionOnDate, setJobs, estimates]);
+        await handleSaveItem(setJobs, updatedJob, 'brooks_jobs');
+
+    }, [jobs, lifts, currentDate, bankHolidays, getEntityConfig, getMaxSlotsForDate, checkCollisionOnDate, setJobs, estimates, handleSaveItem]);
 
     const handleDragStart = useCallback((e: React.DragEvent, parentJobId: string, segmentId: string) => {
         const job = jobs.find(j => j.id === parentJobId);
@@ -277,32 +276,31 @@ export const useDispatchDragDrop = ({
         
         if (dropResultRef.current?.type === 'UNALLOCATED' && draggedItemRef.current) {
             const { parentJobId } = draggedItemRef.current;
-            
-             setJobs(prev => prev.map(job => {
-                if (job.id === parentJobId) {
-                    const newSegments: JobSegment[] = [{
-                         id: crypto.randomUUID(),
-                         segmentId: crypto.randomUUID(),
-                         description: job.description || 'Unallocated Segment',
-                         date: null,
-                         duration: job.estimatedHours,
-                         status: 'Unallocated',
-                         allocatedLift: null,
-                         scheduledStartSegment: null,
-                         engineerId: null
-                    }];
+            const job = jobs.find(j => j.id === parentJobId);
+            if (!job) return;
 
-                    return { 
-                        ...job, 
-                        scheduledDate: null,
-                        segments: newSegments, 
-                        status: 'Unallocated' 
-                    };
-                }
-                return job;
-            }));
+            const newSegments: JobSegment[] = [{
+                 id: crypto.randomUUID(),
+                 segmentId: crypto.randomUUID(),
+                 description: job.description || 'Unallocated Segment',
+                 date: null,
+                 duration: job.estimatedHours,
+                 status: 'Unallocated',
+                 allocatedLift: null,
+                 scheduledStartSegment: null,
+                 engineerId: null
+            }];
+
+            const updatedJob: Job = { 
+                ...job, 
+                scheduledDate: null,
+                segments: newSegments, 
+                status: 'Unallocated' 
+            };
+
+            handleSaveItem(setJobs, updatedJob, 'brooks_jobs');
         }
-    }, [setJobs]);
+    }, [jobs, setJobs, handleSaveItem]);
     
     const handleDragEnd = useCallback((e: React.DragEvent) => {
         const sourceElement = e.currentTarget as HTMLElement;

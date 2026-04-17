@@ -101,7 +101,21 @@ const PrintableJobCard: React.FC<PrintableJobCardProps> = ({
     const tyreLocations: TyreLocation[] = ['frontLeft', 'frontRight', 'rearLeft', 'rearRight', 'spare'];
     const tyreLocationLabels: Record<TyreLocation, string> = { frontLeft: 'F/L', frontRight: 'F/R', rearLeft: 'R/L', rearRight: 'R/R', spare: 'Spare' };
     const statusLabels: Record<ChecklistItemStatus, string> = { ok: 'OK', attention: 'ATTN', urgent: 'URGENT', na: 'N/A' };
-
+    const totalCalculatedHours = useMemo(() => {
+        const estItems = (estimates || []).flatMap(e => e.lineItems || []);
+        const hourTotal = estItems
+            .filter(li => {
+                const isLabor = li.isLabor || 
+                               li.type === 'labor' || 
+                               li.partNumber === 'LABOUR' || 
+                               li.partNumber === 'MOT' ||
+                               li.description?.toLowerCase().includes('labour');
+                return isLabor;
+            })
+            .reduce((sum, li) => sum + Number(li.quantity || 0), 0);
+        
+        return hourTotal > 0 ? hourTotal : (job.estimatedHours || 0);
+    }, [estimates, job.estimatedHours]);
 
     const mainContent = (
         <div className="bg-white font-sans text-sm text-gray-800 printable-page" style={pageStyle}>
@@ -169,7 +183,7 @@ const PrintableJobCard: React.FC<PrintableJobCardProps> = ({
                 <section className="border-2 border-gray-900 rounded-lg overflow-hidden">
                     <div className="bg-gray-900 text-white px-4 py-2 flex justify-between items-center">
                         <h3 className="text-xs font-bold uppercase tracking-widest">Primary Work Description</h3>
-                        <span className="text-[10px] uppercase font-bold text-gray-400">Hours: {job.estimatedHours || 0}h</span>
+                        <span className="text-[10px] uppercase font-bold text-gray-400">Hours: {totalCalculatedHours}h</span>
                     </div>
                     <div className="p-4 bg-white">
                         <p className="text-lg font-bold text-gray-900 mb-2 underline decoration-indigo-500 underline-offset-4">

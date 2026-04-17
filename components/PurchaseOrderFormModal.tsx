@@ -1001,7 +1001,10 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({
                  <EmailPurchaseOrderModal
                     isOpen={isEmailModalOpen}
                     onClose={() => setIsEmailModalOpen(false)}
-                    onSend={() => {}}
+                    onSend={(recipients) => {
+                        setIsEmailModalOpen(false);
+                        showSuccess(`Email sent to: ${recipients}`);
+                    }}
                     purchaseOrder={formData as PurchaseOrder}
                     businessEntity={currentEntity}
                     supplier={currentSupplier}

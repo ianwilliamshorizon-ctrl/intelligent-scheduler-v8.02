@@ -131,39 +131,80 @@ const MemoizedEditableLineItemRow = React.memo(({
 
     return (
          <div className={`grid grid-cols-12 gap-2 items-start p-2 rounded-lg border ${isPackageComponent ? 'bg-gray-100' : 'bg-white'}`}>
-            <div className="col-span-5 space-y-1">
-                <input 
-                    type="text" 
-                    placeholder="Part No." 
-                    value={item.partNumber || ''} 
-                    onChange={e => onLineItemChange(item.id, 'partNumber', e.target.value)} 
-                    className="w-full p-1 border rounded disabled:bg-gray-200 text-sm" 
-                    disabled={isReadOnly || item.isLabor} 
-                />
-                <div className="relative w-full">
-                    <input
-                        type="text"
-                        placeholder="Description"
-                        value={item.description}
-                        onChange={handleDescriptionChange}
-                        onFocus={() => !item.isLabor && onSetActivePartSearch(item.id)}
-                        onBlur={() => setTimeout(() => onSetActivePartSearch(null), 150)}
-                        className="w-full p-1 border rounded disabled:bg-gray-200"
+            <div className="col-span-5 flex items-start gap-2">
+                {!isPackageComponent && (
+                    <input 
+                        type="checkbox" 
+                        checked={item.isOptional || false} 
+                        onChange={e => onLineItemChange(item.id, 'isOptional', e.target.checked)}
+                        className="h-3.5 w-3.5 mt-2 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 flex-shrink-0"
                         disabled={isReadOnly}
+                        title="Mark as Optional"
                     />
-                    {activePartSearch === item.id && (
-                        <div className="absolute z-20 top-full left-0 w-full bg-white border rounded shadow-lg max-h-50 overflow-y-auto mt-1">
-                            {filteredParts.map(part => (
-                                <div key={part.id} onMouseDown={() => onSelectPart(item.id, part)} className="p-2 hover:bg-indigo-100 cursor-pointer text-sm border-b last:border-0">
-                                    <p className="font-semibold">{part.partNumber} - {part.description}</p>
+                )}
+                <div className="flex-grow space-y-1">
+                    <input 
+                        type="text" 
+                        placeholder="Part No." 
+                        value={item.partNumber || ''} 
+                        onChange={e => onLineItemChange(item.id, 'partNumber', e.target.value)} 
+                        className="w-full p-1 border rounded disabled:bg-gray-200 text-sm" 
+                        disabled={isReadOnly || item.isLabor} 
+                    />
+                    <div className="relative w-full">
+                        <input
+                            type="text"
+                            placeholder="Description"
+                            value={item.description}
+                            onChange={handleDescriptionChange}
+                            onFocus={() => !item.isLabor && onSetActivePartSearch(item.id)}
+                            onBlur={() => setTimeout(() => onSetActivePartSearch(null), 150)}
+                            className="w-full p-1 border rounded disabled:bg-gray-200 text-sm"
+                            disabled={isReadOnly}
+                        />
+                         {activePartSearch === item.id && (
+                            <div className="absolute z-20 top-full left-0 w-full bg-white border rounded shadow-lg max-h-60 overflow-y-auto mt-1">
+                                {filteredParts.map(part => (
+                                    <div key={part.id} onMouseDown={() => onSelectPart(item.id, part)} className="p-2 hover:bg-green-100 cursor-pointer text-sm border-b last:border-0 flex justify-between items-center group">
+                                        <div className="flex-grow">
+                                            <p className="font-semibold text-green-700">{part.partNumber}</p>
+                                            <p className="text-gray-600 truncate">{part.description}</p>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <button 
+                                                onMouseDown={(e) => { e.stopPropagation(); onEditPart(part); }}
+                                                className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
+                                                title="Edit Part Details"
+                                            >
+                                                <Edit size={14} />
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                                <div onMouseDown={() => onAddNewPart(item.id, item.description || '')} className="p-2 bg-green-50 hover:bg-green-100 cursor-pointer text-sm text-green-700 font-semibold border-t flex items-center gap-1">
+                                    <PlusCircle size={14}/> Create New Part "{item.description}"
                                 </div>
-                            ))}
-                            <div 
-                                onMouseDown={() => onAddNewPart(item.id, item.description)} 
-                                className="p-2 bg-indigo-50 hover:bg-indigo-100 cursor-pointer text-sm text-indigo-700 font-semibold border-t flex items-center gap-1"
-                            >
-                                <Plus size={14}/> Create New Part
                             </div>
+                        )}
+                    </div>
+                    {item.isOptional && (
+                        <div className="flex gap-1">
+                            <input 
+                                type="text" 
+                                placeholder="Group (e.g. EXHAUST)" 
+                                value={item.optionGroupId || ''} 
+                                onChange={e => onLineItemChange(item.id, 'optionGroupId', e.target.value)} 
+                                className="w-1/2 p-0.5 border border-indigo-200 rounded text-[9px] bg-indigo-50 font-bold" 
+                                disabled={isReadOnly}
+                            />
+                            <input 
+                                type="text" 
+                                placeholder="Label (e.g. Option 1)" 
+                                value={item.optionLabel || ''} 
+                                onChange={e => onLineItemChange(item.id, 'optionLabel', e.target.value)} 
+                                className="w-1/2 p-0.5 border border-slate-200 rounded text-[9px] bg-slate-50" 
+                                disabled={isReadOnly}
+                            />
                         </div>
                     )}
                 </div>

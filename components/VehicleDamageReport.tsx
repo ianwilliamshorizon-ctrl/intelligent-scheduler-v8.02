@@ -4,7 +4,7 @@ import { VehicleDamagePoint } from '../types';
 import { XCircle } from 'lucide-react';
 import PorscheFrames from './PorscheFrames';
 import AsyncImage from './AsyncImage';
-import { getHexFromColorName, getMarkerColorClass } from '../utils/colorUtils';
+import { getHexFromColorName, getMarkerColorClass, getMarkerHexColor } from '../utils/colorUtils';
 
 interface DamageMarkerProps {
     point: VehicleDamagePoint;
@@ -34,7 +34,8 @@ const DamageMarker: React.FC<DamageMarkerProps> = ({ point, index, onUpdate, onR
     return (
         <div className="absolute group" style={markerStyle}>
             <div 
-                className={`w-6 h-6 rounded-full border-2 border-white shadow-md ${colorClass} flex items-center justify-center text-white font-bold text-xs`}
+                className={`w-6 h-6 rounded-full border-2 border-white shadow-md ${!isReadOnly ? colorClass : ''} flex items-center justify-center text-white font-bold text-xs`}
+                style={{ backgroundColor: isReadOnly ? (colorClass.includes('blue') ? '#3b82f6' : '#dc2626') : undefined }}
                 onClick={() => !isReadOnly && onUpdate && setIsEditing(true)}
             >
                 {index + 1}
@@ -91,6 +92,9 @@ const VehicleDamageReport: React.FC<VehicleDamageReportProps> = ({ activePoints,
     // Favor explicitly passed class, then dynamic fallback, then hardcoded red as last resort
     const effectiveActiveColorClass = activeColorClass || dynamicMarkerClass;
     const effectiveReferenceColorClass = referencePoints?.colorClass || 'bg-blue-500';
+
+    const activeHexColor = getMarkerHexColor(vehicleHex);
+    const referenceHexColor = '#3b82f6'; // blue-500 hex
 
     const handleContainerClick = (e: React.MouseEvent<HTMLDivElement>) => {
         if (isReadOnly || !containerRef.current) return;

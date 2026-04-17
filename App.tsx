@@ -198,8 +198,26 @@ const App = () => {
     const handleCustomerApproveEstimate = (estimate: T.Estimate, selectedOptionalItemIds: string[], dateRange: any, notes: string) => {
         if (estimate.jobId) { workshopActions.handleApproveEstimate(estimate, selectedOptionalItemIds, notes); return; }
         const customer = (customers || []).find(c => c.id === estimate.customerId);
+        
+        // --- IMPROVED LINE ITEM PROCESSING ---
+        // Ensure identified optional items are converted to standard items so the scheduler sees them
+        const explicitItemIds = new Set((estimate.lineItems || []).filter(li => !li.isOptional || selectedOptionalItemIds.includes(li.id)).map(i => i.id));
+        const allIncludedIds = new Set(explicitItemIds);
+        
+        // Include package components if their header is selected
+        (estimate.lineItems || []).forEach(item => {
+            if (item.isPackageComponent && item.servicePackageId) {
+                const header = (estimate.lineItems || []).find(h => h.servicePackageId === item.servicePackageId && !h.isPackageComponent);
+                if (header && explicitItemIds.has(header.id)) allIncludedIds.add(item.id);
+            }
+        });
+
+        const activeLineItems = (estimate.lineItems || []).filter(li => allIncludedIds.has(li.id));
+        const approvedLineItems = activeLineItems.map(li => ({ ...li, isOptional: false }));
+
         const selectedOptionsList = (estimate.lineItems || []).filter(item => item.isOptional && selectedOptionalItemIds.includes(item.id)).map(item => `- ${item.description} (${(item.unitCost * item.quantity).toFixed(2)})`).join('\n');
         const inquiryMessage = `ONLINE APPROVAL: Estimate #${estimate.estimateNumber}\n\n` + `Preferred Dates: ${dateRange?.start ? formatDate(new Date(dateRange.start)) : 'N/A'} to ${dateRange?.end ? formatDate(new Date(dateRange.end)) : 'N/A'}\n` + `Customer Notes: ${notes || 'None'}\n\n` + (selectedOptionsList ? `Selected Optional Extras:\n${selectedOptionsList}` : `No optional extras selected.`);
+        
         const existingInquiry = (inquiries || []).find(i => i.linkedEstimateId === estimate.id);
         if (existingInquiry) {
             const updatedInquiry = { ...existingInquiry, status: 'Approved' as const, message: existingInquiry.message + '\n\n' + inquiryMessage, actionNotes: (existingInquiry.actionNotes || '') + '\n[System]: Customer Approved Online. Action Required.' };
@@ -208,7 +226,8 @@ const App = () => {
             const newInquiry: T.Inquiry = { id: crypto.randomUUID(), entityId: estimate.entityId, createdAt: new Date().toISOString(), fromName: getCustomerDisplayName(customer), fromContact: customer?.email || customer?.mobile || "Client Portal", message: inquiryMessage, takenByUserId: 'system', status: 'Approved', linkedCustomerId: estimate.customerId, linkedVehicleId: estimate.vehicleId, linkedEstimateId: estimate.id, actionNotes: 'Auto-generated from Customer Estimate Approval. Please review dates and convert to Job.' };
             handleSaveItem(setInquiries, newInquiry);
         }
-        const updatedEstimate: T.Estimate = { ...estimate, status: 'Approved' };
+
+        const updatedEstimate: T.Estimate = { ...estimate, status: 'Approved', lineItems: approvedLineItems };
         handleSaveItem(setEstimates, updatedEstimate);
         setConfirmation({ isOpen: true, title: 'Request Received', message: 'Thank you. We have received your approval and preferred dates. A member of our team will review the schedule and confirm your booking shortly.', type: 'success' });
     };
@@ -222,7 +241,10 @@ const App = () => {
     };
 
     const handleMarkJobAsAwaitingCollection = (jobId: string) => {
-        setJobs(prev => (prev || []).map(j => j.id === jobId ? { ...j, vehicleStatus: 'Awaiting Collection' } : j));
+        const job = (jobs || []).find(j => j.id === jobId);
+        if (job) {
+            handleSaveItem(setJobs, { ...job, vehicleStatus: 'Awaiting Collection' }, 'brooks_jobs');
+        }
     };
     
     const handleSearchResult = (type: 'customer' | 'vehicle', id: string) => {
