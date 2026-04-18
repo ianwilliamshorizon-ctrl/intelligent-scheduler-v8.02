@@ -13,6 +13,7 @@ import { writeBatch, doc, collection } from 'firebase/firestore';
 interface ManagementCustomersTabProps {
     searchTerm: string;
     onShowStatus: (text: string, type: 'info' | 'success' | 'error') => void;
+    onViewVehicle?: (id: string) => void;
 }
 
 /**
@@ -113,7 +114,7 @@ const HighlightText = memo(({ text, highlight }: { text: string; highlight: stri
     );
 });
 
-export const ManagementCustomersTab: React.FC<ManagementCustomersTabProps> = ({ searchTerm, onShowStatus }) => {
+export const ManagementCustomersTab: React.FC<ManagementCustomersTabProps> = ({ searchTerm, onShowStatus, onViewVehicle }) => {
     const { customers, setCustomers, vehicles, jobs, estimates, invoices } = useData();
     const { selectedIds, updateItem, deleteItem, toggleSelection, toggleSelectAll, bulkDelete } = useManagementTable(customers, 'brooks_customers', setCustomers);
     
@@ -299,6 +300,7 @@ export const ManagementCustomersTab: React.FC<ManagementCustomersTabProps> = ({ 
                     jobs={jobs}
                     estimates={estimates}
                     invoices={invoices}
+                    onViewVehicle={onViewVehicle}
                 />
             )}
         </div>

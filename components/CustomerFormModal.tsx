@@ -6,6 +6,7 @@ import { formatDate } from '../core/utils/dateUtils';
 import { lookupAddressByPostcode, AddressDetails } from '../services/postcodeLookupService';
 import { Loader2, Search, Briefcase, Car, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react';
 import { useAuditLogger } from '../core/hooks/useAuditLogger';
+import { useData } from '../core/state/DataContext';
 
 const Section = ({ title, icon: Icon, children, defaultOpen = true }: { title: string, icon: React.ElementType, children?: React.ReactNode, defaultOpen?: boolean }) => {
     const [isOpen, setIsOpen] = useState(defaultOpen);
@@ -26,16 +27,24 @@ interface CustomerFormModalProps {
     onSave: (customer: Customer) => void;
     customer: Partial<Customer> | null;
     existingCustomers: Customer[];
-    jobs: Job[];
-    vehicles: Vehicle[];
-    estimates: Estimate[];
-    invoices: Invoice[];
+    jobs?: Job[];
+    vehicles?: Vehicle[];
+    estimates?: Estimate[];
+    invoices?: Invoice[];
     onViewVehicle?: (vehicleId: string) => void;
 }
 
 const CustomerFormModal: React.FC<CustomerFormModalProps> = ({ 
-    isOpen, onClose, onSave, customer, existingCustomers = [], vehicles = [], onViewVehicle 
+    isOpen, onClose, onSave, customer, existingCustomers = [], 
+    jobs: propsJobs, vehicles: propsVehicles, estimates: propsEstimates, invoices: propsInvoices, 
+    onViewVehicle 
 }) => {
+    const globalData = useData();
+    const jobs = (propsJobs && propsJobs.length > 0) ? propsJobs : (globalData.jobs || []);
+    const vehicles = (propsVehicles && propsVehicles.length > 0) ? propsVehicles : (globalData.vehicles || []);
+    const estimates = (propsEstimates && propsEstimates.length > 0) ? propsEstimates : (globalData.estimates || []);
+    const invoices = (propsInvoices && propsInvoices.length > 0) ? propsInvoices : (globalData.invoices || []);
+
     // Using 'any' here temporarily to resolve the missing properties in your Customer type definition
     const [formData, setFormData] = useState<any>({});
     const [isLookingUpAddress, setIsLookingUpAddress] = useState(false);

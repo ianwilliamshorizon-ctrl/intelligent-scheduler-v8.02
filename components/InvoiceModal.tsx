@@ -1,9 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import ReactDOM from 'react-dom/client';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
 import { Invoice, Customer, Vehicle, BusinessEntity, Job, TaxRate, ServicePackage, InspectionTemplate, InspectionDiagram } from '../types';
-import { X, Printer, CheckCircle, Download, Loader2, Wallet, Mail } from 'lucide-react';
+import { X, Printer, CheckCircle, Wallet, Mail } from 'lucide-react';
 import { usePrint } from '../core/hooks/usePrint';
 import PrintableInvoice from './PrintableInvoice';
 import PaymentModal from './PaymentModal';
@@ -27,7 +24,6 @@ interface InvoiceModalProps {
 
 const InvoiceModal: React.FC<InvoiceModalProps> = ({ isOpen, onClose, invoice, customer, vehicle, entity, job, taxRates, servicePackages, inspectionTemplates, inspectionDiagrams, onUpdateInvoice, onInvoiceAction }) => {
     const print = usePrint();
-    const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
     const [isEmailing, setIsEmailing] = useState(false);
 
@@ -71,83 +67,6 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ isOpen, onClose, invoice, c
         print(<PrintableInvoice {...{ invoice, customer, vehicle, entity, job, taxRates, servicePackages, inspectionTemplates, inspectionDiagrams }} />);
     };
 
-    const handleDownloadPdf = async () => {
-        setIsGeneratingPdf(true);
-        const printMountPoint = document.createElement('div');
-        printMountPoint.style.position = 'absolute';
-        printMountPoint.style.left = '-9999px';
-        printMountPoint.style.top = '0';
-        printMountPoint.style.width = '210mm'; // Standard A4 width for canvas rendering
-        document.body.appendChild(printMountPoint);
-
-        try {
-            if (job && onInvoiceAction) {
-                onInvoiceAction(job.id);
-            }
-
-            const root = ReactDOM.createRoot(printMountPoint);
-            root.render(
-                <React.StrictMode>
-                    <PrintableInvoice {...{ invoice, customer, vehicle, entity, job, taxRates, servicePackages, inspectionTemplates, inspectionDiagrams }} />
-                </React.StrictMode>
-            );
-
-            // Wait for render, images and state settles
-            await new Promise(resolve => setTimeout(resolve, 2000));
-
-            const canvas = await html2canvas(printMountPoint, { 
-                scale: 2, 
-                useCORS: true, 
-                allowTaint: true,
-                logging: false,
-                backgroundColor: '#ffffff',
-                onclone: (clonedDoc) => {
-                    // CRITICAL: Aggressively remove oklch from all styles to prevent crash
-                    const styles = clonedDoc.querySelectorAll('style');
-                    styles.forEach(s => {
-                        s.innerHTML = s.innerHTML.replace(/oklch\([^)]+\)/g, '#000000');
-                    });
-                    const rootStyle = clonedDoc.createElement('style');
-                    rootStyle.innerHTML = `
-                        :root { color-scheme: light !important; }
-                        * { -webkit-print-color-adjust: exact !important; color-adjust: exact !important; }
-                    `;
-                    clonedDoc.head.appendChild(rootStyle);
-                }
-            });
-
-            const imgData = canvas.toDataURL('image/png');
-            const pdf = new jsPDF('p', 'mm', 'a4');
-            const pdfWidth = pdf.internal.pageSize.getWidth();
-            const pdfHeight = pdf.internal.pageSize.getHeight();
-            const canvasHeightOnPdf = pdfWidth * (canvas.height / canvas.width);
-            
-            let heightLeft = canvasHeightOnPdf;
-            let position = 0;
-
-            pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, canvasHeightOnPdf);
-            heightLeft -= pdfHeight;
-
-            while (heightLeft > 0) {
-                position -= pdfHeight;
-                pdf.addPage();
-                pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, canvasHeightOnPdf);
-                heightLeft -= pdfHeight;
-            }
-
-            pdf.save(`Invoice-${invoice.id}.pdf`);
-            root.unmount();
-        } catch (error) {
-            console.error("PDF Generation Error:", error);
-            alert("Failed to generate PDF. Please use standard Print button.");
-        } finally {
-            if (document.body.contains(printMountPoint)) {
-                document.body.removeChild(printMountPoint);
-            }
-            setIsGeneratingPdf(false);
-        }
-    };
-    
     const handleMarkAsPaid = () => {
         setIsPaymentModalOpen(true);
     };
@@ -210,14 +129,6 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ isOpen, onClose, invoice, c
                             >
                                 <Printer size={16} className="mr-2"/> 
                                 <span>Print</span>
-                            </button>
-                            <button 
-                                onClick={handleDownloadPdf} 
-                                disabled={isGeneratingPdf} 
-                                className="flex items-center py-2 px-4 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 shadow-sm disabled:opacity-50 transition-colors"
-                            >
-                                {isGeneratingPdf ? <Loader2 size={16} className="mr-2 animate-spin"/> : <Download size={16} className="mr-2"/>}
-                                <span>Download PDF</span>
                             </button>
                             {invoice.status !== 'Paid' && (
                                 <button 

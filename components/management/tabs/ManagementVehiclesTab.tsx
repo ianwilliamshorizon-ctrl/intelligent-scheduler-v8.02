@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, memo, useDeferredValue, useCallback, useTransition } from 'react';
 import { VList } from 'virtua';
 import { useData } from '../../../core/state/DataContext';
-import { Vehicle, Customer, Job, Estimate, Invoice, InspectionDiagram } from '../../../types';
+import { Vehicle, Customer, Job, Estimate, Invoice, InspectionDiagram, PurchaseOrder } from '../../../types';
 import { PlusCircle, Trash2, Upload, RefreshCw, Search, Wand2 } from 'lucide-react';
 import { useManagementTable } from '../hooks/useManagementTable';
 import { parseCsv } from '../../../utils/csvUtils';
@@ -14,7 +14,11 @@ import { findBestDiagramMatch } from '../../../core/utils/diagramUtils';
 interface ManagementVehiclesTabProps {
     searchTerm: string;
     onShowStatus: (text: string, type: 'info' | 'success' | 'error') => void;
-    onViewCustomer?: (customerId: string) => void; 
+    onViewCustomer?: (customerId: string) => void;
+    onViewJob?: (jobId: string) => void;
+    onViewEstimate?: (estimate: Estimate) => void;
+    onViewInvoice?: (invoice: Invoice) => void;
+    onOpenPurchaseOrder?: (po: PurchaseOrder) => void;
 }
 
 const VehicleRow = memo(({ 
@@ -24,7 +28,8 @@ const VehicleRow = memo(({
     selected, 
     onToggle, 
     onEdit, 
-    onDelete 
+    onDelete,
+    onViewCustomer
 }: { 
     v: Vehicle, 
     searchTerm: string, 
@@ -32,7 +37,8 @@ const VehicleRow = memo(({
     selected: boolean, 
     onToggle: (id: string) => void,
     onEdit: (v: Vehicle) => void,
-    onDelete: (id: string) => void
+    onDelete: (id: string) => void,
+    onViewCustomer?: (id: string) => void
 }) => (
     <div className="border-b border-gray-100 flex items-center hover:bg-indigo-50/50 transition-colors text-sm bg-white h-[64px] w-full shrink-0 group">
         <div className="w-12 flex justify-center shrink-0">
@@ -62,7 +68,16 @@ const VehicleRow = memo(({
         <div className="px-4 w-[25%] shrink-0 flex flex-col justify-center">
             <div className="text-xs text-gray-400 uppercase font-bold tracking-tighter">Owner</div>
             <div className="text-gray-700 font-medium truncate italic">
-                {ownerName}
+                {onViewCustomer ? (
+                    <button 
+                        onClick={() => onViewCustomer(v.customerId)}
+                        className="text-indigo-600 hover:text-indigo-800 underline underline-offset-2 decoration-indigo-200"
+                    >
+                        {ownerName}
+                    </button>
+                ) : (
+                    ownerName
+                )}
             </div>
         </div>
 
@@ -100,7 +115,9 @@ const HighlightText = memo(({ text, highlight }: { text: string; highlight: stri
     );
 });
 
-export const ManagementVehiclesTab: React.FC<ManagementVehiclesTabProps> = ({ searchTerm, onShowStatus, onViewCustomer }) => {
+export const ManagementVehiclesTab: React.FC<ManagementVehiclesTabProps> = ({ 
+    searchTerm, onShowStatus, onViewCustomer, onViewJob, onViewEstimate, onViewInvoice, onOpenPurchaseOrder 
+}) => {
     const { vehicles, setVehicles, customers, jobs, estimates, invoices, inspectionDiagrams, forceRefresh } = useData();
     const { selectedIds, updateItem, deleteItem, toggleSelection, toggleSelectAll, bulkDelete } = useManagementTable(vehicles, 'brooks_vehicles', setVehicles);
 
@@ -350,6 +367,7 @@ export const ManagementVehiclesTab: React.FC<ManagementVehiclesTabProps> = ({ se
                                     onToggle={toggleSelection}
                                     onEdit={handleEdit}
                                     onDelete={deleteItem}
+                                    onViewCustomer={onViewCustomer}
                                 />
                             ))}
                         </VList>
@@ -369,6 +387,10 @@ export const ManagementVehiclesTab: React.FC<ManagementVehiclesTabProps> = ({ se
                     estimates={estimates}
                     invoices={invoices}
                     onViewCustomer={onViewCustomer}
+                    onViewJob={onViewJob}
+                    onViewEstimate={onViewEstimate}
+                    onViewInvoice={onViewInvoice}
+                    onOpenPurchaseOrder={onOpenPurchaseOrder}
                     vehicles={vehicles}
                 />
             )}

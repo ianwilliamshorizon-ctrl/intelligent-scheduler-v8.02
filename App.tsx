@@ -343,6 +343,9 @@ const App = () => {
                         onViewJob={(id) => { setIsManagementOpen(false); setters.setSelectedJobId(id); setters.setIsEditJobModalOpen(true); }}
                         onViewEstimate={(est) => { setIsManagementOpen(false); setters.setEstimateViewModal({isOpen: true, estimate: est}); }}
                         onViewCustomer={handleViewCustomerFromManagement}
+                        onViewVehicle={(id) => { setIsManagementOpen(false); setters.setVehicleModal({ isOpen: true, vehicleId: id }); }}
+                        onViewInvoice={(inv) => { setIsManagementOpen(false); setters.setViewInvoiceModal({ isOpen: true, invoice: inv }); }}
+                        onOpenPurchaseOrder={(po) => { setIsManagementOpen(false); setters.setViewPoModal({ isOpen: true, po }); }}
                         backupSchedule={backupSchedule}
                         setBackupSchedule={setBackupSchedule}
                         onManualBackup={handleManualBackup}

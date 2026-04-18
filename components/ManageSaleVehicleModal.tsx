@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { SaleVehicle, Vehicle, Customer, Job, Estimate, SaleUpsell, SalePrepCost, ServicePackage, SaleOverhead, SaleOverheadPackage, Invoice, BatteryCharger, ChargingEvent, SaleNonRecoverableCost, SaleVersion, TaxRate, BusinessEntity, EstimateLineItem, Prospect } from '../types';
-import { X, Save, Car, Tag, Repeat, DollarSign, Wrench, Shield, Trash2, PlusCircle, CheckCircle, Briefcase, Plus, FileText, ChevronDown, ChevronUp, BatteryCharging, TrendingUp, KeyRound, ChevronLeft, ChevronRight, Users } from 'lucide-react';
+import { X, Save, Car, Tag, Repeat, DollarSign, Wrench, Shield, Trash2, PlusCircle, CheckCircle, Briefcase, Plus, FileText, ChevronDown, ChevronUp, BatteryCharging, TrendingUp, KeyRound, ChevronLeft, ChevronRight, Users, Camera } from 'lucide-react';
 import { formatDate, addDays } from '../core/utils/dateUtils';
 import { formatCurrency } from '../utils/formatUtils';
 import SearchableSelect from './SearchableSelect';
 import { generateInvoiceId } from '../core/utils/numberGenerators';
+import MediaManager from './MediaManager';
 
 const Section = ({ title, children, defaultOpen = false, icon: Icon }: { title: string, children?: React.ReactNode, defaultOpen?: boolean, icon: React.ElementType }) => {
     const [isOpen, setIsOpen] = useState(defaultOpen);
@@ -273,6 +274,7 @@ const ManageSaleVehicleModal: React.FC<ManageSaleVehicleModalProps> = ({ isOpen,
             issueDate: new Date().toISOString().split('T')[0],
             dueDate: new Date().toISOString().split('T')[0], // Immediate for sales usually
             status: 'Draft',
+            payments: [],
             lineItems: [
                 {
                     id: crypto.randomUUID(),
@@ -430,7 +432,7 @@ const ManageSaleVehicleModal: React.FC<ManageSaleVehicleModalProps> = ({ isOpen,
                         <Section title="Preparation Costs (Recoverable)" icon={Wrench} defaultOpen>
                             <ItemList items={formData.prepCosts} onRemove={handleRemovePrepCost} icon={Wrench}/>
                             <div className="flex gap-2 mt-3 pt-2 border-t">
-                                <SearchableSelect options={availableInvoices.map(inv => ({id: inv.id, label: `Inv #${inv.id} - ${formatCurrency(inv.lineItems.reduce((s,i)=>s+i.unitPrice*i.quantity,0))}`}))} value={null} onChange={(val) => {if(val) handleAddInvoicePrepCost(val)}} placeholder="Link Invoice..." />
+                                <SearchableSelect options={availableInvoices.map(inv => ({value: inv.id, label: `Inv #${inv.id} - ${formatCurrency(inv.lineItems.reduce((s,i)=>s+i.unitPrice*i.quantity,0))}`}))} value={null} onChange={(val) => {if(val) handleAddInvoicePrepCost(val)}} placeholder="Link Invoice..." />
                                 <button onClick={() => setIsAddingOneOffPrepCost(true)} className="flex items-center text-sm font-semibold text-indigo-600 bg-indigo-50 px-2 rounded hover:bg-indigo-100 flex-shrink-0"><PlusCircle size={14} className="mr-1"/> Add One-Off</button>
                             </div>
                             {isAddingOneOffPrepCost && (
@@ -463,7 +465,7 @@ const ManageSaleVehicleModal: React.FC<ManageSaleVehicleModalProps> = ({ isOpen,
                                 <button onClick={() => setAddOverheadType('OneOff')} className="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded hover:bg-indigo-200">Add Custom</button>
                             </div>
                             {addOverheadType === 'Package' && (
-                                <div className="mt-2"><SearchableSelect options={allSaleOverheadPackages.map(p => ({id: p.id, label: `${p.name} (${formatCurrency(p.cost)})`}))} value={null} onChange={(val) => {if(val) handleAddOverheadPackage(val)}} placeholder="Select package..." /></div>
+                                <div className="mt-2"><SearchableSelect options={allSaleOverheadPackages.map(p => ({value: p.id, label: `${p.name} (${formatCurrency(p.cost)})`}))} value={null} onChange={(val) => {if(val) handleAddOverheadPackage(val)}} placeholder="Select package..." /></div>
                             )}
                             {addOverheadType === 'OneOff' && (
                                 <div className="flex gap-2 mt-2 items-center bg-gray-100 p-2 rounded">
@@ -487,6 +489,10 @@ const ManageSaleVehicleModal: React.FC<ManageSaleVehicleModalProps> = ({ isOpen,
                                     <button onClick={() => setIsAddingUpsell(false)} className="text-red-600"><X size={18}/></button>
                                 </div>
                             )}
+                        </Section>
+
+                        <Section title="Gallery & Documents" icon={Camera} defaultOpen>
+                            <MediaManager media={formData.media || []} onUpdate={(updatedMedia) => setFormData({...formData, media: updatedMedia})} />
                         </Section>
 
                         <Section title="Battery Charging Log" icon={BatteryCharging}>
@@ -558,7 +564,7 @@ const ManageSaleVehicleModal: React.FC<ManageSaleVehicleModalProps> = ({ isOpen,
                                     </div>
                                     <div>
                                         <label className="block text-xs font-semibold text-gray-600 mb-1">Buyer</label>
-                                        <SearchableSelect options={allCustomers.map(c => ({id: c.id, label: `${c.forename} ${c.surname}`}))} value={soldData.buyerCustomerId || null} onChange={val => setSoldData({...soldData, buyerCustomerId: val || ''})} placeholder="Select Buyer..."/>
+                                        <SearchableSelect options={allCustomers.map(c => ({value: c.id, label: `${c.forename} ${c.surname}`}))} value={soldData.buyerCustomerId || null} onChange={val => setSoldData({...soldData, buyerCustomerId: val || ''})} placeholder="Select Buyer..."/>
                                     </div>
                                     <div className="flex gap-2 pt-2">
                                         <button onClick={confirmSold} className="flex-1 bg-green-600 text-white font-bold py-2 rounded hover:bg-green-700">Confirm Sold</button>

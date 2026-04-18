@@ -683,6 +683,10 @@ export interface StorageBooking {
     lastBilledDate?: string | null;
     invoiceIds?: string[];
     chargingHistory?: ChargingEvent[];
+    media?: SaleMediaItem[];
+    checkInPhotos?: CheckInPhoto[];
+    checkOutPhotos?: CheckInPhoto[];
+    mileage?: number;
 }
 export interface AbsenceRequest {
     id: string;
@@ -691,8 +695,44 @@ export interface AbsenceRequest {
     endDate: string;
     type: 'Holiday' | 'Sick' | 'Other';
     status: 'Pending' | 'Approved' | 'Rejected';
-  }
-  export interface SaleVehicle {
+}
+
+export interface SaleMediaItem {
+    id: string;
+    type: 'Photo' | 'Document';
+    name: string;
+    uploadedAt: string;
+}
+
+export interface SaleUpsell {
+    id: string;
+    description: string;
+    costPrice: number;
+    salePrice: number;
+}
+
+export interface SalePrepCost {
+    id: string;
+    type: 'Invoice' | 'OneOff';
+    description: string;
+    cost: number;
+    sourceId?: string;
+}
+
+export interface SaleOverhead {
+    id: string;
+    description: string;
+    cost: number;
+    sourcePackageId?: string;
+}
+
+export interface SaleNonRecoverableCost {
+    id: string;
+    description: string;
+    cost: number;
+}
+
+export interface SaleVehicle {
     id: string;
     make?: string;
     model?: string;
@@ -722,6 +762,11 @@ export interface AbsenceRequest {
     keyNumber?: number;
     versions?: SaleVersion[];
     activeVersionId?: string;
+    media?: SaleMediaItem[];
+    finalSalePrice?: number;
+    soldDate?: string;
+    buyerCustomerId?: string;
+    chargingHistory?: ChargingEvent[];
 }
 
 export interface SaleVersion {
@@ -741,6 +786,8 @@ export interface Prospect {
     status: 'New' | 'Contacted' | 'Qualified' | 'Lost' | 'Converted';
     notes?: string;
     interestedVehicleId?: string; // Links to SaleVehicle
+    linkedSaleVehicleId?: string; // Duplicate/Alternative name? I'll add it for compatibility
+    customerId?: string;          // Added for conversion tracking
     createdAt?: string;
     assignedUserId?: string;
 }
@@ -748,6 +795,7 @@ export interface Prospect {
 export interface SaleOverheadPackage {
     id: string;
     name: string;
+    cost: number;
 }
 
 export interface AuditLogEntry {

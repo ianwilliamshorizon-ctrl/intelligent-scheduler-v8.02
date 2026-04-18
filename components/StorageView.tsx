@@ -3,11 +3,15 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useData } from '../core/state/DataContext';
 import { StorageBooking, Vehicle, Customer, BusinessEntity, StorageLocation, BatteryCharger, ChargingEvent, Invoice, TaxRate } from '../types';
-import { Warehouse, PlusCircle, Car, MoreHorizontal, Save, Trash2, BatteryCharging, FileText, Calendar, Check, ChevronDown, ChevronUp, User, Clock, DollarSign, LogOut, KeyRound, Search, X, CheckSquare, MapPin, AlertCircle } from 'lucide-react';
+import { Warehouse, PlusCircle, Car, MoreHorizontal, Save, Trash2, BatteryCharging, FileText, Calendar, Check, ChevronDown, ChevronUp, User, Clock, DollarSign, LogOut, KeyRound, Search, X, CheckSquare, MapPin, AlertCircle, Camera, Upload, Milestone } from 'lucide-react';
 import { formatDate, dateStringToDate, daysBetween, addDays } from '../core/utils/dateUtils';
 import { formatCurrency } from '../utils/formatUtils';
 import AddStorageBookingModal from './AddStorageBookingModal';
 import { generateInvoiceId } from '../core/utils/numberGenerators';
+import MediaManager from './MediaManager';
+import { saveImage, getImage } from '../utils/imageStore';
+import AsyncImage from './AsyncImage';
+import { CheckInPhoto as CheckInPhotoType } from '../types';
 
 // --- MODALS ---
 
@@ -31,6 +35,8 @@ const ManageStorageBookingModal = ({
     const [formData, setFormData] = useState<StorageBooking>(booking);
     const [isCharging, setIsCharging] = useState(false);
     const [selectedChargerId, setSelectedChargerId] = useState('');
+    const checkInInputRef = React.useRef<HTMLInputElement>(null);
+    const checkOutInputRef = React.useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         setFormData(booking);
@@ -75,6 +81,42 @@ const ManageStorageBookingModal = ({
             chargingHistory: (prev.chargingHistory || []).map(event => 
                 event.id === activeChargingEvent!.id ? { ...event, endDate: new Date().toISOString() } : event
             )
+        }));
+    };
+
+    const handlePhotoUpload = async (event: React.ChangeEvent<HTMLInputElement>, type: 'checkIn' | 'checkOut') => {
+        if (!event.target.files) return;
+        const newPhotos: CheckInPhotoType[] = [];
+        
+        for (const file of event.target.files) {
+            const photoId = crypto.randomUUID();
+            const reader = new FileReader();
+            await new Promise<void>((resolve, reject) => {
+                reader.onloadend = async () => {
+                    try {
+                        await saveImage(photoId, reader.result as string);
+                        newPhotos.push({ id: photoId });
+                        resolve();
+                    } catch (e) { reject(e); }
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        setFormData(prev => ({
+            ...prev,
+            [type === 'checkIn' ? 'checkInPhotos' : 'checkOutPhotos']: [
+                ...(type === 'checkIn' ? prev.checkInPhotos || [] : prev.checkOutPhotos || []),
+                ...newPhotos
+            ]
+        }));
+        event.target.value = '';
+    };
+
+    const handleRemovePhoto = (id: string, type: 'checkIn' | 'checkOut') => {
+        setFormData(prev => ({
+            ...prev,
+            [type === 'checkIn' ? 'checkInPhotos' : 'checkOutPhotos']: (type === 'checkIn' ? prev.checkInPhotos || [] : prev.checkOutPhotos || []).filter(p => p.id !== id)
         }));
     };
     
@@ -221,8 +263,75 @@ const ManageStorageBookingModal = ({
                             )}
                         </div>
                     </Section>
-                    
-                     <Section title="Billing" icon={FileText}>
+
+                    <Section title="Arrival & Departure Documentation" icon={Milestone}>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-1">
+                                    <Milestone size={12}/> Current Mileage
+                                </label>
+                                <input 
+                                    type="number" 
+                                    value={formData.mileage || ''} 
+                                    onChange={e => setFormData({...formData, mileage: e.target.value ? parseInt(e.target.value, 10) : undefined})} 
+                                    className="w-full p-2 border rounded-lg text-sm font-bold"
+                                    placeholder="Enter mileage..."
+                                    disabled={isClosed}
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <label className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-gray-500">
+                                        Check-In Photos
+                                        {!isClosed && <button onClick={() => checkInInputRef.current?.click()} className="text-indigo-600 hover:text-indigo-800"><Camera size={14}/></button>}
+                                    </label>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        {(formData.checkInPhotos || []).map(p => (
+                                            <div key={p.id} className="relative group rounded-lg overflow-hidden border border-gray-200 aspect-square">
+                                                <AsyncImage imageId={p.id} alt="Check-in" className="w-full h-full object-cover" />
+                                                {!isClosed && (
+                                                    <button onClick={() => handleRemovePhoto(p.id, 'checkIn')} className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity">
+                                                        <Trash2 size={16}/>
+                                                    </button>
+                                                )}
+                                            </div>
+                                        ))}
+                                        {(formData.checkInPhotos || []).length === 0 && <div className="col-span-2 py-4 bg-gray-50 border border-dashed rounded-lg text-[9px] text-center text-gray-400">No check-in photos.</div>}
+                                    </div>
+                                    <input ref={checkInInputRef} type="file" multiple accept="image/*" capture="environment" onChange={e => handlePhotoUpload(e, 'checkIn')} className="hidden" />
+                                </div>
+
+                                <div className="space-y-2">
+                                    <label className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-gray-500">
+                                        Check-Out Photos
+                                        <button onClick={() => checkOutInputRef.current?.click()} className="text-indigo-600 hover:text-indigo-800"><Camera size={14}/></button>
+                                    </label>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        {(formData.checkOutPhotos || []).map(p => (
+                                            <div key={p.id} className="relative group rounded-lg overflow-hidden border border-gray-200 aspect-square">
+                                                <AsyncImage imageId={p.id} alt="Check-out" className="w-full h-full object-cover" />
+                                                <button onClick={() => handleRemovePhoto(p.id, 'checkOut')} className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity">
+                                                    <Trash2 size={16}/>
+                                                </button>
+                                            </div>
+                                        ))}
+                                        {(formData.checkOutPhotos || []).length === 0 && <div className="col-span-2 py-4 bg-gray-50 border border-dashed rounded-lg text-[9px] text-center text-gray-400">No check-out photos.</div>}
+                                    </div>
+                                    <input ref={checkOutInputRef} type="file" multiple accept="image/*" capture="environment" onChange={e => handlePhotoUpload(e, 'checkOut')} className="hidden" />
+                                </div>
+                            </div>
+                        </div>
+                    </Section>
+
+                    <Section title="Gallery & Documents" icon={Camera}>
+                        <MediaManager 
+                            media={formData.media || []} 
+                            onUpdate={(updatedMedia) => setFormData({...formData, media: updatedMedia})} 
+                        />
+                    </Section>
+
+                    <Section title="Billing" icon={FileText}>
                          {isClosed && (
                             <div className="p-3 bg-red-100 text-red-700 rounded-lg text-center text-sm font-semibold mb-2">
                                 This booking is closed. No further billing actions are available.
