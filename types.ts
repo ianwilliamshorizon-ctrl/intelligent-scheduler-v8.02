@@ -130,7 +130,8 @@ export interface PreviousRegistration {
 
 export interface CheckInPhoto {
     id: string;
-    dataUrl: string;
+    dataUrl?: string;
+    notes?: string;
 }
 
 export interface VehicleDamagePoint {
@@ -206,6 +207,7 @@ export interface Job {
     storageLocationId?: string;
     depositAmount?: number;
     depositMethod?: string;
+    checkInPhotos?: CheckInPhoto[];
 }
 export type VehicleStatus = 'On Site' | 'Off-Site (Partner)' | 'Awaiting Arrival' | 'Awaiting Collection' | 'Collected' | 'Cancelled';
 

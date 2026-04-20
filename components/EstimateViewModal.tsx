@@ -1,10 +1,8 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import ReactDOM from 'react-dom/client';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
 import { Estimate, Customer, Vehicle, EstimateLineItem, TaxRate, BusinessEntity, Part, User, ServicePackage } from '../types';
 import { 
-    X, CheckSquare, Mail, Download, Loader2, Printer, CheckCircle, 
+    X, CheckSquare, Mail, Loader2, Printer, CheckCircle, 
     MessageSquare, Monitor, Image as ImageIcon, Gauge, AlertTriangle, 
     ChevronLeft, ChevronRight, AlertCircle, CalendarCheck, Package,
     ArrowRight, Calendar 
@@ -63,7 +61,6 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
 }) => {
     const { jobs, businessEntities, vehicles, customers, absenceRequests } = useData();
     const [isEmailing, setIsEmailing] = useState(false);
-    const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
     const [localViewMode, setLocalViewMode] = useState<'internal' | 'customer'>(viewMode);
     
     const [selectedOptionalItems, setSelectedOptionalItems] = useState<Set<string>>(new Set());
@@ -361,62 +358,7 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
         );
     };
 
-    const handleDownloadPdf = async () => {
-        setIsGeneratingPdf(true);
-        const printMountPoint = document.createElement('div');
-        printMountPoint.style.position = 'absolute';
-        printMountPoint.style.left = '-9999px';
-        document.body.appendChild(printMountPoint);
 
-        const approvedEstimateForPdf: Estimate = { ...estimate, lineItems: estimate.lineItems };
-        const root = ReactDOM.createRoot(printMountPoint);
-        root.render(
-            <React.StrictMode>
-                <PrintableEstimate 
-                    estimate={approvedEstimateForPdf} 
-                    customer={customer}
-                    vehicle={vehicle}
-                    entityDetails={resolvedEntity}
-                    taxRates={taxRates}
-                    parts={parts}
-                    canViewPricing={canViewPricing}
-                    totals={dynamicTotals}
-                />
-            </React.StrictMode>
-        );
-
-        await new Promise(resolve => setTimeout(resolve, 800));
-    
-        try {
-            const canvas = await html2canvas(printMountPoint, { scale: 2, useCORS: true });
-            const imgData = canvas.toDataURL('image/png');
-            const pdf = new jsPDF('p', 'mm', 'a4');
-            const pdfWidth = pdf.internal.pageSize.getWidth();
-            const pdfHeight = pdf.internal.pageSize.getHeight();
-            const canvasHeightOnPdf = pdfWidth * (canvas.height / canvas.width);
-            let heightLeft = canvasHeightOnPdf;
-            let position = 0;
-
-            pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, canvasHeightOnPdf);
-            heightLeft -= pdfHeight;
-
-            while (heightLeft > 0) {
-                position -= pdfHeight;
-                pdf.addPage();
-                pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, canvasHeightOnPdf);
-                heightLeft -= pdfHeight;
-            }
-
-            pdf.save(`Estimate-${estimate.estimateNumber}.pdf`);
-        } catch (error) {
-            console.error("Error generating PDF:", error);
-            alert("Failed to generate PDF. Try using the 'Print' button and saving as PDF.");
-        } finally {
-            root.unmount();
-            document.body.removeChild(printMountPoint);
-            setIsGeneratingPdf(false);
-        }
-    };
     
     const handleEmailSuccess = (recipients: string) => {
         onEmailSuccess({ ...estimate, status: 'Sent' });
@@ -673,9 +615,7 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                                     <button onClick={() => handlePrint()} className="flex items-center py-2 px-4 bg-gray-100 text-gray-700 font-semibold rounded-lg hover:bg-gray-200 transition">
                                         <Printer size={16} className="mr-2"/> Print Estimate
                                     </button>
-                                    <button onClick={() => handleDownloadPdf()} disabled={isGeneratingPdf} className="flex items-center py-2 px-4 bg-gray-100 text-gray-700 font-semibold rounded-lg hover:bg-gray-200 disabled:opacity-50 transition">
-                                        {isGeneratingPdf ? <Loader2 size={16} className="mr-2 animate-spin"/> : <Download size={16} className="mr-2" />} PDF
-                                    </button>
+
                                 </div>
                     
                                 <div className="flex gap-2">

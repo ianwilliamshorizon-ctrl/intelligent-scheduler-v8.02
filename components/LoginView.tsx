@@ -102,7 +102,7 @@ const LoginView: React.FC<LoginViewProps> = ({ users, onLogin, environment, busi
                         <div className="mx-auto bg-white/20 w-24 h-24 rounded-2xl flex items-center justify-center mb-6 backdrop-blur-md shadow-xl border border-white/30 overflow-hidden transform hover:scale-110 transition-transform duration-300">
                              <img src="/logo.png" alt="Logo" className="w-full h-full object-contain p-2" />
                         </div>
-                        <h1 className="text-xl font-black text-white tracking-widest uppercase">Brookspeed Intelligent Scheduling System</h1>
+                        <h1 className="text-sm md:text-xl font-black text-white tracking-widest uppercase max-w-[90vw] mx-auto text-center">Brookspeed Intelligent Scheduling System</h1>
                         <p className="text-indigo-100 mt-2 font-bold tracking-widest text-[10px] uppercase opacity-80">v8.02 &bull; Professional Management</p>
                     </div>
                 </div>

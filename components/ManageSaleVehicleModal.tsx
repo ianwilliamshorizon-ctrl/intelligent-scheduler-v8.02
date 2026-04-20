@@ -432,7 +432,7 @@ const ManageSaleVehicleModal: React.FC<ManageSaleVehicleModalProps> = ({ isOpen,
                         <Section title="Preparation Costs (Recoverable)" icon={Wrench} defaultOpen>
                             <ItemList items={formData.prepCosts} onRemove={handleRemovePrepCost} icon={Wrench}/>
                             <div className="flex gap-2 mt-3 pt-2 border-t">
-                                <SearchableSelect options={availableInvoices.map(inv => ({value: inv.id, label: `Inv #${inv.id} - ${formatCurrency(inv.lineItems.reduce((s,i)=>s+i.unitPrice*i.quantity,0))}`}))} value={null} onChange={(val) => {if(val) handleAddInvoicePrepCost(val)}} placeholder="Link Invoice..." />
+                                <SearchableSelect options={availableInvoices.map(inv => ({value: inv.id, label: `Inv #${inv.id} - ${formatCurrency(inv.lineItems.reduce((s,i)=>s+i.unitPrice*i.quantity,0))}`}))} initialValue={null} onSelect={(val) => {if(val) handleAddInvoicePrepCost(val)}} placeholder="Link Invoice..." />
                                 <button onClick={() => setIsAddingOneOffPrepCost(true)} className="flex items-center text-sm font-semibold text-indigo-600 bg-indigo-50 px-2 rounded hover:bg-indigo-100 flex-shrink-0"><PlusCircle size={14} className="mr-1"/> Add One-Off</button>
                             </div>
                             {isAddingOneOffPrepCost && (
@@ -465,7 +465,7 @@ const ManageSaleVehicleModal: React.FC<ManageSaleVehicleModalProps> = ({ isOpen,
                                 <button onClick={() => setAddOverheadType('OneOff')} className="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded hover:bg-indigo-200">Add Custom</button>
                             </div>
                             {addOverheadType === 'Package' && (
-                                <div className="mt-2"><SearchableSelect options={allSaleOverheadPackages.map(p => ({value: p.id, label: `${p.name} (${formatCurrency(p.cost)})`}))} value={null} onChange={(val) => {if(val) handleAddOverheadPackage(val)}} placeholder="Select package..." /></div>
+                                <div className="mt-2"><SearchableSelect options={allSaleOverheadPackages.map(p => ({value: p.id, label: `${p.name} (${formatCurrency(p.cost)})`}))} initialValue={null} onSelect={(val) => {if(val) handleAddOverheadPackage(val)}} placeholder="Select package..." /></div>
                             )}
                             {addOverheadType === 'OneOff' && (
                                 <div className="flex gap-2 mt-2 items-center bg-gray-100 p-2 rounded">
@@ -564,7 +564,7 @@ const ManageSaleVehicleModal: React.FC<ManageSaleVehicleModalProps> = ({ isOpen,
                                     </div>
                                     <div>
                                         <label className="block text-xs font-semibold text-gray-600 mb-1">Buyer</label>
-                                        <SearchableSelect options={allCustomers.map(c => ({value: c.id, label: `${c.forename} ${c.surname}`}))} value={soldData.buyerCustomerId || null} onChange={val => setSoldData({...soldData, buyerCustomerId: val || ''})} placeholder="Select Buyer..."/>
+                                        <SearchableSelect options={allCustomers.map(c => ({value: c.id, label: `${c.forename} ${c.surname}`}))} initialValue={soldData.buyerCustomerId || null} onSelect={val => setSoldData({...soldData, buyerCustomerId: val || ''})} placeholder="Select Buyer..."/>
                                     </div>
                                     <div className="flex gap-2 pt-2">
                                         <button onClick={confirmSold} className="flex-1 bg-green-600 text-white font-bold py-2 rounded hover:bg-green-700">Confirm Sold</button>

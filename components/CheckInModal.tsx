@@ -79,7 +79,7 @@ const CheckInModal: React.FC<CheckInModalProps> = ({ isOpen, onClose, onSave, jo
 
         const updatedJob: Job = {
             ...job,
-            keyNumber: keyNumber ? parseInt(keyNumber, 10) : undefined,
+            keyNumber: keyNumber || undefined,
             mileage: mileage ? parseInt(mileage, 10) : undefined,
             checkInPhotos: finalPhotos,
             vehicleStatus: 'On Site'
@@ -93,99 +93,99 @@ const CheckInModal: React.FC<CheckInModalProps> = ({ isOpen, onClose, onSave, jo
     const partsReady = job.partsStatus === 'Fully Received' || job.partsStatus === 'Not Required';
 
     return (
-        <div className="fixed inset-0 bg-gray-900 bg-opacity-75 z-[70] flex justify-center items-center p-4">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
-                <header className="flex-shrink-0 flex justify-between items-center p-4 border-b">
-                    <h2 className="text-xl font-bold text-indigo-700">Check In Vehicle: {job.id}</h2>
-                    <button onClick={onClose}><X size={24} /></button>
+        <div className="fixed inset-0 bg-gray-900/80 backdrop-blur-sm z-[70] flex justify-center items-end sm:items-center p-0 sm:p-4">
+            <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-2xl w-full max-w-2xl h-[95vh] sm:h-auto sm:max-h-[90vh] flex flex-col animate-in slide-in-from-bottom sm:zoom-in-95 duration-300">
+                <header className="flex-shrink-0 flex justify-between items-center p-4 border-b bg-gray-50/50 rounded-t-2xl sm:rounded-t-xl">
+                    <h2 className="text-lg sm:text-xl font-bold text-indigo-700 truncate pr-4">Check In: {job.id}</h2>
+                    <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><X size={20} /></button>
                 </header>
-                <main className="flex-grow overflow-y-auto p-6 space-y-4">
-                    <div className={`p-3 rounded-lg text-sm mb-4 ${partsReady ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'}`}>
-                        <p className="font-bold">Current Parts Status: {job.partsStatus || 'Not Required'}</p>
+                <main className="flex-grow overflow-y-auto p-4 sm:p-6 space-y-5 custom-scrollbar">
+                    <div className={`p-3 rounded-xl text-xs sm:text-sm border ${partsReady ? 'bg-green-50 border-green-100 text-green-800' : 'bg-amber-50 border-amber-100 text-amber-800'}`}>
+                        <p className="font-extrabold uppercase tracking-tight mb-1">Parts Status: {job.partsStatus || 'Not Required'}</p>
                         {partsReady ? (
-                        <p>Parts are ready. After check-in, this job will be ready for the workshop.</p>
+                        <p className="opacity-90">Parts are ready. Job will be workshop-ready after check-in.</p>
                         ) : (
-                        <p>Parts are not yet fully received. Job will not be ready for the workshop until they are.</p>
+                        <p className="opacity-90">Parts not yet received. Job will stay pending after check-in.</p>
                         )}
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label htmlFor="keyNumber" className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
-                                <KeyRound size={14} /> Key Number
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
+                            <label htmlFor="keyNumber" className="flex items-center gap-2 text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1.5">
+                                <KeyRound size={12} /> Key Number
                             </label>
                             <input
                                 id="keyNumber"
                                 type="number"
                                 value={keyNumber}
                                 onChange={e => setKeyNumber(e.target.value)}
-                                className="w-full p-2 border rounded"
-                                placeholder="e.g., 27"
+                                className="w-full p-2.5 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 font-bold text-lg"
+                                placeholder="e.g. 27"
+                                inputMode="numeric"
                             />
                         </div>
-                        <div>
-                            <label htmlFor="mileage" className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
-                                <Milestone size={14} /> Mileage
+                        <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
+                            <label htmlFor="mileage" className="flex items-center gap-2 text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1.5">
+                                <Milestone size={12} /> Current Mileage
                             </label>
                             <input
                                 id="mileage"
                                 type="number"
                                 value={mileage}
                                 onChange={e => setMileage(e.target.value)}
-                                className="w-full p-2 border rounded"
-                                placeholder="e.g., 45000"
+                                className="w-full p-2.5 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 font-bold text-lg"
+                                placeholder="e.g. 45000"
+                                inputMode="numeric"
                             />
                         </div>
                     </div>
+                    
                     <div>
-                        <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
-                            <Camera size={14} /> Condition Photos
+                        <label className="flex items-center gap-2 text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">
+                            <Camera size={12} /> Condition Photos
                         </label>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mt-2">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                             {photos.map(photo => (
-                                <div key={photo.id} className="relative group border rounded-lg overflow-hidden">
+                                <div key={photo.id} className="relative group border border-gray-200 rounded-xl overflow-hidden shadow-sm bg-gray-50 h-32 sm:h-40">
                                     {photo.tempDataUrl ? (
-                                        <img src={photo.tempDataUrl} alt="Vehicle condition" className="w-full h-32 object-cover" />
+                                        <img src={photo.tempDataUrl} alt="Vehicle condition" className="w-full h-full object-cover" />
                                     ) : (
-                                        <AsyncImage imageId={photo.id} alt="Vehicle condition" className="w-full h-32 object-cover" />
+                                        <AsyncImage imageId={photo.id} alt="Vehicle condition" className="w-full h-full object-cover" />
                                     )}
-                                    <button onClick={() => handleRemovePhoto(photo.id)} className="absolute top-1 right-1 bg-white/70 p-1 rounded-full text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <Trash2 size={16} />
+                                    <button onClick={() => handleRemovePhoto(photo.id)} className="absolute top-1 right-1 bg-white/90 p-1.5 rounded-full text-red-500 shadow-md hover:bg-red-50 transition-colors">
+                                        <Trash2 size={14} />
                                     </button>
-                                    <input 
-                                        type="text"
-                                        value={photo.notes || ''}
-                                        onChange={(e) => handlePhotoNotesChange(photo.id, e.target.value)}
-                                        placeholder="Add notes..."
-                                        className="absolute bottom-0 left-0 right-0 w-full bg-black/50 text-white text-xs p-1 border-t border-white/20"
-                                    />
+                                    <div className="absolute bottom-0 left-0 right-0 bg-black/60 backdrop-blur-xs p-1">
+                                        <input 
+                                            type="text"
+                                            value={photo.notes || ''}
+                                            onChange={(e) => handlePhotoNotesChange(photo.id, e.target.value)}
+                                            placeholder="Add notes..."
+                                            className="w-full bg-transparent text-white text-[10px] p-1 border-none focus:ring-0 outline-none placeholder:text-white/50"
+                                        />
+                                    </div>
                                 </div>
                             ))}
-                             <div className="w-full h-32 border-2 border-dashed rounded-lg flex flex-col items-center justify-center text-gray-500 p-2">
-                                <div className="flex items-center gap-4">
+                             <div className="w-full h-32 sm:h-40 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer group p-2">
+                                <div className="flex sm:flex-col items-center gap-4 sm:gap-2">
                                     <button
                                         type="button"
                                         onClick={() => cameraInputRef.current?.click()}
-                                        className="flex flex-col items-center justify-center p-3 rounded-lg hover:bg-gray-100 hover:text-indigo-600 transition"
-                                        title="Use device camera"
+                                        className="flex flex-col items-center justify-center p-2 rounded-xl bg-white shadow-sm border border-gray-200 hover:text-indigo-600 transition"
                                     >
                                         <Camera size={24} />
-                                        <span className="text-sm mt-1">Take Photo</span>
+                                        <span className="text-[10px] font-bold uppercase mt-1">Camera</span>
                                     </button>
-                                    <div className="w-px h-16 bg-gray-300"></div>
+                                    <div className="hidden sm:block w-8 h-px bg-gray-300"></div>
                                     <button
                                         type="button"
                                         onClick={() => uploadInputRef.current?.click()}
-                                        className="flex flex-col items-center justify-center p-3 rounded-lg hover:bg-gray-100 hover:text-indigo-600 transition"
-                                        title="Upload from device storage"
+                                        className="flex flex-col items-center justify-center p-2 rounded-xl bg-white shadow-sm border border-gray-200 hover:text-indigo-600 transition"
                                     >
                                         <Upload size={24} />
-                                        <span className="text-sm mt-1">Upload File</span>
+                                        <span className="text-[10px] font-bold uppercase mt-1">Upload</span>
                                     </button>
                                 </div>
-                                <p className="text-xs text-gray-400 mt-2 text-center">
-                                    'Take Photo' will use your camera on mobile. On desktop, it may open a file browser.
-                                </p>
                             </div>
                         </div>
                         <input
@@ -207,10 +207,10 @@ const CheckInModal: React.FC<CheckInModalProps> = ({ isOpen, onClose, onSave, jo
                         />
                     </div>
                 </main>
-                <footer className="flex-shrink-0 flex justify-end gap-2 p-4 border-t bg-gray-50">
-                    <button onClick={onClose} className="py-2 px-4 bg-gray-200 rounded-lg font-semibold">Cancel</button>
-                    <button onClick={handleSave} className="flex items-center gap-2 py-2 px-4 bg-indigo-600 text-white font-semibold rounded-lg">
-                        <Save size={16} /> Confirm Check-In
+                <footer className="flex-shrink-0 flex justify-between gap-3 p-4 border-t bg-gray-50/50">
+                    <button onClick={onClose} className="flex-1 py-3 px-4 bg-white border border-gray-300 text-gray-700 rounded-xl font-bold text-sm hover:bg-gray-50 transition-colors">Cancel</button>
+                    <button onClick={handleSave} className="flex-[2] flex items-center justify-center gap-2 py-3 px-4 bg-indigo-600 text-white font-bold rounded-xl text-sm shadow-lg hover:bg-indigo-700 transition-all active:scale-[0.98]">
+                        <Save size={18} /> Confirm Check-In
                     </button>
                 </footer>
             </div>

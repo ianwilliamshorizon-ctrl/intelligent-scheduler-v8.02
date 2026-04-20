@@ -1,6 +1,6 @@
 import React from 'react';
 import { Job, Vehicle, Customer, PurchaseOrder, User, Engineer } from '../../types';
-import { KeyRound, Wrench, Warehouse, MapPin } from 'lucide-react';
+import { KeyRound, Wrench, Warehouse, MapPin, LogIn, FileText, LogOut } from 'lucide-react';
 import { StorageLocation } from '../../types';
 import { JobHoverPopout } from './JobHoverPopout';
 
@@ -82,6 +82,32 @@ export const SummaryJobCard: React.FC<SummaryJobCardProps> = (props) => {
                         </div>
                     )}
 
+                    {props.highlightAction === 'checkIn' && (
+                        <button
+                            onClick={(e) => { e.stopPropagation(); props.onCheckIn(job.id); }}
+                            className="mt-2 w-full py-1.5 bg-blue-600 text-white text-[10px] font-black uppercase tracking-widest rounded-lg shadow-md flex items-center justify-center gap-1.5 hover:bg-blue-700 transition-all active:scale-95"
+                        >
+                            <LogIn size={12} /> CHECK IN
+                        </button>
+                    )}
+
+                    {props.highlightAction === 'invoice' && (
+                        <button
+                            onClick={(e) => { e.stopPropagation(); props.onGenerateInvoice?.(job.id); }}
+                            className="mt-2 w-full py-1.5 bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest rounded-lg shadow-md flex items-center justify-center gap-1.5 hover:bg-indigo-700 transition-all active:scale-95"
+                        >
+                            <FileText size={12} /> INVOICE
+                        </button>
+                    )}
+
+                    {props.highlightAction === 'collect' && (
+                        <button
+                            onClick={(e) => { e.stopPropagation(); props.onCollect?.(job.id); }}
+                            className="mt-2 w-full py-1.5 bg-emerald-600 text-white text-[10px] font-black uppercase tracking-widest rounded-lg shadow-md flex items-center justify-center gap-1.5 hover:bg-emerald-700 transition-all active:scale-95"
+                        >
+                            <LogOut size={12} /> COLLECT
+                        </button>
+                    )}
                 </div>
             </div>
         </JobHoverPopout>

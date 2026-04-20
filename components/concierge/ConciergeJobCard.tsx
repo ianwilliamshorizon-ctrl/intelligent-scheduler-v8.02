@@ -101,50 +101,56 @@ export const ConciergeJobCard: React.FC<ConciergeJobCardProps> = (props) => {
 
     return (
         <div
-            className={`p-3 rounded-xl shadow-lg border relative overflow-hidden transition-all duration-200 hover:shadow-xl hover:scale-[1.01] mb-3 ${getCardColorClasses()}`}
+            className={`p-1.5 sm:p-3 rounded-xl shadow-lg border relative overflow-hidden transition-all duration-200 hover:shadow-xl hover:scale-[1.01] mb-2 sm:mb-3 ${getCardColorClasses()}`}
             onClick={() => onEdit(job.id)}
         >
             {/* Parts Status Accent */}
-            <div className={`absolute top-0 right-0 h-1.5 w-12 rounded-bl-lg ${partsStatusColor()?.bg || 'bg-white/20'}`} title={partsStatus || 'No Parts'}></div>
+            <div className={`absolute top-0 right-0 h-1 sm:h-1.5 w-8 sm:w-12 rounded-bl-lg ${partsStatusColor()?.bg || 'bg-white/20'}`} title={partsStatus || 'No Parts'}></div>
 
             {/* Header */}
-            <div className="flex justify-between items-start mb-2">
-                <h4 className={`flex-grow text-sm font-bold uppercase tracking-tight leading-tight text-gray-900`}>
+            <div className="flex justify-between items-start mb-1 sm:mb-2">
+                <h4 className="flex-grow text-[10px] sm:text-sm font-bold uppercase tracking-tight leading-tight text-gray-900">
                     {job.description}
                 </h4>
-                <div className="flex flex-col items-end gap-1 flex-shrink-0 ml-2">
-                    <span className={`font-mono text-xs font-bold px-2 py-0.5 rounded-full border bg-white/50 border-gray-200 text-gray-600`}>
+                <div className="flex flex-col items-end gap-0.5 sm:gap-1 flex-shrink-0 ml-1 sm:ml-2">
+                    <span className="font-mono text-[9px] sm:text-xs font-bold px-1.5 sm:px-2 py-0.5 rounded-full border bg-white/50 border-gray-200 text-gray-600">
                         #{job.id}
                     </span>
                     {job.keyNumber && (
-                        <span className={`flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded border bg-amber-50 border-amber-200 text-amber-800`}>
-                            <KeyRound size={10} /> {job.keyNumber}
+                        <span className="flex items-center gap-0.5 sm:gap-1 text-[8px] sm:text-[9px] font-bold px-1 sm:px-1.5 py-0.5 rounded border bg-amber-50 border-amber-200 text-amber-800">
+                            <KeyRound size={8} className="sm:w-[10px] sm:h-[10px]" /> {job.keyNumber}
                         </span>
                     )}
                 </div>
             </div>
             
             {/* Details */}
-            <div className={`text-xs space-y-1 mb-3 text-gray-600`}>
-                <p className="flex items-center gap-2 font-bold text-gray-800"><Car size={13} className="opacity-70 text-gray-400"/> {vehicle?.registration} • {vehicle?.make} {vehicle?.model}</p>
-                <p title={getCustomerDisplayName(customer)} className="truncate font-semibold flex items-center gap-2"><UserIcon size={13} className="opacity-70 text-gray-400"/> {getCustomerDisplayName(customer)}</p>
-                <div className="flex items-center gap-2 opacity-80 font-semibold">
-                    <Clock size={13} className="text-gray-400" />
-                    <span>{job.estimatedHours} hours estimated</span>
+            <div className="text-[9px] sm:text-xs space-y-0.5 sm:space-y-1 mb-2 sm:mb-3 text-gray-600">
+                <p className="flex items-center gap-1.5 sm:gap-2 font-bold text-gray-800">
+                    <Car size={10} className="sm:w-[13px] sm:h-[13px] opacity-70 text-gray-400"/> 
+                    {vehicle?.registration} • {vehicle?.make} {vehicle?.model}
+                </p>
+                <p title={getCustomerDisplayName(customer)} className="truncate font-semibold flex items-center gap-1.5 sm:gap-2">
+                    <UserIcon size={10} className="sm:w-[13px] sm:h-[13px] opacity-70 text-gray-400"/> 
+                    {getCustomerDisplayName(customer)}
+                </p>
+                <div className="flex items-center gap-1.5 sm:gap-2 opacity-80 font-semibold">
+                    <Clock size={10} className="sm:w-[13px] sm:h-[13px] text-gray-400" />
+                    <span>{job.estimatedHours}h est.</span>
                 </div>
             </div>
 
              {/* Purchase Orders Links */}
              {associatedPOs.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 my-2 py-2 border-t border-gray-100">
+                <div className="flex flex-wrap gap-1 sm:gap-1.5 my-1.5 sm:my-2 py-1.5 sm:py-2 border-t border-gray-100/50">
                     {associatedPOs.map(po => (
                         <button
                             key={po.id}
                             onClick={(e) => { e.stopPropagation(); onOpenPurchaseOrder(po); }}
-                            className={`flex items-center gap-1 px-2 py-0.5 rounded-lg border text-[11px] font-black tracking-widest transition-all hover:scale-105 active:scale-95 shadow-sm ${getPoStatusColor(po.status, 'bg')} ${getPoStatusColor(po.status, 'text')} border-white/20`}
+                            className={`flex items-center gap-1 px-1.5 sm:px-2 py-0.5 rounded-lg border text-[9px] sm:text-[11px] font-black tracking-widest transition-all hover:scale-105 active:scale-95 shadow-sm ${getPoStatusColor(po.status, 'bg')} ${getPoStatusColor(po.status, 'text')} border-white/20`}
                             title={`View PO #${po.id} (${po.status})`}
                         >
-                            <PackageIcon size={10} />
+                            <PackageIcon size={9} className="sm:w-[10px] sm:h-[10px]" />
                             <span className="font-mono">{po.id}</span>
                         </button>
                     ))}
@@ -153,11 +159,11 @@ export const ConciergeJobCard: React.FC<ConciergeJobCardProps> = (props) => {
 
             {/* Service Packages */}
             {job.lineItems && job.lineItems.some(item => item.isPackage) && (
-                <div className="mt-2 pt-2 border-t border-gray-100">
+                <div className="mt-1.5 sm:mt-2 pt-1.5 sm:pt-2 border-t border-gray-100/50">
                     <div className="flex flex-wrap gap-1">
                         {job.lineItems.filter(item => item.isPackage).map((pkg, idx) => (
-                            <span key={idx} className="bg-indigo-50 text-indigo-700 text-[10px] px-2 py-0.5 rounded-full font-bold border border-indigo-100 flex items-center gap-1">
-                                <PackageIcon size={10} /> {pkg.servicePackageName || pkg.description}
+                            <span key={idx} className="bg-indigo-50 text-indigo-700 text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded-full font-bold border border-indigo-100 flex items-center gap-1">
+                                <PackageIcon size={9} className="sm:w-[10px] sm:h-[10px]" /> {pkg.servicePackageName || pkg.description}
                             </span>
                         ))}
                     </div>
@@ -166,7 +172,7 @@ export const ConciergeJobCard: React.FC<ConciergeJobCardProps> = (props) => {
 
             {/* Segments for Today */}
             {segmentsToday.length > 0 && (
-                <div className={`mt-2 pt-2 border-t border-gray-100 text-xs space-y-1.5`}>
+                <div className="mt-1.5 sm:mt-2 pt-1.5 sm:pt-2 border-t border-gray-100/50 text-[10px] sm:text-xs space-y-1 sm:space-y-1.5">
                     {segmentsToday.map(seg => {
                         let timeString = `${seg.duration} hrs`;
                         if (seg.scheduledStartSegment !== null) {
@@ -174,25 +180,25 @@ export const ConciergeJobCard: React.FC<ConciergeJobCardProps> = (props) => {
                             const numSegments = seg.duration * (60 / SEGMENT_DURATION_MINUTES);
                             const endSegmentIndex = seg.scheduledStartSegment + numSegments;
                             const endTime = endSegmentIndex < TIME_SEGMENTS.length ? TIME_SEGMENTS[endSegmentIndex] : `${END_HOUR}:${END_MINUTE}`;
-                            timeString = `${startTime} - ${endTime}`;
+                            timeString = `${startTime}-${endTime}`;
                         }
                         
                         const controlEnabled = canControl(seg);
 
                         return (
-                            <div key={seg.segmentId} className={`p-2 rounded-xl transition-colors ${controlEnabled ? 'bg-indigo-50 border border-indigo-100' : 'bg-gray-50'}`}>
-                                <div className="flex justify-between items-center mb-1">
-                                    <span className="font-bold truncate text-gray-700">{engineersById.get(seg.engineerId!)?.name} on {seg.allocatedLift}</span>
+                            <div key={seg.segmentId} className={`p-1.5 sm:p-2 rounded-xl transition-colors ${controlEnabled ? 'bg-indigo-50 border border-indigo-100' : 'bg-gray-50'}`}>
+                                <div className="flex justify-between items-center mb-0.5 sm:mb-1">
+                                    <span className="font-bold truncate text-gray-700">{engineersById.get(seg.engineerId!)?.name} @ {seg.allocatedLift}</span>
                                     <span className={`font-bold ${seg.status === 'Paused' ? 'text-rose-600 animate-pulse' : 'text-indigo-700'}`}>
                                         {seg.status === 'Paused' ? 'PAUSED' : timeString}
                                     </span>
                                 </div>
                                 {controlEnabled && (
-                                    <div className="flex items-center justify-end gap-1.5">
-                                        {seg.status === 'Allocated' && onStartWork && <button onClick={(e) => { e.stopPropagation(); onStartWork(job.id, seg.segmentId); }} className="flex items-center gap-1 px-2 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 shadow-sm text-[10px] font-bold uppercase tracking-tight transition-transform active:scale-95"><PlayCircle size={14} /> Start</button>}
-                                        {seg.status === 'Paused' && onRestart && <button onClick={(e) => { e.stopPropagation(); onRestart(job.id, seg.segmentId); }} className="flex items-center gap-1 px-2 py-1 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 shadow-sm text-[10px] font-bold uppercase tracking-tight transition-transform active:scale-95"><PlayCircle size={14}/> Restart</button>}
-                                        {seg.status === 'In Progress' && onPause && <button onClick={(e) => { e.stopPropagation(); onPause(job.id, seg.segmentId); }} className="flex items-center gap-1 px-2 py-1 bg-amber-600 text-white rounded-lg hover:bg-amber-700 shadow-sm text-[10px] font-bold uppercase tracking-tight transition-transform active:scale-95"><PauseCircle size={14}/> Pause</button>}
-                                        {seg.status === 'In Progress' && onEngineerComplete && <button onClick={(e) => { e.stopPropagation(); onEngineerComplete(job, seg.segmentId); }} className="flex items-center gap-1 px-2 py-1 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 shadow-sm text-[10px] font-bold uppercase tracking-tight border border-indigo-200 transition-transform active:scale-95"><CheckCircle size={14}/> Complete</button>}
+                                    <div className="flex items-center justify-end gap-1 sm:gap-1.5">
+                                        {seg.status === 'Allocated' && onStartWork && <button onClick={(e) => { e.stopPropagation(); onStartWork(job.id, seg.segmentId); }} className="flex items-center gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 shadow-sm text-[9px] sm:text-[10px] font-bold uppercase tracking-tight transition-transform active:scale-95"><PlayCircle size={12} className="sm:w-[14px] sm:h-[14px]" /> Start</button>}
+                                        {seg.status === 'Paused' && onRestart && <button onClick={(e) => { e.stopPropagation(); onRestart(job.id, seg.segmentId); }} className="flex items-center gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 shadow-sm text-[9px] sm:text-[10px] font-bold uppercase tracking-tight transition-transform active:scale-95"><PlayCircle size={12} className="sm:w-[14px] sm:h-[14px]"/> Restart</button>}
+                                        {seg.status === 'In Progress' && onPause && <button onClick={(e) => { e.stopPropagation(); onPause(job.id, seg.segmentId); }} className="flex items-center gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 bg-amber-600 text-white rounded-lg hover:bg-amber-700 shadow-sm text-[9px] sm:text-[10px] font-bold uppercase tracking-tight transition-transform active:scale-95"><PauseCircle size={12} className="sm:w-[14px] sm:h-[14px]"/> Pause</button>}
+                                        {seg.status === 'In Progress' && onEngineerComplete && <button onClick={(e) => { e.stopPropagation(); onEngineerComplete(job, seg.segmentId); }} className="flex items-center gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 shadow-sm text-[9px] sm:text-[10px] font-bold uppercase tracking-tight border border-indigo-200 transition-transform active:scale-95"><CheckCircle size={12} className="sm:w-[14px] sm:h-[14px]"/> Complete</button>}
                                     </div>
                                 )}
                             </div>
@@ -202,27 +208,27 @@ export const ConciergeJobCard: React.FC<ConciergeJobCardProps> = (props) => {
             )}
 
             {/* Footer */}
-            <div className={`flex justify-between items-center pt-2 border-t mt-2 border-gray-100`}>
-                 <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider">
-                    <span title={`Vehicle Status: ${currentVehicleStatus.text}`} className={`flex items-center gap-1 text-gray-500`}>
-                        <currentVehicleStatus.icon size={12}/> {currentVehicleStatus.text}
+            <div className="flex justify-between items-center pt-1.5 sm:pt-2 border-t mt-1.5 sm:mt-2 border-gray-100/50">
+                 <div className="flex items-center gap-1.5 sm:gap-2 text-[8px] sm:text-[10px] font-bold uppercase tracking-wider">
+                    <span title={`Vehicle Status: ${currentVehicleStatus.text}`} className="flex items-center gap-0.5 sm:gap-1 text-gray-500">
+                        <currentVehicleStatus.icon size={10} className="sm:w-[12px] sm:h-[12px]"/> {currentVehicleStatus.text}
                     </span>
                     
                 </div>
-                <div className="flex items-center gap-2">
-                    <button onClick={(e) => { e.stopPropagation(); onOpenAssistant(job.id); }} className={`p-1.5 rounded-lg transition-colors bg-gray-50 hover:bg-gray-100 text-indigo-600 border border-gray-200`} title="Assistant"><Wand2 size={14} /></button>
+                <div className="flex items-center gap-1 sm:gap-2">
+                    <button onClick={(e) => { e.stopPropagation(); onOpenAssistant(job.id); }} className="p-1 sm:p-1.5 rounded-lg transition-colors bg-gray-50 hover:bg-gray-100 text-indigo-600 border border-gray-200" title="Assistant"><Wand2 size={12} className="sm:w-[14px] sm:h-[14px]" /></button>
                     
                     {/* Check In Action */}
                     {highlightAction === 'checkIn' && (
-                        <button onClick={(e) => { e.stopPropagation(); onCheckIn(job.id); }} className="text-[10px] font-bold uppercase tracking-tight flex items-center gap-1 bg-white text-blue-600 px-3 py-1 rounded-lg hover:bg-blue-50 border border-blue-100 shadow-xs transition-transform active:scale-95">
-                            <LogIn size={12} /> Check In
+                        <button onClick={(e) => { e.stopPropagation(); onCheckIn(job.id); }} className="text-[9px] sm:text-[10px] font-bold uppercase tracking-tight flex items-center gap-1 bg-white text-blue-600 px-2 sm:px-3 py-0.5 sm:py-1 rounded-lg hover:bg-blue-50 border border-blue-100 shadow-xs transition-transform active:scale-95">
+                            <LogIn size={10} className="sm:w-[12px] sm:h-[12px]" /> Check In
                         </button>
                     )}
                     
                     {/* Invoice Action */}
                     {highlightAction === 'invoice' && onGenerateInvoice && (
-                        <button onClick={(e) => { e.stopPropagation(); onGenerateInvoice(job.id); }} className="text-[10px] font-bold uppercase tracking-tight flex items-center gap-1 bg-white text-indigo-600 px-3 py-1 rounded-lg hover:bg-indigo-50 border border-indigo-100 shadow-xs transition-transform active:scale-95">
-                            <FileText size={12} /> Invoice
+                        <button onClick={(e) => { e.stopPropagation(); onGenerateInvoice(job.id); }} className="text-[9px] sm:text-[10px] font-bold uppercase tracking-tight flex items-center gap-1 bg-white text-indigo-600 px-2 sm:px-3 py-0.5 sm:py-1 rounded-lg hover:bg-indigo-50 border border-indigo-100 shadow-xs transition-transform active:scale-95">
+                            <FileText size={10} className="sm:w-[12px] sm:h-[12px]" /> Invoice
                         </button>
                     )}
 
@@ -230,17 +236,17 @@ export const ConciergeJobCard: React.FC<ConciergeJobCardProps> = (props) => {
                     {(highlightAction === 'collect' || vehicleStatus === 'Awaiting Collection' || (vehicleStatus === 'On Site' && !!job.invoiceId)) && onCollect && (
                         <button 
                             onClick={(e) => { e.stopPropagation(); onCollect(job.id); }} 
-                            className="text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 bg-emerald-600 text-white px-3 py-1.5 rounded-xl hover:bg-emerald-700 shadow-sm transition-all active:scale-95"
+                            className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 sm:gap-1.5 bg-emerald-600 text-white px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl hover:bg-emerald-700 shadow-sm transition-all active:scale-95"
                         >
-                            <LogOut size={12} /> 
+                            <LogOut size={10} className="sm:w-[12px] sm:h-[12px]" /> 
                             <span>COLLECT</span>
                         </button>
                     )}
 
                     {/* QC Action */}
                     {job.status === 'Pending QC' && highlightAction !== 'collect' && onQcApprove && (currentUser.role === 'Admin' || currentUser.role === 'Dispatcher') && (
-                        <button onClick={(e) => {e.stopPropagation(); onQcApprove(job.id);}} className="text-[10px] font-bold uppercase tracking-tight flex items-center gap-1 bg-white text-orange-600 px-3 py-1 rounded-lg hover:bg-orange-50 border border-orange-100 shadow-xs transition-transform active:scale-95">
-                            <ClipboardCheck size={12}/> Sign-off
+                        <button onClick={(e) => {e.stopPropagation(); onQcApprove(job.id);}} className="text-[9px] sm:text-[10px] font-bold uppercase tracking-tight flex items-center gap-1 bg-white text-orange-600 px-2 sm:px-3 py-0.5 sm:py-1 rounded-lg hover:bg-orange-50 border border-orange-100 shadow-xs transition-transform active:scale-95">
+                            <ClipboardCheck size={10} className="sm:w-[12px] sm:h-[12px]"/> Sign-off
                         </button>
                     )}
                 </div>

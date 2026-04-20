@@ -183,50 +183,53 @@ const ConciergeView: React.FC<ConciergeViewProps> = (props) => {
     }, [arrivalFilter]);
 
     return (
-        <div className="w-full h-full flex flex-col p-4 bg-gray-50">
-            <header className="flex justify-between items-center mb-3 flex-shrink-0">
-                <div className="flex items-center gap-6">
-                    <h2 className="text-xl font-bold text-gray-800">
-                        {currentUser.role === 'Engineer' ? 'My Job Stream' : 'Service Stream'}
-                    </h2>
-                    
-                    <div className="flex bg-gray-200 rounded-lg p-1">
-                        {(['standard', 'summary'] as const).map(mode => (
-                            <button
-                                key={mode}
-                                onClick={() => setViewMode(mode)}
-                                className={`px-4 py-1 text-xs font-black uppercase tracking-widest rounded-md transition ${viewMode === mode ? 'bg-indigo-600 shadow text-white' : 'text-gray-600 hover:text-gray-800'}`}
-                            >
-                                {mode}
-                            </button>
-                        ))}
+        <div className="w-full h-full flex flex-col p-2 sm:p-4 bg-gray-50">
+            <header className="flex flex-col gap-3 mb-4 flex-shrink-0">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                    <div className="flex items-center justify-between w-full sm:w-auto gap-4">
+                        <h2 className="text-lg sm:text-xl font-bold text-gray-800">
+                            {currentUser.role === 'Engineer' ? 'My Stream' : 'Service Stream'}
+                        </h2>
+                        
+                        <div className="flex bg-gray-200 rounded-lg p-0.5 sm:p-1">
+                            {(['standard', 'summary'] as const).map(mode => (
+                                <button
+                                    key={mode}
+                                    onClick={() => setViewMode(mode)}
+                                    className={`px-2 sm:px-4 py-1 text-[10px] sm:text-xs font-black uppercase tracking-widest rounded-md transition ${viewMode === mode ? 'bg-indigo-600 shadow text-white' : 'text-gray-600 hover:text-gray-800'}`}
+                                >
+                                    {mode}
+                                </button>
+                            ))}
+                        </div>
                     </div>
-                </div>
-                <div className="flex items-center gap-4">
-                    <div className="flex bg-gray-200 rounded-lg p-1">
-                        {(['today', '7days', '14days'] as const).map(opt => (
-                            <button
-                                key={opt}
-                                onClick={() => setArrivalFilter(opt)}
-                                className={`px-3 py-1 text-xs font-semibold rounded-md transition ${arrivalFilter === opt ? 'bg-white shadow text-gray-800' : 'text-gray-600 hover:text-gray-800'}`}
-                            >
-                                {opt === 'today' ? 'Today' : opt === '7days' ? '7 Days' : '14 Days'}
-                            </button>
-                        ))}
-                    </div>
-                     <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16}/>
-                        <input 
-                            value={searchTerm}
-                            onChange={e => setSearchTerm(e.target.value)}
-                            placeholder="Search by reg, customer..."
-                            className="w-64 p-1.5 pl-9 border rounded-lg text-sm"
-                        />
-                        {searchTerm && (
-                            <button onClick={() => setSearchTerm('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                                <X size={16}/>
-                            </button>
-                        )}
+
+                    <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
+                        <div className="flex bg-gray-200 rounded-lg p-0.5 sm:p-1">
+                            {(['today', '7days', '14days'] as const).map(opt => (
+                                <button
+                                    key={opt}
+                                    onClick={() => setArrivalFilter(opt)}
+                                    className={`px-2 sm:px-3 py-1 text-[10px] sm:text-xs font-semibold rounded-md transition ${arrivalFilter === opt ? 'bg-white shadow text-gray-800' : 'text-gray-600 hover:text-gray-800'}`}
+                                >
+                                    {opt === 'today' ? 'Today' : opt === '7days' ? '7D' : '14D'}
+                                </button>
+                            ))}
+                        </div>
+                        <div className="relative flex-grow sm:flex-grow-0">
+                            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" size={14}/>
+                            <input 
+                                value={searchTerm}
+                                onChange={e => setSearchTerm(e.target.value)}
+                                placeholder="Search..."
+                                className="w-full sm:w-48 md:w-64 p-1.5 pl-8 border rounded-lg text-xs sm:text-sm"
+                            />
+                            {searchTerm && (
+                                <button onClick={() => setSearchTerm('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                                    <X size={14}/>
+                                </button>
+                            )}
+                        </div>
                     </div>
                 </div>
             </header>

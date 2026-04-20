@@ -92,12 +92,10 @@ const MainLayout: React.FC<{
             <aside className={`
                 fixed inset-y-0 left-0 z-50 lg:relative
                 ${isSidebarOpen ? 'w-64 translate-x-0' : 'w-0 -translate-x-full lg:translate-x-0 lg:w-20'} 
-                bg-slate-900 text-white transition-all duration-300 flex flex-col flex-shrink-0
+                bg-slate-900 text-white transition-all duration-300 flex flex-col flex-shrink-0 overflow-hidden
             `}>
-                <div className="p-4 flex items-center justify-between h-16 border-b border-slate-800">
-                    {(isSidebarOpen || window.innerWidth < 1024) && (
-                        <span className="font-bold text-xl tracking-tight">BROOKSPEED</span>
-                    )}
+                <div className="p-4 flex items-center justify-between h-16 border-b border-slate-800 flex-shrink-0">
+                    <span className="font-bold text-xl tracking-tight hidden lg:block">BROOKSPEED</span>
                     <button 
                         onClick={() => setIsSidebarOpen(!isSidebarOpen)} 
                         className="p-1 rounded hover:bg-slate-800 hidden lg:block"
