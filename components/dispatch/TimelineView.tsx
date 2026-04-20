@@ -96,10 +96,10 @@ export const TimelineView: React.FC<TimelineViewProps> = (props) => {
     }, [unallocatedJobs]);
 
     return (
-        <div className="flex-grow flex p-4 gap-4 min-h-0">
+        <div className="flex-grow flex flex-col lg:flex-row p-3 sm:p-4 gap-4 min-h-0">
             {/* UNALLOCATED COLUMN */}
              <div
-                className="w-80 flex-shrink-0 flex flex-col bg-gray-100 rounded-lg shadow-inner unallocated-drop-zone min-h-0"
+                className="w-full lg:w-80 flex-shrink-0 flex flex-col bg-gray-100 rounded-lg shadow-inner unallocated-drop-zone min-h-[300px] lg:min-h-0"
                 onDragOver={(e) => {
                     e.preventDefault(); // Critical for drag-back functionality
                     onDragOverUnallocated(e);
@@ -139,7 +139,7 @@ export const TimelineView: React.FC<TimelineViewProps> = (props) => {
                         </label>
                     </div>
                 </div>
-                <div className="flex-grow p-3 space-y-3 overflow-y-auto">
+                <div className="flex-grow p-3 space-y-3 overflow-y-auto lg:max-h-full max-h-[400px]">
                     {unallocatedJobs.map(job => {
                         const commonProps = {
                             job,
@@ -176,7 +176,7 @@ export const TimelineView: React.FC<TimelineViewProps> = (props) => {
             </div>
 
             {/* TIMELINE SECTION */}
-            <div className="flex-grow flex bg-white rounded-lg shadow-md overflow-auto min-w-0">
+            <div className="flex-grow flex bg-white rounded-lg shadow-md overflow-auto min-w-0 min-h-[400px] lg:min-h-0">
                 <div className="flex-shrink-0 border-r flex flex-col bg-white sticky left-0 z-20">
                     <h4 className="flex items-center justify-center font-bold p-2 border-b sticky top-0 bg-white z-30 text-transparent select-none h-16">&nbsp;</h4>
                     {TIME_SEGMENTS.map(time => <div key={time} className="flex-1 text-xs text-right pr-2 text-gray-500 border-b flex items-center justify-end">{time}</div>)}

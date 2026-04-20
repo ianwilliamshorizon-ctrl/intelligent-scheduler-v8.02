@@ -841,13 +841,13 @@ const EditJobModal: React.FC<{
     const TabButton = ({ tabId, label, icon, isFirst, isLast }: { tabId: string, label: string, icon: React.ReactNode, isFirst?: boolean, isLast?: boolean }) => (
         <button 
             onClick={() => setActiveTab(tabId)} 
-            className={`flex-1 flex items-center justify-center gap-2 py-3 text-sm font-semibold relative 
+            className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 text-xs sm:text-sm font-semibold relative whitespace-nowrap
                 ${activeTab === tabId 
-                    ? 'bg-white text-indigo-700' 
+                    ? 'bg-white text-indigo-700 shadow-sm z-10' 
                     : 'bg-gray-50 text-gray-500 hover:bg-gray-100 hover:text-indigo-600'}
                 ${!isFirst ? 'border-l border-gray-200' : ''}
                 transition-colors duration-150 ease-in-out`}>
-            {icon}{label}
+            {icon}<span>{label}</span>
             {activeTab === tabId && <div className="absolute bottom-0 left-0 right-0 h-1 bg-indigo-600"></div>}
         </button>
     );
@@ -900,10 +900,10 @@ const EditJobModal: React.FC<{
                     </div>
 
                     <div className="lg:col-span-4 flex flex-col">
-                        <div className="flex items-stretch bg-gray-50 rounded-t-lg border border-gray-200 overflow-hidden">
+                        <div className="flex items-stretch bg-gray-50 rounded-t-lg border border-gray-200 overflow-x-auto no-scrollbar">
                            <TabButton tabId="estimates" label="Estimates & Parts" icon={<DollarSign size={16}/>} isFirst />
                            <TabButton tabId="inspection" label="Inspection" icon={<ListChecks size={16}/>} />
-                           <TabButton tabId="notes" label="Technician Notes" icon={<MessageSquare size={16}/>} />
+                           <TabButton tabId="notes" label="Notes" icon={<MessageSquare size={16}/>} />
                            <TabButton tabId="segments" label="Segments" icon={<CalendarDays size={16}/>} isLast />
                         </div>
                         <div className="bg-white border-x border-b border-gray-200 rounded-b-lg shadow-sm flex-grow p-4">
@@ -1176,8 +1176,8 @@ const EditJobModal: React.FC<{
                     </div>
                 </main>
 
-                <footer className="flex-shrink-0 flex justify-between items-center p-4 border-t bg-white">
-                    <div>
+                <footer className="flex-shrink-0 flex flex-col sm:flex-row justify-between items-stretch sm:items-center p-3 sm:p-4 border-t bg-white gap-3">
+                    <div className="flex justify-center sm:justify-start">
                         {onDelete && !isReadOnly && (
                             <button
                                 type="button"
@@ -1191,22 +1191,22 @@ const EditJobModal: React.FC<{
                                         onClose();
                                     }
                                 })}
-                                className="flex items-center gap-2 py-2 px-4 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-semibold"
+                                className="flex items-center gap-2 py-2 px-4 bg-red-600 text-white rounded-lg hover:bg-red-700 text-xs sm:text-sm font-semibold w-full sm:w-auto justify-center"
                             >
                                 <Ban size={14} /> Cancel Job
                             </button>
                         )}
                     </div>
-                    <div className="flex items-center gap-2">
-                        <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2">
+                        <div className="flex items-center gap-2 mr-auto sm:mr-0">
                             <input type="checkbox" id="print-blank-sheet" checked={printBlankSheet} onChange={(e) => setPrintBlankSheet(e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
-                            <label htmlFor="print-blank-sheet" className="text-sm text-gray-700">Print Blank Inspection Sheet</label>
+                            <label htmlFor="print-blank-sheet" className="text-[10px] sm:text-xs text-gray-700">Blank Sheet</label>
                         </div>
-                        <button type="button" onClick={triggerPrint} className="flex items-center gap-2 py-2 px-4 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 text-sm font-semibold" disabled={isPrinting}>
-                            <Printer size={14} /> {isPrinting ? 'Loading...' : 'Print Job Card'}
+                        <button type="button" onClick={triggerPrint} className="flex items-center gap-2 py-2 px-3 sm:px-4 bg-gray-100 text-gray-800 rounded-lg hover:bg-gray-200 text-xs sm:text-sm font-semibold" disabled={isPrinting}>
+                            <Printer size={14} /> <span className="hidden sm:inline">{isPrinting ? 'Loading...' : 'Print Card'}</span><span className="sm:hidden">Print</span>
                         </button>
-                        <button type="button" onClick={onClose} className="py-2 px-4 bg-gray-200 rounded-lg font-semibold">Close</button>
-                        <button type="button" onClick={handleSaveMain} className="flex items-center gap-2 py-2 px-4 bg-indigo-600 text-white font-semibold rounded-lg disabled:opacity-50" disabled={isReadOnly}><Save size={14}/> Save Changes</button>
+                        <button type="button" onClick={onClose} className="py-2 px-3 sm:px-4 bg-gray-100 rounded-lg font-semibold text-xs sm:text-sm">Close</button>
+                        <button type="button" onClick={handleSaveMain} className="flex items-center gap-2 py-2 px-3 sm:px-4 bg-indigo-600 text-white font-semibold rounded-lg disabled:opacity-50 text-xs sm:text-sm" disabled={isReadOnly}><Save size={14}/> Save</button>
                     </div>
                 </footer>
             </div>

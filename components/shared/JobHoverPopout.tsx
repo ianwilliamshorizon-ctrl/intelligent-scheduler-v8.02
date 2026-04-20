@@ -80,8 +80,8 @@ export const JobHoverPopout: React.FC<JobHoverPopoutProps> = (props) => {
             style={{
                 top: popOutPosition === 'top' ? `${coords.top}px` : `${coords.top + coords.height}px`,
                 left: `${(() => {
-                    const popoutWidth = 360;
                     const viewportWidth = document.documentElement.clientWidth || window.innerWidth;
+                    const popoutWidth = Math.min(360, viewportWidth - 24);
                     const padding = 12;
                     const centerX = coords.left + coords.width / 2;
                     let leftEdge = centerX - popoutWidth / 2;
@@ -92,7 +92,7 @@ export const JobHoverPopout: React.FC<JobHoverPopoutProps> = (props) => {
                 transform: popOutPosition === 'top' ? 'translateY(-100%)' : 'translateY(0%)',
                 paddingTop: popOutPosition === 'bottom' ? '12px' : '0',
                 paddingBottom: popOutPosition === 'top' ? '12px' : '0',
-                width: `360px`
+                width: `min(360px, calc(100vw - 24px))`
             }}
             onMouseEnter={() => {
                 if (hoverTimeout.current) clearTimeout(hoverTimeout.current);

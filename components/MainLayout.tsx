@@ -135,13 +135,13 @@ const MainLayout: React.FC<{
 
             <div className="flex-grow flex flex-col h-full overflow-hidden w-full">
                 
-                <header className="bg-white border-b border-gray-200 h-16 flex items-center justify-between px-4 lg:px-6 flex-shrink-0 z-30 shadow-sm">
-                    <div className="flex items-center gap-4 flex-1">
-                        <button onClick={() => setIsSidebarOpen(true)} className="lg:hidden p-2 -ml-2 text-gray-600">
+                <header className="bg-white border-b border-gray-200 h-16 flex items-center justify-between px-2 lg:px-6 flex-shrink-0 z-30 shadow-sm">
+                    <div className="flex items-center gap-2 lg:gap-4 flex-1 min-w-0">
+                        <button onClick={() => setIsSidebarOpen(true)} className="lg:hidden p-2 -ml-1 text-gray-600 flex-shrink-0">
                             <Menu size={24} />
                         </button>
 
-                        <div className="hidden md:flex items-center gap-2">
+                        <div className="hidden md:flex items-center gap-2 flex-shrink-0">
                              <Building2 size={18} className="text-indigo-600" />
                              <select 
                                 value={selectedEntityId} 
@@ -154,13 +154,13 @@ const MainLayout: React.FC<{
                              </select>
                         </div>
 
-                        <div className="relative w-full max-w-xs lg:max-w-md">
+                        <div className="relative w-full max-w-[140px] sm:max-w-xs lg:max-w-md">
                             <div className="relative">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                                <Search className="absolute left-2.5 sm:left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
                                 <input 
                                     type="text"
                                     placeholder="Search..."
-                                    className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-full text-sm focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
+                                    className="w-full pl-8 sm:pl-10 pr-4 py-1.5 sm:py-2 bg-gray-50 border border-gray-200 rounded-full text-xs sm:text-sm focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
                                     onFocus={() => setIsSearchFocused(true)}
@@ -169,7 +169,7 @@ const MainLayout: React.FC<{
                             </div>
 
                             {isSearchFocused && searchResults.length > 0 && (
-                                <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden z-50">
+                                <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden z-50 min-w-[240px]">
                                     {searchResults.map((result, idx) => (
                                         <button 
                                             key={`${result.type}-${result.id}-${idx}`}
@@ -179,12 +179,12 @@ const MainLayout: React.FC<{
                                                 setSearchQuery('');
                                             }}
                                         >
-                                            <div className="p-2 bg-gray-100 rounded-lg text-indigo-600">
+                                            <div className="p-2 bg-gray-100 rounded-lg text-indigo-600 flex-shrink-0">
                                                 <result.icon size={16} />
                                             </div>
-                                            <div>
-                                                <div className="text-sm font-bold text-gray-900">{result.label}</div>
-                                                <div className="text-xs text-gray-500">{result.type} • {result.sub}</div>
+                                            <div className="min-w-0">
+                                                <div className="text-sm font-bold text-gray-900 truncate">{result.label}</div>
+                                                <div className="text-xs text-gray-500 truncate">{result.type} • {result.sub}</div>
                                             </div>
                                         </button>
                                     ))}

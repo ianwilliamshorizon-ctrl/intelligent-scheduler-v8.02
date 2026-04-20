@@ -113,27 +113,29 @@ export const WeeklyView: React.FC<WeeklyViewProps> = (props) => {
                 </div>
             </div>
 
-            <div className="grid grid-cols-7 text-xs font-bold text-center text-gray-500 border-b pb-2 mb-2 flex-shrink-0 bg-white sticky top-0 py-2 rounded-t-lg z-10 shadow-sm">
-                {days.map(day => {
-                    const dateStr = formatDate(day);
-                    const allocatedHours = allocatedHoursByDay.get(dateStr) || 0;
-                    const capacityInfo = getCapacityInfo(allocatedHours, dailyCapacityHours);
+            <div className="flex bg-white sticky top-0 py-2 rounded-t-lg z-10 shadow-sm border-b mb-2 overflow-x-auto no-scrollbar">
+                <div className="grid grid-cols-7 min-w-[700px] lg:min-w-0 w-full text-xs font-bold text-center text-gray-500 pb-2">
+                    {days.map(day => {
+                        const dateStr = formatDate(day);
+                        const allocatedHours = allocatedHoursByDay.get(dateStr) || 0;
+                        const capacityInfo = getCapacityInfo(allocatedHours, dailyCapacityHours);
 
-                    return (
-                        <div key={day.toISOString()} className="flex flex-col items-center justify-start gap-1">
-                            <span className="font-bold text-gray-700">
-                                {day.toLocaleDateString('en-GB', { weekday: 'short' })}
-                                <span className="text-gray-500 font-medium ml-1">{day.getUTCDate()}</span>
-                            </span>
-                            <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] ${capacityInfo.classes} border border-black/10`}>
-                                <Gauge size={10} />
-                                <span className="font-bold">{allocatedHours.toFixed(1)}h</span>
+                        return (
+                            <div key={day.toISOString()} className="flex flex-col items-center justify-start gap-1">
+                                <span className="font-bold text-gray-700">
+                                    {day.toLocaleDateString('en-GB', { weekday: 'short' })}
+                                    <span className="text-gray-500 font-medium ml-1">{day.getUTCDate()}</span>
+                                </span>
+                                <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] ${capacityInfo.classes} border border-black/10`}>
+                                    <Gauge size={10} />
+                                    <span className="font-bold">{allocatedHours.toFixed(1)}h</span>
+                                </div>
                             </div>
-                        </div>
-                    );
-                })}
+                        );
+                    })}
+                </div>
             </div>
-            <div className="grid grid-cols-7 gap-3 flex-grow min-h-0">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 flex-grow min-h-0">
                 {days.map(day => {
                     const dateStr = formatDate(day);
                     const dailyJobs = jobsByDay.get(dateStr) || [];
