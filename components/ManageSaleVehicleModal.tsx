@@ -114,6 +114,7 @@ interface ManageSaleVehicleModalProps {
     onViewSORContract: (saleVehicle: SaleVehicle) => void;
     onViewInternalStatement: (saleVehicle: SaleVehicle) => void;
     onViewInvoice: (saleVehicle: SaleVehicle) => void;
+    onViewOrderForm: (saleVehicle: SaleVehicle) => void;
     saleVehicle: SaleVehicle;
     allJobs: Job[];
     allEstimates: Estimate[];
@@ -129,7 +130,7 @@ interface ManageSaleVehicleModalProps {
     onUpdateProspect: (prospect: Prospect) => void;
 }
 
-const ManageSaleVehicleModal: React.FC<ManageSaleVehicleModalProps> = ({ isOpen, onClose, onSave, onSaleFinalized, onViewStatement, onViewSORContract, onViewInternalStatement, onViewInvoice, saleVehicle, allJobs, allEstimates, allCustomers, allVehicles, allServicePackages, allSaleOverheadPackages, allInvoices, allBatteryChargers, taxRates, businessEntities, prospects, onUpdateProspect }) => {
+const ManageSaleVehicleModal: React.FC<ManageSaleVehicleModalProps> = ({ isOpen, onClose, onSave, onSaleFinalized, onViewStatement, onViewSORContract, onViewInternalStatement, onViewInvoice, onViewOrderForm, saleVehicle, allJobs, allEstimates, allCustomers, allVehicles, allServicePackages, allSaleOverheadPackages, allInvoices, allBatteryChargers, taxRates, businessEntities, prospects, onUpdateProspect }) => {
     const [formData, setFormData] = useState<SaleVehicle>(saleVehicle);
     const [currentVersionId, setCurrentVersionId] = useState('');
     const [initialVersionCount, setInitialVersionCount] = useState(0);
@@ -547,10 +548,14 @@ const ManageSaleVehicleModal: React.FC<ManageSaleVehicleModalProps> = ({ isOpen,
 
                         <Section title="Documents & Actions" icon={FileText} defaultOpen>
                             <div className="space-y-2">
-                                <button onClick={() => onViewSORContract(saleVehicle)} className="w-full text-left p-2 bg-gray-100 rounded hover:bg-gray-200 text-sm font-semibold text-gray-700">View Sale or Return Agreement</button>
+                                <button onClick={() => onViewOrderForm(saleVehicle)} className="w-full text-left p-3 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 text-sm font-black text-indigo-700 flex justify-between items-center group">
+                                    <span>PRINT VEHICLE ORDER FORM</span>
+                                    <FileText size={16} className="group-hover:scale-110 transition-transform"/>
+                                </button>
+                                <button onClick={() => onViewSORContract(saleVehicle)} className="w-full text-left p-2 bg-gray-100 rounded hover:bg-gray-200 text-sm font-semibold text-gray-700">View SOR Agreement</button>
                                 <button onClick={() => onViewStatement(saleVehicle)} className="w-full text-left p-2 bg-gray-100 rounded hover:bg-gray-200 text-sm font-semibold text-gray-700">Print Owner Statement</button>
                                 <button onClick={() => onViewInternalStatement(saleVehicle)} className="w-full text-left p-2 bg-gray-100 rounded hover:bg-gray-200 text-sm font-semibold text-gray-700">Print Internal Statement</button>
-                                {formData.invoiceId && <button onClick={() => onViewInvoice(saleVehicle)} className="w-full text-left p-2 bg-green-100 rounded hover:bg-green-200 text-sm font-semibold text-green-800 border border-green-300">View Sales Invoice</button>}
+                                {formData.invoiceId && <button onClick={() => onViewInvoice(saleVehicle)} className="w-full text-left p-2 bg-green-100 rounded hover:bg-green-200 text-sm font-semibold text-green-800 border border-green-300">Print Sales Invoice</button>}
                             </div>
                         </Section>
 

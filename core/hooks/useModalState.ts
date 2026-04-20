@@ -22,6 +22,7 @@ export interface ModalState {
     sorContractModal: { isOpen: boolean; saleVehicle: T.SaleVehicle | null };
     ownerStatementModal: { isOpen: boolean; saleVehicle: T.SaleVehicle | null };
     internalStatementModal: { isOpen: boolean; saleVehicle: T.SaleVehicle | null };
+    vehicleOrderFormModal: { isOpen: boolean; saleVehicle: T.SaleVehicle | null };
     salesReportModal: boolean;
     addSaleVehicleModalOpen: boolean;
     manageSaleVehicleModal: { isOpen: boolean; saleVehicle: T.SaleVehicle | null };
@@ -62,6 +63,7 @@ export interface ModalSetters {
     setSorContractModal: React.Dispatch<React.SetStateAction<{ isOpen: boolean; saleVehicle: T.SaleVehicle | null }>>;
     setOwnerStatementModal: React.Dispatch<React.SetStateAction<{ isOpen: boolean; saleVehicle: T.SaleVehicle | null }>>;
     setInternalStatementModal: React.Dispatch<React.SetStateAction<{ isOpen: boolean; saleVehicle: T.SaleVehicle | null }>>;
+    setVehicleOrderFormModal: React.Dispatch<React.SetStateAction<{ isOpen: boolean; saleVehicle: T.SaleVehicle | null }>>;
     setSalesReportModal: React.Dispatch<React.SetStateAction<boolean>>;
     setAddSaleVehicleModalOpen: React.Dispatch<React.SetStateAction<boolean>>;
     setManageSaleVehicleModal: React.Dispatch<React.SetStateAction<{ isOpen: boolean; saleVehicle: T.SaleVehicle | null }>>;
@@ -102,6 +104,7 @@ const useModalState = (): [ModalState, ModalSetters] => {
     const [sorContractModal, setSorContractModal] = useState<{ isOpen: boolean; saleVehicle: T.SaleVehicle | null }>({ isOpen: false, saleVehicle: null });
     const [ownerStatementModal, setOwnerStatementModal] = useState<{ isOpen: boolean; saleVehicle: T.SaleVehicle | null }>({ isOpen: false, saleVehicle: null });
     const [internalStatementModal, setInternalStatementModal] = useState<{ isOpen: boolean; saleVehicle: T.SaleVehicle | null }>({ isOpen: false, saleVehicle: null });
+    const [vehicleOrderFormModal, setVehicleOrderFormModal] = useState<{ isOpen: boolean; saleVehicle: T.SaleVehicle | null }>({ isOpen: false, saleVehicle: null });
     const [salesReportModal, setSalesReportModal] = useState(false);
     const [addSaleVehicleModalOpen, setAddSaleVehicleModalOpen] = useState(false);
     const [manageSaleVehicleModal, setManageSaleVehicleModal] = useState<{ isOpen: boolean; saleVehicle: T.SaleVehicle | null }>({ isOpen: false, saleVehicle: null });
@@ -124,7 +127,7 @@ const useModalState = (): [ModalState, ModalSetters] => {
         isEditJobModalOpen, selectedJobId, partModal, isSmartCreateOpen, smartCreateMode, smartCreateDefaultDate,
         poModal, batchPoModalOpen, batchUpdatePoRefModalOpen, viewPoModal, invoiceFormModal, viewInvoiceModal, salesInvoiceModal,
         rentalBookingModal, rentalConditionModal, rentalAgreementModal, rentalReturnReportModal,
-        sorContractModal, ownerStatementModal, internalStatementModal, salesReportModal, addSaleVehicleModalOpen,
+        sorContractModal, ownerStatementModal, internalStatementModal, vehicleOrderFormModal, salesReportModal, addSaleVehicleModalOpen,
         manageSaleVehicleModal, prospectModal, estimateFormModal, estimateViewModal, scheduleJobFromEstimateModal,
         scheduleEmailModal, inquiryModal, isAssistantOpen, assistantContextJobId, checkInJob, checkOutJob,
         exportModal, customerModal, vehicleModal, vehicleHistoryReportModal
@@ -134,7 +137,7 @@ const useModalState = (): [ModalState, ModalSetters] => {
         setIsEditJobModalOpen, setSelectedJobId, setPartModal, setIsSmartCreateOpen, setSmartCreateMode, setSmartCreateDefaultDate, 
         setPoModal, setBatchPoModalOpen, setBatchUpdatePoRefModalOpen, setViewPoModal, setInvoiceFormModal, setViewInvoiceModal,
         setSalesInvoiceModal, setRentalBookingModal, setRentalConditionModal, setRentalAgreementModal,
-        setRentalReturnReportModal, setSorContractModal, setOwnerStatementModal, setInternalStatementModal,
+        setRentalReturnReportModal, setSorContractModal, setOwnerStatementModal, setInternalStatementModal, setVehicleOrderFormModal,
         setSalesReportModal, setAddSaleVehicleModalOpen, setManageSaleVehicleModal, setProspectModal,
         setEstimateFormModal, setEstimateViewModal, setScheduleJobFromEstimateModal, setScheduleEmailModal,
         setInquiryModal, setIsAssistantOpen, setAssistantContextJobId, setCheckInJob, setCheckOutJob, 

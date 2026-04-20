@@ -31,12 +31,13 @@
 
 /* --- LIGHTWEIGHT PRINT ENGINE (SAFE) --- */
 @media print {
-  /* Only hide UI components, don't mess with layout */
   body {
     background: white !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
   
-  #root, .modal-backdrop, [role="dialog"], header, nav, .no-print {
+  #root, .modal-backdrop, [role="dialog"], header, nav, .no-print, .modal-header, .modal-footer {
     display: none !important;
   }
 
@@ -47,11 +48,47 @@
     top: 0 !important;
     left: 0 !important;
     width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
   }
 
-  /* Prevent standard browser headers/footers if possible */
   @page {
-    margin: 10mm;
+    margin: 15mm 10mm 15mm 10mm;
+    size: A4;
+  }
+
+  /* Natural Page Breaks */
+  .page-break-before { page-break-before: always; }
+  .page-break-after { page-break-after: always; }
+  .no-break { page-break-inside: avoid; break-inside: avoid; }
+  
+  section, table, tr, .card {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  /* Repeating Headers and Footers using the Table Hack */
+  .print-container {
+    width: 100%;
+  }
+  
+  .print-header-space, .print-footer-space {
+    height: 25mm;
+  }
+  
+  .print-header {
+    position: fixed;
+    top: 0;
+    width: 100%;
+    height: 25mm;
+  }
+  
+  .print-footer {
+    position: fixed;
+    bottom: 0;
+    width: 100%;
+    height: 15mm;
+    border-top: 1px solid #e2e8f0;
   }
 }
 

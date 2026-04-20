@@ -22,6 +22,7 @@ import RentalCheckInReportModal from './RentalCheckInReportModal';
 import SORContractModal from './SORContractModal';
 import OwnerStatementModal from './OwnerStatementModal';
 import InternalSaleStatementModal from './InternalSaleStatementModal';
+import VehicleOrderFormModal from './VehicleOrderFormModal';
 import SalesSummaryReportModal from './SalesSummaryReportModal';
 import ProspectFormModal from './ProspectFormModal';
 import InquiryFormModal from './InquiryFormModal';
@@ -417,6 +418,18 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                 />
             )}
 
+            {modals.vehicleOrderFormModal?.isOpen && modals.vehicleOrderFormModal.saleVehicle && (
+                <VehicleOrderFormModal 
+                    isOpen={modals.vehicleOrderFormModal.isOpen}
+                    onClose={() => setters.setVehicleOrderFormModal({isOpen: false, saleVehicle: null})}
+                    saleVehicle={modals.vehicleOrderFormModal.saleVehicle}
+                    vehicle={data.vehicles.find(v => v.id === modals.vehicleOrderFormModal.saleVehicle!.vehicleId)}
+                    buyer={data.customers.find(c => c.id === modals.vehicleOrderFormModal.saleVehicle!.buyerCustomerId)}
+                    entity={data.businessEntities.find(e => e.id === modals.vehicleOrderFormModal.saleVehicle!.entityId)}
+                    taxRates={data.taxRates}
+                />
+            )}
+
             {modals.salesReportModal && (
                 <SalesSummaryReportModal 
                     isOpen={modals.salesReportModal}
@@ -447,6 +460,20 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                     isOpen={modals.manageSaleVehicleModal.isOpen}
                     onClose={() => setters.setManageSaleVehicleModal({isOpen: false, saleVehicle: null})}
                     onSave={(sv) => handleSaveItem(data.setSaleVehicles, sv, 'brooks_saleVehicles')}
+                    onSaleFinalized={(sv, inv) => {
+                        handleSaveItem(data.setSaleVehicles, sv, 'brooks_saleVehicles');
+                        handleSaveItem(data.setInvoices, inv, 'brooks_invoices');
+                        setters.setManageSaleVehicleModal({isOpen: false, saleVehicle: null});
+                        setters.setSalesInvoiceModal({isOpen: true, invoice: inv});
+                    }}
+                    onViewStatement={(sv) => setters.setOwnerStatementModal({ isOpen: true, saleVehicle: sv })}
+                    onViewSORContract={(sv) => setters.setSorContractModal({ isOpen: true, saleVehicle: sv })}
+                    onViewInternalStatement={(sv) => setters.setInternalStatementModal({ isOpen: true, saleVehicle: sv })}
+                    onViewInvoice={(sv) => {
+                        const inv = data.invoices.find(i => i.id === sv.invoiceId);
+                        if (inv) setters.setSalesInvoiceModal({ isOpen: true, invoice: inv });
+                    }}
+                    onViewOrderForm={(sv) => setters.setVehicleOrderFormModal({ isOpen: true, saleVehicle: sv })}
                     saleVehicle={modals.manageSaleVehicleModal.saleVehicle}
                     
                     allJobs={data.jobs}
@@ -460,20 +487,6 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                     taxRates={data.taxRates}
                     businessEntities={data.businessEntities}
                     prospects={data.prospects}
-                    
-                    onSaleFinalized={(sv, inv) => {
-                        handleSaveItem(data.setSaleVehicles, sv, 'brooks_saleVehicles');
-                        handleSaveItem(data.setInvoices, inv, 'brooks_invoices');
-                        setters.setManageSaleVehicleModal({isOpen: false, saleVehicle: null});
-                        setters.setViewInvoiceModal({isOpen: true, invoice: inv});
-                    }}
-                    onViewStatement={(sv) => setters.setOwnerStatementModal({isOpen: true, saleVehicle: sv})}
-                    onViewSORContract={(sv) => setters.setSorContractModal({isOpen: true, saleVehicle: sv})}
-                    onViewInternalStatement={(sv) => setters.setInternalStatementModal({isOpen: true, saleVehicle: sv})}
-                    onViewInvoice={(sv) => {
-                        const inv = data.invoices.find(i => i.id === sv.invoiceId);
-                        if(inv) setters.setSalesInvoiceModal({isOpen: true, invoice: inv});
-                    }}
                     onUpdateProspect={(p) => handleSaveItem(data.setProspects, p, 'brooks_prospects')}
                 />
             )}
