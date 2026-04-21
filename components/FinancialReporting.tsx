@@ -158,7 +158,8 @@ const FinancialReporting: React.FC = () => {
                     </div>
                     <div>
                         <h1 className="text-xl md:text-2xl font-black text-gray-900 leading-none">
-                            Financial Reporting
+                            <span className="md:hidden">Brookspeed</span>
+                            <span className="hidden md:inline">Financial Reporting</span>
                         </h1>
                         <p className="text-[10px] md:text-sm text-gray-500 font-bold mt-1 uppercase tracking-wider">
                             {reportMode === 'aged' ? 'Outstanding Balances Only' : 'Transaction Revenue Analysis'}

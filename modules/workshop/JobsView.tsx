@@ -3,7 +3,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useApp } from '../../core/state/AppContext';
 import { useData } from '../../core/state/DataContext';
 import { Job, Vehicle, Customer, ServicePackage, Estimate } from '../../types';
-import { Eye, Search, PlusCircle, Printer, Briefcase, Wand2, Loader2, CalendarDays } from 'lucide-react';
+import { Eye, Search, PlusCircle, Printer, Briefcase, Wand2, Loader2, CalendarDays, Camera } from 'lucide-react';
 import { getCustomerDisplayName } from '../../core/utils/customerUtils';
 import { getRelativeDate, formatDate, dateStringToDate, addDays, formatReadableDate } from '../../core/utils/dateUtils';
 import PrintableJobList from '../../components/PrintableJobList';
@@ -13,7 +13,7 @@ import ServicePackageFormModal from '../../components/ServicePackageFormModal';
 import { useWorkshopActions } from '../../core/hooks/useWorkshopActions';
 
 interface JobsViewProps {
-    onEditJob: (jobId: string) => void;
+    onEditJob: (jobId: string, initialTab?: string) => void;
     onSmartCreateClick: () => void;
 }
 
@@ -215,7 +215,10 @@ const JobsView: React.FC<JobsViewProps> = ({ onEditJob, onSmartCreateClick }) =>
     return (
         <div className="w-full h-full flex flex-col p-6 bg-gray-50">
             <header className="flex justify-between items-center mb-4 flex-shrink-0">
-                <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2"><Briefcase /> Jobs <span className="text-gray-500 font-medium text-lg">({dateFilterOptions[dateFilter]})</span></h2>
+                <h2 className="text-xl md:text-2xl font-bold text-gray-800 flex items-center gap-2">
+                    <span className="md:hidden">Brookspeed</span>
+                    <span className="hidden md:inline"><Briefcase /> Jobs <span className="text-gray-500 font-medium text-lg">({dateFilterOptions[dateFilter]})</span></span>
+                </h2>
                 <div className="flex items-center gap-2">
                      <button onClick={handlePrint} className="flex items-center gap-2 py-2 px-4 bg-gray-600 text-white font-semibold rounded-lg shadow-md hover:bg-gray-700">
                         <Printer size={16}/> Print List
@@ -277,7 +280,18 @@ const JobsView: React.FC<JobsViewProps> = ({ onEditJob, onSmartCreateClick }) =>
                                 const customer = customerMap.get(job.customerId);
                                 return (
                                 <tr key={job.id} className="hover:bg-indigo-50">
-                                    <td className="p-3 font-mono">{job.id}</td>
+                                    <td className="p-3 font-mono flex items-center gap-2">
+                                        {job.id}
+                                        {job.checkInPhotos && job.checkInPhotos.length > 0 && (
+                                            <button 
+                                                onClick={() => onEditJob(job.id, 'media')}
+                                                className="text-indigo-600 hover:text-indigo-800" 
+                                                title={`${job.checkInPhotos.length} Condition Photos - Click to View`}
+                                            >
+                                                <Camera size={14} />
+                                            </button>
+                                        )}
+                                    </td>
                                     <td className="p-3">{job.createdAt ? formatReadableDate(job.createdAt) : 'N/A'}</td>
                                     <td className="p-3">{getCustomerDisplayName(customer)}</td>
                                     <td className="p-3 font-mono">{vehicle?.registration}</td>

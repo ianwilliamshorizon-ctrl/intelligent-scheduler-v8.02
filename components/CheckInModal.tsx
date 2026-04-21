@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Job, CheckInPhoto } from '../types';
-import { X, Save, KeyRound, Camera, Trash2, Plus, Upload, Milestone } from 'lucide-react';
+import { X, Save, KeyRound, Camera, Trash2, Plus, Upload, Milestone, Film } from 'lucide-react';
 import { saveImage } from '../utils/imageStore';
-import AsyncImage from './AsyncImage';
+import AsyncMedia from './AsyncMedia';
 
 interface TempCheckInPhoto extends CheckInPhoto {
     tempDataUrl?: string;
@@ -20,6 +20,7 @@ const CheckInModal: React.FC<CheckInModalProps> = ({ isOpen, onClose, onSave, jo
     const [mileage, setMileage] = useState<string>('');
     const [photos, setPhotos] = useState<TempCheckInPhoto[]>([]);
     const cameraInputRef = useRef<HTMLInputElement>(null);
+    const videoInputRef = useRef<HTMLInputElement>(null);
     const uploadInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
@@ -33,13 +34,14 @@ const CheckInModal: React.FC<CheckInModalProps> = ({ isOpen, onClose, onSave, jo
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         if (event.target.files) {
             for (const file of event.target.files) {
+                const isVideo = file.type.startsWith('video/');
                 const reader = new FileReader();
                 reader.onloadend = () => {
                     const dataUrl = reader.result as string;
-                    // We only need the dataUrl for temporary preview before saving
                     const newPhoto: TempCheckInPhoto = {
                         id: crypto.randomUUID(),
-                        tempDataUrl: dataUrl
+                        tempDataUrl: dataUrl,
+                        type: isVideo ? 'video' : 'photo'
                     };
                     setPhotos(prev => [...prev, newPhoto]);
                 };
@@ -66,14 +68,14 @@ const CheckInModal: React.FC<CheckInModalProps> = ({ isOpen, onClose, onSave, jo
             if (photo.tempDataUrl) { // This is a new photo
                 try {
                     await saveImage(photo.id, photo.tempDataUrl);
-                    finalPhotos.push({ id: photo.id, notes: photo.notes });
+                    finalPhotos.push({ id: photo.id, notes: photo.notes, type: photo.type });
                 } catch (error) {
-                    console.error("Could not save check-in image:", error);
-                    alert(`Failed to save one of the images (${photo.id}). Please try again.`);
+                    console.error("Could not save check-in media:", error);
+                    alert(`Failed to save one of the media items (${photo.id}). Please try again.`);
                     return; // Abort save if any image fails
                 }
             } else { // This is an existing photo
-                finalPhotos.push({ id: photo.id, notes: photo.notes });
+                finalPhotos.push({ id: photo.id, notes: photo.notes, type: photo.type });
             }
         }
 
@@ -84,8 +86,14 @@ const CheckInModal: React.FC<CheckInModalProps> = ({ isOpen, onClose, onSave, jo
             checkInPhotos: finalPhotos,
             vehicleStatus: 'On Site'
         };
-        onSave(updatedJob);
-        onClose();
+        console.log("[CheckIn] Saving job...", updatedJob);
+        try {
+            await onSave(updatedJob);
+            onClose();
+        } catch (err) {
+            console.error("[CheckIn] Save error:", err);
+            alert("Failed to update job status. Please check your connection.");
+        }
     };
 
     if (!isOpen || !job) return null;
@@ -148,9 +156,13 @@ const CheckInModal: React.FC<CheckInModalProps> = ({ isOpen, onClose, onSave, jo
                             {photos.map(photo => (
                                 <div key={photo.id} className="relative group border border-gray-200 rounded-xl overflow-hidden shadow-sm bg-gray-50 h-32 sm:h-40">
                                     {photo.tempDataUrl ? (
-                                        <img src={photo.tempDataUrl} alt="Vehicle condition" className="w-full h-full object-cover" />
+                                        photo.type === 'video' ? (
+                                            <video src={photo.tempDataUrl} className="w-full h-full object-cover" controls />
+                                        ) : (
+                                            <img src={photo.tempDataUrl} alt="Vehicle condition" className="w-full h-full object-cover" />
+                                        )
                                     ) : (
-                                        <AsyncImage imageId={photo.id} alt="Vehicle condition" className="w-full h-full object-cover" />
+                                        <AsyncMedia imageId={photo.id} alt="Vehicle condition" className="w-full h-full object-cover" />
                                     )}
                                     <button onClick={() => handleRemovePhoto(photo.id)} className="absolute top-1 right-1 bg-white/90 p-1.5 rounded-full text-red-500 shadow-md hover:bg-red-50 transition-colors">
                                         <Trash2 size={14} />
@@ -174,9 +186,17 @@ const CheckInModal: React.FC<CheckInModalProps> = ({ isOpen, onClose, onSave, jo
                                         className="flex flex-col items-center justify-center p-2 rounded-xl bg-white shadow-sm border border-gray-200 hover:text-indigo-600 transition"
                                     >
                                         <Camera size={24} />
-                                        <span className="text-[10px] font-bold uppercase mt-1">Camera</span>
+                                        <span className="text-[10px] font-bold uppercase mt-1">Photo</span>
                                     </button>
-                                    <div className="hidden sm:block w-8 h-px bg-gray-300"></div>
+                                    <button
+                                        type="button"
+                                        onClick={() => videoInputRef.current?.click()}
+                                        className="flex flex-col items-center justify-center p-2 rounded-xl bg-white shadow-sm border border-gray-200 hover:text-indigo-600 transition"
+                                    >
+                                        <Film size={24} />
+                                        <span className="text-[10px] font-bold uppercase mt-1">Video</span>
+                                    </button>
+                                    <div className="hidden sm:block w-px h-8 bg-gray-300"></div>
                                     <button
                                         type="button"
                                         onClick={() => uploadInputRef.current?.click()}
@@ -191,8 +211,15 @@ const CheckInModal: React.FC<CheckInModalProps> = ({ isOpen, onClose, onSave, jo
                         <input
                             ref={cameraInputRef}
                             type="file"
-                            multiple
                             accept="image/*"
+                            capture="environment"
+                            onChange={handleFileChange}
+                            className="hidden"
+                        />
+                        <input
+                            ref={videoInputRef}
+                            type="file"
+                            accept="video/*"
                             capture="environment"
                             onChange={handleFileChange}
                             className="hidden"
@@ -201,7 +228,7 @@ const CheckInModal: React.FC<CheckInModalProps> = ({ isOpen, onClose, onSave, jo
                             ref={uploadInputRef}
                             type="file"
                             multiple
-                            accept="image/*"
+                            accept="image/*,video/*"
                             onChange={handleFileChange}
                             className="hidden"
                         />

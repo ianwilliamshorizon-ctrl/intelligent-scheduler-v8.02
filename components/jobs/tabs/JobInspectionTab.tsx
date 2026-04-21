@@ -68,7 +68,7 @@ export const JobInspectionTab: React.FC<JobInspectionTabProps> = ({
                     </div>
                     <div className="flex items-center gap-2">
                          <select 
-                            className="text-sm border rounded p-1.5 bg-white max-w-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                            className="text-sm border rounded p-1.5 bg-white max-w-md focus:ring-2 focus:ring-indigo-500 outline-none"
                             value={selectedTemplateId || ''}
                             onChange={handleSelectChange}
                         >

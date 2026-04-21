@@ -17,7 +17,7 @@ const WorkflowJobCard: React.FC<{
     customer?: Customer;
     children?: React.ReactNode;
     statusColorClass: string;
-    onEdit: (jobId: string) => void;
+    onEdit: (jobId: string, initialTab?: string) => void;
     onOpenAssistant: (jobId: string) => void;
     onOpenPurchaseOrder: (po: PurchaseOrder) => void;
     purchaseOrders: PurchaseOrder[];
@@ -115,7 +115,7 @@ interface WorkflowViewProps {
     currentUser: User;
     onQcApprove: (jobId: string) => void;
     onGenerateInvoice: (jobId: string) => void;
-    onEditJob: (jobId: string) => void;
+    onEditJob: (jobId: string, initialTab?: string) => void;
     onStartWork: (jobId: string, segmentId: string) => void;
     onEngineerComplete: (job: Job, segmentId: string) => void;
     onPause: (jobId: string, segmentId: string) => void;

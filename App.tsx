@@ -269,7 +269,11 @@ const App = () => {
         onEngineerComplete: (job: T.Job, segmentId: string) => workshopActions.handleUpdateSegmentStatus(job.id, segmentId, 'Engineer Complete', { engineerCompletedAt: new Date().toISOString() }),
         onQcApprove: workshopActions.handleQcApprove,
         onOpenAssistant: (id: string) => { setters.setAssistantContextJobId(id); setters.setIsAssistantOpen(true); },
-        onEditJob: (id: string) => { setters.setSelectedJobId(id); setters.setIsEditJobModalOpen(true); },
+        onEditJob: (id: string, initialTab?: string) => { 
+            setters.setSelectedJobId(id); 
+            setters.setEditJobInitialTab(initialTab || null);
+            setters.setIsEditJobModalOpen(true); 
+        },
     };
 
     const modalActions = {
@@ -295,7 +299,19 @@ const App = () => {
             case 'directors-dashboard':
                 return <DirectorsDashboard />;
             case 'dispatch':
-                return <DispatchView {...commonProps} setDefaultDateForModal={(date: Date | null) => setters.setSmartCreateDefaultDate(date)} setIsSmartCreateOpen={setters.setIsSmartCreateOpen} setSmartCreateMode={setters.setSmartCreateMode} setSelectedJobId={setters.setSelectedJobId} setIsEditModalOpen={setters.setIsEditJobModalOpen} onOpenPurchaseOrder={(po) => setters.setPoModal({isOpen: true, po})} onReassignEngineer={workshopActions.handleReassignEngineer} onCheckIn={(id) => setters.setCheckInJob((jobs || []).find(j => j.id === id) || null)} onUnscheduleSegment={workshopActions.handleUnscheduleSegment} />;
+                return <DispatchView 
+                    {...commonProps} 
+                    setDefaultDateForModal={(date: Date | null) => setters.setSmartCreateDefaultDate(date)} 
+                    setIsSmartCreateOpen={setters.setIsSmartCreateOpen} 
+                    setSmartCreateMode={setters.setSmartCreateMode} 
+                    setSelectedJobId={setters.setSelectedJobId} 
+                    setIsEditModalOpen={setters.setIsEditJobModalOpen} 
+                    setEditJobInitialTab={setters.setEditJobInitialTab}
+                    onOpenPurchaseOrder={(po) => setters.setPoModal({isOpen: true, po})} 
+                    onReassignEngineer={workshopActions.handleReassignEngineer} 
+                    onCheckIn={(id) => setters.setCheckInJob((jobs || []).find(j => j.id === id) || null)} 
+                    onUnscheduleSegment={workshopActions.handleUnscheduleSegment} 
+                />;
             case 'workflow':
                 const workflowJobs = (jobs || []).filter(j => selectedEntityId === 'all' || j.entityId === selectedEntityId);
                 return <WorkflowView jobs={workflowJobs} vehicles={vehicles || []} customers={customers || []} engineers={engineers || []} currentUser={currentUser} onQcApprove={commonProps.onQcApprove} onGenerateInvoice={handleGenerateInvoice} onEditJob={commonProps.onEditJob} onStartWork={commonProps.onStartWork} onEngineerComplete={commonProps.onEngineerComplete} onPause={(id, segId) => workshopActions.handleUpdateSegmentStatus(id, segId, 'Paused')} onRestart={commonProps.onRestart} onOpenAssistant={commonProps.onOpenAssistant} onOpenPurchaseOrder={(po) => setters.setPoModal({isOpen: true, po})} />;

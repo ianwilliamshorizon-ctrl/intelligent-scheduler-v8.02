@@ -19,7 +19,7 @@ interface RentalAgreementModalProps {
 
 const PrintableContract: React.FC<any> = ({ booking, rentalVehicle, vehicle, customer, entity, diagramImageId }) => {
     return (
-        <div className="bg-white font-sans text-sm text-gray-800 printable-page" style={{ width: '210mm', minHeight: '297mm', padding: '15mm', boxSizing: 'border-box', display: 'flex', flexDirection: 'column' }}>
+        <div className="bg-white font-sans text-sm text-gray-800 printable-page" style={{ width: '210mm', minHeight: '297mm', padding: '20mm', boxSizing: 'border-box', display: 'flex', flexDirection: 'column' }}>
             <header className="pb-6 border-b">
                 <div style={{ marginBottom: '5mm' }}>
                     <h1 className="text-3xl font-bold text-gray-900">{entity?.name}</h1>
@@ -54,7 +54,7 @@ const PrintableContract: React.FC<any> = ({ booking, rentalVehicle, vehicle, cus
                         <p className="text-right font-bold">{new Date(booking.startDate).toLocaleString()}</p>
                         <p className="font-semibold">End Date/Time:</p>
                         <p className="text-right font-bold">{new Date(booking.endDate).toLocaleString()}</p>
-                        
+
                         {booking.bookingType === 'Rental' && (
                             <>
                                 <p className="font-semibold mt-2">Daily Rate:</p>
@@ -78,15 +78,15 @@ const PrintableContract: React.FC<any> = ({ booking, rentalVehicle, vehicle, cus
                             <p><strong>Condition Notes:</strong> {booking.checkOutDetails?.conditionNotes || 'None'}</p>
                         </div>
                         <div className="h-40 border rounded bg-gray-50 relative overflow-hidden">
-                             {/* Simplified diagram rendering for print */}
-                             <VehicleDamageReport 
+                            {/* Simplified diagram rendering for print */}
+                            <VehicleDamageReport
                                 activePoints={booking.checkOutDetails?.damagePoints || []}
-                                onUpdate={() => {}}
+                                onUpdate={() => { }}
                                 isReadOnly={true}
                                 vehicleModel={vehicle?.model}
                                 imageId={diagramImageId}
                                 activeColorClass="bg-blue-500"
-                             />
+                            />
                         </div>
                     </div>
                 </section>
@@ -146,7 +146,7 @@ const RentalAgreementModal: React.FC<RentalAgreementModalProps> = ({ isOpen, onC
             const pdf = new jsPDF('p', 'mm', 'a4');
             const pdfWidth = pdf.internal.pageSize.getWidth();
             const pdfHeight = pdf.internal.pageSize.getHeight();
-            
+
             const imgWidth = canvas.width;
             const imgHeight = canvas.height;
             const ratio = imgHeight / imgWidth;
@@ -175,7 +175,7 @@ const RentalAgreementModal: React.FC<RentalAgreementModalProps> = ({ isOpen, onC
             setIsGeneratingPdf(false);
         }
     };
-    
+
     if (!isOpen) return null;
 
     return (
@@ -193,7 +193,7 @@ const RentalAgreementModal: React.FC<RentalAgreementModalProps> = ({ isOpen, onC
                 <footer className="flex-shrink-0 flex justify-between items-center p-4 border-t bg-gray-50">
                     <div className="flex gap-2">
                         <button onClick={handleDownloadPdf} disabled={isGeneratingPdf} className="flex items-center py-2 px-4 bg-gray-600 text-white font-semibold rounded-lg hover:bg-gray-700 disabled:opacity-50">
-                            {isGeneratingPdf ? <Loader2 size={16} className="mr-2 animate-spin"/> : <Download size={16} className="mr-2" />}
+                            {isGeneratingPdf ? <Loader2 size={16} className="mr-2 animate-spin" /> : <Download size={16} className="mr-2" />}
                             {isGeneratingPdf ? 'Generating...' : 'Download PDF'}
                         </button>
                     </div>

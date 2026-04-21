@@ -10,7 +10,7 @@ import { formatDate } from '../core/utils/dateUtils';
 
 // The printable component
 const PrintableReport: React.FC<{ reportData: any, totals: any, entity: BusinessEntity | undefined, startDate: string, endDate: string }> = ({ reportData, totals, entity, startDate, endDate }) => (
-    <div className="bg-white font-sans text-xs text-gray-800" style={{ width: '297mm', padding: '15mm', boxSizing: 'border-box' }}>
+    <div className="bg-white font-sans text-xs text-gray-800" style={{ width: '297mm', padding: '20mm', boxSizing: 'border-box' }}>
         <header className="pb-4 border-b mb-6">
             <h1 className="text-2xl font-bold text-gray-900">{entity?.name}</h1>
             <h2 className="text-lg font-semibold text-gray-700">Sales Summary Report</h2>

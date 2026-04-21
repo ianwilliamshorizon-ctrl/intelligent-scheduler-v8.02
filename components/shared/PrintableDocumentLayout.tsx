@@ -10,7 +10,10 @@ interface PrintableDocumentLayoutProps {
 
 export const PrintableDocumentLayout: React.FC<PrintableDocumentLayoutProps> = ({ entity, title, subtitle, children }) => {
     return (
-        <div className="print-container font-sans text-sm text-gray-800 bg-white">
+        <div 
+            className="print-container font-sans text-sm text-gray-800 bg-white"
+            style={{ padding: '20mm', minHeight: '297mm', boxSizing: 'border-box' }}
+        >
             <table className="w-full">
                 <thead>
                     <tr>
@@ -38,7 +41,7 @@ export const PrintableDocumentLayout: React.FC<PrintableDocumentLayoutProps> = (
             </table>
 
             {/* Header fixed to top of every page */}
-            <div className="print-header flex justify-between items-start border-b pb-4 px-2">
+            <div className="print-header print-border flex justify-between items-start border-b-2 border-black print-border-b pb-4 px-2">
                 <div>
                     <h1 className="text-2xl font-black text-gray-900 uppercase tracking-tighter">{entity?.name || 'BROOKSPEED'}</h1>
                     <p className="text-[10px] text-gray-600 leading-tight">

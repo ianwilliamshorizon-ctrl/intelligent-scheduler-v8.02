@@ -6,7 +6,7 @@ import { formatCurrency } from '../utils/formatUtils';
 import { PrintableDocumentLayout } from './shared/PrintableDocumentLayout';
 
 const PrintableStatement: React.FC<any> = ({ saleVehicle, vehicle, owner, buyer, entity, financialSummary }) => {
-    
+
     const renderStockBreakdown = () => (
         <div className="space-y-4">
             <div className="grid grid-cols-2 gap-x-4 text-sm">
@@ -24,11 +24,11 @@ const PrintableStatement: React.FC<any> = ({ saleVehicle, vehicle, owner, buyer,
             <div className="grid grid-cols-2 gap-x-4 border-t mt-1 pt-1 font-bold text-gray-900">
                 <p>Gross Profit</p><p className="text-right">{formatCurrency(financialSummary.grossProfit)}</p>
             </div>
-             <div className="grid grid-cols-2 gap-x-4 mt-3 text-gray-500 italic">
-                 <p>Less: VAT on Margin (Est.)</p><p className="text-right">({formatCurrency(financialSummary.vatOnMargin)})</p>
+            <div className="grid grid-cols-2 gap-x-4 mt-3 text-gray-500 italic">
+                <p>Less: VAT on Margin (Est.)</p><p className="text-right">({formatCurrency(financialSummary.vatOnMargin)})</p>
                 <p>Less: Overheads</p><p className="text-right">({formatCurrency(financialSummary.totalOverheads)})</p>
             </div>
-             <div className="grid grid-cols-2 gap-x-4 border-t-4 border-double mt-4 pt-2 font-black text-2xl text-green-700">
+            <div className="grid grid-cols-2 gap-x-4 border-t-4 border-double mt-4 pt-2 font-black text-2xl text-green-700">
                 <p>Net Profit</p><p className="text-right">{formatCurrency(financialSummary.netSalesProfit)}</p>
             </div>
         </div>
@@ -77,11 +77,11 @@ const PrintableStatement: React.FC<any> = ({ saleVehicle, vehicle, owner, buyer,
             </div>
         </div>
     );
-    
+
     return (
-        <PrintableDocumentLayout 
-            entity={entity} 
-            title="SALES STATEMENT" 
+        <PrintableDocumentLayout
+            entity={entity}
+            title="SALES STATEMENT"
             subtitle={`Vehicle: ${vehicle?.registration} • ${saleVehicle?.saleType}`}
         >
             <div className="space-y-8 py-4">
@@ -155,7 +155,7 @@ const SaleStatementModal: React.FC<SaleStatementModalProps> = ({ isOpen, onClose
         const totalOverheads = saleVehicle.overheads.reduce((sum, overhead) => sum + overhead.cost, 0);
         const totalNonRecoverableCosts = (saleVehicle.nonRecoverableCosts || []).reduce((sum, cost) => sum + cost.cost, 0);
         const finalSalePrice = saleVehicle.finalSalePrice || 0;
-        
+
         let grossProfit = 0;
         let returnToCustomer = 0;
         let baseReturn = 0;
@@ -177,7 +177,7 @@ const SaleStatementModal: React.FC<SaleStatementModalProps> = ({ isOpen, onClose
 
         return { prepCosts, upsellRevenue, upsellCosts, returnToCustomer, grossProfit, totalOverheads, vatOnMargin, netSalesProfit, finalSalePrice, baseReturn, purchasePrice, totalVehicleCost, totalNonRecoverableCosts };
     }, [saleVehicle]);
-    
+
     const handlePrint = () => {
         setIsPrinting(true);
         const printMountPoint = document.createElement('div');
@@ -207,28 +207,28 @@ const SaleStatementModal: React.FC<SaleStatementModalProps> = ({ isOpen, onClose
         <div className="fixed inset-0 bg-gray-900 bg-opacity-75 z-[60] flex justify-center items-center p-4">
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
                 <header className="flex-shrink-0 flex justify-between items-center p-4 border-b">
-                     <h2 className="text-xl font-bold text-indigo-700 uppercase tracking-tight">Sales Statement Preview</h2>
+                    <h2 className="text-xl font-bold text-indigo-700 uppercase tracking-tight">Sales Statement Preview</h2>
                     <button onClick={onClose}><X size={24} className="text-gray-500 hover:text-gray-800" /></button>
                 </header>
                 <main className="flex-grow overflow-y-auto bg-gray-100 p-8">
                     <div className="shadow-2xl mx-auto" style={{ width: '210mm' }}>
-                         <PrintableStatement {...{ saleVehicle, vehicle, owner, buyer, entity, financialSummary }} />
+                        <PrintableStatement {...{ saleVehicle, vehicle, owner, buyer, entity, financialSummary }} />
                     </div>
                 </main>
-                 <footer className="flex-shrink-0 flex justify-between items-center p-4 border-t bg-gray-50">
+                <footer className="flex-shrink-0 flex justify-between items-center p-4 border-t bg-gray-50">
                     <div className="text-xs text-gray-500 italic">* Turn off headers/footers in browser print settings.</div>
                     <div className="flex gap-2">
-                        <button 
-                            onClick={handlePrint} 
+                        <button
+                            onClick={handlePrint}
                             disabled={isPrinting}
                             className="flex items-center py-2 px-6 bg-indigo-600 text-white font-black uppercase tracking-widest rounded-lg hover:bg-indigo-700 shadow-md transition-all active:scale-95 disabled:opacity-50"
                         >
-                            {isPrinting ? <Loader2 size={16} className="mr-2 animate-spin"/> : <Printer size={16} className="mr-2" />}
+                            {isPrinting ? <Loader2 size={16} className="mr-2 animate-spin" /> : <Printer size={16} className="mr-2" />}
                             Print Statement
                         </button>
                         <button onClick={onClose} className="py-2 px-4 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300">Close</button>
                     </div>
-                 </footer>
+                </footer>
             </div>
         </div>
     );

@@ -132,6 +132,7 @@ export interface CheckInPhoto {
     id: string;
     dataUrl?: string;
     notes?: string;
+    type?: 'photo' | 'video';
 }
 
 export interface VehicleDamagePoint {

@@ -19,7 +19,7 @@ interface RentalCheckInReportModalProps {
 
 const PrintableReport: React.FC<any> = ({ booking, rentalVehicle, vehicle, customer, entity, diagramImageId }) => {
     return (
-        <div className="bg-white font-sans text-sm text-gray-800 printable-page" style={{ width: '210mm', minHeight: '297mm', padding: '15mm', boxSizing: 'border-box', display: 'flex', flexDirection: 'column' }}>
+        <div className="bg-white font-sans text-sm text-gray-800 printable-page" style={{ width: '210mm', minHeight: '297mm', padding: '20mm', boxSizing: 'border-box', display: 'flex', flexDirection: 'column' }}>
             <header className="pb-6 border-b">
                 <div style={{ marginBottom: '5mm' }}>
                     <h1 className="text-3xl font-bold text-gray-900">{entity?.name}</h1>
@@ -60,9 +60,9 @@ const PrintableReport: React.FC<any> = ({ booking, rentalVehicle, vehicle, custo
                 <section>
                     <h3 className="text-lg font-bold text-gray-800 mb-2 border-b pb-1">Damage Inspection</h3>
                     <div className="h-64 border rounded bg-gray-50 relative overflow-hidden">
-                         <VehicleDamageReport 
+                        <VehicleDamageReport
                             activePoints={booking.checkInDetails?.damagePoints || []}
-                            onUpdate={() => {}}
+                            onUpdate={() => { }}
                             isReadOnly={true}
                             vehicleModel={vehicle?.model}
                             imageId={diagramImageId}
@@ -71,7 +71,7 @@ const PrintableReport: React.FC<any> = ({ booking, rentalVehicle, vehicle, custo
                                 points: booking.checkOutDetails.damagePoints,
                                 colorClass: "bg-blue-500"
                             } : undefined}
-                         />
+                        />
                     </div>
                     <div className="text-xs text-gray-500 mt-2 text-center">
                         Blue markers indicate pre-existing damage. Red markers indicate new damage found at check-in.
@@ -99,7 +99,7 @@ const PrintableReport: React.FC<any> = ({ booking, rentalVehicle, vehicle, custo
                             <tfoot>
                                 <tr className="font-bold">
                                     <td className="p-2 text-right">Total Additional Charges:</td>
-                                    <td className="p-2 text-right">{formatCurrency(booking.additionalCharges.reduce((s,c) => s + c.amount, 0))}</td>
+                                    <td className="p-2 text-right">{formatCurrency(booking.additionalCharges.reduce((s, c) => s + c.amount, 0))}</td>
                                 </tr>
                             </tfoot>
                         </table>
@@ -172,7 +172,7 @@ const RentalCheckInReportModal: React.FC<RentalCheckInReportModalProps> = ({ isO
                 pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, canvasHeightOnPdf);
                 heightLeft -= pdfHeight;
             }
-            
+
             pdf.save(`Return_Report_${booking.id}.pdf`);
         } catch (error) {
             console.error("Error generating PDF:", error);
@@ -183,7 +183,7 @@ const RentalCheckInReportModal: React.FC<RentalCheckInReportModalProps> = ({ isO
             setIsGeneratingPdf(false);
         }
     };
-    
+
     if (!isOpen) return null;
 
     return (
@@ -201,7 +201,7 @@ const RentalCheckInReportModal: React.FC<RentalCheckInReportModalProps> = ({ isO
                 <footer className="flex-shrink-0 flex justify-between items-center p-4 border-t bg-gray-50">
                     <div className="flex gap-2">
                         <button onClick={handleDownloadPdf} disabled={isGeneratingPdf} className="flex items-center py-2 px-4 bg-gray-600 text-white font-semibold rounded-lg hover:bg-gray-700 disabled:opacity-50">
-                            {isGeneratingPdf ? <Loader2 size={16} className="mr-2 animate-spin"/> : <Download size={16} className="mr-2" />}
+                            {isGeneratingPdf ? <Loader2 size={16} className="mr-2 animate-spin" /> : <Download size={16} className="mr-2" />}
                             {isGeneratingPdf ? 'Generating...' : 'Download PDF'}
                         </button>
                     </div>

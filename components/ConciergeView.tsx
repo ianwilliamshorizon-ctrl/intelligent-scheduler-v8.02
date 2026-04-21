@@ -12,7 +12,7 @@ import { KanbanColumn } from './concierge/KanbanColumn';
 import LiveAssistant from './LiveAssistant';
 
 interface ConciergeViewProps {
-    onEditJob: (jobId: string) => void;
+    onEditJob: (jobId: string, initialTab?: string) => void;
     onCheckIn: (jobId: string) => void;
     onOpenPurchaseOrder: (po: PurchaseOrder) => void;
     onOpenAssistant: (jobId: string) => void;

@@ -3,14 +3,14 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useData } from '../core/state/DataContext';
 import { StorageBooking, Vehicle, Customer, BusinessEntity, StorageLocation, BatteryCharger, ChargingEvent, Invoice, TaxRate } from '../types';
-import { Warehouse, PlusCircle, Car, MoreHorizontal, Save, Trash2, BatteryCharging, FileText, Calendar, Check, ChevronDown, ChevronUp, User, Clock, DollarSign, LogOut, KeyRound, Search, X, CheckSquare, MapPin, AlertCircle, Camera, Upload, Milestone } from 'lucide-react';
+import { Warehouse, PlusCircle, Car, MoreHorizontal, Save, Trash2, BatteryCharging, FileText, Calendar, Check, ChevronDown, ChevronUp, User, Clock, DollarSign, LogOut, KeyRound, Search, X, CheckSquare, MapPin, AlertCircle, Camera, Upload, Milestone, Film } from 'lucide-react';
 import { formatDate, dateStringToDate, daysBetween, addDays } from '../core/utils/dateUtils';
 import { formatCurrency } from '../utils/formatUtils';
 import AddStorageBookingModal from './AddStorageBookingModal';
 import { generateInvoiceId } from '../core/utils/numberGenerators';
 import MediaManager from './MediaManager';
 import { saveImage, getImage } from '../utils/imageStore';
-import AsyncImage from './AsyncImage';
+import AsyncMedia from './AsyncMedia';
 import { CheckInPhoto as CheckInPhotoType } from '../types';
 
 // --- MODALS ---
@@ -36,7 +36,9 @@ const ManageStorageBookingModal = ({
     const [isCharging, setIsCharging] = useState(false);
     const [selectedChargerId, setSelectedChargerId] = useState('');
     const checkInInputRef = React.useRef<HTMLInputElement>(null);
+    const checkInVideoInputRef = React.useRef<HTMLInputElement>(null);
     const checkOutInputRef = React.useRef<HTMLInputElement>(null);
+    const checkOutVideoInputRef = React.useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         setFormData(booking);
@@ -90,12 +92,13 @@ const ManageStorageBookingModal = ({
         
         for (const file of event.target.files) {
             const photoId = crypto.randomUUID();
+            const isVideo = file.type.startsWith('video/');
             const reader = new FileReader();
             await new Promise<void>((resolve, reject) => {
                 reader.onloadend = async () => {
                     try {
                         await saveImage(photoId, reader.result as string);
-                        newPhotos.push({ id: photoId });
+                        newPhotos.push({ id: photoId, type: isVideo ? 'video' : 'photo' });
                         resolve();
                     } catch (e) { reject(e); }
                 };
@@ -283,13 +286,18 @@ const ManageStorageBookingModal = ({
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
                                     <label className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-gray-500">
-                                        Check-In Photos
-                                        {!isClosed && <button onClick={() => checkInInputRef.current?.click()} className="text-indigo-600 hover:text-indigo-800"><Camera size={14}/></button>}
+                                        Check-In Media
+                                        {!isClosed && (
+                                            <div className="flex gap-2">
+                                                <button onClick={() => checkInInputRef.current?.click()} className="text-indigo-600 hover:text-indigo-800"><Camera size={14}/></button>
+                                                <button onClick={() => checkInVideoInputRef.current?.click()} className="text-indigo-600 hover:text-indigo-800"><Film size={14}/></button>
+                                            </div>
+                                        )}
                                     </label>
                                     <div className="grid grid-cols-2 gap-2">
                                         {(formData.checkInPhotos || []).map(p => (
                                             <div key={p.id} className="relative group rounded-lg overflow-hidden border border-gray-200 aspect-square">
-                                                <AsyncImage imageId={p.id} alt="Check-in" className="w-full h-full object-cover" />
+                                                <AsyncMedia imageId={p.id} alt="Check-in" className="w-full h-full object-cover" />
                                                 {!isClosed && (
                                                     <button onClick={() => handleRemovePhoto(p.id, 'checkIn')} className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity">
                                                         <Trash2 size={16}/>
@@ -297,28 +305,33 @@ const ManageStorageBookingModal = ({
                                                 )}
                                             </div>
                                         ))}
-                                        {(formData.checkInPhotos || []).length === 0 && <div className="col-span-2 py-4 bg-gray-50 border border-dashed rounded-lg text-[9px] text-center text-gray-400">No check-in photos.</div>}
+                                        {(formData.checkInPhotos || []).length === 0 && <div className="col-span-2 py-4 bg-gray-50 border border-dashed rounded-lg text-[9px] text-center text-gray-400">No check-in media.</div>}
                                     </div>
-                                    <input ref={checkInInputRef} type="file" multiple accept="image/*" capture="environment" onChange={e => handlePhotoUpload(e, 'checkIn')} className="hidden" />
+                                    <input ref={checkInInputRef} type="file" accept="image/*" capture="environment" onChange={e => handlePhotoUpload(e, 'checkIn')} className="hidden" />
+                                    <input ref={checkInVideoInputRef} type="file" accept="video/*" capture="environment" onChange={e => handlePhotoUpload(e, 'checkIn')} className="hidden" />
                                 </div>
 
                                 <div className="space-y-2">
                                     <label className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-gray-500">
-                                        Check-Out Photos
-                                        <button onClick={() => checkOutInputRef.current?.click()} className="text-indigo-600 hover:text-indigo-800"><Camera size={14}/></button>
+                                        Check-Out Media
+                                        <div className="flex gap-2">
+                                            <button onClick={() => checkOutInputRef.current?.click()} className="text-indigo-600 hover:text-indigo-800"><Camera size={14}/></button>
+                                            <button onClick={() => checkOutVideoInputRef.current?.click()} className="text-indigo-600 hover:text-indigo-800"><Film size={14}/></button>
+                                        </div>
                                     </label>
                                     <div className="grid grid-cols-2 gap-2">
                                         {(formData.checkOutPhotos || []).map(p => (
                                             <div key={p.id} className="relative group rounded-lg overflow-hidden border border-gray-200 aspect-square">
-                                                <AsyncImage imageId={p.id} alt="Check-out" className="w-full h-full object-cover" />
+                                                <AsyncMedia imageId={p.id} alt="Check-out" className="w-full h-full object-cover" />
                                                 <button onClick={() => handleRemovePhoto(p.id, 'checkOut')} className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity">
                                                     <Trash2 size={16}/>
                                                 </button>
                                             </div>
                                         ))}
-                                        {(formData.checkOutPhotos || []).length === 0 && <div className="col-span-2 py-4 bg-gray-50 border border-dashed rounded-lg text-[9px] text-center text-gray-400">No check-out photos.</div>}
+                                        {(formData.checkOutPhotos || []).length === 0 && <div className="col-span-2 py-4 bg-gray-50 border border-dashed rounded-lg text-[9px] text-center text-gray-400">No check-out media.</div>}
                                     </div>
-                                    <input ref={checkOutInputRef} type="file" multiple accept="image/*" capture="environment" onChange={e => handlePhotoUpload(e, 'checkOut')} className="hidden" />
+                                    <input ref={checkOutInputRef} type="file" accept="image/*" capture="environment" onChange={e => handlePhotoUpload(e, 'checkOut')} className="hidden" />
+                                    <input ref={checkOutVideoInputRef} type="file" accept="video/*" capture="environment" onChange={e => handlePhotoUpload(e, 'checkOut')} className="hidden" />
                                 </div>
                             </div>
                         </div>

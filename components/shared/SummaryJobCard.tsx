@@ -12,7 +12,7 @@ interface SummaryJobCardProps {
     engineers: Engineer[];
     storageLocations: StorageLocation[];
     currentUser: User;
-    onEdit: (jobId: string) => void;
+    onEdit: (jobId: string, initialTab?: string) => void;
     onCheckIn: (jobId: string) => void;
     onOpenPurchaseOrder: (po: PurchaseOrder) => void;
     onOpenAssistant: (jobId: string) => void;

@@ -1,14 +1,14 @@
 
 import React, { useMemo } from 'react';
-import { 
-    Job, 
-    Vehicle, 
-    Customer, 
-    Estimate, 
-    BusinessEntity, 
-    Engineer, 
-    TaxRate, 
-    EstimateLineItem, 
+import {
+    Job,
+    Vehicle,
+    Customer,
+    Estimate,
+    BusinessEntity,
+    Engineer,
+    TaxRate,
+    EstimateLineItem,
     InspectionTemplate,
     ChecklistSection,
     TyreLocation,
@@ -28,14 +28,14 @@ interface PrintableJobCardProps {
     inspectionTemplates?: InspectionTemplate[];
 }
 
-const PrintableJobCard: React.FC<PrintableJobCardProps> = ({ 
-    job, 
-    vehicle, 
-    customer, 
-    estimates = [], 
-    entity, 
+const PrintableJobCard: React.FC<PrintableJobCardProps> = ({
+    job,
+    vehicle,
+    customer,
+    estimates = [],
+    entity,
     engineers = [],
-    taxRates = [], 
+    taxRates = [],
     printBlankInspectionSheet,
     inspectionTemplates = [],
 }) => {
@@ -48,9 +48,9 @@ const PrintableJobCard: React.FC<PrintableJobCardProps> = ({
     const displayName = customerFullName || (job.customerId ? `ACCOUNT: ${job.customerId}` : "DATA MISSING");
 
     const segments = Array.isArray(job.segments) ? job.segments : (Array.isArray(jobData.tasks) ? jobData.tasks : []);
-    
+
     const technicianIds = new Set(segments.map((s: any) => s?.engineerId).filter(Boolean));
-    
+
     const safeEngineers = Array.isArray(engineers) ? engineers : [];
     const technicianNames = Array.from(technicianIds)
         .map(id => safeEngineers.find(e => e.id === id)?.name)
@@ -79,20 +79,20 @@ const PrintableJobCard: React.FC<PrintableJobCardProps> = ({
         if (!inspectionTemplate || !Array.isArray(inspectionTemplate.sections)) return [];
         return inspectionTemplate.sections.map(section => ({
             id: section.id,
-            title: section.title, 
+            title: section.title,
             items: Array.isArray(section.items) ? section.items.map(item => ({
                 id: item.id,
                 label: item.label,
                 status: 'na',
-                comment: '' 
+                comment: ''
             })) : []
         }));
     }, [inspectionTemplate]);
-    
+
     const pageStyle: React.CSSProperties = {
         width: '210mm',
         minHeight: '297mm',
-        padding: '10mm',
+        padding: '20mm',
         boxSizing: 'border-box',
         display: 'flex',
         flexDirection: 'column'
@@ -105,22 +105,22 @@ const PrintableJobCard: React.FC<PrintableJobCardProps> = ({
         const estItems = (estimates || []).flatMap(e => e.lineItems || []);
         const hourTotal = estItems
             .filter(li => {
-                const isLabor = li.isLabor || 
-                               li.type === 'labor' || 
-                               li.partNumber === 'LABOUR' || 
-                               li.partNumber === 'MOT' ||
-                               li.description?.toLowerCase().includes('labour');
+                const isLabor = li.isLabor ||
+                    li.type === 'labor' ||
+                    li.partNumber === 'LABOUR' ||
+                    li.partNumber === 'MOT' ||
+                    li.description?.toLowerCase().includes('labour');
                 return isLabor;
             })
             .reduce((sum, li) => sum + Number(li.quantity || 0), 0);
-        
+
         return hourTotal > 0 ? hourTotal : (job.estimatedHours || 0);
     }, [estimates, job.estimatedHours]);
 
     const mainContent = (
         <div className="bg-white font-sans text-sm text-gray-800 printable-page" style={pageStyle}>
             <header className="flex justify-between items-start pb-6 border-b-4 border-gray-900 mb-8">
-                 <div className="flex items-center gap-6">
+                <div className="flex items-center gap-6">
                     {entity?.logoUrl && (
                         <img src={entity.logoUrl} alt="Logo" className="h-20 object-contain" />
                     )}
@@ -208,11 +208,11 @@ const PrintableJobCard: React.FC<PrintableJobCardProps> = ({
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
-                                 {(estimates || []).length > 0 ? (
+                                {(estimates || []).length > 0 ? (
                                     (estimates || []).flatMap(est => (est.lineItems || []).map((item: EstimateLineItem) => {
                                         const isPackageHeader = item.servicePackageId && !item.isPackageComponent;
                                         const rowClass = isPackageHeader ? "bg-gray-100 font-black text-gray-950" : "text-sm";
-                                        
+
                                         return (
                                             <tr key={item.id} className={rowClass}>
                                                 <td className="px-4 py-3 font-mono text-[10px] text-gray-400 uppercase">
@@ -239,7 +239,7 @@ const PrintableJobCard: React.FC<PrintableJobCardProps> = ({
                         </table>
                     </div>
                 </section>
-                
+
                 <div style={{ pageBreakBefore: 'always' }} />
 
                 <section className="flex-grow flex flex-col">
@@ -260,7 +260,7 @@ const PrintableJobCard: React.FC<PrintableJobCardProps> = ({
                     </div>
                 </section>
 
-                 <section className="mt-6">
+                <section className="mt-6">
                     <h3 className="text-xs font-bold text-gray-400 uppercase mb-2 ml-1">Vehicle Damage & Tyre Report</h3>
                     <div className="grid grid-cols-2 gap-6">
                         <div className="relative w-full mx-auto rounded-lg overflow-hidden shadow-md bg-gray-200 border border-gray-300">
@@ -274,7 +274,7 @@ const PrintableJobCard: React.FC<PrintableJobCardProps> = ({
                             ))}
                         </div>
                         <div className="border border-gray-200 rounded-lg overflow-hidden bg-white text-[10px]">
-                             <table className="w-full text-left border-collapse">
+                            <table className="w-full text-left border-collapse">
                                 <thead className="bg-gray-50 uppercase text-gray-500 border-b">
                                     <tr>
                                         <th className="px-3 py-1.5">Tyre</th>
@@ -338,7 +338,7 @@ const PrintableJobCard: React.FC<PrintableJobCardProps> = ({
             <main>
                 <InspectionChecklist
                     checklistData={blankChecklistData}
-                    onUpdate={() => {}} 
+                    onUpdate={() => { }}
                     isReadOnly={true}
                 />
             </main>
@@ -346,7 +346,7 @@ const PrintableJobCard: React.FC<PrintableJobCardProps> = ({
     );
 
     const filledInspectionSheet = hasFilledChecklist && (
-         <div className="bg-white font-sans text-sm text-gray-800 printable-page" style={pageStyle}>
+        <div className="bg-white font-sans text-sm text-gray-800 printable-page" style={pageStyle}>
             <header className="flex justify-between items-center mb-6 border-b pb-2">
                 <h2 className="text-2xl font-bold text-gray-800">{inspectionTemplate?.name || 'Inspection Report'}</h2>
                 <div className="text-right text-sm">
@@ -357,7 +357,7 @@ const PrintableJobCard: React.FC<PrintableJobCardProps> = ({
             <main>
                 <InspectionChecklist
                     checklistData={job.inspectionChecklist || []}
-                    onUpdate={() => {}} 
+                    onUpdate={() => { }}
                     isReadOnly={true}
                 />
             </main>
@@ -367,7 +367,8 @@ const PrintableJobCard: React.FC<PrintableJobCardProps> = ({
 
     return (
         <div style={{ backgroundColor: '#ffffff', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
-             <style dangerouslySetInnerHTML={{ __html: `
+            <style dangerouslySetInnerHTML={{
+                __html: `
                 @media print {
                     @page { 
                         size: A4 portrait;
@@ -429,7 +430,7 @@ const PrintableJobCard: React.FC<PrintableJobCardProps> = ({
                     .first-page-hide { display: none !important; }
                 }
             `}} />
-            
+
             <div className="rebuild-print-container font-sans">
                 {/* Fixed Repeating Footer */}
                 <div className="page-footer hidden print:flex items-center justify-between">
@@ -454,7 +455,7 @@ const PrintableJobCard: React.FC<PrintableJobCardProps> = ({
                             </td>
                         </tr>
                     </thead>
-                    
+
                     <tbody>
                         <tr>
                             <td>

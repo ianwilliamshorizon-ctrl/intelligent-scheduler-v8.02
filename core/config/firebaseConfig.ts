@@ -1,6 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
+import { getStorage } from 'firebase/storage';
 
 // 1. Environment Helper
 const getEnv = (key: string) => {
@@ -58,6 +59,7 @@ export const db = FIREBASE_DATABASE_ID === '(default)'
     : getFirestore(app, FIREBASE_DATABASE_ID);
 
 export const auth = getAuth(app);
+export const storage = getStorage(app);
 
 if (currentEnvironment === 'Production') {
     console.log("🚀 [SYSTEM] BROOKSPEED PRODUCTION INITIALIZED");

@@ -24,7 +24,7 @@ const getCapacityInfo = (totalHours: number, maxHours: number) => {
 
 interface WeeklyViewProps {
     weekStart: Date;
-    onEditJob: (jobId: string) => void;
+    onEditJob: (jobId: string, initialTab?: string) => void;
     onOpenAssistant: (jobId: string) => void;
     onCheckIn: (jobId: string) => void;
     onOpenPurchaseOrder: (po: PurchaseOrder) => void;

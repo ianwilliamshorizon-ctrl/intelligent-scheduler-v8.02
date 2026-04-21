@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useData } from '../core/state/DataContext';
 import { useApp } from '../core/state/AppContext';
 import * as T from '../types';
-import { X, Save, Car, User, FileText, Wrench, Package, DollarSign, Edit, Plus, Trash2, KeyRound, MessageSquare, ChevronUp, ChevronDown, ListChecks, PlusCircle, ClipboardCheck, CarFront, Image as ImageIcon, Ban, Expand, Loader2, Printer, CalendarDays, PlayCircle, PauseCircle, CheckCircle, RotateCcw, UserCheck, UserPlus, MoreHorizontal } from 'lucide-react';
+import { X, Save, Car, User, FileText, Wrench, Package, DollarSign, Edit, Plus, Trash2, KeyRound, MessageSquare, ChevronUp, ChevronDown, ListChecks, PlusCircle, ClipboardCheck, CarFront, Image as ImageIcon, Ban, Expand, Loader2, Printer, CalendarDays, PlayCircle, PauseCircle, CheckCircle, RotateCcw, UserCheck, UserPlus, MoreHorizontal, Camera } from 'lucide-react';
 import { formatCurrency } from '../utils/formatUtils';
 import { formatDate, addDays } from '../core/utils/dateUtils';
 import { generateEstimateNumber } from '../core/utils/numberGenerators';
@@ -30,8 +30,9 @@ import VehicleDamageReport from './VehicleDamageReport';
 import { getHexFromColorName } from '../utils/colorUtils';
 import { usePrint } from '../core/hooks/usePrint';
 import { PrintableEstimate } from './estimates/PrintableEstimate';
+import AsyncMedia from './AsyncMedia';
 
-const EditJobModal: React.FC<{
+interface EditJobModalProps {
     isOpen: boolean;
     onClose: () => void;
     selectedJobId: string;
@@ -47,26 +48,17 @@ const EditJobModal: React.FC<{
     generatePurchaseOrderId: (allPurchaseOrders: T.PurchaseOrder[], entityShortCode: string) => string;
     rentalBookings: T.RentalBooking[];
     onOpenRentalBooking: (booking: T.RentalBooking) => void;
-    onOpenConditionReport: (booking: T.RentalBooking, mode: 'checkIn' | 'checkOut') => void;
-    forceRefresh: (collectionKey: string) => Promise<void>;
-}> = ({ 
-    isOpen, 
-    onClose, 
-    selectedJobId, 
-    purchaseOrders, 
-    onOpenPurchaseOrder, 
-    onRaiseSupplementaryEstimate, 
-    onViewEstimate, 
-    onViewCustomer, 
-    onViewVehicle, 
-    onCheckIn, 
-    onCheckOut, 
-    onDelete, 
-    generatePurchaseOrderId,
-    rentalBookings,
-    onOpenRentalBooking,
-    onOpenConditionReport,
-    forceRefresh
+    onOpenConditionReport?: (booking: T.RentalBooking, mode: 'checkIn' | 'checkOut') => void;
+    forceRefresh?: (collectionKey: any) => Promise<void>;
+    initialTab?: string;
+}
+
+const EditJobModal: React.FC<EditJobModalProps> = ({ 
+    isOpen, onClose, selectedJobId, purchaseOrders, 
+    onRaiseSupplementaryEstimate, onViewEstimate, onViewCustomer, onViewVehicle,
+    onCheckIn, onCheckOut, onDelete, generatePurchaseOrderId, onOpenPurchaseOrder,
+    rentalBookings, onOpenRentalBooking, onOpenConditionReport, forceRefresh,
+    initialTab
 }) => {
     
     const data = useData();
@@ -97,7 +89,7 @@ const EditJobModal: React.FC<{
     const safePurchaseOrders = Array.isArray(purchaseOrders) ? purchaseOrders : [];
     const safeRentalBookings = Array.isArray(rentalBookings) ? rentalBookings : [];
 
-    const [activeTab, setActiveTab] = useState('estimates');
+    const [activeTab, setActiveTab] = useState(initialTab || 'estimates');
     const [editableJob, setEditableJob] = useState<T.Job | null>(null);
     const [editableEstimate, setEditableEstimate] = useState<T.Estimate | null>(null);
     const [isPrinting, setIsPrinting] = useState(false);
@@ -903,6 +895,7 @@ const EditJobModal: React.FC<{
                         <div className="flex items-stretch bg-gray-50 rounded-t-lg border border-gray-200 overflow-x-auto no-scrollbar">
                            <TabButton tabId="estimates" label="Estimates & Parts" icon={<DollarSign size={16}/>} isFirst />
                            <TabButton tabId="inspection" label="Inspection" icon={<ListChecks size={16}/>} />
+                           <TabButton tabId="media" label="Media" icon={<ImageIcon size={16}/>} />
                            <TabButton tabId="notes" label="Notes" icon={<MessageSquare size={16}/>} />
                            <TabButton tabId="segments" label="Segments" icon={<CalendarDays size={16}/>} isLast />
                         </div>
@@ -1023,6 +1016,54 @@ const EditJobModal: React.FC<{
                                             </table>
                                         </div>
                                     </div>
+                                </div>
+                            )}
+                            {activeTab === 'media' && (
+                                <div className="space-y-6">
+                                    <div className="flex justify-between items-center">
+                                        <h3 className="text-lg font-bold text-gray-800">Job Media & Documentation</h3>
+                                        <div className="flex gap-2">
+                                            <button 
+                                                onClick={() => {
+                                                    setMediaModalTitle('Manage Job Media');
+                                                    setMediaModalData(editableJob?.checkInPhotos || []);
+                                                    setOnMediaSaveCallback(() => (newMedia: T.CheckInPhoto[]) => {
+                                                        setEditableJob(prev => prev ? { ...prev, checkInPhotos: newMedia } : null);
+                                                    });
+                                                    setIsMediaModalOpen(true);
+                                                }}
+                                                className="flex items-center gap-2 px-3 py-1.5 bg-indigo-600 text-white text-xs font-bold rounded-lg hover:bg-indigo-700 transition shadow-sm"
+                                            >
+                                                <Camera size={14} /> Manage Media
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {(editableJob.checkInPhotos && editableJob.checkInPhotos.length > 0) ? (
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                                            {editableJob.checkInPhotos.map((photo) => (
+                                                <div key={photo.id} className="group relative aspect-square rounded-xl overflow-hidden bg-gray-100 border border-gray-200 shadow-sm hover:shadow-md transition-all">
+                                                    <AsyncMedia 
+                                                        imageId={photo.id} 
+                                                        alt="Check-in"
+                                                        className="w-full h-full object-cover"
+                                                    />
+                                                    {photo.notes && (
+                                                        <div className="absolute bottom-0 left-0 right-0 p-2 bg-black/60 backdrop-blur-sm">
+                                                            <p className="text-[10px] text-white font-medium line-clamp-2">{photo.notes}</p>
+                                                        </div>
+                                                    )}
+                                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors pointer-events-none" />
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="text-center py-16 px-4 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200">
+                                            <ImageIcon size={48} className="mx-auto text-gray-300 mb-3" />
+                                            <h3 className="text-sm font-bold text-gray-900 mb-1">No Media Found</h3>
+                                            <p className="text-xs text-gray-500 italic max-w-xs mx-auto">Click 'Manage Media' to add photos, videos or documentation for this vehicle.</p>
+                                        </div>
+                                    )}
                                 </div>
                             )}
                             {activeTab === 'notes' && (

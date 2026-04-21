@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { CheckInPhoto } from '../types';
 import { X, Save, Camera, Upload, Trash2, Film } from 'lucide-react';
 import { saveImage, deleteImage } from '../utils/imageStore';
-import AsyncImage from './AsyncImage';
+import AsyncMedia from './AsyncMedia';
 
 interface MediaManagerModalProps {
     isOpen: boolean;
@@ -20,6 +20,7 @@ interface TempMedia extends CheckInPhoto {
 const MediaManagerModal: React.FC<MediaManagerModalProps> = ({ isOpen, onClose, title, initialMedia, onSave }) => {
     const [mediaList, setMediaList] = useState<TempMedia[]>([]);
     const cameraInputRef = useRef<HTMLInputElement>(null);
+    const videoInputRef = useRef<HTMLInputElement>(null);
     const uploadInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
@@ -32,12 +33,14 @@ const MediaManagerModal: React.FC<MediaManagerModalProps> = ({ isOpen, onClose, 
         if (event.target.files) {
             for (const file of event.target.files) {
                 const reader = new FileReader();
+                const isVideo = file.type.startsWith('video/');
                 reader.onloadend = () => {
                     const dataUrl = reader.result as string;
                     const newMedia: TempMedia = {
                         id: crypto.randomUUID(),
                         notes: '',
-                        tempDataUrl: dataUrl
+                        tempDataUrl: dataUrl,
+                        type: isVideo ? 'video' : 'photo'
                     };
                     setMediaList(prev => [...prev, newMedia]);
                 };
@@ -63,7 +66,7 @@ const MediaManagerModal: React.FC<MediaManagerModalProps> = ({ isOpen, onClose, 
                 // New item, save to DB
                 try {
                     await saveImage(item.id, item.tempDataUrl);
-                    finalMedia.push({ id: item.id, notes: item.notes });
+                    finalMedia.push({ id: item.id, notes: item.notes, type: item.type });
                 } catch (e) {
                     console.error("Failed to save media", e);
                     alert("Failed to save image/video. Please try again.");
@@ -71,7 +74,7 @@ const MediaManagerModal: React.FC<MediaManagerModalProps> = ({ isOpen, onClose, 
                 }
             } else {
                 // Existing item, preserve ID
-                finalMedia.push({ id: item.id, notes: item.notes });
+                finalMedia.push({ id: item.id, notes: item.notes, type: item.type });
             }
         }
         
@@ -97,13 +100,17 @@ const MediaManagerModal: React.FC<MediaManagerModalProps> = ({ isOpen, onClose, 
                         {mediaList.map(item => (
                             <div key={item.id} className="relative group border rounded-lg overflow-hidden bg-black shadow-sm">
                                 {item.tempDataUrl ? (
-                                    item.tempDataUrl.startsWith('data:video') ? (
+                                    item.tempDataUrl.startsWith('data:video') || item.type === 'video' ? (
                                         <video src={item.tempDataUrl} className="w-full h-40 object-contain" controls />
                                     ) : (
                                         <img src={item.tempDataUrl} alt="Preview" className="w-full h-40 object-cover" />
                                     )
                                 ) : (
-                                    <AsyncImage imageId={item.id} className="w-full h-40 object-cover" />
+                                    <AsyncMedia 
+                                        imageId={item.id} 
+                                        alt="Media item" 
+                                        className="w-full h-full object-cover" 
+                                    />
                                 )}
                                 
                                 <button 
@@ -132,7 +139,14 @@ const MediaManagerModal: React.FC<MediaManagerModalProps> = ({ isOpen, onClose, 
                                     className="flex flex-col items-center gap-1 p-2 rounded hover:bg-gray-100 text-indigo-600 transition"
                                 >
                                     <Camera size={24}/>
-                                    <span className="text-xs">Camera</span>
+                                    <span className="text-xs">Photo</span>
+                                </button>
+                                <button 
+                                    onClick={() => videoInputRef.current?.click()}
+                                    className="flex flex-col items-center gap-1 p-2 rounded hover:bg-gray-100 text-indigo-600 transition"
+                                >
+                                    <Film size={24}/>
+                                    <span className="text-xs">Video</span>
                                 </button>
                                 <div className="w-px bg-gray-200"></div>
                                 <button 
@@ -143,14 +157,22 @@ const MediaManagerModal: React.FC<MediaManagerModalProps> = ({ isOpen, onClose, 
                                     <span className="text-xs">Upload</span>
                                 </button>
                              </div>
-                             <p className="text-[10px] text-center">Support for Photos & Short Videos</p>
+                             <p className="text-[10px] text-center">Capture vehicle media</p>
                         </div>
                     </div>
                     
                     <input 
                         ref={cameraInputRef} 
                         type="file" 
-                        accept="image/*,video/*" 
+                        accept="image/*" 
+                        capture="environment" 
+                        className="hidden" 
+                        onChange={handleFileChange}
+                    />
+                    <input 
+                        ref={videoInputRef} 
+                        type="file" 
+                        accept="video/*" 
                         capture="environment" 
                         className="hidden" 
                         onChange={handleFileChange}

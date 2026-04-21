@@ -146,9 +146,11 @@ const MainLayout: React.FC<{
                                 onChange={(e) => setSelectedEntityId(e.target.value)}
                                 className="border-none bg-transparent font-semibold text-gray-700 focus:ring-0 cursor-pointer outline-none hover:text-indigo-700 transition-colors"
                              >
-                                {allWorkshops.map(e => (
-                                    <option key={e.id} value={e.id}>{e.name}</option>
-                                ))}
+                                 {allWorkshops.map(e => (
+                                     <option key={e.id} value={e.id}>
+                                         {window.innerWidth < 1024 ? (e.shortCode || 'Brookspeed') : e.name}
+                                     </option>
+                                 ))}
                              </select>
                         </div>
 

@@ -33,7 +33,7 @@ const PrintableOrderForm: React.FC<any> = ({ saleVehicle, vehicle, buyer, entity
             <div className="space-y-8 py-4">
                 {/* Parties */}
                 <section className="grid grid-cols-2 gap-8">
-                    <div className="bg-gray-50 p-4 rounded-lg border">
+                    <div className="bg-gray-50 p-4 rounded-lg" style={{ border: '2px solid black' }}>
                         <h3 className="text-xs font-black text-gray-500 uppercase mb-2">Customer Details</h3>
                         <p className="font-bold text-lg">{buyer?.forename} {buyer?.surname}</p>
                         {buyer?.companyName && <p className="font-semibold text-gray-700">{buyer.companyName}</p>}
@@ -42,7 +42,7 @@ const PrintableOrderForm: React.FC<any> = ({ saleVehicle, vehicle, buyer, entity
                         <p className="mt-2 text-xs">Email: {buyer?.email}</p>
                         <p className="text-xs">Tel: {buyer?.mobile || buyer?.phone}</p>
                     </div>
-                    <div className="bg-gray-50 p-4 rounded-lg border">
+                    <div className="bg-gray-50 p-4 rounded-lg" style={{ border: '2px solid black' }}>
                         <h3 className="text-xs font-black text-gray-500 uppercase mb-2">Vehicle Details</h3>
                         <p className="font-bold text-lg">{vehicle?.make} {vehicle?.model}</p>
                         <p className="font-mono text-gray-700">Reg: {vehicle?.registration}</p>
@@ -54,7 +54,7 @@ const PrintableOrderForm: React.FC<any> = ({ saleVehicle, vehicle, buyer, entity
 
                 {/* Financials */}
                 <section className="no-break">
-                    <h3 className="text-sm font-black text-gray-900 border-b-2 border-indigo-600 pb-1 mb-4">Financial Details</h3>
+                    <h3 className="text-sm font-black text-gray-900 border-b-2 border-black pb-1 mb-4">Financial Details</h3>
                     <div className="space-y-2 text-sm">
                         <div className="flex justify-between items-center py-1">
                             <span>Vehicle Basic Price</span>
@@ -114,7 +114,7 @@ const PrintableOrderForm: React.FC<any> = ({ saleVehicle, vehicle, buyer, entity
                 {/* T&Cs if they exist */}
                 {entity?.sorTermsAndConditions && (
                     <section className="page-break-before pt-8">
-                        <h3 className="text-sm font-black text-gray-900 border-b-2 border-indigo-600 pb-1 mb-4">Terms & Conditions</h3>
+                        <h3 className="text-sm font-black text-gray-900 border-b-2 border-black pb-1 mb-4">Terms & Conditions</h3>
                         <div className="text-[9px] text-gray-500 leading-relaxed columns-2 gap-8 whitespace-pre-wrap">
                             {entity.sorTermsAndConditions}
                         </div>

@@ -180,7 +180,10 @@ const EstimatesView: React.FC<EstimatesViewProps> = ({ onOpenEstimateModal, onVi
     return (
         <div className="w-full h-full flex flex-col p-4 sm:p-6 bg-gray-50">
             <header className="flex justify-between items-center mb-4 flex-shrink-0">
-                <h2 className="text-2xl font-bold text-gray-800">Estimates <span className="text-gray-500 font-medium text-lg">({dateFilterOptions[dateFilter]})</span></h2>
+                <h2 className="text-xl md:text-2xl font-bold text-gray-800">
+                    <span className="md:hidden">Brookspeed</span>
+                    <span className="hidden md:inline">Estimates <span className="text-gray-500 font-medium text-lg">({dateFilterOptions[dateFilter]})</span></span>
+                </h2>
                 <div className="flex items-center gap-2">
                      <button onClick={handlePrintList} className="flex items-center gap-2 py-2 px-4 bg-gray-600 text-white font-semibold rounded-lg shadow-md hover:bg-gray-700">
                         <Printer size={16}/> Print List

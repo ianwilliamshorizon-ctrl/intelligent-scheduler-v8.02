@@ -32,6 +32,7 @@ interface DispatchViewProps {
     onOpenAssistant: (jobId: string) => void;
     onUnscheduleSegment: (jobId: string, segmentId: string) => void;
     onStartWork: (jobId: string, segmentId: string) => void;
+    setEditJobInitialTab?: (tab: string | null) => void;
 }
 
 const DispatchView: React.FC<DispatchViewProps> = ({ 
@@ -47,7 +48,8 @@ const DispatchView: React.FC<DispatchViewProps> = ({
     onCheckIn, 
     onOpenAssistant, 
     onUnscheduleSegment, 
-    onStartWork 
+    onStartWork,
+    setEditJobInitialTab
 }) => {
     const { jobs, setJobs, lifts, engineers, customers, vehicles, purchaseOrders, absenceRequests, businessEntities, estimates, parts, forceRefresh } = useData();
     
@@ -217,7 +219,7 @@ const DispatchView: React.FC<DispatchViewProps> = ({
                     setUnallocatedDateFilter={setUnallocatedDateFilter}
                     showOnSiteOnly={showOnSiteOnly}
                     setShowOnSiteOnly={setShowOnSiteOnly}
-                    onEditJob={(id) => { setSelectedJobId(id); setIsEditModalOpen(true); }}
+                    onEditJob={(id, initialTab) => { setSelectedJobId(id); setEditJobInitialTab?.(initialTab || null); setIsEditModalOpen(true); }}
                     onCheckIn={(id) => { setSelectedJobId(id); onCheckIn(id); }}
                     onOpenPurchaseOrder={onOpenPurchaseOrder}
                     onStartWork={onStartWork}
@@ -240,7 +242,7 @@ const DispatchView: React.FC<DispatchViewProps> = ({
                         maxDailyCapacityHours={dailyCapacity}
                         absencesByDate={absencesByDate}
                         onDayClick={(date) => { setCurrentDate(date); setViewMode('timeline'); }}
-                        onEditJob={(id) => { setSelectedJobId(id); setIsEditModalOpen(true); }}
+                        onEditJob={(id, initialTab) => { setSelectedJobId(id); setEditJobInitialTab?.(initialTab || null); setIsEditModalOpen(true); }}
                         currentMonthDate={currentMonthDate}
                         selectedDate={currentDate}
                     />
@@ -250,7 +252,7 @@ const DispatchView: React.FC<DispatchViewProps> = ({
             {viewMode === 'week' && (
                 <WeeklyView 
                     weekStart={weekStart}
-                    onEditJob={(id) => { setSelectedJobId(id); setIsEditModalOpen(true); }}
+                    onEditJob={(id, initialTab) => { setSelectedJobId(id); setEditJobInitialTab?.(initialTab || null); setIsEditModalOpen(true); }}
                     onOpenAssistant={(id) => { setSelectedJobId(id); onOpenAssistant(id); }}
                     onCheckIn={(id) => { setSelectedJobId(id); onCheckIn(id); }}
                     onOpenPurchaseOrder={onOpenPurchaseOrder}

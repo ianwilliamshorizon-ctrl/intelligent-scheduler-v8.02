@@ -35,7 +35,7 @@ interface TimelineViewProps {
     setUnallocatedDateFilter: React.Dispatch<React.SetStateAction<'all' | 'today' | '7days' | '14days'>>;
     showOnSiteOnly: boolean;
     setShowOnSiteOnly: React.Dispatch<React.SetStateAction<boolean>>;
-    onEditJob: (jobId: string) => void;
+    onEditJob: (jobId: string, initialTab?: string) => void;
     onCheckIn: (jobId: string) => void;
     onOpenPurchaseOrder: (po: PurchaseOrder) => void;
     onStartWork: (jobId: string, segmentId: string) => void;

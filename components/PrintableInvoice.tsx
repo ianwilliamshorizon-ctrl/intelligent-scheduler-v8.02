@@ -111,7 +111,7 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, customer, 
     }, [job?.inspectionChecklist, inspectionTemplate]);
 
     const hasTechnicianNotes = job && Array.isArray(job.technicianObservations) && job.technicianObservations.length > 0;
-    
+
     // Improved checks for sub-reports
     const hasTyreData = useMemo(() => {
         if (!job?.tyreCheck) return false;
@@ -126,16 +126,17 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, customer, 
     const pageStyle = {
         width: '210mm',
         boxSizing: 'border-box' as const,
-        backgroundColor: '#ffffff !important', 
+        backgroundColor: '#ffffff !important',
         margin: '0 auto',
         display: 'block' as const,
-        color: '#000000 !important'
+        color: '#000000 !important',
+        padding: '20mm'
     };
 
     const renderLine = (item: EstimateLineItem, isChild = false) => {
         const net = (item.quantity || 0) * (item.unitPrice || 0);
         const isPackage = item.servicePackageId && !item.isPackageComponent;
-        
+
         const rowStyle: React.CSSProperties = {
             borderBottom: '1px solid #f1f5f9',
             backgroundColor: isPackage ? '#f1f5f9' : (isChild ? '#fafafa' : 'transparent'),
@@ -238,7 +239,8 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, customer, 
 
     return (
         <div className="rebuild-print-container" style={pageStyle}>
-            <style dangerouslySetInnerHTML={{ __html: `
+            <style dangerouslySetInnerHTML={{
+                __html: `
                 @media print {
                     body { counter-reset: page; }
                     thead { display: table-header-group; }
@@ -368,7 +370,7 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, customer, 
                                 <main style={{ paddingBottom: '30px' }}>
                                     <div style={{ breakInside: 'avoid' }}>
                                         <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '15px', borderBottom: '2px solid #000', paddingBottom: '8px' }}>Inspection Report</h3>
-                                        <InspectionChecklist checklistData={page.sections} onUpdate={()=>{}} isReadOnly={true} />
+                                        <InspectionChecklist checklistData={page.sections} onUpdate={() => { }} isReadOnly={true} />
                                     </div>
                                 </main>
                             </td>
@@ -388,7 +390,7 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, customer, 
                                 <main style={{ paddingBottom: '30px' }}>
                                     <div style={{ breakInside: 'avoid' }}>
                                         <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '15px', borderBottom: '2px solid #000', paddingBottom: '8px' }}>Tyre Safety Check</h3>
-                                        <TyreCheck tyreData={job.tyreCheck!} onUpdate={()=>{}} isReadOnly={true} />
+                                        <TyreCheck tyreData={job.tyreCheck!} onUpdate={() => { }} isReadOnly={true} />
                                     </div>
                                 </main>
                             </td>
@@ -408,7 +410,7 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, customer, 
                                 <main style={{ paddingBottom: '30px' }}>
                                     <div style={{ breakInside: 'avoid' }}>
                                         <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '15px', borderBottom: '2px solid #000', paddingBottom: '8px' }}>Vehicle Condition Report</h3>
-                                        <VehicleDamageReport activePoints={job.damagePoints || []} onUpdate={()=>{}} isReadOnly={true} vehicleModel={vehicle?.model} vehicleColor={vehicle?.colour} imageId={null} />
+                                        <VehicleDamageReport activePoints={job.damagePoints || []} onUpdate={() => { }} isReadOnly={true} vehicleModel={vehicle?.model} vehicleColor={vehicle?.colour} imageId={null} />
                                     </div>
                                 </main>
                             </td>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Job, JobSegment, Vehicle, Customer, Engineer, PurchaseOrder, User } from '../../types';
-import { Package as PackageIcon, KeyRound, PauseCircle, PlayCircle, UserCog, Trash2, Wand2, Edit, User as UserIcon, UserPlus, CheckCircle } from 'lucide-react';
+import { Package as PackageIcon, KeyRound, PauseCircle, PlayCircle, UserCog, Trash2, Wand2, Edit, User as UserIcon, UserPlus, CheckCircle, Camera } from 'lucide-react';
 import { getCustomerDisplayName } from '../../core/utils/customerUtils';
 import { getPoStatusColor } from '../../core/utils/statusUtils';
 import { TIME_SEGMENTS, SEGMENT_DURATION_MINUTES } from '../../constants';
@@ -18,7 +18,7 @@ export const AllocatedJobCard: React.FC<{
     purchaseOrders: PurchaseOrder[];
     onDragStart: (e: React.DragEvent, parentJobId: string, segmentId: string) => void;
     onDragEnd: (e: React.DragEvent) => void;
-    onEdit: (jobId: string) => void;
+    onEdit: (jobId: string, initialTab?: string) => void;
     onStartWork?: (jobId: string, segmentId: string) => void;
     onPause: (jobId: string, segmentId: string) => void;
     onRestart: (jobId: string, segmentId: string) => void;
@@ -176,6 +176,15 @@ export const AllocatedJobCard: React.FC<{
                         </div>
                     </div>
                     <div className="flex items-center gap-1 flex-shrink-0 pt-0.5">
+                        {job.checkInPhotos && job.checkInPhotos.length > 0 && (
+                            <button 
+                                onClick={(e) => { e.stopPropagation(); onEdit(job.id, 'media'); }}
+                                className="flex items-center gap-1 bg-indigo-50 px-1 rounded font-bold text-[10px] text-indigo-700 border border-indigo-200 hover:bg-indigo-100 transition-colors" 
+                                title={`${job.checkInPhotos.length} Condition Photos - Click to View`}
+                            >
+                                <Camera size={12}/> {job.checkInPhotos.length}
+                            </button>
+                        )}
                         {job.keyNumber && <span className="flex items-center gap-1 bg-white/20 px-1 rounded font-bold text-[10px] text-gray-700 border border-gray-200"><KeyRound size={12}/> {job.keyNumber}</span>}
                     </div>
                 </div>

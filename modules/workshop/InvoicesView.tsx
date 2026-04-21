@@ -114,7 +114,10 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({
     return (
         <div className="w-full p-4 h-full flex flex-col">
             <header className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6 flex-shrink-0">
-                <h2 className="text-xl md:text-2xl font-black text-gray-900 tracking-tight">Invoices <span className="text-gray-400 font-bold text-sm md:text-lg">({dateFilterOptions[dateFilter]})</span></h2>
+                <h2 className="text-xl md:text-2xl font-black text-gray-900 tracking-tight">
+                    <span className="md:hidden">Brookspeed</span>
+                    <span className="hidden md:inline">Invoices <span className="text-gray-400 font-bold text-sm md:text-lg">({dateFilterOptions[dateFilter]})</span></span>
+                </h2>
                  <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
                     <button 
                         onClick={onViewAgedDebtors}

@@ -10,7 +10,7 @@ interface JobHoverPopoutProps {
     purchaseOrders: PurchaseOrder[];
     engineers: Engineer[];
     currentUser: User;
-    onEdit: (jobId: string) => void;
+    onEdit: (jobId: string, initialTab?: string) => void;
     onCheckIn: (jobId: string) => void;
     onOpenPurchaseOrder: (po: PurchaseOrder) => void;
     onOpenAssistant: (jobId: string) => void;
@@ -61,7 +61,7 @@ export const JobHoverPopout: React.FC<JobHoverPopoutProps> = (props) => {
 
     const wrappedProps = {
         ...props,
-        onEdit: (jobId: string) => { setIsHovered(false); props.onEdit(jobId); },
+        onEdit: (jobId: string, initialTab?: string) => { setIsHovered(false); props.onEdit(jobId, initialTab); },
         onCheckIn: (jobId: string) => { setIsHovered(false); props.onCheckIn(jobId); },
         onOpenPurchaseOrder: (po: PurchaseOrder) => { setIsHovered(false); props.onOpenPurchaseOrder(po); },
         onOpenAssistant: (jobId: string) => { setIsHovered(false); props.onOpenAssistant(jobId); },

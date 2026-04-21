@@ -19,21 +19,21 @@ interface SalesInvoiceModalProps {
 
 const PrintableSalesInvoice: React.FC<any> = ({ invoice, vehicle, buyer, entity, taxRates, totals }) => {
     return (
-        <PrintableDocumentLayout 
-            entity={entity} 
-            title="SALES INVOICE" 
+        <PrintableDocumentLayout
+            entity={entity}
+            title="SALES INVOICE"
             subtitle={`Invoice: #${invoice?.id}`}
         >
             <div className="space-y-8 py-4">
                 <section className="grid grid-cols-2 gap-8">
-                    <div className="bg-gray-50 p-4 rounded border">
+                    <div className="bg-gray-50 p-4 rounded-lg" style={{ border: '1.5px solid black' }}>
                         <h3 className="text-xs font-black text-gray-500 uppercase mb-2">Invoice To</h3>
                         <p className="font-bold text-lg">{buyer?.forename} {buyer?.surname}</p>
                         {buyer?.companyName && <p className="font-semibold text-gray-700">{buyer.companyName}</p>}
                         <p>{buyer?.addressLine1}</p>
                         <p>{buyer?.city}, {buyer?.postcode}</p>
                     </div>
-                    <div className="bg-gray-50 p-4 rounded border">
+                    <div className="bg-gray-50 p-4 rounded-lg text-right" style={{ border: '1.5px solid black' }}>
                         <h3 className="text-xs font-black text-gray-500 uppercase mb-2">Vehicle Information</h3>
                         <p className="font-bold text-lg">{vehicle?.make} {vehicle?.model}</p>
                         <p className="font-mono text-gray-700">Reg: {vehicle?.registration}</p>
@@ -113,14 +113,14 @@ const PrintableSalesInvoice: React.FC<any> = ({ invoice, vehicle, buyer, entity,
 
 const SalesInvoiceModal: React.FC<SalesInvoiceModalProps> = ({ isOpen, onClose, saleVehicle, invoice, vehicle, buyer, entity, taxRates, onUpdateInvoice }) => {
     const [isPrinting, setIsPrinting] = useState(false);
-    
+
     const totals = useMemo(() => {
         if (!invoice) return { subtotal: 0, total: 0, vat: 0, grandTotal: 0, deposit: 0, vatBreakdown: [] };
 
         const standardTaxRateId = taxRates.find(t => t.code === 'T1')?.id;
         const taxRatesMap = new Map(taxRates.map(t => [t.id, t]));
         const vatBreakdown: { [key: string]: { net: number; vat: number; rate: number; name: string; } } = {};
-        
+
         let subtotal = 0;
         let deposit = 0;
 
@@ -147,7 +147,7 @@ const SalesInvoiceModal: React.FC<SalesInvoiceModalProps> = ({ isOpen, onClose, 
 
         const finalVatBreakdown = Object.values(vatBreakdown);
         const totalVat = finalVatBreakdown.reduce((sum, b) => sum + b.vat, 0);
-        
+
         return {
             subtotal,
             total: subtotal + totalVat,
@@ -197,12 +197,12 @@ const SalesInvoiceModal: React.FC<SalesInvoiceModalProps> = ({ isOpen, onClose, 
                 <footer className="flex-shrink-0 flex justify-between items-center p-4 border-t bg-gray-50">
                     <div className="text-xs text-gray-500 italic">* Turn off headers/footers in browser print settings.</div>
                     <div className="flex gap-2">
-                        <button 
-                            onClick={handlePrint} 
+                        <button
+                            onClick={handlePrint}
                             disabled={isPrinting}
                             className="flex items-center py-2 px-6 bg-indigo-600 text-white font-black uppercase tracking-widest rounded-lg hover:bg-indigo-700 shadow-md transition-all active:scale-95 disabled:opacity-50"
                         >
-                            {isPrinting ? <Loader2 size={16} className="mr-2 animate-spin"/> : <Printer size={16} className="mr-2" />}
+                            {isPrinting ? <Loader2 size={16} className="mr-2 animate-spin" /> : <Printer size={16} className="mr-2" />}
                             Print Invoice
                         </button>
                         <button onClick={onClose} className="py-2 px-4 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300">Close</button>

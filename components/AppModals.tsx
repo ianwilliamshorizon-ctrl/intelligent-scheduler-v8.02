@@ -145,8 +145,12 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
             {modals.isEditJobModalOpen && modals.selectedJobId && (
                 <EditJobModal
                     isOpen={true}
-                    onClose={() => setters.setIsEditJobModalOpen(false)}
+                    onClose={() => {
+                        setters.setIsEditJobModalOpen(false);
+                        setters.setEditJobInitialTab(null);
+                    }}
                     selectedJobId={modals.selectedJobId}
+                    initialTab={modals.editJobInitialTab || undefined}
                     purchaseOrders={data.purchaseOrders}
                     onRaiseSupplementaryEstimate={(job) => setters.setEstimateFormModal({
                         isOpen: true,

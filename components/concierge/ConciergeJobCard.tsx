@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { useData } from '../../core/state/DataContext';
 import { Job, Vehicle, Customer, PurchaseOrder, User, JobSegment, Engineer, VehicleStatus, StorageLocation } from '../../types';
-import { Package as PackageIcon, PackageCheck, CheckCircle, ArrowRightCircle, Clock, KeyRound, Car, Wand2, LogIn, ClipboardCheck, FileText, LogOut, PlayCircle, Play, PauseCircle, User as UserIcon, XCircle, Warehouse } from 'lucide-react';
+import { Package as PackageIcon, PackageCheck, CheckCircle, ArrowRightCircle, Clock, KeyRound, Car, Wand2, LogIn, ClipboardCheck, FileText, LogOut, PlayCircle, Play, PauseCircle, User as UserIcon, XCircle, Warehouse, Camera } from 'lucide-react';
 import { getCustomerDisplayName } from '../../core/utils/customerUtils';
 import { getRelativeDate } from '../../core/utils/dateUtils';
 import { TIME_SEGMENTS, SEGMENT_DURATION_MINUTES, END_HOUR, END_MINUTE } from '../../constants';
@@ -14,7 +14,7 @@ interface ConciergeJobCardProps {
     purchaseOrders: PurchaseOrder[];
     engineers: Engineer[];
     currentUser: User;
-    onEdit: (jobId: string) => void;
+    onEdit: (jobId: string, initialTab?: string) => void;
     onCheckIn: (jobId: string) => void;
     onOpenPurchaseOrder: (po: PurchaseOrder) => void;
     onOpenAssistant: (jobId: string) => void;
@@ -121,6 +121,15 @@ export const ConciergeJobCard: React.FC<ConciergeJobCardProps> = (props) => {
                             <KeyRound size={8} className="sm:w-[10px] sm:h-[10px]" /> {job.keyNumber}
                         </span>
                     )}
+                    {job.checkInPhotos && job.checkInPhotos.length > 0 && (
+                             <button 
+                                onClick={(e) => { e.stopPropagation(); onEdit(job.id, 'media'); }}
+                                className="flex items-center gap-0.5 sm:gap-1 text-[8px] sm:text-[9px] font-bold px-1 sm:px-1.5 py-0.5 rounded border bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100 transition-colors" 
+                                title={`${job.checkInPhotos.length} Condition Photos - Click to View`}
+                            >
+                                <Camera size={8} className="sm:w-[10px] sm:h-[10px]" /> {job.checkInPhotos.length}
+                            </button>
+                        )}
                 </div>
             </div>
             
