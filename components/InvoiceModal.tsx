@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Invoice, Customer, Vehicle, BusinessEntity, Job, TaxRate, ServicePackage, InspectionTemplate, InspectionDiagram } from '../types';
-import { X, Printer, CheckCircle, Wallet, Mail } from 'lucide-react';
+import { X, Printer, CheckCircle, Wallet, Mail, Edit } from 'lucide-react';
 import { usePrint } from '../core/hooks/usePrint';
 import PrintableInvoice from './PrintableInvoice';
 import PaymentModal from './PaymentModal';
@@ -20,12 +20,19 @@ interface InvoiceModalProps {
     inspectionDiagrams: InspectionDiagram[];
     onUpdateInvoice: (invoice: Invoice) => void;
     onInvoiceAction?: (jobId: string) => void;
+    onEdit?: (invoice: Invoice) => void;
 }
 
-const InvoiceModal: React.FC<InvoiceModalProps> = ({ isOpen, onClose, invoice, customer, vehicle, entity, job, taxRates, servicePackages, inspectionTemplates, inspectionDiagrams, onUpdateInvoice, onInvoiceAction }) => {
+const InvoiceModal: React.FC<InvoiceModalProps> = ({ isOpen, onClose, invoice, customer, vehicle, entity, job, taxRates, servicePackages, inspectionTemplates, inspectionDiagrams, onUpdateInvoice, onInvoiceAction, onEdit }) => {
     const print = usePrint();
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
     const [isEmailing, setIsEmailing] = useState(false);
+    const [printOptions, setPrintOptions] = useState({
+        showInvoice: true,
+        showTechNotes: true,
+        showInspections: true,
+        showMedia: true
+    });
 
     // Calculate Grand Total including VAT (Mirroring PrintableInvoice logic)
     const grandTotal = useMemo(() => {
@@ -64,7 +71,7 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ isOpen, onClose, invoice, c
         if (job && onInvoiceAction) {
             onInvoiceAction(job.id);
         }
-        print(<PrintableInvoice {...{ invoice, customer, vehicle, entity, job, taxRates, servicePackages, inspectionTemplates, inspectionDiagrams }} />);
+        print(<PrintableInvoice {...{ invoice, customer, vehicle, entity, job, taxRates, servicePackages, inspectionTemplates, inspectionDiagrams, printOptions }} />);
     };
 
     const handleMarkAsPaid = () => {
@@ -113,40 +120,73 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ isOpen, onClose, invoice, c
         <>
             <div className="fixed inset-0 bg-gray-900 bg-opacity-75 z-[70] flex justify-center items-center p-4">
                 <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[95vh] flex flex-col">
-                    <header className="flex-shrink-0 flex justify-between items-center p-4 border-b bg-gray-50 rounded-t-xl">
-                        <h2 className="text-xl font-bold text-indigo-700">Invoice #{invoice.id}</h2>
-                        <div className="flex items-center gap-3">
-                            <button 
-                                onClick={() => setIsEmailing(true)}
-                                className="flex items-center py-2 px-4 bg-gray-100 text-gray-700 font-semibold rounded-lg hover:bg-gray-200 transition-colors"
-                            >
-                                <Mail size={16} className="mr-2"/> 
-                                <span>Email</span>
-                            </button>
-                            <button 
-                                onClick={handlePrint} 
-                                className="flex items-center py-2 px-4 bg-gray-600 text-white font-semibold rounded-lg hover:bg-gray-700 shadow-sm transition-colors"
-                            >
-                                <Printer size={16} className="mr-2"/> 
-                                <span>Print</span>
-                            </button>
-                            {invoice.status !== 'Paid' && (
+                    <header className="flex-shrink-0 flex flex-col p-4 border-b bg-gray-50 rounded-t-xl">
+                        <div className="flex justify-between items-center mb-4">
+                            <h2 className="text-xl font-bold text-indigo-700">Invoice #{invoice.id}</h2>
+                            <div className="flex items-center gap-3">
                                 <button 
-                                    onClick={handleMarkAsPaid} 
-                                    className="flex items-center py-2 px-6 bg-green-600 text-white font-bold rounded-lg shadow-sm hover:bg-green-700 transition-all gap-2"
+                                    onClick={() => setIsEmailing(true)}
+                                    className="flex items-center py-2 px-4 bg-gray-100 text-gray-700 font-semibold rounded-lg hover:bg-gray-200 transition-colors"
                                 >
-                                    <Wallet size={16} />
-                                    <span>Record Payment</span>
+                                    <Mail size={16} className="mr-2"/> 
+                                    <span>Email</span>
                                 </button>
-                            )}
-                            
-                            <div className="w-px h-8 bg-gray-300 mx-1"></div>
-                            <button onClick={onClose} className="p-1 hover:bg-gray-200 rounded-full transition-colors"><X size={28} className="text-gray-400 hover:text-gray-800" /></button>
+                                <button 
+                                    onClick={handlePrint} 
+                                    className="flex items-center py-2 px-4 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 shadow-sm transition-colors"
+                                >
+                                    <Printer size={16} className="mr-2"/> 
+                                    <span>Print Document</span>
+                                </button>
+                                {invoice.status !== 'Paid' && (
+                                    <button 
+                                        onClick={handleMarkAsPaid} 
+                                        className="flex items-center py-2 px-6 bg-green-600 text-white font-bold rounded-lg shadow-sm hover:bg-green-700 transition-all gap-2"
+                                    >
+                                        <Wallet size={16} />
+                                        <span>Record Payment</span>
+                                    </button>
+                                )}
+
+                                {onEdit && (
+                                    <button 
+                                        onClick={() => { onEdit(invoice); onClose(); }} 
+                                        className="flex items-center py-2 px-4 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 shadow-sm transition-colors"
+                                    >
+                                        <Edit size={16} className="mr-2"/> 
+                                        <span>Edit Invoice</span>
+                                    </button>
+                                )}
+                                
+                                <div className="w-px h-8 bg-gray-300 mx-1"></div>
+                                <button onClick={onClose} className="p-1 hover:bg-gray-200 rounded-full transition-colors"><X size={28} className="text-gray-400 hover:text-gray-800" /></button>
+                            </div>
+                        </div>
+
+                        {/* Print Options Selection */}
+                        <div className="flex items-center gap-6 px-4 py-2 bg-indigo-50/50 rounded-xl border border-indigo-100">
+                            <span className="text-[10px] font-black text-indigo-900 uppercase tracking-widest mr-2">Print Sections:</span>
+                            <label className="flex items-center gap-2 cursor-pointer group">
+                                <input type="checkbox" checked={printOptions.showInvoice} onChange={(e) => setPrintOptions(prev => ({ ...prev, showInvoice: e.target.checked }))} className="h-4 w-4 text-indigo-600 rounded border-indigo-300 focus:ring-indigo-500" />
+                                <span className="text-xs font-bold text-gray-700 group-hover:text-indigo-600 transition-colors">Invoice</span>
+                            </label>
+                            <label className="flex items-center gap-2 cursor-pointer group">
+                                <input type="checkbox" checked={printOptions.showTechNotes} onChange={(e) => setPrintOptions(prev => ({ ...prev, showTechNotes: e.target.checked }))} className="h-4 w-4 text-indigo-600 rounded border-indigo-300 focus:ring-indigo-500" />
+                                <span className="text-xs font-bold text-gray-700 group-hover:text-indigo-600 transition-colors">Tech Notes</span>
+                            </label>
+                            <label className="flex items-center gap-2 cursor-pointer group">
+                                <input type="checkbox" checked={printOptions.showInspections} onChange={(e) => setPrintOptions(prev => ({ ...prev, showInspections: e.target.checked }))} className="h-4 w-4 text-indigo-600 rounded border-indigo-300 focus:ring-indigo-500" />
+                                <span className="text-xs font-bold text-gray-700 group-hover:text-indigo-600 transition-colors">Inspections</span>
+                            </label>
+                            <label className="flex items-center gap-2 cursor-pointer group">
+                                <input type="checkbox" checked={printOptions.showMedia} onChange={(e) => setPrintOptions(prev => ({ ...prev, showMedia: e.target.checked }))} className="h-4 w-4 text-indigo-600 rounded border-indigo-300 focus:ring-indigo-500" />
+                                <span className="text-xs font-bold text-gray-700 group-hover:text-indigo-600 transition-colors">Media Shots</span>
+                            </label>
                         </div>
                     </header>
                     <main className="flex-grow overflow-y-auto bg-gray-100 p-8">
                         <div className="scale-90 origin-top shadow-xl">
-                            <PrintableInvoice {...{ invoice, customer, vehicle, entity, job, taxRates, servicePackages, inspectionTemplates, inspectionDiagrams }} />
+                            <PrintableInvoice {...{ invoice, customer, vehicle, entity, job, taxRates, servicePackages, inspectionTemplates, inspectionDiagrams, printOptions }} />
                         </div>
                     </main>
                 </div>

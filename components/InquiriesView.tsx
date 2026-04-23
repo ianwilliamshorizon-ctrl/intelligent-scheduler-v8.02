@@ -61,7 +61,7 @@ const InquiryCard: React.FC<{
             className={`bg-white rounded-lg shadow p-3 border-l-4 ${
                 inquiry.status === 'New' ? 'border-red-400' : 
                 inquiry.status === 'In Progress' ? 'border-blue-400' : 
-                inquiry.status === 'Quoted' ? 'border-yellow-400' : 
+                inquiry.status === 'Quoted' ? 'border-gray-200' : 
                 inquiry.status === 'Approved' ? 'border-green-400' : 'border-gray-200'
             } cursor-pointer hover:shadow-md transition-shadow mb-3`}
             onClick={() => onOpenInquiryModal(inquiry)}

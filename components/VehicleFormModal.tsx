@@ -192,6 +192,17 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
             alert('Required fields: Customer, Registration, Make, and Model.');
             return;
         }
+
+        const cleanReg = formData.registration.toUpperCase().replace(/\s/g, '');
+        const duplicate = vehicles.find(v => v.id !== formData.id && v.registration.toUpperCase().replace(/\s/g, '') === cleanReg);
+        
+        if (duplicate) {
+            const owner = customers.find(c => c.id === duplicate.customerId);
+            if (!window.confirm(`Vehicle with registration ${cleanReg} already exists and is owned by ${owner ? `${owner.forename} ${owner.surname}` : 'another customer'}. Do you want to continue? This may create duplicate data.`)) {
+                return;
+            }
+        }
+
         const isNew = !formData.id;
         let vehicleToSave = { ...formData };
 

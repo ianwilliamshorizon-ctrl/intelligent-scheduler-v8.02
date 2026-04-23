@@ -323,6 +323,7 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                     inspectionDiagrams={data.inspectionDiagrams}
                     onUpdateInvoice={(inv) => handleSaveItem(data.setInvoices, inv, 'brooks_invoices')}
                     onInvoiceAction={(id) => actions.handleMarkJobAsAwaitingCollection(id)}
+                    onEdit={(inv) => setters.setInvoiceFormModal({ isOpen: true, invoice: inv, job: data.jobs.find(j => j.id === inv.jobId) || null })}
                 />
             )}
 
@@ -554,6 +555,7 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                     currentUser={currentUser}
                     onCreateInquiry={(est) => setters.setInquiryModal({isOpen: true, inquiry: { linkedEstimateId: est.id, linkedCustomerId: est.customerId, linkedVehicleId: est.vehicleId, message: `Question regarding Estimate #${est.estimateNumber}` }})}
                     onScheduleEstimate={(est, inquiryId) => setters.setScheduleJobFromEstimateModal({isOpen: true, estimate: est, inquiryId})}
+                    onEdit={(est) => setters.setEstimateFormModal({ isOpen: true, estimate: est })}
                 />
             )}
 

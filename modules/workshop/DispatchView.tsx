@@ -185,6 +185,12 @@ const DispatchView: React.FC<DispatchViewProps> = ({
         setReassignModalData(null);
     };
 
+    const handleEditJob = (id: string, initialTab?: string) => {
+        setSelectedJobId(id);
+        setEditJobInitialTab?.(initialTab || null);
+        setIsEditModalOpen(true);
+    };
+
     return (
         <div className="w-full h-full flex flex-col">
             <DispatchHeader
@@ -219,7 +225,7 @@ const DispatchView: React.FC<DispatchViewProps> = ({
                     setUnallocatedDateFilter={setUnallocatedDateFilter}
                     showOnSiteOnly={showOnSiteOnly}
                     setShowOnSiteOnly={setShowOnSiteOnly}
-                    onEditJob={(id, initialTab) => { setSelectedJobId(id); setEditJobInitialTab?.(initialTab || null); setIsEditModalOpen(true); }}
+                    onEditJob={handleEditJob}
                     onCheckIn={(id) => { setSelectedJobId(id); onCheckIn(id); }}
                     onOpenPurchaseOrder={onOpenPurchaseOrder}
                     onStartWork={onStartWork}
@@ -242,7 +248,7 @@ const DispatchView: React.FC<DispatchViewProps> = ({
                         maxDailyCapacityHours={dailyCapacity}
                         absencesByDate={absencesByDate}
                         onDayClick={(date) => { setCurrentDate(date); setViewMode('timeline'); }}
-                        onEditJob={(id, initialTab) => { setSelectedJobId(id); setEditJobInitialTab?.(initialTab || null); setIsEditModalOpen(true); }}
+                        onEditJob={handleEditJob}
                         currentMonthDate={currentMonthDate}
                         selectedDate={currentDate}
                     />
@@ -252,7 +258,7 @@ const DispatchView: React.FC<DispatchViewProps> = ({
             {viewMode === 'week' && (
                 <WeeklyView 
                     weekStart={weekStart}
-                    onEditJob={(id, initialTab) => { setSelectedJobId(id); setEditJobInitialTab?.(initialTab || null); setIsEditModalOpen(true); }}
+                    onEditJob={handleEditJob}
                     onOpenAssistant={(id) => { setSelectedJobId(id); onOpenAssistant(id); }}
                     onCheckIn={(id) => { setSelectedJobId(id); onCheckIn(id); }}
                     onOpenPurchaseOrder={onOpenPurchaseOrder}

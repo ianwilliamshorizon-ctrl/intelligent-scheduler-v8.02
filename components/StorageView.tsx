@@ -297,7 +297,7 @@ const ManageStorageBookingModal = ({
                                     <div className="grid grid-cols-2 gap-2">
                                         {(formData.checkInPhotos || []).map(p => (
                                             <div key={p.id} className="relative group rounded-lg overflow-hidden border border-gray-200 aspect-square">
-                                                <AsyncMedia imageId={p.id} alt="Check-in" className="w-full h-full object-cover" />
+                                                <AsyncMedia imageId={p.id} type={p.type} alt="Check-in" className="w-full h-full object-cover" />
                                                 {!isClosed && (
                                                     <button onClick={() => handleRemovePhoto(p.id, 'checkIn')} className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity">
                                                         <Trash2 size={16}/>
@@ -322,7 +322,7 @@ const ManageStorageBookingModal = ({
                                     <div className="grid grid-cols-2 gap-2">
                                         {(formData.checkOutPhotos || []).map(p => (
                                             <div key={p.id} className="relative group rounded-lg overflow-hidden border border-gray-200 aspect-square">
-                                                <AsyncMedia imageId={p.id} alt="Check-out" className="w-full h-full object-cover" />
+                                                <AsyncMedia imageId={p.id} type={p.type} alt="Check-out" className="w-full h-full object-cover" />
                                                 <button onClick={() => handleRemovePhoto(p.id, 'checkOut')} className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity">
                                                     <Trash2 size={16}/>
                                                 </button>

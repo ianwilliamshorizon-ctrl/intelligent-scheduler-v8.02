@@ -23,7 +23,7 @@ interface DraggableJobItemProps {
     segment: JobSegment;
     vehicle?: Vehicle;
     onDragStart: (e: React.DragEvent<HTMLDivElement>, parentJobId: string, segmentId: string) => void;
-    onEditJob: (jobId: string) => void;
+    onEditJob: (jobId: string, initialTab?: string) => void;
 }
 
 const DraggableJobItem: React.FC<DraggableJobItemProps> = ({ job, segment, vehicle, onDragStart, onEditJob }) => {
@@ -60,7 +60,7 @@ export interface BookingCalendarViewProps {
   maxDailyCapacityHours: number;
   absencesByDate: Map<string, number>;
   onDayClick: (date: string) => void;
-  onEditJob: (jobId: string) => void;
+  onEditJob: (jobId: string, initialTab?: string) => void;
   currentMonthDate: Date;
   selectedDate?: string;
 }

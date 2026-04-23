@@ -1,10 +1,17 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { Invoice, Customer, Vehicle, BusinessEntity, Job, TaxRate, EstimateLineItem, ChecklistSection, ServicePackage, InspectionTemplate, InspectionDiagram } from '../types';
+import { Invoice, Customer, Vehicle, BusinessEntity, Job, TaxRate, EstimateLineItem, ChecklistSection, ServicePackage, InspectionTemplate, InspectionDiagram, DocumentLayoutSettings } from '../types';
 import { formatCurrency } from '../core/utils/formatUtils';
 import InspectionChecklist from './InspectionChecklist';
 import VehicleDamageReport from './VehicleDamageReport';
 import TyreCheck from './TyreCheck';
 import { getImage } from '../utils/imageStore';
+
+export interface PrintOptions {
+    showInvoice?: boolean;
+    showTechNotes?: boolean;
+    showInspections?: boolean;
+    showMedia?: boolean;
+}
 
 interface PrintableInvoiceProps {
     invoice: Invoice;
@@ -16,13 +23,21 @@ interface PrintableInvoiceProps {
     servicePackages: ServicePackage[];
     inspectionTemplates: InspectionTemplate[];
     inspectionDiagrams: InspectionDiagram[];
+    printOptions?: PrintOptions;
 }
 
-const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, customer, vehicle, entity, job, taxRates, servicePackages, inspectionTemplates, inspectionDiagrams }) => {
+const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, customer, vehicle, entity, job, taxRates, servicePackages, inspectionTemplates, inspectionDiagrams, printOptions = { showInvoice: true, showTechNotes: true, showInspections: true, showMedia: true } }) => {
     const [logoUrl, setLogoUrl] = useState<string | null>(null);
 
     useEffect(() => {
         const loadLogo = async () => {
+            // Check for temp preview URL from the designer first
+            const anyEntity = entity as any;
+            if (anyEntity?.tempLogoUrl) {
+                setLogoUrl(anyEntity.tempLogoUrl);
+                return;
+            }
+
             if (entity?.logoImageId) {
                 const url = await getImage(entity.logoImageId);
                 if (url) {
@@ -129,8 +144,7 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, customer, 
         backgroundColor: '#ffffff !important',
         margin: '0 auto',
         display: 'block' as const,
-        color: '#000000 !important',
-        padding: '20mm'
+        color: '#000000 !important'
     };
 
     const renderLine = (item: EstimateLineItem, isChild = false) => {
@@ -164,58 +178,123 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, customer, 
     };
 
     const renderSectionHeader = (title: string) => (
-        <tr style={{ backgroundColor: '#f8fafc' }}>
+        <tr style={{ backgroundColor: '#f9fafb' }}>
             <td colSpan={4} style={{ padding: '8px 10px', borderBottom: '2px solid #e2e8f0' }}>
                 <span style={{ fontSize: '10px', fontWeight: '900', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{title}</span>
             </td>
         </tr>
     );
 
-    const renderHeader = () => (
-        <thead>
-            <tr>
-                <td>
-                    <div style={{ height: '10mm' }}></div>
-                    <div style={{ margin: '0 15mm 20px 15mm' }}>
-                        {/* Centered INVOICE title */}
-                        <div style={{ textAlign: 'center', marginBottom: '15px' }}>
-                            <h2 style={{ fontSize: '36px', fontWeight: '900', color: '#334155', margin: 0, opacity: 0.8, letterSpacing: '0.1em' }}>INVOICE</h2>
-                        </div>
-
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', paddingBottom: '20px', borderBottom: '2px solid #000' }}>
-                            {/* Details on Left */}
-                            <div style={{ flex: 1 }}>
-                                <div style={{ fontSize: '18px', fontWeight: '900', color: '#000', marginBottom: '8px' }}>{entity?.name || 'BROOKSPEED'}</div>
-                                <div style={{ fontSize: '10px', color: '#000', fontWeight: '500', lineHeight: '1.4' }}>
-                                    <p>{entity?.addressLine1}, {entity?.city}, {entity?.postcode}</p>
-                                    <div style={{ marginTop: '5px', display: 'flex', gap: '15px' }}>
-                                        {entity?.vatNumber && <p>VAT: {entity.vatNumber}</p>}
-                                        {entity?.email && <p>{entity.email}</p>}
-                                    </div>
-                                </div>
-                                <div style={{ marginTop: '12px', borderLeft: '3px solid #000', paddingLeft: '12px' }}>
-                                    <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#000' }}>Invoice: #{invoice?.id}</div>
-                                    <div style={{ fontSize: '12px', color: '#444' }}>Date: {invoice?.issueDate}</div>
-                                </div>
-                            </div>
-
-                            {/* Logo on Right */}
-                            <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}>
-                                {logoUrl ? (
-                                    <img src={logoUrl} alt="Logo" style={{ maxHeight: '90px', maxWidth: '280px', width: 'auto', display: 'block' }} />
-                                ) : (
-                                    <div style={{ textAlign: 'right' }}>
-                                        <div style={{ fontSize: '24px', fontWeight: '900', color: '#000' }}>{entity?.name || 'BROOKSPEED'}</div>
-                                        <div style={{ fontSize: '10px', color: '#64748b', marginTop: '4px' }}>Automotive Excellence</div>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                </td>
-            </tr>
-        </thead>
+    const renderLogo = (layout: DocumentLayoutSettings, alignment: 'left' | 'right' | 'center') => (
+        <div style={{ display: 'flex', justifyContent: alignment === 'right' ? 'flex-end' : (alignment === 'center' ? 'center' : 'flex-start'), marginBottom: '10px' }}>
+            {logoUrl ? (
+                <img src={logoUrl} alt="Logo" style={{ maxHeight: `${layout.logoHeight || 90}px`, maxWidth: '280px', width: 'auto', display: 'block' }} />
+            ) : (
+                <div style={{ textAlign: alignment }}>
+                    <div style={{ fontSize: '24px', fontWeight: '900', color: '#000' }}>{entity?.name || 'BROOKSPEED'}</div>
+                    <div style={{ fontSize: '10px', color: '#64748b', marginTop: '4px' }}>Automotive Excellence</div>
+                </div>
+            )}
+        </div>
     );
+
+    const renderBranding = (alignment: 'left' | 'right' | 'center') => (
+        <div style={{ textAlign: alignment, marginBottom: '10px' }}>
+            <div style={{ fontSize: '18px', fontWeight: '900', color: '#000', marginBottom: '8px' }}>{entity?.name || 'BROOKSPEED'}</div>
+            <div style={{ fontSize: '10px', color: '#000', fontWeight: '500', lineHeight: '1.4' }}>
+                <p>{entity?.addressLine1}, {entity?.city}, {entity?.postcode}</p>
+                <div style={{ marginTop: '5px', display: 'flex', gap: '15px', justifyContent: alignment === 'right' ? 'flex-end' : (alignment === 'center' ? 'center' : 'flex-start') }}>
+                    {entity?.vatNumber && <p>VAT: {entity.vatNumber}</p>}
+                    {entity?.email && <p>{entity.email}</p>}
+                </div>
+            </div>
+        </div>
+    );
+
+    const renderDetailsBlock = (alignment: 'left' | 'right' | 'center') => (
+        <div style={{ 
+            textAlign: alignment,
+            marginTop: '12px', 
+            paddingLeft: alignment === 'left' ? '12px' : '0',
+            paddingRight: alignment === 'right' ? '12px' : '0',
+            marginBottom: '10px'
+        }}>
+            <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#000' }}>Invoice: #{invoice?.id}</div>
+            <div style={{ fontSize: '12px', color: '#444' }}>Date: {invoice?.issueDate}</div>
+        </div>
+    );
+
+    const renderVehicleBlock = (alignment: 'left' | 'right' | 'center') => (
+        <div style={{ 
+            textAlign: alignment,
+            marginTop: '12px', 
+            paddingLeft: alignment === 'left' ? '12px' : '0',
+            paddingRight: alignment === 'right' ? '12px' : '0',
+            marginBottom: '10px'
+        }}>
+            <h3 style={{ fontSize: '8px', fontWeight: 'bold', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '4px' }}>Vehicle</h3>
+            <p style={{ display: 'inline-block', fontSize: '14px', fontWeight: '900', backgroundColor: '#FFD700', color: '#000', padding: '1px 6px', borderRadius: '3px', border: '1px solid rgba(0,0,0,0.1)' }}>{vehicle?.registration}</p>
+            <p style={{ fontSize: '10px', fontWeight: 'bold', color: '#64748b', marginTop: '2px' }}>
+                {vehicle?.make} {vehicle?.model}
+                {job?.mileage ? ` | ${job.mileage.toLocaleString()} miles` : ''}
+            </p>
+        </div>
+    );
+
+    const renderCustomerBlock = (alignment: 'left' | 'right' | 'center') => (
+        <div style={{ 
+            textAlign: alignment,
+            marginTop: '12px', 
+            paddingLeft: alignment === 'left' ? '12px' : '0',
+            paddingRight: alignment === 'right' ? '12px' : '0',
+            marginBottom: '10px'
+        }}>
+            <h3 style={{ fontSize: '8px', fontWeight: 'bold', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '4px' }}>Customer</h3>
+            <p style={{ fontSize: '14px', fontWeight: 'bold', color: '#000' }}>{customer?.forename} {customer?.surname}</p>
+            <p style={{ fontSize: '11px', color: '#64748b' }}>{customer?.addressLine1}, {customer?.city}, {customer?.postcode}</p>
+        </div>
+    );
+
+    const renderHeader = () => {
+        const layout = entity?.layoutSettings || {};
+        const logoPos = layout.logoPosition || 'right';
+        const brandingPos = layout.brandingPosition || 'left';
+        const detailsPos = layout.detailsPosition || (layout.estimateNumberPosition === 'right' ? 'right' : 'left');
+        const vehiclePos = layout.vehiclePosition || 'left';
+        const customerPos = layout.customerPosition || 'none';
+
+        const renderSlot = (pos: 'left' | 'right' | 'center') => (
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: pos === 'right' ? 'flex-end' : (pos === 'center' ? 'center' : 'flex-start') }}>
+                {logoPos === pos && renderLogo(layout, pos)}
+                {brandingPos === pos && renderBranding(pos)}
+                {vehiclePos === pos && renderVehicleBlock(pos)}
+                {customerPos === pos && renderCustomerBlock(pos)}
+                {detailsPos === pos && renderDetailsBlock(pos)}
+            </div>
+        );
+
+        return (
+            <thead>
+                <tr>
+                    <td>
+                        <div style={{ height: '10mm' }}></div>
+                        <div style={{ margin: '0 15mm 20px 15mm', paddingBottom: '20px', borderBottom: '2px solid #000' }}>
+                            <div style={{ 
+                                display: 'flex', 
+                                justifyContent: 'space-between', 
+                                alignItems: 'flex-start', 
+                                gap: '20px'
+                            }}>
+                                {renderSlot('left')}
+                                {renderSlot('center')}
+                                {renderSlot('right')}
+                            </div>
+                        </div>
+                    </td>
+                </tr>
+            </thead>
+        );
+    };
 
     const renderFooter = () => (
         <tfoot>
@@ -238,7 +317,7 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, customer, 
     );
 
     return (
-        <div className="rebuild-print-container" style={pageStyle}>
+        <div className="rebuild-print-container" style={{ ...pageStyle, display: 'block', padding: '0' }}>
             <style dangerouslySetInnerHTML={{
                 __html: `
                 @media print {
@@ -254,75 +333,71 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, customer, 
             ` }} />
 
             {/* 1. Main Invoice Table */}
-            <table className="printable-page-wrapper" style={{ width: '100%', borderCollapse: 'collapse' }}>
-                {renderHeader()}
-                <tbody>
-                    <tr>
-                        <td style={{ padding: '0 15mm' }}>
-                            <main style={{ paddingBottom: '30px' }}>
-                                <div style={{ display: 'flex', gap: '40px', marginBottom: '30px', paddingBottom: '20px', borderBottom: '1px solid #f1f5f9' }}>
-                                    <div style={{ flex: 1 }}>
-                                        <h3 style={{ fontSize: '8px', fontWeight: 'bold', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '4px' }}>Customer</h3>
-                                        <p style={{ fontSize: '14px', fontWeight: 'bold', color: '#000' }}>{customer?.forename} {customer?.surname}</p>
-                                        <p style={{ fontSize: '11px', color: '#64748b' }}>{customer?.addressLine1}, {customer?.city}, {customer?.postcode}</p>
+            {printOptions.showInvoice && (
+                <table className="printable-page-wrapper" style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    {renderHeader()}
+                    <tbody>
+                        <tr>
+                            <td style={{ padding: '0 15mm' }}>
+                                <main style={{ paddingBottom: '30px' }}>
+                                    <div style={{ display: 'flex', gap: '40px', marginBottom: '30px', paddingBottom: '20px', borderBottom: '1px solid #f1f5f9' }}>
+                                        {(!entity?.layoutSettings?.customerPosition || entity.layoutSettings.customerPosition === 'none') && (
+                                            <div style={{ flex: 1 }}>
+                                                <h3 style={{ fontSize: '8px', fontWeight: 'bold', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '4px' }}>Customer</h3>
+                                                <p style={{ fontSize: '14px', fontWeight: 'bold', color: '#000' }}>{customer?.forename} {customer?.surname}</p>
+                                                <p style={{ fontSize: '11px', color: '#64748b' }}>{customer?.addressLine1}, {customer?.city}, {customer?.postcode}</p>
+                                            </div>
+                                        )}
                                     </div>
-                                    <div style={{ flex: 1, paddingLeft: '60px' }}>
-                                        <h3 style={{ fontSize: '8px', fontWeight: 'bold', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '4px' }}>Vehicle</h3>
-                                        <p style={{ display: 'inline-block', fontSize: '16px', fontWeight: '900', backgroundColor: '#FFD700', color: '#000', padding: '2px 8px', borderRadius: '4px', border: '1px solid rgba(0,0,0,0.1)' }}>{vehicle?.registration}</p>
-                                        <p style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748b', marginTop: '4px' }}>{vehicle?.make} {vehicle?.model} {job?.mileage ? `| ${job.mileage.toLocaleString()} miles` : ''}</p>
-                                    </div>
-                                </div>
 
                                 <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '30px' }}>
-                                    <thead style={{ backgroundColor: '#f8fafc', borderBottom: '2px solid #e2e8f0', borderTop: '2px solid #e2e8f0' }}>
+                                    <thead style={{ backgroundColor: '#f9fafb', borderBottom: '2px solid #e5e7eb', borderTop: '2px solid #e5e7eb' }}>
                                         <tr>
-                                            <th style={{ padding: '10px', textAlign: 'left', fontSize: '9px', fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase' }}>Description of Work</th>
-                                            <th style={{ padding: '10px', textAlign: 'center', fontSize: '9px', fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase', width: '60px' }}>Qty</th>
-                                            <th style={{ padding: '10px', textAlign: 'right', fontSize: '9px', fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase', width: '100px' }}>Unit</th>
-                                            <th style={{ padding: '10px', textAlign: 'right', fontSize: '9px', fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase', width: '100px' }}>Total</th>
+                                            <th style={{ padding: '10px', textAlign: 'left', fontSize: '9px', fontWeight: 'bold', color: '#6b7280', textTransform: 'uppercase' }}>Description of Work</th>
+                                            <th style={{ padding: '10px', textAlign: 'center', fontSize: '9px', fontWeight: 'bold', color: '#6b7280', textTransform: 'uppercase', width: '60px' }}>Qty</th>
+                                            <th style={{ padding: '10px', textAlign: 'right', fontSize: '9px', fontWeight: 'bold', color: '#6b7280', textTransform: 'uppercase', width: '100px' }}>Unit</th>
+                                            <th style={{ padding: '10px', textAlign: 'right', fontSize: '9px', fontWeight: 'bold', color: '#6b7280', textTransform: 'uppercase', width: '100px' }}>Total</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {groupedItems.packages.length > 0 && (
-                                            <>
-                                                {renderSectionHeader("Service Packages")}
-                                                {groupedItems.packages.map(pkg => (
-                                                    <React.Fragment key={pkg.header.id}>
-                                                        {renderLine(pkg.header)}
-                                                        {pkg.children.map(child => renderLine(child, true))}
-                                                    </React.Fragment>
-                                                ))}
-                                            </>
-                                        )}
+                                        {groupedItems.packages.map(pkg => (
+                                            <React.Fragment key={pkg.header.id}>
+                                                {renderSectionHeader(pkg.header.description)}
+                                                {renderLine(pkg.header)}
+                                                {pkg.children.map(child => renderLine(child, true))}
+                                            </React.Fragment>
+                                        ))}
+
                                         {groupedItems.labor.length > 0 && (
-                                            <>
+                                            <React.Fragment>
                                                 {renderSectionHeader("Labour")}
                                                 {groupedItems.labor.map(item => renderLine(item))}
-                                            </>
+                                            </React.Fragment>
                                         )}
+
                                         {groupedItems.parts.length > 0 && (
-                                            <>
+                                            <React.Fragment>
                                                 {renderSectionHeader("Parts & Materials")}
                                                 {groupedItems.parts.map(item => renderLine(item))}
-                                            </>
+                                            </React.Fragment>
                                         )}
                                     </tbody>
                                 </table>
 
                                 <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px', breakInside: 'avoid', pageBreakInside: 'avoid' }}>
-                                    <div style={{ width: '280px', backgroundColor: '#f8fafc', padding: '20px', borderRadius: '12px', border: '1px solid #e2e8f0', breakInside: 'avoid', pageBreakInside: 'avoid' }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#64748b', marginBottom: '8px' }}>
-                                            <span>Subtotal Net</span>
-                                            <span style={{ color: '#000', fontWeight: 'bold' }}>{formatCurrency(totals.subtotal)}</span>
+                                    <div style={{ width: '288px', backgroundColor: '#f9fafb', padding: '20px', borderRadius: '12px', border: '1px solid #f3f4f6', breakInside: 'avoid', pageBreakInside: 'avoid' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#9ca3af', marginBottom: '8px' }}>
+                                            <span style={{ fontWeight: 'bold', textTransform: 'uppercase', fontSize: '9px' }}>Subtotal Net</span>
+                                            <span style={{ color: '#111827', fontWeight: 'bold' }}>{formatCurrency(totals.subtotal)}</span>
                                         </div>
                                         {totals.vatBreakdown.map(b => (
-                                            <div key={b.name} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>
+                                            <div key={b.name} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: '#9ca3af', marginBottom: '4px' }}>
                                                 <span>{b.name} ({b.rate}%)</span>
                                                 <span>{formatCurrency(b.vat)}</span>
                                             </div>
                                         ))}
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '20px', fontWeight: '900', color: '#000', marginTop: '15px', paddingTop: '15px', borderTop: '2px solid #e2e8f0' }}>
-                                            <span>TOTAL</span>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '20px', fontWeight: '900', color: '#000', marginTop: '15px', paddingTop: '15px', borderTop: '2px solid #e5e7eb' }}>
+                                            <span style={{ fontSize: '12px', textTransform: 'uppercase' }}>TOTAL</span>
                                             <span>{formatCurrency(totals.grandTotal)}</span>
                                         </div>
                                     </div>
@@ -333,9 +408,10 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, customer, 
                 </tbody>
                 {renderFooter()}
             </table>
+            )}
 
             {/* 2. Technician Notes Table */}
-            {hasTechnicianNotes && (
+            {printOptions.showTechNotes && hasTechnicianNotes && (
                 <table className="printable-page-wrapper" style={{ width: '100%', borderCollapse: 'collapse', breakBefore: 'page' }}>
                     {renderHeader()}
                     <tbody>
@@ -361,7 +437,7 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, customer, 
             )}
 
             {/* 3. Inspection Report Tables */}
-            {inspectionPages.map((page, idx) => (
+            {printOptions.showInspections && inspectionPages.map((page, idx) => (
                 <table key={idx} className="printable-page-wrapper" style={{ width: '100%', borderCollapse: 'collapse', breakBefore: 'page' }}>
                     {renderHeader()}
                     <tbody>
@@ -381,7 +457,7 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, customer, 
             ))}
 
             {/* 4. Tyre Check Table */}
-            {hasTyreData && (
+            {printOptions.showInspections && hasTyreData && (
                 <table className="printable-page-wrapper" style={{ width: '100%', borderCollapse: 'collapse', breakBefore: 'page' }}>
                     {renderHeader()}
                     <tbody>
@@ -401,7 +477,7 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, customer, 
             )}
 
             {/* 5. Damage Report Table */}
-            {hasDamageReport && (
+            {printOptions.showInspections && hasDamageReport && (
                 <table className="printable-page-wrapper" style={{ width: '100%', borderCollapse: 'collapse', breakBefore: 'page' }}>
                     {renderHeader()}
                     <tbody>
@@ -411,6 +487,30 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, customer, 
                                     <div style={{ breakInside: 'avoid' }}>
                                         <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '15px', borderBottom: '2px solid #000', paddingBottom: '8px' }}>Vehicle Condition Report</h3>
                                         <VehicleDamageReport activePoints={job.damagePoints || []} onUpdate={() => { }} isReadOnly={true} vehicleModel={vehicle?.model} vehicleColor={vehicle?.colour} imageId={null} />
+                                    </div>
+                                </main>
+                            </td>
+                        </tr>
+                    </tbody>
+                    {renderFooter()}
+                </table>
+            )}
+            {/* 6. Media Gallery Table */}
+            {printOptions.showMedia && job?.checkInPhotos && job.checkInPhotos.length > 0 && (
+                <table className="printable-page-wrapper" style={{ width: '100%', borderCollapse: 'collapse', breakBefore: 'page' }}>
+                    {renderHeader()}
+                    <tbody>
+                        <tr>
+                            <td style={{ padding: '0 15mm' }}>
+                                <main style={{ paddingBottom: '30px' }}>
+                                    <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '15px', borderBottom: '2px solid #000', paddingBottom: '8px' }}>Media Gallery</h3>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
+                                        {job.checkInPhotos.map((item, i) => (
+                                            <div key={i} style={{ border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden', breakInside: 'avoid' }}>
+                                                {item.dataUrl && <img src={item.dataUrl} alt={`Media ${i}`} style={{ width: '100%', height: '180px', objectFit: 'cover' }} />}
+                                                {item.notes && <p style={{ padding: '8px', fontSize: '10px', color: '#64748b', borderTop: '1px solid #e2e8f0' }}>{item.notes}</p>}
+                                            </div>
+                                        ))}
                                     </div>
                                 </main>
                             </td>

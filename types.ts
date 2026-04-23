@@ -133,6 +133,7 @@ export interface CheckInPhoto {
     dataUrl?: string;
     notes?: string;
     type?: 'photo' | 'video';
+    status?: ChecklistItemStatus;
 }
 
 export interface VehicleDamagePoint {
@@ -495,6 +496,22 @@ export interface WorkingHoursConfig {
     region: 'england-and-wales' | 'scotland' | 'northern-ireland';
 }
 
+export interface DocumentLayoutSettings {
+    logoPosition?: 'left' | 'right' | 'center' | 'none';
+    brandingPosition?: 'left' | 'right' | 'center' | 'none';
+    detailsPosition?: 'left' | 'right' | 'center' | 'none';
+    vehiclePosition?: 'left' | 'right' | 'center' | 'none';
+    customerPosition?: 'left' | 'right' | 'center' | 'none';
+    estimateNumberPosition?: 'left' | 'right'; // Legacy alias for detailsPosition
+    logoHeight?: number;
+    primaryColor?: string;
+    accentColor?: string;
+    showBankDetails?: boolean;
+    showVatBreakdown?: boolean;
+    headerStyle?: 'minimal' | 'bold' | 'classic';
+    fontSize?: 'small' | 'medium' | 'large';
+}
+
 export interface BusinessEntity {
     id: string;
     name?: string;
@@ -527,6 +544,12 @@ export interface BusinessEntity {
     winterCheckReminderEmailTemplate?: string;
     winterCheckReminderSmsTemplate?: string;
     
+    // Document Templates
+    estimateTemplateId?: string;
+    invoiceTemplateId?: string;
+    estimateTemplateName?: string;
+    invoiceTemplateName?: string;
+    
     // Terms and Conditions
     courtesyCarTermsAndConditions?: string;
     rentalTermsAndConditions?: string;
@@ -534,6 +557,7 @@ export interface BusinessEntity {
     storageTermsAndConditions?: string;
     
     workingHours?: WorkingHoursConfig;
+    layoutSettings?: DocumentLayoutSettings;
 }
 
 export interface Engineer { 

@@ -26,8 +26,22 @@ export default defineConfig(({ mode }) => {
       ], 
       resolve: {
         alias: {
-          '@': path.resolve(__dirname, './src'), // Ensure this points to your source folder
+          '@': path.resolve(__dirname, './src'),
         }
+      },
+      build: {
+        rollupOptions: {
+          output: {
+            manualChunks: {
+              'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+              'vendor-ui': ['lucide-react', '@mui/material', '@emotion/react', '@emotion/styled'],
+              'vendor-charts': ['recharts'],
+              'vendor-utils': ['lodash', 'date-fns', 'papaparse'],
+              'vendor-firebase': ['firebase/app', 'firebase/auth', 'firebase/firestore', 'firebase/storage'],
+            }
+          }
+        },
+        chunkSizeWarningLimit: 2000,
       }
     };
 });

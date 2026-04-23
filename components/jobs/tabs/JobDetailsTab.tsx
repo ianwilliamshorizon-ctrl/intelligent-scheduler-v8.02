@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import * as T from '../../../types';
 import { Car, User, KeyRound, Edit, Phone, Mail, MapPin, Building, Briefcase, Expand, ImageIcon, X, Gauge, Info, Wrench, DollarSign, Printer, CheckCircle } from 'lucide-react';
 import { HoverInfo } from '../../shared/HoverInfo';
+import SpeechToTextButton from '../../shared/SpeechToTextButton';
 import LiveAssistant from '../../LiveAssistant';
 import { usePrint } from '../../../core/hooks/usePrint';
 import { formatCurrency } from '../../../core/utils/formatUtils';
@@ -320,16 +321,26 @@ const JobDetailsTab: React.FC<JobDetailsTabProps> = ({
                     <span className="flex items-center gap-2"><ImageIcon size={16}/> Internal Notes</span>
                     <button type="button" onClick={() => setIsNotesModalOpen(true)} className="text-[10px] uppercase font-black tracking-widest bg-white border border-gray-200 text-indigo-600 px-2 py-1 rounded flex items-center gap-1 hover:bg-indigo-50 transition-all"><Expand size={12}/> Fullscreen</button>
                 </h3>
-                <div className="p-3">
+                <div className="p-3 relative">
                     <textarea 
                         name="notes" 
                         value={editableJob.notes || ''} 
                         onChange={onChange} 
                         rows={8} 
-                        className="w-full p-2 border rounded text-sm focus:ring-1 focus:ring-indigo-500 outline-none bg-indigo-50/20" 
+                        className="w-full p-2 pr-10 border rounded text-sm focus:ring-1 focus:ring-indigo-500 outline-none bg-indigo-50/20" 
                         placeholder="Add internal notes for the workshop staff..." 
                         disabled={isReadOnly} 
                     />
+                    <div className="absolute top-5 right-5">
+                        <SpeechToTextButton 
+                            onTranscript={(text) => {
+                                const current = editableJob.notes || '';
+                                const space = current && !current.endsWith(' ') ? ' ' : '';
+                                onChange({ target: { name: 'notes', value: current + space + text } } as any);
+                            }}
+                            disabled={isReadOnly}
+                        />
+                    </div>
                 </div>
             </div>
 
@@ -340,15 +351,26 @@ const JobDetailsTab: React.FC<JobDetailsTabProps> = ({
                             <h2 className="text-lg font-bold">Internal Workshop Notes</h2>
                             <button onClick={() => setIsNotesModalOpen(false)} className="hover:rotate-90 transition-transform"><X size={24} /></button>
                         </header>
-                        <div className="flex-grow p-4">
+                        <div className="flex-grow p-4 relative">
                             <textarea
                                 value={editableJob.notes || ''}
                                 onChange={onChange}
                                 name="notes"
-                                className="w-full h-full p-4 border rounded-xl resize-none text-base focus:ring-2 focus:ring-indigo-500 outline-none bg-gray-50"
+                                className="w-full h-full p-4 pr-12 border rounded-xl resize-none text-base focus:ring-2 focus:ring-indigo-500 outline-none bg-gray-50"
                                 placeholder="Enter workshop notes..."
                                 readOnly={isReadOnly}
                             />
+                            <div className="absolute top-8 right-8">
+                                <SpeechToTextButton 
+                                    onTranscript={(text) => {
+                                        const current = editableJob.notes || '';
+                                        const space = current && !current.endsWith(' ') ? ' ' : '';
+                                        onChange({ target: { name: 'notes', value: current + space + text } } as any);
+                                    }}
+                                    disabled={isReadOnly}
+                                    className="scale-125"
+                                />
+                            </div>
                         </div>
                         <footer className="p-4 border-t flex justify-end gap-2">
                             <button onClick={() => setIsNotesModalOpen(false)} className="px-6 py-2 bg-gray-200 rounded-xl font-bold hover:bg-gray-300 transition-all">Close</button>

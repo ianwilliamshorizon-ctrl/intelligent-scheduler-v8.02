@@ -26,7 +26,7 @@ interface ScheduleJobFromEstimateModalProps {
     businessEntities: BusinessEntity[];
     customers: Customer[];
     absenceRequests: AbsenceRequest[];
-    onEditJob: (jobId: string) => void;
+    onEditJob: (jobId: string, initialTab?: string) => void;
     inquiry?: Inquiry | null;
     parts: Part[];
 }

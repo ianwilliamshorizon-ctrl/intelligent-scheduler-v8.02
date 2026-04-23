@@ -321,12 +321,6 @@ const AddNewVehicleForm: React.FC<AddNewVehicleFormProps> = ({ initialRegistrati
                             Update & Use Existing Record
                         </button>
                         <button 
-                            onClick={handleAddNewWithSameReg}
-                            className="w-full py-3 bg-gray-100 text-gray-700 font-bold rounded-lg hover:bg-gray-200"
-                        >
-                            Create New Record with Same VRM
-                        </button>
-                        <button 
                             onClick={() => setShowDuplicatePrompt(false)}
                             className="w-full py-2 text-sm text-gray-400 font-semibold hover:text-gray-600"
                         >

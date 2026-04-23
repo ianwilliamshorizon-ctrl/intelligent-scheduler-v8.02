@@ -5,7 +5,7 @@ import {
     X, CheckSquare, Mail, Loader2, Printer, CheckCircle, 
     MessageSquare, Monitor, Image as ImageIcon, Gauge, AlertTriangle, 
     ChevronLeft, ChevronRight, AlertCircle, CalendarCheck, Package,
-    ArrowRight, Calendar 
+    ArrowRight, Calendar, Edit
 } from 'lucide-react';
 import EmailEstimateModal from './EmailEstimateModal';
 import { formatCurrency } from '../utils/formatUtils';
@@ -37,6 +37,7 @@ interface EstimateViewModalProps {
     currentUser: User;
     onCreateInquiry?: (estimate: Estimate) => void;
     onScheduleEstimate?: (estimate: Estimate, inquiryId?: string) => void;
+    onEdit?: (estimate: Estimate) => void;
 }
 
 const EstimateViewModal: React.FC<EstimateViewModalProps> = ({ 
@@ -57,7 +58,8 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
     users, 
     currentUser, 
     onCreateInquiry,
-    onScheduleEstimate 
+    onScheduleEstimate,
+    onEdit
 }) => {
     const { jobs, businessEntities, vehicles, customers, absenceRequests } = useData();
     const [isEmailing, setIsEmailing] = useState(false);
@@ -620,6 +622,11 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                     
                                 <div className="flex gap-2">
                                     {onCreateInquiry && <button onClick={() => onCreateInquiry(estimate)} className="flex items-center py-2 px-4 bg-purple-100 text-purple-700 font-semibold rounded-lg hover:bg-purple-200 transition"><MessageSquare size={16} className="mr-2"/> Raise Inquiry</button>}
+                                    {onEdit && (
+                                        <button onClick={() => { onEdit(estimate); onClose(); }} className="flex items-center py-2 px-4 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 shadow-md transition">
+                                            <Edit size={16} className="mr-2"/> Edit Estimate
+                                        </button>
+                                    )}
                                     <button onClick={() => { onScheduleEstimate?.(estimate); onClose(); }} className="flex items-center py-2 px-4 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 shadow-md transition">
                                         <CalendarCheck size={16} className="mr-2"/> Schedule Job
                                     </button>

@@ -7,11 +7,13 @@ import { getCustomerDisplayName } from '../core/utils/customerUtils';
 import { SummaryJobCard } from './shared/SummaryJobCard';
 import { applyStorageRateToJob } from '../core/utils/jobUtils';
 import AsyncImage from './AsyncImage';
-import { X, Key, LayoutGrid, BarChart, Users, FileText, Briefcase, Car, CalendarCheck, CheckCircle, Clock, LogIn, PlayCircle, PauseCircle, Tag, MessageSquare, Wrench, UserCheck, AlertCircle, Play, ClipboardCheck, Wand2, Camera } from 'lucide-react';
+import { X, Key, LayoutGrid, BarChart, Users, FileText, Briefcase, Car, CalendarCheck, CheckCircle, Clock, LogIn, PlayCircle, PauseCircle, Tag, MessageSquare, Wrench, UserCheck, AlertCircle, Play, ClipboardCheck, Wand2, Camera, Printer } from 'lucide-react';
+import { useReactToPrint } from 'react-to-print';
+import { PrintableOnSiteList } from './PrintableOnSiteList';
 
 // Main Dashboard Component Props
 interface DashboardViewProps {
-    onEditJob: (jobId: string) => void;
+    onEditJob: (jobId: string, initialTab?: string) => void;
     onCheckIn: (jobId: string) => void;
     onStartWork: (jobId: string, segmentId: string) => void;
     onPause: (jobId: string, segmentId: string, reason: string) => void;
@@ -145,19 +147,39 @@ const VehiclesOnSiteModal: React.FC<{
     storageBookings: T.StorageBooking[];
     vehicles: T.Vehicle[];
 }> = ({ isOpen, onClose, entityName, jobs, storageBookings, vehicles }) => {
+    const printRef = React.useRef<HTMLDivElement>(null);
+    const handlePrint = useReactToPrint({
+        contentRef: printRef,
+        documentTitle: `OnSite_Vehicles_${entityName}_${new Date().toISOString().split('T')[0]}`,
+    });
+
     if (!isOpen) return null;
 
     return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[999] flex items-center justify-center p-4">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden animate-fade-in-up">
                 <header className="p-4 border-b flex justify-between items-center bg-gray-50">
-                    <div>
-                        <h2 className="text-xl font-black text-gray-900">Vehicles On Site</h2>
-                        <p className="text-sm text-indigo-600 font-bold">{entityName}</p>
+                    <div className="flex items-center gap-4">
+                        <div className="p-2 bg-green-500 rounded-lg text-white">
+                            <Car size={20} />
+                        </div>
+                        <div>
+                            <h2 className="text-xl font-black text-gray-900 leading-tight">Vehicles On Site</h2>
+                            <p className="text-sm text-indigo-600 font-bold">{entityName}</p>
+                        </div>
                     </div>
-                    <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full transition-colors">
-                        <X size={24} className="text-gray-500" />
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <button 
+                            onClick={() => handlePrint()}
+                            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 mr-2"
+                        >
+                            <Printer size={18} />
+                            <span>Print List</span>
+                        </button>
+                        <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full transition-colors">
+                            <X size={24} className="text-gray-500" />
+                        </button>
+                    </div>
                 </header>
                 <div className="flex-grow overflow-y-auto p-4">
                     <div className="grid grid-cols-1 gap-3">
@@ -212,6 +234,18 @@ const VehiclesOnSiteModal: React.FC<{
                 <footer className="p-4 border-t bg-gray-50 text-center">
                     <p className="text-xs text-gray-500 font-medium italic">Showing all vehicles currently marked as 'On Site' for this division.</p>
                 </footer>
+            </div>
+
+            {/* Hidden printable component */}
+            <div className="hidden">
+                <div ref={printRef}>
+                    <PrintableOnSiteList 
+                        entityName={entityName}
+                        jobs={jobs}
+                        storageBookings={storageBookings}
+                        vehicles={vehicles}
+                    />
+                </div>
             </div>
         </div>
     );

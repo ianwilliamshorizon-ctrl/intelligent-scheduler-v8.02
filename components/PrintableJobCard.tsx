@@ -15,6 +15,7 @@ import {
     ChecklistItemStatus
 } from '../types';
 import InspectionChecklist from './InspectionChecklist';
+import AsyncMedia from './AsyncMedia';
 
 interface PrintableJobCardProps {
     job: Job;
@@ -304,6 +305,29 @@ const PrintableJobCard: React.FC<PrintableJobCardProps> = ({
                         </div>
                     </div>
                 </section>
+                
+                {job.checkInPhotos && job.checkInPhotos.some(p => p.status === 'attention' || p.status === 'urgent') && (
+                    <section className="avoid-break">
+                        <h3 className="text-xs font-bold text-gray-400 uppercase mb-2 ml-1">Important Photos & Documents</h3>
+                        <div className="grid grid-cols-2 gap-4">
+                            {job.checkInPhotos.filter(p => p.status === 'attention' || p.status === 'urgent').map((photo) => (
+                                <div key={photo.id} className={`border-4 rounded-lg overflow-hidden bg-gray-50 flex flex-col ${photo.status === 'attention' ? 'border-indigo-500' : 'border-red-500'}`}>
+                                    <div className="relative aspect-video">
+                                        <AsyncMedia imageId={photo.id} alt="Attention Media" className="w-full h-full object-contain" />
+                                        <div className={`absolute top-0 right-0 px-2 py-1 text-[10px] font-bold uppercase text-white ${photo.status === 'attention' ? 'bg-indigo-600' : 'bg-red-600'}`}>
+                                            {photo.status === 'attention' ? 'Needs Attention' : 'Urgent'}
+                                        </div>
+                                    </div>
+                                    {photo.notes && (
+                                        <div className="p-2 text-xs text-gray-800 italic bg-white border-t border-gray-100">
+                                            {photo.notes}
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    </section>
+                )}
             </main>
 
             <footer className="mt-8 pt-6 border-t-2 border-gray-900 text-[11px]">

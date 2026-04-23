@@ -3,9 +3,11 @@ import { Job, CheckInPhoto } from '../types';
 import { X, Save, KeyRound, Camera, Trash2, Plus, Upload, Milestone, Film } from 'lucide-react';
 import { saveImage } from '../utils/imageStore';
 import AsyncMedia from './AsyncMedia';
+import MediaLightbox from './MediaLightbox';
 
 interface TempCheckInPhoto extends CheckInPhoto {
     tempDataUrl?: string;
+    file?: File;
 }
 
 interface CheckInModalProps {
@@ -22,6 +24,8 @@ const CheckInModal: React.FC<CheckInModalProps> = ({ isOpen, onClose, onSave, jo
     const cameraInputRef = useRef<HTMLInputElement>(null);
     const videoInputRef = useRef<HTMLInputElement>(null);
     const uploadInputRef = useRef<HTMLInputElement>(null);
+    const [isLightboxOpen, setIsLightboxOpen] = useState(false);
+    const [lightboxIndex, setLightboxIndex] = useState(0);
 
     useEffect(() => {
         if (job) {
@@ -35,21 +39,30 @@ const CheckInModal: React.FC<CheckInModalProps> = ({ isOpen, onClose, onSave, jo
         if (event.target.files) {
             for (const file of event.target.files) {
                 const isVideo = file.type.startsWith('video/');
-                const reader = new FileReader();
-                reader.onloadend = () => {
-                    const dataUrl = reader.result as string;
-                    const newPhoto: TempCheckInPhoto = {
-                        id: crypto.randomUUID(),
-                        tempDataUrl: dataUrl,
-                        type: isVideo ? 'video' : 'photo'
-                    };
-                    setPhotos(prev => [...prev, newPhoto]);
+                const previewUrl = URL.createObjectURL(file);
+                
+                const newPhoto: TempCheckInPhoto = {
+                    id: crypto.randomUUID(),
+                    tempDataUrl: previewUrl,
+                    file: file,
+                    type: isVideo ? 'video' : 'photo'
                 };
-                reader.readAsDataURL(file);
+                setPhotos(prev => [...prev, newPhoto]);
             }
         }
         event.target.value = ''; // Reset file input
     };
+
+    // Cleanup object URLs to prevent memory leaks
+    useEffect(() => {
+        return () => {
+            photos.forEach(p => {
+                if (p.tempDataUrl?.startsWith('blob:')) {
+                    URL.revokeObjectURL(p.tempDataUrl);
+                }
+            });
+        };
+    }, [photos]);
 
     const handleRemovePhoto = (id: string) => {
         setPhotos(prev => prev.filter(p => p.id !== id));
@@ -65,9 +78,10 @@ const CheckInModal: React.FC<CheckInModalProps> = ({ isOpen, onClose, onSave, jo
         // Save new images to IndexedDB and prepare the final photo data for the job object
         const finalPhotos: CheckInPhoto[] = [];
         for (const photo of photos) {
-            if (photo.tempDataUrl) { // This is a new photo
+            if (photo.file || photo.tempDataUrl) { // This is a new photo
                 try {
-                    await saveImage(photo.id, photo.tempDataUrl);
+                    // Pass the actual File object if available for better performance
+                    await saveImage(photo.id, photo.file || photo.tempDataUrl!);
                     finalPhotos.push({ id: photo.id, notes: photo.notes, type: photo.type });
                 } catch (error) {
                     console.error("Could not save check-in media:", error);
@@ -153,16 +167,23 @@ const CheckInModal: React.FC<CheckInModalProps> = ({ isOpen, onClose, onSave, jo
                             <Camera size={12} /> Condition Photos
                         </label>
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                            {photos.map(photo => (
-                                <div key={photo.id} className="relative group border border-gray-200 rounded-xl overflow-hidden shadow-sm bg-gray-50 h-32 sm:h-40">
+                            {photos.map((photo, index) => (
+                                <div 
+                                    key={photo.id} 
+                                    className="relative group aspect-square rounded-xl overflow-hidden bg-gray-100 border border-gray-200 shadow-sm cursor-pointer"
+                                    onClick={() => {
+                                        setLightboxIndex(index);
+                                        setIsLightboxOpen(true);
+                                    }}
+                                >
                                     {photo.tempDataUrl ? (
                                         photo.type === 'video' ? (
-                                            <video src={photo.tempDataUrl} className="w-full h-full object-cover" controls />
+                                            <video src={photo.tempDataUrl} className="w-full h-full object-cover" />
                                         ) : (
                                             <img src={photo.tempDataUrl} alt="Vehicle condition" className="w-full h-full object-cover" />
                                         )
                                     ) : (
-                                        <AsyncMedia imageId={photo.id} alt="Vehicle condition" className="w-full h-full object-cover" />
+                                        <AsyncMedia imageId={photo.id} type={photo.type} alt="Vehicle condition" className="w-full h-full object-cover" />
                                     )}
                                     <button onClick={() => handleRemovePhoto(photo.id)} className="absolute top-1 right-1 bg-white/90 p-1.5 rounded-full text-red-500 shadow-md hover:bg-red-50 transition-colors">
                                         <Trash2 size={14} />
@@ -241,6 +262,13 @@ const CheckInModal: React.FC<CheckInModalProps> = ({ isOpen, onClose, onSave, jo
                     </button>
                 </footer>
             </div>
+
+            <MediaLightbox 
+                isOpen={isLightboxOpen}
+                onClose={() => setIsLightboxOpen(false)}
+                mediaIds={photos.map(p => p.id)}
+                initialIndex={lightboxIndex}
+            />
         </div>
     );
 };

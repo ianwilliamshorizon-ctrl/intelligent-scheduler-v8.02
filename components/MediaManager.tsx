@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useEffect } from 'react';
 import { SaleVehicle, SaleMediaItem } from '../types';
 import { Upload, Trash2, FileText, Camera, Download } from 'lucide-react';
 import { saveImage, getImage } from '../utils/imageStore';
@@ -12,7 +12,7 @@ interface MediaManagerProps {
 const MediaManager: React.FC<MediaManagerProps> = ({ media, onUpdate }) => {
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         if (event.target.files) {
             const newMedia: SaleMediaItem[] = [];
             const savePromises: Promise<void>[] = [];
@@ -26,25 +26,17 @@ const MediaManager: React.FC<MediaManagerProps> = ({ media, onUpdate }) => {
                     uploadedAt: new Date().toISOString()
                 };
                 newMedia.push(mediaItem);
-
-                const reader = new FileReader();
-                const savePromise = new Promise<void>((resolve, reject) => {
-                    reader.onloadend = () => {
-                        saveImage(mediaItem.id, reader.result as string).then(resolve).catch(reject);
-                    };
-                    reader.onerror = reject;
-                    reader.readAsDataURL(file);
-                });
-                savePromises.push(savePromise);
+                savePromises.push(saveImage(mediaItem.id, file));
             }
 
-            Promise.all(savePromises).then(() => {
+            try {
+                await Promise.all(savePromises);
                 const updatedMedia = [...(media || []), ...newMedia];
                 onUpdate(updatedMedia);
-            }).catch(error => {
+            } catch (error) {
                 console.error("Error saving media:", error);
                 alert("Could not save one or more files.");
-            });
+            }
         }
         if (event.target) event.target.value = '';
     };
@@ -65,6 +57,8 @@ const MediaManager: React.FC<MediaManagerProps> = ({ media, onUpdate }) => {
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
+            // If it's a blob URL we created, we should ideally revoke it later, 
+            // but for a one-off download it's usually fine.
         } else {
             alert('Could not retrieve file data.');
         }

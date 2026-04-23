@@ -1,7 +1,8 @@
-import React, { useMemo } from 'react';
-import { Estimate, Customer, Vehicle, BusinessEntity, TaxRate, Part, EstimateLineItem } from '../../types';
+import React, { useMemo, useState, useEffect } from 'react';
+import { Estimate, Customer, Vehicle, BusinessEntity, TaxRate, Part, EstimateLineItem, DocumentLayoutSettings, Job } from '../../types';
 import { formatCurrency } from '../../utils/formatUtils';
 import { getDisplayDate } from './EstimateShared';
+import { getImage } from '../../utils/imageStore';
 
 interface PrintableEstimateProps {
     estimate: Estimate;
@@ -16,6 +17,32 @@ interface PrintableEstimateProps {
 }
 
 export const PrintableEstimate: React.FC<PrintableEstimateProps> = ({ estimate, customer, vehicle, entityDetails, parts, canViewPricing, totals, depositAmount }) => {
+    const [logoUrl, setLogoUrl] = useState<string | null>(null);
+
+    useEffect(() => {
+        const loadLogo = async () => {
+            const anyEntity = entityDetails as any;
+            if (anyEntity?.tempLogoUrl) {
+                setLogoUrl(anyEntity.tempLogoUrl);
+                return;
+            }
+
+            if (entityDetails?.logoImageId) {
+                const url = await getImage(entityDetails.logoImageId);
+                if (url) {
+                    setLogoUrl(url);
+                    return;
+                }
+            }
+            if (entityDetails?.logoUrl) {
+                setLogoUrl(entityDetails.logoUrl);
+            } else {
+                setLogoUrl('/logo.png');
+            }
+        };
+        loadLogo();
+    }, [entityDetails]);
+
     // Simplifed Body (Classic Table feel but clean)
     const allItems = estimate.lineItems || [];
     const essentialItems = allItems.filter(i => !i.isOptional);
@@ -113,6 +140,73 @@ export const PrintableEstimate: React.FC<PrintableEstimateProps> = ({ estimate, 
         );
     };
 
+    const renderLogo = (layout: DocumentLayoutSettings, alignment: 'left' | 'right' | 'center') => (
+        <div style={{ display: 'flex', justifyContent: alignment === 'right' ? 'flex-end' : (alignment === 'center' ? 'center' : 'flex-start'), marginBottom: '10px' }}>
+            {logoUrl ? (
+                <img src={logoUrl} alt="Logo" style={{ maxHeight: `${layout.logoHeight || 90}px`, maxWidth: '280px', width: 'auto', display: 'block' }} />
+            ) : (
+                <div style={{ textAlign: alignment }}>
+                    <div style={{ fontSize: '24px', fontWeight: '900', color: '#000' }}>{entityDetails?.name || 'BROOKSPEED'}</div>
+                    <div style={{ fontSize: '10px', color: '#64748b', marginTop: '4px' }}>Automotive Excellence</div>
+                </div>
+            )}
+        </div>
+    );
+
+    const renderBranding = (alignment: 'left' | 'right' | 'center') => (
+        <div style={{ textAlign: alignment, marginBottom: '10px' }}>
+            <div style={{ fontSize: '18px', fontWeight: '900', color: '#000', marginBottom: '8px' }}>{entityDetails?.name || 'BROOKSPEED'}</div>
+            <div style={{ fontSize: '10px', color: '#000', fontWeight: '500', lineHeight: '1.4' }}>
+                <p>{entityDetails?.addressLine1}, {entityDetails?.city}, {entityDetails?.postcode}</p>
+                <div style={{ marginTop: '5px', display: 'flex', gap: '15px', justifyContent: alignment === 'right' ? 'flex-end' : (alignment === 'center' ? 'center' : 'flex-start') }}>
+                    {entityDetails?.vatNumber && <p>VAT: {entityDetails.vatNumber}</p>}
+                    {entityDetails?.email && <p>{entityDetails.email}</p>}
+                </div>
+            </div>
+        </div>
+    );
+
+    const renderDetailsBlock = (alignment: 'left' | 'right' | 'center') => (
+        <div style={{ 
+            textAlign: alignment,
+            marginTop: '12px', 
+            paddingLeft: alignment === 'left' ? '12px' : '0',
+            paddingRight: alignment === 'right' ? '12px' : '0',
+            marginBottom: '10px'
+        }}>
+            <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#000' }}>Estimate: #{estimate.estimateNumber || estimate.id}</div>
+            <div style={{ fontSize: '12px', color: '#444' }}>Date: {getDisplayDate(estimate.issueDate)}</div>
+        </div>
+    );
+
+    const renderVehicleBlock = (alignment: 'left' | 'right' | 'center') => (
+        <div style={{ 
+            textAlign: alignment,
+            marginTop: '12px', 
+            paddingLeft: alignment === 'left' ? '12px' : '0',
+            paddingRight: alignment === 'right' ? '12px' : '0',
+            marginBottom: '10px'
+        }}>
+            <h3 style={{ fontSize: '8px', fontWeight: 'bold', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '4px' }}>Vehicle</h3>
+            <p style={{ display: 'inline-block', fontSize: '14px', fontWeight: '900', backgroundColor: '#FFD700', color: '#000', padding: '1px 6px', borderRadius: '3px', border: '1px solid rgba(0,0,0,0.1)' }}>{vehicle?.registration}</p>
+            <p style={{ fontSize: '10px', fontWeight: 'bold', color: '#64748b', marginTop: '2px' }}>{vehicle?.make} {vehicle?.model}</p>
+        </div>
+    );
+
+    const renderCustomerBlock = (alignment: 'left' | 'right' | 'center') => (
+        <div style={{ 
+            textAlign: alignment,
+            marginTop: '12px', 
+            paddingLeft: alignment === 'left' ? '12px' : '0',
+            paddingRight: alignment === 'right' ? '12px' : '0',
+            marginBottom: '10px'
+        }}>
+            <h3 style={{ fontSize: '8px', fontWeight: 'bold', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '4px' }}>Customer</h3>
+            <p style={{ fontSize: '14px', fontWeight: 'bold', color: '#000' }}>{customer?.forename} {customer?.surname}</p>
+            <p style={{ fontSize: '11px', color: '#64748b' }}>{customer?.addressLine1}, {customer?.city}, {customer?.postcode}</p>
+        </div>
+    );
+
     const renderSectionHeader = (title: string) => (
         <tr className="bg-gray-100/50">
             <td colSpan={4} style={{ padding: '8px 10px', borderBottom: '2px solid #e2e8f0' }}>
@@ -130,34 +224,38 @@ export const PrintableEstimate: React.FC<PrintableEstimateProps> = ({ estimate, 
                              {/* HEADING REPEATS ON EVERY PAGE */}
                             <div className="print-header-padding" style={{ height: '10mm' }}></div>
                             <div id="estimate-print-header" style={{ paddingBottom: '20px', marginBottom: '20px', borderBottom: '2px solid #000', margin: '0 15mm 20px 15mm' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                    <div style={{ flex: 1 }}>
-                                        {entityDetails?.logoUrl && (
-                                            <img src={entityDetails.logoUrl} alt="Logo" style={{ height: '50px', marginBottom: '8px', objectFit: 'contain' }} />
-                                        ) || (
-                                            <div style={{ fontSize: '20px', fontWeight: '900', color: '#000', marginBottom: '8px' }}>BROOKSPEED</div>
-                                        )}
-                                        <h1 style={{ fontSize: '20px', fontWeight: '900', color: '#000', margin: '0 0 2px 0' }}>
-                                            {entityDetails?.name || 'BROOKSPEED'}
-                                        </h1>
-                                        <div style={{ fontSize: '10px', color: '#000', fontWeight: '500' }}>
-                                            <p>{entityDetails?.addressLine1}, {entityDetails?.city}, {entityDetails?.postcode}</p>
-                                            <div style={{ marginTop: '5px', display: 'flex', gap: '15px' }}>
-                                                {entityDetails?.vatNumber && <p>VAT: {entityDetails.vatNumber}</p>}
-                                                {entityDetails?.email && <p>{entityDetails.email}</p>}
-                                            </div>
+                                {(() => {
+                                    const layout = entityDetails?.layoutSettings || {};
+                                    const logoPos = layout.logoPosition || 'right';
+                                    const brandingPos = layout.brandingPosition || 'left';
+                                    const detailsPos = layout.detailsPosition || (layout.estimateNumberPosition === 'right' ? 'right' : 'left');
+                                    const vehiclePos = layout.vehiclePosition || 'left';
+                                    const customerPos = layout.customerPosition || 'none';
+
+                                    const renderSlot = (pos: 'left' | 'right' | 'center') => (
+                                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: pos === 'right' ? 'flex-end' : (pos === 'center' ? 'center' : 'flex-start') }}>
+                                            {logoPos === pos && renderLogo(layout, pos)}
+                                            {brandingPos === pos && renderBranding(pos)}
+                                            {vehiclePos === pos && renderVehicleBlock(pos)}
+                                            {customerPos === pos && renderCustomerBlock(pos)}
+                                            {detailsPos === pos && renderDetailsBlock(pos)}
                                         </div>
-                                    </div>
-                                    <div style={{ textAlign: 'right' }}>
-                                        <h2 style={{ fontSize: '32px', fontWeight: '900', color: '#475569', margin: 0, lineHeight: 1 }}>
-                                            {depositAmount && depositAmount > 0 ? 'DEPOSIT RECEIPT' : 'ESTIMATE'}
-                                        </h2>
-                                        <div style={{ marginTop: '12px' }}>
-                                            <p style={{ fontFamily: 'monospace', fontSize: '14px', fontWeight: 'bold', color: '#000' }}>#{estimate?.estimateNumber}</p>
-                                            <p style={{ marginTop: '2px', fontSize: '11px', color: '#6b7280' }}>Date: {getDisplayDate(estimate.issueDate)}</p>
+                                    );
+
+                                    return (
+                                        <div style={{ 
+                                            display: 'flex', 
+                                            justifyContent: 'space-between', 
+                                            alignItems: 'flex-start', 
+                                            paddingBottom: '20px', 
+                                            gap: '20px'
+                                        }}>
+                                            {renderSlot('left')}
+                                            {renderSlot('center')}
+                                            {renderSlot('right')}
                                         </div>
-                                    </div>
-                                </div>
+                                    );
+                                })()}
                             </div>
                         </td>
                     </tr>
@@ -167,17 +265,14 @@ export const PrintableEstimate: React.FC<PrintableEstimateProps> = ({ estimate, 
                     <tr>
                         <td style={{ padding: '0 15mm' }}>
                             <main style={{ paddingBottom: '30px' }}>
-                                <div className="grid grid-cols-2 gap-10 mb-8 pb-6 border-b border-gray-100">
-                                    <div>
-                                        <h3 className="text-[8px] font-bold text-gray-400 uppercase tracking-widest mb-1">Customer</h3>
-                                        <p className="text-sm font-bold" style={{ color: '#000' }}>{customer?.forename} {customer?.surname}</p>
-                                        <p className="text-gray-600 text-[11px]">{customer?.addressLine1}, {customer?.city}, {customer?.postcode}</p>
-                                    </div>
-                                    <div>
-                                        <h3 className="text-[8px] font-bold text-gray-400 uppercase tracking-widest mb-1">Vehicle</h3>
-                                        <p className="text-base font-black font-mono bg-[#FFD700] text-black border border-black/10 px-2 py-0.5 inline-block rounded shadow-sm">{vehicle?.registration}</p>
-                                        <p className="text-gray-600 font-bold mt-1 text-[11px]">{vehicle?.make} {vehicle?.model} {vehicle?.year ? `(${vehicle.year})` : ''}</p>
-                                    </div>
+                                <div className="mb-8 pb-6 border-b border-gray-100">
+                                    {(!entityDetails?.layoutSettings?.customerPosition || entityDetails.layoutSettings.customerPosition === 'none') && (
+                                        <div>
+                                            <h3 className="text-[8px] font-bold text-gray-400 uppercase tracking-widest mb-1">Customer</h3>
+                                            <p className="text-sm font-bold" style={{ color: '#000' }}>{customer?.forename} {customer?.surname}</p>
+                                            <p className="text-gray-600 text-[11px]">{customer?.addressLine1}, {customer?.city}, {customer?.postcode}</p>
+                                        </div>
+                                    )}
                                 </div>
 
                                 <table className="w-full text-left" style={{ borderCollapse: 'collapse', marginBottom: '20px' }}>
@@ -190,30 +285,26 @@ export const PrintableEstimate: React.FC<PrintableEstimateProps> = ({ estimate, 
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {groupedEssential.packages.length > 0 && (
-                                            <>
-                                                {renderSectionHeader("Service Packages")}
-                                                {groupedEssential.packages.map(pkg => (
-                                                    <React.Fragment key={pkg.header.id}>
-                                                        {renderLine(pkg.header)}
-                                                        {pkg.children.map(child => renderLine(child, true))}
-                                                    </React.Fragment>
-                                                ))}
-                                            </>
-                                        )}
+                                        {groupedEssential.packages.map(pkg => (
+                                            <React.Fragment key={pkg.header.id}>
+                                                {renderSectionHeader(pkg.header.description)}
+                                                {renderLine(pkg.header)}
+                                                {pkg.children.map(child => renderLine(child, true))}
+                                            </React.Fragment>
+                                        ))}
                                         
                                         {groupedEssential.labor.length > 0 && (
-                                            <>
+                                            <React.Fragment>
                                                 {renderSectionHeader("Labour")}
                                                 {groupedEssential.labor.map(item => renderLine(item))}
-                                            </>
+                                            </React.Fragment>
                                         )}
 
                                         {groupedEssential.parts.length > 0 && (
-                                            <>
+                                            <React.Fragment>
                                                 {renderSectionHeader("Parts & Materials")}
                                                 {groupedEssential.parts.map(item => renderLine(item))}
-                                            </>
+                                            </React.Fragment>
                                         )}
 
                                         {essentialItems.length === 0 && (
@@ -231,30 +322,26 @@ export const PrintableEstimate: React.FC<PrintableEstimateProps> = ({ estimate, 
                                         </div>
                                         <table className="w-full text-left bg-indigo-50/20 border-x border-b border-indigo-100 rounded-b-lg">
                                             <tbody>
-                                                {groupedOptional.packages.length > 0 && (
-                                                    <>
-                                                        {renderSectionHeader("Service Packages")}
-                                                        {groupedOptional.packages.map(pkg => (
-                                                            <React.Fragment key={pkg.header.id}>
-                                                                {renderLine(pkg.header)}
-                                                                {pkg.children.map(child => renderLine(child, true))}
-                                                            </React.Fragment>
-                                                        ))}
-                                                    </>
-                                                )}
+                                                {groupedOptional.packages.map(pkg => (
+                                                    <React.Fragment key={pkg.header.id}>
+                                                        {renderSectionHeader(pkg.header.description)}
+                                                        {renderLine(pkg.header)}
+                                                        {pkg.children.map(child => renderLine(child, true))}
+                                                    </React.Fragment>
+                                                ))}
                                                 
                                                 {groupedOptional.labor.length > 0 && (
-                                                    <>
+                                                    <React.Fragment>
                                                         {renderSectionHeader("Labour")}
                                                         {groupedOptional.labor.map(item => renderLine(item))}
-                                                    </>
+                                                    </React.Fragment>
                                                 )}
 
                                                 {groupedOptional.parts.length > 0 && (
-                                                    <>
+                                                    <React.Fragment>
                                                         {renderSectionHeader("Parts & Materials")}
                                                         {groupedOptional.parts.map(item => renderLine(item))}
-                                                    </>
+                                                    </React.Fragment>
                                                 )}
                                             </tbody>
                                         </table>

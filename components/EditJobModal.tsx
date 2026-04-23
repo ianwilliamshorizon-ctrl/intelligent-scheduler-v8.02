@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useData } from '../core/state/DataContext';
 import { useApp } from '../core/state/AppContext';
 import * as T from '../types';
-import { X, Save, Car, User, FileText, Wrench, Package, DollarSign, Edit, Plus, Trash2, KeyRound, MessageSquare, ChevronUp, ChevronDown, ListChecks, PlusCircle, ClipboardCheck, CarFront, Image as ImageIcon, Ban, Expand, Loader2, Printer, CalendarDays, PlayCircle, PauseCircle, CheckCircle, RotateCcw, UserCheck, UserPlus, MoreHorizontal, Camera } from 'lucide-react';
+import { X, Save, Car, User, FileText, Wrench, Package, DollarSign, Edit, Plus, Trash2, KeyRound, MessageSquare, ChevronUp, ChevronDown, ListChecks, PlusCircle, ClipboardCheck, CarFront, Image as ImageIcon, Ban, Expand, Loader2, Printer, CalendarDays, PlayCircle, PauseCircle, CheckCircle, RotateCcw, UserCheck, UserPlus, MoreHorizontal, Camera, Info } from 'lucide-react';
 import { formatCurrency } from '../utils/formatUtils';
 import { formatDate, addDays } from '../core/utils/dateUtils';
 import { generateEstimateNumber } from '../core/utils/numberGenerators';
@@ -31,6 +31,8 @@ import { getHexFromColorName } from '../utils/colorUtils';
 import { usePrint } from '../core/hooks/usePrint';
 import { PrintableEstimate } from './estimates/PrintableEstimate';
 import AsyncMedia from './AsyncMedia';
+import MediaLightbox from './MediaLightbox';
+import SpeechToTextButton from './shared/SpeechToTextButton';
 
 interface EditJobModalProps {
     isOpen: boolean;
@@ -97,6 +99,7 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
     const print = usePrint();
 
     const depositReceiptRef = useRef<HTMLDivElement>(null);
+    const isSpeechSupported = useMemo(() => !!((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition), []);
     const triggerPrintDepositReceipt = () => {
         const estToPrint = (editableEstimate || mainEstimate || { id: 'temp', estimateNumber: 'DEPOSIT', issueDate: new Date().toISOString(), lineItems: editableJob?.lineItems || [] });
         print(
@@ -145,6 +148,8 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
     const [partSearchTerm, setPartSearchTerm] = useState('');
     const [activePartSearch, setActivePartSearch] = useState<string | null>(null);
     const [isMediaModalOpen, setIsMediaModalOpen] = useState(false);
+    const [isLightboxOpen, setIsLightboxOpen] = useState(false);
+    const [lightboxIndex, setLightboxIndex] = useState(0);
     const [mediaModalTitle, setMediaModalTitle] = useState('');
     const [mediaModalData, setMediaModalData] = useState<T.CheckInPhoto[]>([]);
     const [onMediaSaveCallback, setOnMediaSaveCallback] = useState<((media: T.CheckInPhoto[]) => void) | null>(null);
@@ -895,9 +900,9 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
                         <div className="flex items-stretch bg-gray-50 rounded-t-lg border border-gray-200 overflow-x-auto no-scrollbar">
                            <TabButton tabId="estimates" label="Estimates & Parts" icon={<DollarSign size={16}/>} isFirst />
                            <TabButton tabId="inspection" label="Inspection" icon={<ListChecks size={16}/>} />
-                           <TabButton tabId="media" label="Media" icon={<ImageIcon size={16}/>} />
                            <TabButton tabId="notes" label="Notes" icon={<MessageSquare size={16}/>} />
-                           <TabButton tabId="segments" label="Segments" icon={<CalendarDays size={16}/>} isLast />
+                           <TabButton tabId="segments" label="Segments" icon={<CalendarDays size={16}/>} />
+                           <TabButton tabId="media" label="Media" icon={<ImageIcon size={16}/>} isLast />
                         </div>
                         <div className="bg-white border-x border-b border-gray-200 rounded-b-lg shadow-sm flex-grow p-4">
                             {activeTab === 'estimates' && (
@@ -1008,7 +1013,20 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
                                                                         <option value="ok">OK</option><option value="attention">Attention</option><option value="urgent">Urgent</option><option value="na">N/A</option>
                                                                     </select>
                                                                 </td>
-                                                                <td className="py-2 px-2"><input type="text" value={tyreData?.comments || ''} onChange={e => handleTyreTextDataChange(location, 'comments', e.target.value)} className="w-full p-1 border rounded" readOnly={isReadOnly}/></td>
+                                                                <td className="py-2 px-2">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <input type="text" value={tyreData?.comments || ''} onChange={e => handleTyreTextDataChange(location, 'comments', e.target.value)} className="flex-grow p-1 border rounded min-w-[120px]" readOnly={isReadOnly}/>
+                                                                        <SpeechToTextButton 
+                                                                            onTranscript={(text) => {
+                                                                                const current = tyreData?.comments || '';
+                                                                                const space = current && !current.endsWith(' ') ? ' ' : '';
+                                                                                handleTyreTextDataChange(location, 'comments', current + space + text);
+                                                                            }}
+                                                                            disabled={isReadOnly}
+                                                                            className="!p-1.5"
+                                                                        />
+                                                                    </div>
+                                                                </td>
                                                             </tr>
                                                         );
                                                     })}
@@ -1041,13 +1059,33 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
 
                                     {(editableJob.checkInPhotos && editableJob.checkInPhotos.length > 0) ? (
                                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                                            {editableJob.checkInPhotos.map((photo) => (
-                                                <div key={photo.id} className="group relative aspect-square rounded-xl overflow-hidden bg-gray-100 border border-gray-200 shadow-sm hover:shadow-md transition-all">
+                                            {editableJob.checkInPhotos.map((photo, index) => (
+                                                <div 
+                                                    key={photo.id} 
+                                                    className="group relative aspect-square rounded-xl overflow-hidden bg-gray-100 border border-gray-200 shadow-sm hover:shadow-md transition-all cursor-pointer"
+                                                    onClick={() => {
+                                                        setLightboxIndex(index);
+                                                        setIsLightboxOpen(true);
+                                                    }}
+                                                >
                                                     <AsyncMedia 
                                                         imageId={photo.id} 
                                                         alt="Check-in"
+                                                        type={photo.type}
                                                         className="w-full h-full object-cover"
                                                     />
+                                                    <button 
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            if (window.confirm('Remove this media item?')) {
+                                                                const updated = (editableJob.checkInPhotos || []).filter(p => p.id !== photo.id);
+                                                                setEditableJob(prev => prev ? { ...prev, checkInPhotos: updated } : null);
+                                                            }
+                                                        }}
+                                                        className="absolute top-1 right-1 p-1 bg-red-600/80 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
+                                                    >
+                                                        <Trash2 size={12} />
+                                                    </button>
                                                     {photo.notes && (
                                                         <div className="absolute bottom-0 left-0 right-0 p-2 bg-black/60 backdrop-blur-sm">
                                                             <p className="text-[10px] text-white font-medium line-clamp-2">{photo.notes}</p>
@@ -1067,18 +1105,76 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
                                 </div>
                             )}
                             {activeTab === 'notes' && (
-                                <div className="space-y-3">
-                                    <h3 className="text-md font-bold">Internal Technician Notes</h3>
-                                    {(editableJob.technicianObservations || []).map((obs, index) => (
-                                        <textarea 
-                                            key={index}
-                                            value={obs}
-                                            onChange={(e) => handleTechObservationChange(index, e.target.value)}
-                                            readOnly={isReadOnly}
-                                            className="w-full p-2 border rounded bg-gray-50 h-24"
-                                            placeholder={`Observation ${index + 1}...`}
-                                        />
-                                    ))}
+                                <div className="space-y-4">
+                                    <div className="flex justify-between items-center">
+                                        <h3 className="text-lg font-bold text-gray-800">Internal Technician Notes</h3>
+                                        <p className="text-xs text-gray-500 italic">Dictate your findings line by line for the report.</p>
+                                    </div>
+
+                                    {!isSpeechSupported && (
+                                        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex gap-3 items-start animate-fade-in">
+                                            <div className="bg-amber-100 p-2 rounded-full text-amber-600">
+                                                <Info size={18} />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <p className="text-sm font-bold text-amber-900">Voice-to-Text Limited</p>
+                                                <p className="text-xs text-amber-800 leading-relaxed">
+                                                    Your current browser (Firefox) does not support the built-in dictation feature. 
+                                                    For the best experience, we recommend using <strong className="font-bold">Google Chrome</strong>, 
+                                                    <strong className="font-bold">Microsoft Edge</strong>, or <strong className="font-bold">Safari</strong>.
+                                                </p>
+                                            </div>
+                                        </div>
+                                    )}
+                                    <div className="grid grid-cols-1 gap-4">
+                                        {(editableJob.technicianObservations || []).map((obs, index) => (
+                                            <div key={index} className="relative group flex gap-3 items-start bg-white p-3 rounded-xl border border-gray-100 shadow-sm transition-all hover:shadow-md hover:border-indigo-100">
+                                                <div className="flex-grow">
+                                                    <div className="flex justify-between items-center mb-1">
+                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Observation {index + 1}</span>
+                                                    </div>
+                                                    <textarea 
+                                                        value={obs}
+                                                        onChange={(e) => handleTechObservationChange(index, e.target.value)}
+                                                        readOnly={isReadOnly}
+                                                        className="w-full p-3 border border-gray-200 rounded-lg bg-gray-50/50 h-24 text-sm focus:bg-white focus:ring-2 focus:ring-indigo-500 transition-all resize-none outline-none"
+                                                        placeholder={`Enter findings or dictate using the mic...`}
+                                                    />
+                                                </div>
+                                                <div className="flex flex-col pt-6">
+                                                    <SpeechToTextButton 
+                                                        onTranscript={(text) => {
+                                                            const current = editableJob.technicianObservations?.[index] || '';
+                                                            const space = current && !current.endsWith(' ') ? ' ' : '';
+                                                            handleTechObservationChange(index, current + space + text);
+                                                        }}
+                                                        disabled={isReadOnly}
+                                                        className="shadow-sm"
+                                                    />
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    {!isReadOnly && (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setEditableJob(prev => {
+                                                    if (!prev) return null;
+                                                    return {
+                                                        ...prev,
+                                                        technicianObservations: [...(prev.technicianObservations || []), '']
+                                                    };
+                                                });
+                                            }}
+                                            className="mt-4 flex items-center justify-center gap-2 w-full py-4 border-2 border-dashed border-gray-200 rounded-xl text-gray-400 hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50 transition-all font-bold text-sm group"
+                                        >
+                                            <div className="bg-gray-100 group-hover:bg-indigo-100 p-1 rounded-full transition-colors">
+                                                <Plus size={16} />
+                                            </div>
+                                            Add Additional Observation Line
+                                        </button>
+                                    )}
                                 </div>
                             )}
                             {activeTab === 'segments' && (
@@ -1256,7 +1352,23 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
             <div className="hidden">
             </div>
 
-            {isMediaModalOpen && <MediaManagerModal isOpen={isMediaModalOpen} onClose={() => setIsMediaModalOpen(false)} title={mediaModalTitle} initialMedia={mediaModalData} onSave={(newMedia) => { if (onMediaSaveCallback) { onMediaSaveCallback(newMedia); } setIsMediaModalOpen(false); }} />}
+            {isMediaModalOpen && (
+                <MediaManagerModal 
+                    isOpen={isMediaModalOpen}
+                    onClose={() => setIsMediaModalOpen(false)}
+                    title={mediaModalTitle}
+                    initialMedia={mediaModalData}
+                    onSave={onMediaSaveCallback}
+                />
+            )}
+
+            <MediaLightbox 
+                isOpen={isLightboxOpen}
+                onClose={() => setIsLightboxOpen(false)}
+                mediaIds={editableJob.checkInPhotos?.map(p => p.id) || []}
+                initialIndex={lightboxIndex}
+            />
+
             {isPartModalOpen && (
                  <PartFormModal 
                     isOpen={isPartModalOpen} 
