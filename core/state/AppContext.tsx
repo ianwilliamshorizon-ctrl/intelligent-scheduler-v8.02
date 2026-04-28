@@ -3,6 +3,7 @@ import * as T from '../../types';
 import { getAll, saveDocument } from '../../core/db';
 import { initialData } from '../data/initialData';
 import { COLLECTION_NAME, currentEnvironment } from '../../core/config/firebaseConfig'; 
+import { SPEECH_SETTINGS_KEY } from '../../core/utils/speechUtils';
 import { 
     getAuth, 
     signInWithEmailAndPassword, 
@@ -46,6 +47,8 @@ interface AppState {
     setSidebarOpen: (isOpen: boolean) => void;
     onSwitchEntity: () => void;
     onLogout: () => void;
+    preferredVoiceName: string | null;
+    setPreferredVoiceName: (name: string | null) => void;
 }
 
 export const AppContext = createContext<AppState | undefined>(undefined);
@@ -72,6 +75,7 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
     const [selectedEntityId, setSelectedEntityId] = useState<string>(''); 
     const [confirmation, setConfirmation] = useState({ isOpen: false, title: '', message: '', type: 'info' });
     const [backupSchedule, setBackupSchedule] = useState<T.BackupSchedule>({ enabled: false, times: ['02:00', '14:00'] });
+    const [preferredVoiceName, setPreferredVoiceNameState] = useState<string | null>(localStorage.getItem(SPEECH_SETTINGS_KEY));
     
     const syncStarted = useRef(false);
     
@@ -259,6 +263,15 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
         setSelectedEntityId(id);
         localStorage.setItem('selectedEntityId', id);
     };
+
+    const setPreferredVoiceName = (name: string | null) => {
+        setPreferredVoiceNameState(name);
+        if (name) {
+            localStorage.setItem(SPEECH_SETTINGS_KEY, name);
+        } else {
+            localStorage.removeItem(SPEECH_SETTINGS_KEY);
+        }
+    };
     
     const onSwitchEntity = () => {
     
@@ -276,7 +289,8 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
             selectedEntityId, setSelectedEntityId: handleSetSelectedEntityId, confirmation, 
             setConfirmation, backupSchedule, setBackupSchedule, appEnvironment, setAppEnvironment,
             businessEntities, filteredBusinessEntities, allWorkshops, refreshData,
-            isSidebarOpen, setSidebarOpen, onSwitchEntity, onLogout
+            isSidebarOpen, setSidebarOpen, onSwitchEntity, onLogout,
+            preferredVoiceName, setPreferredVoiceName
         }}>
             {!isAppReady ? (
                 <div style={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center', background: '#000', color: '#fff', flexDirection: 'column' }}>

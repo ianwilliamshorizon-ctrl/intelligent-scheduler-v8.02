@@ -1,6 +1,7 @@
+import { cloudSpeechSynthesis, CloudSpeechSynthesisUtterance } from '../core/utils/cloudSpeech';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Estimate, Customer, Vehicle, BusinessEntity, TaxRate, ServicePackage, Part, EstimateLineItem, Job, User, CheckInPhoto, Supplier } from '../types';
-import { Save, PlusCircle, Gauge, Info, FileText, ChevronUp, ChevronDown, Trash2, X, TrendingUp, Plus, Image as ImageIcon, History, Car, Wand2, Expand, Edit } from 'lucide-react';
+import { Save, PlusCircle, Gauge, Info, FileText, ChevronUp, ChevronDown, Trash2, X, TrendingUp, Plus, Image as ImageIcon, History, Car, Wand2, Expand, Edit, Volume2 } from 'lucide-react';
 import { formatDate, getTodayISOString, getFutureDateISOString } from '../core/utils/dateUtils';
 import { generateEstimateNumber } from '../core/utils/numberGenerators';
 import { formatCurrency } from '../utils/formatUtils';
@@ -17,6 +18,10 @@ import { calculatePackagePrices } from '../core/utils/packageUtils';
 import { HoverInfo } from './shared/HoverInfo';
 import LookupModal from './LookupModal';
 import { AddressDetails } from '../services/postcodeLookupService';
+import SpeechToTextButton from './shared/SpeechToTextButton';
+import { findBestVoice, prepareTextForSpeech } from '../core/utils/speechUtils';
+import { useApp } from '../core/state/AppContext';
+
 
 interface EditableLineItemRowProps {
     item: EstimateLineItem;
@@ -217,28 +222,84 @@ interface NotesModalProps {
 }
 
 const NotesModal: React.FC<NotesModalProps> = ({ isOpen, onClose, notes, onSave }) => {
+    const { preferredVoiceName } = useApp();
     const [localNotes, setLocalNotes] = useState(notes);
+    const [voices, setVoices] = useState<any[]>([]);
+
+    useEffect(() => {
+        const loadVoices = () => {
+            const availableVoices = cloudSpeechSynthesis.getVoices();
+            if (availableVoices.length > 0) setVoices(availableVoices);
+        };
+        loadVoices();
+        cloudSpeechSynthesis.onvoiceschanged = loadVoices;
+        return () => { cloudSpeechSynthesis.onvoiceschanged = null; };
+    }, []);
+
     useEffect(() => {
         setLocalNotes(notes);
     }, [notes, isOpen]);
+
     const handleSave = () => {
         onSave(localNotes);
         onClose();
+    };
+
+    const handleSpeak = () => {
+        cloudSpeechSynthesis.cancel();
+        if (!localNotes) return;
+
+        const plainText = prepareTextForSpeech(localNotes);
+        if (!plainText) return;
+
+        const selectedVoice = findBestVoice(voices, { 
+            gender: 'female', 
+            lang: 'en-GB',
+            preferredVoiceName 
+        });
+
+        const utterance = new CloudSpeechSynthesisUtterance(plainText);
+        if (selectedVoice) utterance.voice = selectedVoice;
+        utterance.lang = 'en-GB';
+        utterance.pitch = 0.95; // Softer/Calmer
+        utterance.rate = 0.95;  // More charismatic/deliberate
+        utterance.volume = 1.0;
+        cloudSpeechSynthesis.speak(utterance);
     };
 
     if (!isOpen) return null;
     return (
         <div className="fixed inset-0 bg-gray-900 bg-opacity-75 z-[100] flex justify-center items-center p-4">
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl h-[80vh] flex flex-col">
-                <header className="flex justify-between items-center p-4 border-b">
-                    <h2 className="text-lg font-bold">Edit Notes</h2>
-                    <button onClick={onClose}><X size={24} /></button>
+                <header className="flex justify-between items-center p-4 border-b bg-gray-50 rounded-t-xl">
+                    <div className="flex items-center gap-4">
+                        <h2 className="text-lg font-bold text-gray-800">Edit Notes</h2>
+                        <div className="flex items-center gap-2 border-l pl-4">
+                            <SpeechToTextButton 
+                                onTranscript={(text) => {
+                                    const current = localNotes || '';
+                                    const space = current && !current.endsWith(' ') ? ' ' : '';
+                                    setLocalNotes(current + space + text);
+                                }}
+                                className="!bg-white !shadow-sm hover:!bg-indigo-50 border border-gray-200"
+                            />
+                            <button
+                                type="button"
+                                onClick={handleSpeak}
+                                className="p-2 bg-white border border-gray-200 rounded-full shadow-sm hover:bg-indigo-50 text-indigo-600 transition-all active:scale-90"
+                                title="Read Aloud"
+                            >
+                                <Volume2 size={18} />
+                            </button>
+                        </div>
+                    </div>
+                    <button onClick={onClose} className="p-1 hover:bg-gray-200 rounded-full transition-colors"><X size={24} /></button>
                 </header>
-                <div className="flex-grow p-4">
+                <div className="flex-grow p-4 relative">
                     <textarea
                         value={localNotes}
                         onChange={(e) => setLocalNotes(e.target.value)}
-                        className="w-full h-full p-2 border rounded resize-none text-sm"
+                        className="w-full h-full p-4 border rounded-xl resize-none text-base focus:ring-2 focus:ring-indigo-500 outline-none bg-gray-50/50"
                         placeholder="Enter notes..."
                     />
                 </div>

@@ -6,6 +6,8 @@
     "node": "22"
   },
   "dependencies": {
+    "@google-cloud/speech": "^7.3.0",
+    "@google-cloud/text-to-speech": "^6.4.0",
     "@google/generative-ai": "^0.24.0",
     "axios": "^1.13.6",
     "cors": "^2.8.5",

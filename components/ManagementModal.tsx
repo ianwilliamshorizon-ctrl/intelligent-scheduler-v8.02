@@ -10,7 +10,7 @@ import {
 import { 
     X, Settings, Database, User as UserIcon, Car, Wrench, Package, Briefcase, 
     ShieldCheck, Users, Truck, AlertTriangle, RefreshCw, CarFront, List, Info, CheckCircle, Server, Save,
-    ArrowUpCircle, BatteryCharging, ClipboardCheck, Search, Banknote, Tag, Lock, Eye, BarChart2, Warehouse
+    ArrowUpCircle, BatteryCharging, ClipboardCheck, Search, Banknote, Tag, Lock, Eye, BarChart2, Warehouse, Volume2
 } from 'lucide-react';
 
 // Extracted Tab Views
@@ -20,7 +20,7 @@ import {
     ManagementSuppliersTab, ManagementPartsTab, ManagementPackagesTab,
     ManagementNominalCodesTab, ManagementTaxCodesTab, ManagementLiftsTab, ManagementBatteryChargersTab,
     ManagementInspectionTemplatesTab,ManagementDiscountCodesTab,
-    ManagementStorageLocationsTab
+    ManagementStorageLocationsTab, ManagementVoiceTab
 } from './management/ManagementViews';
 import { ManagementBackupTab } from './management/tabs/ManagementBackupTab';
 
@@ -97,6 +97,7 @@ const ManagementModal: React.FC<ManagementModalProps> = ({
         { id: 'taxCodes', label: 'Tax Codes', icon: Banknote, render: () => <ManagementTaxCodesTab searchTerm={searchTerm} onShowStatus={showStatus} />, permission: 'canManageTaxCodes' },
         { id: 'discountCodes', label: 'Discount Codes', icon: Tag, render: () => <ManagementDiscountCodesTab />, permission: 'canManageDiscountCodes' },
         { id: 'storageLocations', label: 'Storage Locations', icon: Warehouse, render: () => <ManagementStorageLocationsTab searchTerm={searchTerm} onShowStatus={showStatus} />, permission: 'canManageStorageLocations' },
+        { id: 'voiceSettings', label: 'AI & Voice Settings', icon: Volume2, render: () => <ManagementVoiceTab />, permission: 'canManageStaff' },
         { id: 'backup', label: 'Backup & Restore', icon: Database, render: () => <ManagementBackupTab backupSchedule={backupSchedule} setBackupSchedule={setBackupSchedule} onManualBackup={onManualBackup} onShowStatus={showStatus} />, permission: 'canManageBackups' },
     ], [searchTerm, backupSchedule, onManualBackup, setBackupSchedule, setCurrentView, onClose, onViewCustomer, onViewVehicle, onViewJob, onViewEstimate, onViewInvoice, onOpenPurchaseOrder]); // Added handlers to dependency array
 

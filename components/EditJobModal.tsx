@@ -1,8 +1,10 @@
+import { cloudSpeechSynthesis, CloudSpeechSynthesisUtterance } from '../core/utils/cloudSpeech';
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useData } from '../core/state/DataContext';
+import { findBestVoice, prepareTextForSpeech } from '../core/utils/speechUtils';
 import { useApp } from '../core/state/AppContext';
 import * as T from '../types';
-import { X, Save, Car, User, FileText, Wrench, Package, DollarSign, Edit, Plus, Trash2, KeyRound, MessageSquare, ChevronUp, ChevronDown, ListChecks, PlusCircle, ClipboardCheck, CarFront, Image as ImageIcon, Ban, Expand, Loader2, Printer, CalendarDays, PlayCircle, PauseCircle, CheckCircle, RotateCcw, UserCheck, UserPlus, MoreHorizontal, Camera, Info } from 'lucide-react';
+import { X, Save, Car, User, FileText, Wrench, Package, DollarSign, Edit, Plus, Trash2, KeyRound, MessageSquare, ChevronUp, ChevronDown, ListChecks, PlusCircle, ClipboardCheck, CarFront, Image as ImageIcon, Ban, Expand, Loader2, Printer, CalendarDays, PlayCircle, PauseCircle, CheckCircle, RotateCcw, UserCheck, UserPlus, MoreHorizontal, Camera, Info, Volume2 } from 'lucide-react';
 import { formatCurrency } from '../utils/formatUtils';
 import { formatDate, addDays } from '../core/utils/dateUtils';
 import { generateEstimateNumber } from '../core/utils/numberGenerators';
@@ -64,7 +66,7 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
 }) => {
     
     const data = useData();
-    const { currentUser, setConfirmation } = useApp();
+    const { currentUser, setConfirmation, preferredVoiceName } = useApp();
     const { 
         handleSaveItem, 
         handleSaveEstimate, 
@@ -95,7 +97,18 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
     const [editableJob, setEditableJob] = useState<T.Job | null>(null);
     const [editableEstimate, setEditableEstimate] = useState<T.Estimate | null>(null);
     const [isPrinting, setIsPrinting] = useState(false);
-    const [printBlankSheet, setPrintBlankSheet] = useState(true);
+    const [printBlankSheet, setPrintBlankSheet] = useState(false);
+    const [voices, setVoices] = useState<any[]>([]);
+
+    useEffect(() => {
+        const loadVoices = () => {
+            const availableVoices = cloudSpeechSynthesis.getVoices();
+            if (availableVoices.length > 0) setVoices(availableVoices);
+        };
+        loadVoices();
+        cloudSpeechSynthesis.onvoiceschanged = loadVoices;
+        return () => { cloudSpeechSynthesis.onvoiceschanged = null; };
+    }, []);
     const print = usePrint();
 
     const depositReceiptRef = useRef<HTMLDivElement>(null);
@@ -1141,7 +1154,7 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
                                                         placeholder={`Enter findings or dictate using the mic...`}
                                                     />
                                                 </div>
-                                                <div className="flex flex-col pt-6">
+                                                <div className="flex flex-col gap-2 pt-6">
                                                     <SpeechToTextButton 
                                                         onTranscript={(text) => {
                                                             const current = editableJob.technicianObservations?.[index] || '';
@@ -1151,6 +1164,30 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
                                                         disabled={isReadOnly}
                                                         className="shadow-sm"
                                                     />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            cloudSpeechSynthesis.cancel();
+                                                            const plainText = prepareTextForSpeech(obs);
+                                                            if (!plainText) return;
+                                                            
+                                                            const utterance = new CloudSpeechSynthesisUtterance(plainText);
+                                                            const selectedVoice = findBestVoice(voices, { 
+                                                                gender: 'female', 
+                                                                lang: 'en-GB',
+                                                                preferredVoiceName 
+                                                            });
+                                                            if (selectedVoice) utterance.voice = selectedVoice;
+                                                            
+                                                            utterance.lang = 'en-GB';
+                                                            utterance.rate = 1.0;
+                                                            cloudSpeechSynthesis.speak(utterance);
+                                                        }}
+                                                        className="p-2 bg-white border border-gray-200 rounded-full shadow-sm hover:bg-gray-50 text-indigo-600 transition-all active:scale-90"
+                                                        title="Read Aloud"
+                                                    >
+                                                        <Volume2 size={16} />
+                                                    </button>
                                                 </div>
                                             </div>
                                         ))}

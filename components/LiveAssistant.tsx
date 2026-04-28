@@ -1,6 +1,10 @@
+import { cloudSpeechSynthesis, CloudSpeechSynthesisUtterance } from '../core/utils/cloudSpeech';
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Send, Loader2, Bot, ClipboardCopy, Expand } from 'lucide-react';
+import { X, Send, Loader2, Bot, ClipboardCopy, Expand, Volume2, VolumeX } from 'lucide-react';
 import { generateContent } from '../core/services/geminiService';
+import { useApp } from '../core/state/AppContext';
+import SpeechToTextButton from './shared/SpeechToTextButton';
+import { findBestVoice, prepareTextForSpeech } from '../core/utils/speechUtils';
 import { Estimate } from '../types';
 
 interface Message {
@@ -17,12 +21,135 @@ interface LiveAssistantProps {
     onReviewPackage?: (estimate: Partial<Estimate>) => void;
 }
 
-const LiveAssistant: React.FC<LiveAssistantProps> = ({ isOpen, onClose, jobId, onAddNote }) => {
+const LiveAssistant: React.FC<LiveAssistantProps> = ({ isOpen, onClose, jobId, onAddNote, onReviewPackage }) => {
+    const { preferredVoiceName } = useApp();
     const [messages, setMessages] = useState<Message[]>([]);
+    const activeUtterance = useRef<SpeechSynthesisUtterance | null>(null);
     const [textInput, setTextInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [isExpanded, setIsExpanded] = useState(false);
+    const [isSpeaking, setIsSpeaking] = useState<string | null>(null);
+    const [responseMode, setResponseMode] = useState<'summary' | 'full'>('summary');
     const messagesEndRef = useRef<HTMLDivElement>(null);
+
+    const [voices, setVoices] = useState<any[]>([]);
+
+    useEffect(() => {
+        const loadVoices = () => {
+            const availableVoices = cloudSpeechSynthesis.getVoices();
+            if (availableVoices.length > 0) {
+                setVoices(availableVoices);
+            }
+        };
+
+        loadVoices();
+        cloudSpeechSynthesis.onvoiceschanged = loadVoices;
+        
+        return () => {
+            cloudSpeechSynthesis.onvoiceschanged = null;
+            cloudSpeechSynthesis.cancel();
+        };
+    }, []);
+
+    const speak = (text: string, messageId: string) => {
+        if (isSpeaking === messageId) {
+            cloudSpeechSynthesis.cancel();
+            setIsSpeaking(null);
+            return;
+        }
+
+        cloudSpeechSynthesis.cancel();
+        
+        const plainText = prepareTextForSpeech(text);
+        if (!plainText) return;
+
+        const selectedVoice = findBestVoice(voices, { 
+            gender: 'female', 
+            lang: 'en-GB',
+            preferredVoiceName 
+        });
+
+        // Chunking for long text (browsers often have limits on single utterance length)
+
+        // Chunking for long text (browsers often have limits on single utterance length)
+        const chunks = plainText.match(/[^.!?]+[.!?]+|\s*[^.!?]+/g) || [plainText];
+        
+        let chunkIndex = 0;
+        setIsSpeaking(messageId);
+
+        const speakNextChunk = (isRetry = false) => {
+            if (chunkIndex >= chunks.length) {
+                setIsSpeaking(null);
+                return;
+            }
+
+            const chunk = chunks[chunkIndex].trim();
+            if (!chunk) {
+                chunkIndex++;
+                speakNextChunk();
+                return;
+            }
+
+            const utterance = new CloudSpeechSynthesisUtterance(chunk);
+            activeUtterance.current = utterance;
+            
+            // Premium voices in Edge can be fragile with pitch/rate settings
+            const isPremium = selectedVoice?.name.toLowerCase().includes('natural') || 
+                              selectedVoice?.name.toLowerCase().includes('online');
+
+            utterance.lang = selectedVoice?.lang || 'en-GB';
+            if (selectedVoice) utterance.voice = selectedVoice;
+            
+            if (!isPremium) {
+                utterance.pitch = 0.95; 
+                utterance.rate = 0.95;
+            }
+            utterance.volume = 1.0;
+
+            utterance.onstart = () => console.log('LiveAssistant: Speech started');
+            utterance.onend = () => {
+                activeUtterance.current = null;
+                chunkIndex++;
+                speakNextChunk();
+            };
+
+            utterance.onerror = (e) => {
+                console.error("LiveAssistant: Speech Synthesis Error:", e.error, e);
+                activeUtterance.current = null;
+                
+                // If premium voice fails, attempt one-time fallback to standard local voice
+                if (!isRetry && (e.error === 'synthesis-failed' || e.error === 'network')) {
+                    console.warn('LiveAssistant: Premium voice failed. Falling back to local...');
+                    const localFallback = voices.find(v => 
+                        v.lang.startsWith(utterance.lang.split('-')[0]) && 
+                        !v.name.toLowerCase().includes('natural') && 
+                        !v.name.toLowerCase().includes('online')
+                    );
+                    if (localFallback) {
+                        const retryUtterance = new CloudSpeechSynthesisUtterance(chunk);
+                        activeUtterance.current = retryUtterance;
+                        retryUtterance.voice = localFallback;
+                        retryUtterance.onend = () => {
+                            activeUtterance.current = null;
+                            chunkIndex++;
+                            speakNextChunk();
+                        };
+                        cloudSpeechSynthesis.speak(retryUtterance);
+                        return;
+                    }
+                }
+                
+                setIsSpeaking(null);
+            };
+
+            if (cloudSpeechSynthesis.paused) cloudSpeechSynthesis.resume();
+            cloudSpeechSynthesis.speak(utterance);
+        };
+
+        setIsSpeaking(messageId);
+        setTimeout(() => speakNextChunk(), 150);
+    };
+
 
     const formatMessage = (text: string) => {
         return text.split('\n').map((line, i) => {
@@ -58,7 +185,15 @@ const LiveAssistant: React.FC<LiveAssistantProps> = ({ isOpen, onClose, jobId, o
         setIsLoading(true);
         
         try {
+            const toneInstruction = "You are the Brookspeed Master Technician. Your role is to advise other technicians on complex procedures, repair processes, and technical specifications with absolute authority and a smooth, charismatic confidence. Use a velvety, professional tone that is both brilliant and highly engaging. You are the expert's expert.";
+            const modeInstruction = responseMode === 'summary' 
+                ? "Keep the response extremely brief and concise—just the essential facts."
+                : "Provide a complete and helpful response with relevant details and technical context.";
+
             const prompt = `You are a technician assistant at Brookspeed. 
+            ${toneInstruction}
+            ${modeInstruction}
+            
             Job context: ${jobId || 'General'}. Provide clear specs and repair data. 
             User Question: ${currentText}`;
 
@@ -71,12 +206,13 @@ const LiveAssistant: React.FC<LiveAssistantProps> = ({ isOpen, onClose, jobId, o
             setMessages(prev => [...prev, { 
                 id: crypto.randomUUID(), 
                 role: 'model', 
-                text: "An unexpected error occurred. Please try again."
+                text: "I'm sorry, I had a bit of trouble finding that info. Could you try asking again?"
             }]);
         } finally {
             setIsLoading(false);
         }
     };
+
 
     if (!isOpen) return null;
 
@@ -88,6 +224,20 @@ const LiveAssistant: React.FC<LiveAssistantProps> = ({ isOpen, onClose, jobId, o
                     <span className="text-[10px] text-indigo-300 font-mono tracking-tighter">SECURE CLOUD ENGINE</span>
                 </div>
                 <div className="flex items-center gap-4">
+                    <div className="flex bg-indigo-800/50 p-1 rounded-lg border border-indigo-700">
+                        <button 
+                            onClick={() => setResponseMode('summary')}
+                            className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${responseMode === 'summary' ? 'bg-indigo-600 text-white shadow-sm' : 'text-indigo-300 hover:text-white'}`}
+                        >
+                            Summary
+                        </button>
+                        <button 
+                            onClick={() => setResponseMode('full')}
+                            className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${responseMode === 'full' ? 'bg-indigo-600 text-white shadow-sm' : 'text-indigo-300 hover:text-white'}`}
+                        >
+                            Full
+                        </button>
+                    </div>
                     <button onClick={() => setIsExpanded(!isExpanded)} className="text-white hover:text-gray-300">
                         <Expand size={20}/>
                     </button>
@@ -117,12 +267,29 @@ const LiveAssistant: React.FC<LiveAssistantProps> = ({ isOpen, onClose, jobId, o
                         </div>
                         
                         {msg.role === 'model' && (
-                            <button 
-                                onClick={() => onAddNote(msg.text)}
-                                className="mt-2 flex items-center gap-1.5 text-[11px] font-bold text-indigo-700 hover:text-indigo-900 bg-indigo-50 px-2 py-1 rounded border border-indigo-100 transition-colors uppercase tracking-tight"
-                            >
-                                <ClipboardCopy size={12} /> Save to Job Note
-                            </button>
+                            <div className="mt-2 flex items-center gap-2">
+                                <button 
+                                    onClick={() => {
+                                        onAddNote(msg.text);
+                                        onClose();
+                                    }}
+                                    className="flex items-center gap-1.5 text-[11px] font-bold text-indigo-700 hover:text-indigo-900 bg-indigo-50 px-2 py-1 rounded border border-indigo-100 transition-colors uppercase tracking-tight"
+                                >
+                                    <ClipboardCopy size={12} /> Save to Job Note
+                                </button>
+                                <button 
+                                    onClick={() => speak(msg.text, msg.id)}
+                                    className={`flex items-center gap-1.5 text-[11px] font-bold px-2 py-1 rounded border transition-colors uppercase tracking-tight ${
+                                        isSpeaking === msg.id 
+                                            ? 'bg-red-50 text-red-700 border-red-100 hover:bg-red-100' 
+                                            : 'bg-indigo-50 text-indigo-700 border-indigo-100 hover:bg-indigo-200'
+                                    }`}
+                                    title={isSpeaking === msg.id ? "Stop Speaking" : "Read Aloud"}
+                                >
+                                    {isSpeaking === msg.id ? <VolumeX size={12} /> : <Volume2 size={12} />}
+                                    {isSpeaking === msg.id ? "Stop" : "Speak"}
+                                </button>
+                            </div>
                         )}
                     </div>
                 ))}
@@ -146,6 +313,11 @@ const LiveAssistant: React.FC<LiveAssistantProps> = ({ isOpen, onClose, jobId, o
                         onKeyDown={(e) => e.key === 'Enter' && handleSendText()}
                         placeholder="Enter inquiry..." 
                         className="flex-grow p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm shadow-inner" 
+                        disabled={isLoading}
+                    />
+                    <SpeechToTextButton 
+                        onTranscript={(transcript) => setTextInput(prev => prev + (prev ? ' ' : '') + transcript)}
+                        className="h-[46px] w-[46px]"
                         disabled={isLoading}
                     />
                     <button 

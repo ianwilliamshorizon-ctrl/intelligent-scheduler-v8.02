@@ -1,12 +1,15 @@
-import React, { useState, useMemo } from 'react';
+import { cloudSpeechSynthesis, CloudSpeechSynthesisUtterance } from '../../../core/utils/cloudSpeech';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import * as T from '../../../types';
-import { Car, User, KeyRound, Edit, Phone, Mail, MapPin, Building, Briefcase, Expand, ImageIcon, X, Gauge, Info, Wrench, DollarSign, Printer, CheckCircle } from 'lucide-react';
+import { Car, User, KeyRound, Edit, Phone, Mail, MapPin, Building, Briefcase, Expand, ImageIcon, X, Gauge, Info, Wrench, DollarSign, Printer, CheckCircle, Volume2 } from 'lucide-react';
 import { HoverInfo } from '../../shared/HoverInfo';
 import SpeechToTextButton from '../../shared/SpeechToTextButton';
 import LiveAssistant from '../../LiveAssistant';
 import { usePrint } from '../../../core/hooks/usePrint';
 import { formatCurrency } from '../../../core/utils/formatUtils';
 import { formatDate } from '../../../core/utils/dateUtils';
+import { findBestVoice, prepareTextForSpeech } from '../../../core/utils/speechUtils';
+import { useApp } from '../../../core/state/AppContext';
 
 interface TabSectionProps {
     title: string;
@@ -42,6 +45,8 @@ interface JobDetailsTabProps {
 const JobDetailsTab: React.FC<JobDetailsTabProps> = ({ 
     editableJob, vehicle, customer, isReadOnly, purchaseOrders, onOpenPurchaseOrder, onChange, onViewCustomer, onViewVehicle, allJobs, onUpdateLinkedJob 
 }) => {
+    const { preferredVoiceName } = useApp();
+    const activeUtterance = useRef<SpeechSynthesisUtterance | CloudSpeechSynthesisUtterance | null>(null);
     const [isNotesModalOpen, setIsNotesModalOpen] = useState(false);
     const [isAssistantOpen, setIsAssistantOpen] = useState(false);
     const [hasDeposit, setHasDeposit] = useState(!!editableJob.depositAmount);
@@ -89,6 +94,47 @@ const JobDetailsTab: React.FC<JobDetailsTabProps> = ({
         return (allJobs || []).find(j => j.id === editableJob.associatedJobId);
     }, [allJobs, editableJob.associatedJobId]);
 
+
+    const [voices, setVoices] = useState<any[]>([]);
+
+    useEffect(() => {
+        const loadVoices = () => {
+            const availableVoices = cloudSpeechSynthesis.getVoices();
+            if (availableVoices.length > 0) setVoices(availableVoices);
+        };
+        loadVoices();
+        cloudSpeechSynthesis.onvoiceschanged = loadVoices;
+        return () => { cloudSpeechSynthesis.onvoiceschanged = null; };
+    }, []);
+
+    const handleSpeak = (text: string) => {
+        cloudSpeechSynthesis.cancel();
+        if (!text) return;
+
+        const plainText = prepareTextForSpeech(text);
+        if (!plainText) return;
+
+        const selectedVoice = findBestVoice(voices, { 
+            gender: 'female', 
+            lang: 'en-GB',
+            preferredVoiceName 
+        });
+
+        setTimeout(() => {
+            const utterance = new CloudSpeechSynthesisUtterance(plainText);
+            activeUtterance.current = utterance;
+            if (selectedVoice) utterance.voice = selectedVoice;
+            utterance.lang = 'en-GB';
+            utterance.pitch = 0.95;
+            utterance.rate = 1.0;
+            utterance.volume = 1.0;
+            
+            utterance.onend = () => { activeUtterance.current = null; };
+            utterance.onerror = () => { activeUtterance.current = null; };
+
+            cloudSpeechSynthesis.speak(utterance);
+        }, 100);
+    };
 
     return (
         <div className="space-y-4 pb-10">
@@ -331,7 +377,7 @@ const JobDetailsTab: React.FC<JobDetailsTabProps> = ({
                         placeholder="Add internal notes for the workshop staff..." 
                         disabled={isReadOnly} 
                     />
-                    <div className="absolute top-5 right-5">
+                    <div className="absolute top-5 right-5 flex flex-col gap-2">
                         <SpeechToTextButton 
                             onTranscript={(text) => {
                                 const current = editableJob.notes || '';
@@ -340,37 +386,55 @@ const JobDetailsTab: React.FC<JobDetailsTabProps> = ({
                             }}
                             disabled={isReadOnly}
                         />
+                        <button
+                            type="button"
+                            onClick={() => handleSpeak(editableJob.notes || '')}
+                            className="p-1.5 bg-white border border-gray-100 rounded-full shadow-sm hover:bg-gray-50 text-indigo-600 transition-all active:scale-90"
+                            title="Read Aloud"
+                        >
+                            <Volume2 size={14} />
+                        </button>
                     </div>
                 </div>
             </div>
 
             {isNotesModalOpen && (
                 <div className="fixed inset-0 bg-gray-900 bg-opacity-75 z-[100] flex justify-center items-center p-4">
-                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl h-[80vh] flex flex-col scale-in">
-                        <header className="flex justify-between items-center p-4 border-b">
-                            <h2 className="text-lg font-bold">Internal Workshop Notes</h2>
-                            <button onClick={() => setIsNotesModalOpen(false)} className="hover:rotate-90 transition-transform"><X size={24} /></button>
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl h-[80vh] flex flex-col scale-in overflow-hidden">
+                        <header className="flex justify-between items-center p-4 border-b bg-gray-50">
+                            <div className="flex items-center gap-4">
+                                <h2 className="text-lg font-bold text-gray-800">Internal Workshop Notes</h2>
+                                <div className="flex items-center gap-2 border-l pl-4">
+                                    <SpeechToTextButton 
+                                        onTranscript={(text) => {
+                                            const current = editableJob.notes || '';
+                                            const space = current && !current.endsWith(' ') ? ' ' : '';
+                                            onChange({ target: { name: 'notes', value: current + space + text } } as any);
+                                        }}
+                                        disabled={isReadOnly}
+                                        className="!bg-white !shadow-sm hover:!bg-indigo-50 border border-gray-200"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => handleSpeak(editableJob.notes || '')}
+                                        className="p-2 bg-white border border-gray-200 rounded-full shadow-sm hover:bg-indigo-50 text-indigo-600 transition-all active:scale-90"
+                                        title="Read Aloud"
+                                    >
+                                        <Volume2 size={18} />
+                                    </button>
+                                </div>
+                            </div>
+                            <button onClick={() => setIsNotesModalOpen(false)} className="hover:rotate-90 transition-transform p-1 hover:bg-gray-200 rounded-full"><X size={24} /></button>
                         </header>
                         <div className="flex-grow p-4 relative">
                             <textarea
                                 value={editableJob.notes || ''}
                                 onChange={onChange}
                                 name="notes"
-                                className="w-full h-full p-4 pr-12 border rounded-xl resize-none text-base focus:ring-2 focus:ring-indigo-500 outline-none bg-gray-50"
+                                className="w-full h-full p-4 border rounded-xl resize-none text-base focus:ring-2 focus:ring-indigo-500 outline-none bg-gray-50/50"
                                 placeholder="Enter workshop notes..."
                                 readOnly={isReadOnly}
                             />
-                            <div className="absolute top-8 right-8">
-                                <SpeechToTextButton 
-                                    onTranscript={(text) => {
-                                        const current = editableJob.notes || '';
-                                        const space = current && !current.endsWith(' ') ? ' ' : '';
-                                        onChange({ target: { name: 'notes', value: current + space + text } } as any);
-                                    }}
-                                    disabled={isReadOnly}
-                                    className="scale-125"
-                                />
-                            </div>
                         </div>
                         <footer className="p-4 border-t flex justify-end gap-2">
                             <button onClick={() => setIsNotesModalOpen(false)} className="px-6 py-2 bg-gray-200 rounded-xl font-bold hover:bg-gray-300 transition-all">Close</button>

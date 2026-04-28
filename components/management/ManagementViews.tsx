@@ -1,4 +1,3 @@
-
 export * from './tabs/ManagementCustomersTab';
 export * from './tabs/ManagementVehiclesTab';
 export * from './tabs/ManagementDiagramsTab';
@@ -15,3 +14,4 @@ export * from './tabs/ManagementBatteryChargersTab';
 export * from './tabs/ManagementInspectionTemplatesTab';
 export * from './tabs/ManagementDiscountCodesTab';
 export * from './tabs/ManagementStorageLocationsTab';
+export * from './tabs/ManagementVoiceTab';

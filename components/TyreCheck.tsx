@@ -1,6 +1,10 @@
+import { cloudSpeechSynthesis, CloudSpeechSynthesisUtterance } from '../core/utils/cloudSpeech';
 import React from 'react';
 import { TyreCheckData, TyreLocation, ChecklistItemStatus } from '../types';
-import { Check, AlertTriangle, XCircle, HelpCircle } from 'lucide-react';
+import { Check, AlertTriangle, XCircle, HelpCircle, Volume2 } from 'lucide-react';
+import SpeechToTextButton from './shared/SpeechToTextButton';
+import { findBestVoice, prepareTextForSpeech } from '../core/utils/speechUtils';
+import { useApp } from '../core/state/AppContext';
 
 interface TyreCheckProps {
     tyreData: TyreCheckData;
@@ -24,6 +28,18 @@ const tyreLabels: Record<TyreLocation, string> = {
 };
 
 const TyreCheck: React.FC<TyreCheckProps> = ({ tyreData, onUpdate, isReadOnly }) => {
+    const { preferredVoiceName } = useApp();
+    const [voices, setVoices] = React.useState<any[]>([]);
+
+    React.useEffect(() => {
+        const loadVoices = () => {
+            const availableVoices = cloudSpeechSynthesis.getVoices();
+            if (availableVoices.length > 0) setVoices(availableVoices);
+        };
+        loadVoices();
+        cloudSpeechSynthesis.onvoiceschanged = loadVoices;
+        return () => { cloudSpeechSynthesis.onvoiceschanged = null; };
+    }, []);
 
     const handleUpdate = (location: TyreLocation, field: string, value: string | number | ChecklistItemStatus) => {
         const updatedTyre = { ...tyreData[location], [field]: value };
@@ -60,9 +76,45 @@ const TyreCheck: React.FC<TyreCheckProps> = ({ tyreData, onUpdate, isReadOnly })
                                 <input type="number" value={data.pressure ?? ''} onChange={e => handleUpdate(location, 'pressure', e.target.value)} placeholder="PSI" className="w-full p-1 border rounded text-xs" disabled={isReadOnly} />
                             </div>
 
-                             <div className="flex-grow sm:flex-grow-0" style={{ minWidth: '200px' }}>
-                                <label className="text-xs text-gray-500">Comments</label>
-                                <input type="text" value={data.comments || ''} onChange={e => handleUpdate(location, 'comments', e.target.value)} className="w-full p-1 border rounded text-xs" disabled={isReadOnly} />
+                             <div className="flex-grow sm:flex-grow-0 flex items-center gap-2" style={{ minWidth: '280px' }}>
+                                <div className="flex-grow">
+                                    <label className="text-xs text-gray-500">Comments</label>
+                                    <input type="text" value={data.comments || ''} onChange={e => handleUpdate(location, 'comments', e.target.value)} className="w-full p-1 border rounded text-xs" disabled={isReadOnly} />
+                                </div>
+                                <div className="flex gap-1 pt-4">
+                                    <SpeechToTextButton 
+                                        onTranscript={(text) => {
+                                            const current = data.comments || '';
+                                            const space = current && !current.endsWith(' ') ? ' ' : '';
+                                            handleUpdate(location, 'comments', current + space + text);
+                                        }}
+                                        disabled={isReadOnly}
+                                        className="!p-1.5"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            cloudSpeechSynthesis.cancel();
+                                            const plainText = prepareTextForSpeech(data.comments || '');
+                                            if (!plainText) return;
+                                            
+                                            const utterance = new CloudSpeechSynthesisUtterance(plainText);
+                                            const selectedVoice = findBestVoice(voices, { 
+                                                gender: 'female', 
+                                                lang: 'en-GB',
+                                                preferredVoiceName 
+                                            });
+                                            if (selectedVoice) utterance.voice = selectedVoice;
+                                            
+                                            utterance.lang = 'en-GB';
+                                            cloudSpeechSynthesis.speak(utterance);
+                                        }}
+                                        className="p-1.5 bg-white border border-gray-200 rounded-full shadow-sm hover:bg-gray-50 text-indigo-600 transition-all active:scale-90"
+                                        title="Read Aloud"
+                                    >
+                                        <Volume2 size={14} />
+                                    </button>
+                                </div>
                             </div>
 
                             <div className="w-full sm:w-auto flex items-center justify-end gap-1 sm:ml-auto">

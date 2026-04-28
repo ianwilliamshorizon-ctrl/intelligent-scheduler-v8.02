@@ -4,6 +4,9 @@ const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const axios = require("axios");
 const logger = require("firebase-functions/logger");
+const textToSpeech = require('@google-cloud/text-to-speech');
+
+let ttsClient = null;
 
 /**
  * Universal Proxy Function
@@ -87,3 +90,80 @@ async function runGeminiAction(request) {
 
 // Clear call names to ensure no conflicts on Cloud Run
 exports.geminiGenerateContent = onCall({ region: "europe-west1", secrets: ["GEMINI_API_KEY"] }, runGeminiAction);
+
+// Google Cloud Text-to-Speech function
+exports.synthesizeSpeech = onCall({ region: "europe-west1" }, async (request) => {
+    const text = request.data?.text;
+    const voiceName = request.data?.voiceName || 'en-GB-Neural2-A';
+    const languageCode = request.data?.languageCode || 'en-GB';
+
+    if (!text) {
+        throw new HttpsError("invalid-argument", 'The function must be called with a "text" argument.');
+    }
+
+    try {
+        if (!ttsClient) {
+            ttsClient = new textToSpeech.TextToSpeechClient();
+        }
+
+        const req = {
+            input: { text: text },
+            voice: { languageCode: languageCode, name: voiceName },
+            audioConfig: { audioEncoding: 'MP3' },
+        };
+
+        const [response] = await ttsClient.synthesizeSpeech(req);
+        
+        if (!response.audioContent) {
+             throw new HttpsError('internal', 'Failed to generate audio content');
+        }
+
+        return { 
+            audioContent: Buffer.from(response.audioContent).toString('base64') 
+        };
+    } catch (error) {
+        logger.error("Cloud TTS Error:", error.message);
+        throw new HttpsError('internal', `Error generating speech: ${error.message}`);
+    }
+});
+
+let speechClient = null;
+
+// Google Cloud Speech-to-Text function
+exports.transcribeSpeech = onCall({ region: "europe-west1" }, async (request) => {
+    const audioContent = request.data?.audioContent;
+
+    if (!audioContent) {
+        throw new HttpsError("invalid-argument", 'The function must be called with an "audioContent" argument.');
+    }
+
+    try {
+        if (!speechClient) {
+            const speech = require('@google-cloud/speech');
+            speechClient = new speech.SpeechClient();
+        }
+
+        const audio = {
+            content: audioContent,
+        };
+
+        const config = {
+            encoding: 'WEBM_OPUS',
+            sampleRateHertz: 48000, // Typically 48000 for modern browsers
+            languageCode: 'en-GB',
+            alternativeLanguageCodes: ['en-US'],
+            enableAutomaticPunctuation: true,
+        };
+
+        const [response] = await speechClient.recognize({ config, audio });
+        
+        const transcription = response.results
+            .map(result => result.alternatives[0].transcript)
+            .join('\n');
+
+        return { text: transcription };
+    } catch (error) {
+        logger.error("Cloud STT Error:", error.message);
+        throw new HttpsError('internal', `Error transcribing speech: ${error.message}`);
+    }
+});
