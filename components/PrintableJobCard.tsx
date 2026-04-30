@@ -411,7 +411,8 @@ const PrintableJobCard: React.FC<PrintableJobCardProps> = ({
                         top: 0 !important; 
                         width: 100% !important;
                     }
-                    .printable-page { page-break-after: always; }
+                    .printable-page { page-break-after: auto; }
+                    .printable-page:not(:last-child) { page-break-after: always; }
 
                     /* Repeating Header/Footer Logic */
                     .page-header-space { height: 15mm; }

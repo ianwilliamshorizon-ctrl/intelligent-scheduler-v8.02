@@ -22,3 +22,10 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Build and Temporary files
+build_*.txt
+scratch/
+.gemini/
+.agents/
+.firebase/

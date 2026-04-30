@@ -1,11 +1,17 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { SaleVehicle, Vehicle, Customer, Job, Estimate, SaleUpsell, SalePrepCost, ServicePackage, SaleOverhead, SaleOverheadPackage, Invoice, BatteryCharger, ChargingEvent, SaleNonRecoverableCost, SaleVersion, TaxRate, BusinessEntity, EstimateLineItem, Prospect } from '../types';
-import { X, Save, Car, Tag, Repeat, DollarSign, Wrench, Shield, Trash2, PlusCircle, CheckCircle, Briefcase, Plus, FileText, ChevronDown, ChevronUp, BatteryCharging, TrendingUp, KeyRound, ChevronLeft, ChevronRight, Users, Camera } from 'lucide-react';
+import { X, Save, Car, Tag, Repeat, DollarSign, Wrench, Shield, Trash2, PlusCircle, CheckCircle, Briefcase, Plus, FileText, ChevronDown, ChevronUp, BatteryCharging, TrendingUp, KeyRound, ChevronLeft, ChevronRight, Users, Camera, Bot, Sparkles, Loader2, Volume2, VolumeX } from 'lucide-react';
 import { formatDate, addDays } from '../core/utils/dateUtils';
 import { formatCurrency } from '../utils/formatUtils';
 import SearchableSelect from './SearchableSelect';
 import { generateInvoiceId } from '../core/utils/numberGenerators';
+import { generateContent } from '../core/services/geminiService';
 import MediaManager from './MediaManager';
+import { cloudSpeechSynthesis, CloudSpeechSynthesisUtterance } from '../core/utils/cloudSpeech';
+import SpeechToTextButton from './shared/SpeechToTextButton';
+import { prepareTextForSpeech } from '../core/utils/speechUtils';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 const Section = ({ title, children, defaultOpen = false, icon: Icon }: { title: string, children?: React.ReactNode, defaultOpen?: boolean, icon: React.ElementType }) => {
     const [isOpen, setIsOpen] = useState(defaultOpen);
@@ -156,6 +162,12 @@ const ManageSaleVehicleModal: React.FC<ManageSaleVehicleModalProps> = ({ isOpen,
     const [isCharging, setIsCharging] = useState(false);
     const [selectedChargerId, setSelectedChargerId] = useState('');
 
+    // AI State
+    const [aiMessages, setAiMessages] = useState<{role: 'user' | 'model', text: string}[]>([]);
+    const [aiInput, setAiInput] = useState('');
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [isSpeaking, setIsSpeaking] = useState(false);
+
     useEffect(() => {
         let initialFormData = { ...saleVehicle };
         // Backward compatibility for data created before versioning
@@ -188,6 +200,10 @@ const ManageSaleVehicleModal: React.FC<ManageSaleVehicleModalProps> = ({ isOpen,
 
         setIsCharging(false);
         setSelectedChargerId('');
+        cloudSpeechSynthesis.cancel();
+        setIsSpeaking(false);
+        setAiMessages([]);
+        setAiInput('');
     }, [saleVehicle, isOpen]);
 
     const sortedVersions = useMemo(() => {
@@ -201,7 +217,8 @@ const ManageSaleVehicleModal: React.FC<ManageSaleVehicleModalProps> = ({ isOpen,
     }, [sortedVersions, currentVersionId]);
 
     const currentVersion = useMemo(() => {
-        return sortedVersions[currentVersionIndex];
+        if (sortedVersions.length === 0) return null;
+        return sortedVersions[currentVersionIndex] || sortedVersions[0];
     }, [sortedVersions, currentVersionIndex]);
     
     const vehicle = useMemo(() => allVehicles.find(v => v.id === formData.vehicleId), [formData.vehicleId, allVehicles]);
@@ -416,6 +433,64 @@ const ManageSaleVehicleModal: React.FC<ManageSaleVehicleModalProps> = ({ isOpen,
         }));
     };
 
+    const handleGenerateAISalesAdvice = async (userPrompt?: string) => {
+        if (isAnalyzing) return;
+        
+        const activeVersion = formData.versions.find(v => v.versionId === formData.activeVersionId);
+        if (!activeVersion) return;
+
+        setIsAnalyzing(true);
+        const isFollowUp = !!userPrompt;
+        const newMessages = [...aiMessages];
+        
+        if (isFollowUp) {
+            newMessages.push({ role: 'user', text: userPrompt! });
+            setAiMessages(newMessages);
+            setAiInput('');
+        }
+
+        try {
+            const systemContext = `You are a high-end luxury car sales expert and psychologist. 
+            Vehicle Details:
+            - Make/Model: ${vehicle?.make} ${vehicle?.model} (${vehicle?.registration})
+            - Sale Type: ${formData.saleType}
+            - List Price: ${formatCurrency(activeVersion.listPrice || 0)}
+            - Preparation: ${formatCurrency(financialSummary.prepCosts)} spent.
+            - Description: ${formData.description || 'No description provided'}
+            
+            Provide elite strategies, psychological pricing advice, and closing tactics.
+            ${!isFollowUp ? "Start by providing a comprehensive sales strategy report." : "Respond to the user's specific question in the context of this vehicle stock."}`;
+
+            const fullPrompt = `${systemContext}\n\nConversation History:\n${newMessages.map(m => `${m.role.toUpperCase()}: ${m.text}`).join('\n')}\n\n${!isFollowUp ? 'INITIAL REPORT REQUEST' : `USER QUESTION: ${userPrompt}`}`;
+
+            const result = await generateContent(fullPrompt);
+            setAiMessages([...newMessages, { role: 'model', text: result }]);
+        } catch (error) {
+            console.error("AI Analysis Error:", error);
+            setAiMessages([...newMessages, { role: 'model', text: "I encountered an error. Please try again." }]);
+        } finally {
+            setIsAnalyzing(false);
+        }
+    };
+    
+    const handleSpeakAnalysis = (text: string) => {
+        if (isSpeaking) {
+            cloudSpeechSynthesis.cancel();
+            setIsSpeaking(false);
+            return;
+        }
+        
+        const plainText = prepareTextForSpeech(text);
+        if (!plainText) return;
+        
+        const utterance = new CloudSpeechSynthesisUtterance(plainText);
+        utterance.onstart = () => setIsSpeaking(true);
+        utterance.onend = () => setIsSpeaking(false);
+        utterance.onerror = () => setIsSpeaking(false);
+        
+        cloudSpeechSynthesis.speak(utterance);
+    };
+
     if (!isOpen) return null;
 
     return (
@@ -497,6 +572,7 @@ const ManageSaleVehicleModal: React.FC<ManageSaleVehicleModalProps> = ({ isOpen,
                         </Section>
 
                         <Section title="Battery Charging Log" icon={BatteryCharging}>
+                            {/* ... existing charging log code ... */}
                             <div className="space-y-2 text-sm max-h-40 overflow-y-auto pr-2 mb-2">
                                 {(formData.chargingHistory || []).map(event => (
                                     <div key={event.id} className="p-2 bg-gray-50 rounded-lg flex justify-between items-center">
@@ -525,6 +601,116 @@ const ManageSaleVehicleModal: React.FC<ManageSaleVehicleModalProps> = ({ isOpen,
                                     </div>
                                 )}
                             </div>
+                        </Section>
+
+                        <Section title="AI Sales Assistant" icon={Sparkles} defaultOpen={aiMessages.length > 0}>
+                            {aiMessages.length > 0 ? (
+                                <div className="space-y-4">
+                                    <div className="flex justify-between items-center bg-indigo-50/50 p-2 rounded-lg">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white shadow-sm">
+                                                <Bot size={18}/>
+                                            </div>
+                                            <div>
+                                                <span className="block font-bold text-indigo-900 text-[10px] uppercase tracking-widest leading-none">Sales Intelligence</span>
+                                                <span className="text-[9px] text-indigo-400 font-medium uppercase tracking-tighter">Live Strategic Chat</span>
+                                            </div>
+                                        </div>
+                                        <button onClick={() => setAiMessages([])} className="text-[10px] text-gray-400 uppercase font-bold hover:text-red-500 transition-colors bg-white px-2 py-1 rounded border border-gray-100 shadow-sm">Reset</button>
+                                    </div>
+
+                                    <div className="space-y-6 max-h-[500px] overflow-y-auto px-1 custom-scrollbar">
+                                        {aiMessages.map((msg, idx) => (
+                                            <div key={idx} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
+                                                <div className={`group relative max-w-[90%] p-4 rounded-2xl shadow-sm text-sm leading-relaxed ${
+                                                    msg.role === 'user' 
+                                                    ? 'bg-indigo-600 text-white rounded-br-none' 
+                                                    : 'bg-white border border-indigo-100 text-gray-800 rounded-bl-none'
+                                                }`}>
+                                                    {msg.role === 'model' ? (
+                                                        <div className="prose prose-sm max-w-none prose-indigo prose-p:leading-relaxed prose-li:my-0">
+                                                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.text}</ReactMarkdown>
+                                                        </div>
+                                                    ) : (
+                                                        msg.text
+                                                    )}
+                                                    
+                                                    {msg.role === 'model' && (
+                                                        <div className="absolute -bottom-6 left-0 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            <button 
+                                                                onClick={() => handleSpeakAnalysis(msg.text)}
+                                                                className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-bold uppercase transition-all shadow-sm ${
+                                                                    isSpeaking ? 'bg-red-500 text-white scale-105' : 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200'
+                                                                }`}
+                                                            >
+                                                                {isSpeaking ? <VolumeX size={12}/> : <Volume2 size={12}/>}
+                                                                {isSpeaking ? 'Stop Audio' : 'Listen to Strategy'}
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div className="h-4"></div>
+                                            </div>
+                                        ))}
+                                        {isAnalyzing && (
+                                            <div className="flex justify-start">
+                                                <div className="bg-white border border-indigo-50 p-4 rounded-2xl rounded-bl-none shadow-sm flex items-center gap-3">
+                                                    <div className="relative">
+                                                        <Bot size={20} className="text-indigo-200"/>
+                                                        <Loader2 size={20} className="animate-spin text-indigo-600 absolute inset-0"/>
+                                                    </div>
+                                                    <span className="text-xs text-indigo-400 font-medium animate-pulse">Thinking...</span>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className="flex gap-2 pt-4 border-t border-indigo-50 mt-4 bg-white p-2 rounded-xl shadow-inner">
+                                        <div className="relative flex-grow">
+                                            <textarea 
+                                                value={aiInput}
+                                                onChange={(e) => setAiInput(e.target.value)}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter' && !e.shiftKey) {
+                                                        e.preventDefault();
+                                                        handleGenerateAISalesAdvice(aiInput);
+                                                    }
+                                                }}
+                                                placeholder="Ask for deeper insights, email drafts, or closing tactics..."
+                                                className="w-full p-3 text-sm border border-indigo-50 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none pr-12 min-h-[44px] max-h-32 bg-indigo-50/30"
+                                                rows={1}
+                                            />
+                                            <div className="absolute right-2 top-2">
+                                                <SpeechToTextButton 
+                                                    onTranscript={(text) => setAiInput(prev => prev + (prev ? ' ' : '') + text)}
+                                                    className="!p-1.5"
+                                                />
+                                            </div>
+                                        </div>
+                                        <button 
+                                            onClick={() => handleGenerateAISalesAdvice(aiInput)}
+                                            disabled={isAnalyzing || !aiInput.trim()}
+                                            className="p-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-all shadow-md flex-shrink-0"
+                                            title="Send Message"
+                                        >
+                                            {isAnalyzing ? <Loader2 size={20} className="animate-spin"/> : <Sparkles size={20}/>}
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="text-center p-4 bg-indigo-50 rounded-lg border border-dashed border-indigo-200">
+                                    <Bot size={32} className="mx-auto text-indigo-300 mb-2"/>
+                                    <p className="text-sm text-indigo-900 font-medium mb-3">Let AI analyze this vehicle and suggest sales strategies.</p>
+                                    <button 
+                                        onClick={() => handleGenerateAISalesAdvice()}
+                                        disabled={isAnalyzing}
+                                        className="w-full py-2 bg-indigo-600 text-white rounded-lg font-bold flex items-center justify-center gap-2 hover:bg-indigo-700 disabled:opacity-50"
+                                    >
+                                        {isAnalyzing ? <Loader2 size={16} className="animate-spin"/> : <Sparkles size={16}/>}
+                                        {isAnalyzing ? 'Analyzing Vehicle...' : 'Generate Sales Strategy'}
+                                    </button>
+                                </div>
+                            )}
                         </Section>
                     </div>
 

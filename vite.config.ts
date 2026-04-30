@@ -32,16 +32,10 @@ export default defineConfig(({ mode }) => {
       build: {
         rollupOptions: {
           output: {
-            manualChunks: {
-              'vendor-react': ['react', 'react-dom', 'react-router-dom'],
-              'vendor-ui': ['lucide-react', '@mui/material', '@emotion/react', '@emotion/styled'],
-              'vendor-charts': ['recharts'],
-              'vendor-utils': ['lodash', 'date-fns', 'papaparse'],
-              'vendor-firebase': ['firebase/app', 'firebase/auth', 'firebase/firestore', 'firebase/storage'],
-            }
+            // Manual chunking disabled temporarily to debug runtime errors
           }
         },
-        chunkSizeWarningLimit: 2000,
+        chunkSizeWarningLimit: 1000,
       }
     };
 });

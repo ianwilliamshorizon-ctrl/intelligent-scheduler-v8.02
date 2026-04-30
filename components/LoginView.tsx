@@ -100,7 +100,14 @@ const LoginView: React.FC<LoginViewProps> = ({ users, onLogin, environment, busi
                     <div className="absolute top-0 left-0 w-full h-full bg-white/10 opacity-20 transform -skew-y-6 origin-top-left scale-150"></div>
                     <div className="relative z-10">
                         <div className="mx-auto bg-white/20 w-24 h-24 rounded-2xl flex items-center justify-center mb-6 backdrop-blur-md shadow-xl border border-white/30 overflow-hidden transform hover:scale-110 transition-transform duration-300">
-                             <img src="/logo.png" alt="Logo" className="w-full h-full object-contain p-2" />
+                             <img 
+                                src={businessEntities[0]?.logoUrl || "/logo.png"} 
+                                alt="Logo" 
+                                className="w-full h-full object-contain p-2" 
+                                onError={(e) => {
+                                    (e.target as HTMLImageElement).src = "/logo.png";
+                                }}
+                             />
                         </div>
                         <h1 className="text-xl font-black text-white tracking-widest uppercase text-center">
                             <span className="md:hidden">Brookspeed</span>

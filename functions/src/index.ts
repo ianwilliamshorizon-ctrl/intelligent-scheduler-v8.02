@@ -1,22 +1,32 @@
 import * as functions from "firebase-functions";
 import { initializeApp } from "firebase-admin/app";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import textToSpeech from '@google-cloud/text-to-speech';
+import * as textToSpeech from '@google-cloud/text-to-speech';
 
 initializeApp();
 
-// Create a client for TTS
-const ttsClient = new textToSpeech.TextToSpeechClient();
-
-// Get the Gemini API key from the Firebase functions configuration
-const geminiAPIKey = functions.config().gemini.key;
+// Lazy initialization helpers
+let ttsClient: textToSpeech.TextToSpeechClient | undefined;
 let genAI: GoogleGenerativeAI | undefined;
 
-if (!geminiAPIKey) {
-  console.error("Gemini API key not found in Firebase functions configuration!");
-} else {
-  genAI = new GoogleGenerativeAI(geminiAPIKey);
-}
+const getTtsClient = () => {
+    if (!ttsClient) {
+        ttsClient = new textToSpeech.TextToSpeechClient();
+    }
+    return ttsClient;
+};
+
+const getGenAI = () => {
+    if (!genAI) {
+        const geminiAPIKey = functions.config().gemini?.key;
+        if (!geminiAPIKey) {
+            console.error("Gemini API key not found in Firebase functions configuration!");
+            return null;
+        }
+        genAI = new GoogleGenerativeAI(geminiAPIKey);
+    }
+    return genAI;
+};
 
 // On-call function to interact with the Gemini API
 export const generateContent = functions.https.onCall(async (data, context) => {
@@ -39,6 +49,7 @@ export const generateContent = functions.https.onCall(async (data, context) => {
     }
 
     try {
+        const genAI = getGenAI();
         if (!genAI) {
           throw new Error("Gemini AI not initialized. Check API key configuration.");
         }
@@ -83,7 +94,7 @@ export const synthesizeSpeech = functions.https.onCall(async (data, context) => 
             audioConfig: { audioEncoding: 'MP3' as const },
         };
 
-        const [response] = await ttsClient.synthesizeSpeech(request);
+        const [response] = await getTtsClient().synthesizeSpeech(request);
         
         if (!response.audioContent) {
              throw new Error('Failed to generate audio content');

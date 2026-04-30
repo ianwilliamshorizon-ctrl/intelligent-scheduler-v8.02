@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback, Suspense, lazy } from 'react';
 import { BrowserRouter as Router } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -12,28 +12,30 @@ import { formatDate, dateStringToDate } from './core/utils/dateUtils';
 import useModalState from './core/hooks/useModalState';
 import { useWorkshopActions } from './core/hooks/useWorkshopActions';
 
-// Layout & Views
+// Layout & Core Components
 import MainLayout from './components/MainLayout';
 import AppModals from './components/AppModals';
-import DashboardView from './components/DashboardView';
-import DirectorsDashboard from './components/DirectorsDashboard';
-import DispatchView from './modules/workshop/DispatchView';
-import WorkflowView from './components/WorkflowView';
-import JobsView from './modules/workshop/JobsView';
-import EstimatesView from './modules/workshop/EstimatesView';
-import InvoicesView from './modules/workshop/InvoicesView';
-import PurchaseOrdersView from './modules/workshop/PurchaseOrdersView';
-import SalesView from './components/SalesView';
-import StorageView from './components/StorageView';
-import RentalsView from './components/RentalsView';
-import ConciergeView from './components/ConciergeView';
-import CommunicationsView from './components/CommunicationsView';
-import AbsenceView from './components/AbsenceView';
-import InquiriesView from './components/InquiriesView';
-import FinancialReporting from './components/FinancialReporting';
-import ManagementModal from './components/ManagementModal';
 import LoginView from './components/LoginView';
-import HelpCentre from './components/HelpCentre';
+
+// Lazy Loaded Views
+const DashboardView = lazy(() => import('./components/DashboardView'));
+const DirectorsDashboard = lazy(() => import('./components/DirectorsDashboard'));
+const DispatchView = lazy(() => import('./modules/workshop/DispatchView'));
+const WorkflowView = lazy(() => import('./components/WorkflowView'));
+const JobsView = lazy(() => import('./modules/workshop/JobsView'));
+const EstimatesView = lazy(() => import('./modules/workshop/EstimatesView'));
+const InvoicesView = lazy(() => import('./modules/workshop/InvoicesView'));
+const PurchaseOrdersView = lazy(() => import('./modules/workshop/PurchaseOrdersView'));
+const SalesView = lazy(() => import('./components/SalesView'));
+const StorageView = lazy(() => import('./components/StorageView'));
+const RentalsView = lazy(() => import('./components/RentalsView'));
+const ConciergeView = lazy(() => import('./components/ConciergeView'));
+const CommunicationsView = lazy(() => import('./components/CommunicationsView'));
+const AbsenceView = lazy(() => import('./components/AbsenceView'));
+const InquiriesView = lazy(() => import('./components/InquiriesView'));
+const FinancialReporting = lazy(() => import('./components/FinancialReporting'));
+const ManagementModal = lazy(() => import('./components/ManagementModal'));
+const HelpCentre = lazy(() => import('./components/HelpCentre'));
 
 // --- INACTIVITY HOOK ---
 const useInactivityLogout = (logoutFn: () => void, isAuthenticated: boolean, timeoutMs: number = 30 * 60 * 1000) => {
@@ -324,7 +326,7 @@ const App = () => {
             case 'purchaseOrders':
                 return <PurchaseOrdersView onOpenPurchaseOrderModal={(po) => setters.setPoModal({isOpen: true, po})} onViewPurchaseOrder={(po) => setters.setViewPoModal({isOpen: true, po})} onExport={(data, type) => setters.setExportModal({isOpen: true, type: type as any, items: data})} onOpenBatchAddModal={() => setters.setBatchPoModalOpen(true)} onOpenBatchUpdateRefModal={() => setters.setBatchUpdatePoRefModalOpen(true)} />;
             case 'sales':
-                return <SalesView entity={businessEntities.find(e => e.id === selectedEntityId) || businessEntities[0]} onManageSaleVehicle={(sv) => setters.setManageSaleVehicleModal({isOpen: true, saleVehicle: sv})} onAddSaleVehicle={() => setters.setAddSaleVehicleModalOpen(true)} onGenerateReport={() => setters.setSalesReportModal(true)} onAddProspect={() => setters.setProspectModal({isOpen: true, prospect: null})} onEditProspect={(p) => setters.setProspectModal({isOpen: true, prospect: p})} onViewCustomer={(id) => setters.setCustomerModal({isOpen: true, customerId: id})} />;
+                return <SalesView entity={businessEntities.find(e => e.id === selectedEntityId) || businessEntities[0]} onManageSaleVehicle={(sv) => setters.setManageSaleVehicleModal({isOpen: true, saleVehicle: sv})} onAddSaleVehicle={() => setters.setAddSaleVehicleModalOpen(true)} onGenerateReport={() => setters.setSalesReportModal(true)} onAddProspect={() => setters.setProspectModal({isOpen: true, prospect: null})} onEditProspect={(p) => setters.setProspectModal({isOpen: true, prospect: p})} onViewCustomer={(id) => setters.setCustomerModal({isOpen: true, customerId: id})} onPrintProspects={() => setters.setProspectsReportModal(true)} />;
             case 'storage':
                 return <StorageView entity={businessEntities.find(e => e.id === selectedEntityId)!} onSaveBooking={(b) => handleSaveItem(setStorageBookings, b as any, 'brooks_storageBookings')} onBookOutVehicle={(id) => { const b = (storageBookings || []).find(sb => sb.id === id); if(b) setters.setCheckOutJob({id: `temp_job_${id}`, vehicleId: b.vehicleId, customerId: b.customerId } as any) }} onViewInvoice={(inv) => setters.setViewInvoiceModal({isOpen: true, invoice: (invoices || []).find(i => i.id === inv) || null})} onAddCustomerAndVehicle={(c, v) => { handleSaveItem(setCustomers, c, 'brooks_customers'); handleSaveItem(setVehicles, v, 'brooks_vehicles'); }} onSaveInvoice={(inv) => handleSaveItem(setInvoices, inv as any, 'brooks_invoices')} setConfirmation={setConfirmation} setViewedInvoice={(inv) => setters.setViewInvoiceModal({isOpen: true, invoice: inv})} />;
             case 'rentals':
@@ -348,7 +350,16 @@ const App = () => {
     return (
         <Router>
             <MainLayout onOpenManagement={() => setIsManagementOpen(true)} onOpenHelpCentre={() => setIsHelpCentreOpen(true)} onSearchResult={handleSearchResult}>
-                {renderCurrentView()}
+                <Suspense fallback={
+                    <div className="flex items-center justify-center h-screen bg-slate-50 dark:bg-slate-900">
+                        <div className="flex flex-col items-center gap-4">
+                            <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                            <p className="text-slate-600 dark:text-slate-400 font-medium animate-pulse text-sm">Loading module...</p>
+                        </div>
+                    </div>
+                }>
+                    {renderCurrentView()}
+                </Suspense>
                 <AppModals modals={modalsState} setters={setters} actions={modalActions} commonProps={commonProps} />
                 {isManagementOpen && (
                     <ManagementModal 

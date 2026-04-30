@@ -91,6 +91,7 @@ class CloudSpeechSynthesis {
     pause() {}
 
     async speak(utterance: CloudSpeechSynthesisUtterance) {
+        this.cancel();
         this.speaking = true;
         this.currentUtterance = utterance;
         
@@ -128,35 +129,55 @@ class CloudSpeechSynthesis {
                 'Google Cloud Premium Neural2 D (Male, AU)': { name: 'en-AU-Neural2-D', lang: 'en-AU'},
             };
             
-            const selectedVoice = utterance.voice?.name ? voiceMap[utterance.voice.name] : { name: 'en-US-Journey-F', lang: 'en-US' };
-            const effectiveVoice = selectedVoice || { name: 'en-US-Journey-F', lang: 'en-US' };
+            const selectedVoice = utterance.voice?.name ? voiceMap[utterance.voice.name] : { name: 'en-GB-Neural2-A', lang: 'en-GB' };
+            const effectiveVoice = selectedVoice || { name: 'en-GB-Neural2-A', lang: 'en-GB' };
 
-            const result = await synthesizeCloudSpeechCallable({ 
-                text: utterance.text, 
-                voiceName: effectiveVoice.name, 
-                languageCode: effectiveVoice.lang 
-            });
+            // Split text into manageable chunks (approx 4000 characters to be safe, though 5000 is the limit)
+            // We'll split by sentence to avoid mid-sentence breaks
+            const chunks = utterance.text.match(/[^.!?]+[.!?]+|\s*[^.!?]+/g) || [utterance.text];
             
-            const data = result.data as any;
-            this.currentAudio = new Audio("data:audio/mp3;base64," + data.audioContent);
-            
-            this.currentAudio.onended = () => {
-                this.speaking = false;
-                if (utterance.onend) utterance.onend(new Event('end'));
-            };
-            
-            this.currentAudio.onerror = (e) => {
-                this.speaking = false;
-                if (utterance.onerror) utterance.onerror(new Event('error'));
+            // Re-group chunks into segments under 4000 chars
+            const segments: string[] = [];
+            let currentSegment = "";
+            for (const chunk of chunks) {
+                if ((currentSegment + chunk).length > 4000) {
+                    segments.push(currentSegment.trim());
+                    currentSegment = chunk;
+                } else {
+                    currentSegment += chunk;
+                }
+            }
+            if (currentSegment) segments.push(currentSegment.trim());
+
+            for (const segment of segments) {
+                if (!this.speaking) break; // Check if cancelled
+
+                const result = await synthesizeCloudSpeechCallable({ 
+                    text: segment, 
+                    voiceName: effectiveVoice.name, 
+                    languageCode: effectiveVoice.lang 
+                });
+                
+                const data = result.data as any;
+                this.currentAudio = new Audio("data:audio/mp3;base64," + data.audioContent);
+                
+                const playPromise = new Promise<void>((resolve, reject) => {
+                    if (!this.currentAudio) return resolve();
+                    this.currentAudio.onended = () => resolve();
+                    this.currentAudio.onerror = (e) => reject(e);
+                    this.currentAudio.play().catch(reject);
+                });
+
+                await playPromise;
             }
 
-            await this.currentAudio.play();
+            this.speaking = false;
+            if (utterance.onend) utterance.onend(new Event('end'));
 
         } catch (e: any) {
             console.error("Cloud TTS Error:", e);
             this.speaking = false;
-            // Fire onerror with a mock event
-            if (utterance.onerror) utterance.onerror({ error: 'synthesis-failed' } as any);
+            if (utterance.onerror) utterance.onerror({ error: 'synthesis-failed', originalError: e } as any);
         }
     }
 }

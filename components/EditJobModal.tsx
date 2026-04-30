@@ -1372,10 +1372,12 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
                         )}
                     </div>
                     <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2">
-                        <div className="flex items-center gap-2 mr-auto sm:mr-0">
-                            <input type="checkbox" id="print-blank-sheet" checked={printBlankSheet} onChange={(e) => setPrintBlankSheet(e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
-                            <label htmlFor="print-blank-sheet" className="text-[10px] sm:text-xs text-gray-700">Blank Sheet</label>
-                        </div>
+                        {editableJob?.inspectionTemplateId && (
+                            <div className="flex items-center gap-2 mr-auto sm:mr-0">
+                                <input type="checkbox" id="print-blank-sheet" checked={printBlankSheet} onChange={(e) => setPrintBlankSheet(e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+                                <label htmlFor="print-blank-sheet" className="text-[10px] sm:text-xs text-gray-700">Blank Inspection Sheet</label>
+                            </div>
+                        )}
                         <button type="button" onClick={triggerPrint} className="flex items-center gap-2 py-2 px-3 sm:px-4 bg-gray-100 text-gray-800 rounded-lg hover:bg-gray-200 text-xs sm:text-sm font-semibold" disabled={isPrinting}>
                             <Printer size={14} /> <span className="hidden sm:inline">{isPrinting ? 'Loading...' : 'Print Card'}</span><span className="sm:hidden">Print</span>
                         </button>

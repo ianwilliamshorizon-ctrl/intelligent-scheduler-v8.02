@@ -14,9 +14,10 @@ interface SalesViewProps {
     onAddProspect: () => void;
     onEditProspect: (prospect: Prospect) => void;
     onViewCustomer: (customerId: string) => void;
+    onPrintProspects: () => void;
 }
 
-const SalesView: React.FC<SalesViewProps> = ({ entity, onManageSaleVehicle, onAddSaleVehicle, onGenerateReport, onAddProspect, onEditProspect, onViewCustomer }) => {
+const SalesView: React.FC<SalesViewProps> = ({ entity, onManageSaleVehicle, onAddSaleVehicle, onGenerateReport, onAddProspect, onEditProspect, onViewCustomer, onPrintProspects }) => {
     const { saleVehicles, vehicles, customers, prospects } = useData();
     const [activeTab, setActiveTab] = useState<'forSale' | 'prospects'>('forSale');
     const [searchTerm, setSearchTerm] = useState('');
@@ -143,9 +144,14 @@ const SalesView: React.FC<SalesViewProps> = ({ entity, onManageSaleVehicle, onAd
         <div>
             <div className="flex justify-between items-center">
                  <h2 className="text-2xl font-bold text-gray-800 mb-2">Prospects ({filteredProspects.length})</h2>
-                 <button onClick={onAddProspect} className="flex items-center gap-2 py-2 px-4 bg-green-600 text-white font-semibold rounded-lg shadow-md hover:bg-green-700">
-                    <PlusCircle size={16}/> Add Prospect
-                </button>
+                 <div className="flex items-center gap-2">
+                    <button onClick={onPrintProspects} className="flex items-center gap-2 py-2 px-4 bg-gray-100 text-gray-700 font-bold rounded-lg border border-gray-300 hover:bg-gray-200">
+                        <FileText size={16}/> Print Prospects Report
+                    </button>
+                    <button onClick={onAddProspect} className="flex items-center gap-2 py-2 px-4 bg-green-600 text-white font-semibold rounded-lg shadow-md hover:bg-green-700">
+                        <PlusCircle size={16}/> Add Prospect
+                    </button>
+                 </div>
             </div>
             <div className="bg-white border rounded-lg shadow-sm mt-4">
                 <table className="min-w-full text-sm">
@@ -153,6 +159,7 @@ const SalesView: React.FC<SalesViewProps> = ({ entity, onManageSaleVehicle, onAd
                         <tr>
                             <th className="p-3 text-left font-semibold text-gray-600">Name</th>
                             <th className="p-3 text-left font-semibold text-gray-600">Contact</th>
+                            <th className="p-3 text-left font-semibold text-gray-600 text-center">Score</th>
                             <th className="p-3 text-left font-semibold text-gray-600">Desired Vehicle</th>
                             <th className="p-3 text-left font-semibold text-gray-600">Linked Vehicle</th>
                             <th className="p-3 text-left font-semibold text-gray-600">Status / Customer</th>
@@ -173,6 +180,15 @@ const SalesView: React.FC<SalesViewProps> = ({ entity, onManageSaleVehicle, onAd
                                 <tr key={prospect.id} className="hover:bg-gray-50">
                                     <td className="p-3 font-semibold">{prospect.name}</td>
                                     <td className="p-3">{prospect.phone}<br/>{prospect.email}</td>
+                                    <td className="p-3 text-center">
+                                        <div className={`inline-block px-2 py-1 rounded font-bold text-xs ${
+                                            (prospect.prospectingScore || 0) >= 70 ? 'bg-green-100 text-green-800' : 
+                                            (prospect.prospectingScore || 0) >= 40 ? 'bg-orange-100 text-orange-800' : 
+                                            'bg-gray-100 text-gray-600'
+                                        }`}>
+                                            {prospect.prospectingScore || 0}%
+                                        </div>
+                                    </td>
                                     <td className="p-3">{prospect.desiredVehicle}</td>
                                     <td className="p-3">
                                         {linkedVehicle ? (

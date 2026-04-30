@@ -805,18 +805,20 @@ export interface SaleVersion {
 
 export interface Prospect {
     id: string;
-    firstName: string;
-    lastName: string;
+    name: string;
     email: string;
     phone?: string;
-    source?: string; // e.g., 'Website', 'Walk-in'
-    status: 'New' | 'Contacted' | 'Qualified' | 'Lost' | 'Converted';
+    source?: string;
+    status: 'Active' | 'New' | 'Contacted' | 'Qualified' | 'Lost' | 'Converted' | 'Archived';
     notes?: string;
-    interestedVehicleId?: string; // Links to SaleVehicle
-    linkedSaleVehicleId?: string; // Duplicate/Alternative name? I'll add it for compatibility
-    customerId?: string;          // Added for conversion tracking
+    desiredVehicle: string;
+    interestedVehicleId?: string;
+    linkedSaleVehicleId?: string;
+    customerId?: string;
+    entityId?: string;
     createdAt?: string;
     assignedUserId?: string;
+    prospectingScore?: number;
 }
 
 export interface SaleOverheadPackage {

@@ -3,7 +3,7 @@ import React, { useState, useMemo } from 'react';
 import ReactDOM from 'react-dom/client';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
-import { SaleVehicle, Vehicle, BusinessEntity, SaleVersion } from '../types';
+import { SaleVehicle, Vehicle, BusinessEntity, SaleVersion, Prospect } from '../types';
 import { X, Download, Loader2 } from 'lucide-react';
 import { formatCurrency } from '../utils/formatUtils';
 import { formatDate } from '../core/utils/dateUtils';
@@ -25,6 +25,7 @@ const PrintableReport: React.FC<{ reportData: any, totals: any, entity: Business
                         <th className="p-2 border-b">Vehicle</th>
                         <th className="p-2 border-b">Type</th>
                         <th className="p-2 border-b text-right">Sale/List Price</th>
+                        <th className="p-2 border-b text-center">Prospect Score</th>
                         <th className="p-2 border-b text-right">Total Costs</th>
                         <th className="p-2 border-b text-right">Gross Profit</th>
                         <th className="p-2 border-b text-right">Overheads</th>
@@ -39,6 +40,16 @@ const PrintableReport: React.FC<{ reportData: any, totals: any, entity: Business
                             <td className="p-2 border-b">{row.vehicle.make} {row.vehicle.model}</td>
                             <td className="p-2 border-b">{row.saleVehicle.saleType === 'Sale or Return' ? 'SOR' : 'Stock'}</td>
                             <td className="p-2 border-b text-right">{formatCurrency(row.financials.finalSalePrice)}</td>
+                            <td className="p-2 border-b text-center">
+                                {row.saleVehicle.status === 'For Sale' ? (
+                                    <div className="flex flex-col items-center">
+                                        <span className={`font-bold ${row.maxProspectScore >= 70 ? 'text-green-600' : row.maxProspectScore >= 40 ? 'text-orange-500' : 'text-gray-400'}`}>
+                                            {row.maxProspectScore}%
+                                        </span>
+                                        <span className="text-[8px] text-gray-400 uppercase tracking-tighter">{row.prospectCount} PROSPECT(S)</span>
+                                    </div>
+                                ) : <span className="text-gray-300">-</span>}
+                            </td>
                             <td className="p-2 border-b text-right text-red-600">({formatCurrency(row.financials.totalCosts)})</td>
                             <td className="p-2 border-b text-right font-semibold">{formatCurrency(row.financials.grossProfit)}</td>
                             <td className="p-2 border-b text-right text-red-600">({formatCurrency(row.financials.totalOverheads)})</td>
@@ -50,6 +61,7 @@ const PrintableReport: React.FC<{ reportData: any, totals: any, entity: Business
                     <tr>
                         <td colSpan={4} className="p-2">Totals</td>
                         <td className="p-2 text-right">{formatCurrency(totals.finalSalePrice)}</td>
+                        <td className="p-2 border-b"></td>
                         <td className="p-2 text-right text-red-600">({formatCurrency(totals.totalCosts)})</td>
                         <td className="p-2 text-right">{formatCurrency(totals.grossProfit)}</td>
                         <td className="p-2 text-right text-red-600">({formatCurrency(totals.totalOverheads)})</td>
@@ -106,10 +118,11 @@ interface SalesSummaryReportModalProps {
     onClose: () => void;
     saleVehicles: SaleVehicle[];
     vehicles: Vehicle[];
+    prospects: Prospect[];
     entity?: BusinessEntity;
 }
 
-const SalesSummaryReportModal: React.FC<SalesSummaryReportModalProps> = ({ isOpen, onClose, saleVehicles, vehicles, entity }) => {
+const SalesSummaryReportModal: React.FC<SalesSummaryReportModalProps> = ({ isOpen, onClose, saleVehicles, vehicles, prospects, entity }) => {
     const [startDate, setStartDate] = useState(() => formatDate(new Date(new Date().getFullYear(), 0, 1)));
     const [endDate, setEndDate] = useState(() => formatDate(new Date()));
     const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
@@ -125,10 +138,15 @@ const SalesSummaryReportModal: React.FC<SalesSummaryReportModalProps> = ({ isOpe
             .map(sv => {
                 const vehicle = vehiclesById.get(sv.vehicleId);
                 if (!vehicle) return null;
+                const vehicleProspects = prospects.filter(p => p.linkedSaleVehicleId === sv.id && p.status !== 'Lost');
+                const maxProspectScore = vehicleProspects.reduce((max, p) => Math.max(max, p.prospectingScore || 0), 0);
+
                 return {
                     saleVehicle: sv,
                     vehicle,
-                    financials: calculateSaleFinancials(sv)
+                    financials: calculateSaleFinancials(sv),
+                    maxProspectScore,
+                    prospectCount: vehicleProspects.length
                 };
             })
             .filter((item): item is NonNullable<typeof item> => item !== null)
