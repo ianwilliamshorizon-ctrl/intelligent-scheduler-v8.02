@@ -5,7 +5,7 @@ import { ChecklistSection, ChecklistItem, ChecklistItemStatus } from '../types';
 import { Check, AlertTriangle, XCircle, HelpCircle, Volume2 } from 'lucide-react';
 import SpeechToTextButton from './shared/SpeechToTextButton';
 import { findBestVoice, prepareTextForSpeech } from '../core/utils/speechUtils';
-import { useApp } from '../core/state/AppContext';
+import { AppContext } from '../core/state/AppContext';
 
 interface InspectionChecklistProps {
     checklistData: ChecklistSection[];
@@ -21,7 +21,8 @@ const statusConfig: Record<ChecklistItemStatus, { icon: React.ElementType, color
 };
 
 const InspectionChecklist: React.FC<InspectionChecklistProps> = ({ checklistData, onUpdate, isReadOnly }) => {
-    const { preferredVoiceName } = useApp();
+    const appContext = React.useContext(AppContext);
+    const preferredVoiceName = appContext?.preferredVoiceName || null;
     const [voices, setVoices] = React.useState<any[]>([]);
 
     React.useEffect(() => {

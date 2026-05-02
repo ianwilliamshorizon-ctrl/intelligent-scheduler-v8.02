@@ -357,20 +357,30 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
     const t99RateId = taxRates.find(t => t.code === 'T99')?.id;
 
     useEffect(() => {
-        if (estimate && Object.keys(estimate).length > 0) {
-            setFormData(JSON.parse(JSON.stringify(estimate)));
-        } else {
-            const initialEntity = selectedEntityId !== 'all'
-                ? selectedEntityId
-                : (businessEntities.length > 0 ? businessEntities[0].id : '');
-            setFormData({
-                customerId: '', vehicleId: '',
-                entityId: initialEntity,
-                issueDate: getTodayISOString(), expiryDate: getFutureDateISOString(30),
-                status: 'Draft', lineItems: [], notes: '', createdByUserId: currentUser.id
-            });
-        }
-    }, [estimate, isOpen, businessEntities, selectedEntityId, currentUser.id]);
+        if (!isOpen) return;
+
+        setFormData(prev => {
+            if (estimate && Object.keys(estimate).length > 0) {
+                // If we are already editing this estimate, don't overwrite local changes with background syncs
+                if (prev && prev.id === estimate.id) return prev;
+                return JSON.parse(JSON.stringify(estimate));
+            } else {
+                // Only reset if we don't have a partial form or the jobId context has changed
+                if (prev && !prev.id && (jobContext ? prev.jobId === jobContext.id : true)) return prev;
+
+                const initialEntity = selectedEntityId !== 'all'
+                    ? selectedEntityId
+                    : (businessEntities.length > 0 ? businessEntities[0].id : '');
+                return {
+                    customerId: '', vehicleId: '',
+                    entityId: initialEntity,
+                    issueDate: getTodayISOString(), expiryDate: getFutureDateISOString(30),
+                    status: 'Draft', lineItems: [], notes: '', createdByUserId: currentUser.id,
+                    jobId: jobContext?.id || ''
+                };
+            }
+        });
+    }, [estimate, isOpen, businessEntities, selectedEntityId, currentUser.id, jobContext]);
 
     const totals = useMemo(() => {
         const breakdown: { [key: string]: { net: number; vat: number; rate: number | string; name: string; } } = {};

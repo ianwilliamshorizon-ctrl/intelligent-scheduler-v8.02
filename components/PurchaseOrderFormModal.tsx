@@ -279,48 +279,56 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({
     useEffect(() => {
         if (!isOpen) return;
 
-        if (purchaseOrder) {
-            const data = JSON.parse(JSON.stringify(purchaseOrder));
-            const rawId = data.supplierId || data.supplier?.id || data.SupplierId || "";
+        setFormData(prev => {
+            if (purchaseOrder) {
+                // Prevent background sync from overwriting local changes if we're already editing this PO
+                if (prev && prev.id === purchaseOrder.id) return prev;
 
-            const isNewlyGenerated = !data.id && (data.lineItems || []).length > 0;
-            let lineItemsToSet = data.lineItems || [];
+                const data = JSON.parse(JSON.stringify(purchaseOrder));
+                const rawId = data.supplierId || data.supplier?.id || data.SupplierId || "";
 
-            if (isNewlyGenerated) {
-                lineItemsToSet = lineItemsToSet.filter((item: PurchaseOrderLineItem) => {
-                    if (!item.partNumber) return true;
-                    const part = partsMap.get(item.partNumber.toLowerCase());
-                    return !part || !part.isStockItem;
-                });
+                const isNewlyGenerated = !data.id && (data.lineItems || []).length > 0;
+                let lineItemsToSet = data.lineItems || [];
+
+                if (isNewlyGenerated) {
+                    lineItemsToSet = lineItemsToSet.filter((item: PurchaseOrderLineItem) => {
+                        if (!item.partNumber) return true;
+                        const part = partsMap.get(item.partNumber.toLowerCase());
+                        return !part || !part.isStockItem;
+                    });
+                }
+                
+                return {
+                    ...data,
+                    supplierId: String(rawId), 
+                    vehicleRegistrationRef: data.vehicleRegistrationRef || '',
+                    supplierReference: data.supplierReference || '',
+                    secondarySupplierReference: data.secondarySupplierReference || '',
+                    notes: data.notes || '',
+                    status: data.status || 'Draft',
+                    type: data.type || 'Standard',
+                    lineItems: lineItemsToSet,
+                    jobId: data.jobId || ''
+                };
+            } else {
+                // Only reset if we don't have a partial form or the jobId has changed
+                if (prev && !prev.id && prev.jobId === (jobId || '')) return prev;
+
+                return {
+                    entityId: selectedEntityId,
+                    supplierId: '',
+                    orderDate: formatDate(new Date()),
+                    status: 'Draft', 
+                    lineItems: [],
+                    notes: '',
+                    vehicleRegistrationRef: '',
+                    supplierReference: '',
+                    secondarySupplierReference: '',
+                    type: 'Standard',
+                    jobId: jobId || '',
+                };
             }
-            
-            setFormData({
-                ...data,
-                supplierId: String(rawId), 
-                vehicleRegistrationRef: data.vehicleRegistrationRef || '',
-                supplierReference: data.supplierReference || '',
-                secondarySupplierReference: data.secondarySupplierReference || '',
-                notes: data.notes || '',
-                status: data.status || 'Draft',
-                type: data.type || 'Standard',
-                lineItems: lineItemsToSet,
-                jobId: data.jobId || ''
-            });
-        } else {
-            setFormData({
-                entityId: selectedEntityId,
-                supplierId: '',
-                orderDate: formatDate(new Date()),
-                status: 'Draft', 
-                lineItems: [],
-                notes: '',
-                vehicleRegistrationRef: '',
-                supplierReference: '',
-                secondarySupplierReference: '',
-                type: 'Standard',
-                jobId: jobId || '',
-            });
-        }
+        });
     }, [purchaseOrder, isOpen, selectedEntityId, jobId]);
     
     const isReceivingDisabled = useMemo(() => formData.status === 'Draft', [formData.status]);

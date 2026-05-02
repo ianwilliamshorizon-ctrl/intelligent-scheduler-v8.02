@@ -168,7 +168,45 @@ export const DataContextProvider = DataProvider;
 export const useData = () => {
     const context = useContext(DataContext);
     if (!context) {
-        throw new Error('useData must be used within a DataContextProvider');
+        // Return a safe mock state for use outside providers (e.g., during printing)
+        return {
+            jobs: [], setJobs: () => {},
+            vehicles: [], setVehicles: () => {},
+            customers: [], setCustomers: () => {},
+            estimates: [], setEstimates: () => {},
+            invoices: [], setInvoices: () => {},
+            purchaseOrders: [], setPurchaseOrders: () => {},
+            purchases: [], setPurchases: () => {},
+            parts: [], setParts: () => {},
+            servicePackages: [], setServicePackages: () => {},
+            suppliers: [], setSuppliers: () => {},
+            engineers: [], setEngineers: () => {},
+            lifts: [], setLifts: () => {},
+            rentalVehicles: [], setRentalVehicles: () => {},
+            rentalBookings: [], setRentalBookings: () => {},
+            saleVehicles: [], setSaleVehicles: () => {},
+            saleOverheadPackages: [], setSaleOverheadPackages: () => {},
+            prospects: [], setProspects: () => {},
+            storageBookings: [], setStorageBookings: () => {},
+            storageLocations: [], setStorageLocations: () => {},
+            batteryChargers: [], setBatteryChargers: () => {},
+            nominalCodes: [], setNominalCodes: () => {},
+            nominalCodeRules: [], setNominalCodeRules: () => {},
+            absenceRequests: [], setAbsenceRequests: () => {},
+            inquiries: [], setInquiries: () => {},
+            reminders: [], setReminders: () => {},
+            auditLog: [], setAuditLog: () => {},
+            businessEntities: [], setBusinessEntities: () => {},
+            taxRates: [], setTaxRates: () => {},
+            roles: [], setRoles: () => {},
+            inspectionDiagrams: [], setInspectionDiagrams: () => {},
+            inspectionTemplates: [], setInspectionTemplates: () => {},
+            discountCodes: [], setDiscountCodes: () => {},
+            financialBaselines: [], setFinancialBaselines: () => {},
+            forceRefresh: async () => {},
+            isDataLoaded: true,
+            saveRecord: async (_col: string, record: any) => record
+        } as DataContextType;
     }
     return context;
 };

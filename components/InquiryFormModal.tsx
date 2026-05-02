@@ -48,24 +48,35 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
     const [suggestedVehicle, setSuggestedVehicle] = useState<Vehicle | null>(null);
 
     useEffect(() => {
-        if (isOpen) {
-            setFormData(inquiry ? { ...inquiry } : {
-                entityId: selectedEntityId,
-                fromName: '',
-                fromContact: '',
-                message: '',
-                status: 'New',
-                actionNotes: '',
-                takenByUserId: null,
-                linkedCustomerId: null,
-                linkedVehicleId: null,
-                linkedEstimateId: null,
-            });
-            setIsAnalyzing(false);
-            setAiError('');
-            setSuggestedCustomer(null);
-            setSuggestedVehicle(null);
-        }
+        if (!isOpen) return;
+
+        setFormData(prev => {
+            if (inquiry && inquiry.id) {
+                // Prevent background sync from overwriting local changes if we're already editing this inquiry
+                if (prev && prev.id === inquiry.id) return prev;
+                return { ...inquiry };
+            } else {
+                // If it's a new inquiry, only reset if we don't have a partial form already
+                if (prev && !prev.id) return prev;
+
+                return {
+                    entityId: selectedEntityId,
+                    fromName: '',
+                    fromContact: '',
+                    message: '',
+                    status: 'New',
+                    actionNotes: '',
+                    takenByUserId: null,
+                    linkedCustomerId: null,
+                    linkedVehicleId: null,
+                    linkedEstimateId: null,
+                };
+            }
+        });
+        setIsAnalyzing(false);
+        setAiError('');
+        setSuggestedCustomer(null);
+        setSuggestedVehicle(null);
     }, [isOpen, inquiry, selectedEntityId]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {

@@ -216,8 +216,34 @@ export const PrintableEstimate: React.FC<PrintableEstimateProps> = ({ estimate, 
     );
 
     return (
-        <div className="rebuild-print-container" style={{ ...pageStyle, display: 'block', padding: '0' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <div style={{ backgroundColor: '#ffffff', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
+            <style dangerouslySetInnerHTML={{
+                __html: `
+                @media print {
+                    @page { 
+                        size: A4 portrait;
+                        margin: 15mm; 
+                    }
+                    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; counter-reset: page; }
+                    body * { 
+                        visibility: hidden; 
+                    }
+                    .rebuild-print-container, .rebuild-print-container * { 
+                        visibility: visible !important; 
+                    }
+                    .rebuild-print-container { 
+                        position: absolute !important; 
+                        left: 0 !important; 
+                        top: 0 !important; 
+                        width: 100% !important;
+                        padding: 0 !important;
+                        margin: 0 !important;
+                    }
+                }
+                * { -webkit-print-color-adjust: exact !important; color-adjust: exact !important; }
+            ` }} />
+            <div className="rebuild-print-container" style={{ width: '210mm', margin: '0 auto', backgroundColor: '#ffffff', minHeight: '100%' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead className="print-header-group">
                     <tr>
                         <td>
@@ -410,6 +436,7 @@ export const PrintableEstimate: React.FC<PrintableEstimateProps> = ({ estimate, 
                     </tr>
                 </tfoot>
             </table>
+            </div>
         </div>
     );
 };

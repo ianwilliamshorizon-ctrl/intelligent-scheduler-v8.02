@@ -304,6 +304,43 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
 
 export const useApp = () => {
     const context = useContext(AppContext);
-    if (context === undefined) throw new Error('useApp must be used within an AppProvider');
+    if (context === undefined) {
+        // Return a safe mock state for use outside providers (e.g., during printing)
+        return {
+            currentUser: null,
+            users: [],
+            setUsers: () => {},
+            roles: [],
+            jobs: [],
+            customers: [],
+            vehicles: [],
+            isAuthenticated: false,
+            currentView: 'dashboard',
+            setCurrentView: () => {},
+            login: async () => false,
+            logout: () => {},
+            resetPassword: async () => {},
+            adminResetPassword: async () => {},
+            registerAuthorizedUser: async () => {},
+            selectedEntityId: '',
+            setSelectedEntityId: () => {},
+            confirmation: { isOpen: false, title: '', message: '', type: 'info' },
+            setConfirmation: () => {},
+            backupSchedule: { enabled: false, times: [] },
+            setBackupSchedule: () => {},
+            appEnvironment: 'production',
+            setAppEnvironment: () => {},
+            businessEntities: [],
+            filteredBusinessEntities: [],
+            allWorkshops: [],
+            refreshData: async () => {},
+            isSidebarOpen: false,
+            setSidebarOpen: () => {},
+            onSwitchEntity: () => {},
+            onLogout: () => {},
+            preferredVoiceName: null,
+            setPreferredVoiceName: () => {}
+        } as AppState;
+    }
     return context;
 };

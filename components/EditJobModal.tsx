@@ -198,6 +198,8 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
         if (editableJob && vehicle && customer) {
             setIsPrinting(true);
             triggerPrintJobCard();
+            // Reset isPrinting after a delay to allow the print dialog to open and then re-enable the button
+            setTimeout(() => setIsPrinting(false), 3000);
         } else {
             setConfirmation({
                 isOpen: true,
@@ -234,42 +236,67 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
     }, [vehicle, inspectionDiagrams, vehicleImage]);
 
     useEffect(() => {
-        if (editableJob && editableEstimate) {
+        if (editableEstimate) {
             const nextPartsStatus = calculateJobPartsStatus(editableEstimate, safePurchaseOrders);
-            if (editableJob.partsStatus !== nextPartsStatus) {
-                setEditableJob({ ...editableJob, partsStatus: nextPartsStatus });
-            }
+            setEditableJob(prev => {
+                if (!prev || prev.partsStatus === nextPartsStatus) return prev;
+                return { ...prev, partsStatus: nextPartsStatus };
+            });
         }
     }, [editableEstimate, safePurchaseOrders]);
 
+    const handleJobChange = (field: keyof T.Job, value: any) => {
+        setEditableJob(prev => {
+            if (!prev) return null;
+            return { ...prev, [field]: value };
+        });
+    };
+
     useEffect(() => {
-        if (isOpen && job) {
-            const jobCopy = JSON.parse(JSON.stringify(job));
-            const obs = jobCopy.technicianObservations || [];
-            jobCopy.technicianObservations = [...obs, ...Array(Math.max(0, 10 - obs.length)).fill('')].slice(0, 10);
-            if (!jobCopy.inspectionChecklist && safeInspectionTemplates.some(t => t.isDefault)) {
-                const defaultTemplate = safeInspectionTemplates.find(t => t.isDefault);
-                if (defaultTemplate) {
-                    jobCopy.inspectionTemplateId = defaultTemplate.id;
-                    jobCopy.inspectionChecklist = (defaultTemplate.sections || []).map(s => ({
-                        ...s,
-                        id: crypto.randomUUID(),
-                        items: (s.items || []).map(i => ({ ...i, id: crypto.randomUUID(), status: 'na' }))
-                    }));
-                }
-            }
-            setEditableJob(jobCopy);
-        } else if (!isOpen) {
+        if (!isOpen) {
             setEditableJob(null);
+            return;
+        }
+
+        if (job) {
+            setEditableJob(prev => {
+                // If we are already editing this job, don't overwrite local changes with background syncs
+                if (prev && prev.id === job.id) return prev;
+
+                const jobCopy = JSON.parse(JSON.stringify(job));
+                const obs = jobCopy.technicianObservations || [];
+                // Ensure at least 10 lines, but don't truncate if there are more
+                const targetLength = Math.max(10, obs.length);
+                jobCopy.technicianObservations = [...obs, ...Array(Math.max(0, targetLength - obs.length)).fill('')];
+                
+                if (!jobCopy.inspectionChecklist && safeInspectionTemplates.some(t => t.isDefault)) {
+                    const defaultTemplate = safeInspectionTemplates.find(t => t.isDefault);
+                    if (defaultTemplate) {
+                        jobCopy.inspectionTemplateId = defaultTemplate.id;
+                        jobCopy.inspectionChecklist = (defaultTemplate.sections || []).map(s => ({
+                            ...s,
+                            id: crypto.randomUUID(),
+                            items: (s.items || []).map(i => ({ ...i, id: crypto.randomUUID(), status: 'na' }))
+                        }));
+                    }
+                }
+                return jobCopy;
+            });
         }
     }, [isOpen, job, safeInspectionTemplates]);
 
     useEffect(() => {
-        if (isOpen) {
-            const currentEstimate = mainEstimate ? JSON.parse(JSON.stringify(mainEstimate)) : null;
-            setEditableEstimate(currentEstimate);
-        } else if (!isOpen) {
+        if (!isOpen) {
             setEditableEstimate(null);
+            return;
+        }
+
+        if (mainEstimate) {
+            setEditableEstimate(prev => {
+                // If we are already editing this estimate, don't overwrite local changes with background syncs
+                if (prev && prev.id === mainEstimate.id) return prev;
+                return JSON.parse(JSON.stringify(mainEstimate));
+            });
         }
     }, [isOpen, mainEstimate]);
 
@@ -306,6 +333,13 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
         }
         return editableEstimate;
     }, [editableEstimate, editableJob, safeBusinessEntities, safeEstimates, currentUser]);
+
+    const handleEstimateChange = (field: keyof T.Estimate, value: any) => {
+        setEditableEstimate(prev => {
+            if (!prev) return null;
+            return { ...prev, [field]: value };
+        });
+    };
 
     const handleLineItemChange = useCallback((id: string, field: keyof T.EstimateLineItem, value: any) => { 
         setEditableEstimate(prev => {
@@ -536,15 +570,18 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
 
     const handleInspectionTemplateChange = (templateId: string) => {
         const template = safeInspectionTemplates.find(t => t.id === templateId);
-        if (template && editableJob) {
-            setEditableJob({
-                ...editableJob,
-                inspectionTemplateId: template.id,
-                inspectionChecklist: (template.sections || []).map(s => ({
-                    ...s,
-                    id: crypto.randomUUID(),
-                    items: (s.items || []).map(i => ({ ...i, id: crypto.randomUUID(), status: 'na' }))
-                }))
+        if (template) {
+            setEditableJob(prev => {
+                if (!prev) return null;
+                return {
+                    ...prev,
+                    inspectionTemplateId: template.id,
+                    inspectionChecklist: (template.sections || []).map(s => ({
+                        ...s,
+                        id: crypto.randomUUID(),
+                        items: (s.items || []).map(i => ({ ...i, id: crypto.randomUUID(), status: 'na' }))
+                    }))
+                };
             });
         }
     };

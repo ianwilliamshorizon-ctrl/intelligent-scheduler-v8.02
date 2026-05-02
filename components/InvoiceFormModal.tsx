@@ -184,11 +184,17 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
     }, [job, estimates]);
 
     useEffect(() => { 
-        if (isOpen) {
-            let initialData: Partial<Invoice>;
+        if (!isOpen) return;
+
+        setFormData(prev => {
             if (invoice) {
-                initialData = { ...invoice };
+                // Prevent background sync from overwriting local changes if we're already editing this invoice
+                if (prev && prev.id === invoice.id) return prev;
+                return { ...invoice };
             } else if (job) {
+                // Prevent background sync if we're already editing an invoice for this job
+                if (prev && prev.jobId === job.id) return prev;
+
                 const linkedEstimate = mainEstimate;
                 
                 // Carry over line items from estimate
@@ -207,7 +213,7 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
                     } as InvoiceLineItem);
                 }
 
-                initialData = {
+                return {
                     jobId: job.id,
                     customerId: linkedEstimate?.customerId || job.customerId,
                     vehicleId: linkedEstimate?.vehicleId || job.vehicleId,
@@ -219,7 +225,10 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
                     notes: linkedEstimate?.notes || job.notes || ''
                 };
             } else {
-                initialData = { 
+                // Only reset if we don't have a partial form already
+                if (prev && !prev.id && !prev.jobId) return prev;
+
+                return { 
                     customerId: '', 
                     vehicleId: '', 
                     entityId: (businessEntities || [])[0]?.id || '', 
@@ -230,12 +239,11 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
                     notes: '' 
                 };
             }
-            setFormData(initialData);
-            setAppliedDiscount(null);
-            setDiscountCodeInput('');
-            setDiscountError(null);
-        }
-    }, [invoice, job, isOpen, businessEntities, mainEstimate]);
+        });
+        setAppliedDiscount(null);
+        setDiscountCodeInput('');
+        setDiscountError(null);
+    }, [invoice, job, isOpen, businessEntities, mainEstimate, standardTaxRateId]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => 
         setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));

@@ -61,7 +61,11 @@ const PrintableJobCard: React.FC<PrintableJobCardProps> = ({
     const inspectionTemplate = useMemo(() => {
         if (!job?.inspectionTemplateId) return null;
         const safeTemplates = Array.isArray(inspectionTemplates) ? inspectionTemplates : [];
-        return safeTemplates.find(t => t.id === job.inspectionTemplateId);
+        const found = safeTemplates.find(t => t.id === job.inspectionTemplateId);
+        if (!found) {
+            console.warn(`Inspection template ${job.inspectionTemplateId} not found in safeTemplates`);
+        }
+        return found;
     }, [job?.inspectionTemplateId, inspectionTemplates]);
 
     const vehicleImage = useMemo(() => {
@@ -350,7 +354,7 @@ const PrintableJobCard: React.FC<PrintableJobCardProps> = ({
         </div>
     );
 
-    const blankInspectionSheet = printBlankInspectionSheet && inspectionTemplate && (
+    const blankInspectionSheet = printBlankInspectionSheet && inspectionTemplate && blankChecklistData.length > 0 && (
         <div className="bg-white font-sans text-sm text-gray-800 printable-page" style={pageStyle}>
             <header className="flex justify-between items-center mb-6 border-b pb-2">
                 <h2 className="text-2xl font-bold text-gray-800">{inspectionTemplate.name}</h2>

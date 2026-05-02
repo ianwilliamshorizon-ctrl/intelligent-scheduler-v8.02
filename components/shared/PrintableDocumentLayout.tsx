@@ -14,6 +14,28 @@ export const PrintableDocumentLayout: React.FC<PrintableDocumentLayoutProps> = (
             className="print-container font-sans text-sm text-gray-800 bg-white"
             style={{ padding: '20mm', minHeight: '297mm', boxSizing: 'border-box' }}
         >
+            <style dangerouslySetInnerHTML={{
+                __html: `
+                @media print {
+                    @page { 
+                        size: A4 portrait;
+                        margin: 0; 
+                    }
+                    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                    body * { 
+                        visibility: hidden; 
+                    }
+                    .print-container, .print-container * { 
+                        visibility: visible !important; 
+                    }
+                    .print-container { 
+                        position: absolute !important; 
+                        left: 0 !important; 
+                        top: 0 !important; 
+                        width: 100% !important;
+                    }
+                }
+            ` }} />
             <table className="w-full">
                 <thead>
                     <tr>
