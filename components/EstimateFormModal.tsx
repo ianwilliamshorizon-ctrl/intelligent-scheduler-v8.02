@@ -366,9 +366,10 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                 return JSON.parse(JSON.stringify(estimate));
             } else {
                 // Only reset if we don't have a partial form or the jobId context has changed
-                if (prev && !prev.id && (jobContext ? prev.jobId === jobContext.id : true)) return prev;
+                // We also allow reset if entityId is missing to ensure it gets the default from selectedEntityId
+                if (prev && !prev.id && prev.entityId && (jobContext ? prev.jobId === jobContext.id : true)) return prev;
 
-                const initialEntity = selectedEntityId !== 'all'
+                const initialEntity = (selectedEntityId && selectedEntityId !== 'all')
                     ? selectedEntityId
                     : (businessEntities.length > 0 ? businessEntities[0].id : '');
                 return {

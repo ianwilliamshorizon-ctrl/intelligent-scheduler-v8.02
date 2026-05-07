@@ -334,6 +334,7 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                         parts={data.parts}
                         invoices={data.invoices}
                         discountCodes={data.discountCodes}
+                        selectedEntityId={selectedEntityId}
                     />
                 </ModalSuspense>
             )}
@@ -387,6 +388,7 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                         customers={data.customers}
                         jobs={data.jobs}
                         rentalEntities={data.businessEntities.filter(e => e.type === 'Rentals')}
+                        selectedEntityId={selectedEntityId}
                     />
                 </ModalSuspense>
             )}

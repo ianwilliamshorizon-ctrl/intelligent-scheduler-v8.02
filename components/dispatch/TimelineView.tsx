@@ -43,6 +43,8 @@ interface TimelineViewProps {
     onRestart: (jobId: string, segmentId: string) => void;
     onReassign: (jobId: string, segmentId: string) => void;
     onUnscheduleSegment: (jobId: string, segmentId: string) => void;
+    onSendOffsite: (jobId: string, segmentId: string) => void;
+    onPassToSales: (jobId: string) => void;
     onOpenAssistant: (jobId: string) => void;
 }
 
@@ -52,7 +54,7 @@ export const TimelineView: React.FC<TimelineViewProps> = (props) => {
         onDragOverUnallocated, onDropOnUnallocated, onDragLeaveUnallocated,
         unallocatedJobs, allocatedSegmentsByLift, unallocatedDateFilter, setUnallocatedDateFilter, 
         showOnSiteOnly, setShowOnSiteOnly, onEditJob, onCheckIn, onOpenPurchaseOrder, 
-        onStartWork, onPause, onRestart, onReassign, onUnscheduleSegment, 
+        onStartWork, onPause, onRestart, onReassign, onUnscheduleSegment, onSendOffsite, onPassToSales,
         onOpenAssistant
     } = props;
 
@@ -156,6 +158,7 @@ export const TimelineView: React.FC<TimelineViewProps> = (props) => {
                             onPause,
                             onRestart,
                             onCheckIn,
+                            onPassToSales,
                             onQcApprove: (id: string) => {}, // Not used here
                         };
 
@@ -219,6 +222,8 @@ export const TimelineView: React.FC<TimelineViewProps> = (props) => {
                                                 onReassign={onReassign}
                                                 onOpenPurchaseOrder={onOpenPurchaseOrder}
                                                 onUnscheduleSegment={onUnscheduleSegment}
+                                                onSendOffsite={onSendOffsite}
+                                                onPassToSales={onPassToSales}
                                                 currentUser={currentUser}
                                                 onOpenAssistant={handleOpenAssistant}
                                             />

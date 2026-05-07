@@ -40,7 +40,8 @@ const FinancialsDisplay = ({ summary, saleType }: { summary: any, saleType: 'Sal
                 
                 <div className="h-2"></div>
 
-                <FinancialRow label="Vehicle Cost" value={summary.totalVehicleCost} isNegative />
+                <FinancialRow label="Vehicle Cost" value={summary.totalVehicleCost - summary.workshopCosts} isNegative />
+                <FinancialRow label="Workshop Costs" value={summary.workshopCosts} isNegative />
                 <FinancialRow label="Non-recoverable Costs" value={summary.totalNonRecoverableCosts} isNegative />
                 <FinancialRow label="Upsell Costs" value={summary.upsellCosts} isNegative />
                 
@@ -83,7 +84,8 @@ const FinancialsDisplay = ({ summary, saleType }: { summary: any, saleType: 'Sal
                 <h4 className="font-bold text-gray-800 mb-1">Owner Payout Calculation</h4>
                  <div className="space-y-1">
                     <FinancialRow label="Agreed Return Price" value={summary.baseReturn} />
-                    <FinancialRow label="Less Prep Costs" value={summary.prepCosts} isNegative />
+                    <FinancialRow label="Prep Costs (Misc)" value={summary.prepCosts - summary.workshopCosts} isNegative />
+                    {summary.workshopCosts > 0 && <FinancialRow label="Workshop Costs (Internal)" value={summary.workshopCosts} isNegative />}
                     <FinancialRow label="Final Payment to Owner" value={summary.returnToCustomer} isSubTotal />
                  </div>
             </div>
@@ -234,7 +236,13 @@ const ManageSaleVehicleModal: React.FC<ManageSaleVehicleModalProps> = ({ isOpen,
     const financialSummary = useMemo(() => {
         if (!currentVersion) return {};
         
-        const prepCosts = formData.prepCosts.reduce((sum, cost) => sum + cost.cost, 0);
+        const linkedJobs = allJobs.filter(j => j.saleVehicleId === formData.id);
+        const workshopCosts = linkedJobs.reduce((total, job) => {
+            const jobCost = (job.lineItems || []).reduce((sum, li) => (sum + (li.quantity * (li.unitCost || 0))), 0);
+            return total + jobCost;
+        }, 0);
+
+        const prepCosts = formData.prepCosts.reduce((sum, cost) => sum + cost.cost, 0) + workshopCosts;
         const upsellCosts = formData.upsells.reduce((sum, upsell) => sum + upsell.costPrice, 0);
         const upsellRevenue = formData.upsells.reduce((sum, upsell) => sum + upsell.salePrice, 0);
         const totalOverheads = formData.overheads.reduce((sum, overhead) => sum + overhead.cost, 0);
@@ -261,8 +269,8 @@ const ManageSaleVehicleModal: React.FC<ManageSaleVehicleModalProps> = ({ isOpen,
         const vatOnMargin = grossProfit > 0 ? grossProfit / 6 : 0;
         const netSalesProfit = grossProfit - vatOnMargin - totalOverheads;
 
-        return { prepCosts, upsellRevenue, upsellCosts, returnToCustomer, grossProfit, totalOverheads, vatOnMargin, netSalesProfit, finalSalePrice, baseReturn, purchasePrice, totalVehicleCost, totalNonRecoverableCosts };
-    }, [formData, currentVersion]);
+        return { prepCosts, workshopCosts, upsellRevenue, upsellCosts, returnToCustomer, grossProfit, totalOverheads, vatOnMargin, netSalesProfit, finalSalePrice, baseReturn, purchasePrice, totalVehicleCost, totalNonRecoverableCosts, linkedJobs };
+    }, [formData, currentVersion, allJobs]);
 
     const handleSave = () => {
         onSave(formData);
@@ -519,6 +527,33 @@ const ManageSaleVehicleModal: React.FC<ManageSaleVehicleModalProps> = ({ isOpen,
                                     <button onClick={() => setIsAddingOneOffPrepCost(false)} className="text-red-600"><X size={18}/></button>
                                 </div>
                             )}
+                        </Section>
+
+                        <Section title="Workshop Jobs (Internal Prep)" icon={Wrench} defaultOpen={financialSummary.linkedJobs.length > 0}>
+                            <div className="space-y-2 text-sm max-h-40 overflow-y-auto pr-2">
+                                {financialSummary.linkedJobs.length === 0 && <p className="text-xs text-gray-500 text-center p-2">No workshop jobs linked to this stock vehicle.</p>}
+                                {financialSummary.linkedJobs.map(job => {
+                                    const jobCost = (job.lineItems || []).reduce((sum, li) => (sum + (li.quantity * (li.unitCost || 0))), 0);
+                                    return (
+                                        <div key={job.id} className="flex justify-between items-center p-2 bg-indigo-50 border border-indigo-100 rounded">
+                                            <div className="flex items-center gap-2">
+                                                <Wrench size={14} className="text-indigo-500"/>
+                                                <div>
+                                                    <p className="font-semibold text-indigo-900">Job #{job.id} - {job.description || 'Workshop Prep'}</p>
+                                                    <p className="text-[10px] text-indigo-400 font-bold uppercase">{job.status} • {job.scheduledDate}</p>
+                                                </div>
+                                            </div>
+                                            <div className="text-right">
+                                                <span className="font-bold text-red-600 block">{formatCurrency(jobCost)}</span>
+                                                <span className="text-[9px] text-gray-400 uppercase font-black">Internal Cost</span>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                            <p className="mt-3 text-[10px] text-gray-500 italic bg-white p-2 rounded border border-dashed border-gray-200">
+                                Jobs linked to this vehicle's ID or flagged as 'Sales Prep' in the workshop are automatically tracked here.
+                            </p>
                         </Section>
 
                         <Section title="Non-Recoverable Costs" icon={Shield} defaultOpen>

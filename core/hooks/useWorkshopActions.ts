@@ -818,6 +818,61 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
         }
     };
 
+    const handleSendOffsite = async (jobId: string, segmentId: string) => {
+        const job = jobs.find(j => j.id === jobId);
+        if (job) {
+            const newSegments = job.segments.map(s => s.segmentId === segmentId ? { 
+                ...s, 
+                status: 'Unallocated' as const, 
+                allocatedLift: null, 
+                scheduledStartSegment: null, 
+                engineerId: null 
+            } : s);
+            
+            const updatedJob: T.Job = { 
+                ...job, 
+                segments: newSegments, 
+                status: calculateJobStatus(newSegments),
+                vehicleStatus: 'Off-Site (Partner)',
+                notes: (job.notes || '') + `\n\n[System]: Vehicle sent Off-Site for third-party work on ${new Date().toLocaleDateString('en-GB')}.`
+            };
+            
+            await handleSaveItem(setJobs, updatedJob, 'brooks_jobs');
+            showSuccess(`Job #${jobId} moved to Off-Site status.`);
+        }
+    };
+
+    const handlePassToSales = async (jobId: string) => {
+        const job = jobs.find(j => j.id === jobId);
+        if (!job) return;
+
+        const vehicle = vehicles.find(v => v.id === job.vehicleId);
+        const matchingSales = data.saleVehicles.filter(sv => 
+            sv.vehicleId === job.vehicleId || 
+            (vehicle?.registration && sv.registration === vehicle.registration)
+        );
+
+        if (matchingSales.length === 1) {
+            const saleVehicle = matchingSales[0];
+            const updatedJob = { 
+                ...job, 
+                saleVehicleId: saleVehicle.id, 
+                isSalesPrep: true,
+                notes: (job.notes || '') + `\n\n[System]: Job passed to Sales and linked to Stock #${saleVehicle.stockNumber || saleVehicle.id}.`
+            };
+            await handleSaveItem(setJobs, updatedJob, 'brooks_jobs');
+            showSuccess(`Job linked to Sales Stock #${saleVehicle.stockNumber || saleVehicle.id}`);
+        } else {
+            const updatedJob = { 
+                ...job, 
+                isSalesPrep: true,
+                notes: (job.notes || '') + `\n\n[System]: Job flagged as Sales Prep / Warranty.`
+            };
+            await handleSaveItem(setJobs, updatedJob, 'brooks_jobs');
+            showSuccess(`Job flagged for Sales Prep`);
+        }
+    };
+
     return {
         handleSaveItem,
         handleDeleteJob,
@@ -830,6 +885,8 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
         handleQcApprove,
         handleReassignEngineer,
         handleUnscheduleSegment,
+        handleSendOffsite,
+        handlePassToSales,
         updateLinkedInquiryStatus,
         syncPurchaseOrdersFromEstimate
     };

@@ -210,6 +210,8 @@ export interface Job {
     depositAmount?: number;
     depositMethod?: string;
     checkInPhotos?: CheckInPhoto[];
+    saleVehicleId?: string;
+    isSalesPrep?: boolean;
 }
 export type VehicleStatus = 'On Site' | 'Off-Site (Partner)' | 'Awaiting Arrival' | 'Awaiting Collection' | 'Collected' | 'Cancelled';
 
@@ -663,6 +665,9 @@ export interface RentalBooking {
     status: 'Draft' | 'Confirmed' | 'Active' | 'Completed' | 'Cancelled';
     notes?: string;
     totalPrice?: number;
+    totalCost?: number;
+    bookingType?: 'Courtesy Car' | 'Rental';
+    jobId?: string;
     createdByUserId?: string;
     checkOutDetails?: {
         mileage: number;
@@ -692,6 +697,8 @@ export interface RentalVehicle {
         checkOut: string;
         checkIn: string;
     };
+    weeklyRate: number;
+    dailyRate: number;
 }
 
 export interface StorageBooking {

@@ -55,7 +55,9 @@ const SummaryMetrics: React.FC<{
     const stats = useMemo(() => {
         const activeJobs = jobs.filter(j => (selectedEntityId === 'all' || j.entityId === selectedEntityId) && j.status !== 'Cancelled');
         const jobsToday = activeJobs.flatMap(j => j.segments || []).filter(s => s.date === today && s.allocatedLift).length;
-        const vehiclesOnSiteJobs = activeJobs.filter(j => j.vehicleStatus === 'On Site').length;
+        const jobsOnSite = activeJobs.filter(j => j.vehicleStatus === 'On Site').length;
+        const jobsOffSite = activeJobs.filter(j => j.vehicleStatus === 'Off-Site (Partner)').length;
+        const vehiclesOnSiteJobs = jobsOnSite + jobsOffSite;
         
         // Add active storage bookings
         const activeStorageCount = storageBookings.filter(b => !b.endDate && (selectedEntityId === 'all' || b.entityId === selectedEntityId || selectedEntityId === 'ent_storage')).length;
@@ -146,7 +148,8 @@ const VehiclesOnSiteModal: React.FC<{
     jobs: T.Job[];
     storageBookings: T.StorageBooking[];
     vehicles: T.Vehicle[];
-}> = ({ isOpen, onClose, entityName, jobs, storageBookings, vehicles }) => {
+    onEditJob: (jobId: string) => void;
+}> = ({ isOpen, onClose, entityName, jobs, storageBookings, vehicles, onEditJob }) => {
     const printRef = React.useRef<HTMLDivElement>(null);
     const handlePrint = useReactToPrint({
         contentRef: printRef,
@@ -164,7 +167,7 @@ const VehiclesOnSiteModal: React.FC<{
                             <Car size={20} />
                         </div>
                         <div>
-                            <h2 className="text-xl font-black text-gray-900 leading-tight">Vehicles On Site</h2>
+                            <h2 className="text-xl font-black text-gray-900 leading-tight">Vehicles On Site & Off-Site</h2>
                             <p className="text-sm text-indigo-600 font-bold">{entityName}</p>
                         </div>
                     </div>
@@ -188,12 +191,21 @@ const VehiclesOnSiteModal: React.FC<{
                             return (
                                 <div key={job.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-100 hover:border-indigo-200 transition-all shadow-sm">
                                     <div className="flex items-center gap-4">
-                                        <div className="bg-white px-3 py-1.5 rounded-lg border-2 border-gray-900 shadow-sm">
-                                            <span className="font-black text-lg tracking-wider text-gray-900">{vehicle?.registration || 'UNKNOWN'}</span>
+                                        <div 
+                                            className="bg-white px-3 py-1.5 rounded-lg border-2 border-gray-900 shadow-sm cursor-pointer hover:bg-gray-900 hover:text-white transition-all group"
+                                            onClick={() => { onEditJob(job.id); onClose(); }}
+                                            title="Click to view job details"
+                                        >
+                                            <span className="font-black text-lg tracking-wider group-hover:text-white">{vehicle?.registration || 'UNKNOWN'}</span>
                                         </div>
                                         <div>
                                             <p className="text-xs text-gray-500 font-bold uppercase tracking-tight">{vehicle?.make} {vehicle?.model}</p>
-                                            <p className="text-sm font-medium text-gray-700">Job #{job.id}</p>
+                                            <div className="flex items-center gap-2">
+                                                <p className="text-sm font-medium text-gray-700">Job #{job.id}</p>
+                                                {job.vehicleStatus === 'Off-Site (Partner)' && (
+                                                    <span className="bg-amber-500 text-white text-[10px] px-1.5 py-0.5 rounded font-black uppercase tracking-widest">Off-Site</span>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
                                     <div className="flex flex-col items-end gap-1">
@@ -232,7 +244,7 @@ const VehiclesOnSiteModal: React.FC<{
                     </div>
                 </div>
                 <footer className="p-4 border-t bg-gray-50 text-center">
-                    <p className="text-xs text-gray-500 font-medium italic">Showing all vehicles currently marked as 'On Site' for this division.</p>
+                    <p className="text-xs text-gray-500 font-medium italic">Showing vehicles marked as 'On Site' or 'Off-Site (Partner)' for this division.</p>
                 </footer>
             </div>
 
@@ -546,7 +558,7 @@ const DashboardView: React.FC<DashboardViewProps> = (props) => {
         if (!selectedDivision) return [];
         return jobs.filter(j => 
             (selectedDivision.id === 'unknown' ? !j.entityId : j.entityId === selectedDivision.id) && 
-            j.vehicleStatus === 'On Site' &&
+            (j.vehicleStatus === 'On Site' || j.vehicleStatus === 'Off-Site (Partner)') &&
             j.status !== 'Cancelled'
         );
     }, [jobs, selectedDivision]);
@@ -609,6 +621,7 @@ const DashboardView: React.FC<DashboardViewProps> = (props) => {
                 jobs={divisionJobs}
                 storageBookings={useData().storageBookings}
                 vehicles={vehicles}
+                onEditJob={props.onEditJob}
             />
         </div>
     );

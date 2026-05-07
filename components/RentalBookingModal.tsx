@@ -17,24 +17,29 @@ interface RentalBookingModalProps {
     customers: Customer[];
     jobs: Job[];
     rentalEntities: BusinessEntity[];
+    selectedEntityId?: string;
 }
 
-const RentalBookingModal: React.FC<RentalBookingModalProps> = ({ isOpen, onClose, onSave, booking, vehicles, rentalVehicles, customers, jobs, rentalEntities }) => {
+const RentalBookingModal: React.FC<RentalBookingModalProps> = ({ 
+    isOpen, onClose, onSave, booking, vehicles, rentalVehicles, customers, jobs, rentalEntities, selectedEntityId 
+}) => {
     const [formData, setFormData] = useState<Partial<RentalBooking>>({});
     const [additionalCharges, setAdditionalCharges] = useState<{ id: string; description: string; amount: number; }[]>([]);
 
     useEffect(() => {
         if (isOpen) {
             setFormData(booking ? { ...booking } : {
-                entityId: rentalEntities[0]?.id,
+                entityId: (selectedEntityId && rentalEntities.some(e => e.id === selectedEntityId)) 
+                    ? selectedEntityId 
+                    : (rentalEntities[0]?.id || ''),
                 startDate: formatDate(new Date()) + 'T09:00',
-                endDate: formatDate(addDays(new Date(), 3)) + 'T17:00',
+                endDate: formatDate(addDays(new Date(), 3)),
                 bookingType: 'Courtesy Car',
                 status: 'Active',
             });
             setAdditionalCharges(booking?.additionalCharges || []);
         }
-    }, [isOpen, booking, rentalEntities]);
+    }, [isOpen, booking, rentalEntities, selectedEntityId]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         setFormData(p => ({ ...p, [e.target.name]: e.target.value }));

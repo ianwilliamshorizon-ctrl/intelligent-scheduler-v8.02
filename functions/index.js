@@ -1,10 +1,8 @@
 const { onRequest } = require("firebase-functions/v2/https");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
-// FORCE DEPLOY TIMESTAMP: 2026-03-23-19-45
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+// FORCE DEPLOY TIMESTAMP: 2026-05-05-09-57
 const axios = require("axios");
 const logger = require("firebase-functions/logger");
-const textToSpeech = require('@google-cloud/text-to-speech');
 
 let ttsClient = null;
 
@@ -73,6 +71,7 @@ async function runGeminiAction(request) {
   }
 
   try {
+    const { GoogleGenerativeAI } = require("@google/generative-ai");
     const genAI = new GoogleGenerativeAI(geminiApiKey);
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
     const result = await model.generateContent(prompt);
@@ -103,6 +102,7 @@ exports.synthesizeSpeech = onCall({ region: "europe-west1" }, async (request) =>
 
     try {
         if (!ttsClient) {
+            const textToSpeech = require('@google-cloud/text-to-speech');
             ttsClient = new textToSpeech.TextToSpeechClient();
         }
 

@@ -82,11 +82,20 @@ export const PrintableOnSiteList: React.FC<PrintableOnSiteListProps> = ({ entity
                     font-weight: 900;
                     text-transform: uppercase;
                 }
+                .badge-offsite {
+                    background-color: #f59e0b;
+                    color: #ffffff;
+                    padding: 2px 6px;
+                    border-radius: 4px;
+                    font-size: 9px;
+                    font-weight: 900;
+                    text-transform: uppercase;
+                }
             `}} />
             
             <header style={{ borderBottom: '3px solid #000', paddingBottom: '15px', marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
                 <div>
-                    <h1 style={{ fontSize: '24px', fontWeight: '900', margin: 0, textTransform: 'uppercase', letterSpacing: '-0.02em' }}>Vehicles On Site</h1>
+                    <h1 style={{ fontSize: '24px', fontWeight: '900', margin: 0, textTransform: 'uppercase', letterSpacing: '-0.02em' }}>Vehicles On Site & Off-Site</h1>
                     <p style={{ fontSize: '14px', color: '#6366f1', fontWeight: '800', margin: '4px 0 0 0' }}>{entityName}</p>
                 </div>
                 <div style={{ textAlign: 'right' }}>
@@ -119,7 +128,12 @@ export const PrintableOnSiteList: React.FC<PrintableOnSiteListProps> = ({ entity
                                     </td>
                                     <td>
                                         <div style={{ fontWeight: '600' }}>Job #{job.id}</div>
-                                        <div style={{ fontSize: '10px', color: '#64748b' }}>{job.status}</div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                            <div style={{ fontSize: '10px', color: '#64748b' }}>{job.status}</div>
+                                            {job.vehicleStatus === 'Off-Site (Partner)' && (
+                                                <span className="badge-offsite">Off-Site</span>
+                                            )}
+                                        </div>
                                     </td>
                                     <td style={{ textAlign: 'center' }}>
                                         <div className="key-tag">{job.keyNumber || 'N/A'}</div>
@@ -154,7 +168,7 @@ export const PrintableOnSiteList: React.FC<PrintableOnSiteListProps> = ({ entity
 
             <footer style={{ marginTop: '30px', borderTop: '1px solid #f1f5f9', paddingTop: '15px', display: 'flex', justifyContent: 'space-between', fontSize: '9px', color: '#94a3b8', fontWeight: 'bold' }}>
                 <div>BROOKSPEED PRODUCTION SYSTEM v8.02</div>
-                <div>TOTAL VEHICLES: {jobs.length + storageBookings.filter(b => !b.endDate && (entityName === 'All' || entityName === 'Storage' || entityName.toLowerCase().includes('storage'))).length}</div>
+                <div>TOTAL VEHICLES (ON/OFF SITE): {jobs.length + storageBookings.filter(b => !b.endDate && (entityName === 'All' || entityName === 'Storage' || entityName.toLowerCase().includes('storage'))).length}</div>
             </footer>
         </div>
     );

@@ -136,15 +136,34 @@ const CheckInModal: React.FC<CheckInModalProps> = ({ isOpen, onClose, onSave, jo
                             <label htmlFor="keyNumber" className="flex items-center gap-2 text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1.5">
                                 <KeyRound size={12} /> Key Number
                             </label>
-                            <input
-                                id="keyNumber"
-                                type="number"
-                                value={keyNumber}
-                                onChange={e => setKeyNumber(e.target.value)}
-                                className="w-full p-2.5 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 font-bold text-lg"
-                                placeholder="e.g. 27"
-                                inputMode="numeric"
-                            />
+                            <div className="flex gap-2">
+                                <input
+                                    id="keyNumber"
+                                    type="text"
+                                    value={keyNumber}
+                                    onChange={e => setKeyNumber(e.target.value)}
+                                    className="w-full p-2.5 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 font-bold text-lg"
+                                    placeholder="e.g. 27"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        if (keyNumber.endsWith('S')) {
+                                            setKeyNumber(keyNumber.slice(0, -1));
+                                        } else {
+                                            setKeyNumber(keyNumber + 'S');
+                                        }
+                                    }}
+                                    className={`px-4 rounded-lg font-black text-lg border transition-all ${
+                                        keyNumber.endsWith('S') 
+                                            ? 'bg-indigo-600 text-white border-indigo-600' 
+                                            : 'bg-white text-gray-400 border-gray-200 hover:border-indigo-300'
+                                    }`}
+                                    title="Toggle Sales Suffix"
+                                >
+                                    S
+                                </button>
+                            </div>
                         </div>
                         <div className="bg-gray-50 p-3 rounded-xl border border-gray-100">
                             <label htmlFor="mileage" className="flex items-center gap-2 text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1.5">

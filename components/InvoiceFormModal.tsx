@@ -145,11 +145,13 @@ interface InvoiceFormModalProps {
     parts: Part[];
     invoices: Invoice[];
     discountCodes: DiscountCode[];
+    selectedEntityId?: string;
 }
 
 const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({ 
     isOpen, onClose, onSave, invoice, job, customers, onSaveCustomer, 
-    vehicles, onSaveVehicle, businessEntities, taxRates, servicePackages, parts, invoices, discountCodes 
+    vehicles, onSaveVehicle, businessEntities, taxRates, servicePackages, parts, invoices, discountCodes,
+    selectedEntityId 
 }) => {
     const { estimates } = useData();
     const [formData, setFormData] = useState<Partial<Invoice>>({});
@@ -226,12 +228,17 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
                 };
             } else {
                 // Only reset if we don't have a partial form already
-                if (prev && !prev.id && !prev.jobId) return prev;
+                // We also allow reset if entityId is missing to ensure it gets the default from selectedEntityId
+                if (prev && !prev.id && !prev.jobId && prev.entityId) return prev;
+
+                const initialEntity = (selectedEntityId && selectedEntityId !== 'all')
+                    ? selectedEntityId
+                    : (businessEntities || [])[0]?.id || '';
 
                 return { 
                     customerId: '', 
                     vehicleId: '', 
-                    entityId: (businessEntities || [])[0]?.id || '', 
+                    entityId: initialEntity, 
                     issueDate: formatDate(new Date()), 
                     dueDate: formatDate(addDays(new Date(), 30)),
                     status: 'Draft', 
@@ -243,7 +250,7 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
         setAppliedDiscount(null);
         setDiscountCodeInput('');
         setDiscountError(null);
-    }, [invoice, job, isOpen, businessEntities, mainEstimate, standardTaxRateId]);
+    }, [invoice, job, isOpen, businessEntities, mainEstimate, standardTaxRateId, selectedEntityId]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => 
         setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));

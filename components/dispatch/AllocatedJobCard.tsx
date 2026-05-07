@@ -25,12 +25,14 @@ export const AllocatedJobCard: React.FC<{
     onReassign: (jobId: string, segmentId: string) => void;
     onOpenPurchaseOrder: (po: PurchaseOrder) => void;
     onUnscheduleSegment: (jobId: string, segmentId: string) => void;
+    onSendOffsite: (jobId: string, segmentId: string) => void;
+    onPassToSales: (jobId: string) => void;
     currentUser: User;
     onOpenAssistant: (jobId: string) => void;
     engineers?: Engineer[];
     onQcApprove?: (jobId: string) => void;
     onEngineerComplete?: (job: Job, segmentId: string) => void;
-}> = ({ job, segment, vehicle, customer, engineer, purchaseOrders, onDragStart, onDragEnd, onEdit, onStartWork, onPause, onRestart, onReassign, onOpenPurchaseOrder, onUnscheduleSegment, currentUser, onOpenAssistant, engineers = [], onQcApprove = () => {}, onEngineerComplete = () => {} }) => {
+}> = ({ job, segment, vehicle, customer, engineer, purchaseOrders, onDragStart, onDragEnd, onEdit, onStartWork, onPause, onRestart, onReassign, onOpenPurchaseOrder, onUnscheduleSegment, onSendOffsite, onPassToSales, currentUser, onOpenAssistant, engineers = [], onQcApprove = () => {}, onEngineerComplete = () => {} }) => {
     
     const segments = segment.duration * (60 / SEGMENT_DURATION_MINUTES);
     const maxSegmentsAvailable = TIME_SEGMENTS.length - (segment.scheduledStartSegment || 0);
@@ -128,11 +130,13 @@ export const AllocatedJobCard: React.FC<{
         if (canPerformActions) {
             list.push({ id: 'assistant', label: 'Technical Assistant', icon: Wand2, onClick: () => onOpenAssistant(job.id), group: 'secondary' });
             list.push({ id: 'edit', label: 'Edit Job', icon: Edit, onClick: () => onEdit(job.id), group: 'secondary' });
+            list.push({ id: 'pass-to-sales', label: job.saleVehicleId ? 'Linked to Sales' : 'Pass to Sales', icon: PackageIcon, onClick: () => onPassToSales(job.id), group: 'secondary', color: job.saleVehicleId ? 'text-indigo-600' : undefined });
             list.push({ id: 'reassign', label: 'Reassign Engineer', icon: UserCog, onClick: () => onReassign(job.id, segment.segmentId), group: 'secondary' });
         }
 
         if (canUnschedule) {
             list.push({ id: 'unschedule', label: 'Move to Unallocated', icon: Trash2, onClick: () => onUnscheduleSegment(job.id, segment.segmentId), group: 'danger' });
+            list.push({ id: 'send-offsite', label: 'Send Offsite (Third Party)', icon: Camera, onClick: () => onSendOffsite(job.id, segment.segmentId), group: 'danger' });
         }
 
         return list;
@@ -168,12 +172,15 @@ export const AllocatedJobCard: React.FC<{
                         >
                             <span className="font-bold truncate" title={vehicle?.registration}>{vehicle?.registration || 'Unknown Vehicle'}</span>
                         </HoverInfo>
-                        <div className="flex items-center gap-1.5 leading-tight">
-                            <span className="font-mono text-[11px] font-black text-gray-900">#{job.id}</span>
-                            {job.jobType === 'MOT' && (
-                                <span className="bg-emerald-500/20 text-emerald-800 text-[8px] px-1 rounded-sm font-bold uppercase tracking-tighter">MOT</span>
-                            )}
-                        </div>
+                            <div className="flex items-center gap-1.5 leading-tight">
+                                <span className="font-mono text-[11px] font-black text-gray-900">#{job.id}</span>
+                                {job.jobType === 'MOT' && (
+                                    <span className="bg-emerald-500/20 text-emerald-800 text-[8px] px-1 rounded-sm font-bold uppercase tracking-tighter">MOT</span>
+                                )}
+                                {job.saleVehicleId && (
+                                    <span className="bg-indigo-600 text-white text-[8px] px-1 rounded-sm font-bold uppercase tracking-tighter shadow-sm border border-indigo-700/20">SALES</span>
+                                )}
+                            </div>
                     </div>
                     <div className="flex items-center gap-1 flex-shrink-0 pt-0.5">
                         {job.checkInPhotos && job.checkInPhotos.length > 0 && (

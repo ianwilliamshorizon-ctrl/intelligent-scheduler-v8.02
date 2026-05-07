@@ -41,11 +41,19 @@ export const SummaryJobCard: React.FC<SummaryJobCardProps> = (props) => {
     return (
         <JobHoverPopout {...props}>
             <div 
-                className={`p-2 bg-white border rounded-lg shadow-sm hover:shadow-md hover:border-indigo-400 cursor-pointer transition-all duration-200 ${hasServicePackages ? 'border-l-4 border-l-indigo-500' : 'border-gray-200'}`}
+                className={`p-2 border rounded-lg shadow-sm hover:shadow-md hover:border-indigo-400 cursor-pointer transition-all duration-200 ${job.vehicleStatus === 'Off-Site (Partner)' ? 'bg-gray-100 border-gray-300 opacity-80' : 'bg-white border-gray-200'} ${hasServicePackages && job.vehicleStatus !== 'Off-Site (Partner)' ? 'border-l-4 border-l-indigo-500' : ''}`}
                 onClick={() => props.onEdit(job.id)}
             >
                 <div className="flex justify-between items-center text-[9px] font-bold mb-1">
-                    <span className="text-gray-400 font-mono">#{job.id}</span>
+                    <div className="flex items-center gap-1">
+                        <span className="text-gray-400 font-mono">#{job.id}</span>
+                        {job.vehicleStatus === 'Off-Site (Partner)' && (
+                            <span className="bg-amber-500 text-white px-1 rounded font-black uppercase tracking-tighter shadow-sm border border-amber-600/20">OFFSITE</span>
+                        )}
+                        {job.saleVehicleId && (
+                            <span className="bg-indigo-600 text-white px-1 rounded font-black uppercase tracking-tighter shadow-sm border border-indigo-700/20">SALES</span>
+                        )}
+                    </div>
                     {job.keyNumber && (
                         <span className="flex items-center gap-0.5 text-amber-600 bg-amber-50 px-1 rounded border border-amber-100">
                             <KeyRound size={9} /> {job.keyNumber}

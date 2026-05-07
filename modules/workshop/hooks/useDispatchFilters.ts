@@ -65,9 +65,9 @@ export const useDispatchFilters = ({
             (job.segments || []).some(s => s.status === 'Unallocated')
         );
         
-        // 2. Filter by On Site status if toggled
+        // 2. Filter by On Site status if toggled (Includes Off-Site Partners for tracking)
         const siteFilteredJobs = showOnSiteOnly 
-            ? allPotentialUnallocated.filter(job => job.vehicleStatus === 'On Site') 
+            ? allPotentialUnallocated.filter(job => job.vehicleStatus === 'On Site' || job.vehicleStatus === 'Off-Site (Partner)') 
             : allPotentialUnallocated;
         
         // 3. Filter by Date
@@ -102,7 +102,14 @@ export const useDispatchFilters = ({
             });
         });
 
-        return { unallocatedJobs: dateFilteredJobs, allocatedSegmentsByLift: allocated };
+        // 5. Group and Sort (Off-Site first)
+        const sortedUnallocated = [...dateFilteredJobs].sort((a, b) => {
+            if (a.vehicleStatus === 'Off-Site (Partner)' && b.vehicleStatus !== 'Off-Site (Partner)') return -1;
+            if (a.vehicleStatus !== 'Off-Site (Partner)' && b.vehicleStatus === 'Off-Site (Partner)') return 1;
+            return 0;
+        });
+
+        return { unallocatedJobs: sortedUnallocated, allocatedSegmentsByLift: allocated };
     }, [jobs, currentDate, selectedEntityId, unallocatedDateFilter, showOnSiteOnly]);
 
     return {

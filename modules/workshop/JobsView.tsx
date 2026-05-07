@@ -99,7 +99,8 @@ const JobsView: React.FC<JobsViewProps> = ({ onEditJob, onSmartCreateClick }) =>
                     description.includes(lowerFilter) ||
                     customerName.includes(lowerFilter) ||
                     reg.includes(filterNoSpace) ||
-                    prevRegMatch;
+                    prevRegMatch ||
+                    (job.keyNumber ? String(job.keyNumber).toLowerCase().includes(lowerFilter) : false);
             }
 
             return true; 

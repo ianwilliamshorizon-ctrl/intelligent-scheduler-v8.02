@@ -10,6 +10,8 @@ import { formatCurrency } from '../../../core/utils/formatUtils';
 import { formatDate } from '../../../core/utils/dateUtils';
 import { findBestVoice, prepareTextForSpeech } from '../../../core/utils/speechUtils';
 import { useApp } from '../../../core/state/AppContext';
+import { useData } from '../../../core/state/DataContext';
+import SearchableSelect from '../../SearchableSelect';
 
 interface TabSectionProps {
     title: string;
@@ -45,6 +47,7 @@ interface JobDetailsTabProps {
 const JobDetailsTab: React.FC<JobDetailsTabProps> = ({ 
     editableJob, vehicle, customer, isReadOnly, purchaseOrders, onOpenPurchaseOrder, onChange, onViewCustomer, onViewVehicle, allJobs, onUpdateLinkedJob 
 }) => {
+    const { saleVehicles, vehicles: allVehicles } = useData();
     const { preferredVoiceName } = useApp();
     const activeUtterance = useRef<SpeechSynthesisUtterance | CloudSpeechSynthesisUtterance | null>(null);
     const [isNotesModalOpen, setIsNotesModalOpen] = useState(false);
@@ -330,6 +333,43 @@ const JobDetailsTab: React.FC<JobDetailsTabProps> = ({
                     </div>
                 </TabSection>
             )}
+
+            <TabSection title="Sales & Warranty" icon={DollarSign}>
+                <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                        <label className="text-xs font-bold text-gray-700">Internal Sales Prep / Warranty?</label>
+                        <button 
+                            type="button" 
+                            onClick={() => onChange({ target: { name: 'isSalesPrep', value: !editableJob.isSalesPrep } } as any)}
+                            className={`w-10 h-5 rounded-full transition-colors relative ${editableJob.isSalesPrep ? 'bg-indigo-600' : 'bg-gray-300'}`}
+                            disabled={isReadOnly}
+                        >
+                            <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform ${editableJob.isSalesPrep ? 'left-5' : 'left-0.5'}`} />
+                        </button>
+                    </div>
+
+                    <div>
+                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Link to Sale Vehicle</label>
+                        <SearchableSelect 
+                            options={saleVehicles.map(sv => {
+                                const v = allVehicles.find(veh => veh.id === sv.vehicleId);
+                                return {
+                                    value: sv.id,
+                                    label: `${v?.registration || 'Unknown'} - ${v?.make} ${v?.model} (${sv.status})`
+                                };
+                            })}
+                            initialValue={editableJob.saleVehicleId || null}
+                            onSelect={(val) => onChange({ target: { name: 'saleVehicleId', value: val } } as any)}
+                            placeholder="Select a vehicle in stock..."
+                        />
+                        {editableJob.saleVehicleId && (
+                            <p className="text-[10px] text-indigo-600 mt-1 font-semibold flex items-center gap-1">
+                                <CheckCircle size={10}/> Linked to Stock Profitability
+                            </p>
+                        )}
+                    </div>
+                </div>
+            </TabSection>
 
             <TabSection title="Job Status" icon={Briefcase}>
                 <div className="space-y-2">

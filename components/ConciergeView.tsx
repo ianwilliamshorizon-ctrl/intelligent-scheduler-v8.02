@@ -41,7 +41,7 @@ const ConciergeView: React.FC<ConciergeViewProps> = (props) => {
     const { selectedEntityId, currentUser } = useApp();
     const [searchTerm, setSearchTerm] = useState('');
     const [pauseData, setPauseData] = useState<{ jobId: string, segmentId: string } | null>(null);
-    const [arrivalFilter, setArrivalFilter] = useState<'today' | '7days' | '14days'>('today');
+    const [arrivalFilter, setArrivalFilter] = useState<'today' | '7days' | '14days' | 'all'>('today');
     const [assistantJobId, setAssistantJobId] = useState<string | null>(null);
     const [viewMode, setViewMode] = useState<'standard' | 'summary'>('standard');
 
@@ -101,6 +101,7 @@ const ConciergeView: React.FC<ConciergeViewProps> = (props) => {
 
         if (arrivalFilter === '7days') filterEndDate = getRelativeDate(6);
         if (arrivalFilter === '14days') filterEndDate = getRelativeDate(13);
+        if (arrivalFilter === 'all') filterEndDate = '9999-12-31';
 
         filteredJobs.forEach(job => {
             if (job.vehicleStatus === 'Awaiting Arrival') {
@@ -179,7 +180,8 @@ const ConciergeView: React.FC<ConciergeViewProps> = (props) => {
     const arrivalsTitle = useMemo(() => {
         if (arrivalFilter === 'today') return "Due Today / Arrivals";
         if (arrivalFilter === '7days') return "Due 7 Days / Arrivals";
-        return "Due 14 Days / Arrivals";
+        if (arrivalFilter === '14days') return "Due 14 Days / Arrivals";
+        return "All Pending Arrivals";
     }, [arrivalFilter]);
 
     return (
@@ -206,13 +208,13 @@ const ConciergeView: React.FC<ConciergeViewProps> = (props) => {
 
                     <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
                         <div className="flex bg-gray-200 rounded-lg p-0.5 sm:p-1">
-                            {(['today', '7days', '14days'] as const).map(opt => (
+                            {(['today', '7days', '14days', 'all'] as const).map(opt => (
                                 <button
                                     key={opt}
                                     onClick={() => setArrivalFilter(opt)}
                                     className={`px-2 sm:px-3 py-1 text-[10px] sm:text-xs font-semibold rounded-md transition ${arrivalFilter === opt ? 'bg-white shadow text-gray-800' : 'text-gray-600 hover:text-gray-800'}`}
                                 >
-                                    {opt === 'today' ? 'Today' : opt === '7days' ? '7D' : '14D'}
+                                    {opt === 'today' ? 'Today' : opt === '7days' ? '7D' : opt === '14days' ? '14D' : 'All'}
                                 </button>
                             ))}
                         </div>

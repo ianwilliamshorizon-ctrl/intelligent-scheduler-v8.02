@@ -31,6 +31,8 @@ interface DispatchViewProps {
     onCheckIn: (jobId: string) => void;
     onOpenAssistant: (jobId: string) => void;
     onUnscheduleSegment: (jobId: string, segmentId: string) => void;
+    onSendOffsite: (jobId: string, segmentId: string) => void;
+    onPassToSales: (jobId: string) => void;
     onStartWork: (jobId: string, segmentId: string) => void;
     setEditJobInitialTab?: (tab: string | null) => void;
 }
@@ -48,6 +50,8 @@ const DispatchView: React.FC<DispatchViewProps> = ({
     onCheckIn, 
     onOpenAssistant, 
     onUnscheduleSegment, 
+    onSendOffsite,
+    onPassToSales,
     onStartWork,
     setEditJobInitialTab
 }) => {
@@ -233,6 +237,8 @@ const DispatchView: React.FC<DispatchViewProps> = ({
                     onRestart={onRestart}
                     onReassign={handleReassignClick}
                     onUnscheduleSegment={onUnscheduleSegment}
+                    onSendOffsite={onSendOffsite}
+                    onPassToSales={onPassToSales}
                     onOpenAssistant={(id) => { setSelectedJobId(id); onOpenAssistant(id); }}
                 />
             )}

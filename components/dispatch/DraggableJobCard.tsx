@@ -24,7 +24,8 @@ export const DraggableJobCard: React.FC<{
     onPause?: (jobId: string, segmentId: string) => void;
     onRestart?: (jobId: string, segmentId: string) => void;
     onQcApprove?: (jobId: string) => void;
-}> = ({ job, vehicle, customer, purchaseOrders, onDragStart, onDragEnd, onEdit, onCheckIn, onOpenPurchaseOrder, currentUser, onOpenAssistant, engineers = [], onStartWork = () => {}, onPause = () => {}, onRestart = () => {}, onQcApprove = () => {} }) => {
+    onPassToSales?: (jobId: string) => void;
+}> = ({ job, vehicle, customer, purchaseOrders, onDragStart, onDragEnd, onEdit, onCheckIn, onOpenPurchaseOrder, currentUser, onOpenAssistant, engineers = [], onStartWork = () => {}, onPause = () => {}, onRestart = () => {}, onQcApprove = () => {}, onPassToSales = () => {} }) => {
     const [isActionsMenuOpen, setIsActionsMenuOpen] = React.useState(false);
     const unallocatedSegments = (job.segments || []).filter(s => s.status === 'Unallocated');
 
@@ -57,6 +58,8 @@ export const DraggableJobCard: React.FC<{
     const currentVehicleStatus = vehicleStatusInfo[vehicleStatus || 'Awaiting Arrival'] || vehicleStatusInfo['Awaiting Arrival'];
 
     const getCardColorClasses = () => {
+        if (job.vehicleStatus === 'Off-Site (Partner)') return 'bg-gray-100 border-gray-300 text-gray-500 grayscale opacity-80';
+
         const isVehicleOnSite = job.vehicleStatus === 'On Site';
         const arePartsReady = job.partsStatus === 'Fully Received' || job.partsStatus === 'Not Required';
         const isReadyForWorkshop = isVehicleOnSite && arePartsReady;
@@ -94,7 +97,8 @@ export const DraggableJobCard: React.FC<{
     const actions = useMemo(() => {
         const list = [
             { id: 'assistant', label: 'Technical Assistant', icon: Wand2, onClick: () => onOpenAssistant(job.id), group: 'primary' as const },
-            { id: 'edit', label: 'Edit Job', icon: Edit, onClick: () => onEdit(job.id), group: 'secondary' as const }
+            { id: 'edit', label: 'Edit Job', icon: Edit, onClick: () => onEdit(job.id), group: 'secondary' as const },
+            { id: 'pass-to-sales', label: job.saleVehicleId ? 'Linked to Sales' : 'Pass to Sales', icon: PackageIcon, onClick: () => onPassToSales(job.id), group: 'secondary' as const }
         ];
 
         if (job.vehicleStatus === 'Awaiting Arrival') {
@@ -120,9 +124,14 @@ export const DraggableJobCard: React.FC<{
                         {isReadyForWorkshop && <span title="Ready for Workshop"><Wrench size={18} className="text-emerald-600" /></span>}
                         {job.description}
                     </h4>
-                    <span className={`font-mono text-xs font-bold px-2 py-0.5 rounded-full border border-gray-200 text-gray-600 flex-shrink-0 ml-2`}>
-                        #{job.id}
-                    </span>
+                    <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
+                        {job.saleVehicleId && (
+                            <span className="bg-indigo-600 text-white text-[8px] px-1 rounded-sm font-bold uppercase tracking-tighter shadow-sm border border-indigo-700/20">SALES</span>
+                        )}
+                        <span className={`font-mono text-xs font-bold px-2 py-0.5 rounded-full border border-gray-200 text-gray-600`}>
+                            #{job.id}
+                        </span>
+                    </div>
                 </div>
                 
                 <div className={`text-xs space-y-1.5 mb-3 text-gray-600`}>
@@ -155,7 +164,7 @@ export const DraggableJobCard: React.FC<{
                 <div className="flex justify-between items-center pt-2 border-t mt-2 border-gray-100">
                     <div className="flex items-center gap-3">
                         {partsStatusInfo && <span title={partsStatusInfo.title} className={`flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider ${isVibrant ? 'text-white/80' : partsStatusInfo.color}`}>{partsStatusInfo.icon && <partsStatusInfo.icon size={12}/>} {partsStatus}</span>}
-                        <span title={`Vehicle Status: ${currentVehicleStatus.text}`} className={`flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-gray-500`}>
+                        <span title={`Vehicle Status: ${currentVehicleStatus.text}`} className={`flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider ${job.vehicleStatus === 'Off-Site (Partner)' ? 'text-amber-600' : 'text-gray-500'}`}>
                             <currentVehicleStatus.icon size={12}/> {currentVehicleStatus.text}
                         </span>
                     </div>

@@ -41,7 +41,7 @@ const WorkflowJobCard: React.FC<{
     
     return (
         <div 
-            className={`p-4 rounded-xl shadow-sm border ${statusColorClass} cursor-pointer hover:shadow-md hover:scale-[1.01] transition-all duration-200 relative overflow-hidden group mb-3`}
+            className={`p-4 rounded-xl shadow-sm border ${job.vehicleStatus === 'Off-Site (Partner)' ? 'bg-gray-100 border-gray-300 text-gray-500 opacity-80' : statusColorClass} cursor-pointer hover:shadow-md hover:scale-[1.01] transition-all duration-200 relative overflow-hidden group mb-3`}
             onClick={() => onEdit(job.id)}
         >
             {/* Parts Status Badge */}
@@ -51,8 +51,11 @@ const WorkflowJobCard: React.FC<{
 
             <div className="flex justify-between items-start mb-2">
                 <div className="min-w-0 pr-8">
-                    <h3 className="text-sm font-bold uppercase tracking-tight leading-tight mb-1 truncate text-gray-900">
+                    <h3 className="text-sm font-bold uppercase tracking-tight leading-tight mb-1 truncate text-gray-900 flex items-center gap-2">
                         {job.description}
+                        {job.vehicleStatus === 'Off-Site (Partner)' && (
+                            <span className="bg-amber-500 text-white px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-tighter shadow-sm border border-amber-600/20">OFFSITE</span>
+                        )}
                     </h3>
                     <div className="flex items-center gap-2 text-xs font-semibold text-gray-500">
                         {vehicle && (

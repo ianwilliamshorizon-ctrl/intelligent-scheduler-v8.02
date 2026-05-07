@@ -132,17 +132,40 @@ const App = () => {
         const backupData = createBackup(getFullStateData());
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
         try {
+            // 1. Remote Retention (Firestore)
             await setItem(`backup_auto_${timestamp}`, backupData);
+            
+            // 2. Local Retention (Browser LocalStorage)
+            // We only store the last one locally to avoid quota issues
+            try {
+                localStorage.setItem('brooks_last_auto_backup', JSON.stringify(backupData));
+            } catch (localErr) {
+                console.warn("Local storage quota exceeded, snapshot saved to cloud only.");
+            }
+
             setConfirmation({
                 isOpen: true,
-                title: 'Automated Backup',
-                message: 'A scheduled system backup has been successfully saved to the cloud database.',
+                title: 'Automated Snapshot Created',
+                message: 'A dual-retention system backup (Local & Remote) has been successfully saved. You can restore this from the Management > Backup tab.',
                 type: 'success'
             });
         } catch (e) {
             console.error("Auto-backup failed", e);
         }
     }, [getFullStateData, setConfirmation]);
+
+    const handleRestoreFromSnapshot = useCallback(async (snapshotId: string) => {
+        const { getItem } = await import('./core/db');
+        const snapshot = await getItem<any>(snapshotId);
+        if (!snapshot) throw new Error("Snapshot not found");
+
+        const dataToRestore = snapshot.data || snapshot;
+        for (const [key, value] of Object.entries(dataToRestore)) {
+            if (key.startsWith('brooks_')) {
+                await setItem(key, value);
+            }
+        }
+    }, []);
 
     useEffect(() => {
         if (!backupSchedule.enabled) return;
@@ -269,6 +292,7 @@ const App = () => {
         onRestartWork: (jobId: string, segmentId: string) => workshopActions.handleUpdateSegmentStatus(jobId, segmentId, 'In Progress'),
         onRestart: (jobId: string, segmentId: string) => workshopActions.handleUpdateSegmentStatus(jobId, segmentId, 'In Progress'),
         onEngineerComplete: (job: T.Job, segmentId: string) => workshopActions.handleUpdateSegmentStatus(job.id, segmentId, 'Engineer Complete', { engineerCompletedAt: new Date().toISOString() }),
+        onSendOffsite: workshopActions.handleSendOffsite,
         onQcApprove: workshopActions.handleQcApprove,
         onOpenAssistant: (id: string) => { setters.setAssistantContextJobId(id); setters.setIsAssistantOpen(true); },
         onEditJob: (id: string, initialTab?: string) => { 
@@ -313,6 +337,8 @@ const App = () => {
                     onReassignEngineer={workshopActions.handleReassignEngineer} 
                     onCheckIn={(id) => setters.setCheckInJob((jobs || []).find(j => j.id === id) || null)} 
                     onUnscheduleSegment={workshopActions.handleUnscheduleSegment} 
+                    onSendOffsite={workshopActions.handleSendOffsite}
+                    onPassToSales={workshopActions.handlePassToSales}
                 />;
             case 'workflow':
                 const workflowJobs = (jobs || []).filter(j => selectedEntityId === 'all' || j.entityId === selectedEntityId);
@@ -376,6 +402,7 @@ const App = () => {
                         backupSchedule={backupSchedule}
                         setBackupSchedule={setBackupSchedule}
                         onManualBackup={handleManualBackup}
+                        onRestoreFromSnapshot={handleRestoreFromSnapshot}
                     />
                 )}
                  <HelpCentre open={isHelpCentreOpen} onClose={() => setIsHelpCentreOpen(false)} />
