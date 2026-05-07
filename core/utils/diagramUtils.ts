@@ -39,15 +39,15 @@ export const findBestDiagramMatch = (vehicle: Vehicle, diagrams: InspectionDiagr
         return null;
     }
 
-    const vehicleMake = vehicle.make.toLowerCase().trim();
-    const vehicleModel = vehicle.model.toLowerCase().trim();
+    const vehicleMake = String(vehicle.make || '').toLowerCase().trim();
+    const vehicleModel = String(vehicle.model || '').toLowerCase().trim();
 
     let bestMatchId: string | null = null;
     let highestScore = -1;
 
     for (const diagram of diagrams) {
-        const diagramMake = diagram.make.toLowerCase().trim();
-        const diagramModel = diagram.model.toLowerCase().trim();
+        const diagramMake = String(diagram.make || '').toLowerCase().trim();
+        const diagramModel = String(diagram.model || '').toLowerCase().trim();
         let currentScore = 0;
         let makeMatchFactor = 0;
 
