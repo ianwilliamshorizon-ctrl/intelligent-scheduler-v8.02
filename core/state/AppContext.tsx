@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, useRef } from 'react';
 import * as T from '../../types';
-import { getAll, saveDocument } from '../../core/db';
+import { getAll, saveDocument, getItem, setItem } from '../../core/db';
 import { initialData } from '../data/initialData';
 import { COLLECTION_NAME, currentEnvironment } from '../../core/config/firebaseConfig'; 
 import { SPEECH_SETTINGS_KEY } from '../../core/utils/speechUtils';
@@ -130,10 +130,19 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
             if (dbJobs?.length) setJobs(dbJobs);
             
             // Sync Backup Schedule
-            const dbSettings = await getAll<any>(getPath('settings'));
-            const schedule = dbSettings.find(s => s.id === 'backup_schedule');
-            if (schedule) {
-                setBackupSchedule({ enabled: schedule.enabled, times: schedule.times || [] });
+            try {
+                const schedule = await getItem<T.BackupSchedule>('backup_schedule');
+                if (schedule) {
+                    console.log("💾 AppContext: Backup schedule loaded:", schedule);
+                    setBackupSchedule({ 
+                        enabled: schedule.enabled ?? false, 
+                        times: schedule.times || [] 
+                    });
+                } else {
+                    console.warn("⚠️ AppContext: No backup schedule found in DB.");
+                }
+            } catch (err) {
+                console.error("❌ AppContext: Failed to load backup schedule", err);
             }
 
             console.log("✅ AppContext: Sync Complete.");
@@ -274,13 +283,14 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
     const handleSetBackupSchedule = async (schedule: T.BackupSchedule) => {
         setBackupSchedule(schedule);
         try {
-            await saveDocument(`${COLLECTION_NAME}_settings`, {
-                id: 'backup_schedule',
+            const payload = {
                 ...schedule,
                 updatedAt: new Date().toISOString()
-            });
+            };
+            await setItem('backup_schedule', payload);
+            console.log("✅ AppContext: Backup schedule saved successfully.");
         } catch (err) {
-            console.error("Failed to save backup schedule", err);
+            console.error("❌ AppContext: Failed to save backup schedule", err);
         }
     };
 

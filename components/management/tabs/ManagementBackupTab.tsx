@@ -219,6 +219,39 @@ export const ManagementBackupTab: React.FC<ManagementBackupTabProps> = ({
                                 </div>
                             </div>
                             <p className="text-[10px] text-gray-500 mt-2 italic">Standard Brookspeed policy: 02:00 and 14:00 (Guaranteed Server-Side Automation + Local Redundancy enabled).</p>
+                            
+                            {(backupSchedule.lastRun || backupSchedule.lastSuccess) && (
+                                <div className="mt-3 pt-3 border-t border-gray-100 flex flex-wrap gap-4 text-[10px]">
+                                    {backupSchedule.lastRun && (
+                                        <div className="flex items-center gap-1 text-gray-500">
+                                            <Clock size={10} />
+                                            <span>Last Attempt: {new Date(backupSchedule.lastRun).toLocaleString()}</span>
+                                        </div>
+                                    )}
+                                    {backupSchedule.lastSuccess && (
+                                        <div className="flex items-center gap-1 text-green-600 font-bold">
+                                            <RefreshCw size={10} />
+                                            <span>Last Success: {new Date(backupSchedule.lastSuccess).toLocaleString()}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                            
+                            <div className="mt-3">
+                                <button 
+                                    onClick={async () => {
+                                        onShowStatus('Manually triggering automated backup cycle...', 'info');
+                                        // We use the passed prop to trigger the logic in App.tsx
+                                        // But App.tsx's handleAutoBackup is not directly exposed as a prop
+                                        // We can use onCloudSnapshot as a proxy or we can update App.tsx to pass it
+                                        const success = await onCloudSnapshot(); 
+                                        if (success) onShowStatus('Backup recorded successfully.', 'success');
+                                    }}
+                                    className="text-[10px] text-indigo-600 hover:text-indigo-800 font-bold underline flex items-center gap-1"
+                                >
+                                    <RefreshCw size={10}/> Run Automated Cycle Now
+                                </button>
+                            </div>
                         </div>
 
                         <div className="bg-white p-3 rounded-lg border border-gray-200">

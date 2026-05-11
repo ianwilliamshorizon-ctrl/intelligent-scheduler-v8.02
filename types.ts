@@ -651,6 +651,8 @@ export interface AuditLog {
 export interface BackupSchedule {
     enabled: boolean;
     times: string[];
+    lastRun?: string;
+    lastSuccess?: string;
 }
 /**
  * RENTAL & BOOKING TYPES

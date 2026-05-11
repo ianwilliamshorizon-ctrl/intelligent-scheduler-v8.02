@@ -164,6 +164,13 @@ const App = () => {
             // Keep track of the latest local backup for quick access
             await idbSet('last_auto_backup', backupData);
 
+            // 3. Update Schedule Status
+            setBackupSchedule({
+                ...backupSchedule,
+                lastRun: new Date().toISOString(),
+                lastSuccess: new Date().toISOString()
+            });
+
             setConfirmation({
                 isOpen: true,
                 title: 'Automated Snapshot Created',
@@ -172,7 +179,10 @@ const App = () => {
             });
         } catch (e) {
             console.error("Auto-backup failed", e);
-            // Fallback: try saving a minimal version or just logging
+            setBackupSchedule({
+                ...backupSchedule,
+                lastRun: new Date().toISOString()
+            });
         }
     }, [getFullStateData, setConfirmation]);
 
