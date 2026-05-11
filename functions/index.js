@@ -1,5 +1,7 @@
-const { onRequest } = require("firebase-functions/v2/https");
-const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { onRequest, onCall, HttpsError } = require("firebase-functions/v2/https");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
+const admin = require("firebase-admin");
+admin.initializeApp();
 // FORCE DEPLOY TIMESTAMP: 2026-05-05-09-57
 const axios = require("axios");
 const logger = require("firebase-functions/logger");
@@ -165,5 +167,70 @@ exports.transcribeSpeech = onCall({ region: "europe-west1" }, async (request) =>
     } catch (error) {
         logger.error("Cloud STT Error:", error.message);
         throw new HttpsError('internal', `Error transcribing speech: ${error.message}`);
+    }
+});
+
+/**
+ * AUTOMATED SYSTEM BACKUP (SERVER-SIDE)
+ * Runs at 02:00 and 14:00 daily
+ */
+exports.performScheduledBackup = onSchedule({
+    schedule: "0 2,14 * * *",
+    timeZone: "Europe/London",
+    region: "europe-west1",
+    memory: "1GiB",
+    timeoutSeconds: 300
+}, async (event) => {
+    logger.info("Starting Scheduled System Backup...");
+    
+    const collections = [
+        'brooks_jobs', 'brooks_vehicles', 'brooks_customers', 'brooks_estimates', 
+        'brooks_invoices', 'brooks_purchaseOrders', 'brooks_purchases', 'brooks_parts', 
+        'brooks_servicePackages', 'brooks_suppliers', 'brooks_engineers', 'brooks_lifts', 
+        'brooks_rentalVehicles', 'brooks_rentalBookings', 'brooks_saleVehicles', 
+        'brooks_saleOverheadPackages', 'brooks_prospects', 'brooks_storageBookings', 
+        'brooks_storageLocations', 'brooks_batteryChargers', 'brooks_nominalCodes', 
+        'brooks_nominalCodeRules', 'brooks_absenceRequests', 'brooks_inquiries', 
+        'brooks_reminders', 'brooks_businessEntities', 'brooks_taxRates', 'brooks_roles', 
+        'brooks_inspectionDiagrams', 'brooks_inspectionTemplates', 'brooks_discountCodes', 
+        'brooks_users', 'brooks_settings'
+    ];
+
+    try {
+        const backupData = {
+            backupSchemaVersion: '1.1',
+            backupDate: new Date().toISOString(),
+            source: 'Cloud Functions (Automated)',
+            data: {}
+        };
+
+        // 1. Fetch all data from all collections
+        for (const colName of collections) {
+            const snapshot = await admin.firestore().collection(colName).get();
+            backupData.data[colName] = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+            logger.info(`Backed up ${snapshot.docs.length} records from ${colName}`);
+        }
+
+        // 2. Format filename
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const filename = `backups/backup_auto_server_${timestamp}.json`;
+        
+        // 3. Upload to Storage
+        const bucket = admin.storage().bucket();
+        const file = bucket.file(filename);
+        
+        await file.save(JSON.stringify(backupData), {
+            contentType: 'application/json',
+            metadata: {
+                metadata: {
+                    source: 'AutomatedServerBackup'
+                }
+            }
+        });
+
+        logger.info(`Successfully completed backup: ${filename}`);
+
+    } catch (error) {
+        logger.error("Scheduled Backup Failed:", error);
     }
 });

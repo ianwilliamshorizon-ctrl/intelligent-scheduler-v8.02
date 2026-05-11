@@ -128,6 +128,13 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
             if (dbCustomers?.length) setCustomers(dbCustomers);
             if (dbVehicles?.length) setVehicles(dbVehicles);
             if (dbJobs?.length) setJobs(dbJobs);
+            
+            // Sync Backup Schedule
+            const dbSettings = await getAll<any>(getPath('settings'));
+            const schedule = dbSettings.find(s => s.id === 'backup_schedule');
+            if (schedule) {
+                setBackupSchedule({ enabled: schedule.enabled, times: schedule.times || [] });
+            }
 
             console.log("✅ AppContext: Sync Complete.");
         } catch (e) {
@@ -264,6 +271,19 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
         localStorage.setItem('selectedEntityId', id);
     };
 
+    const handleSetBackupSchedule = async (schedule: T.BackupSchedule) => {
+        setBackupSchedule(schedule);
+        try {
+            await saveDocument(`${COLLECTION_NAME}_settings`, {
+                id: 'backup_schedule',
+                ...schedule,
+                updatedAt: new Date().toISOString()
+            });
+        } catch (err) {
+            console.error("Failed to save backup schedule", err);
+        }
+    };
+
     const setPreferredVoiceName = (name: string | null) => {
         setPreferredVoiceNameState(name);
         if (name) {
@@ -287,7 +307,7 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
             isAuthenticated, currentView, setCurrentView,
             login, logout, resetPassword, adminResetPassword, registerAuthorizedUser,
             selectedEntityId, setSelectedEntityId: handleSetSelectedEntityId, confirmation, 
-            setConfirmation, backupSchedule, setBackupSchedule, appEnvironment, setAppEnvironment,
+            setConfirmation, backupSchedule, setBackupSchedule: handleSetBackupSchedule, appEnvironment, setAppEnvironment,
             businessEntities, filteredBusinessEntities, allWorkshops, refreshData,
             isSidebarOpen, setSidebarOpen, onSwitchEntity, onLogout,
             preferredVoiceName, setPreferredVoiceName

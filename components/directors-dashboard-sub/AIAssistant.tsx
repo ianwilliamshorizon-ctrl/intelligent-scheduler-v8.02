@@ -96,7 +96,7 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ financialData }) => {
             currentOverview: financialData?.totals || {},
             strategicTrends: (financialData?.chartData || []).slice(-3), // Last 3 months context
             businessScale: {
-                entities: businessEntities.map(e => ({ name: e.name, capacity: e.dailyCapacityHours }))
+                entities: (businessEntities || []).map(e => ({ name: e.name, capacity: e.dailyCapacityHours }))
             }
         };
 

@@ -266,6 +266,7 @@ export const ManagementVehiclesTab: React.FC<ManagementVehiclesTabProps> = ({
                         registration: String(row.registration || '').toUpperCase().replace(/\s/g, ''),
                         make: String(row.make || 'Unknown'),
                         model: String(row.model || 'Unknown'),
+                        colour: row.colour || row.Color || row.Colour || row.color || 'Silver',
                         customerId: row.customerId || 'unknown_owner',
                     };
                     currentBatch.set(doc(collection(db, 'brooks_vehicles'), id), vehicleData);

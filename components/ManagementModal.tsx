@@ -41,11 +41,12 @@ interface ManagementModalProps {
     backupSchedule: BackupSchedule;
     setBackupSchedule: (schedule: BackupSchedule) => void;
     onManualBackup: () => void;
+    onCloudSnapshot: () => Promise<boolean>;
     onRestoreFromSnapshot: (snapshotId: string) => Promise<void>;
 }
 
 const ManagementModal: React.FC<ManagementModalProps> = ({ 
-    isOpen, onClose, initialView, backupSchedule, setBackupSchedule, onManualBackup, onRestoreFromSnapshot, 
+    isOpen, onClose, initialView, backupSchedule, setBackupSchedule, onManualBackup, onCloudSnapshot, onRestoreFromSnapshot, 
     onViewCustomer, onViewVehicle, onViewJob, onViewEstimate, onViewInvoice, onOpenPurchaseOrder
 }) => {
     const dataContext = useData();
@@ -99,7 +100,7 @@ const ManagementModal: React.FC<ManagementModalProps> = ({
         { id: 'discountCodes', label: 'Discount Codes', icon: Tag, render: () => <ManagementDiscountCodesTab />, permission: 'canManageDiscountCodes' },
         { id: 'storageLocations', label: 'Storage Locations', icon: Warehouse, render: () => <ManagementStorageLocationsTab searchTerm={searchTerm} onShowStatus={showStatus} />, permission: 'canManageStorageLocations' },
         { id: 'voiceSettings', label: 'AI & Voice Settings', icon: Volume2, render: () => <ManagementVoiceTab />, permission: 'canManageStaff' },
-        { id: 'backup', label: 'Backup & Restore', icon: Database, render: () => <ManagementBackupTab backupSchedule={backupSchedule} setBackupSchedule={setBackupSchedule} onManualBackup={onManualBackup} onRestoreFromSnapshot={onRestoreFromSnapshot} onShowStatus={showStatus} />, permission: 'canManageBackups' },
+        { id: 'backup', label: 'Backup & Restore', icon: Database, render: () => <ManagementBackupTab backupSchedule={backupSchedule} setBackupSchedule={setBackupSchedule} onManualBackup={onManualBackup} onCloudSnapshot={onCloudSnapshot} onRestoreFromSnapshot={onRestoreFromSnapshot} onShowStatus={showStatus} />, permission: 'canManageBackups' },
     ], [searchTerm, backupSchedule, onManualBackup, onRestoreFromSnapshot, setBackupSchedule, setCurrentView, onClose, onViewCustomer, onViewVehicle, onViewJob, onViewEstimate, onViewInvoice, onOpenPurchaseOrder]); // Added handlers to dependency array
 
     const filteredTabs = useMemo(() => {

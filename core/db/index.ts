@@ -15,7 +15,9 @@ import {
 
 // We import the single source of truth for 'auth' and 'db' 
 // which is now correctly configured to use (default)
-import { auth, db } from '../config/firebaseConfig';
+import { auth, db, storage } from '../config/firebaseConfig';
+import { ref, uploadString, getDownloadURL, listAll, deleteObject } from 'firebase/storage';
+import { idbSet, idbGet, idbKeys, idbDel } from './idb';
 
 /**
  * COLLECTION NAMES
@@ -181,5 +183,51 @@ export const clearStore = async () => {
     console.warn("Manual clear required in Firebase Console for Firestore storage.");
 };
 
-// Re-exporting auth and db to maintain compatibility with other files
-export { auth, db };
+/**
+ * FIREBASE STORAGE HELPERS (For Large Backups)
+ */
+export const uploadToStorage = async (path: string, data: any): Promise<string> => {
+    if (!storage) throw new Error("Storage not initialized");
+    const storageRef = ref(storage, path);
+    const jsonString = JSON.stringify(data);
+    await uploadString(storageRef, jsonString, 'raw', { contentType: 'application/json' });
+    return await getDownloadURL(storageRef);
+};
+
+export const downloadFromStorage = async <T>(path: string): Promise<T | null> => {
+    if (!storage) return null;
+    const storageRef = ref(storage, path);
+    try {
+        const url = await getDownloadURL(storageRef);
+        const response = await fetch(url);
+        return await response.json() as T;
+    } catch (err) {
+        console.error(`[Storage Download Error] ${path}:`, err);
+        return null;
+    }
+};
+
+export const listStorageFiles = async (directory: string): Promise<string[]> => {
+    if (!storage) return [];
+    const listRef = ref(storage, directory);
+    try {
+        const res = await listAll(listRef);
+        return res.items.map(item => item.fullPath);
+    } catch (err) {
+        console.error(`[Storage List Error] ${directory}:`, err);
+        return [];
+    }
+};
+
+export const deleteFromStorage = async (path: string): Promise<void> => {
+    if (!storage) return;
+    const storageRef = ref(storage, path);
+    try {
+        await deleteObject(storageRef);
+    } catch (err) {
+        console.error(`[Storage Delete Error] ${path}:`, err);
+    }
+};
+
+// Re-exporting auth, db and storage to maintain compatibility
+export { auth, db, storage };

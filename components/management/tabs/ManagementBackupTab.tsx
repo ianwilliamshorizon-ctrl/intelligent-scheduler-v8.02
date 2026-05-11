@@ -1,15 +1,17 @@
 import React, { useState } from 'react';
 import { useApp } from '../../../core/state/AppContext';
 import { useData } from '../../../core/state/DataContext';
-import { Download, Upload, RefreshCw, Server, AlertTriangle, PlusCircle, X, Clock } from 'lucide-react';
+import { Download, Upload, RefreshCw, Server, AlertTriangle, PlusCircle, X, Clock, Database, Cloud } from 'lucide-react';
 import { performFactoryReset } from '../../../core/utils/backupUtils';
-import { setItem, getStorageType, getAll } from '../../../core/db';
+import { setItem, getStorageType, getAll, listStorageFiles, uploadToStorage } from '../../../core/db';
+import { idbKeys } from '../../../core/db/idb';
 import { BackupSchedule } from '../../../types';
 
 interface ManagementBackupTabProps {
     backupSchedule: BackupSchedule;
     setBackupSchedule: (schedule: BackupSchedule) => void;
     onManualBackup: () => void;
+    onCloudSnapshot: () => Promise<boolean>;
     onRestoreFromSnapshot: (snapshotId: string) => Promise<void>;
     onShowStatus: (text: string, type: 'info' | 'success' | 'error') => void;
 }
@@ -18,12 +20,14 @@ export const ManagementBackupTab: React.FC<ManagementBackupTabProps> = ({
     backupSchedule, 
     setBackupSchedule, 
     onManualBackup,
+    onCloudSnapshot,
     onRestoreFromSnapshot,
     onShowStatus 
 }) => {
     const { appEnvironment, setAppEnvironment } = useApp();
     const [isUpdating, setIsUpdating] = useState(false);
-    const [snapshots, setSnapshots] = useState<any[]>([]);
+    const [cloudSnapshots, setCloudSnapshots] = useState<any[]>([]);
+    const [localSnapshots, setLocalSnapshots] = useState<any[]>([]);
     const [isLoadingSnapshots, setIsLoadingSnapshots] = useState(false);
     const [isRestoring, setIsRestoring] = useState(false);
     const [restoreStatus, setRestoreStatus] = useState('');
@@ -37,16 +41,42 @@ export const ManagementBackupTab: React.FC<ManagementBackupTabProps> = ({
     const fetchSnapshots = async () => {
         setIsLoadingSnapshots(true);
         try {
+            // 1. Fetch Cloud Storage Snapshots
+            const cloudFiles = await listStorageFiles('backups');
+            const cloudArr = cloudFiles.map(path => ({
+                id: path,
+                name: path.split('/').pop()?.replace('backup_auto_', '').replace('.json', '') || path,
+                type: 'cloud'
+            })).sort((a, b) => b.id.localeCompare(a.id));
+            setCloudSnapshots(cloudArr);
+
+            // 2. Fetch Local IndexedDB Snapshots
+            const keys = await idbKeys();
+            const localArr = (keys as string[])
+                .filter(k => k.startsWith('backup_local_'))
+                .map(k => ({
+                    id: k,
+                    name: k.replace('backup_local_', '').replace(/-/g, ':'),
+                    type: 'local'
+                }))
+                .sort((a, b) => b.id.localeCompare(a.id));
+            setLocalSnapshots(localArr);
+
+            // 3. Fallback: Fetch Legacy Firestore Snapshots
             const allSettings = await getAll<any>('brooks_settings');
-            const autoSnapshots = allSettings
+            const legacySnapshots = allSettings
                 .filter(s => s.id.startsWith('backup_auto_'))
                 .map(s => ({
                     id: s.id,
-                    date: s.id.replace('backup_auto_', '').replace(/-/g, ':'),
-                    timestamp: s.id.replace('backup_auto_', '')
-                }))
-                .sort((a, b) => b.id.localeCompare(a.id));
-            setSnapshots(autoSnapshots);
+                    name: s.id.replace('backup_auto_', '').replace(/-/g, ':'),
+                    type: 'legacy'
+                }));
+            
+            if (legacySnapshots.length > 0) {
+                // Mix them into cloud for visibility
+                setCloudSnapshots(prev => [...prev, ...legacySnapshots].sort((a, b) => b.id.localeCompare(a.id)));
+            }
+
         } catch (err) {
             console.error("Failed to fetch snapshots", err);
         } finally {
@@ -134,10 +164,32 @@ export const ManagementBackupTab: React.FC<ManagementBackupTabProps> = ({
             <div className="p-4 border rounded-lg bg-blue-50 border-blue-200">
                 <h3 className="text-lg font-bold text-blue-900 mb-2 flex items-center gap-2"><Download size={20}/> Manual Backup</h3>
                 <p className="text-sm text-blue-800 mb-4">Generate an immediate full system export. Use this before making major configuration changes.</p>
-                <button onClick={onManualBackup} className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 shadow flex items-center gap-2">
-                    <Download size={18}/>
-                    Download JSON Backup
-                </button>
+                <div className="flex flex-wrap gap-3">
+                    <button onClick={onManualBackup} className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 shadow flex items-center gap-2 transition-all">
+                        <Download size={18}/>
+                        Download JSON Backup
+                    </button>
+                    <button 
+                        onClick={async () => {
+                            onShowStatus('Creating cloud snapshot...', 'info');
+                            try {
+                                const success = await onCloudSnapshot();
+                                if (success) {
+                                    onShowStatus('Cloud snapshot created successfully.', 'success');
+                                    fetchSnapshots(); // Refresh the list
+                                } else {
+                                    onShowStatus('Cloud snapshot failed.', 'error');
+                                }
+                            } catch (e) {
+                                onShowStatus('Snapshot failed', 'error');
+                            }
+                        }} 
+                        className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 shadow flex items-center gap-2 transition-all"
+                    >
+                        <Cloud size={18}/>
+                        Create Cloud Snapshot
+                    </button>
+                </div>
             </div>
             
             <div className="p-4 border rounded-lg bg-gray-50 border-gray-200 mt-4">
@@ -166,7 +218,7 @@ export const ManagementBackupTab: React.FC<ManagementBackupTabProps> = ({
                                     <button onClick={() => { const input = document.getElementById('new-backup-time') as HTMLInputElement; if (input.value && !backupSchedule.times.includes(input.value)) { setBackupSchedule({...backupSchedule, times: [...backupSchedule.times, input.value].sort()}); input.value = ''; } }} className="bg-indigo-100 text-indigo-700 hover:bg-indigo-600 hover:text-white p-2 rounded-full transition-colors"><PlusCircle size={20}/></button>
                                 </div>
                             </div>
-                            <p className="text-[10px] text-gray-500 mt-2 italic">Standard Brookspeed policy: 02:00 and 14:00 (Local and Remote redundancy enabled).</p>
+                            <p className="text-[10px] text-gray-500 mt-2 italic">Standard Brookspeed policy: 02:00 and 14:00 (Guaranteed Server-Side Automation + Local Redundancy enabled).</p>
                         </div>
 
                         <div className="bg-white p-3 rounded-lg border border-gray-200">
@@ -179,30 +231,69 @@ export const ManagementBackupTab: React.FC<ManagementBackupTabProps> = ({
                             
                             {isLoadingSnapshots ? (
                                 <p className="text-xs text-gray-500 py-4 text-center">Loading snapshot history...</p>
-                            ) : snapshots.length > 0 ? (
-                                <div className="max-h-48 overflow-y-auto space-y-2">
-                                    {snapshots.map(snapshot => (
-                                        <div key={snapshot.id} className="flex items-center justify-between p-2 hover:bg-gray-50 rounded-lg border border-transparent hover:border-gray-100 transition-all">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-8 h-8 rounded bg-green-100 text-green-700 flex items-center justify-center">
-                                                    <Server size={14} />
-                                                </div>
-                                                <div>
-                                                    <p className="text-xs font-bold text-gray-800">{snapshot.id}</p>
-                                                    <p className="text-[10px] text-gray-500">Stored in Cloud Firestore</p>
-                                                </div>
+                            ) : (cloudSnapshots.length > 0 || localSnapshots.length > 0) ? (
+                                <div className="space-y-4">
+                                    {cloudSnapshots.length > 0 && (
+                                        <div>
+                                            <p className="text-[10px] font-bold text-gray-400 uppercase mb-2 flex items-center gap-1"><Cloud size={10}/> Cloud Snapshots (Remote)</p>
+                                            <div className="max-h-48 overflow-y-auto space-y-2">
+                                                {cloudSnapshots.map(snapshot => (
+                                                    <div key={snapshot.id} className="flex items-center justify-between p-2 hover:bg-indigo-50 rounded-lg border border-transparent hover:border-indigo-100 transition-all group">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-8 h-8 rounded bg-indigo-100 text-indigo-700 flex items-center justify-center">
+                                                                <Cloud size={14} />
+                                                            </div>
+                                                            <div>
+                                                                <p className="text-xs font-bold text-gray-800">{snapshot.name}</p>
+                                                                <p className="text-[10px] text-gray-500">{snapshot.type === 'legacy' ? 'Legacy Firestore' : 'Firebase Storage'}</p>
+                                                            </div>
+                                                        </div>
+                                                        <button 
+                                                            onClick={() => handleSnapshotRestore(snapshot.id)}
+                                                            className="text-[10px] font-black uppercase tracking-widest bg-white border border-indigo-200 text-indigo-600 px-3 py-1.5 rounded-md hover:bg-indigo-600 hover:text-white transition-all shadow-sm opacity-0 group-hover:opacity-100"
+                                                        >
+                                                            Restore
+                                                        </button>
+                                                    </div>
+                                                ))}
                                             </div>
-                                            <button 
-                                                onClick={() => handleSnapshotRestore(snapshot.id)}
-                                                className="text-[10px] font-black uppercase tracking-widest bg-white border border-indigo-200 text-indigo-600 px-3 py-1.5 rounded-md hover:bg-indigo-600 hover:text-white transition-all shadow-sm"
-                                            >
-                                                Restore
-                                            </button>
                                         </div>
-                                    ))}
+                                    )}
+
+                                    {localSnapshots.length > 0 && (
+                                        <div>
+                                            <p className="text-[10px] font-bold text-gray-400 uppercase mb-2 flex items-center gap-1"><Database size={10}/> Local Snapshots (Browser)</p>
+                                            <div className="max-h-48 overflow-y-auto space-y-2">
+                                                {localSnapshots.map(snapshot => (
+                                                    <div key={snapshot.id} className="flex items-center justify-between p-2 hover:bg-amber-50 rounded-lg border border-transparent hover:border-amber-100 transition-all group">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-8 h-8 rounded bg-amber-100 text-amber-700 flex items-center justify-center">
+                                                                <Database size={14} />
+                                                            </div>
+                                                            <div>
+                                                                <p className="text-xs font-bold text-gray-800">{snapshot.name}</p>
+                                                                <p className="text-[10px] text-gray-500">Stored in IndexedDB</p>
+                                                            </div>
+                                                        </div>
+                                                        <button 
+                                                            onClick={() => handleSnapshotRestore(snapshot.id)}
+                                                            className="text-[10px] font-black uppercase tracking-widest bg-white border border-amber-200 text-amber-600 px-3 py-1.5 rounded-md hover:bg-amber-600 hover:text-white transition-all shadow-sm opacity-0 group-hover:opacity-100"
+                                                        >
+                                                            Restore
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             ) : (
-                                <p className="text-xs text-gray-400 py-4 text-center">No automated snapshots found yet.</p>
+                                <div className="text-center py-6">
+                                    <div className="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-2">
+                                        <AlertTriangle size={20} className="text-gray-300" />
+                                    </div>
+                                    <p className="text-xs text-gray-400">No snapshots found. Enable automation or create a manual cloud snapshot.</p>
+                                </div>
                             )}
                         </div>
                     </div>

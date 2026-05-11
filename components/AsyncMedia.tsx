@@ -63,7 +63,7 @@ export const AsyncMedia: React.FC<AsyncMediaProps> = ({ imageId, alt = "Media", 
 
     if (isLoading) {
         return (
-            <div className={`flex items-center justify-center bg-gray-100 animate-pulse ${className}`}>
+            <div className={`flex items-center justify-center animate-pulse ${className}`}>
                 <Loader2 className="w-5 h-5 text-indigo-400 animate-spin" />
             </div>
         );

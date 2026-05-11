@@ -6,7 +6,8 @@ import * as T from './types';
 import { useData } from './core/state/DataContext';
 import { useApp } from './core/state/AppContext';
 import { createBackup, downloadBackup } from './core/utils/backupUtils';
-import { setItem } from './core/db';
+import { setItem, uploadToStorage, downloadFromStorage } from './core/db';
+import { idbSet, idbGet } from './core/db/idb';
 import { getCustomerDisplayName } from './core/utils/customerUtils';
 import { formatDate, dateStringToDate } from './core/utils/dateUtils';
 import useModalState from './core/hooks/useModalState';
@@ -128,36 +129,65 @@ const App = () => {
         downloadBackup(backupData);
     }, [getFullStateData]);
 
+    const handleCloudSnapshot = useCallback(async () => {
+        const backupData = createBackup(getFullStateData());
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const filename = `backups/backup_manual_${timestamp}.json`;
+        
+        try {
+            await uploadToStorage(filename, backupData);
+            setConfirmation({
+                isOpen: true,
+                title: 'Cloud Snapshot Created',
+                message: 'A manual system snapshot has been successfully uploaded to cloud storage.',
+                type: 'success'
+            });
+            return true;
+        } catch (e) {
+            console.error("Cloud snapshot failed", e);
+            return false;
+        }
+    }, [getFullStateData, setConfirmation]);
+
     const handleAutoBackup = useCallback(async () => {
         const backupData = createBackup(getFullStateData());
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const filename = `backups/backup_auto_${timestamp}.json`;
+
         try {
-            // 1. Remote Retention (Firestore)
-            await setItem(`backup_auto_${timestamp}`, backupData);
+            // 1. Remote Retention (Firebase Storage) - No 1MB limit
+            await uploadToStorage(filename, backupData);
             
-            // 2. Local Retention (Browser LocalStorage)
-            // We only store the last one locally to avoid quota issues
-            try {
-                localStorage.setItem('brooks_last_auto_backup', JSON.stringify(backupData));
-            } catch (localErr) {
-                console.warn("Local storage quota exceeded, snapshot saved to cloud only.");
-            }
+            // 2. Local Retention (IndexedDB) - Much larger than LocalStorage
+            await idbSet(`backup_local_${timestamp}`, backupData);
+            
+            // Keep track of the latest local backup for quick access
+            await idbSet('last_auto_backup', backupData);
 
             setConfirmation({
                 isOpen: true,
                 title: 'Automated Snapshot Created',
-                message: 'A dual-retention system backup (Local & Remote) has been successfully saved. You can restore this from the Management > Backup tab.',
+                message: 'A dual-retention system backup (Local IndexedDB & Cloud Storage) has been successfully saved. You can restore this from the Management > Backup tab.',
                 type: 'success'
             });
         } catch (e) {
             console.error("Auto-backup failed", e);
+            // Fallback: try saving a minimal version or just logging
         }
     }, [getFullStateData, setConfirmation]);
 
     const handleRestoreFromSnapshot = useCallback(async (snapshotId: string) => {
-        const { getItem } = await import('./core/db');
-        const snapshot = await getItem<any>(snapshotId);
-        if (!snapshot) throw new Error("Snapshot not found");
+        let snapshot: any = null;
+        
+        if (snapshotId.startsWith('backups/')) {
+            // Restore from Cloud Storage
+            snapshot = await downloadFromStorage(snapshotId);
+        } else {
+            // Restore from Local IndexedDB
+            snapshot = await idbGet(snapshotId);
+        }
+
+        if (!snapshot) throw new Error("Snapshot not found or could not be downloaded");
 
         const dataToRestore = snapshot.data || snapshot;
         for (const [key, value] of Object.entries(dataToRestore)) {
@@ -402,6 +432,7 @@ const App = () => {
                         backupSchedule={backupSchedule}
                         setBackupSchedule={setBackupSchedule}
                         onManualBackup={handleManualBackup}
+                        onCloudSnapshot={handleCloudSnapshot}
                         onRestoreFromSnapshot={handleRestoreFromSnapshot}
                     />
                 )}

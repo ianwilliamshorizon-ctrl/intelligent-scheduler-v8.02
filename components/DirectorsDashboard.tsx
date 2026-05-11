@@ -14,11 +14,11 @@ const DirectorsDashboard: React.FC = () => {
     const [selectedEntityId, setSelectedEntityId] = useState<string>('all');
     const [selectedYear, setSelectedYear] = useState<string>(format(new Date(), 'yyyy'));
 
-    const getSafeDate = (item: any): Date => {
+    const getSafeDate = (item: any): Date | null => {
         const dateString = item.issueDate || item.createdAt || item.orderDate || item.scheduledDate;
-        if (!dateString) return new Date('invalid');
+        if (!dateString) return null;
         const d = new Date(dateString);
-        return isValid(d) ? d : new Date('invalid');
+        return isValid(d) ? d : null;
     };
 
     const processedData = useMemo(() => {
@@ -64,6 +64,7 @@ const DirectorsDashboard: React.FC = () => {
         // 2. Process Invoices into breakdown buckets
         (invoices || []).forEach(inv => {
             const date = getSafeDate(inv);
+            if (!date) return;
             const monthKey = format(date, 'yyyy-MM');
             const key = `${inv.entityId}_${monthKey}`;
             if (breakdownBuckets.has(key)) {
@@ -97,6 +98,7 @@ const DirectorsDashboard: React.FC = () => {
         // 4. Process Jobs for count
         (jobs || []).forEach(job => {
             const date = getSafeDate(job);
+            if (!date) return;
             const monthKey = format(date, 'yyyy-MM');
             const key = `${job.entityId}_${monthKey}`;
             if (breakdownBuckets.has(key)) {
@@ -106,12 +108,26 @@ const DirectorsDashboard: React.FC = () => {
 
         // 5. Finalize Table Rows
         const tableData = Array.from(breakdownBuckets.values())
-            .sort((a, b) => b.month.localeCompare(a.month) || a.entityName.localeCompare(b.entityName))
-            .map(b => ({
-                ...b,
-                netProfit: b.grossProfit - b.baselineCosts,
-                displayMonth: format(parse(b.month, 'yyyy-MM', new Date()), 'MMM yyyy')
-            }));
+            .filter(b => {
+                // Defensive check for invalid months or missing entity data
+                if (!b.month || typeof b.month !== 'string') return false;
+                const d = parse(b.month, 'yyyy-MM', new Date());
+                return isValid(d);
+            })
+            .sort((a, b) => {
+                // Safe sort with fallbacks for missing names
+                const monthComp = (b.month || '').localeCompare(a.month || '');
+                if (monthComp !== 0) return monthComp;
+                return (a.entityName || '').localeCompare(b.entityName || '');
+            })
+            .map(b => {
+                const date = parse(b.month, 'yyyy-MM', new Date());
+                return {
+                    ...b,
+                    netProfit: (b.grossProfit || 0) - (b.baselineCosts || 0),
+                    displayMonth: isValid(date) ? format(date, 'MMM yyyy') : 'Unknown'
+                };
+            });
 
         // --- Keep Existing Chart/Kpi Aggregation (Totaled for the selected view) ---
         const buckets = createMonthlyBuckets();
@@ -123,6 +139,7 @@ const DirectorsDashboard: React.FC = () => {
         // (Original aggregation logic remains for the Chart and Top KPIs)
         filteredInvoices.forEach(inv => {
             const date = getSafeDate(inv);
+            if (!date) return;
             const monthKey = format(date, 'yyyy-MM');
             if (buckets.has(monthKey)) {
                 const b = buckets.get(monthKey)!;
@@ -151,12 +168,14 @@ const DirectorsDashboard: React.FC = () => {
 
         filteredJobs.forEach(job => {
             const date = getSafeDate(job);
+            if (!date) return;
             const monthKey = format(date, 'yyyy-MM');
             if (buckets.has(monthKey)) buckets.get(monthKey)!.count++;
         });
 
         filteredEstimates.forEach(est => {
             const date = getSafeDate(est);
+            if (!date) return;
             const monthKey = format(date, 'yyyy-MM');
             if (buckets.has(monthKey)) {
                 const b = buckets.get(monthKey)!;
