@@ -229,6 +229,47 @@ exports.performScheduledBackup = onSchedule({
         });
 
         logger.info(`Successfully completed backup: ${filename}`);
+        
+        // 4. Cleanup old backups based on retention policy:
+        // - Keep all backups for 7 days
+        // - Keep Sunday backups for 3 months (90 days)
+        // - Delete everything else
+        logger.info("Starting backup retention cleanup...");
+        const [files] = await bucket.getFiles({ prefix: 'backups/backup_auto_' });
+        const now = new Date();
+        const sevenDaysAgo = new Date(now.getTime() - (7 * 24 * 60 * 60 * 1000));
+        const threeMonthsAgo = new Date(now.getTime() - (90 * 24 * 60 * 60 * 1000));
+
+        let deletedCount = 0;
+        for (const f of files) {
+            // Skip the file we just created
+            if (f.name === filename) continue;
+
+            // Extract date from filename: backup_auto_[server_]YYYY-MM-DD...
+            // Format: backup_auto_server_2026-05-11T09-34-31-000Z.json
+            const datePart = f.name.match(/\d{4}-\d{2}-\d{2}/);
+            if (!datePart) continue;
+
+            const fileDate = new Date(datePart[0]);
+            const isSunday = fileDate.getDay() === 0;
+
+            let shouldKeep = false;
+
+            if (fileDate > sevenDaysAgo) {
+                // Within 7 days - Keep all
+                shouldKeep = true;
+            } else if (isSunday && fileDate > threeMonthsAgo) {
+                // Sunday backup within 3 months - Keep
+                shouldKeep = true;
+            }
+
+            if (!shouldKeep) {
+                await f.delete();
+                deletedCount++;
+                logger.info(`Deleted old backup: ${f.name}`);
+            }
+        }
+        logger.info(`Cleanup complete. Deleted ${deletedCount} old backups.`);
 
     } catch (error) {
         logger.error("Scheduled Backup Failed:", error);
