@@ -6,6 +6,10 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:brookspeed": "vite build --mode brookspeed",
+    "deploy:brookspeed": "firebase deploy --project default",
+    "build:company1": "vite build --mode company1",
+    "deploy:company1": "firebase deploy --project company1",
     "preview": "vite preview",
     "test": "vitest",
     "test:ui": "vitest --ui"

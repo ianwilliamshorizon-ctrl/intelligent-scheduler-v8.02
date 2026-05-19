@@ -73,5 +73,6 @@ export const prepareTextForSpeech = (text: string): string => {
         .replace(/^\* /gm, '')          // Strip list bullets at start of lines
         .replace(/^- /gm, '')           // Strip alternative list bullets
         .replace(/\n+/g, ' ')           // Convert newlines to spaces for smoother flow
+        .replace(/(\d+)\.(\d+)/g, '$1 point $2') // Read decimals naturally (4.8 -> 4 point 8)
         .trim();
 };

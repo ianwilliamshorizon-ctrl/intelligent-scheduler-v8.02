@@ -10,7 +10,7 @@ interface BaselineCostsEditorProps {
     onSave: (baseline: FinancialBaseline) => void;
 }
 
-const BaselineCostsEditor: React.FC<BaselineCostsEditorProps> = ({ entityId, baselines, onSave }) => {
+const BaselineCostsEditor: React.FC<BaselineCostsEditorProps> = ({ entityId, entities, baselines, onSave }) => {
     const [isAdding, setIsAdding] = useState(false);
     const [editData, setEditData] = useState<Partial<FinancialBaseline>>({
         month: format(new Date(), 'yyyy-MM'),
@@ -80,7 +80,22 @@ const BaselineCostsEditor: React.FC<BaselineCostsEditorProps> = ({ entityId, bas
 
             {isAdding && (
                 <div className="p-6 bg-indigo-50/30 border-b border-indigo-100 animate-in fade-in slide-in-from-top-4 duration-300">
-                    <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-8 gap-4 mb-6">
+                    <div className={`grid grid-cols-1 md:grid-cols-4 ${entityId === 'all' ? 'lg:grid-cols-9' : 'lg:grid-cols-8'} gap-4 mb-6`}>
+                        {entityId === 'all' && (
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-indigo-600 px-1">Business Entity</label>
+                                <select 
+                                    value={editData.entityId || ''}
+                                    onChange={e => setEditData({...editData, entityId: e.target.value})}
+                                    className="w-full px-3 py-2.5 bg-white border border-indigo-200 rounded-xl text-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all font-bold"
+                                >
+                                    <option value="" disabled>Select Entity...</option>
+                                    {entities.map(e => (
+                                        <option key={e.id} value={e.id}>{e.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
                         <div className="space-y-1.5">
                             <label className="text-[10px] font-black uppercase tracking-widest text-indigo-600 px-1">Month</label>
                             <div className="relative">
@@ -170,6 +185,7 @@ const BaselineCostsEditor: React.FC<BaselineCostsEditorProps> = ({ entityId, bas
                     <thead className="bg-gray-50 text-[10px] font-black uppercase tracking-widest text-gray-400">
                         <tr>
                             <th className="px-6 py-4">Month</th>
+                            {entityId === 'all' && <th className="px-6 py-4">Entity</th>}
                             <th className="px-6 py-4">Direct Overheads</th>
                             <th className="px-6 py-4">Hist. Revenue</th>
                             <th className="px-6 py-4">Hist. COS</th>
@@ -180,7 +196,7 @@ const BaselineCostsEditor: React.FC<BaselineCostsEditorProps> = ({ entityId, bas
                     <tbody className="divide-y divide-gray-50">
                         {filteredBaselines.length === 0 ? (
                             <tr>
-                                <td colSpan={6} className="px-6 py-12 text-center text-gray-400 italic">No baseline or historical data recorded.</td>
+                                <td colSpan={entityId === 'all' ? 7 : 6} className="px-6 py-12 text-center text-gray-400 italic">No baseline or historical data recorded.</td>
                             </tr>
                         ) : (
                             filteredBaselines.map(baseline => {
@@ -191,6 +207,11 @@ const BaselineCostsEditor: React.FC<BaselineCostsEditorProps> = ({ entityId, bas
                                             <div className="font-black text-indigo-600">{format(new Date(baseline.month), 'MMMM yyyy')}</div>
                                             <div className="text-[10px] text-gray-400 font-bold uppercase tracking-tighter">Baseline Records</div>
                                         </td>
+                                        {entityId === 'all' && (
+                                            <td className="px-6 py-4">
+                                                <div className="font-bold text-gray-700">{entities.find(e => e.id === baseline.entityId)?.name || 'Unknown Entity'}</div>
+                                            </td>
+                                        )}
                                         <td className="px-6 py-4">
                                             <div className="text-[10px] text-gray-500 font-medium">Salaries: £{baseline.salaries.toLocaleString()}</div>
                                             <div className="text-[10px] text-gray-500 font-medium">Rent/Util: £{(baseline.rentRates + baseline.utilities).toLocaleString()}</div>

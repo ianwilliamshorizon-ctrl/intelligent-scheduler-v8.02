@@ -99,7 +99,6 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
      */
     const refreshData = async () => {
         if (syncStarted.current && users.length > 0) return;
-        syncStarted.current = true;
         
         const getPath = (s: string) => `${COLLECTION_NAME}_${s}`;
         
@@ -136,18 +135,20 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
                     console.log("💾 AppContext: Backup schedule loaded:", schedule);
                     setBackupSchedule({ 
                         enabled: schedule.enabled ?? false, 
-                        times: schedule.times || [] 
+                        times: schedule.times || [],
+                        lastRun: schedule.lastRun,
+                        lastSuccess: schedule.lastSuccess
                     });
-                } else {
-                    console.warn("⚠️ AppContext: No backup schedule found in DB.");
                 }
             } catch (err) {
-                console.error("❌ AppContext: Failed to load backup schedule", err);
+                console.warn("⚠️ AppContext: Could not load backup schedule (permissions?)", err);
             }
 
             console.log("✅ AppContext: Sync Complete.");
+            syncStarted.current = true; // Set to true ONLY on success
         } catch (e) {
             console.error("❌ AppContext: Sync Failed.", e);
+            syncStarted.current = false; // Allow retry
         } finally {
             setIsAppReady(true);
         }
@@ -159,6 +160,9 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, (fbUser) => {
             if (fbUser) {
+                // When authenticated, ensure we sync data
+                refreshData(); 
+                
                 const profile = users.find(u => u.email?.toLowerCase() === fbUser.email?.toLowerCase());
                 if (profile) {
                     setCurrentUser(profile);

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Drawer, List, ListItemButton, ListItemText, Typography, Box } from '@mui/material';
+import { Drawer, List, ListItemButton, ListItemText, Typography, Box, Modal, IconButton } from '@mui/material';
+import { X, ZoomIn } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
@@ -16,6 +17,7 @@ const sopFiles = [
 const HelpCentre = ({ open, onClose }) => {
   const [sops, setSops] = useState([]);
   const [selectedSop, setSelectedSop] = useState(null);
+  const [zoomedImage, setZoomedImage] = useState(null);
 
   useEffect(() => {
     const fetchSops = async () => {
@@ -89,7 +91,56 @@ const HelpCentre = ({ open, onClose }) => {
           '& a': { color: '#1976d2', textDecoration: 'none', '&:hover': { textDecoration: 'underline' } },
         }}>
           {selectedSop ? (
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+            <ReactMarkdown 
+              remarkPlugins={[remarkGfm]}
+              components={{
+                img: ({ node, ...props }) => (
+                  <Box 
+                    sx={{ 
+                      position: 'relative', 
+                      display: 'inline-block', 
+                      my: 3, 
+                      cursor: 'zoom-in',
+                      '&:hover .zoom-overlay': { opacity: 1 },
+                      '& img': { 
+                        maxWidth: '100%', 
+                        height: 'auto', 
+                        borderRadius: '12px', 
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                        transition: 'transform 0.2s ease-in-out'
+                      },
+                      '&:hover img': {
+                        transform: 'scale(1.02)'
+                      }
+                    }}
+                    onClick={() => setZoomedImage(props.src)}
+                  >
+                    <img {...props} alt={props.alt || 'Help Image'} />
+                    <Box 
+                      className="zoom-overlay"
+                      sx={{ 
+                        position: 'absolute', 
+                        top: 12, 
+                        right: 12, 
+                        backgroundColor: 'rgba(255,255,255,0.9)', 
+                        p: 1, 
+                        borderRadius: 'full', 
+                        opacity: 0, 
+                        transition: 'opacity 0.2s',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                        color: '#1976d2',
+                        pointerEvents: 'none'
+                      }}
+                    >
+                      <ZoomIn size={18} />
+                    </Box>
+                  </Box>
+                )
+              }}
+            >
               {selectedSop.content}
             </ReactMarkdown>
           ) : (
@@ -97,6 +148,46 @@ const HelpCentre = ({ open, onClose }) => {
           )}
         </Box>
       </Box>
+
+      {/* Image Zoom Modal */}
+      <Modal
+        open={!!zoomedImage}
+        onClose={() => setZoomedImage(null)}
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: 'rgba(0,0,0,0.9)',
+          zIndex: 10000,
+        }}
+      >
+        <Box sx={{ position: 'relative', maxWidth: '95vw', maxHeight: '95vh', outline: 'none' }}>
+          <IconButton
+            onClick={() => setZoomedImage(null)}
+            sx={{
+              position: 'absolute',
+              top: -48,
+              right: 0,
+              color: 'white',
+              backgroundColor: 'rgba(255,255,255,0.1)',
+              '&:hover': { backgroundColor: 'rgba(255,255,255,0.2)' }
+            }}
+          >
+            <X size={24} />
+          </IconButton>
+          <img 
+            src={zoomedImage} 
+            alt="Zoomed" 
+            style={{ 
+              maxWidth: '100%', 
+              maxHeight: '90vh', 
+              objectFit: 'contain',
+              borderRadius: '8px',
+              boxShadow: '0 24px 48px rgba(0,0,0,0.5)'
+            }} 
+          />
+        </Box>
+      </Modal>
     </Drawer>
   );
 };

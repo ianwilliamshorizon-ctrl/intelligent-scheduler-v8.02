@@ -17,6 +17,7 @@ import { useWorkshopActions } from './core/hooks/useWorkshopActions';
 import MainLayout from './components/MainLayout';
 import AppModals from './components/AppModals';
 import LoginView from './components/LoginView';
+import VersionChecker from './components/VersionChecker';
 
 // Lazy Loaded Views
 const DashboardView = lazy(() => import('./components/DashboardView'));
@@ -415,6 +416,7 @@ const App = () => {
 
     return (
         <Router>
+            <VersionChecker />
             <MainLayout onOpenManagement={() => setIsManagementOpen(true)} onOpenHelpCentre={() => setIsHelpCentreOpen(true)} onSearchResult={handleSearchResult}>
                 <Suspense fallback={
                     <div className="flex items-center justify-center h-screen bg-slate-50 dark:bg-slate-900">
