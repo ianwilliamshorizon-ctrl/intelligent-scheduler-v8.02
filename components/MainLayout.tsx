@@ -94,15 +94,17 @@ const MainLayout: React.FC<{
                 ${isSidebarOpen ? 'w-64 translate-x-0' : 'w-0 -translate-x-full lg:translate-x-0 lg:w-20'} 
                 bg-slate-900 text-white transition-all duration-300 flex flex-col flex-shrink-0 overflow-hidden
             `}>
-                <div className="p-4 flex items-center justify-between h-16 border-b border-slate-800 flex-shrink-0">
-                    <span className="font-bold text-xl tracking-tight hidden lg:block">BROOKSPEED</span>
+                <div className={`p-4 flex items-center h-16 border-b border-slate-800 flex-shrink-0 ${isSidebarOpen ? 'justify-between' : 'justify-center'}`}>
+                    {isSidebarOpen && (
+                        <span className="font-bold text-xl tracking-tight hidden lg:block">BROOKSPEED</span>
+                    )}
                     <button 
                         onClick={() => setIsSidebarOpen(!isSidebarOpen)} 
                         className="p-1 rounded hover:bg-slate-800 hidden lg:block"
                     >
                         <Menu size={20} />
                     </button>
-                    <button onClick={() => setIsSidebarOpen(false)} className="lg:hidden p-1">
+                    <button onClick={() => setIsSidebarOpen(false)} className="lg:hidden p-1 absolute right-4">
                         <X size={24} />
                     </button>
                 </div>
