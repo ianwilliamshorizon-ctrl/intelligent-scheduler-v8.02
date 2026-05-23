@@ -84,9 +84,30 @@ export const ManagementBackupTab: React.FC<ManagementBackupTabProps> = ({
         }
     };
 
+    const [availableVersion, setAvailableVersion] = useState<string | null>(null);
+
     React.useEffect(() => {
         fetchSnapshots();
+        // Fetch the server version specifically for this tab
+        fetch(`/version.json?t=${Date.now()}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data && data.version) {
+                    setAvailableVersion(data.version);
+                }
+            })
+            .catch(err => console.error("Could not fetch server version", err));
     }, []);
+
+    const formatVersionDate = (timestampStr: string) => {
+        if (!timestampStr) return 'Unknown';
+        try {
+            const date = new Date(parseInt(timestampStr));
+            return date.toLocaleString();
+        } catch {
+            return timestampStr;
+        }
+    };
 
     const handleRestore = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -360,6 +381,32 @@ export const ManagementBackupTab: React.FC<ManagementBackupTabProps> = ({
 
              <div className="p-4 border rounded-lg bg-indigo-50 border-indigo-200">
                 <h3 className="text-lg font-bold text-indigo-900 mb-2 flex items-center gap-2"><RefreshCw size={20}/> Software Update</h3>
+                
+                <div className="bg-white p-3 rounded-md border border-indigo-100 mb-4">
+                    <div className="flex justify-between items-center text-sm mb-2">
+                        <span className="text-gray-600 font-medium">Currently Running Version:</span>
+                        <span className="font-mono text-indigo-700 font-bold bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
+                            {formatVersionDate(typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '')}
+                        </span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm">
+                        <span className="text-gray-600 font-medium">Available on Server:</span>
+                        <span className="font-mono text-green-700 font-bold bg-green-50 px-2 py-0.5 rounded border border-green-100 flex items-center gap-1">
+                            {!availableVersion ? (
+                                <span className="flex items-center gap-1 text-gray-500"><RefreshCw size={12} className="animate-spin" /> Checking...</span>
+                            ) : (
+                                formatVersionDate(availableVersion)
+                            )}
+                        </span>
+                    </div>
+                    {availableVersion && typeof __APP_VERSION__ !== 'undefined' && availableVersion !== __APP_VERSION__ && (
+                        <div className="mt-3 p-2 bg-yellow-50 border border-yellow-200 text-yellow-800 text-xs rounded-md font-bold flex items-center justify-between">
+                            <span>An update is available!</span>
+                            <button onClick={() => window.location.reload()} className="px-2 py-1 bg-white border border-yellow-300 rounded shadow-sm hover:bg-yellow-100 text-yellow-900 transition-colors">Reload to Update</button>
+                        </div>
+                    )}
+                </div>
+
                 <div className="flex flex-col gap-2 mb-4">
                     <label className="text-sm font-medium text-indigo-900">Target Environment</label>
                     <select value={appEnvironment} onChange={(e) => setAppEnvironment(e.target.value as any)} className="p-2 border rounded-md text-sm bg-white w-full md:w-1/2" disabled={isUpdating}>
