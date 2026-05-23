@@ -46,7 +46,8 @@ const ManageStorageBookingModal = ({
         setSelectedChargerId('');
     }, [booking, isOpen]);
 
-    const isClosed = !!formData.endDate;
+    // Allow editing unless the booking has already departed (end date is in the past)
+    const isClosed = !!booking.endDate && new Date(booking.endDate) < new Date(new Date().setHours(0,0,0,0));
 
     const activeChargingEvent = useMemo(() => {
         return (formData.chargingHistory || []).find(event => event.endDate === null);
@@ -58,6 +59,7 @@ const ManageStorageBookingModal = ({
     };
     
     const handleBookOut = () => {
+        onSave(formData); // Save any entered departure date before booking out
         onBookOutVehicle(formData.id);
         onClose();
     };
@@ -388,8 +390,8 @@ const ManageStorageBookingModal = ({
                                 </ul>
                             </div>
                             <div className="mt-4 pt-4 border-t">
-                                <button type="button" onClick={() => onGenerateInvoice(booking)} disabled={isClosed} className="w-full flex justify-center items-center py-2 px-3 bg-purple-600 text-white font-semibold rounded-lg shadow-md hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed">
-                                    <FileText size={16} className="mr-2" /> Generate 4-Week Interim Invoice
+                                <button type="button" onClick={() => onGenerateInvoice(formData)} disabled={isClosed} className="w-full flex justify-center items-center py-2 px-3 bg-purple-600 text-white font-semibold rounded-lg shadow-md hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                                    <FileText size={16} className="mr-2" /> {formData.endDate ? 'Generate Final Invoice' : 'Generate 4-Week Interim Invoice'}
                                 </button>
                             </div>
                         </div>
@@ -497,7 +499,7 @@ const StorageView: React.FC<StorageViewProps> = ({ entity, onSaveBooking, onBook
     }, [selectedLocation, locationPrefix, bookingsForLocation]);
 
     const activeBookings = useMemo(() => {
-        return slots.map(s => s.booking).filter((b): b is StorageBooking => !!b && !b.endDate);
+        return slots.map(s => s.booking).filter((b): b is StorageBooking => !!b && (!b.endDate || new Date(b.endDate) >= new Date(new Date().setHours(0,0,0,0))));
     }, [slots]);
     
     const usageCount = activeBookings.length;
@@ -736,29 +738,41 @@ const StorageView: React.FC<StorageViewProps> = ({ entity, onSaveBooking, onBook
                     onClose={() => setManageModal({isOpen: false, booking: null})}
                     onSave={onSaveBooking}
                     onBookOutVehicle={onBookOutVehicle}
-                    onGenerateInvoice={(booking) => {
-                        const billingStartDate = booking.lastBilledDate ? addDays(dateStringToDate(booking.lastBilledDate), 1) : dateStringToDate(booking.startDate);
-                        const daysToBill = 28;
-                        const billingEndDate = addDays(billingStartDate, daysToBill - 1);
-                        const durationWeeks = Math.ceil(daysToBill / 7);
+                    onGenerateInvoice={(bookingFormData) => {
+                        const billingStartDate = bookingFormData.lastBilledDate ? addDays(dateStringToDate(bookingFormData.lastBilledDate), 1) : dateStringToDate(bookingFormData.startDate);
+                        let billingEndDate;
+                        let durationWeeks;
+                        let notes;
+
+                        if (bookingFormData.endDate) {
+                            billingEndDate = dateStringToDate(bookingFormData.endDate);
+                            const daysToBill = daysBetween(billingStartDate, billingEndDate) + 1;
+                            durationWeeks = Math.max(1, Math.ceil(daysToBill / 7));
+                            notes = `Final storage invoice.`;
+                        } else {
+                            const daysToBill = 28;
+                            billingEndDate = addDays(billingStartDate, daysToBill - 1);
+                            durationWeeks = Math.ceil(daysToBill / 7);
+                            notes = `Interim storage invoice.`;
+                        }
 
                         const newInvoiceId = generateInvoiceId(invoices, entity.shortCode || 'BSS');
-                        const vehicle = vehicles.find(v => v.id === booking.vehicleId);
+                        const vehicle = vehicles.find(v => v.id === bookingFormData.vehicleId);
                         const newInvoice: Invoice = {
                             id: newInvoiceId,
-                            entityId: booking.entityId,
-                            storageBookingId: booking.id,
-                            customerId: booking.customerId,
+                            entityId: bookingFormData.entityId,
+                            storageBookingId: bookingFormData.id,
+                            customerId: bookingFormData.customerId,
                             issueDate: formatDate(new Date()),
                             dueDate: formatDate(addDays(new Date(), 14)),
                             status: 'Draft',
-                            lineItems: [{ id: crypto.randomUUID(), description: `Vehicle Storage for ${vehicle?.registration} (${formatDate(billingStartDate)} to ${formatDate(billingEndDate)})`, quantity: durationWeeks, unitPrice: booking.weeklyRate, isLabor: false, taxCodeId: taxRates.find(t=>t.code==='T1')?.id, isStorageCharge: true }],
+                            lineItems: [{ id: crypto.randomUUID(), description: `Vehicle Storage for ${vehicle?.registration} (${formatDate(billingStartDate)} to ${formatDate(billingEndDate)})`, quantity: durationWeeks, unitPrice: bookingFormData.weeklyRate, isLabor: false, taxCodeId: taxRates.find(t=>t.code==='T1')?.id, isStorageCharge: true }],
                             payments: [],
-                            notes: `Interim storage invoice.`,
-                            vehicleId: booking.vehicleId,
+                            notes: notes,
+                            vehicleId: bookingFormData.vehicleId,
                         };
                         onSaveInvoice(newInvoice);
-                        onSaveBooking({ ...booking, lastBilledDate: formatDate(billingEndDate), invoiceIds: [...(booking.invoiceIds || []), newInvoiceId] });
+                        onSaveBooking({ ...bookingFormData, lastBilledDate: formatDate(billingEndDate), invoiceIds: [...(bookingFormData.invoiceIds || []), newInvoiceId] });
                         setViewedInvoice(newInvoice);
                     }}
                     onViewInvoice={onViewInvoice}
