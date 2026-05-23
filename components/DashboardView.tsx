@@ -268,7 +268,7 @@ const Widget: React.FC<{ title: string; icon: React.ElementType; children: React
         <h3 className="text-lg font-bold p-4 flex items-center gap-2 text-gray-800 border-b shrink-0">
             <Icon size={20} className="text-indigo-600" /> {title}
         </h3>
-        <div className="flex-grow p-4 overflow-y-auto max-h-[60vh] md:max-h-[500px]">
+        <div className="flex-grow p-4 overflow-y-auto max-h-[60vh] md:max-h-[400px]">
             {children}
         </div>
     </div>
