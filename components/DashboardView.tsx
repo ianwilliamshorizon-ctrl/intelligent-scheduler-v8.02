@@ -292,12 +292,11 @@ const AdminDispatcherDashboard: React.FC<DashboardViewProps & { onSelectDivision
 
     const openInquiries = useMemo(() => {
         return inquiries.filter(i => (i.status === 'New' || i.status === 'In Progress') && (selectedEntityId === 'all' || i.entityId === selectedEntityId))
-            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-            .slice(0, 5);
+            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     }, [inquiries, selectedEntityId]);
 
     const unallocatedJobList = useMemo(() => {
-        return jobs.filter(j => (selectedEntityId === 'all' || j.entityId === selectedEntityId) && j.status !== 'Cancelled' && (j.segments || []).some(s => s.status === 'Unallocated')).slice(0, 5);
+        return jobs.filter(j => (selectedEntityId === 'all' || j.entityId === selectedEntityId) && j.status !== 'Cancelled' && (j.segments || []).some(s => s.status === 'Unallocated'));
     }, [jobs, selectedEntityId]);
     
     const userRoleDef = roles.find(r => r.name === currentUser.role);
