@@ -163,7 +163,22 @@ export const TimelineView: React.FC<TimelineViewProps> = (props) => {
                         };
 
                         if (viewMode === 'summary') {
-                            return <SummaryJobCard key={job.id} {...commonProps} />;
+                            const unallocatedSegments = (job.segments || []).filter(s => s.status === 'Unallocated');
+                            if (unallocatedSegments.length === 0) return null;
+                            const segmentToDrag = unallocatedSegments[0];
+                            const canDrag = currentUser.role === 'Admin' || currentUser.role === 'Dispatcher';
+
+                            return (
+                                <div 
+                                    key={job.id}
+                                    draggable={canDrag}
+                                    onDragStart={(e) => canDrag && onDragStart(e, job.id, segmentToDrag.segmentId)}
+                                    onDragEnd={onDragEnd}
+                                    className={`${canDrag ? 'cursor-grab' : 'cursor-default'} draggable-job transition-transform hover:scale-[1.02] active:scale-95`}
+                                >
+                                    <SummaryJobCard {...commonProps} />
+                                </div>
+                            );
                         }
 
                         return (
