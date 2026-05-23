@@ -265,10 +265,10 @@ const VehiclesOnSiteModal: React.FC<{
 
 const Widget: React.FC<{ title: string; icon: React.ElementType; children: React.ReactNode; }> = ({ title, icon: Icon, children }) => (
     <div className="bg-white rounded-xl shadow-md flex flex-col h-full animate-fade-in-up">
-        <h3 className="text-lg font-bold p-4 flex items-center gap-2 text-gray-800 border-b">
+        <h3 className="text-lg font-bold p-4 flex items-center gap-2 text-gray-800 border-b shrink-0">
             <Icon size={20} className="text-indigo-600" /> {title}
         </h3>
-        <div className="flex-grow p-4 overflow-y-auto">
+        <div className="flex-grow p-4 overflow-y-auto max-h-[60vh] md:max-h-[500px]">
             {children}
         </div>
     </div>
