@@ -144,7 +144,7 @@ const WorkflowView: React.FC<WorkflowViewProps> = ({ jobs, vehicles, customers, 
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedEngineerId, setSelectedEngineerId] = useState<string>('all');
     const [assistantJobId, setAssistantJobId] = useState<string | null>(null);
-    const [viewMode, setViewMode] = useState<'standard' | 'summary'>('standard');
+    const [viewMode, setViewMode] = useState<'standard' | 'summary'>('summary');
 
     const handleOpenAssistant = (jobId: string) => setAssistantJobId(jobId);
     const handleCloseAssistant = () => setAssistantJobId(null);

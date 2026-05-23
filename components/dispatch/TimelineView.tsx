@@ -61,7 +61,7 @@ export const TimelineView: React.FC<TimelineViewProps> = (props) => {
     const { jobs, engineers, customers, vehicles, purchaseOrders, saveRecord, storageLocations } = useData();
     const { currentUser, users } = useApp();
     const [assistantJobId, setAssistantJobId] = useState<string | null>(null);
-    const [viewMode, setViewMode] = useState<'standard' | 'summary'>('standard');
+    const [viewMode, setViewMode] = useState<'standard' | 'summary'>('summary');
 
     const vehiclesById = useMemo(() => new Map(vehicles.map(v => [v.id, v])), [vehicles]);
     const customersById = useMemo(() => new Map(customers.map(c => [c.id, c])), [customers]);

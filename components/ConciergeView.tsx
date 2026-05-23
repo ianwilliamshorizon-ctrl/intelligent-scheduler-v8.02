@@ -43,7 +43,7 @@ const ConciergeView: React.FC<ConciergeViewProps> = (props) => {
     const [pauseData, setPauseData] = useState<{ jobId: string, segmentId: string } | null>(null);
     const [arrivalFilter, setArrivalFilter] = useState<'today' | '7days' | '14days' | 'all'>('today');
     const [assistantJobId, setAssistantJobId] = useState<string | null>(null);
-    const [viewMode, setViewMode] = useState<'standard' | 'summary'>('standard');
+    const [viewMode, setViewMode] = useState<'standard' | 'summary'>('summary');
 
     const vehiclesById = useMemo(() => new Map(vehicles.map(v => [v.id, v])), [vehicles]);
     const customersById = useMemo(() => new Map(customers.map(c => [c.id, c])), [customers]);
