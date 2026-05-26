@@ -45,7 +45,7 @@ export interface MotTest {
  */
 export interface ManagedDataPermissions {
     isSuperAdmin: boolean;
-    canSeeDirectorsDashboard: boolean;
+    canSeeDirectorsDashboard?: boolean;
     canManageCustomers?: boolean;
     canManageVehicles?: boolean;
     canManageInspectionDiagrams?: boolean;
@@ -87,6 +87,7 @@ export interface Role {
     baseRole?: 'Admin' | 'Dispatcher' | 'Engineer' | 'Sales' | 'Garage Concierge';
     defaultAllowedViews?: ViewType[];
     managedDataPermissions?: ManagedDataPermissions;
+    description?: string;
 }
 
 /**
@@ -194,7 +195,7 @@ export interface Job {
     technicianObservations?: string[];
     estimateId?: string;
     inspectionTemplateId?: string;
-    keyNumber?: string;
+    keyNumber?: string | number;
     damagePoints?: VehicleDamagePoint[];
     tyreCheck?: TyreCheckData;
     inspectionChecklist?: ChecklistSection[];
@@ -212,6 +213,7 @@ export interface Job {
     checkInPhotos?: CheckInPhoto[];
     saleVehicleId?: string;
     isSalesPrep?: boolean;
+    tyreDepths?: any;
 }
 export type VehicleStatus = 'On Site' | 'Off-Site (Partner)' | 'Awaiting Arrival' | 'Awaiting Collection' | 'Collected' | 'Cancelled';
 
@@ -254,8 +256,8 @@ export interface Vehicle {
  * WORKSHOP & JOB TYPES
  */
 export interface JobSegment {
-    id: string;
-    description: string;
+    id?: string;
+    description?: string;
     status: 'Unallocated' | 'Allocated' | 'In Progress' | 'Engineer Complete' | 'QC Complete' | 'Paused' | 'Cancelled';
     engineerId?: string;
     date?: string;
@@ -289,16 +291,20 @@ export interface Purchase {
     nominalCodeId?: string;
 }
 
+export type DiscountType = 'Percentage' | 'Fixed' | 'percentage' | 'fixed';
+export type DiscountApplicability = 'All' | 'Labor' | 'Parts' | 'Packages';
+
 export interface DiscountCode {
     id: string;
     code: string;
-    discountType: 'percentage' | 'fixed';
+    discountType: DiscountType;
     type?: 'Percentage' | 'Fixed';
     value: number;
     expiryDate?: string;
     isActive: boolean;
     description: string;
-    applicability: 'All' | 'Labor' | 'Parts' | 'Packages';
+    applicability: DiscountApplicability;
+    entityId?: string;
 }
 
 /**
@@ -340,7 +346,7 @@ export interface EstimateLineItem {
     description: string;
     quantity: number;
     unitPrice: number;
-    unitCost: number;
+    unitCost?: number;
     taxCodeId?: string; // Required by your error logs
     servicePackageName?: string;
     // --- ADD/VERIFY THESE OPTIONAL PROPERTIES ---
@@ -403,6 +409,7 @@ export interface Invoice {
     createdByUserId?: string;
     saleVehicleId?: string;
     storageBookingId?: string;
+    grandTotal?: number;
 }
 
 export interface Payment {
@@ -545,6 +552,8 @@ export interface BusinessEntity {
     serviceReminderSmsTemplate?: string;
     winterCheckReminderEmailTemplate?: string;
     winterCheckReminderSmsTemplate?: string;
+    marketingReminderEmailTemplate?: string;
+    marketingReminderSmsTemplate?: string;
     
     // Document Templates
     estimateTemplateId?: string;
@@ -566,6 +575,7 @@ export interface Engineer {
     id: string; 
     name: string; 
     entityId?: string;
+    specialization?: string;
 }
 
 export interface ServicePackage {
@@ -596,8 +606,8 @@ export type ChecklistItemStatus = 'ok' | 'attention' | 'urgent' | 'na';
 export interface ChecklistItem {
     id: string;
     label: string;
-    status: ChecklistItemStatus;
-    comment: string;
+    status?: ChecklistItemStatus;
+    comment?: string;
 }
 
 export interface ChecklistSection {
@@ -608,11 +618,15 @@ export interface ChecklistSection {
     comments?: string;
 }
 
+export interface InspectionItemTemplate { id: string; label: string; }
+export interface InspectionSectionTemplate { id: string; title: string; items: InspectionItemTemplate[]; }
+
 export interface InspectionTemplate {
     id: string;
     name: string;
     sections: ChecklistSection[];
     isDefault?: boolean;
+    description?: string;
 }
 
 /**
@@ -699,8 +713,11 @@ export interface RentalVehicle {
         checkOut: string;
         checkIn: string;
     };
-    weeklyRate: number;
-    dailyRate: number;
+    weeklyRate?: number;
+    dailyRate?: number;
+    status?: string;
+    type?: string;
+    defaultRentalDays?: number;
 }
 
 export interface StorageBooking {
@@ -833,8 +850,10 @@ export interface Prospect {
 export interface SaleOverheadPackage {
     id: string;
     name: string;
-    cost: number;
+    cost?: number;
 }
+
+export type AuditAction = 'CREATE' | 'UPDATE' | 'DELETE' | string;
 
 export interface AuditLogEntry {
     id: string;
@@ -846,13 +865,19 @@ export interface AuditLogEntry {
     entityId?: string;
 }
 
+export type ReminderType = 'MOT' | 'Service' | 'Winter Check' | 'Marketing' | 'Other';
+
 export interface Reminder {
     id: string;
     vehicleId: string;
     customerId: string;
-    type: 'MOT' | 'Service' | 'Other';
+    type: ReminderType;
     date: string;
-    status: 'Pending' | 'Sent' | 'Failed';
+    status: 'Pending' | 'Sent' | 'Failed' | 'Dismissed';
+    dueDate?: string;
+    eventName?: string;
+    createdAt?: string;
+    actionedAt?: string;
 }
 
 export interface StorageBookingSummary {
@@ -867,7 +892,7 @@ export interface StorageBookingSummary {
 
 export interface StorageLocation {
     id: string;
-    entityId: string;
+    entityId?: string;
     name: string;
     capacity: number;
     weeklyRate?: number;

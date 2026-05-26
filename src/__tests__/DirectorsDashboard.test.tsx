@@ -11,17 +11,26 @@ const mockData = {
   customers: [],
   vehicles: [],
   businessEntities: [],
+  financialBaselines: [],
+  isDataLoaded: true,
 };
 
 // Mock the useData hook
-vi.mock('../../core/state/DataContext', () => ({
-  ...vi.importActual('../../core/state/DataContext'),
-  useData: () => mockData,
-}));
+vi.mock('../../core/state/DataContext', async (importOriginal) => {
+  const actual = await importOriginal<any>();
+  return {
+    ...actual,
+    DataProvider: ({ children }) => <>{children}</>,
+    useData: () => mockData,
+  };
+});
 
 // Mock child components that have their own complex logic
-vi.mock('../../components/DirectorsDashboard/AIAssistant', () => () => <div>AIAssistant Mock</div>);
-vi.mock('../../components/DirectorsDashboard/Charts', () => () => <div>Charts Mock</div>);
+vi.mock('../../components/directors-dashboard-sub/AIAssistant', () => ({ default: () => <div>AIAssistant Mock</div> }));
+vi.mock('../../components/directors-dashboard-sub/charts', () => ({
+  SimpleLineChart: () => <div>Charts Mock</div>,
+  SimpleBarChart: () => <div>Charts Mock</div>,
+}));
 
 describe('DirectorsDashboard', () => {
   it('renders the main heading', () => {
@@ -30,11 +39,11 @@ describe('DirectorsDashboard', () => {
         <DirectorsDashboard />
       </DataProvider>
     );
-    const heading = screen.getByText(/Directors Dashboard/i);
+    const heading = screen.getByText(/Business Summary/i);
     expect(heading).toBeInTheDocument();
 
     // Check that child components are rendered
     expect(screen.getByText('AIAssistant Mock')).toBeInTheDocument();
-    expect(screen.getByText('Charts Mock')).toBeInTheDocument();
+    expect(screen.getAllByText('Charts Mock').length).toBe(3);
   });
 });

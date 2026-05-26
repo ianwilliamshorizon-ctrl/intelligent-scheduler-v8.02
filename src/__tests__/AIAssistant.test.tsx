@@ -1,6 +1,6 @@
 
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import AIAssistant from '../../components/DirectorsDashboard/AIAssistant';
+import AIAssistant from '../../components/directors-dashboard-sub/AIAssistant';
 import { DataProvider } from '../../core/state/DataContext';
 
 // Mock the DataContext
@@ -11,25 +11,23 @@ const mockData = {
   customers: [],
   vehicles: [],
   businessEntities: [],
+  financialBaselines: [],
+  isDataLoaded: true,
 };
 
 // Mock the useData hook
-vi.mock('../../core/state/DataContext', () => ({
-  ...vi.importActual('../../core/state/DataContext'),
-  useData: () => mockData,
-}));
+vi.mock('../../core/state/DataContext', async (importOriginal) => {
+  const actual = await importOriginal<any>();
+  return {
+    ...actual,
+    DataProvider: ({ children }) => <>{children}</>,
+    useData: () => mockData,
+  };
+});
 
-// Mock the GoogleGenerativeAI
-vi.mock('@google/generative-ai', () => ({
-  GoogleGenerativeAI: vi.fn(() => ({
-    getGenerativeModel: vi.fn(() => ({
-      generateContent: vi.fn(() => Promise.resolve({
-        response: {
-          text: () => 'This is a mock response.',
-        },
-      })),
-    })),
-  })),
+// Mock the geminiService
+vi.mock('../../core/services/geminiService', () => ({
+  generateContent: vi.fn(() => Promise.resolve('This is a mock response.')),
 }));
 
 describe('AIAssistant', () => {
@@ -44,7 +42,7 @@ describe('AIAssistant', () => {
     expect(screen.getByText('Total Revenue Last Month')).toBeInTheDocument();
     expect(screen.getByText('Busiest Entity')).toBeInTheDocument();
     expect(screen.getByText('Average Job Value')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Ask a question about your data...')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('How can I help you understand your data today?')).toBeInTheDocument();
   });
 
   it('allows typing in the input and asking a question', async () => {
@@ -54,7 +52,7 @@ describe('AIAssistant', () => {
       </DataProvider>
     );
 
-    const input = screen.getByPlaceholderText('Ask a question about your data...');
+    const input = screen.getByPlaceholderText('How can I help you understand your data today?');
     const askButton = screen.getByText('Ask');
 
     fireEvent.change(input, { target: { value: 'What is the meaning of life?' } });

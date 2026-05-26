@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useData } from '../core/state/DataContext';
-import { RentalVehicle, RentalBooking, Vehicle, Customer, BusinessEntity, Job, RentalDriverDetails, DamagePoint } from '../types';
+import { RentalVehicle, RentalBooking, Vehicle, Customer, BusinessEntity, Job } from '../types';
 import { CarFront, PlusCircle, ChevronLeft, ChevronRight, Edit, FileText, Trash2, Save, X, Car, Fuel, Milestone, FilePenLine, Calendar, Clock } from 'lucide-react';
 import { formatDate, dateStringToDate, addDays, daysBetween, getRelativeDate } from '../core/utils/dateUtils';
 import { formatCurrency } from '../utils/formatUtils';

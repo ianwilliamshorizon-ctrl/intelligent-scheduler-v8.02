@@ -14,17 +14,17 @@ export const currentEnvironment: 'Production' | 'Development' = isDev() ? 'Devel
 // 2. Config Object (Directly driven by standard Vite .env variables)
 export const firebaseConfig = {
     // @ts-ignore
-    apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+    apiKey: (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_FIREBASE_API_KEY) || "AIzaSyMockKeyForTestingPurposesOnly_",
     // @ts-ignore
-    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+    authDomain: (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_FIREBASE_AUTH_DOMAIN) || "mock-auth-domain.firebaseapp.com",
     // @ts-ignore
-    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+    projectId: (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_FIREBASE_PROJECT_ID) || "mock-project-id",
     // @ts-ignore
-    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+    storageBucket: (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_FIREBASE_STORAGE_BUCKET) || "mock-project-id.appspot.com",
     // @ts-ignore
-    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+    messagingSenderId: (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID) || "1234567890",
     // @ts-ignore
-    appId: import.meta.env.VITE_FIREBASE_APP_ID
+    appId: (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_FIREBASE_APP_ID) || "1:1234567890:web:123456"
 };
 
 export const COLLECTION_NAME = 'brooks';

@@ -1,4 +1,4 @@
-import { Estimate, Invoice, RentalBooking, Job, PurchaseOrder } from '../../types';
+import { Estimate, Invoice, RentalBooking, Job, PurchaseOrder, Purchase } from '../../types';
 
 /**
  * Helper function to find the next sequential number for a given prefix.
@@ -62,6 +62,16 @@ export const generateInvoiceId = (allInvoices: Invoice[], entityShortCode: strin
 export const generatePurchaseOrderId = (allPurchaseOrders: PurchaseOrder[], entityShortCode: string): string => {
     const prefix = '944';
     const sequence = getNextSequence(allPurchaseOrders, entityShortCode, prefix, 'id');
+    return `${entityShortCode}${prefix}${sequence}`;
+};
+
+/**
+ * Generates a unique sequential purchase ID with an entity prefix.
+ * Format: [3-letter entity code]945[6-digit sequence]
+ */
+export const generatePurchaseId = (allPurchases: Purchase[], entityShortCode: string): string => {
+    const prefix = '945';
+    const sequence = getNextSequence(allPurchases, entityShortCode, prefix, 'id');
     return `${entityShortCode}${prefix}${sequence}`;
 };
 
