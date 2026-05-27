@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { User, AbsenceRequest, AbsenceType } from '../types';
 import { X, Save, Trash2 } from 'lucide-react';
+import { useApp } from '../core/state/AppContext';
 import { formatDate, dateStringToDate, addDays, calculateWorkingDays, findEndDateAfterWorkingDays } from '../core/utils/dateUtils';
 import { useAuditLogger } from '../core/hooks/useAuditLogger';
 
@@ -22,7 +23,10 @@ const AbsenceRequestModal: React.FC<AbsenceRequestModalProps> = ({ isOpen, onClo
     const holidaySet = useMemo(() => new Set(bankHolidays.keys()), [bankHolidays]);
     const { logEvent } = useAuditLogger();
     
-    const canRequestForOthers = currentUser.role === 'Admin' || currentUser.role === 'Dispatcher';
+    const { roles } = useApp();
+    const userRoleObj = roles.find(r => r.name === currentUser.role);
+    const baseRole = userRoleObj ? userRoleObj.baseRole : currentUser.role;
+    const canRequestForOthers = baseRole === 'Admin' || baseRole === 'Dispatcher';
 
     const [userId, setUserId] = useState(currentUser.id);
     const [type, setType] = useState<AbsenceType>('Holiday');
@@ -79,7 +83,7 @@ const AbsenceRequestModal: React.FC<AbsenceRequestModalProps> = ({ isOpen, onClo
 
     const isOwner = currentUser.id === requestToEdit?.userId;
     const isApprover = currentUser.id === requestToEdit?.approverId;
-    const isAdminOrDispatcher = currentUser.role === 'Admin' || currentUser.role === 'Dispatcher';
+    const isAdminOrDispatcher = baseRole === 'Admin' || baseRole === 'Dispatcher';
     const canEdit = isNewRequest || (isOwner && requestToEdit?.status === 'Pending') || isApprover || isAdminOrDispatcher;
     
     const handleSubmit = (e: React.FormEvent) => {

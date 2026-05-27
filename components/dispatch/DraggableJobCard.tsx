@@ -3,6 +3,7 @@ import { Job, Vehicle, Customer, PurchaseOrder, User, VehicleStatus, Engineer } 
 import { Package as PackageIcon, PackageCheck, CheckCircle, ArrowRightCircle, Clock, Wrench, Edit, Wand2, LogIn, XCircle, Car } from 'lucide-react';
 import { getCustomerDisplayName } from '../../core/utils/customerUtils';
 import { getPoStatusColor } from '../../core/utils/statusUtils';
+import { useApp } from '../../core/state/AppContext';
 
 import { JobHoverPopout } from '../shared/JobHoverPopout';
 import { JobActionsMenu } from '../shared/JobActionsMenu';
@@ -30,9 +31,10 @@ export const DraggableJobCard: React.FC<{
     const unallocatedSegments = (job.segments || []).filter(s => s.status === 'Unallocated');
 
     if (unallocatedSegments.length === 0) return null;
-    
-    // @ts-ignore
-    const canDrag = currentUser.role === 'Admin' || currentUser.role === 'Dispatcher';
+    const { roles } = useApp();
+    const userRoleObj = roles.find(r => r.name === currentUser.role);
+    const baseRole = userRoleObj ? userRoleObj.baseRole : currentUser.role;
+    const canDrag = baseRole === 'Admin' || baseRole === 'Dispatcher';
     const segmentToDrag = unallocatedSegments[0];
     const { partsStatus, vehicleStatus } = job;
 

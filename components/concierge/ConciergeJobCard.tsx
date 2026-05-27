@@ -38,6 +38,8 @@ export const ConciergeJobCard: React.FC<ConciergeJobCardProps> = (props) => {
         onUpdateJob 
     } = props;
     const { roles } = useData();
+    const userRoleObj = roles.find(r => r.name === currentUser.role);
+    const baseRole = userRoleObj ? userRoleObj.baseRole : currentUser.role;
     
     const { partsStatus, vehicleStatus } = job;
     const today = getRelativeDate(0);
@@ -95,8 +97,7 @@ export const ConciergeJobCard: React.FC<ConciergeJobCardProps> = (props) => {
         if (!segment.engineerId) return false;
         if (currentUser.role === 'Engineer') return segment.engineerId === currentUser.engineerId;
         // Expand to include Sales and Garage Concierge for better visibility across the team
-        return ['Admin', 'Dispatcher', 'Sales', 'Garage Concierge'].includes(currentUser.role) || 
-               ['Admin', 'Dispatcher', 'Sales', 'Garage Concierge'].includes(roles.find(r => r.name === currentUser.role)?.baseRole || '');
+        return ['Admin', 'Dispatcher', 'Sales', 'Garage Concierge'].includes(baseRole);
     };
 
     return (
@@ -253,7 +254,7 @@ export const ConciergeJobCard: React.FC<ConciergeJobCardProps> = (props) => {
                     )}
 
                     {/* QC Action */}
-                    {job.status === 'Pending QC' && highlightAction !== 'collect' && onQcApprove && (currentUser.role === 'Admin' || currentUser.role === 'Dispatcher') && (
+                    {job.status === 'Pending QC' && highlightAction !== 'collect' && onQcApprove && (baseRole === 'Admin' || baseRole === 'Dispatcher') && (
                         <button onClick={(e) => {e.stopPropagation(); onQcApprove(job.id);}} className="text-[9px] sm:text-[10px] font-bold uppercase tracking-tight flex items-center gap-1 bg-white text-orange-600 px-2 sm:px-3 py-0.5 sm:py-1 rounded-lg hover:bg-orange-50 border border-orange-100 shadow-xs transition-transform active:scale-95">
                             <ClipboardCheck size={10} className="sm:w-[12px] sm:h-[12px]"/> Sign-off
                         </button>

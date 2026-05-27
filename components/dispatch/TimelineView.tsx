@@ -59,7 +59,7 @@ export const TimelineView: React.FC<TimelineViewProps> = (props) => {
     } = props;
 
     const { jobs, engineers, customers, vehicles, purchaseOrders, saveRecord, storageLocations } = useData();
-    const { currentUser, users } = useApp();
+    const { currentUser, users, roles } = useApp();
     const [assistantJobId, setAssistantJobId] = useState<string | null>(null);
     const [viewMode, setViewMode] = useState<'standard' | 'summary'>('summary');
 
@@ -166,7 +166,9 @@ export const TimelineView: React.FC<TimelineViewProps> = (props) => {
                             const unallocatedSegments = (job.segments || []).filter(s => s.status === 'Unallocated');
                             if (unallocatedSegments.length === 0) return null;
                             const segmentToDrag = unallocatedSegments[0];
-                            const canDrag = currentUser.role === 'Admin' || currentUser.role === 'Dispatcher';
+                            const userRoleObj = roles.find(r => r.name === currentUser.role);
+                            const baseRole = userRoleObj ? userRoleObj.baseRole : currentUser.role;
+                            const canDrag = baseRole === 'Admin' || baseRole === 'Dispatcher';
 
                             return (
                                 <div 

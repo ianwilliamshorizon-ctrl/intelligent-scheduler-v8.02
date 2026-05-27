@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { User, AbsenceRequest, AbsenceRequestStatus } from '../types';
 import { ChevronLeft, ChevronRight, PlusCircle, Check, X } from 'lucide-react';
+import { useApp } from '../core/state/AppContext';
 import { formatDate, dateStringToDate, getRelativeDate, addDays } from '../core/utils/dateUtils';
 import AbsenceRequestModal from './AbsenceRequestModal';
 import { useAuditLogger } from '../core/hooks/useAuditLogger';
@@ -34,6 +35,9 @@ interface AbsenceViewProps {
 }
 
 const AbsenceView: React.FC<AbsenceViewProps> = ({ currentUser, users, absenceRequests, setAbsenceRequests }) => {
+    const { roles } = useApp();
+    const userRoleObj = roles.find(r => r.name === currentUser.role);
+    const baseRole = userRoleObj ? userRoleObj.baseRole : currentUser.role;
     const [currentMonth, setCurrentMonth] = useState(() => dateStringToDate(getRelativeDate(0)));
     const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
     const [editingRequest, setEditingRequest] = useState<AbsenceRequest | null>(null);
@@ -74,7 +78,7 @@ const AbsenceView: React.FC<AbsenceViewProps> = ({ currentUser, users, absenceRe
     const usersById = useMemo(() => new Map(users.map(u => [u.id, u])), [users]);
     
     const viewableUsers = useMemo(() => {
-        if (currentUser.role === 'Admin' || currentUser.role === 'Dispatcher') {
+        if (baseRole === 'Admin' || baseRole === 'Dispatcher') {
             return users.sort((a, b) => a.name.localeCompare(b.name));
         }
 
@@ -84,7 +88,7 @@ const AbsenceView: React.FC<AbsenceViewProps> = ({ currentUser, users, absenceRe
         
         return [...new Map(userList.map(item => [item.id, item])).values()]
             .sort((a: User, b: User) => a.name.localeCompare(b.name));
-    }, [currentUser, users]);
+    }, [currentUser, users, baseRole]);
 
     useEffect(() => {
         if (viewingUserId !== 'all' && !viewableUsers.some(u => u.id === viewingUserId)) {
@@ -248,7 +252,7 @@ const AbsenceView: React.FC<AbsenceViewProps> = ({ currentUser, users, absenceRe
                         <label className="text-sm font-medium text-gray-700">View:</label>
                         {viewableUsers.length > 1 ? (
                             <select value={viewingUserId} onChange={e => setViewingUserId(e.target.value)} className="p-2 border rounded-lg bg-white">
-                                {(currentUser.role === 'Admin' || currentUser.role === 'Dispatcher') && <option value="all">All Staff</option>}
+                                {(baseRole === 'Admin' || baseRole === 'Dispatcher') && <option value="all">All Staff</option>}
                                 {viewableUsers.map(user => (
                                     <option key={user.id} value={user.id}>{user.id === currentUser.id ? `My Absences (${user.name})` : user.name}</option>
                                 ))}

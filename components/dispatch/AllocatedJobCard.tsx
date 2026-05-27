@@ -3,6 +3,7 @@ import { Job, JobSegment, Vehicle, Customer, Engineer, PurchaseOrder, User } fro
 import { Package as PackageIcon, KeyRound, PauseCircle, PlayCircle, UserCog, Trash2, Wand2, Edit, User as UserIcon, UserPlus, CheckCircle, Camera } from 'lucide-react';
 import { getCustomerDisplayName } from '../../core/utils/customerUtils';
 import { getPoStatusColor } from '../../core/utils/statusUtils';
+import { useApp } from '../../core/state/AppContext';
 import { TIME_SEGMENTS, SEGMENT_DURATION_MINUTES } from '../../constants';
 import { HoverInfo } from '../shared/HoverInfo';
 
@@ -60,8 +61,11 @@ export const AllocatedJobCard: React.FC<{
     const [isPoMenuOpen, setIsPoMenuOpen] = useState(false);
     const [isActionsMenuOpen, setIsActionsMenuOpen] = useState(false);
     const poMenuRef = useRef<HTMLDivElement>(null);
-    const canDrag = currentUser.role === 'Admin' || currentUser.role === 'Dispatcher';
-    const canUnschedule = currentUser.role === 'Admin' || currentUser.role === 'Dispatcher';
+    const { roles } = useApp();
+    const userRoleObj = roles.find(r => r.name === currentUser.role);
+    const baseRole = userRoleObj ? userRoleObj.baseRole : currentUser.role;
+    const canDrag = baseRole === 'Admin' || baseRole === 'Dispatcher';
+    const canUnschedule = baseRole === 'Admin' || baseRole === 'Dispatcher';
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -79,8 +83,8 @@ export const AllocatedJobCard: React.FC<{
     if (segment.status === 'QC Complete') statusColor = 'bg-emerald-100 text-emerald-900 border-emerald-200';
     if (segment.status === 'Paused') statusColor = 'bg-rose-100 text-rose-900 border-rose-200';
 
-    const canStartOrPause = (currentUser.role === 'Engineer' && engineer?.id === currentUser.engineerId) || currentUser.role === 'Admin' || currentUser.role === 'Dispatcher';
-    const canPerformActions = currentUser.role === 'Admin' || currentUser.role === 'Dispatcher';
+    const canStartOrPause = (currentUser.role === 'Engineer' && engineer?.id === currentUser.engineerId) || baseRole === 'Admin' || baseRole === 'Dispatcher';
+    const canPerformActions = baseRole === 'Admin' || baseRole === 'Dispatcher';
 
     const handleAction = (e: React.MouseEvent, action: () => void) => {
         e.stopPropagation();

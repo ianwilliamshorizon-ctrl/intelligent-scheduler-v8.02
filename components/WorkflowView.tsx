@@ -140,7 +140,7 @@ const WorkflowView: React.FC<WorkflowViewProps> = ({ jobs, vehicles, customers, 
         }, 30000); 
         return () => clearInterval(interval);
     }, [forceRefresh]);
-    const { currentUser, users } = useApp();
+    const { currentUser, users, roles } = useApp();
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedEngineerId, setSelectedEngineerId] = useState<string>('all');
     const [assistantJobId, setAssistantJobId] = useState<string | null>(null);
@@ -229,7 +229,9 @@ const WorkflowView: React.FC<WorkflowViewProps> = ({ jobs, vehicles, customers, 
     const canControlJob = (engineerId?: string | null) => {
         if (!engineerId) return false;
         if (currentUser.role === 'Engineer') return engineerId === currentUser.engineerId;
-        return currentUser.role === 'Admin' || currentUser.role === 'Dispatcher';
+        const userRoleObj = roles.find(r => r.name === currentUser.role);
+        const baseRole = userRoleObj ? userRoleObj.baseRole : currentUser.role;
+        return baseRole === 'Admin' || baseRole === 'Dispatcher';
     };
 
     const renderJobCard = (job: Job, bgColor: string, title?: string) => {
