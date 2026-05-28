@@ -94,6 +94,7 @@ export const ManagementStaffTab: React.FC<ManagementStaffTabProps> = ({ searchTe
                                 <th className="px-6 py-4 font-black text-slate-400 uppercase text-[10px] tracking-[0.15em]">System Access</th>
                                 <th className="px-6 py-4 font-black text-slate-400 uppercase text-[10px] tracking-[0.15em]">Role</th>
                                 <th className="px-6 py-4 font-black text-slate-400 uppercase text-[10px] tracking-[0.15em]">Default Entity</th>
+                                <th className="px-6 py-4 font-black text-slate-400 uppercase text-[10px] tracking-[0.15em]">Holiday Entitlement</th>
                                 <th className="px-6 py-4 font-black text-slate-400 uppercase text-[10px] tracking-[0.15em] text-right">Actions</th>
                             </tr>
                         </thead>
@@ -127,6 +128,11 @@ export const ManagementStaffTab: React.FC<ManagementStaffTabProps> = ({ searchTe
                                         <td className="px-6 py-5">
                                             <span className="text-slate-500 font-medium text-xs">
                                                 {entity ? entity.name : 'N/A'}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-5">
+                                            <span className="px-3 py-1 bg-slate-100 text-slate-700 rounded-lg text-[10px] font-black uppercase tracking-widest border border-slate-200">
+                                                {u.holidayEntitlement !== undefined ? `${u.holidayEntitlement} days` : 'Not Set'}
                                             </span>
                                         </td>
                                         <td className="px-6 py-5 text-right">
@@ -178,6 +184,7 @@ export const ManagementStaffTab: React.FC<ManagementStaffTabProps> = ({ searchTe
                     user={selectedUser} 
                     roles={roles || []} 
                     businessEntities={businessEntities || []} 
+                    users={localUsers}
                 />
             )}
         </div>

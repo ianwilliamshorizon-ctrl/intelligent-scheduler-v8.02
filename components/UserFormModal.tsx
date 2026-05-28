@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Loader, ShieldCheck, Mail, User, Briefcase } from 'lucide-react';
+import { X, Loader, ShieldCheck, Mail, User, Briefcase, Calendar, UserCheck } from 'lucide-react';
 import * as T from '../types';
 
 interface UserFormModalProps {
@@ -9,9 +9,10 @@ interface UserFormModalProps {
     user: T.User | null;
     roles: T.Role[];
     businessEntities: T.BusinessEntity[];
+    users: T.User[];
 }
 
-const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, user, roles, businessEntities }) => {
+const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, user, roles, businessEntities, users }) => {
     const [formData, setFormData] = useState<Partial<T.User>>({});
     const [isSaving, setIsSaving] = useState(false);
 
@@ -147,6 +148,53 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, 
                                         <option key={e.id} value={e.id}>{e.name}</option>
                                     ))}
                                 </select>
+                            </div>
+                        </div>
+                    </div>
+                                         
+                    {/* Leave & Absence Settings */}
+                    <div className="pt-4 border-t border-slate-100 space-y-4">
+                        <h4 className="text-[11px] font-black uppercase text-indigo-600 tracking-wider">Leave & Absence Settings</h4>
+                        
+                        <div className="grid grid-cols-2 gap-4">
+                            {/* Holiday Entitlement */}
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Entitlement (Days)</label>
+                                <div className="relative">
+                                    <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" />
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        max="365"
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-3 text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-bold"
+                                        value={formData.holidayEntitlement ?? ''}
+                                        onChange={(e) => setFormData({ ...formData, holidayEntitlement: e.target.value ? parseInt(e.target.value, 10) : undefined })}
+                                        placeholder="e.g. 25"
+                                        disabled={isSaving}
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Holiday Approver */}
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Holiday Approver</label>
+                                <div className="relative">
+                                    <UserCheck size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" />
+                                    <select
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-8 py-3 text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-bold appearance-none cursor-pointer"
+                                        value={formData.holidayApproverId || ''}
+                                        onChange={(e) => setFormData({ ...formData, holidayApproverId: e.target.value || undefined })}
+                                        disabled={isSaving}
+                                    >
+                                        <option value="">No Approver</option>
+                                        {users
+                                            .filter(u => u.id !== formData.id) // Can't approve own holidays
+                                            .map(u => (
+                                                <option key={u.id} value={u.id}>{u.name || u.email}</option>
+                                            ))
+                                        }
+                                    </select>
+                                </div>
                             </div>
                         </div>
                     </div>

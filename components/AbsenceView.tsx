@@ -114,8 +114,11 @@ const AbsenceView: React.FC<AbsenceViewProps> = ({ currentUser, users, absenceRe
     const holidayRemaining = holidayEntitlement - holidayTaken - holidayPending;
 
     const approvalsRequired = useMemo(() => {
+        if (baseRole === 'Admin') {
+            return absenceRequests.filter(r => r.status === 'Pending');
+        }
         return absenceRequests.filter(r => r.approverId === currentUser.id && r.status === 'Pending');
-    }, [absenceRequests, currentUser.id]);
+    }, [absenceRequests, currentUser.id, baseRole]);
     
     const myPendingRequests = useMemo(() => {
         return absenceRequests.filter(r => r.userId === currentUser.id && r.status === 'Pending');

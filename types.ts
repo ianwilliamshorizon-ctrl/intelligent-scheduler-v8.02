@@ -79,6 +79,8 @@ export interface User {
     engineerId?: string;
     preferredEntityId?: string;
     status?: 'pending' | 'active' | 'disabled';
+    holidayEntitlement?: number;
+    holidayApproverId?: string;
 }
 
 export interface Role {
@@ -741,13 +743,24 @@ export interface StorageBooking {
     checkOutPhotos?: CheckInPhoto[];
     mileage?: number;
 }
+export type AbsenceType = 'Holiday' | 'Sickness' | 'Appointment' | 'Unpaid Leave' | 'Race Support' | 'Training';
+export type AbsenceRequestStatus = 'Pending' | 'Approved' | 'Rejected';
+
 export interface AbsenceRequest {
     id: string;
     userId: string;
+    approverId?: string;
     startDate: string;
     endDate: string;
-    type: 'Holiday' | 'Sick' | 'Other';
-    status: 'Pending' | 'Approved' | 'Rejected';
+    isHalfDayStart?: boolean;
+    isHalfDayEnd?: boolean;
+    type: AbsenceType;
+    status: AbsenceRequestStatus;
+    daysTaken: number;
+    notes?: string;
+    requestedAt?: string;
+    actionedAt?: string;
+    rejectionReason?: string;
 }
 
 export interface SaleMediaItem {
