@@ -167,6 +167,7 @@ export const ManagementSuppliersTab = ({ searchTerm = '', onShowStatus }: { sear
                     }} 
                     onSave={handleSave} 
                     supplier={selectedSupplier} 
+                    suppliers={localSuppliers}
                 />
             )}
         </div>
