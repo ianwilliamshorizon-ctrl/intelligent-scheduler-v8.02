@@ -99,14 +99,46 @@ export const ManagementBackupTab: React.FC<ManagementBackupTabProps> = ({
             .catch(err => console.error("Could not fetch server version", err));
     }, []);
 
-    const formatVersionDate = (timestampStr: string) => {
-        if (!timestampStr) return 'Unknown';
-        try {
-            const date = new Date(parseInt(timestampStr));
-            return date.toLocaleString();
-        } catch {
-            return timestampStr;
+    const formatVersionDate = (versionStr: string) => {
+        if (!versionStr) return 'Unknown';
+        
+        const formatSemver = (semver: string) => {
+            const parts = semver.split('.');
+            if (parts.length >= 3) {
+                const major = parts[0];
+                const minor = parts[1];
+                const patch = parts[2];
+                return `${major}.${minor}${patch}`;
+            }
+            return semver;
+        };
+
+        const parts = versionStr.split('-');
+        if (parts.length === 2 && !isNaN(Number(parts[1]))) {
+            const semverPart = parts[0];
+            const timestamp = Number(parts[1]);
+            const customVersion = formatSemver(semverPart);
+            try {
+                const date = new Date(timestamp);
+                return `${customVersion} (${date.toLocaleDateString()} ${date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})})`;
+            } catch {
+                return `${customVersion} (${parts[1]})`;
+            }
         }
+
+        const parsedSemver = formatSemver(versionStr);
+        if (parsedSemver !== versionStr) {
+            return parsedSemver;
+        }
+
+        try {
+            if (!isNaN(Number(versionStr))) {
+                const date = new Date(parseInt(versionStr));
+                return date.toLocaleString();
+            }
+        } catch {}
+        
+        return versionStr;
     };
 
     const handleRestore = async (e: React.ChangeEvent<HTMLInputElement>) => {
