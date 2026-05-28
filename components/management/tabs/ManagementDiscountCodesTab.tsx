@@ -7,8 +7,8 @@ import DiscountCodeFormModal from '../../DiscountCodeFormModal';
 import { useManagementTable } from '../hooks/useManagementTable';
 
 export const ManagementDiscountCodesTab = () => {
-    const { discountCodes } = useData();
-    const { updateItem, deleteItem } = useManagementTable(discountCodes, 'brooks_discountCodes');
+    const { discountCodes, setDiscountCodes } = useData();
+    const { updateItem, deleteItem } = useManagementTable(discountCodes, 'brooks_discountCodes', setDiscountCodes);
 
     const [selectedCode, setSelectedCode] = useState<DiscountCode | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);

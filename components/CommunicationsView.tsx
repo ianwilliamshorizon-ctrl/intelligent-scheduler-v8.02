@@ -8,6 +8,7 @@ import { getCustomerDisplayName } from '../core/utils/customerUtils';
 import SendReminderModal from './SendReminderModal';
 import CreateMarketingReminderModal from './CreateMarketingReminderModal';
 import GenerateRemindersModal from './GenerateRemindersModal';
+import { saveDocument } from '../core/db';
 
 const CommunicationsView: React.FC = () => {
     const { users, setConfirmation } = useApp();
@@ -75,10 +76,17 @@ const CommunicationsView: React.FC = () => {
         filteredReminders.filter(r => r.status !== 'Pending').sort((a,b) => (b.actionedAt || '').localeCompare(a.actionedAt || ''))
     , [filteredReminders]);
 
-    const handleAction = (id: string, status: 'Sent' | 'Dismissed') => {
-        setReminders(prev => prev.map(r => 
-            r.id === id ? { ...r, status, actionedAt: new Date().toISOString() } : r
-        ));
+    const handleAction = async (id: string, status: 'Sent' | 'Dismissed') => {
+        const reminder = reminders.find(r => r.id === id);
+        if (reminder) {
+            const updated = { ...reminder, status, actionedAt: new Date().toISOString() };
+            setReminders(prev => prev.map(r => r.id === id ? updated : r));
+            try {
+                await saveDocument('brooks_reminders', updated);
+            } catch (error) {
+                console.error("Failed to update reminder in Firestore:", error);
+            }
+        }
     };
 
     const openSendModal = (reminder: Reminder, customer: Customer, vehicle: Vehicle | null, method: 'Email' | 'SMS') => {
@@ -98,7 +106,7 @@ const CommunicationsView: React.FC = () => {
         setSendModalData({ isOpen: false, reminder: null, customer: null, vehicle: null, method: null, entity: null });
     };
     
-    const handleCreateMarketingReminders = (eventName: string, eventDate: string) => {
+    const handleCreateMarketingReminders = async (eventName: string, eventDate: string) => {
         const consentingCustomers = customers.filter(c => c.marketingConsent);
         const newReminders: Reminder[] = consentingCustomers.map(customer => ({
             id: crypto.randomUUID(),
@@ -119,9 +127,15 @@ const CommunicationsView: React.FC = () => {
             onConfirm: () => setConfirmation({ isOpen: false, title: '', message: '' }),
             confirmText: 'OK',
         });
+
+        try {
+            await Promise.all(newReminders.map(r => saveDocument('brooks_reminders', r)));
+        } catch (error) {
+            console.error("Failed to save marketing reminders to Firestore:", error);
+        }
     };
 
-    const handleGeneratedReminders = (newReminders: Reminder[]) => {
+    const handleGeneratedReminders = async (newReminders: Reminder[]) => {
         setReminders(prev => [...prev, ...newReminders]);
         setConfirmation({
             isOpen: true,
@@ -129,6 +143,12 @@ const CommunicationsView: React.FC = () => {
             message: `${newReminders.length} reminders have been created and added to the 'Pending' list.`,
             type: 'success',
         });
+
+        try {
+            await Promise.all(newReminders.map(r => saveDocument('brooks_reminders', r)));
+        } catch (error) {
+            console.error("Failed to save generated reminders to Firestore:", error);
+        }
     };
 
     const handleSelect = (id: string) => {
@@ -151,19 +171,32 @@ const CommunicationsView: React.FC = () => {
         }
     };
 
-    const handleBulkDismiss = () => {
-        setReminders(prev => prev.map(r => 
-            selectedReminderIds.has(r.id) 
-            ? { ...r, status: 'Dismissed', actionedAt: new Date().toISOString() } 
-            : r
-        ));
+    const handleBulkDismiss = async () => {
+        const updatedList: Reminder[] = [];
+        const nowStr = new Date().toISOString();
+
+        setReminders(prev => prev.map(r => {
+            if (selectedReminderIds.has(r.id)) {
+                const updated = { ...r, status: 'Dismissed' as const, actionedAt: nowStr };
+                updatedList.push(updated);
+                return updated;
+            }
+            return r;
+        }));
         setSelectedReminderIds(new Set());
+
+        try {
+            await Promise.all(updatedList.map(r => saveDocument('brooks_reminders', r)));
+        } catch (error) {
+            console.error("Failed to bulk dismiss reminders in Firestore:", error);
+        }
     };
 
-    const handleBulkSend = () => {
+    const handleBulkSend = async () => {
         let sentCount = { email: 0, sms: 0 };
         let skippedCount = 0;
         const remindersToUpdate = new Set(selectedReminderIds);
+        const updatedList: Reminder[] = [];
 
         const updatedReminders = reminders.map(r => {
             if (remindersToUpdate.has(r.id)) {
@@ -172,11 +205,15 @@ const CommunicationsView: React.FC = () => {
                     const preference = customer.communicationPreference;
                     if (preference === 'Email' && customer.email) {
                         sentCount.email++;
-                        return { ...r, status: 'Sent' as ReminderStatus, actionedAt: new Date().toISOString() };
+                        const updated = { ...r, status: 'Sent' as ReminderStatus, actionedAt: new Date().toISOString() };
+                        updatedList.push(updated);
+                        return updated;
                     }
                     if (preference === 'SMS' && (customer.mobile || customer.phone)) {
                         sentCount.sms++;
-                        return { ...r, status: 'Sent' as ReminderStatus, actionedAt: new Date().toISOString() };
+                        const updated = { ...r, status: 'Sent' as ReminderStatus, actionedAt: new Date().toISOString() };
+                        updatedList.push(updated);
+                        return updated;
                     }
                 }
                 skippedCount++;
@@ -203,6 +240,12 @@ const CommunicationsView: React.FC = () => {
             onConfirm: () => setConfirmation({ isOpen: false, title: '', message: '' }),
             confirmText: 'OK',
         });
+
+        try {
+            await Promise.all(updatedList.map(r => saveDocument('brooks_reminders', r)));
+        } catch (error) {
+            console.error("Failed to bulk send reminders in Firestore:", error);
+        }
     };
 
     const renderBulkActionHeader = () => {

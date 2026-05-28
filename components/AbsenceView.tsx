@@ -5,6 +5,7 @@ import { useApp } from '../core/state/AppContext';
 import { formatDate, dateStringToDate, getRelativeDate, addDays } from '../core/utils/dateUtils';
 import AbsenceRequestModal from './AbsenceRequestModal';
 import { useAuditLogger } from '../core/hooks/useAuditLogger';
+import { saveDocument, deleteDocument } from '../core/db';
 
 // UK Bank Holidays fallback data to ensure the calendar works even if the gov.uk API is blocked by CORS
 const FALLBACK_BANK_HOLIDAYS = [
@@ -124,7 +125,7 @@ const AbsenceView: React.FC<AbsenceViewProps> = ({ currentUser, users, absenceRe
         return absenceRequests.filter(r => r.userId === currentUser.id && r.status === 'Pending');
     }, [absenceRequests, currentUser.id]);
 
-    const handleSaveRequest = (request: AbsenceRequest) => {
+    const handleSaveRequest = async (request: AbsenceRequest) => {
         setAbsenceRequests(prev => {
             const existingIndex = prev.findIndex(r => r.id === request.id);
             if (existingIndex > -1) {
@@ -137,26 +138,46 @@ const AbsenceView: React.FC<AbsenceViewProps> = ({ currentUser, users, absenceRe
         });
         setIsRequestModalOpen(false);
         setEditingRequest(null);
+
+        try {
+            await saveDocument('brooks_absenceRequests', request);
+        } catch (error) {
+            console.error("Failed to save absence request to Firestore:", error);
+        }
     };
     
-    const handleDeleteRequest = (requestId: string) => {
+    const handleDeleteRequest = async (requestId: string) => {
         if (window.confirm('Are you sure you want to cancel this absence request? This cannot be undone.')) {
             setAbsenceRequests(prev => prev.filter(r => r.id !== requestId));
             setIsRequestModalOpen(false);
             setEditingRequest(null);
+
+            try {
+                await deleteDocument('brooks_absenceRequests', requestId);
+            } catch (error) {
+                console.error("Failed to delete absence request from Firestore:", error);
+            }
         }
     };
 
-    const handleApprovalAction = (requestId: string, status: 'Approved' | 'Rejected') => {
+    const handleApprovalAction = async (requestId: string, status: 'Approved' | 'Rejected') => {
         const request = absenceRequests.find(r => r.id === requestId);
         if (request) {
             logEvent(status === 'Approved' ? 'APPROVE' : 'DECLINE', 'AbsenceRequest', requestId, `${status} absence request for ${usersById.get(request.userId)?.name}.`);
+            const updated = { ...request, status, actionedAt: new Date().toISOString() };
+            
+            setAbsenceRequests(prev => prev.map(r => 
+                r.id === requestId 
+                ? updated 
+                : r
+            ));
+
+            try {
+                await saveDocument('brooks_absenceRequests', updated);
+            } catch (error) {
+                console.error("Failed to update absence request status in Firestore:", error);
+            }
         }
-        setAbsenceRequests(prev => prev.map(r => 
-            r.id === requestId 
-            ? { ...r, status, actionedAt: new Date().toISOString() } 
-            : r
-        ));
     };
 
     const absencesByDate = useMemo(() => {
@@ -297,7 +318,16 @@ const AbsenceView: React.FC<AbsenceViewProps> = ({ currentUser, users, absenceRe
                                     <span className={`text-sm font-semibold ${dayInfo.isToday ? 'text-indigo-600' : 'text-gray-700'}`}>{dayInfo.day}</span>
                                     <div className="flex-grow min-h-0 mt-1 space-y-1 overflow-y-auto pr-2">
                                         {dayInfo.absences.map(req => (
-                                            <div key={req.id} title={`${usersById.get(req.userId)?.name} - ${req.type}`} className={`p-1 rounded text-xs ${statusColors[req.status]}`}>
+                                            <div 
+                                                key={req.id} 
+                                                title={`${usersById.get(req.userId)?.name} - ${req.type}`} 
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setEditingRequest(req);
+                                                    setIsRequestModalOpen(true);
+                                                }}
+                                                className={`p-1 rounded text-xs cursor-pointer hover:opacity-80 transition-opacity ${statusColors[req.status]}`}
+                                            >
                                                 <p className="font-semibold truncate">{`${usersById.get(req.userId)?.name} (${req.type})`}</p>
                                             </div>
                                         ))}

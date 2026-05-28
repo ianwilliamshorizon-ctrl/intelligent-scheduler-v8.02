@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import { useData } from '../state/DataContext';
 import { useApp } from '../state/AppContext';
 import { AuditAction, AuditLogEntry } from '../../types';
+import { saveDocument } from '../db';
 
 export const useAuditLogger = () => {
   const { setAuditLog } = useData();
@@ -18,6 +19,12 @@ export const useAuditLogger = () => {
       details,
     };
     setAuditLog(prev => [newEntry, ...prev]);
+
+    try {
+      saveDocument('brooks_auditLog', newEntry);
+    } catch (error) {
+      console.error("Failed to save audit log to Firestore:", error);
+    }
   }, [currentUser.id, setAuditLog]);
 
   return { logEvent };
