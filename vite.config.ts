@@ -4,7 +4,10 @@ import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 
-const buildTimestamp = Date.now().toString();
+// Read package.json version
+const pkgPath = path.resolve(__dirname, 'package.json');
+const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
+const appVersion = `${pkg.version}-${Date.now()}`;
 
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, '.', '');
@@ -12,11 +15,11 @@ export default defineConfig(({ mode }) => {
     // Generate version.json for the client to poll
     const publicDir = path.resolve(__dirname, 'public');
     if (!fs.existsSync(publicDir)) fs.mkdirSync(publicDir, { recursive: true });
-    fs.writeFileSync(path.join(publicDir, 'version.json'), JSON.stringify({ version: buildTimestamp }));
+    fs.writeFileSync(path.join(publicDir, 'version.json'), JSON.stringify({ version: appVersion }));
 
     return {
       define: {
-        __APP_VERSION__: JSON.stringify(buildTimestamp),
+        __APP_VERSION__: JSON.stringify(appVersion),
       },
       server: {
         port: 3000,
