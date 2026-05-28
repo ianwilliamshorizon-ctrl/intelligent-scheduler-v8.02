@@ -191,10 +191,11 @@ const JobDetailsTab: React.FC<JobDetailsTabProps> = ({
                 >
                     <div className="flex items-center justify-between">
                         <div>
-                            <p className="font-bold text-base flex items-center gap-2">
-                                {vehicle.registration}
-                                <span className="bg-yellow-400 text-black px-1 rounded text-[10px] font-black border border-black/10">UK</span>
-                            </p>
+                            <div className="mb-1">
+                                <span className="bg-yellow-400 text-black px-2 py-0.5 rounded font-mono font-bold text-sm border border-black inline-block uppercase tracking-wide">
+                                    {vehicle.registration}
+                                </span>
+                            </div>
                             <p className="text-gray-600 text-xs font-semibold">{vehicle.make} {vehicle.model}</p>
                         </div>
                         <button type="button" onClick={() => onViewVehicle(vehicle.id)} className="text-xs bg-white border border-gray-300 px-2 py-1 rounded hover:bg-gray-100 font-semibold shadow-sm">View Specs</button>
