@@ -364,6 +364,7 @@ const SmartCreateJobModal: React.FC<SmartCreateJobModalProps> = ({
                 partsStatus: lineItems.some(li => 
                     !li.fromStock &&
                     !li.isLabor && // Filter labor
+                    !li.isOptional && // Filter optional/advisory
                     (!li.servicePackageId || li.isPackageComponent === true) &&
                     (li.unitCost || 0) > 0
                 ) ? 'Awaiting Order' : 'Not Required',
@@ -438,12 +439,13 @@ const SmartCreateJobModal: React.FC<SmartCreateJobModalProps> = ({
                     notes: notes,
                     vehicleStatus: 'Awaiting Arrival',
                     partsStatus: lineItems.some(li => 
-                    !li.fromStock &&
-                    !li.isLabor && 
-                    li.type !== 'labor' &&
-                    !li.description?.toLowerCase().includes('labour') &&
-                    (!li.servicePackageId || li.isPackageComponent === true)
-                ) ? 'Awaiting Order' : 'Not Required',
+                        !li.fromStock &&
+                        !li.isLabor && 
+                        !li.isOptional && // Filter optional/advisory
+                        li.type !== 'labor' &&
+                        !li.description?.toLowerCase().includes('labour') &&
+                        (!li.servicePackageId || li.isPackageComponent === true)
+                    ) ? 'Awaiting Order' : 'Not Required',
                     isStandalone: isStandaloneMOT
                 };
                 

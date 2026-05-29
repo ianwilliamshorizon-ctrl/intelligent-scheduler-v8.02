@@ -53,7 +53,7 @@ export const calculateJobPartsStatus = (estimate: Estimate | null, purchaseOrder
     const materialItems = estimate.lineItems.filter(li => {
         const isPart = (li.partId || li.description?.trim() || li.partNumber?.trim());
         const isPackageHeader = (li.servicePackageId && !li.isPackageComponent);
-        return !li.isLabor && isPart && !isPackageHeader;
+        return !li.isLabor && !li.isOptional && isPart && !isPackageHeader;
     });
     
     if (materialItems.length === 0) return 'Not Required';

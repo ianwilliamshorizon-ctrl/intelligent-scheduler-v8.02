@@ -12,6 +12,7 @@ import { usePrint } from '../core/hooks/usePrint';
 import { PrintableEstimate } from './estimates/PrintableEstimate';
 import { formatCurrency } from '../core/utils/formatUtils';
 import FormModal from './FormModal';
+import { calculateJobPartsStatus } from '../core/utils/jobUtils';
 
 interface ScheduleJobFromEstimateModalProps {
     isOpen: boolean;
@@ -260,7 +261,7 @@ Linked MOT Booking: #${motJobId} @ ${motBooking.time}`;
             mainJob.segments = splitJobIntoSegments(mainJob);
         }
 
-        mainJob.partsStatus = 'Awaiting Order';
+        mainJob.partsStatus = calculateJobPartsStatus(estimate, purchaseOrders || []);
 
         const updatedEstimate: Estimate = { ...estimate, status: 'Converted to Job', jobId: mainJob.id };
         setIsSubmitting(true);
@@ -335,7 +336,7 @@ Linked MOT Booking: #${motJobId} @ ${motBooking.time}`;
         let newJob: Job = { id: newJobId, entityId: estimate.entityId, vehicleId: estimate.vehicleId, customerId: estimate.customerId, description: `Work from Estimate #${estimate.estimateNumber}`, estimatedHours: laborHours, scheduledDate: suggestion.suggestedDate, status: 'Unallocated', createdAt: formatDate(new Date()), segments: [], estimateId: estimate.id, notes: estimate.notes, vehicleStatus: 'Awaiting Arrival', createdByUserId: '', };
         newJob.segments = splitJobIntoSegments(newJob);
 
-        newJob.partsStatus = 'Awaiting Order';
+        newJob.partsStatus = calculateJobPartsStatus(estimate, purchaseOrders || []);
 
         const updatedEstimate: Estimate = { ...estimate, status: 'Converted to Job', jobId: newJob.id };
         onConfirm(newJob, updatedEstimate, { isAlternative: true, originalDate: suggestion.originalDate }, []);
