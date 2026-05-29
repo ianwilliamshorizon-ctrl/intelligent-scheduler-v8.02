@@ -1149,6 +1149,11 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                     }}
                     onSave={(newVehicle) => {
                         onSaveVehicle(newVehicle);
+                        setFormData(prev => ({
+                            ...prev,
+                            vehicleId: newVehicle.id,
+                            customerId: newVehicle.customerId || prev.customerId
+                        }));
                         setIsAddingVehicle(false);
                         setInitialVehicleData(null);
                     }}

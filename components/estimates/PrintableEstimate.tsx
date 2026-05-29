@@ -222,7 +222,9 @@ export const PrintableEstimate: React.FC<PrintableEstimateProps> = ({ estimate, 
         }}>
             <h3 style={{ fontSize: '8px', fontWeight: 'bold', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '4px' }}>Customer</h3>
             <p style={{ fontSize: '14px', fontWeight: 'bold', color: '#000' }}>{customer?.forename} {customer?.surname}</p>
-            <p style={{ fontSize: '11px', color: '#64748b' }}>{customer?.addressLine1}, {customer?.city}, {customer?.postcode}</p>
+            <p style={{ fontSize: '11px', color: '#64748b' }}>
+                {[customer?.addressLine1, customer?.addressLine2, customer?.city, customer?.county, customer?.postcode].filter(Boolean).join(', ')}
+            </p>
         </div>
     );
 
@@ -326,7 +328,9 @@ export const PrintableEstimate: React.FC<PrintableEstimateProps> = ({ estimate, 
                                         <div>
                                             <h3 className="text-[8px] font-bold text-gray-400 uppercase tracking-widest mb-1">Customer</h3>
                                             <p className="text-sm font-bold" style={{ color: '#000' }}>{customer?.forename} {customer?.surname}</p>
-                                            <p className="text-gray-600 text-[11px]">{customer?.addressLine1}, {customer?.city}, {customer?.postcode}</p>
+                                            <p className="text-gray-600 text-[11px]">
+                                                {[customer?.addressLine1, customer?.addressLine2, customer?.city, customer?.county, customer?.postcode].filter(Boolean).join(', ')}
+                                            </p>
                                         </div>
                                     )}
                                 </div>

@@ -57,6 +57,8 @@ export const lookupVehicleByVRM = async (vrm: string, includeMotHistory: boolean
   
   const response = await fetch(url, { method: 'GET', credentials: 'include' });
   const json = await response.json();
+  console.log('UKVD VehicleDetails API response:', json);
+
   const res = json.Results || {};
 
   const rawDate = findValue(res, 'DateOfManufacture') || findValue(res, 'DateFirstRegistered') || findValue(res, 'DateFirstRegisteredInUk');
@@ -77,15 +79,49 @@ export const lookupVehicleByVRM = async (vrm: string, includeMotHistory: boolean
     fuelType: findValue(res, 'DvlaFuelType') || findValue(res, 'FuelType') || '',
     cc: findValue(res, 'EngineCapacityCc') || undefined,
     transmissionType: findValue(res, 'TransmissionType') || 'Other',
-    nextMotDate: formatToISODate(findValue(res, 'MotExpiryDate')),
+    nextMotDate: '',
   };
 
   if (!mapped.make && !mapped.model) {
     throw new Error(`API returned empty results for ${cleanVrm}. Check permissions.`);
   }
 
-  if (includeMotHistory) {
-      mapped.motHistory = await lookupMotHistory(vrm);
+  // Always attempt to fetch MotHistoryDetails to extract the next MOT due date and log raw payload
+  try {
+    const motHistoryUrl = `${API_BASE_URL}?packagename=MotHistoryDetails&apikey=${API_KEY}&vrm=${encodeURIComponent(cleanVrm)}`;
+    const motResponse = await fetch(motHistoryUrl, { method: 'GET', credentials: 'include' });
+    const motJson = await motResponse.json();
+    console.log('UKVD MotHistoryDetails API response:', motJson);
+
+    const motRes = motJson?.Results?.MotHistoryDetails || {};
+    if (motRes.MotDueDate) {
+      mapped.nextMotDate = formatToISODate(motRes.MotDueDate);
+    }
+
+    const list = motRes.MotTestDetailsList || [];
+    const mappedHistory: MotTest[] = list.map((test: any) => ({
+      testDate: formatToISODate(test.TestDate),
+      testPassed: test.TestPassed,
+      odometerReading: test.OdometerReading,
+      odometerUnit: test.OdometerUnit || 'miles',
+      expiryDate: formatToISODate(test.ExpiryDate),
+      testNumber: test.TestNumber || '',
+      annotationList: test.AnnotationList?.map((a: any) => ({
+        type: a.Type,
+        text: a.Text,
+        isDangerous: !!a.IsDangerous
+      })) || []
+    }));
+
+    if (includeMotHistory) {
+      mapped.motHistory = mappedHistory;
+    }
+
+    if (!mapped.nextMotDate && mappedHistory.length > 0) {
+      mapped.nextMotDate = mappedHistory[0].expiryDate || '';
+    }
+  } catch (motErr) {
+    console.warn('Failed to fetch MOT history for nextMotDate:', motErr);
   }
 
   return mapped;
