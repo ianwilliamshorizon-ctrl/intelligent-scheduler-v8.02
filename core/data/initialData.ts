@@ -64,19 +64,71 @@ export const getInitialBusinessEntities = (): BusinessEntity[] => ([
     {
         id: 'ent_porsche', name: 'Brookspeed Porsche & Performance', shortCode: 'BPP', laborRate: 125, laborCostRate: 45,
         addressLine1: '14-15 Test Lane', city: 'Southampton', postcode: 'SO16 9JX', vatNumber: 'GB 123 4567 89', type: 'Workshop',
-        logoUrl: '/logo.png'
+        logoUrl: '/logo.png',
+        layoutSettings: {
+            logoPosition: 'center',
+            brandingPosition: 'left',
+            detailsPosition: 'right',
+            vehiclePosition: 'left',
+            customerPosition: 'none',
+            logoHeight: 120
+        }
     },
     { 
-        id: 'ent_audi', name: 'Brookspeed Audi & VW', shortCode: 'BAV', laborRate: 110, laborCostRate: 40, type: 'Workshop'
+        id: 'ent_audi', name: 'Brookspeed Audi & VW', shortCode: 'BAV', laborRate: 110, laborCostRate: 40, type: 'Workshop',
+        layoutSettings: {
+            logoPosition: 'center',
+            brandingPosition: 'left',
+            detailsPosition: 'right',
+            vehiclePosition: 'left',
+            customerPosition: 'none',
+            logoHeight: 120
+        }
     },
     { 
-        id: 'ent_trimming', name: 'Brookspeed Trimming', shortCode: 'BTR', laborRate: 95, laborCostRate: 35, type: 'Workshop'
+        id: 'ent_trimming', name: 'Brookspeed Trimming', shortCode: 'BTR', laborRate: 95, laborCostRate: 35, type: 'Workshop',
+        layoutSettings: {
+            logoPosition: 'center',
+            brandingPosition: 'left',
+            detailsPosition: 'right',
+            vehiclePosition: 'left',
+            customerPosition: 'none',
+            logoHeight: 120
+        }
     },
     { 
-        id: 'ent_sales', name: 'Brookspeed Sales', shortCode: 'BSA', type: 'Sales'
+        id: 'ent_sales', name: 'Brookspeed Sales', shortCode: 'BSA', type: 'Sales',
+        layoutSettings: {
+            logoPosition: 'center',
+            brandingPosition: 'left',
+            detailsPosition: 'right',
+            vehiclePosition: 'left',
+            customerPosition: 'none',
+            logoHeight: 120
+        }
     },
-    { id: 'ent_storage', name: 'Brookspeed Secure Storage', shortCode: 'BSS', type: 'Storage' },
-    { id: 'ent_rentals', name: 'Brookspeed Rentals', shortCode: 'BRE', type: 'Rentals' }
+    { 
+        id: 'ent_storage', name: 'Brookspeed Secure Storage', shortCode: 'BSS', type: 'Storage',
+        layoutSettings: {
+            logoPosition: 'center',
+            brandingPosition: 'left',
+            detailsPosition: 'right',
+            vehiclePosition: 'left',
+            customerPosition: 'none',
+            logoHeight: 120
+        }
+    },
+    { 
+        id: 'ent_rentals', name: 'Brookspeed Rentals', shortCode: 'BRE', type: 'Rentals',
+        layoutSettings: {
+            logoPosition: 'center',
+            brandingPosition: 'left',
+            detailsPosition: 'right',
+            vehiclePosition: 'left',
+            customerPosition: 'none',
+            logoHeight: 120
+        }
+    }
 ]);
 
 // --- Tax Rates ---

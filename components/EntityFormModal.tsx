@@ -464,7 +464,7 @@ const EntityFormModal: React.FC<EntityFormModalProps> = ({ isOpen, onClose, onSa
                                                     <button 
                                                         key={pos}
                                                         onClick={() => handleLayoutChange('logoPosition', pos)}
-                                                        className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold uppercase border transition-all ${formData.layoutSettings?.logoPosition === pos ? 'bg-indigo-600 border-indigo-600 text-white shadow-md' : 'bg-white border-gray-200 text-gray-500 hover:border-indigo-300'}`}
+                                                        className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold uppercase border transition-all ${(formData.layoutSettings?.logoPosition || 'center') === pos ? 'bg-indigo-600 border-indigo-600 text-white shadow-md' : 'bg-white border-gray-200 text-gray-500 hover:border-indigo-300'}`}
                                                     >
                                                         {pos === 'none' ? 'Hidden' : pos}
                                                     </button>
@@ -479,7 +479,7 @@ const EntityFormModal: React.FC<EntityFormModalProps> = ({ isOpen, onClose, onSa
                                                     <button 
                                                         key={pos}
                                                         onClick={() => handleLayoutChange('brandingPosition', pos)}
-                                                        className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold uppercase border transition-all ${formData.layoutSettings?.brandingPosition === pos ? 'bg-indigo-600 border-indigo-600 text-white shadow-md' : 'bg-white border-gray-200 text-gray-500 hover:border-indigo-300'}`}
+                                                        className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold uppercase border transition-all ${(formData.layoutSettings?.brandingPosition || 'left') === pos ? 'bg-indigo-600 border-indigo-600 text-white shadow-md' : 'bg-white border-gray-200 text-gray-500 hover:border-indigo-300'}`}
                                                     >
                                                         {pos === 'none' ? 'Hidden' : pos}
                                                     </button>
@@ -497,7 +497,7 @@ const EntityFormModal: React.FC<EntityFormModalProps> = ({ isOpen, onClose, onSa
                                                             handleLayoutChange('detailsPosition', pos);
                                                             handleLayoutChange('estimateNumberPosition', pos); // Keep legacy in sync
                                                         }}
-                                                        className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold uppercase border transition-all ${formData.layoutSettings?.detailsPosition === pos ? 'bg-indigo-600 border-indigo-600 text-white shadow-md' : 'bg-white border-gray-200 text-gray-500 hover:border-indigo-300'}`}
+                                                        className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold uppercase border transition-all ${(formData.layoutSettings?.detailsPosition || 'right') === pos ? 'bg-indigo-600 border-indigo-600 text-white shadow-md' : 'bg-white border-gray-200 text-gray-500 hover:border-indigo-300'}`}
                                                     >
                                                         {pos === 'none' ? 'Hidden' : pos}
                                                     </button>
@@ -511,7 +511,7 @@ const EntityFormModal: React.FC<EntityFormModalProps> = ({ isOpen, onClose, onSa
                                                     <button 
                                                         key={pos}
                                                         onClick={() => handleLayoutChange('vehiclePosition', pos)}
-                                                        className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold uppercase border transition-all ${formData.layoutSettings?.vehiclePosition === pos ? 'bg-indigo-600 border-indigo-600 text-white shadow-md' : 'bg-white border-gray-200 text-gray-500 hover:border-indigo-300'}`}
+                                                        className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold uppercase border transition-all ${(formData.layoutSettings?.vehiclePosition || 'left') === pos ? 'bg-indigo-600 border-indigo-600 text-white shadow-md' : 'bg-white border-gray-200 text-gray-500 hover:border-indigo-300'}`}
                                                     >
                                                         {pos === 'none' ? 'Hidden' : pos}
                                                     </button>
@@ -525,7 +525,7 @@ const EntityFormModal: React.FC<EntityFormModalProps> = ({ isOpen, onClose, onSa
                                                     <button 
                                                         key={pos}
                                                         onClick={() => handleLayoutChange('customerPosition', pos)}
-                                                        className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold uppercase border transition-all ${formData.layoutSettings?.customerPosition === pos ? 'bg-indigo-600 border-indigo-600 text-white shadow-md' : 'bg-white border-gray-200 text-gray-500 hover:border-indigo-300'}`}
+                                                        className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold uppercase border transition-all ${(formData.layoutSettings?.customerPosition || 'none') === pos ? 'bg-indigo-600 border-indigo-600 text-white shadow-md' : 'bg-white border-gray-200 text-gray-500 hover:border-indigo-300'}`}
                                                     >
                                                         {pos === 'none' ? 'Hidden' : pos}
                                                     </button>
@@ -537,13 +537,13 @@ const EntityFormModal: React.FC<EntityFormModalProps> = ({ isOpen, onClose, onSa
                                             <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Logo Height (px)</label>
                                             <input 
                                                 type="range" min="30" max="150" step="5"
-                                                value={formData.layoutSettings?.logoHeight || 60}
+                                                value={formData.layoutSettings?.logoHeight || 120}
                                                 onChange={(e) => handleLayoutChange('logoHeight', parseInt(e.target.value))}
                                                 className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
                                             />
                                             <div className="flex justify-between text-[10px] font-bold text-gray-400 mt-1">
                                                 <span>30px</span>
-                                                <span>{formData.layoutSettings?.logoHeight || 60}px</span>
+                                                <span>{formData.layoutSettings?.logoHeight || 120}px</span>
                                                 <span>150px</span>
                                             </div>
                                         </div>

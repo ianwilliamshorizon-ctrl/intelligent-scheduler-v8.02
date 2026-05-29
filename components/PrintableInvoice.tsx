@@ -272,9 +272,9 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, customer, 
 
     const renderHeader = () => {
         const layout = resolvedEntity?.layoutSettings || {};
-        const logoPos = layout.logoPosition || 'right';
+        const logoPos = layout.logoPosition || 'center';
         const brandingPos = layout.brandingPosition || 'left';
-        const detailsPos = layout.detailsPosition || (layout.estimateNumberPosition === 'right' ? 'right' : 'left');
+        const detailsPos = layout.detailsPosition || 'right';
         const vehiclePos = layout.vehiclePosition || 'left';
         const customerPos = layout.customerPosition || 'none';
 

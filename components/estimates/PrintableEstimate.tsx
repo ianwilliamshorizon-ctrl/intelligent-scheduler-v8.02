@@ -284,9 +284,9 @@ export const PrintableEstimate: React.FC<PrintableEstimateProps> = ({ estimate, 
                             <div id="estimate-print-header" style={{ paddingBottom: '20px', marginBottom: '20px', borderBottom: '2px solid #000', margin: '0 15mm 20px 15mm' }}>
                                 {(() => {
                                     const layout = resolvedEntity?.layoutSettings || {};
-                                    const logoPos = layout.logoPosition || 'right';
+                                    const logoPos = layout.logoPosition || 'center';
                                     const brandingPos = layout.brandingPosition || 'left';
-                                    const detailsPos = layout.detailsPosition || (layout.estimateNumberPosition === 'right' ? 'right' : 'left');
+                                    const detailsPos = layout.detailsPosition || 'right';
                                     const vehiclePos = layout.vehiclePosition || 'left';
                                     const customerPos = layout.customerPosition || 'none';
 

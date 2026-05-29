@@ -481,11 +481,15 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
                                     disabled={isRaisingPOs}
                                 >
                                     {isRaisingPOs ? (
-                                        <><Loader2 size={12} className="animate-spin mr-1"/>Refreshing...</>
+                                        <><Loader2 size={12} className="animate-spin mr-1"/>{(purchaseOrderIds || []).length > 0 ? 'Refreshing...' : 'Raising POs...'}</>
                                     ) : (
-                                        <><ShoppingCart size={12}/> Refresh Purchase Orders</>
+                                        <><ShoppingCart size={12}/> {(purchaseOrderIds || []).length > 0 ? 'Refresh Purchase Orders' : 'Raise Purchase Orders'}</>
                                     )}
-                                    {!isRaisingPOs && unlinkedPartsCount > 0 && <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center">{unlinkedPartsCount}</span>}
+                                    {!isRaisingPOs && (purchaseOrderIds || []).length > 0 && unlinkedPartsCount > 0 && (
+                                        <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center">
+                                            {unlinkedPartsCount}
+                                        </span>
+                                    )}
                                 </button>
                             )}
                         </div>
