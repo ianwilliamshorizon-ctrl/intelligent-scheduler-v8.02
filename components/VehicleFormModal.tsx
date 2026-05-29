@@ -169,8 +169,17 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
                 // Merge images from lookup details
                 let updatedImages = prev.images || [];
                 if (details.images && details.images.length > 0) {
+                    const hasExistingPrimary = updatedImages.some((img: any) => img.isPrimaryDiagram);
                     const existingIds = new Set(updatedImages.map((img: any) => img.id));
-                    const newImages = details.images.filter((img: any) => !existingIds.has(img.id));
+                    
+                    const newImages = details.images
+                        .filter((img: any) => !existingIds.has(img.id))
+                        .map((img: any) => ({
+                            ...img,
+                            // If we already have any images, or if there is a primary diagram, set the API image's isPrimaryDiagram to false
+                            isPrimaryDiagram: updatedImages.length === 0 && !hasExistingPrimary
+                        }));
+                        
                     updatedImages = [...updatedImages, ...newImages];
                 }
 
