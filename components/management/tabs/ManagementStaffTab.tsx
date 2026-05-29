@@ -24,7 +24,12 @@ export const ManagementStaffTab: React.FC<ManagementStaffTabProps> = ({ searchTe
         }
     }, [users]);
 
-    const { deleteItem } = useManagementTable(localUsers, 'brooks_users', setLocalUsers);
+    const syncUsers = (updater: any) => {
+        setLocalUsers(updater);
+        if (setUsers) setUsers(updater);
+    };
+
+    const { deleteItem } = useManagementTable(localUsers, 'brooks_users', syncUsers);
     const [selectedUser, setSelectedUser] = useState<UserType | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
 

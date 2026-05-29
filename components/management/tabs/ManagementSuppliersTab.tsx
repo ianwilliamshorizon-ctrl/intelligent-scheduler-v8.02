@@ -21,7 +21,12 @@ export const ManagementSuppliersTab = ({ searchTerm = '', onShowStatus }: { sear
         setLocalSuppliers(Array.isArray(suppliers) ? suppliers : []);
     }, [suppliers]);
 
-    const { deleteItem } = useManagementTable(localSuppliers, 'brooks_suppliers', setLocalSuppliers);
+    const syncSuppliers = (updater: any) => {
+        setLocalSuppliers(updater);
+        if (setSuppliers) setSuppliers(updater);
+    };
+
+    const { deleteItem } = useManagementTable(localSuppliers, 'brooks_suppliers', syncSuppliers);
 
     const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);

@@ -21,11 +21,16 @@ export const ManagementDiagramsTab: React.FC<ManagementDiagramsTabProps> = ({ se
     
     const [localDiagrams, setLocalDiagrams] = useState<InspectionDiagram[]>(Array.isArray(inspectionDiagrams) ? inspectionDiagrams : []);
 
+    const syncDiagrams = (updater: any) => {
+        setLocalDiagrams(updater);
+        if (setInspectionDiagrams) setInspectionDiagrams(updater);
+    };
+
     useEffect(() => {
         setLocalDiagrams(Array.isArray(inspectionDiagrams) ? inspectionDiagrams : []);
     }, [inspectionDiagrams]);
 
-    const { deleteItem } = useManagementTable(inspectionDiagrams || [], 'brooks_inspectionDiagrams', setLocalDiagrams);
+    const { deleteItem } = useManagementTable(inspectionDiagrams || [], 'brooks_inspectionDiagrams', syncDiagrams);
 
     const [selectedDiagram, setSelectedDiagram] = useState<InspectionDiagram | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
