@@ -393,6 +393,10 @@ export const ManagementVehiclesTab: React.FC<ManagementVehiclesTabProps> = ({
                     onViewInvoice={onViewInvoice}
                     onOpenPurchaseOrder={onOpenPurchaseOrder}
                     vehicles={vehicles}
+                    onSaveCustomer={async (c) => {
+                        await db.saveDocument('brooks_customers', c);
+                        await forceRefresh('brooks_customers');
+                    }}
                 />
             )}
         </div>

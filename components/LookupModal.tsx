@@ -166,6 +166,16 @@ const LookupModal: React.FC<LookupModalProps> = ({
                         </div>
                     )}
 
+                    <div className="mt-4 flex justify-end">
+                        <button
+                            type="button"
+                            onClick={handleManualEntryClick}
+                            className="text-sm font-bold text-indigo-600 hover:text-indigo-800 transition-colors"
+                        >
+                            Skip Lookup & Enter Manually →
+                        </button>
+                    </div>
+
                     {errorMessage && (
                         <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-md flex gap-3">
                             <AlertCircle size={20} className="text-red-500 shrink-0" />

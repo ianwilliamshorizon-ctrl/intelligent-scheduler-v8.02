@@ -831,6 +831,7 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                         onSave={(v) => handleSaveItem(actions.setVehicles, v, 'brooks_vehicles')}
                         vehicle={data.vehicles.find(v => v.id === modals.vehicleModal.vehicleId) || null}
                         customers={data.customers}
+                        onSaveCustomer={(c) => handleSaveItem(actions.setCustomers, c, 'brooks_customers')}
                         jobs={data.jobs}
                         estimates={data.estimates}
                         invoices={data.invoices}

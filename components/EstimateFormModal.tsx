@@ -1160,6 +1160,7 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                     customers={customers}
                     vehicles={vehicles}
                     initialCustomerId={formData.customerId} 
+                    onSaveCustomer={onSaveCustomer}
                 />
             )}
         </FormModal>

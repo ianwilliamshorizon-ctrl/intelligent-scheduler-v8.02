@@ -6,7 +6,7 @@ import {
     Loader2, Search, Briefcase, History, 
     Eye, ArrowRightLeft, ShieldCheck, AlertCircle, 
     Printer, Car, Shield, XCircle, AlertTriangle,
-    Database, User, ExternalLink
+    Database, User, ExternalLink, Plus
 } from 'lucide-react';
 import SearchableSelect from './SearchableSelect';
 import { useAuditLogger } from '../core/hooks/useAuditLogger';
@@ -16,6 +16,7 @@ import * as T from '../types';
 import { formatCurrency } from '../utils/formatUtils';
 import { formatDate, dateStringToDate } from '../core/utils/dateUtils';
 import AddNewVehicleForm from './AddNewVehicleForm';
+import CustomerFormModal from './CustomerFormModal';
 
 type LocalInvoice = any;
 type LocalPrevReg = { registration: string; changedAt: string; changedByUserId: string };
@@ -65,11 +66,13 @@ interface VehicleFormModalProps {
     initialCustomerId?: string;
     initialRegistration?: string;
     vehicles: Vehicle[];
+    onSaveCustomer?: (customer: Customer) => void;
 }
 
 const VehicleFormModal: React.FC<VehicleFormModalProps> = ({ 
     isOpen, onClose, onSave, vehicle, customers, jobs, estimates, invoices, purchaseOrders,
-    onViewJob, onViewEstimate, onViewInvoice, onViewCustomer, onOpenPurchaseOrder, initialCustomerId, onSaveWithCustomer, initialRegistration, vehicles
+    onViewJob, onViewEstimate, onViewInvoice, onViewCustomer, onOpenPurchaseOrder, initialCustomerId, onSaveWithCustomer, initialRegistration, vehicles,
+    onSaveCustomer
 }) => {
     const [formData, setFormData] = useState<any>({});
     const [isLookingUp, setIsLookingUp] = useState(false);
@@ -80,6 +83,7 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
     const { currentUser } = useApp();
     const [isTransferMode, setIsTransferMode] = useState(false);
     const [includeMotHistory, setIncludeMotHistory] = useState(false);
+    const [isAddingCustomer, setIsAddingCustomer] = useState(false);
     
     const hasAutoLookedUp = useRef(false);
 
@@ -275,6 +279,14 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
                                                 placeholder="Search customers..."
                                             />
                                         </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsAddingCustomer(true)}
+                                            className="p-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 flex-shrink-0"
+                                            title="Add New Customer"
+                                        >
+                                            <Plus size={20} />
+                                        </button>
                                         {formData.customerId && (
                                             <button
                                                 type="button"
@@ -511,6 +523,29 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
                     )}
                 </div>
             </div>
+
+            {isAddingCustomer && (
+                <CustomerFormModal 
+                    isOpen={isAddingCustomer} 
+                    onClose={() => setIsAddingCustomer(false)} 
+                    onSave={(newCustomer) => { 
+                        if (onSaveCustomer) {
+                            onSaveCustomer(newCustomer);
+                        }
+                        setFormData((prev: any) => ({
+                            ...prev,
+                            customerId: newCustomer.id
+                        }));
+                        setIsAddingCustomer(false);
+                    }} 
+                    customer={null}
+                    existingCustomers={customers}
+                    jobs={[]}
+                    vehicles={[]}
+                    estimates={[]}
+                    invoices={[]}
+                />
+            )}
         </FormModal>
     );
 };
