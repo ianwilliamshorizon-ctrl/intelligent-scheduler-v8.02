@@ -6,6 +6,7 @@ import { formatDate, dateStringToDate, getRelativeDate, addDays } from '../core/
 import AbsenceRequestModal from './AbsenceRequestModal';
 import { useAuditLogger } from '../core/hooks/useAuditLogger';
 import { saveDocument, deleteDocument } from '../core/db';
+import BulkCompulsoryLeaveModal from './BulkCompulsoryLeaveModal';
 
 // UK Bank Holidays fallback data to ensure the calendar works even if the gov.uk API is blocked by CORS
 const FALLBACK_BANK_HOLIDAYS = [
@@ -41,6 +42,7 @@ const AbsenceView: React.FC<AbsenceViewProps> = ({ currentUser, users, absenceRe
     const baseRole = userRoleObj ? userRoleObj.baseRole : currentUser.role;
     const [currentMonth, setCurrentMonth] = useState(() => dateStringToDate(getRelativeDate(0)));
     const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
+    const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
     const [editingRequest, setEditingRequest] = useState<AbsenceRequest | null>(null);
     const [viewingUserId, setViewingUserId] = useState<string>(currentUser.id); // 'all' or a user ID
     const [bankHolidays, setBankHolidays] = useState<Map<string, string>>(new Map());
@@ -106,13 +108,19 @@ const AbsenceView: React.FC<AbsenceViewProps> = ({ currentUser, users, absenceRe
             .filter(r => r.userId === userForSummary.id && r.type === 'Holiday' && r.status === 'Approved')
             .reduce((sum, r) => sum + r.daysTaken, 0);
     }, [absenceRequests, userForSummary]);
+    const compulsoryTaken = useMemo(() => {
+        if (!userForSummary) return 0;
+        return absenceRequests
+            .filter(r => r.userId === userForSummary.id && r.type === 'Compulsory' && r.status === 'Approved')
+            .reduce((sum, r) => sum + r.daysTaken, 0);
+    }, [absenceRequests, userForSummary]);
     const holidayPending = useMemo(() => {
         if (!userForSummary) return 0;
         return absenceRequests
             .filter(r => r.userId === userForSummary.id && r.type === 'Holiday' && r.status === 'Pending')
             .reduce((sum, r) => sum + r.daysTaken, 0);
     }, [absenceRequests, userForSummary]);
-    const holidayRemaining = holidayEntitlement - holidayTaken - holidayPending;
+    const holidayRemaining = holidayEntitlement - holidayTaken - compulsoryTaken - holidayPending;
 
     const approvalsRequired = useMemo(() => {
         if (baseRole === 'Admin') {
@@ -177,6 +185,16 @@ const AbsenceView: React.FC<AbsenceViewProps> = ({ currentUser, users, absenceRe
             } catch (error) {
                 console.error("Failed to update absence request status in Firestore:", error);
             }
+        }
+    };
+
+    const handleSaveBulkCompulsory = async (newRequests: AbsenceRequest[]) => {
+        setAbsenceRequests(prev => [...prev, ...newRequests]);
+        try {
+            await Promise.all(newRequests.map(req => saveDocument('brooks_absenceRequests', req)));
+            logEvent('CREATE', 'AbsenceRequest', 'bulk', `Created bulk compulsory leave for ${newRequests.length} users.`);
+        } catch (error) {
+            console.error("Failed to save bulk compulsory leave to Firestore:", error);
         }
     };
 
@@ -286,8 +304,13 @@ const AbsenceView: React.FC<AbsenceViewProps> = ({ currentUser, users, absenceRe
                         )}
                     </div>
                 </div>
-                 <div className="flex items-center gap-4">
-                    <button onClick={() => { setEditingRequest(null); setDefaultDateForModal(null); setIsRequestModalOpen(true); }} className="flex items-center gap-2 py-2 px-4 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700">
+                 <div className="flex items-center gap-2">
+                    {baseRole === 'Admin' && (
+                        <button onClick={() => setIsBulkModalOpen(true)} className="flex items-center gap-2 py-2 px-4 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-lg shadow-md transition-all">
+                            <PlusCircle size={16}/> Bulk Compulsory Leave
+                        </button>
+                    )}
+                    <button onClick={() => { setEditingRequest(null); setDefaultDateForModal(null); setIsRequestModalOpen(true); }} className="flex items-center gap-2 py-2 px-4 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition-all">
                         <PlusCircle size={16}/> Request Absence
                     </button>
                 </div>
@@ -302,9 +325,12 @@ const AbsenceView: React.FC<AbsenceViewProps> = ({ currentUser, users, absenceRe
                          {calendarDays.map(dayInfo => {
                             if (dayInfo.isPlaceholder) return <div key={dayInfo.key} className="bg-gray-100 rounded-lg"></div>;
                             const isHoliday = !!dayInfo.bankHolidayName;
+                            const hasCompulsory = dayInfo.absences.some(r => r.type === 'Compulsory');
                             
                             let cellClass = 'bg-white';
-                            if (isHoliday) {
+                            if (hasCompulsory) {
+                                cellClass = 'bg-purple-50/50 border-purple-200';
+                            } else if (isHoliday) {
                                 cellClass = 'bg-teal-50';
                             } else if (dayInfo.isWeekend) {
                                 cellClass = 'bg-gray-100';
@@ -317,20 +343,24 @@ const AbsenceView: React.FC<AbsenceViewProps> = ({ currentUser, users, absenceRe
                                 `}>
                                     <span className={`text-sm font-semibold ${dayInfo.isToday ? 'text-indigo-600' : 'text-gray-700'}`}>{dayInfo.day}</span>
                                     <div className="flex-grow min-h-0 mt-1 space-y-1 overflow-y-auto pr-2">
-                                        {dayInfo.absences.map(req => (
-                                            <div 
-                                                key={req.id} 
-                                                title={`${usersById.get(req.userId)?.name} - ${req.type}`} 
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setEditingRequest(req);
-                                                    setIsRequestModalOpen(true);
-                                                }}
-                                                className={`p-1 rounded text-xs cursor-pointer hover:opacity-80 transition-opacity ${statusColors[req.status]}`}
-                                            >
-                                                <p className="font-semibold truncate">{`${usersById.get(req.userId)?.name} (${req.type})`}</p>
-                                            </div>
-                                        ))}
+                                        {dayInfo.absences.map(req => {
+                                            const isComp = req.type === 'Compulsory';
+                                            const bgClass = isComp ? 'bg-purple-100 text-purple-800 border-purple-200' : statusColors[req.status];
+                                            return (
+                                                <div 
+                                                    key={req.id} 
+                                                    title={`${usersById.get(req.userId)?.name} - ${req.type}`} 
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setEditingRequest(req);
+                                                        setIsRequestModalOpen(true);
+                                                    }}
+                                                    className={`p-1 rounded text-xs cursor-pointer hover:opacity-80 transition-opacity border ${bgClass}`}
+                                                >
+                                                    <p className="font-semibold truncate">{`${usersById.get(req.userId)?.name} (${req.type})`}</p>
+                                                </div>
+                                            );
+                                        })}
                                         {isHoliday && (
                                             <div className="p-1 rounded text-xs bg-teal-100 text-teal-800 text-center font-semibold">
                                                 {dayInfo.bankHolidayName}
@@ -362,7 +392,10 @@ const AbsenceView: React.FC<AbsenceViewProps> = ({ currentUser, users, absenceRe
                             <h3 className="font-bold text-gray-800 mb-2">{userForSummary.id === currentUser.id ? 'My' : `${userForSummary.name}'s`} Holiday Entitlement</h3>
                             <div className="space-y-1 text-sm">
                                 <div className="flex justify-between"><span>Allowance:</span><span className="font-semibold">{holidayEntitlement} days</span></div>
-                                <div className="flex justify-between"><span>Taken:</span><span className="font-semibold text-red-600">{holidayTaken} days</span></div>
+                                <div className="flex justify-between"><span>Taken (Holiday):</span><span className="font-semibold text-red-600">{holidayTaken} days</span></div>
+                                {compulsoryTaken > 0 && (
+                                    <div className="flex justify-between text-purple-700 font-medium"><span>Compulsory Leave:</span><span className="font-semibold">{compulsoryTaken} days</span></div>
+                                )}
                                 <div className="flex justify-between"><span>Pending:</span><span className="font-semibold text-amber-600">{holidayPending} days</span></div>
                                 <div className="flex justify-between font-bold border-t mt-2 pt-2"><span>Remaining:</span><span className="text-green-700">{holidayRemaining} days</span></div>
                             </div>
@@ -422,6 +455,16 @@ const AbsenceView: React.FC<AbsenceViewProps> = ({ currentUser, users, absenceRe
                     requestToEdit={editingRequest}
                     bankHolidays={bankHolidays}
                     defaultDate={defaultDateForModal}
+                />
+            )}
+            {isBulkModalOpen && (
+                <BulkCompulsoryLeaveModal
+                    isOpen={isBulkModalOpen}
+                    onClose={() => setIsBulkModalOpen(false)}
+                    currentUser={currentUser}
+                    users={users}
+                    onSave={handleSaveBulkCompulsory}
+                    bankHolidays={bankHolidays}
                 />
             )}
         </div>

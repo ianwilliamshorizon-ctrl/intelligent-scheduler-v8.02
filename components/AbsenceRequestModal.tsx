@@ -145,6 +145,7 @@ const AbsenceRequestModal: React.FC<AbsenceRequestModalProps> = ({ isOpen, onClo
                             <option value="Unpaid Leave">Unpaid Leave</option>
                             <option value="Race Support">Race Support</option>
                             <option value="Training">Training</option>
+                            <option value="Compulsory">Compulsory Leave</option>
                         </select>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
@@ -176,9 +177,9 @@ const AbsenceRequestModal: React.FC<AbsenceRequestModalProps> = ({ isOpen, onClo
                         <label className="block text-sm font-medium text-gray-700 mb-1">Notes (optional)</label>
                         <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} className="w-full p-2 border rounded" disabled={!canEdit}></textarea>
                     </div>
-                    {type === 'Holiday' && (
+                    {(type === 'Holiday' || type === 'Compulsory') && (
                         <div className="p-3 bg-indigo-50 rounded-lg text-sm text-indigo-800">
-                            <p>This holiday request will deduct <strong>{daysTaken}</strong> day(s) from {canRequestForOthers && userId !== currentUser.id ? `${selectedUser?.name}'s` : 'your'} entitlement.</p>
+                            <p>This request will deduct <strong>{daysTaken}</strong> day(s) from {canRequestForOthers && userId !== currentUser.id ? `${selectedUser?.name}'s` : 'your'} entitlement.</p>
                         </div>
                     )}
                 </div>

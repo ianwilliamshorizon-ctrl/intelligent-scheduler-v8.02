@@ -79,8 +79,8 @@ export interface User {
     engineerId?: string;
     preferredEntityId?: string;
     status?: 'pending' | 'active' | 'disabled';
-    holidayEntitlement?: number;
     holidayApproverId?: string;
+    holidayEntitlement?: number;
 }
 
 export interface Role {
@@ -743,7 +743,7 @@ export interface StorageBooking {
     checkOutPhotos?: CheckInPhoto[];
     mileage?: number;
 }
-export type AbsenceType = 'Holiday' | 'Sickness' | 'Appointment' | 'Unpaid Leave' | 'Race Support' | 'Training';
+export type AbsenceType = 'Holiday' | 'Sickness' | 'Appointment' | 'Unpaid Leave' | 'Race Support' | 'Training' | 'Compulsory';
 export type AbsenceRequestStatus = 'Pending' | 'Approved' | 'Rejected';
 
 export interface AbsenceRequest {
