@@ -6,7 +6,7 @@ import {
     Loader2, Search, Briefcase, History, 
     Eye, ArrowRightLeft, ShieldCheck, AlertCircle, 
     Printer, Car, Shield, XCircle, AlertTriangle,
-    Database, User, ExternalLink, Plus
+    Database, User, ExternalLink, Plus, RefreshCw
 } from 'lucide-react';
 import SearchableSelect from './SearchableSelect';
 import { useAuditLogger } from '../core/hooks/useAuditLogger';
@@ -165,19 +165,30 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
             if (details.AccountBalance !== undefined) setRemainingQuota(details.AccountBalance);
             else if (details.CreditsRemaining !== undefined) setRemainingQuota(details.CreditsRemaining);
 
-            setFormData((prev: any) => ({
-                ...prev,
-                make: details.make || prev.make,
-                model: details.model || prev.model,
-                colour: details.colour || prev.colour,
-                fuelType: details.fuelType || prev.fuelType,
-                engineCapacityCc: details.engineCapacity || prev.engineCapacityCc,
-                engineNumber: details.engineNumber || prev.engineNumber,
-                vin: details.vin || prev.vin,
-                nextMotDate: details.nextMotDate || prev.nextMotDate,
-                manufactureDate: details.monthOfFirstRegistration ? `${details.monthOfFirstRegistration}-01` : prev.manufactureDate,
-                motHistory: details.motHistory || []
-            }));
+            setFormData((prev: any) => {
+                // Merge images from lookup details
+                let updatedImages = prev.images || [];
+                if (details.images && details.images.length > 0) {
+                    const existingIds = new Set(updatedImages.map((img: any) => img.id));
+                    const newImages = details.images.filter((img: any) => !existingIds.has(img.id));
+                    updatedImages = [...updatedImages, ...newImages];
+                }
+
+                return {
+                    ...prev,
+                    make: details.make || prev.make,
+                    model: details.model || prev.model,
+                    colour: details.colour || prev.colour,
+                    fuelType: details.fuelType || prev.fuelType,
+                    engineCapacityCc: details.cc || details.engineCapacity || prev.engineCapacityCc,
+                    engineNumber: details.engineNumber || prev.engineNumber,
+                    vin: details.vin || prev.vin,
+                    nextMotDate: details.nextMotDate || prev.nextMotDate,
+                    manufactureDate: details.manufactureDate || (details.monthOfFirstRegistration ? `${details.monthOfFirstRegistration}-01` : prev.manufactureDate),
+                    motHistory: details.motHistory || [],
+                    images: updatedImages
+                };
+            });
         } catch (error: any) {
             setLookupError(error.message || 'Lookup failed.');
         } finally {
@@ -333,11 +344,22 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
                                         </label>
                                     </div>
 
-                                    {!isTransferMode && formData.id && (
-                                        <button type="button" onClick={() => setIsTransferMode(true)} className="text-[10px] text-indigo-600 font-bold mt-1 flex items-center gap-1 uppercase">
-                                            <ArrowRightLeft size={10}/> Plate Transfer
-                                        </button>
-                                    )}
+                                     {!isTransferMode && formData.id && (
+                                         <div className="flex items-center gap-3 mt-1">
+                                             <button type="button" onClick={() => setIsTransferMode(true)} className="text-[10px] text-indigo-600 font-bold flex items-center gap-1 uppercase hover:text-indigo-800">
+                                                 <ArrowRightLeft size={10}/> Plate Transfer
+                                             </button>
+                                             <span className="text-[10px] text-gray-300">|</span>
+                                             <button 
+                                                 type="button" 
+                                                 onClick={() => handleLookup(formData.registration!)} 
+                                                 className="text-[10px] text-indigo-600 font-bold flex items-center gap-1 uppercase hover:text-indigo-800 disabled:opacity-50"
+                                                 disabled={isLookingUp}
+                                             >
+                                                 {isLookingUp ? <Loader2 size={10} className="animate-spin" /> : <RefreshCw size={10}/>} Refresh Specs
+                                             </button>
+                                         </div>
+                                     )}
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Make*</label>

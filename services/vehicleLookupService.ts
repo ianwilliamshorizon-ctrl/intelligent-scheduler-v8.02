@@ -53,11 +53,11 @@ export const lookupMotHistory = async (vrm: string): Promise<MotTest[]> => {
 
 export const lookupVehicleByVRM = async (vrm: string, includeMotHistory: boolean = false): Promise<Partial<Vehicle>> => {
   const cleanVrm = vrm.trim().toUpperCase();
-  const url = `${API_BASE_URL}?packagename=VehicleDetails&apikey=${API_KEY}&vrm=${encodeURIComponent(cleanVrm)}`;
+  const url = `${API_BASE_URL}?packagename=VehicleDetailsWithImage&apikey=${API_KEY}&vrm=${encodeURIComponent(cleanVrm)}`;
   
   const response = await fetch(url, { method: 'GET', credentials: 'include' });
   const json = await response.json();
-  console.log('UKVD VehicleDetails API response:', json);
+  console.log('UKVD VehicleDetailsWithImage API response:', json);
 
   const res = json.Results || {};
 
@@ -84,6 +84,16 @@ export const lookupVehicleByVRM = async (vrm: string, includeMotHistory: boolean
 
   if (!mapped.make && !mapped.model) {
     throw new Error(`API returned empty results for ${cleanVrm}. Check permissions.`);
+  }
+
+  // Extract images from VehicleImageDetails
+  const imageDetails = json.Results?.VehicleImageDetails?.VehicleImageList || [];
+  if (imageDetails.length > 0) {
+    mapped.images = imageDetails.map((img: any) => ({
+      id: img.ImageUrl,
+      uploadedAt: new Date().toISOString(),
+      isPrimaryDiagram: true
+    }));
   }
 
   // Always attempt to fetch MotHistoryDetails to extract the next MOT due date and log raw payload

@@ -24,6 +24,12 @@ export const AsyncMedia: React.FC<AsyncMediaProps> = ({ imageId, alt = "Media", 
                 return;
             }
 
+            if (imageId.startsWith('http://') || imageId.startsWith('https://') || imageId.startsWith('data:')) {
+                setMediaUrl(imageId);
+                setIsLoading(false);
+                return;
+            }
+
             try {
                 // 1. Try to load from Local IndexedDB (imageStore) first
                 const localData = await getImage(imageId);
