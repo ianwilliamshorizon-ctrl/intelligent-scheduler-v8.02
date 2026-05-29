@@ -23,6 +23,7 @@ export const ManagementEntitiesTab: React.FC<ManagementEntitiesTabProps> = ({ on
         customers = [], 
         invoices = [], 
         taxRates = [],
+        saveRecord,
     } = useData();
 
     // 2. Local State for UI Stability
@@ -39,18 +40,9 @@ export const ManagementEntitiesTab: React.FC<ManagementEntitiesTabProps> = ({ on
     // 3. Bulletproof Save Logic for Entities
     const handleSave = async (entity: BusinessEntity) => {
         try {
-            await saveDocument('brooks_businessEntities', entity);
-            
-            // Optimistic UI update
-            setLocalEntities(prev => {
-                const current = Array.isArray(prev) ? prev : [];
-                const exists = current.find(e => e.id === entity.id);
-                return exists ? current.map(e => e.id === entity.id ? entity : e) : [...current, entity];
-            });
-
+            await saveRecord('businessEntities', entity);
             setIsModalOpen(false);
             setSelectedEntity(null);
-
             onShowStatus('Business entity updated.', 'success');
         } catch (error) {
             onShowStatus('Failed to save entity changes.', 'error');
