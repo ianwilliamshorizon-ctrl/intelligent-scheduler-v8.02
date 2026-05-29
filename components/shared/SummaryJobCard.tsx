@@ -60,7 +60,7 @@ export const SummaryJobCard: React.FC<SummaryJobCardProps> = (props) => {
                             <span className="bg-indigo-600 text-white px-1 rounded font-black uppercase tracking-tighter shadow-sm border border-indigo-700/20">SALES</span>
                         )}
                         {job.partsStatus === 'Awaiting Order' && job.vehicleStatus !== 'Off-Site (Partner)' && (
-                            <span className="bg-rose-600 text-white px-1 rounded font-black uppercase tracking-tighter shadow-sm border border-rose-700/20">NO PARTS</span>
+                            <span className="bg-rose-600 text-white px-1 rounded font-black uppercase tracking-tighter shadow-sm border border-rose-700/20">PARTS NEEDED</span>
                         )}
                     </div>
                     {job.keyNumber && (
