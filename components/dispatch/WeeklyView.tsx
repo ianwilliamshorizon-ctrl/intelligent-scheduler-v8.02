@@ -193,9 +193,21 @@ export const WeeklyView: React.FC<WeeklyViewProps> = (props) => {
                                     >
                                         <div
                                             onClick={() => onEditJob(job.id)}
-                                            className="p-3 bg-white border border-gray-200 rounded-lg cursor-pointer hover:border-indigo-400 hover:shadow-md transition-all group relative overflow-hidden"
+                                            className={`p-3 border rounded-lg cursor-pointer hover:border-indigo-400 hover:shadow-md transition-all group relative overflow-hidden ${
+                                                job.vehicleStatus === 'Off-Site (Partner)' 
+                                                    ? 'bg-gray-100 border-gray-300 opacity-80' 
+                                                    : job.partsStatus === 'Awaiting Order'
+                                                        ? 'bg-rose-50 border-rose-200' 
+                                                        : 'bg-white border-gray-200'
+                                            }`}
                                         >
-                                            <div className="absolute top-0 left-0 w-1 h-full bg-indigo-500" />
+                                            <div className={`absolute top-0 left-0 w-1 h-full ${
+                                                job.vehicleStatus === 'Off-Site (Partner)' 
+                                                    ? 'bg-gray-400' 
+                                                    : job.partsStatus === 'Awaiting Order'
+                                                        ? 'bg-rose-500' 
+                                                        : 'bg-indigo-500'
+                                            }`} />
                                             <p className="font-black text-xs text-gray-900 mb-1 tracking-tight group-hover:text-indigo-600 transition-colors uppercase">{vehicle?.registration}</p>
                                             <p className="text-[10px] text-gray-500 line-clamp-2 leading-tight uppercase font-medium">{job.description}</p>
                                             <div className="mt-2 text-[9px] text-gray-400 font-bold uppercase truncate">

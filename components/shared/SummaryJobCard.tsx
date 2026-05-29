@@ -41,7 +41,13 @@ export const SummaryJobCard: React.FC<SummaryJobCardProps> = (props) => {
     return (
         <JobHoverPopout {...props}>
             <div 
-                className={`p-2 border rounded-lg shadow-sm hover:shadow-md hover:border-indigo-400 cursor-pointer transition-all duration-200 ${job.vehicleStatus === 'Off-Site (Partner)' ? 'bg-gray-100 border-gray-300 opacity-80' : 'bg-white border-gray-200'} ${hasServicePackages && job.vehicleStatus !== 'Off-Site (Partner)' ? 'border-l-4 border-l-indigo-500' : ''}`}
+                className={`p-2 border rounded-lg shadow-sm hover:shadow-md hover:border-indigo-400 cursor-pointer transition-all duration-200 ${
+                    job.vehicleStatus === 'Off-Site (Partner)' 
+                        ? 'bg-gray-100 border-gray-300 opacity-80' 
+                        : job.partsStatus === 'Awaiting Order'
+                            ? 'bg-rose-50 border-rose-200 text-rose-950 shadow-rose-50' 
+                            : 'bg-white border-gray-200'
+                } ${hasServicePackages && job.vehicleStatus !== 'Off-Site (Partner)' ? 'border-l-4 border-l-indigo-500' : ''}`}
                 onClick={() => props.onEdit(job.id)}
             >
                 <div className="flex justify-between items-center text-[9px] font-bold mb-1">
@@ -52,6 +58,9 @@ export const SummaryJobCard: React.FC<SummaryJobCardProps> = (props) => {
                         )}
                         {job.saleVehicleId && (
                             <span className="bg-indigo-600 text-white px-1 rounded font-black uppercase tracking-tighter shadow-sm border border-indigo-700/20">SALES</span>
+                        )}
+                        {job.partsStatus === 'Awaiting Order' && job.vehicleStatus !== 'Off-Site (Partner)' && (
+                            <span className="bg-rose-600 text-white px-1 rounded font-black uppercase tracking-tighter shadow-sm border border-rose-700/20">NO PARTS</span>
                         )}
                     </div>
                     {job.keyNumber && (
