@@ -55,7 +55,7 @@ const AddNewVehicleForm: React.FC<AddNewVehicleFormProps> = ({ initialRegistrati
     });
     const [vehicleData, setVehicleData] = useState({
         id: '' as string | undefined,
-        registration: initialRegistration,
+        registration: (initialRegistration || '').toUpperCase(),
         make: '',
         model: '',
         type: 'Car',
@@ -126,7 +126,7 @@ const AddNewVehicleForm: React.FC<AddNewVehicleFormProps> = ({ initialRegistrati
 
     const handleVehicleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
-        setVehicleData(prev => ({ ...prev, [name]: value }));
+        setVehicleData(prev => ({ ...prev, [name]: name === 'registration' ? value.toUpperCase() : value }));
     };
 
     const handleLookup = async (lookupValue: string) => {
@@ -340,7 +340,7 @@ const AddNewVehicleForm: React.FC<AddNewVehicleFormProps> = ({ initialRegistrati
                                 name="registration" 
                                 value={vehicleData.registration} 
                                 onChange={handleVehicleChange} 
-                                className="w-full p-2 border border-gray-300 rounded-lg bg-white pr-10"
+                                className="w-full p-2 border border-gray-300 rounded-lg bg-white pr-10 font-bold uppercase tracking-widest"
                                 required
                             />
                             <button
