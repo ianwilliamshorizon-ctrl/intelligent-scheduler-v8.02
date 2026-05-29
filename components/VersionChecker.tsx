@@ -24,13 +24,25 @@ const VersionChecker = () => {
             }
         };
 
-        // Wait 15 seconds before first check, then check every 15 minutes
-        const initialTimeout = setTimeout(checkVersion, 15000);
-        const intervalId = setInterval(checkVersion, 15 * 60 * 1000);
+        // Wait 5 seconds before first check, then check every 2 minutes
+        const initialTimeout = setTimeout(checkVersion, 5000);
+        const intervalId = setInterval(checkVersion, 2 * 60 * 1000);
+
+        // Also check version immediately when user switches back to the tab
+        const handleActivity = () => {
+            if (document.visibilityState === 'visible') {
+                checkVersion();
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleActivity);
+        window.addEventListener('focus', checkVersion);
         
         return () => {
             clearTimeout(initialTimeout);
             clearInterval(intervalId);
+            document.removeEventListener('visibilitychange', handleActivity);
+            window.removeEventListener('focus', checkVersion);
         };
     }, []);
 
