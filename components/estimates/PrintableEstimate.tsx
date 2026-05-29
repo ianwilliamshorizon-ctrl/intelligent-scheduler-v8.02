@@ -222,7 +222,7 @@ export const PrintableEstimate: React.FC<PrintableEstimateProps> = ({ estimate, 
                 @media print {
                     @page { 
                         size: A4 portrait;
-                        margin: 15mm; 
+                        margin: 0mm; 
                     }
                     body { -webkit-print-color-adjust: exact; print-color-adjust: exact; counter-reset: page; }
                     body * { 
@@ -235,15 +235,26 @@ export const PrintableEstimate: React.FC<PrintableEstimateProps> = ({ estimate, 
                         position: absolute !important; 
                         left: 0 !important; 
                         top: 0 !important; 
-                        width: 100% !important;
+                        width: 210mm !important;
                         padding: 0 !important;
                         margin: 0 !important;
                     }
+                    
+                    thead { display: table-header-group; }
+                    tfoot { display: table-footer-group; }
+                    
+                    .page-counter:after {
+                        counter-increment: page;
+                        content: counter(page);
+                    }
+                    
+                    /* Force fixed width of 210mm for print accuracy */
+                    .printable-page-wrapper { width: 210mm !important; }
                 }
                 * { -webkit-print-color-adjust: exact !important; color-adjust: exact !important; }
             ` }} />
-            <div className="rebuild-print-container" style={{ width: '210mm', margin: '0 auto', backgroundColor: '#ffffff', minHeight: '100%' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <div className="rebuild-print-container" style={{ width: '100%', maxWidth: '210mm', margin: '0 auto', backgroundColor: '#ffffff', minHeight: '100%' }}>
+                <table className="printable-page-wrapper" style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead className="print-header-group">
                     <tr>
                         <td>
@@ -426,7 +437,9 @@ export const PrintableEstimate: React.FC<PrintableEstimateProps> = ({ estimate, 
                                     <div style={{ fontStyle: 'italic' }}>
                                         <p>This estimate is valid for 30 days. Final costs subject to actual parts and labor.</p>
                                     </div>
-                                    <div className="footer-page-number" style={{ fontStyle: 'normal', fontWeight: 'bold' }}></div>
+                                     <div className="footer-page-number" style={{ fontStyle: 'normal', fontWeight: 'bold' }}>
+                                         Page <span className="page-counter"></span>
+                                     </div>
                                 </div>
                                 <div style={{ marginTop: '8px', textAlign: 'center', fontSize: '8px', color: '#cbd5e1', fontWeight: 'bold', letterSpacing: '0.1em' }}>
                                     BROOKSPEED PRODUCTION SYSTEM v8.02

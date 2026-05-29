@@ -323,7 +323,7 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, customer, 
                 @media print {
                     @page { 
                         size: A4 portrait;
-                        margin: 15mm; 
+                        margin: 0mm; 
                     }
                     body { -webkit-print-color-adjust: exact; print-color-adjust: exact; counter-reset: page; }
                     body * { 
@@ -336,7 +336,7 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, customer, 
                         position: absolute !important; 
                         left: 0 !important; 
                         top: 0 !important; 
-                        width: 100% !important;
+                        width: 210mm !important;
                         padding: 0 !important;
                         margin: 0 !important;
                     }
@@ -355,7 +355,7 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, customer, 
                 * { -webkit-print-color-adjust: exact !important; color-adjust: exact !important; }
             ` }} />
 
-            <div className="rebuild-print-container" style={{ width: '210mm', margin: '0 auto', backgroundColor: '#ffffff', minHeight: '100%' }}>
+            <div className="rebuild-print-container" style={{ width: '100%', maxWidth: '210mm', margin: '0 auto', backgroundColor: '#ffffff', minHeight: '100%' }}>
                 {/* 1. Main Invoice Table */}
                 {printOptions.showInvoice && (
                     <table className="printable-page-wrapper" style={{ width: '100%', borderCollapse: 'collapse' }}>
