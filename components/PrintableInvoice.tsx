@@ -5,6 +5,7 @@ import InspectionChecklist from './InspectionChecklist';
 import VehicleDamageReport from './VehicleDamageReport';
 import TyreCheck from './TyreCheck';
 import { getImage } from '../utils/imageStore';
+import { useData } from '../core/state/DataContext';
 
 export interface PrintOptions {
     showInvoice?: boolean;
@@ -27,32 +28,44 @@ interface PrintableInvoiceProps {
 }
 
 const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, customer, vehicle, entity, job, taxRates, servicePackages, inspectionTemplates, inspectionDiagrams, printOptions = { showInvoice: true, showTechNotes: true, showInspections: true, showMedia: true } }) => {
+    const data = useData();
+    const resolvedEntity = useMemo(() => {
+        if (entity) return entity;
+        const businessEntities = data?.businessEntities || [];
+        const entityId = invoice?.entityId || job?.entityId;
+        if (entityId) {
+            const found = businessEntities.find(e => e.id === entityId);
+            if (found) return found;
+        }
+        return businessEntities[0];
+    }, [entity, invoice?.entityId, job?.entityId, data?.businessEntities]);
+
     const [logoUrl, setLogoUrl] = useState<string | null>(null);
 
     useEffect(() => {
         const loadLogo = async () => {
             // Check for temp preview URL from the designer first
-            const anyEntity = entity as any;
+            const anyEntity = resolvedEntity as any;
             if (anyEntity?.tempLogoUrl) {
                 setLogoUrl(anyEntity.tempLogoUrl);
                 return;
             }
 
-            if (entity?.logoImageId) {
-                const url = await getImage(entity.logoImageId);
+            if (resolvedEntity?.logoImageId) {
+                const url = await getImage(resolvedEntity.logoImageId);
                 if (url) {
                     setLogoUrl(url);
                     return;
                 }
             }
-            if (entity?.logoUrl) {
-                setLogoUrl(entity.logoUrl);
+            if (resolvedEntity?.logoUrl) {
+                setLogoUrl(resolvedEntity.logoUrl);
             } else {
                 setLogoUrl('/logo.png'); // Global system fallback
             }
         };
         loadLogo();
-    }, [entity]);
+    }, [resolvedEntity]);
 
     const inspectionTemplate = useMemo(() => {
         if (!job?.inspectionTemplateId || !inspectionTemplates) return null;
@@ -188,10 +201,10 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, customer, 
     const renderLogo = (layout: DocumentLayoutSettings, alignment: 'left' | 'right' | 'center') => (
         <div style={{ display: 'flex', justifyContent: alignment === 'right' ? 'flex-end' : (alignment === 'center' ? 'center' : 'flex-start'), marginBottom: '10px' }}>
             {logoUrl ? (
-                <img src={logoUrl} alt="Logo" style={{ maxHeight: `${layout.logoHeight || 90}px`, maxWidth: '280px', width: 'auto', display: 'block' }} />
+                <img src={logoUrl} alt="Logo" style={{ maxHeight: `${layout.logoHeight || 120}px`, maxWidth: '280px', width: 'auto', display: 'block' }} />
             ) : (
                 <div style={{ textAlign: alignment }}>
-                    <div style={{ fontSize: '24px', fontWeight: '900', color: '#000' }}>{entity?.name || 'BROOKSPEED'}</div>
+                    <div style={{ fontSize: '24px', fontWeight: '900', color: '#000' }}>{resolvedEntity?.name || 'BROOKSPEED'}</div>
                     <div style={{ fontSize: '10px', color: '#64748b', marginTop: '4px' }}>Automotive Excellence</div>
                 </div>
             )}
@@ -200,12 +213,12 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, customer, 
 
     const renderBranding = (alignment: 'left' | 'right' | 'center') => (
         <div style={{ textAlign: alignment, marginBottom: '10px' }}>
-            <div style={{ fontSize: '18px', fontWeight: '900', color: '#000', marginBottom: '8px' }}>{entity?.name || 'BROOKSPEED'}</div>
+            <div style={{ fontSize: '18px', fontWeight: '900', color: '#000', marginBottom: '8px' }}>{resolvedEntity?.name || 'BROOKSPEED'}</div>
             <div style={{ fontSize: '10px', color: '#000', fontWeight: '500', lineHeight: '1.4' }}>
-                <p>{entity?.addressLine1}, {entity?.city}, {entity?.postcode}</p>
+                <p>{resolvedEntity?.addressLine1}, {resolvedEntity?.city}, {resolvedEntity?.postcode}</p>
                 <div style={{ marginTop: '5px', display: 'flex', gap: '15px', justifyContent: alignment === 'right' ? 'flex-end' : (alignment === 'center' ? 'center' : 'flex-start') }}>
-                    {entity?.vatNumber && <p>VAT: {entity.vatNumber}</p>}
-                    {entity?.email && <p>{entity.email}</p>}
+                    {resolvedEntity?.vatNumber && <p>VAT: {resolvedEntity.vatNumber}</p>}
+                    {resolvedEntity?.email && <p>{resolvedEntity.email}</p>}
                 </div>
             </div>
         </div>
@@ -256,7 +269,7 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, customer, 
     );
 
     const renderHeader = () => {
-        const layout = entity?.layoutSettings || {};
+        const layout = resolvedEntity?.layoutSettings || {};
         const logoPos = layout.logoPosition || 'right';
         const brandingPos = layout.brandingPosition || 'left';
         const detailsPos = layout.detailsPosition || (layout.estimateNumberPosition === 'right' ? 'right' : 'left');
@@ -304,7 +317,7 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, customer, 
                     <footer style={{ margin: '0 15mm 10mm 15mm', paddingBottom: '10mm' }}>
                         <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '9px', color: '#94a3b8' }}>
                             <div style={{ fontStyle: 'italic' }}>
-                                <p>Thank you for choosing {entity?.name}. Business Registered: {entity?.name} - {entity?.vatNumber}</p>
+                                <p>Thank you for choosing {resolvedEntity?.name}. Business Registered: {resolvedEntity?.name} - {resolvedEntity?.vatNumber}</p>
                             </div>
                             <div style={{ fontStyle: 'normal', fontWeight: 'bold' }}>
                                 Page <span className="page-counter"></span>
@@ -365,7 +378,7 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, customer, 
                             <td style={{ padding: '0 15mm' }}>
                                 <main style={{ paddingBottom: '30px' }}>
                                     <div style={{ display: 'flex', gap: '40px', marginBottom: '30px', paddingBottom: '20px', borderBottom: '1px solid #f1f5f9' }}>
-                                        {(!entity?.layoutSettings?.customerPosition || entity.layoutSettings.customerPosition === 'none') && (
+                                        {(!resolvedEntity?.layoutSettings?.customerPosition || resolvedEntity.layoutSettings.customerPosition === 'none') && (
                                             <div style={{ flex: 1 }}>
                                                 <h3 style={{ fontSize: '8px', fontWeight: 'bold', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '4px' }}>Customer</h3>
                                                 <p style={{ fontSize: '14px', fontWeight: 'bold', color: '#000' }}>{customer?.forename} {customer?.surname}</p>

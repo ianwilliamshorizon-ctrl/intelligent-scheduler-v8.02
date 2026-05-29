@@ -3,6 +3,7 @@ import { Estimate, Customer, Vehicle, BusinessEntity, TaxRate, Part, EstimateLin
 import { formatCurrency } from '../../utils/formatUtils';
 import { getDisplayDate } from './EstimateShared';
 import { getImage } from '../../utils/imageStore';
+import { useData } from '../../core/state/DataContext';
 
 interface PrintableEstimateProps {
     estimate: Estimate;
@@ -17,31 +18,49 @@ interface PrintableEstimateProps {
 }
 
 export const PrintableEstimate: React.FC<PrintableEstimateProps> = ({ estimate, customer, vehicle, entityDetails, parts, canViewPricing, totals, depositAmount }) => {
+    const data = useData();
+    const resolvedEntity = useMemo(() => {
+        if (entityDetails) return entityDetails;
+        const businessEntities = data?.businessEntities || [];
+        if (estimate.entityId) {
+            const found = businessEntities.find(e => e.id === estimate.entityId);
+            if (found) return found;
+        }
+        if (estimate.jobId && data?.jobs) {
+            const job = data.jobs.find((j: any) => j.id === estimate.jobId);
+            if (job?.entityId) {
+                const found = businessEntities.find(e => e.id === job.entityId);
+                if (found) return found;
+            }
+        }
+        return businessEntities[0];
+    }, [entityDetails, estimate.entityId, estimate.jobId, data?.businessEntities, data?.jobs]);
+
     const [logoUrl, setLogoUrl] = useState<string | null>(null);
 
     useEffect(() => {
         const loadLogo = async () => {
-            const anyEntity = entityDetails as any;
+            const anyEntity = resolvedEntity as any;
             if (anyEntity?.tempLogoUrl) {
                 setLogoUrl(anyEntity.tempLogoUrl);
                 return;
             }
 
-            if (entityDetails?.logoImageId) {
-                const url = await getImage(entityDetails.logoImageId);
+            if (resolvedEntity?.logoImageId) {
+                const url = await getImage(resolvedEntity.logoImageId);
                 if (url) {
                     setLogoUrl(url);
                     return;
                 }
             }
-            if (entityDetails?.logoUrl) {
-                setLogoUrl(entityDetails.logoUrl);
+            if (resolvedEntity?.logoUrl) {
+                setLogoUrl(resolvedEntity.logoUrl);
             } else {
                 setLogoUrl('/logo.png');
             }
         };
         loadLogo();
-    }, [entityDetails]);
+    }, [resolvedEntity]);
 
     // Simplifed Body (Classic Table feel but clean)
     const allItems = estimate.lineItems || [];
@@ -143,10 +162,10 @@ export const PrintableEstimate: React.FC<PrintableEstimateProps> = ({ estimate, 
     const renderLogo = (layout: DocumentLayoutSettings, alignment: 'left' | 'right' | 'center') => (
         <div style={{ display: 'flex', justifyContent: alignment === 'right' ? 'flex-end' : (alignment === 'center' ? 'center' : 'flex-start'), marginBottom: '10px' }}>
             {logoUrl ? (
-                <img src={logoUrl} alt="Logo" style={{ maxHeight: `${layout.logoHeight || 90}px`, maxWidth: '280px', width: 'auto', display: 'block' }} />
+                <img src={logoUrl} alt="Logo" style={{ maxHeight: `${layout.logoHeight || 120}px`, maxWidth: '280px', width: 'auto', display: 'block' }} />
             ) : (
                 <div style={{ textAlign: alignment }}>
-                    <div style={{ fontSize: '24px', fontWeight: '900', color: '#000' }}>{entityDetails?.name || 'BROOKSPEED'}</div>
+                    <div style={{ fontSize: '24px', fontWeight: '900', color: '#000' }}>{resolvedEntity?.name || 'BROOKSPEED'}</div>
                     <div style={{ fontSize: '10px', color: '#64748b', marginTop: '4px' }}>Automotive Excellence</div>
                 </div>
             )}
@@ -155,12 +174,12 @@ export const PrintableEstimate: React.FC<PrintableEstimateProps> = ({ estimate, 
 
     const renderBranding = (alignment: 'left' | 'right' | 'center') => (
         <div style={{ textAlign: alignment, marginBottom: '10px' }}>
-            <div style={{ fontSize: '18px', fontWeight: '900', color: '#000', marginBottom: '8px' }}>{entityDetails?.name || 'BROOKSPEED'}</div>
+            <div style={{ fontSize: '18px', fontWeight: '900', color: '#000', marginBottom: '8px' }}>{resolvedEntity?.name || 'BROOKSPEED'}</div>
             <div style={{ fontSize: '10px', color: '#000', fontWeight: '500', lineHeight: '1.4' }}>
-                <p>{entityDetails?.addressLine1}, {entityDetails?.city}, {entityDetails?.postcode}</p>
+                <p>{resolvedEntity?.addressLine1}, {resolvedEntity?.city}, {resolvedEntity?.postcode}</p>
                 <div style={{ marginTop: '5px', display: 'flex', gap: '15px', justifyContent: alignment === 'right' ? 'flex-end' : (alignment === 'center' ? 'center' : 'flex-start') }}>
-                    {entityDetails?.vatNumber && <p>VAT: {entityDetails.vatNumber}</p>}
-                    {entityDetails?.email && <p>{entityDetails.email}</p>}
+                    {resolvedEntity?.vatNumber && <p>VAT: {resolvedEntity.vatNumber}</p>}
+                    {resolvedEntity?.email && <p>{resolvedEntity.email}</p>}
                 </div>
             </div>
         </div>
@@ -262,7 +281,7 @@ export const PrintableEstimate: React.FC<PrintableEstimateProps> = ({ estimate, 
                             <div className="print-header-padding" style={{ height: '10mm' }}></div>
                             <div id="estimate-print-header" style={{ paddingBottom: '20px', marginBottom: '20px', borderBottom: '2px solid #000', margin: '0 15mm 20px 15mm' }}>
                                 {(() => {
-                                    const layout = entityDetails?.layoutSettings || {};
+                                    const layout = resolvedEntity?.layoutSettings || {};
                                     const logoPos = layout.logoPosition || 'right';
                                     const brandingPos = layout.brandingPosition || 'left';
                                     const detailsPos = layout.detailsPosition || (layout.estimateNumberPosition === 'right' ? 'right' : 'left');
@@ -303,7 +322,7 @@ export const PrintableEstimate: React.FC<PrintableEstimateProps> = ({ estimate, 
                         <td style={{ padding: '0 15mm' }}>
                             <main style={{ paddingBottom: '30px' }}>
                                 <div className="mb-8 pb-6 border-b border-gray-100">
-                                    {(!entityDetails?.layoutSettings?.customerPosition || entityDetails.layoutSettings.customerPosition === 'none') && (
+                                    {(!resolvedEntity?.layoutSettings?.customerPosition || resolvedEntity.layoutSettings.customerPosition === 'none') && (
                                         <div>
                                             <h3 className="text-[8px] font-bold text-gray-400 uppercase tracking-widest mb-1">Customer</h3>
                                             <p className="text-sm font-bold" style={{ color: '#000' }}>{customer?.forename} {customer?.surname}</p>
