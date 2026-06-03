@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import * as T from '../types';
 import { useApp } from '../core/state/AppContext';
+import { MASTER_LOGO_URL } from '../constants';
 import { 
     LogIn, 
     ShieldCheck, 
@@ -101,11 +102,11 @@ const LoginView: React.FC<LoginViewProps> = ({ users, onLogin, environment, busi
                     <div className="relative z-10">
                         <div className="mx-auto bg-white/20 w-24 h-24 rounded-2xl flex items-center justify-center mb-6 backdrop-blur-md shadow-xl border border-white/30 overflow-hidden transform hover:scale-110 transition-transform duration-300">
                              <img 
-                                src={businessEntities[0]?.logoUrl || "/logo.png"} 
+                                src={MASTER_LOGO_URL} 
                                 alt="Logo" 
                                 className="w-full h-full object-contain p-2" 
                                 onError={(e) => {
-                                    (e.target as HTMLImageElement).src = "/logo.png";
+                                    (e.target as HTMLImageElement).src = MASTER_LOGO_URL;
                                 }}
                              />
                         </div>

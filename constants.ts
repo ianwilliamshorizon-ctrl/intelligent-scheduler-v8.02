@@ -1,3 +1,4 @@
+export const MASTER_LOGO_URL = '/logo.png';
 
 export const START_HOUR = 8;
 export const START_MINUTE = 30;
