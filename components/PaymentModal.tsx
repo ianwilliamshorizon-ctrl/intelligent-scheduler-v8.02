@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, DollarSign, Wallet, CreditCard, Landmark, FileText, AlertCircle } from 'lucide-react';
+import { X, PoundSterling, Wallet, CreditCard, Landmark, FileText, AlertCircle } from 'lucide-react';
 import { Invoice, Payment } from '../types';
 import { formatCurrency } from '../core/utils/formatUtils';
 
@@ -46,7 +46,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onSave, in
             case 'BACS': return <Landmark size={18} />;
             case 'Cash': return <Wallet size={18} />;
             case 'Bank Transfer': return <Landmark size={18} />;
-            default: return <DollarSign size={18} />;
+            default: return <PoundSterling size={18} />;
         }
     };
 
@@ -116,7 +116,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onSave, in
                         <div>
                             <label className="block text-xs font-black uppercase tracking-widest text-gray-500 mb-1.5">Amount to Pay</label>
                             <div className="relative">
-                                <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                                <PoundSterling className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                                 <input 
                                     type="number" 
                                     step="0.01"
