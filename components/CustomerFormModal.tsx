@@ -7,6 +7,7 @@ import { lookupAddressByPostcode, AddressDetails } from '../services/postcodeLoo
 import { Loader2, Search, Briefcase, Car, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react';
 import { useAuditLogger } from '../core/hooks/useAuditLogger';
 import { useData } from '../core/state/DataContext';
+import { toast } from 'react-toastify';
 
 const Section = ({ title, icon: Icon, children, defaultOpen = true }: { title: string, icon: React.ElementType, children?: React.ReactNode, defaultOpen?: boolean }) => {
     const [isOpen, setIsOpen] = useState(defaultOpen);
@@ -60,7 +61,12 @@ const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
 
         if (customer) {
             if (lastProcessedId.current !== customer.id) {
-                setFormData({ ...customer });
+                setFormData({
+                    marketingConsent: false,
+                    serviceReminderConsent: false,
+                    declinedCommunication: false,
+                    ...customer
+                });
                 lastProcessedId.current = customer.id;
             }
         } else {
@@ -69,7 +75,7 @@ const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
                     title: '', forename: '', surname: '', phone: '', mobile: '', email: '',
                     addressLine1: '', addressLine2: '', city: '', county: '', postcode: '',
                     category: 'Retail', isCashCustomer: false, marketingConsent: false,
-                    serviceReminderConsent: false, communicationPreference: 'None',
+                    serviceReminderConsent: false, declinedCommunication: false, communicationPreference: 'None',
                     isBusinessCustomer: false, companyName: ''
                 });
                 lastProcessedId.current = 'NEW';
@@ -80,7 +86,18 @@ const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value, type } = e.target;
         const val = type === 'checkbox' ? (e.target as HTMLInputElement).checked : value;
-        setFormData((prev: any) => ({ ...prev, [name]: val }));
+        setFormData((prev: any) => {
+            let updated = { ...prev, [name]: val };
+            if (type === 'checkbox') {
+                if (name === 'declinedCommunication' && val === true) {
+                    updated.marketingConsent = false;
+                    updated.serviceReminderConsent = false;
+                } else if ((name === 'marketingConsent' || name === 'serviceReminderConsent') && val === true) {
+                    updated.declinedCommunication = false;
+                }
+            }
+            return updated;
+        });
     };
 
     const handleAddressLookup = async () => {
@@ -113,7 +130,20 @@ const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
     };
 
     const handleSave = () => {
-        if (!formData.forename || !formData.surname) { alert("Name required"); return; }
+        if (!formData.forename || !formData.surname) {
+            toast.error("Forename and Surname are required.");
+            return;
+        }
+
+        const marketing = !!formData.marketingConsent;
+        const reminders = !!formData.serviceReminderConsent;
+        const declined = !!formData.declinedCommunication;
+
+        if (!marketing && !reminders && !declined) {
+            toast.error("Please select at least one option: GDPR Consent, Service/MOT Reminders, or Customer Declined Communication.");
+            return;
+        }
+
         const finalCustomer: Customer = {
             ...formData,
             id: formData.id || generateCustomerId(formData.surname!, existingCustomers),
@@ -220,6 +250,10 @@ const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
                              <div className="flex items-center gap-3">
                                 <input type="checkbox" id="serviceReminderConsent" name="serviceReminderConsent" checked={formData.serviceReminderConsent || false} onChange={handleChange} className="h-4 w-4 text-indigo-600 rounded" />
                                 <label htmlFor="serviceReminderConsent" className="text-sm font-medium text-gray-700">Service/MOT Reminders</label>
+                             </div>
+                             <div className="flex items-center gap-3">
+                                <input type="checkbox" id="declinedCommunication" name="declinedCommunication" checked={formData.declinedCommunication || false} onChange={handleChange} className="h-4 w-4 text-indigo-600 rounded" />
+                                <label htmlFor="declinedCommunication" className="text-sm font-medium text-amber-800 font-bold">Customer Declined Communication</label>
                              </div>
                         </div>
 

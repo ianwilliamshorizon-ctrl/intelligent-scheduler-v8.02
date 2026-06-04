@@ -116,6 +116,7 @@ export interface Customer {
     isCashCustomer?: boolean;
     marketingConsent?: boolean;
     serviceReminderConsent?: boolean;
+    declinedCommunication?: boolean;
     communicationPreference?: 'Email' | 'SMS' | 'WhatsApp' | 'None';
     autoSendReminders?: boolean;
     searchField?: string;
