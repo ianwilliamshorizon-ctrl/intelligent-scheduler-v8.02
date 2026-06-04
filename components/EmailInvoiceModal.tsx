@@ -5,7 +5,7 @@ import { Invoice, Customer, Vehicle } from '../types';
 interface EmailInvoiceModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSend: (recipients: string) => void;
+    onSend: (recipients: string, subject: string, body: string) => Promise<void>;
     invoice: Invoice;
     customer?: Customer | null;
     vehicle?: Vehicle | null;
@@ -14,10 +14,15 @@ interface EmailInvoiceModalProps {
 
 const EmailInvoiceModal: React.FC<EmailInvoiceModalProps> = ({ isOpen, onClose, onSend, invoice, customer, vehicle, totalAmount }) => {
     const [recipients, setRecipients] = useState('');
+    const [subject, setSubject] = useState('');
+    const [body, setBody] = useState('');
+    const [isSending, setIsSending] = useState(false);
 
     const customerEmail = useMemo(() => {
         return customer?.email || `${String(customer?.forename || '').toLowerCase()}.${String(customer?.surname || '').toLowerCase()}@example.com`;
     }, [customer]);
+
+    const total = totalAmount || 0;
 
     useEffect(() => {
         if (isOpen && customerEmail) {
@@ -25,12 +30,36 @@ const EmailInvoiceModal: React.FC<EmailInvoiceModalProps> = ({ isOpen, onClose, 
         }
     }, [isOpen, customerEmail]);
 
+    useEffect(() => {
+        if (isOpen && invoice) {
+            setSubject(`Your Invoice #${invoice.id} from BROOKSPEED`);
+            setBody(
+`Dear ${customer?.forename || 'Customer'},
+
+Please find below the invoice summary for recent work completed on your ${vehicle?.make || 'Vehicle'} ${vehicle?.model || ''} (${vehicle?.registration || 'TBA'}).
+
+Invoice Summary:
+Total Amount Due: £${total.toFixed(2)}
+
+If you have any questions, please don't hesitate to contact us.
+
+Kind regards,
+The BROOKSPEED Team`
+            );
+        }
+    }, [isOpen, invoice, customer, vehicle, total]);
+
     if (!isOpen) return null;
 
-    const total = totalAmount || 0;
-
-    const handleSend = () => {
-        onSend(recipients);
+    const handleSend = async () => {
+        setIsSending(true);
+        try {
+            await onSend(recipients, subject, body);
+        } catch (err: any) {
+            console.error(err);
+        } finally {
+            setIsSending(false);
+        }
     };
 
     return (
@@ -66,32 +95,36 @@ const EmailInvoiceModal: React.FC<EmailInvoiceModalProps> = ({ isOpen, onClose, 
                         <span className="font-bold text-gray-400 w-20 uppercase text-[10px]">From:</span>
                         <span className="text-gray-700 font-medium">BROOKSPEED &lt;no-reply@brookspeed.com&gt;</span>
                     </div>
-                    <div className="flex items-center p-2 bg-gray-50 rounded-md border border-gray-100">
-                        <span className="font-bold text-gray-400 w-20 uppercase text-[10px]">Subject:</span>
-                        <span className="text-gray-800 font-semibold tracking-tight">Your Invoice #{invoice.id} from BROOKSPEED</span>
+
+                    <div className="flex flex-col gap-1">
+                        <label className="font-bold text-[10px] text-gray-400 uppercase tracking-widest block">Subject</label>
+                        <input 
+                            type="text"
+                            value={subject}
+                            onChange={(e) => setSubject(e.target.value)}
+                            className="w-full p-2 border border-gray-200 rounded-md font-medium focus:ring-2 focus:ring-indigo-500 outline-none text-sm text-gray-800"
+                        />
                     </div>
 
-                    <div className="p-4 border border-gray-200 rounded-lg mt-4 h-80 overflow-y-auto bg-white shadow-inner">
-                        <p className="mb-4">Dear {customer?.forename || 'Customer'},</p>
-                        <p className="mb-4">Please find attached your invoice for recent work completed on your {vehicle?.make} {vehicle?.model} ({vehicle?.registration || 'TBA'}).</p>
-                        <div className="p-4 bg-gray-50 my-4 rounded-xl border border-gray-100 shadow-sm text-center">
-                            <h4 className="font-bold text-indigo-900 text-sm mb-3 border-b border-gray-200 pb-2">Invoice Summary</h4>
-                            <div className="inline-block bg-white px-6 py-3 rounded-lg border border-gray-100">
-                                <span className="text-gray-600 font-medium mr-4">Total Amount Due:</span>
-                                <span className="font-black text-lg text-indigo-700">£{total.toFixed(2)}</span>
-                            </div>
-                            <p className="text-[10px] text-gray-400 mt-2 italic uppercase tracking-widest font-black">Full details are in the attached PDF</p>
-                        </div>
-                        <p>If you have any questions, please don't hesitate to contact us.</p>
-                        <p className="mt-6 text-gray-400">Kind regards,</p>
-                        <p className="font-bold text-indigo-900">The BROOKSPEED Team</p>
+                    <div className="flex flex-col gap-1">
+                        <label className="font-bold text-[10px] text-gray-400 uppercase tracking-widest block">Body</label>
+                        <textarea 
+                            value={body}
+                            onChange={(e) => setBody(e.target.value)}
+                            rows={10}
+                            className="w-full p-3 border border-gray-200 rounded-md font-sans text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-gray-50/50"
+                        />
                     </div>
                 </div>
 
                 <div className="flex justify-end space-x-3 mt-6 pt-4 border-t">
                     <button type="button" onClick={onClose} className="py-2.5 px-5 bg-gray-100 text-gray-600 rounded-xl hover:bg-gray-200 font-bold transition-colors">Cancel</button>
-                    <button onClick={handleSend} className="flex items-center py-2.5 px-6 bg-green-600 text-white font-bold rounded-xl shadow-lg hover:bg-green-700 transition-all hover:scale-105 active:scale-95 border-b-4 border-green-800">
-                        <Send size={16} className="mr-2"/> Send Email
+                    <button 
+                        onClick={handleSend} 
+                        disabled={isSending}
+                        className="flex items-center py-2.5 px-6 bg-green-600 text-white font-bold rounded-xl shadow-lg hover:bg-green-700 transition-all hover:scale-105 active:scale-95 border-b-4 border-green-800 disabled:opacity-75"
+                    >
+                        <Send size={16} className="mr-2"/> {isSending ? 'Sending...' : 'Send Email'}
                     </button>
                 </div>
             </div>

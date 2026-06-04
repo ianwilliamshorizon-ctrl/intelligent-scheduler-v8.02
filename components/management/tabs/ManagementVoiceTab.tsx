@@ -11,7 +11,7 @@ export const ManagementVoiceTab: React.FC = () => {
     const [showAllLanguages, setShowAllLanguages] = useState(false);
     const [testText, setTestText] = useState("Hello! I am the Brookspeed Assistant. How does my voice sound to you?");
     const [isSpeaking, setIsSpeaking] = useState<string | null>(null);
-    const activeUtterance = useRef<SpeechSynthesisUtterance | null>(null);
+    const activeUtterance = useRef<any>(null);
 
     useEffect(() => {
         const loadVoices = () => {

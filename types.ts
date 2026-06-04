@@ -5,7 +5,7 @@ import { Timestamp } from 'firebase/firestore';
  */
 export type ViewType = string;
 export type AppEnvironment = 'development' | 'production' | 'staging' | 'uat';
-export type UserRole = 'admin' | 'user' | 'Admin' | 'Engineer' | 'Dispatcher' | 'Director';
+export type UserRole = 'admin' | 'user' | 'Admin' | 'Engineer' | 'Dispatcher' | 'Director' | 'Sales' | 'Garage Concierge';
 
 /** 
  * MOT & VEHICLE HISTORY TYPES 
@@ -275,7 +275,7 @@ export interface Lift {
     name: string;
     color?: string;
     entityId: string;
-    type?: 'Standard' | 'MOT';
+    type?: string;
 }
 
 export interface Purchase {
@@ -621,7 +621,7 @@ export interface ChecklistSection {
 }
 
 export interface InspectionItemTemplate { id: string; label: string; }
-export interface InspectionSectionTemplate { id: string; title: string; items: InspectionItemTemplate[]; }
+export interface InspectionSectionTemplate { id: string; title: string; items: InspectionItemTemplate[]; pageBreakBefore?: boolean; }
 
 export interface InspectionTemplate {
     id: string;
@@ -879,14 +879,15 @@ export interface AuditLogEntry {
 }
 
 export type ReminderType = 'MOT' | 'Service' | 'Winter Check' | 'Marketing' | 'Other';
+export type ReminderStatus = 'Pending' | 'Sent' | 'Failed' | 'Dismissed';
 
 export interface Reminder {
     id: string;
-    vehicleId: string;
+    vehicleId?: string;
     customerId: string;
     type: ReminderType;
-    date: string;
-    status: 'Pending' | 'Sent' | 'Failed' | 'Dismissed';
+    date?: string;
+    status: ReminderStatus;
     dueDate?: string;
     eventName?: string;
     createdAt?: string;

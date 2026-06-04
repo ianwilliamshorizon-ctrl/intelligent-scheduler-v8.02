@@ -11,6 +11,7 @@ import { HoverInfo } from './shared/HoverInfo';
 import PartFormModal from './PartFormModal';
 import { PurchaseOrderPrint } from './PurchaseOrderPrint';
 import EmailPurchaseOrderModal from './EmailPurchaseOrderModal';
+import { sendOutboundEmail } from '../core/services/emailService';
 import { useWorkshopActions } from '../core/hooks/useWorkshopActions';
 import { useApp } from '../core/state/AppContext';
 import SupplierSelectionModal from './SupplierSelectionModal';
@@ -1009,9 +1010,40 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({
                  <EmailPurchaseOrderModal
                     isOpen={isEmailModalOpen}
                     onClose={() => setIsEmailModalOpen(false)}
-                    onSend={(recipients) => {
-                        setIsEmailModalOpen(false);
-                        showSuccess(`Email sent to: ${recipients}`);
+                    onSend={async (recipients) => {
+                        try {
+                            const subject = `Purchase Order #${formData.id} from ${currentEntity.name}`;
+                            const body = `Dear ${currentSupplier?.name || 'Supplier'},
+
+Please find below our purchase order #${formData.id}.
+
+Vehicle Reference: ${formData.vehicleRegistrationRef || 'Stock'}
+${formData.supplierReference ? `Your Reference: ${formData.supplierReference}` : ''}
+
+Line Items:
+${(formData.lineItems || []).map(item => `- ${item.description || item.partNumber || 'Item'}: Qty ${item.quantity || 1} @ £${(item.unitPrice || 0).toFixed(2)}`).join('\n')}
+
+Total Amount: £${grandTotal.toFixed(2)}
+
+Please confirm receipt and provide an estimated delivery date.
+
+If you have any questions, please don't hesitate to contact us.
+
+Kind regards,
+The ${currentEntity.name} Team`;
+
+                            await sendOutboundEmail({
+                                to: recipients,
+                                fromName: currentEntity.name,
+                                fromEmail: currentEntity.email || 'info@brookspeed.com',
+                                subject: subject,
+                                body: body
+                            });
+                            setIsEmailModalOpen(false);
+                            showSuccess(`Email sent successfully to: ${recipients}`);
+                        } catch (error: any) {
+                            showError(`Failed to send email: ${error.message}`);
+                        }
                     }}
                     purchaseOrder={formData as PurchaseOrder}
                     businessEntity={currentEntity}

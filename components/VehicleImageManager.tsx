@@ -21,6 +21,7 @@ const VehicleImageManager: React.FC<VehicleImageManagerProps> = ({ vehicle, onUp
             for (const file of event.target.files) {
                 const newImage: VehicleImage = {
                     id: crypto.randomUUID(),
+                    uploadedAt: new Date().toISOString(),
                     isPrimaryDiagram: false,
                 };
                 newImages.push(newImage);

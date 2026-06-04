@@ -14,6 +14,7 @@ const DiscountCodeFormModal: React.FC<DiscountCodeFormModalProps> = ({ isOpen, o
         id: '',
         code: '',
         description: '',
+        discountType: 'Percentage',
         type: 'Percentage',
         value: 0,
         applicability: 'All',
@@ -23,12 +24,17 @@ const DiscountCodeFormModal: React.FC<DiscountCodeFormModalProps> = ({ isOpen, o
 
     useEffect(() => {
         if (initialData) {
-            setFormData(initialData);
+            setFormData({
+                ...initialData,
+                discountType: initialData.discountType || (initialData.type as DiscountType) || 'Percentage',
+                type: initialData.type || (initialData.discountType === 'percentage' || initialData.discountType === 'Percentage' ? 'Percentage' : 'Fixed')
+            });
         } else {
             setFormData({
                 id: crypto.randomUUID(),
                 code: '',
                 description: '',
+                discountType: 'Percentage',
                 type: 'Percentage',
                 value: 0,
                 applicability: 'All',
@@ -84,7 +90,14 @@ const DiscountCodeFormModal: React.FC<DiscountCodeFormModalProps> = ({ isOpen, o
                             <select 
                                 className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm border p-2"
                                 value={formData.type}
-                                onChange={e => setFormData({...formData, type: e.target.value as DiscountType})}
+                                onChange={e => {
+                                    const val = e.target.value as 'Percentage' | 'Fixed';
+                                    setFormData({
+                                        ...formData,
+                                        type: val,
+                                        discountType: val as DiscountType
+                                    });
+                                }}
                             >
                                 <option value="Percentage">Percentage (%)</option>
                                 <option value="Fixed">Fixed Amount (£)</option>

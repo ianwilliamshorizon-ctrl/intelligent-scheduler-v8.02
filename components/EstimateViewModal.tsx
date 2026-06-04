@@ -8,6 +8,7 @@ import {
     ArrowRight, Calendar, Edit
 } from 'lucide-react';
 import EmailEstimateModal from './EmailEstimateModal';
+import { sendOutboundEmail } from '../core/services/emailService';
 import { formatCurrency } from '../utils/formatUtils';
 import { formatDate, getRelativeDate, dateStringToDate, addDays, getNextWorkingDay } from '../core/utils/dateUtils';
 import { usePrint } from '../core/hooks/usePrint';
@@ -362,9 +363,20 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
 
 
     
-    const handleEmailSuccess = (recipients: string) => {
-        onEmailSuccess({ ...estimate, status: 'Sent' });
-        setIsEmailing(false);
+    const handleEmailSuccess = async (recipients: string, subject: string, body: string) => {
+        try {
+            await sendOutboundEmail({
+                to: recipients,
+                fromName: resolvedEntity?.name || 'Brookspeed',
+                fromEmail: resolvedEntity?.email || 'info@brookspeed.com',
+                subject: subject,
+                body: body
+            });
+            onEmailSuccess({ ...estimate, status: 'Sent' });
+            setIsEmailing(false);
+        } catch (error: any) {
+            alert(`Failed to send email: ${error.message}`);
+        }
     };
     
     const handleSubmitApproval = () => {

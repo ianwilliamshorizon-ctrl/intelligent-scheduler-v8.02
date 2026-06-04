@@ -8,7 +8,7 @@ import { Send, Mail } from 'lucide-react';
 interface ScheduleConfirmationEmailModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSend: (recipients: string) => void;
+    onSend: (recipients: string, subject: string, body: string) => Promise<void>;
     data: {
         job: Job;
         customer: Customer;
@@ -22,6 +22,18 @@ const ScheduleConfirmationEmailModal: React.FC<ScheduleConfirmationEmailModalPro
     const [recipient, setRecipient] = useState('');
     const [subject, setSubject] = useState('');
     const [body, setBody] = useState('');
+    const [isSending, setIsSending] = useState(false);
+
+    const handleSend = async () => {
+        setIsSending(true);
+        try {
+            await onSend(recipient, subject, body);
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setIsSending(false);
+        }
+    };
 
     useEffect(() => {
         if (!data) return;
@@ -76,11 +88,12 @@ The Brookspeed Team`
         <FormModal
             isOpen={isOpen}
             onClose={onClose}
-            onSave={() => onSend(recipient)}
+            onSave={handleSend}
             title="Confirm Booking with Customer"
-            saveText="Send Email"
+            saveText={isSending ? "Sending..." : "Send Email"}
             saveIcon={Send}
             maxWidth="max-w-2xl"
+            saveDisabled={isSending}
         >
             <div className="space-y-4">
                 <div className="flex flex-col p-3 bg-indigo-50/50 rounded-lg border border-indigo-100">

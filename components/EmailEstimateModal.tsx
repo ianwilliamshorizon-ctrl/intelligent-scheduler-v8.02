@@ -6,7 +6,7 @@ import { formatCurrency } from '../utils/formatUtils';
 interface EmailEstimateModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSend: (recipients: string) => void;
+    onSend: (recipients: string, subject: string, body: string) => Promise<void>;
     onViewAsCustomer: () => void;
     estimate: Estimate;
     customer?: Customer;
@@ -44,8 +44,34 @@ const EmailEstimateModal: React.FC<EmailEstimateModalProps> = ({ isOpen, onClose
     
     const total = calculateTotal(estimate.lineItems);
 
-    const handleSend = () => {
-        onSend(recipients);
+    const [isSending, setIsSending] = useState(false);
+
+    const handleSend = async () => {
+        setIsSending(true);
+        try {
+            const subject = `Your Estimate #${estimate.estimateNumber} from BROOKSPEED`;
+            const onlineViewLink = `${window.location.origin}/?estimateId=${estimate.id}&view=customer`;
+            const body = `Dear ${customer?.forename || 'Customer'},
+
+Thank you for choosing BROOKSPEED. Please find below the details of your estimate for the work on your ${vehicle?.make || 'Vehicle'} ${vehicle?.model || ''} (${vehicle?.registration || 'TBA'}).
+
+Estimate Summary:
+Total Estimate Amount: £${total.toFixed(2)}
+
+You can view, approve, or decline your detailed estimate online by clicking the link below:
+${onlineViewLink}
+
+If you have any questions, please don't hesitate to contact us.
+
+Kind regards,
+The BROOKSPEED Team`;
+
+            await onSend(recipients, subject, body);
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setIsSending(false);
+        }
     };
 
     // Z-Index raised to 90 to be higher than EstimateViewModal (Z-60)
@@ -120,8 +146,12 @@ const EmailEstimateModal: React.FC<EmailEstimateModalProps> = ({ isOpen, onClose
 
                 <div className="flex justify-end space-x-3 mt-6 pt-4 border-t">
                     <button type="button" onClick={onClose} className="py-2.5 px-5 bg-gray-100 text-gray-600 rounded-xl hover:bg-gray-200 font-bold transition-colors">Cancel</button>
-                    <button onClick={handleSend} className="flex items-center py-2.5 px-6 bg-green-600 text-white font-bold rounded-xl shadow-lg hover:bg-green-700 transition-all hover:scale-105 active:scale-95 border-b-4 border-green-800">
-                        <Send size={16} className="mr-2"/> Send Email
+                    <button 
+                        onClick={handleSend} 
+                        disabled={isSending}
+                        className="flex items-center py-2.5 px-6 bg-green-600 text-white font-bold rounded-xl shadow-lg hover:bg-green-700 transition-all hover:scale-105 active:scale-95 border-b-4 border-green-800 disabled:opacity-75 disabled:cursor-not-allowed"
+                    >
+                        <Send size={16} className="mr-2"/> {isSending ? 'Sending...' : 'Send Email'}
                     </button>
                 </div>
             </div>

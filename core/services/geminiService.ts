@@ -75,3 +75,25 @@ export const generateServicePackageName = async (lineItems: any[], make: string,
 export const parseInquiryMessage = async (prompt: string): Promise<any> => {
     return parseJobRequest(prompt);
 };
+
+/**
+ * PARSE SEARCH QUERY
+ * Uses AI to parse search queries into a search term and type
+ */
+export const parseSearchQuery = async (query: string): Promise<{ searchTerm: string; searchType: 'customer' | 'vehicle' | 'unknown' }> => {
+    const prompt = `Analyze this search query: "${query}". Identify the primary search term and determine if it represents a "customer" (name, email, phone number) or a "vehicle" (registration plate, VIN, make, model). Return ONLY JSON in this format: {"searchTerm": "...", "searchType": "customer" | "vehicle" | "unknown"}`;
+    
+    try {
+        const result = await parseJobRequest(prompt);
+        return {
+            searchTerm: result.searchTerm || query,
+            searchType: result.searchType || 'unknown'
+        };
+    } catch (error) {
+        console.error("Error parsing search query with AI:", error);
+        return {
+            searchTerm: query,
+            searchType: 'unknown'
+        };
+    }
+};

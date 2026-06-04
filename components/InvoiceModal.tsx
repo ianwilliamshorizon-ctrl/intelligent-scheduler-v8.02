@@ -5,6 +5,7 @@ import { usePrint } from '../core/hooks/usePrint';
 import PrintableInvoice from './PrintableInvoice';
 import PaymentModal from './PaymentModal';
 import EmailInvoiceModal from './EmailInvoiceModal';
+import { sendOutboundEmail } from '../core/services/emailService';
 
 interface InvoiceModalProps {
     isOpen: boolean;
@@ -107,11 +108,22 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ isOpen, onClose, invoice, c
         }
     };
 
-    const handleEmailSuccess = (recipients: string) => {
-        if (invoice) {
-            onUpdateInvoice({ ...invoice, status: invoice.status === 'Draft' ? 'Sent' : invoice.status });
+    const handleEmailSuccess = async (recipients: string, subject: string, body: string) => {
+        try {
+            await sendOutboundEmail({
+                to: recipients,
+                fromName: entity?.name || 'Brookspeed',
+                fromEmail: entity?.email || 'info@brookspeed.com',
+                subject: subject,
+                body: body
+            });
+            if (invoice) {
+                onUpdateInvoice({ ...invoice, status: invoice.status === 'Draft' ? 'Sent' : invoice.status });
+            }
+            setIsEmailing(false);
+        } catch (error: any) {
+            alert(`Failed to send email: ${error.message}`);
         }
-        setIsEmailing(false);
     };
 
     if (!isOpen) return null;

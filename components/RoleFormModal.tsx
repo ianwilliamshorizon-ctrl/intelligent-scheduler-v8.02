@@ -149,7 +149,7 @@ const RoleFormModal: React.FC<RoleFormModalProps> = ({ isOpen, onClose, onSave, 
                                 </label>
                                 <select
                                     value={formData.baseRole}
-                                    onChange={e => setFormData({ ...formData, baseRole: e.target.value as UserRole })}
+                                    onChange={e => setFormData({ ...formData, baseRole: e.target.value as any })}
                                     className="w-full p-3 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition font-mono"
                                 >
                                     {ALL_USER_ROLES.map(r => <option key={r} value={r}>{r}</option>)}

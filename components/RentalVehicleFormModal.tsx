@@ -114,8 +114,8 @@ const RentalVehicleFormModal: React.FC<RentalVehicleFormModalProps> = ({ isOpen,
                         <label className="block text-sm font-medium text-gray-700 mb-1">Vehicle*</label>
                         <SearchableSelect
                             options={availableVehicles.map(v => ({ value: v.id, label: `${v.registration} - ${v.make} ${v.model}` }))}
-                            value={formData.id || null}
-                            onChange={(value) => setFormData(prev => ({...prev, id: value || ''}))}
+                            initialValue={formData.id || null}
+                            onSelect={(value) => setFormData(prev => ({...prev, id: value || ''}))}
                             placeholder="Select a vehicle..."
                             disabled={!!rentalVehicle?.id}
                         />

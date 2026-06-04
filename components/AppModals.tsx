@@ -5,6 +5,7 @@ import { useApp } from '../core/state/AppContext';
 import { formatDate, formatReadableDate } from '../core/utils/dateUtils';
 import { ModalState, ModalSetters } from '../core/hooks/useModalState';
 import { useWorkshopActions } from '../core/hooks/useWorkshopActions';
+import { sendOutboundEmail } from '../core/services/emailService';
 
 // Core Modal Components (Always needed or lightweight)
 import ConfirmationModal from './ConfirmationModal';
@@ -732,9 +733,21 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                     <ScheduleConfirmationEmailModal 
                         isOpen={modals.scheduleEmailModal.isOpen}
                         onClose={() => setters.setScheduleEmailModal({isOpen: false, data: null})}
-                        onSend={(recipients) => {
-                            setters.setScheduleEmailModal({isOpen: false, data: null});
-                            setConfirmation({isOpen: true, title: 'Email Sent', message: `Booking confirmation email sent to ${recipients}.`, type: 'success'});
+                        onSend={async (recipients, subject, body) => {
+                            try {
+                                const entity = data.businessEntities.find(e => e.id === selectedEntityId) || data.businessEntities[0];
+                                await sendOutboundEmail({
+                                    to: recipients,
+                                    fromName: entity?.name || 'Brookspeed',
+                                    fromEmail: entity?.email || 'info@brookspeed.com',
+                                    subject: subject,
+                                    body: body
+                                });
+                                setters.setScheduleEmailModal({isOpen: false, data: null});
+                                setConfirmation({isOpen: true, title: 'Email Sent', message: `Booking confirmation email sent to ${recipients}.`, type: 'success'});
+                            } catch (error: any) {
+                                setConfirmation({isOpen: true, title: 'Failed to Send Email', message: `Error: ${error.message}`, type: 'warning'});
+                            }
                         }}
                         data={modals.scheduleEmailModal.data}
                     />

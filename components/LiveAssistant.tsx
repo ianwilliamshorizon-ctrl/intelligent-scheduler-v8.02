@@ -24,7 +24,7 @@ interface LiveAssistantProps {
 const LiveAssistant: React.FC<LiveAssistantProps> = ({ isOpen, onClose, jobId, onAddNote, onReviewPackage }) => {
     const { preferredVoiceName } = useApp();
     const [messages, setMessages] = useState<Message[]>([]);
-    const activeUtterance = useRef<SpeechSynthesisUtterance | null>(null);
+    const activeUtterance = useRef<any>(null);
     const [textInput, setTextInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [isExpanded, setIsExpanded] = useState(false);

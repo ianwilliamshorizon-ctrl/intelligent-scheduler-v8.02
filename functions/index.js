@@ -275,3 +275,274 @@ exports.performScheduledBackup = onSchedule({
         logger.error("Scheduled Backup Failed:", error);
     }
 });
+
+/**
+ * Outbound Email sending via Office 365 SMTP
+ */
+exports.sendEmail = onCall({ 
+  region: "europe-west1", 
+  secrets: ["SMTP_USER", "SMTP_PASS"] 
+}, async (request) => {
+  const smtpUser = process.env.SMTP_USER;
+  const smtpPass = process.env.SMTP_PASS;
+  if (!smtpUser || !smtpPass) {
+    logger.error("SMTP_USER or SMTP_PASS secrets are not set.");
+    throw new HttpsError("internal", "Mail service is not configured.");
+  }
+
+  const { to, fromName, fromEmail, subject, body, attachment } = request.data || {};
+
+  if (!to || !subject || !body) {
+    throw new HttpsError("invalid-argument", "Missing required email fields (to, subject, body).");
+  }
+
+  const nodemailer = require("nodemailer");
+  const transporter = nodemailer.createTransport({
+    host: "smtp.office365.com",
+    port: 587,
+    secure: false, // true for 465, false for other ports
+    auth: {
+      user: smtpUser,
+      pass: smtpPass
+    },
+    tls: {
+      ciphers: "SSLv3",
+      rejectUnauthorized: false
+    }
+  });
+
+  const resolvedFromEmail = fromEmail || smtpUser;
+  const resolvedFromName = fromName || "Brookspeed";
+
+  const mailOptions = {
+    from: `"${resolvedFromName}" <${smtpUser}>`,
+    to: to,
+    replyTo: resolvedFromEmail,
+    bcc: smtpUser,
+    subject: subject,
+    text: body,
+    html: body.replace(/\n/g, "<br>")
+  };
+
+  if (attachment && attachment.content && attachment.filename) {
+    mailOptions.attachments = [
+      {
+        content: attachment.content,
+        filename: attachment.filename,
+        encoding: "base64",
+        contentType: attachment.type || "application/pdf"
+      }
+    ];
+  }
+
+  try {
+    logger.info(`Sending email to ${to} using SMTP user ${smtpUser}`);
+    await transporter.sendMail(mailOptions);
+    return { success: true };
+  } catch (error) {
+    logger.error("SMTP Mail Error:", error.message);
+    throw new HttpsError("internal", `Failed to send email: ${error.message}`);
+  }
+});
+
+/**
+ * Inbound Email Webhook (triggered by SendGrid Inbound Parse)
+ * Parses incoming email, searches for matching customer/documents,
+ * and creates an Inquiry Card.
+ */
+exports.inboundEmailWebhook = onRequest({
+  region: "europe-west1",
+  cors: true,
+  secrets: ["GEMINI_API_KEY"]
+}, async (req, res) => {
+  if (req.method !== "POST") {
+    return res.status(405).send("Method Not Allowed");
+  }
+
+  try {
+    let fields = {};
+    if (req.headers["content-type"] && req.headers["content-type"].includes("application/json")) {
+      fields = req.body || {};
+    } else {
+      // Parse multipart form data
+      const Busboy = require("busboy");
+      fields = await new Promise((resolve, reject) => {
+        const busboy = Busboy({ headers: req.headers });
+        const parsedFields = {};
+        busboy.on("field", (fieldname, val) => {
+          parsedFields[fieldname] = val;
+        });
+        busboy.on("finish", () => resolve(parsedFields));
+        busboy.on("error", (err) => reject(err));
+        req.pipe(busboy);
+      });
+    }
+
+    const fromField = fields.from || ""; // e.g. "John Doe <john@example.com>"
+    const toField = fields.to || ""; // e.g. "trimming@brookspeed.com"
+    const subject = fields.subject || "";
+    const textBody = fields.text || fields.body || fields.html || "";
+
+    logger.info(`Received inbound email from ${fromField} to ${toField}. Subject: "${subject}"`);
+
+    // Parse email and name from "from" header
+    let fromEmail = "";
+    let fromName = "";
+    const emailMatch = fromField.match(/<([^>]+)>/);
+    if (emailMatch) {
+      fromEmail = emailMatch[1].trim();
+      fromName = fromField.replace(emailMatch[0], "").replace(/"/g, "").trim();
+    } else {
+      fromEmail = fromField.trim();
+      fromName = fromField.trim();
+    }
+
+    // Parse clean recipient email
+    let recipientEmail = toField;
+    const recipientMatch = toField.match(/<([^>]+)>/);
+    if (recipientMatch) {
+      recipientEmail = recipientMatch[1].trim();
+    }
+
+    let matchedCustomerId = null;
+    let matchedVehicleId = null;
+    let matchedEstimateId = null;
+
+    const db = admin.firestore();
+
+    // 1. Look up customer by email
+    if (fromEmail) {
+      const customerSnap = await db.collection("brooks_customers")
+        .where("email", "==", fromEmail)
+        .limit(1)
+        .get();
+      
+      if (!customerSnap.empty) {
+        matchedCustomerId = customerSnap.docs[0].id;
+        logger.info(`Matched customer ID: ${matchedCustomerId}`);
+      }
+    }
+
+    // 2. Look up estimate/document reference in subject line
+    // Matches patterns like "Estimate #1024", "Estimate 1024", "Invoice #3090"
+    const refMatch = subject.match(/(?:Estimate|Invoice|Purchase\s*Order|Job)\s*#?\s*([a-zA-Z0-9_-]+)/i);
+    if (refMatch) {
+      const refId = refMatch[1].trim();
+      logger.info(`Found reference ID in subject: ${refId}`);
+
+      // Try searching for estimate number or ID
+      const estimateSnap = await db.collection("brooks_estimates")
+        .where("estimateNumber", "==", refId)
+        .limit(1)
+        .get();
+
+      if (!estimateSnap.empty) {
+        const estDoc = estimateSnap.docs[0];
+        matchedEstimateId = estDoc.id;
+        matchedCustomerId = matchedCustomerId || estDoc.data().customerId;
+        matchedVehicleId = estDoc.data().vehicleId;
+        logger.info(`Matched estimate ID: ${matchedEstimateId}`);
+      } else {
+        // Try exact document ID match for estimate
+        const estDocById = await db.collection("brooks_estimates").doc(refId).get();
+        if (estDocById.exists) {
+          matchedEstimateId = estDocById.id;
+          matchedCustomerId = matchedCustomerId || estDocById.data().customerId;
+          matchedVehicleId = estDocById.data().vehicleId;
+          logger.info(`Matched estimate ID by document ID: ${matchedEstimateId}`);
+        }
+      }
+    }
+
+    let entityId = null;
+    let classificationReason = "";
+
+    const geminiApiKey = process.env.GEMINI_API_KEY;
+    if (geminiApiKey) {
+      try {
+        const { GoogleGenerativeAI } = require("@google/generative-ai");
+        const genAI = new GoogleGenerativeAI(geminiApiKey);
+        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+
+        const prompt = `
+Analyze the following email subject and body received by a vehicle service center.
+Determine:
+1. Is this email a new request, inquiry, or question regarding an estimate, quotation, pricing, or booking/scheduling a service? (true/false)
+2. Which business entity does this email best match? Use one of the following exact entity IDs:
+   - 'ent_porsche' (for Porsche vehicles, Porsche performance tuning, or Porsche servicing)
+   - 'ent_audi' (for Audi, VW, Volkswagen, Seat, Skoda, or general German cars servicing/repair)
+   - 'ent_trimming' (for car upholstery, leather repair, hood/soft top replacement, interior re-trim, coachbuilding)
+   - 'ent_sales' (for buying or selling cars, vehicle sales inquiries, car showroom)
+   - 'ent_storage' (for secure vehicle storage, car storage)
+   - 'ent_rentals' (for renting cars, hire cars, courtesy cars)
+   If it's none of the above or ambiguous, return null.
+
+Format your response as a valid JSON object with the following fields:
+{
+  "isEstimateOrQuoteRequest": boolean,
+  "matchedEntityId": string | null,
+  "reasoning": "brief description of why this classification was made"
+}
+
+Email Subject: "${subject.replace(/"/g, '\\"')}"
+Email Body:
+${textBody}
+`;
+
+        const result = await model.generateContent(prompt);
+        const responseText = result.response.text();
+        
+        // Strip markdown code block wrappers if any
+        const cleanJsonText = responseText.replace(/```json/g, "").replace(/```/g, "").trim();
+        const classification = JSON.parse(cleanJsonText);
+
+        if (classification.matchedEntityId) {
+          entityId = classification.matchedEntityId;
+        }
+        classificationReason = classification.reasoning || "";
+        logger.info(`Gemini classified email: Entity=${entityId}, QuoteRequest=${classification.isEstimateOrQuoteRequest}, Reason=${classificationReason}`);
+      } catch (geminiError) {
+        logger.error("Error using Gemini for email classification:", geminiError.message);
+      }
+    }
+
+    // Fallback to estimate's entity if matched
+    if (!entityId && matchedEstimateId) {
+      try {
+        const estDoc = await db.collection("brooks_estimates").doc(matchedEstimateId).get();
+        if (estDoc.exists) {
+          entityId = estDoc.data().entityId;
+          logger.info(`Fallback: Matched entity ID from estimate: ${entityId}`);
+        }
+      } catch (err) {
+        logger.error("Error fetching fallback estimate entity:", err.message);
+      }
+    }
+
+    // Default to Porsche if completely unmatched
+    entityId = entityId || "ent_porsche";
+
+    // 3. Create Inquiry Card
+    const newInquiry = {
+      createdAt: new Date().toISOString(),
+      fromName: fromName || fromEmail || "Unknown Sender",
+      fromContact: fromEmail || "No Email",
+      message: textBody || "Received email with empty text body.",
+      takenByUserId: "system",
+      status: "New",
+      linkedCustomerId: matchedCustomerId,
+      linkedVehicleId: matchedVehicleId,
+      linkedEstimateId: matchedEstimateId,
+      entityId: entityId,
+      actionNotes: `[System]: Created automatically from email reply sent to ${recipientEmail}.\nSubject: "${subject}"${classificationReason ? `\nAI Classification: ${classificationReason}` : ''}`
+    };
+
+    const docRef = await db.collection("brooks_inquiries").add(newInquiry);
+    logger.info(`Successfully created Inquiry Card: ${docRef.id}`);
+
+    res.status(200).json({ success: true, inquiryId: docRef.id });
+  } catch (error) {
+    logger.error("Inbound Webhook Parsing Error:", error);
+    res.status(500).send(`Internal Webhook Error: ${error.message}`);
+  }
+});

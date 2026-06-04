@@ -7,7 +7,7 @@ import { useManagementTable } from '../hooks/useManagementTable';
 import { parseCsv } from '../../../utils/csvUtils';
 import { getCustomerDisplayName } from '../../../core/utils/customerUtils';
 import VehicleFormModal from '../../VehicleFormModal';
-import { db } from '../../../core/db';
+import { db, saveDocument } from '../../../core/db';
 import { writeBatch, doc, collection } from 'firebase/firestore';
 import { findBestDiagramMatch } from '../../../core/utils/diagramUtils';
 
@@ -394,7 +394,7 @@ export const ManagementVehiclesTab: React.FC<ManagementVehiclesTabProps> = ({
                     onOpenPurchaseOrder={onOpenPurchaseOrder}
                     vehicles={vehicles}
                     onSaveCustomer={async (c) => {
-                        await db.saveDocument('brooks_customers', c);
+                        await saveDocument('brooks_customers', c);
                         await forceRefresh('brooks_customers');
                     }}
                 />
