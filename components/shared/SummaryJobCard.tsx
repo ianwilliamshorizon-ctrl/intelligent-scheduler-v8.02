@@ -42,7 +42,9 @@ export const SummaryJobCard: React.FC<SummaryJobCardProps> = (props) => {
     };
 
     const today = getRelativeDate(0);
-    const segmentsToday = (job.segments || []).filter(s => s.date === today && s.allocatedLift);
+    const segmentsToday = (job.segments || []).filter(s => 
+        s.allocatedLift && (s.date === today || s.status === 'In Progress' || s.status === 'Paused')
+    );
 
     const engineerNames = (job.segments || [])
         .map(s => engineers.find(e => e.id === s.engineerId)?.name)

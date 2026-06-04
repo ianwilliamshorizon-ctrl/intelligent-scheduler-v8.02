@@ -44,7 +44,9 @@ export const ConciergeJobCard: React.FC<ConciergeJobCardProps> = (props) => {
     const { partsStatus, vehicleStatus } = job;
     const today = getRelativeDate(0);
     const engineersById = useMemo(() => new Map(engineers.map(e => [e.id, e])), [engineers]);
-    const segmentsToday = useMemo(() => (job.segments || []).filter(s => s.date === today && s.allocatedLift), [job.segments, today]);
+    const segmentsToday = useMemo(() => (job.segments || []).filter(s => 
+        s.allocatedLift && (s.date === today || s.status === 'In Progress' || s.status === 'Paused')
+    ), [job.segments, today]);
 
     const partsStatusColor = () => {
         switch (partsStatus) {
