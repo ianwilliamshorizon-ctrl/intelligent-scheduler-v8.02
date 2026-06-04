@@ -1,8 +1,10 @@
 import React from 'react';
 import { Job, Vehicle, Customer, PurchaseOrder, User, Engineer } from '../../types';
-import { KeyRound, Wrench, Warehouse, MapPin, LogIn, FileText, LogOut } from 'lucide-react';
+import { KeyRound, Wrench, Warehouse, MapPin, LogIn, FileText, LogOut, PlayCircle, PauseCircle, CheckCircle } from 'lucide-react';
 import { StorageLocation } from '../../types';
 import { JobHoverPopout } from './JobHoverPopout';
+import { useData } from '../../core/state/DataContext';
+import { getRelativeDate } from '../../core/utils/dateUtils';
 
 interface SummaryJobCardProps {
     job: Job;
@@ -28,7 +30,19 @@ interface SummaryJobCardProps {
 }
 
 export const SummaryJobCard: React.FC<SummaryJobCardProps> = (props) => {
-    const { job, vehicle, engineers } = props;
+    const { job, vehicle, engineers, currentUser } = props;
+    const { roles } = useData();
+    const userRoleObj = roles.find(r => r.name === currentUser.role);
+    const baseRole = userRoleObj ? userRoleObj.baseRole : currentUser.role;
+
+    const canControl = (segment: any) => {
+        if (!segment.engineerId) return false;
+        if (currentUser.role === 'Engineer') return segment.engineerId === currentUser.engineerId;
+        return ['Admin', 'Dispatcher', 'Sales', 'Garage Concierge'].includes(baseRole);
+    };
+
+    const today = getRelativeDate(0);
+    const segmentsToday = (job.segments || []).filter(s => s.date === today && s.allocatedLift);
 
     const engineerNames = (job.segments || [])
         .map(s => engineers.find(e => e.id === s.engineerId)?.name)
@@ -98,6 +112,57 @@ export const SummaryJobCard: React.FC<SummaryJobCardProps> = (props) => {
                             ))}
                         </div>
                     )}
+
+                    {segmentsToday.map(seg => {
+                        const controlEnabled = canControl(seg);
+                        if (!controlEnabled) return null;
+
+                        return (
+                            <div 
+                                key={seg.segmentId} 
+                                className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between gap-1"
+                                onClick={(e) => e.stopPropagation()}
+                            >
+                                <span className={`text-[9px] font-black tracking-tight uppercase ${seg.status === 'Paused' ? 'text-rose-600 animate-pulse' : 'text-indigo-700'}`}>
+                                    {seg.status === 'Paused' ? 'PAUSED' : 'ACTIVE'} ({seg.allocatedLift})
+                                </span>
+                                <div className="flex items-center gap-1">
+                                    {seg.status === 'Allocated' && (
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); props.onStartWork(job.id, seg.segmentId); }}
+                                            className="px-1.5 py-0.5 bg-green-600 text-white rounded text-[8px] font-black uppercase tracking-tight hover:bg-green-700 transition-all active:scale-95 flex items-center gap-0.5"
+                                        >
+                                            <PlayCircle size={10} /> Start
+                                        </button>
+                                    )}
+                                    {seg.status === 'Paused' && (
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); props.onRestart(job.id, seg.segmentId); }}
+                                            className="px-1.5 py-0.5 bg-indigo-600 text-white rounded text-[8px] font-black uppercase tracking-tight hover:bg-indigo-700 transition-all active:scale-95 flex items-center gap-0.5"
+                                        >
+                                            <PlayCircle size={10} /> Restart
+                                        </button>
+                                    )}
+                                    {seg.status === 'In Progress' && (
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); props.onPause(job.id, seg.segmentId); }}
+                                            className="px-1.5 py-0.5 bg-amber-600 text-white rounded text-[8px] font-black uppercase tracking-tight hover:bg-amber-700 transition-all active:scale-95 flex items-center gap-0.5"
+                                        >
+                                            <PauseCircle size={10} /> Pause
+                                        </button>
+                                    )}
+                                    {seg.status === 'In Progress' && props.onEngineerComplete && (
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); props.onEngineerComplete(job, seg.segmentId); }}
+                                            className="px-1.5 py-0.5 bg-indigo-100 text-indigo-700 rounded text-[8px] font-black uppercase tracking-tight hover:bg-indigo-200 border border-indigo-200 transition-all active:scale-95 flex items-center gap-0.5"
+                                        >
+                                            <CheckCircle size={10} /> Complete
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        );
+                    })}
 
                     {props.highlightAction === 'checkIn' && (
                         <button
