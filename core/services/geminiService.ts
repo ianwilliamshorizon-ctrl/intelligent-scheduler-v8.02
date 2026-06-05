@@ -1,5 +1,6 @@
 import { app } from '../services/firebaseServices';
 import { getFunctions, httpsCallable } from 'firebase/functions';
+import { repairJsonString } from '../utils/jsonUtils';
 
 const functions = getFunctions(app, 'europe-west1');
 // Notice the new name here!
@@ -31,15 +32,20 @@ export const parseJobRequest = async (prompt: string): Promise<any> => {
         throw new Error("Empty or invalid response received from the AI service.");
     }
 
+    let cleanJson = '';
     try {
         // Use regex to extract JSON if the AI wrapped it in markdown code blocks
         const jsonStringMatch = rawResult.match(/```json\n([\s\S]*?)\n```/) || rawResult.match(/```([\s\S]*?)```/);
-        const cleanJson = jsonStringMatch ? jsonStringMatch[1] : rawResult;
+        cleanJson = (jsonStringMatch ? jsonStringMatch[1] : rawResult).trim();
 
-        return JSON.parse(cleanJson.trim());
+        // Apply our robust JSON repair helper
+        const repairedJson = repairJsonString(cleanJson);
+
+        return JSON.parse(repairedJson);
     } catch (error) {
         console.error("Error parsing JSON from AI response:", error);
         console.log("Raw response was:", rawResult);
+        console.log("Cleaned JSON block was:", cleanJson);
         throw new Error("Failed to parse the AI's response into a valid format.");
     }
 };

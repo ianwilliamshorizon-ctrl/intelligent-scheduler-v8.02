@@ -235,7 +235,7 @@ Extract:
 5. "estimatedHours": Estimated labor hours for this work as a number, or null if not clear.
 6. "scheduledDate": The requested booking date in YYYY-MM-DD format (if relative, resolve relative to Context Date: ${contextDate}), otherwise null.
 7. "notes": Any specific logistical considerations, turnaround times, or customer comments.
-8. "explanation": A detailed, professional, and helpful markdown-formatted text explaining the estimate/reasoning, answering any user questions, and breaking down labor, materials, and options.
+8. "explanation": A detailed, professional, and helpful markdown-formatted text explaining the estimate/reasoning, answering any user questions, and breaking down labor, materials, and options. IMPORTANT: Do NOT use raw double quotes (") inside this explanation string. Use single quotes (') instead of double quotes (") for highlighted terms, and ensure all newlines are written as escaped '\\n' characters rather than raw carriage returns/newlines.
 9. "extractedLineItems": If the user's request details specific materials, parts, labor hours, or options (such as pricing, fabric cost, or custom addons), generate a detailed array of individual line items. For each item:
    - "description": Descriptive name of the material, part, labor task, or option.
    - "quantity": Number of units (for parts/materials) or number of hours (for labor).
