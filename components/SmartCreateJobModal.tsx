@@ -129,6 +129,41 @@ const SmartCreateJobModal: React.FC<SmartCreateJobModalProps> = ({
         
         return { net, vat, gross, cost, profit, margin };
     }, [lineItems]);
+
+    // Segment line items into packages, custom labor, and custom parts
+    const builderBreakdown = useMemo(() => {
+        const packages: { header: EstimateLineItem; children: EstimateLineItem[] }[] = [];
+        const customLabor: EstimateLineItem[] = [];
+        const customParts: EstimateLineItem[] = [];
+        
+        const packageHeaders = lineItems.filter(item => item.servicePackageId && !item.isPackageComponent);
+        packageHeaders.forEach(header => {
+            packages.push({
+                header,
+                children: lineItems.filter(item => item.isPackageComponent && item.servicePackageId === header.servicePackageId)
+            });
+        });
+        
+        lineItems.forEach(item => {
+            if (!item.servicePackageId) {
+                if (item.isLabor) {
+                    customLabor.push(item);
+                } else {
+                    customParts.push(item);
+                }
+            }
+        });
+        
+        return { packages, customLabor, customParts };
+    }, [lineItems]);
+
+    const customerOptions = useMemo(() => {
+        return customers.map(c => ({
+            id: c.id,
+            value: c.id,
+            label: `${c.forename} ${c.surname} ${c.companyName ? `(${c.companyName})` : ''} - ${c.postcode || ''}`
+        }));
+    }, [customers]);
     
     // Sort and Filter Packages based on Vehicle Hierarchy
     const sortedPackages = useMemo(() => {
@@ -669,6 +704,46 @@ User Request: "${userText}"`;
             </button>
         </div>
     );
+
+    const renderItemRow = (item: EstimateLineItem) => (
+        <div key={item.id} className={`flex items-center gap-3 p-2 rounded-lg border text-sm transition-all shadow-sm ${item.isPackageComponent ? 'bg-gray-100 ml-6' : 'bg-white border-gray-200'}`}>
+            <div className="flex-grow flex items-center gap-2">
+                {item.servicePackageId && !item.isPackageComponent && (
+                    <div className="bg-indigo-600 text-white text-[9px] uppercase font-black px-1.5 py-0.5 rounded shadow-sm">Pkg</div>
+                )}
+                <input 
+                    value={item.description} 
+                    onChange={e => handleLineItemChange(item.id, 'description', e.target.value)}
+                    className="w-full p-1 border-none bg-transparent focus:ring-0 font-medium"
+                    placeholder="Description"
+                />
+            </div>
+            <div className="flex items-center gap-1 w-20">
+                <input 
+                    type="number" 
+                    step="0.1"
+                    value={item.quantity} 
+                    onChange={e => handleLineItemChange(item.id, 'quantity', parseFloat(e.target.value) || 0)}
+                    className="w-full p-1 border rounded text-right bg-white/50 focus:ring-1 focus:ring-indigo-300"
+                />
+                <span className="text-[10px] text-gray-400 font-bold uppercase">{item.isLabor ? 'hrs' : 'qty'}</span>
+            </div>
+            <div className="flex items-center gap-1 w-28">
+                <span className="text-gray-400 font-mono text-xs">£</span>
+                <input 
+                    type="number" 
+                    step="0.01"
+                    value={item.unitPrice} 
+                    onChange={e => handleLineItemChange(item.id, 'unitPrice', parseFloat(e.target.value) || 0)}
+                    className="w-full p-1 border rounded text-right bg-white/50 focus:ring-1 focus:ring-indigo-300 font-bold text-indigo-700"
+                    placeholder="Sell"
+                />
+            </div>
+            {!item.isPackageComponent && (
+                <button onClick={() => handleRemoveLineItem(item.id)} className="text-gray-300 hover:text-red-500 transition-colors p-1"><Trash2 size={16}/></button>
+            )}
+        </div>
+    );
     
     const renderBuilder = () => (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full overflow-hidden">
@@ -694,7 +769,17 @@ User Request: "${userText}"`;
                          <div className="text-sm space-y-1">
                              <div className="flex justify-between items-start">
                                  <p className="font-semibold text-indigo-700">{getCustomerDisplayName(foundCustomer)}</p>
-                                 <button onClick={() => setFoundCustomer(null)} className="text-xs text-gray-400 hover:text-gray-600"><Edit size={12}/></button>
+                                 <button 
+                                     onClick={() => {
+                                         setFoundCustomer(null);
+                                         setFoundVehicle(null);
+                                         setVehicleExists(false);
+                                     }} 
+                                     className="text-xs text-gray-400 hover:text-gray-600"
+                                     title="Clear Customer"
+                                 >
+                                     <X size={14}/>
+                                 </button>
                              </div>
                              <p className="flex items-center gap-2 text-gray-600"><Phone size={12}/> {foundCustomer.mobile || foundCustomer.phone || 'N/A'}</p>
                              <p className="flex items-center gap-2 text-gray-600"><Mail size={12}/> {foundCustomer.email || 'N/A'}</p>
@@ -705,7 +790,7 @@ User Request: "${userText}"`;
                                  {parsedData?.customerName ? `AI Suggested: "${parsedData.customerName}"` : 'Customer not identified.'}
                              </div>
                              <SearchableSelect 
-                                options={customers.map(c => ({ id: c.id, label: getCustomerDisplayName(c), value: c.id }))}
+                                options={customerOptions}
                                 initialValue={null}
                                 onSelect={(val) => val && handleCustomerSelect(val)}
                                 placeholder="Search existing customer..."
@@ -721,8 +806,20 @@ User Request: "${userText}"`;
                     <h3 className="font-bold text-gray-700 flex items-center gap-2 border-b pb-2"><Car size={16}/> Vehicle</h3>
                     {foundVehicle ? (
                         <div className="text-sm space-y-1">
-                            <div className="p-2 bg-green-50 text-green-800 rounded text-sm mb-2 flex items-center gap-2">
-                                <Check size={14}/> <strong>{foundVehicle.registration}</strong>
+                            <div className="flex justify-between items-start">
+                                <div className="p-2 bg-green-50 text-green-800 rounded text-sm mb-2 flex items-center gap-2">
+                                    <Check size={14}/> <strong>{foundVehicle.registration}</strong>
+                                </div>
+                                <button 
+                                    onClick={() => {
+                                        setFoundVehicle(null);
+                                        setVehicleExists(false);
+                                    }} 
+                                    className="text-xs text-gray-400 hover:text-gray-600 mt-2" 
+                                    title="Change Vehicle"
+                                >
+                                    <X size={14}/>
+                                </button>
                             </div>
                              <p className="text-gray-600 font-medium">{foundVehicle.make} {foundVehicle.model}</p>
                              <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-gray-100">
@@ -740,6 +837,27 @@ User Request: "${userText}"`;
                         </div>
                     ) : (
                         <div className="space-y-2">
+                            {foundCustomer && vehicles.filter(v => v.customerId === foundCustomer.id).length > 0 && (
+                                <div className="space-y-1.5 pb-2 border-b border-gray-100">
+                                    <label className="text-[10px] uppercase font-bold text-gray-400 block">Customer's Existing Cars</label>
+                                    <div className="flex flex-col gap-1.5 max-h-40 overflow-y-auto pr-1">
+                                        {vehicles.filter(v => v.customerId === foundCustomer.id).map(v => (
+                                            <button
+                                                key={v.id}
+                                                type="button"
+                                                onClick={() => {
+                                                    setFoundVehicle(v);
+                                                    setVehicleExists(true);
+                                                }}
+                                                className="w-full text-left p-2 rounded border bg-blue-50/50 hover:bg-blue-50 text-xs font-semibold text-blue-700 border-blue-100 flex justify-between items-center transition-colors"
+                                            >
+                                                <span>{v.registration}</span>
+                                                <span className="text-[10px] text-blue-500 font-normal">{v.make} {v.model}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                             <div className="p-2 bg-red-50 text-red-800 rounded text-sm mb-2">
                                  Registration <strong>{parsedData?.vehicleRegistration || 'UNKNOWN'}</strong> not found.
                             </div>
@@ -844,47 +962,38 @@ User Request: "${userText}"`;
                              </div>
                         </div>
 
-                        <div className="flex-grow overflow-y-auto p-4 space-y-2">
+                        <div className="flex-grow overflow-y-auto p-4 space-y-4">
                             {lineItems.length === 0 && <p className="text-center text-gray-400 italic py-10">No items added. Add packages or items to build the job.</p>}
-                            {lineItems.map(item => (
-                                <div key={item.id} className={`flex items-center gap-3 p-2 rounded-lg border text-sm transition-all shadow-sm ${item.isPackageComponent ? 'bg-gray-100 ml-6' : 'bg-white border-gray-200'}`}>
-                                    <div className="flex-grow flex items-center gap-2">
-                                        {item.servicePackageId && !item.isPackageComponent && (
-                                            <div className="bg-indigo-600 text-white text-[9px] uppercase font-black px-1.5 py-0.5 rounded shadow-sm">Pkg</div>
-                                        )}
-                                        <input 
-                                            value={item.description} 
-                                            onChange={e => handleLineItemChange(item.id, 'description', e.target.value)}
-                                            className="w-full p-1 border-none bg-transparent focus:ring-0 font-medium"
-                                            placeholder="Description"
-                                        />
+                            
+                            {builderBreakdown.packages.length > 0 && (
+                                <div className="space-y-2">
+                                    <h4 className="font-bold text-gray-800 text-xs uppercase tracking-wider border-b pb-1">Service Packages</h4>
+                                    <div className="space-y-2">
+                                        {builderBreakdown.packages.flatMap(({ header, children }) => [
+                                            renderItemRow(header),
+                                            ...children.map(child => renderItemRow(child))
+                                        ])}
                                     </div>
-                                    <div className="flex items-center gap-1 w-20">
-                                        <input 
-                                            type="number" 
-                                            step="0.1"
-                                            value={item.quantity} 
-                                            onChange={e => handleLineItemChange(item.id, 'quantity', parseFloat(e.target.value) || 0)}
-                                            className="w-full p-1 border rounded text-right bg-white/50 focus:ring-1 focus:ring-indigo-300"
-                                        />
-                                        <span className="text-[10px] text-gray-400 font-bold uppercase">{item.isLabor ? 'hrs' : 'qty'}</span>
-                                    </div>
-                                    <div className="flex items-center gap-1 w-28">
-                                        <span className="text-gray-400 font-mono text-xs">£</span>
-                                        <input 
-                                            type="number" 
-                                            step="0.01"
-                                            value={item.unitPrice} 
-                                            onChange={e => handleLineItemChange(item.id, 'unitPrice', parseFloat(e.target.value) || 0)}
-                                            className="w-full p-1 border rounded text-right bg-white/50 focus:ring-1 focus:ring-indigo-300 font-bold text-indigo-700"
-                                            placeholder="Sell"
-                                        />
-                                    </div>
-                                    {!item.isPackageComponent && (
-                                        <button onClick={() => handleRemoveLineItem(item.id)} className="text-gray-300 hover:text-red-500 transition-colors p-1"><Trash2 size={16}/></button>
-                                    )}
                                 </div>
-                            ))}
+                            )}
+
+                            {builderBreakdown.customLabor.length > 0 && (
+                                <div className="space-y-2">
+                                    <h4 className="font-bold text-gray-800 text-xs uppercase tracking-wider border-b pb-1">Labour</h4>
+                                    <div className="space-y-2">
+                                        {builderBreakdown.customLabor.map(item => renderItemRow(item))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {builderBreakdown.customParts.length > 0 && (
+                                <div className="space-y-2">
+                                    <h4 className="font-bold text-gray-800 text-xs uppercase tracking-wider border-b pb-1">Parts & Materials</h4>
+                                    <div className="space-y-2">
+                                        {builderBreakdown.customParts.map(item => renderItemRow(item))}
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         {/* Financial Summary Footer */}

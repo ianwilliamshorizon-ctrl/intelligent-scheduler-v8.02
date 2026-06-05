@@ -179,6 +179,21 @@ const AddNewVehicleForm: React.FC<AddNewVehicleFormProps> = ({ initialRegistrati
         }
     };
 
+    useEffect(() => {
+        if (initialRegistration) {
+            const cleanReg = initialRegistration.trim().toUpperCase().replace(/\s/g, '');
+            if (cleanReg) {
+                const existing = vehicles.find(v => v.registration.toUpperCase().replace(/\s/g, '') === cleanReg);
+                if (existing) {
+                    setDuplicateVehicle(existing);
+                    setShowDuplicatePrompt(true);
+                } else {
+                    performLookup(cleanReg);
+                }
+            }
+        }
+    }, [initialRegistration]);
+
     const handleUseExisting = () => {
         if (duplicateVehicle) {
             setVehicleData(prev => ({
@@ -274,7 +289,7 @@ const AddNewVehicleForm: React.FC<AddNewVehicleFormProps> = ({ initialRegistrati
         }
 
         const newVehicle: Vehicle = { 
-            id: crypto.randomUUID(), 
+            id: vehicleData.id || crypto.randomUUID(), 
             customerId: customerToSave.id, 
             registration: vehicleData.registration.toUpperCase().replace(/\s/g, ''), 
             make: vehicleData.make, 
@@ -407,6 +422,45 @@ const AddNewVehicleForm: React.FC<AddNewVehicleFormProps> = ({ initialRegistrati
                         placeholder="Search for customer or create new..."
                     />
                 </div>
+
+                {selectedCustomerId && vehicles.filter(v => v.customerId === selectedCustomerId).length > 0 && (
+                    <div className="mb-4 p-3 border border-blue-100 rounded-lg bg-blue-50/50">
+                        <label className="block text-xs font-bold text-blue-700 uppercase tracking-wider mb-2">
+                            Use Customer's Existing Vehicle
+                        </label>
+                        <div className="flex flex-col gap-1.5 max-h-40 overflow-y-auto">
+                            {vehicles.filter(v => v.customerId === selectedCustomerId).map(v => (
+                                <button
+                                    key={v.id}
+                                    type="button"
+                                    onClick={() => {
+                                        setVehicleData({
+                                            id: v.id,
+                                            registration: v.registration,
+                                            make: v.make,
+                                            model: v.model,
+                                            type: v.type || 'Car',
+                                            vin: v.vin || '',
+                                            nextServiceDate: v.nextServiceDate || '',
+                                            nextMotDate: v.nextMotDate || '',
+                                            winterCheckDate: v.winterCheckDate || '',
+                                            fleetNumber: v.fleetNumber || '',
+                                            manufactureDate: v.manufactureDate || '',
+                                            transmissionType: v.transmissionType || 'Manual',
+                                            engineCapacity: v.cc ? v.cc.toString() : '',
+                                            fuelType: v.fuelType || '',
+                                            colour: v.colour || '',
+                                        });
+                                    }}
+                                    className="w-full text-left p-2 rounded border border-blue-200 bg-white hover:bg-blue-50 text-xs font-semibold text-blue-800 flex justify-between items-center transition-colors animate-fade-in"
+                                >
+                                    <span className="font-bold tracking-wide">{v.registration}</span>
+                                    <span className="text-gray-500 font-normal">{v.make} {v.model}</span>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
 
                 <div className={`grid grid-cols-1 md:grid-cols-3 gap-4 ${selectedCustomerId ? 'opacity-50 pointer-events-none' : ''}`}>
                     <div className="md:col-span-3">
