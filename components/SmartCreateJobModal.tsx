@@ -335,7 +335,8 @@ User Request: "${userText}"`;
             if (finalResult.scheduledDate) setSelectedDate(finalResult.scheduledDate);
             
             setParsedData(finalResult);
-            setNotes(finalResult.notes || '');
+            const combinedNotes = [finalResult.explanation, finalResult.notes].filter(Boolean).join('\n\n');
+            setNotes(combinedNotes);
             
             if (found) {
                 setVehicleExists(true);

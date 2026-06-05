@@ -5,7 +5,7 @@ import {
     X, CheckSquare, Mail, Loader2, Printer, CheckCircle, 
     MessageSquare, Monitor, Image as ImageIcon, Gauge, AlertTriangle, 
     ChevronLeft, ChevronRight, AlertCircle, CalendarCheck, Package,
-    ArrowRight, Calendar, Edit
+    ArrowRight, Calendar, Edit, FileText
 } from 'lucide-react';
 import EmailEstimateModal from './EmailEstimateModal';
 import { sendOutboundEmail } from '../core/services/emailService';
@@ -483,6 +483,17 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                                                     {m.notes && <p className="text-xs text-gray-600 italic bg-gray-50 p-1 rounded">{m.notes}</p>}
                                                 </div>
                                             ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {estimate.notes && (
+                                    <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 shadow-sm space-y-2">
+                                        <h3 className="text-sm font-bold text-gray-800 flex items-center gap-2 border-b pb-2">
+                                            <FileText size={16} className="text-indigo-600"/> Estimate Notes & Instructions
+                                        </h3>
+                                        <div className="text-xs text-gray-700 leading-relaxed whitespace-pre-wrap">
+                                            {estimate.notes}
                                         </div>
                                     </div>
                                 )}

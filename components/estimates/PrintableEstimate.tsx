@@ -408,6 +408,13 @@ export const PrintableEstimate: React.FC<PrintableEstimateProps> = ({ estimate, 
                                     </div>
                                 )}
 
+                                {estimate.notes && (
+                                    <div style={{ marginTop: '20px', padding: '15px', border: '1px solid #e2e8f0', borderRadius: '8px', backgroundColor: '#f8fafc', breakInside: 'avoid' }}>
+                                        <h4 style={{ margin: '0 0 8px 0', fontSize: '10px', fontWeight: 'bold', color: '#1e293b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Estimate Notes & Narrative</h4>
+                                        <p style={{ margin: 0, fontSize: '11px', color: '#475569', lineHeight: '1.5', whiteSpace: 'pre-wrap' }}>{estimate.notes}</p>
+                                    </div>
+                                )}
+
                                 <div className="mt-8 flex justify-end page-break-inside-avoid">
                                     <div className="w-72 space-y-2.5 bg-gray-50 p-5 rounded-xl border border-gray-100">
                                         {canViewPricing ? (
