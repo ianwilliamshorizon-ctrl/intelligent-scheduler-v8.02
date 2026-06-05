@@ -274,7 +274,7 @@ Extract:
 9. "extractedLineItems": If the user's request details specific materials, parts, labor hours, or options (such as pricing, fabric cost, or custom addons), generate a detailed array of individual line items. For each item:
    - "description": Descriptive name of the material, part, labor task, or option.
    - "quantity": Number of units (for parts/materials) or number of hours (for labor).
-   - "unitPrice": The sell price per unit/hour. If a range is given (e.g. £40 - £60), use the upper or average value (e.g. 50 or 60). If it is labor, use the default labor rate of £90/hr unless specified.
+   - "unitPrice": The sell price per unit/hour. If a range is given (e.g. £40 - £60), use the upper or average value (e.g. 50 or 60). If it is labor, use the default labor rate of £${selectedEntity?.laborRate || 90}/hr unless specified.
    - "unitCost": The cost price if mentioned, otherwise null.
    - "isLabor": True if the item represents labor/time, false if it is a part/material/option.
    - "isOptional": True if the item is an optional add-on, upgrade, or alternative tier (e.g. wrapping airbag cover, adding top marker strip).
