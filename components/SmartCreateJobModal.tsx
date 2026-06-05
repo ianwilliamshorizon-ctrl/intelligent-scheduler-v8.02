@@ -212,7 +212,44 @@ const SmartCreateJobModal: React.FC<SmartCreateJobModalProps> = ({
 
         try {
             const contextDate = defaultDate || formatDate(new Date());
-            let finalResult = await parseJobRequest(currentPrompt);
+            const knownPackages = servicePackages.map(p => `- ${p.name}`).join('\n');
+
+            const constructSystemPrompt = (userText: string, vehicleContext?: string) => {
+                return `You are a scheduling assistant for a vehicle service center. 
+Analyze the user's booking request and extract structured details.
+
+Context Date: ${contextDate}
+Available Service Packages in our system:
+${knownPackages || '- MOT\n- Minor Service\n- Major Service\n- General Repair'}
+${vehicleContext ? `Vehicle Context: ${vehicleContext}` : ''}
+
+Extract:
+1. "vehicleRegistration": Extract any vehicle registration plate/number.
+2. "customerName": Extract the customer's name if mentioned, otherwise null.
+3. "servicePackageNames": Identify any requested service packages matching the list above, as an array of strings.
+4. "description": A short summary of the work requested.
+5. "estimatedHours": Estimated labor hours for this work as a number, or null if not clear.
+6. "scheduledDate": The requested booking date in YYYY-MM-DD format (if relative like "tomorrow" or "next Monday", resolve it relative to the Context Date: ${contextDate}), otherwise null.
+7. "notes": Any specific instructions, symptoms, or comments.
+
+Format your response as a valid JSON object only, using this structure:
+{
+  "vehicleRegistration": string | null,
+  "customerName": string | null,
+  "servicePackageNames": string[] | null,
+  "description": string,
+  "estimatedHours": number | null,
+  "scheduledDate": string | null,
+  "notes": string | null
+}
+
+Do not include any conversational text or explanation. Return ONLY the JSON object.
+
+User Request: "${userText}"`;
+            };
+
+            const initialPromptText = constructSystemPrompt(currentPrompt);
+            let finalResult = await parseJobRequest(initialPromptText);
 
             // 1. Match Vehicle
             const registration = finalResult.vehicleRegistration?.toUpperCase().replace(/\s/g, '');
@@ -235,7 +272,7 @@ const SmartCreateJobModal: React.FC<SmartCreateJobModalProps> = ({
             // Re-parse with vehicle context if needed - reducing arguments to match current API signature
             if (found && (!finalResult.servicePackageNames || finalResult.servicePackageNames.length === 0)) {
                 // We simplify the call to match the single-argument signature in geminiService.ts
-                const secondaryPrompt = `${currentPrompt} (Context: Vehicle is a ${found.make} ${found.model})`;
+                const secondaryPrompt = constructSystemPrompt(currentPrompt, `${found.make} ${found.model}`);
                 finalResult = await parseJobRequest(secondaryPrompt);
             }
 
