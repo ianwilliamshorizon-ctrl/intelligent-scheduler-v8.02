@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { X, Loader2, Wand2, Check, Car, Plus, Trash2, Calendar, AlertTriangle, Calculator, FileText, User, Phone, Mail, Edit, DollarSign, Wallet, TrendingUp } from 'lucide-react';
+import { X, Loader2, Wand2, Check, Car, Plus, Trash2, Calendar, AlertTriangle, Calculator, FileText, User, Phone, Mail, Edit, DollarSign, Wallet, TrendingUp, Bot, Sparkles } from 'lucide-react';
 import { parseJobRequest } from '../core/services/geminiService';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { Vehicle, ServicePackage, Customer, EstimateLineItem, Job, Estimate } from '../types';
 import { formatDate, getTodayISOString, getFutureDateISOString, splitJobIntoSegments } from '../core/utils/dateUtils';
 import AddNewVehicleForm from './AddNewVehicleForm';
@@ -215,8 +217,10 @@ const SmartCreateJobModal: React.FC<SmartCreateJobModalProps> = ({
             const knownPackages = servicePackages.map(p => `- ${p.name}`).join('\n');
 
             const constructSystemPrompt = (userText: string, vehicleContext?: string) => {
-                return `You are a scheduling assistant and estimator for a vehicle service center. 
-Analyze the user's booking or estimate request and extract structured details.
+                return `You are an elite estimator and scheduling assistant for a vehicle service center. 
+Analyze the user's booking or estimate request and extract structured details. 
+
+If the user asks a general question or requests an estimate (e.g. "what is the cost of...", "can you give me an estimate to..."), use your knowledge base of UK automotive rates to estimate the time, materials, options, and costs.
 
 Context Date: ${contextDate}
 Available Service Packages in our system:
@@ -231,10 +235,11 @@ Extract:
 5. "estimatedHours": Estimated labor hours for this work as a number, or null if not clear.
 6. "scheduledDate": The requested booking date in YYYY-MM-DD format (if relative, resolve relative to Context Date: ${contextDate}), otherwise null.
 7. "notes": Any specific logistical considerations, turnaround times, or customer comments.
-8. "extractedLineItems": If the user's request details specific materials, parts, labor hours, or options (such as pricing, fabric cost, or custom addons), generate a detailed array of individual line items. For each item:
+8. "explanation": A detailed, professional, and helpful markdown-formatted text explaining the estimate/reasoning, answering any user questions, and breaking down labor, materials, and options.
+9. "extractedLineItems": If the user's request details specific materials, parts, labor hours, or options (such as pricing, fabric cost, or custom addons), generate a detailed array of individual line items. For each item:
    - "description": Descriptive name of the material, part, labor task, or option.
    - "quantity": Number of units (for parts/materials) or number of hours (for labor).
-   - "unitPrice": The sell price per unit/hour. If a range is given (e.g. £40 - £60), use the upper or average value (e.g. 50 or 60). If it is labor, use the provided labor rate or default to 0.
+   - "unitPrice": The sell price per unit/hour. If a range is given (e.g. £40 - £60), use the upper or average value (e.g. 50 or 60). If it is labor, use the default labor rate of £90/hr unless specified.
    - "unitCost": The cost price if mentioned, otherwise null.
    - "isLabor": True if the item represents labor/time, false if it is a part/material/option.
    - "isOptional": True if the item is an optional add-on, upgrade, or alternative tier (e.g. wrapping airbag cover, adding top marker strip).
@@ -248,6 +253,7 @@ Format your response as a valid JSON object only, using this structure:
   "estimatedHours": number | null,
   "scheduledDate": string | null,
   "notes": string | null,
+  "explanation": string,
   "extractedLineItems": Array<{
     description: string,
     quantity: number,
@@ -258,7 +264,7 @@ Format your response as a valid JSON object only, using this structure:
   }> | null
 }
 
-Do not include any conversational text or explanation. Return ONLY the JSON object.
+Do not include any conversational text or explanation outside the JSON. Return ONLY the JSON object.
 
 User Request: "${userText}"`;
             };
@@ -668,6 +674,18 @@ User Request: "${userText}"`;
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full overflow-hidden">
             {/* Left Column: Context Blocks */}
             <div className="lg:col-span-1 flex flex-col gap-4 overflow-y-auto pr-2">
+                 
+                 {/* AI Estimate Breakdown Block */}
+                 {parsedData?.explanation && (
+                     <div className="bg-gradient-to-br from-indigo-50/50 to-white rounded-lg border border-indigo-100 shadow-sm p-4 space-y-2">
+                         <h3 className="font-bold text-indigo-900 flex items-center gap-2 border-b pb-2"><Bot size={16}/> AI Analysis & Breakdown</h3>
+                         <div className="text-xs text-gray-700 leading-relaxed max-h-64 overflow-y-auto pr-2 custom-scrollbar">
+                             <div className="prose prose-sm max-w-none prose-indigo prose-p:leading-relaxed prose-li:my-0 text-xs">
+                                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{parsedData.explanation}</ReactMarkdown>
+                             </div>
+                         </div>
+                     </div>
+                 )}
                  
                  {/* Customer Block */}
                  <div className="bg-white rounded-lg border shadow-sm p-4 space-y-2">
