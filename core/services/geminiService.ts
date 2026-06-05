@@ -16,7 +16,7 @@ export const generateContent = async (prompt: string): Promise<string> => {
         return result.data.text || result.data || "";
     } catch (error) {
         console.error("DIAGNOSTIC-FIX-V1: Error calling geminiGenerateContent function:", error);
-        return "An error occurred while communicating with the AI service.";
+        throw error;
     }
 };
 
@@ -27,8 +27,8 @@ export const generateContent = async (prompt: string): Promise<string> => {
 export const parseJobRequest = async (prompt: string): Promise<any> => {
     const rawResult = await generateContent(prompt);
 
-    if (rawResult.startsWith("The AI service is")) {
-        throw new Error(rawResult);
+    if (!rawResult || typeof rawResult !== 'string') {
+        throw new Error("Empty or invalid response received from the AI service.");
     }
 
     try {

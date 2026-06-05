@@ -573,11 +573,28 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                 processedValue = value === '' ? '' : (Number(value) || 0);
             }
 
-            const updatedLineItems = lineItems.map(item =>
+            let updatedLineItems = lineItems.map(item =>
                 item.id === id
                     ? { ...item, [field]: processedValue }
                     : item
             );
+
+            if (targetItem.isPackageComponent && targetItem.servicePackageId && ['quantity', 'unitPrice'].includes(field as string)) {
+                const pkgId = targetItem.servicePackageId;
+                const packageNetTotal = updatedLineItems
+                    .filter(item => item.servicePackageId === pkgId && item.isPackageComponent)
+                    .reduce((sum, item) => {
+                        const qty = Number(item.quantity) || 0;
+                        const price = Number(item.unitPrice) || 0;
+                        return sum + (qty * price);
+                    }, 0);
+
+                updatedLineItems = updatedLineItems.map(item =>
+                    item.servicePackageId === pkgId && !item.isPackageComponent
+                        ? { ...item, unitPrice: packageNetTotal }
+                        : item
+                );
+            }
 
             if (targetItem && field === 'isOptional' && targetItem.servicePackageId && !targetItem.isPackageComponent) {
                 return {

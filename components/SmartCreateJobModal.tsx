@@ -488,7 +488,7 @@ const SmartCreateJobModal: React.FC<SmartCreateJobModalProps> = ({
             return {
                 ...ci, 
                 id: crypto.randomUUID(), 
-                unitPrice: 0, 
+                unitPrice: ci.unitPrice || 0, 
                 unitCost: part ? part.costPrice : ci.unitCost,
                 partId: part ? part.id : ci.partId,
                 servicePackageId: pkg.id, 
@@ -537,7 +537,38 @@ const SmartCreateJobModal: React.FC<SmartCreateJobModalProps> = ({
     };
     
     const handleLineItemChange = (id: string, field: keyof EstimateLineItem, value: any) => {
-        setLineItems(prev => prev.map(item => item.id === id ? { ...item, [field]: value } : item));
+        setLineItems(prev => {
+            let processedValue = value;
+            if (['quantity', 'unitPrice', 'unitCost'].includes(field as string)) {
+                 processedValue = parseFloat(value) || 0;
+            }
+
+            const targetItem = prev.find(i => i.id === id);
+            if (!targetItem) return prev;
+
+            let updatedLineItems = prev.map(item =>
+                item.id === id ? { ...item, [field]: processedValue } : item
+            );
+
+            if (targetItem.isPackageComponent && targetItem.servicePackageId && ['quantity', 'unitPrice'].includes(field as string)) {
+                const pkgId = targetItem.servicePackageId;
+                const packageNetTotal = updatedLineItems
+                    .filter(item => item.servicePackageId === pkgId && item.isPackageComponent)
+                    .reduce((sum, item) => {
+                        const qty = Number(item.quantity) || 0;
+                        const price = Number(item.unitPrice) || 0;
+                        return sum + (qty * price);
+                    }, 0);
+
+                updatedLineItems = updatedLineItems.map(item =>
+                    item.servicePackageId === pkgId && !item.isPackageComponent
+                        ? { ...item, unitPrice: packageNetTotal }
+                        : item
+                );
+            }
+
+            return updatedLineItems;
+        });
     };
 
     const handleCustomerSelect = (customerId: string) => {

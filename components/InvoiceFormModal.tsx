@@ -256,15 +256,39 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
         setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
 
     const handleLineItemChange = useCallback((id: string, field: keyof InvoiceLineItem, value: any) => { 
-        setFormData(prev => ({ 
-            ...prev, 
-            lineItems: (prev.lineItems || []).map(item => 
-                item.id === id ? { 
-                    ...item, 
-                    [field]: ['quantity', 'unitPrice', 'unitCost'].includes(field as string) ? parseFloat(value) || 0 : value 
-                } : item
-            ) 
-        })); 
+        setFormData(prev => {
+            const lineItems = prev.lineItems || [];
+            const targetItem = lineItems.find(i => i.id === id);
+            if (!targetItem) return prev;
+
+            let processedValue = value;
+            if (['quantity', 'unitPrice', 'unitCost'].includes(field as string)) {
+                 processedValue = parseFloat(value) || 0;
+            }
+
+            let updatedLineItems = lineItems.map(item => 
+                item.id === id ? { ...item, [field]: processedValue } : item
+            );
+
+            if (targetItem.isPackageComponent && targetItem.servicePackageId && ['quantity', 'unitPrice'].includes(field as string)) {
+                const pkgId = targetItem.servicePackageId;
+                const packageNetTotal = updatedLineItems
+                    .filter(item => item.servicePackageId === pkgId && item.isPackageComponent)
+                    .reduce((sum, item) => {
+                        const qty = Number(item.quantity) || 0;
+                        const price = Number(item.unitPrice) || 0;
+                        return sum + (qty * price);
+                    }, 0);
+
+                updatedLineItems = updatedLineItems.map(item =>
+                    item.servicePackageId === pkgId && !item.isPackageComponent
+                        ? { ...item, unitPrice: packageNetTotal }
+                        : item
+                );
+            }
+
+            return { ...prev, lineItems: updatedLineItems };
+        });
     }, []);
 
     const entityLaborRate = useMemo(() => {
@@ -324,7 +348,7 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
                 const detailItem: InvoiceLineItem = { 
                     ...costItem, 
                     id: crypto.randomUUID(), 
-                    unitPrice: 0, 
+                    unitPrice: costItem.unitPrice || 0, 
                     servicePackageId: pkg.id, 
                     servicePackageName: pkg.name, 
                     isPackageComponent: true 

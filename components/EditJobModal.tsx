@@ -397,7 +397,7 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
                                 
                                 const nextPOs = [...prevPOs];
                                 const idx = nextPOs.findIndex(p => p.id === linkedPo.id);
-                                if (idx !== -1) nextPOs[idx] = updatedPO;
+                                  if (idx !== -1) nextPOs[idx] = updatedPO;
                                 return nextPOs;
                             }
                             return prevPOs;
@@ -408,6 +408,25 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
                 }
                 return item;
             });
+
+            const targetItem = (prev.lineItems || []).find(i => i.id === id);
+            if (targetItem && targetItem.isPackageComponent && targetItem.servicePackageId && ['quantity', 'unitPrice'].includes(field as string)) {
+                const pkgId = targetItem.servicePackageId;
+                const packageNetTotal = updatedLineItems
+                    .filter(item => item.servicePackageId === pkgId && item.isPackageComponent)
+                    .reduce((sum, item) => {
+                        const qty = Number(item.quantity) || 0;
+                        const price = Number(item.unitPrice) || 0;
+                        return sum + (qty * price);
+                    }, 0);
+
+                updatedLineItems = updatedLineItems.map(item =>
+                    item.servicePackageId === pkgId && !item.isPackageComponent
+                        ? { ...item, unitPrice: packageNetTotal }
+                        : item
+                );
+            }
+
             return { ...prev, lineItems: updatedLineItems };
         });
     }, [data.setPurchaseOrders, handleSaveItem]);
@@ -457,7 +476,7 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
             const newItem: T.EstimateLineItem = {
                 ...costItem,
                 id: crypto.randomUUID(),
-                unitPrice: 0,
+                unitPrice: costItem.unitPrice || 0,
                 unitCost: part ? part.costPrice : costItem.unitCost,
                 partId: part ? part.id : undefined,
                 servicePackageId: pkg.id,
@@ -781,17 +800,14 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
     const estimateBreakdown = useMemo(() => {
         if (!editableEstimate) return { packages: [], standaloneLabor: [], standaloneParts: [] };
         const items = Array.isArray(editableEstimate.lineItems) ? editableEstimate.lineItems : [];
-        const packagesMap = new Map<string, { header: T.EstimateLineItem, children: T.EstimateLineItem[], pkg: T.ServicePackage, packageTotal: number }>();
+        const packagesMap = new Map<string, { header: T.EstimateLineItem, children: T.EstimateLineItem[], pkg?: T.ServicePackage, packageTotal: number }>();
         const standaloneLabor: T.EstimateLineItem[] = [];
         const standaloneParts: T.EstimateLineItem[] = [];
         items.forEach(item => {
             if (item.servicePackageId) {
                 if (!item.isPackageComponent) {
                     const pkg = safeServicePackages.find(p => p.id === item.servicePackageId);
-                    if (pkg) {
-                        const { net } = calculatePackagePrices(pkg, safeTaxRates);
-                        packagesMap.set(item.servicePackageId, { header: item, children: [], pkg, packageTotal: net });
-                    }
+                    packagesMap.set(item.servicePackageId, { header: item, children: [], pkg, packageTotal: item.unitPrice });
                 } 
             } else {
                 if (item.isLabor) standaloneLabor.push(item);
@@ -805,7 +821,7 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
             }
         });
         return { packages: Array.from(packagesMap.values()), standaloneLabor, standaloneParts };
-    }, [editableEstimate, safeServicePackages, safeTaxRates]);
+    }, [editableEstimate, safeServicePackages]);
     
     const { totalNet, grandTotal, vatBreakdown } = useMemo(() => {
         const breakdown: { [key: string]: { net: number; vat: number; rate: number | string; name: string; } } = {};
