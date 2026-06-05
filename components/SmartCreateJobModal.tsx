@@ -215,8 +215,8 @@ const SmartCreateJobModal: React.FC<SmartCreateJobModalProps> = ({
             const knownPackages = servicePackages.map(p => `- ${p.name}`).join('\n');
 
             const constructSystemPrompt = (userText: string, vehicleContext?: string) => {
-                return `You are a scheduling assistant for a vehicle service center. 
-Analyze the user's booking request and extract structured details.
+                return `You are a scheduling assistant and estimator for a vehicle service center. 
+Analyze the user's booking or estimate request and extract structured details.
 
 Context Date: ${contextDate}
 Available Service Packages in our system:
@@ -229,8 +229,15 @@ Extract:
 3. "servicePackageNames": Identify any requested service packages matching the list above, as an array of strings.
 4. "description": A short summary of the work requested.
 5. "estimatedHours": Estimated labor hours for this work as a number, or null if not clear.
-6. "scheduledDate": The requested booking date in YYYY-MM-DD format (if relative like "tomorrow" or "next Monday", resolve it relative to the Context Date: ${contextDate}), otherwise null.
-7. "notes": Any specific instructions, symptoms, or comments.
+6. "scheduledDate": The requested booking date in YYYY-MM-DD format (if relative, resolve relative to Context Date: ${contextDate}), otherwise null.
+7. "notes": Any specific logistical considerations, turnaround times, or customer comments.
+8. "extractedLineItems": If the user's request details specific materials, parts, labor hours, or options (such as pricing, fabric cost, or custom addons), generate a detailed array of individual line items. For each item:
+   - "description": Descriptive name of the material, part, labor task, or option.
+   - "quantity": Number of units (for parts/materials) or number of hours (for labor).
+   - "unitPrice": The sell price per unit/hour. If a range is given (e.g. £40 - £60), use the upper or average value (e.g. 50 or 60). If it is labor, use the provided labor rate or default to 0.
+   - "unitCost": The cost price if mentioned, otherwise null.
+   - "isLabor": True if the item represents labor/time, false if it is a part/material/option.
+   - "isOptional": True if the item is an optional add-on, upgrade, or alternative tier (e.g. wrapping airbag cover, adding top marker strip).
 
 Format your response as a valid JSON object only, using this structure:
 {
@@ -240,7 +247,15 @@ Format your response as a valid JSON object only, using this structure:
   "description": string,
   "estimatedHours": number | null,
   "scheduledDate": string | null,
-  "notes": string | null
+  "notes": string | null,
+  "extractedLineItems": Array<{
+    description: string,
+    quantity: number,
+    unitPrice: number,
+    unitCost: number | null,
+    isLabor: boolean,
+    isOptional: boolean
+  }> | null
 }
 
 Do not include any conversational text or explanation. Return ONLY the JSON object.
@@ -300,8 +315,21 @@ User Request: "${userText}"`;
                 }
             }
 
-            // Auto-populate line items if packages detected
-            if (finalResult.servicePackageNames && finalResult.servicePackageNames.length > 0) {
+            // Auto-populate line items if custom items are extracted
+            if (finalResult.extractedLineItems && finalResult.extractedLineItems.length > 0) {
+                const items = finalResult.extractedLineItems.map((item: any) => ({
+                    id: crypto.randomUUID(),
+                    description: item.description,
+                    quantity: item.quantity || 1,
+                    unitPrice: item.unitPrice || 0,
+                    unitCost: item.unitCost || 0,
+                    isLabor: !!item.isLabor,
+                    isOptional: !!item.isOptional,
+                    taxCodeId: standardTaxRateId,
+                    fromStock: !item.isLabor ? false : true
+                }));
+                setLineItems(items);
+            } else if (finalResult.servicePackageNames && finalResult.servicePackageNames.length > 0) {
                 finalResult.servicePackageNames.forEach((pkgName: string) => {
                     const pkg = servicePackages.find(p => p.name === pkgName);
                     if (pkg) handleSelectPackage(pkg.id);
