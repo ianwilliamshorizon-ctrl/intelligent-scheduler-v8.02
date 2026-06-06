@@ -43,4 +43,13 @@ describe('repairJsonString', () => {
             quantity: 2
         });
     });
+
+    it('retains unescaped double quotes followed by commas inside string values', () => {
+        const input = '{\n  "explanation": "We use "genuine", non-backed Panel Alcantara fabric for curves.",\n  "quantity": 1\n}';
+        const repaired = repairJsonString(input);
+        expect(JSON.parse(repaired)).toEqual({
+            explanation: 'We use "genuine", non-backed Panel Alcantara fabric for curves.',
+            quantity: 1
+        });
+    });
 });

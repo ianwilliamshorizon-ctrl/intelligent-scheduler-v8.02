@@ -35,17 +35,38 @@ export const repairJsonString = (str: string): string => {
             } else if (char === '\n' || char === '\r') {
                 result += '\\n';
             } else if (char === '"') {
-                // Lookahead to find if this is a closing quote
-                let nextNonWs = '';
-                for (let j = i + 1; j < cleaned.length; j++) {
-                    const c = cleaned[j];
-                    if (c !== ' ' && c !== '\t' && c !== '\n' && c !== '\r') {
-                        nextNonWs = c;
-                        break;
+                // Better lookahead check to determine if this is the closing quote of a string key or value
+                const remaining = cleaned.slice(i + 1);
+                const trimmed = remaining.trimStart();
+                let isClosing = false;
+
+                if (trimmed === '') {
+                    isClosing = true;
+                } else {
+                    const firstChar = trimmed[0];
+                    if (firstChar === ':' || firstChar === '}' || firstChar === ']') {
+                        isClosing = true;
+                    } else if (firstChar === ',') {
+                        const afterComma = trimmed.slice(1).trimStart();
+                        if (afterComma === '') {
+                            isClosing = true;
+                        } else {
+                            const nextChar = afterComma[0];
+                            // Valid next elements after a comma in JSON are:
+                            // - '"' (next key or next string element)
+                            // - '{' or '[' (next object or array element)
+                            // - '}' or ']' (trailing comma before closing brace/bracket)
+                            // - boolean, null, or a number
+                            if (nextChar === '"' || nextChar === '}' || nextChar === ']' || 
+                                nextChar === '{' || nextChar === '[' || 
+                                /^(?:true\b|false\b|null\b|-?\d)/.test(afterComma)) {
+                                isClosing = true;
+                            }
+                        }
                     }
                 }
 
-                if (nextNonWs === ',' || nextNonWs === ':' || nextNonWs === '}' || nextNonWs === ']' || nextNonWs === '') {
+                if (isClosing) {
                     inString = false;
                     result += '"';
                 } else {
