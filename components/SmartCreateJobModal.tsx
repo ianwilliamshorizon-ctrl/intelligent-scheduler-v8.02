@@ -357,8 +357,141 @@ User Request: "${userText}"`;
                 }
             }
 
-            // Auto-populate line items if custom items are extracted
-            if (finalResult.extractedLineItems && finalResult.extractedLineItems.length > 0) {
+            // Helper to generate package line items
+            const createPackageItems = (pkg: ServicePackage): EstimateLineItem[] => {
+                const headerItem: EstimateLineItem = {
+                    id: crypto.randomUUID(),
+                    description: pkg.name || '',
+                    quantity: 1,
+                    unitPrice: pkg.totalPrice || 0,
+                    unitCost: 0,
+                    isLabor: false,
+                    taxCodeId: standardTaxRateId,
+                    servicePackageId: pkg.id,
+                    servicePackageName: pkg.name,
+                };
+                const childItems: EstimateLineItem[] = (pkg.costItems || []).map(ci => {
+                    const part = (ci.partId ? parts.find(p => p.id === ci.partId) : null) || 
+                                 (ci.partNumber ? parts.find(p => p.partNumber === ci.partNumber) : null);
+                    return {
+                        ...ci,
+                        id: crypto.randomUUID(),
+                        unitPrice: ci.unitPrice || 0,
+                        unitCost: part ? part.costPrice : ci.unitCost,
+                        partId: part ? part.id : ci.partId,
+                        servicePackageId: pkg.id,
+                        servicePackageName: pkg.name,
+                        isPackageComponent: true,
+                        supplierId: part?.defaultSupplierId || ci.supplierId,
+                        fromStock: ci.fromStock ?? (ci.isLabor ? true : (part?.isStockItem && part.stockQuantity > 0))
+                    };
+                });
+                return [headerItem, ...childItems];
+            };
+
+            // 1. Identify matched/partially matched service packages
+            const matchedPackages: ServicePackage[] = [];
+            const activeVehicle = found || foundVehicle;
+            
+            // Resolve packages explicitly identified by AI
+            if (finalResult.servicePackageNames && finalResult.servicePackageNames.length > 0) {
+                finalResult.servicePackageNames.forEach((pkgName: string) => {
+                    const pkg = servicePackages.find(p => p.name?.toLowerCase() === pkgName.toLowerCase());
+                    if (pkg && !matchedPackages.some(m => m.id === pkg.id)) {
+                        matchedPackages.push(pkg);
+                    }
+                });
+            }
+
+            // Perform direct string/partial matching on user prompt as a fallback/verification
+            const cleanPrompt = currentPrompt.toLowerCase();
+            servicePackages.forEach(pkg => {
+                if (!pkg.name) return;
+                const cleanPkgName = pkg.name.toLowerCase();
+                let isMatch = false;
+
+                if (cleanPkgName.includes('mot')) {
+                    if (/\bmot\b/i.test(cleanPrompt)) {
+                        isMatch = true;
+                    }
+                } else {
+                    const keywords = ['minor service', 'major service', 'brake fluid', 'winter check', 'air con'];
+                    const matchedKeyword = keywords.find(kw => cleanPkgName.includes(kw) && cleanPrompt.includes(kw));
+                    if (matchedKeyword) {
+                        isMatch = true;
+                    } else if (cleanPrompt.includes(cleanPkgName)) {
+                        isMatch = true;
+                    }
+                }
+
+                if (isMatch) {
+                    if (activeVehicle) {
+                        const vMake = (activeVehicle.make || '').toLowerCase().trim();
+                        const vModel = (activeVehicle.model || '').toLowerCase().trim();
+                        const pkgMake = (pkg.applicableMake || '').toLowerCase().trim();
+                        const pkgModel = (pkg.applicableModel || '').toLowerCase().trim();
+
+                        if (pkgMake && !vMake.includes(pkgMake) && !pkgMake.includes(vMake)) {
+                            return; // Skip make mismatch
+                        }
+                        if (pkgModel && !vModel.includes(pkgModel) && !pkgModel.includes(vModel)) {
+                            return; // Skip model mismatch
+                        }
+                    }
+
+                    if (!matchedPackages.some(m => m.id === pkg.id)) {
+                        matchedPackages.push(pkg);
+                    }
+                }
+            });
+
+            // 2. Populate line items based on matching results
+            if (matchedPackages.length > 0) {
+                let items: EstimateLineItem[] = [];
+                matchedPackages.forEach(pkg => {
+                    items = [...items, ...createPackageItems(pkg)];
+                });
+
+                // Append non-redundant custom items
+                if (finalResult.extractedLineItems && finalResult.extractedLineItems.length > 0) {
+                    const customItems = finalResult.extractedLineItems
+                        .filter((item: any) => {
+                            const itemDesc = (item.description || '').toLowerCase();
+                            if (itemDesc === 'labor' || itemDesc === 'labour') {
+                                return !matchedPackages.some(pkg => 
+                                    (pkg.costItems || []).some(ci => ci.isLabor)
+                                );
+                            }
+                            if (matchedPackages.some(pkg => {
+                                const pName = (pkg.name || '').toLowerCase();
+                                return pName.includes(itemDesc) || itemDesc.includes(pName);
+                            })) {
+                                return false;
+                            }
+                            const isComponentMatch = matchedPackages.some(pkg => 
+                                (pkg.costItems || []).some(ci => {
+                                    const ciDesc = (ci.description || '').toLowerCase();
+                                    return ciDesc.includes(itemDesc) || itemDesc.includes(ciDesc);
+                                })
+                            );
+                            return !isComponentMatch;
+                        })
+                        .map((item: any) => ({
+                            id: crypto.randomUUID(),
+                            description: item.description,
+                            quantity: item.quantity || 1,
+                            unitPrice: item.unitPrice || 0,
+                            unitCost: item.unitCost || 0,
+                            isLabor: !!item.isLabor,
+                            isOptional: !!item.isOptional,
+                            taxCodeId: standardTaxRateId,
+                            fromStock: !item.isLabor ? false : true
+                        }));
+
+                    items = [...items, ...customItems];
+                }
+                setLineItems(items);
+            } else if (finalResult.extractedLineItems && finalResult.extractedLineItems.length > 0) {
                 const items = finalResult.extractedLineItems.map((item: any) => ({
                     id: crypto.randomUUID(),
                     description: item.description,
@@ -371,11 +504,6 @@ User Request: "${userText}"`;
                     fromStock: !item.isLabor ? false : true
                 }));
                 setLineItems(items);
-            } else if (finalResult.servicePackageNames && finalResult.servicePackageNames.length > 0) {
-                finalResult.servicePackageNames.forEach((pkgName: string) => {
-                    const pkg = servicePackages.find(p => p.name === pkgName);
-                    if (pkg) handleSelectPackage(pkg.id);
-                });
             } else if (finalResult.estimatedHours) {
                 // Add generic labor if no package but hours found
                 setLineItems(prev => [...prev, {
