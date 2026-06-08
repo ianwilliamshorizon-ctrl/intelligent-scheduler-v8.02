@@ -10,6 +10,7 @@ import SearchableSelect from './SearchableSelect';
 
 interface AddNewVehicleFormProps {
     initialRegistration: string;
+    initialCustomerId?: string | null;
     onSave: (customer: Customer, vehicle: Vehicle) => void;
     onCancel: () => void;
     customers: Customer[];
@@ -31,8 +32,16 @@ const FormSelect = ({ label, children, ...props }: any) => (
     </div>
 );
 
-const AddNewVehicleForm: React.FC<AddNewVehicleFormProps> = ({ initialRegistration, onSave, onCancel, customers, vehicles, saveButtonText = "Save & Continue" }) => {
-    const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
+const AddNewVehicleForm: React.FC<AddNewVehicleFormProps> = ({ 
+    initialRegistration, 
+    initialCustomerId = null,
+    onSave, 
+    onCancel, 
+    customers, 
+    vehicles, 
+    saveButtonText = "Save & Continue" 
+}) => {
+    const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(initialCustomerId);
     const [customerData, setCustomerData] = useState({
         title: '',
         forename: '',

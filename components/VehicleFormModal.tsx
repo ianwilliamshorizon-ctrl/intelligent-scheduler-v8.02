@@ -121,6 +121,7 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
              <FormModal isOpen={isOpen} onClose={onClose} onSave={() => {}} title="Add New Vehicle & Customer" maxWidth="max-w-4xl">
                 <AddNewVehicleForm
                     initialRegistration={initialRegistration || ''}
+                    initialCustomerId={initialCustomerId}
                     onSave={(customer, v) => {
                         if (onSaveWithCustomer) onSaveWithCustomer(customer, v);
                         onClose();

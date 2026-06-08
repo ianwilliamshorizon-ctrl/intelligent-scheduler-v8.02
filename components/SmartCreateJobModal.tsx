@@ -1068,6 +1068,7 @@ User Request: "${userText}"`;
                     <div className="p-4 overflow-y-auto">
                         <AddNewVehicleForm
                             initialRegistration={parsedData.vehicleRegistration}
+                            initialCustomerId={foundCustomer?.id || null}
                             onSave={handleSaveNewVehicleAndCreate}
                             onCancel={() => setShowAddNewVehicle(false)}
                             customers={customers}
