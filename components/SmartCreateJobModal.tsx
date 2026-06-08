@@ -13,6 +13,7 @@ import SearchableSelect from './SearchableSelect';
 import { generateEstimateNumber, generateJobId } from '../core/utils/numberGenerators';
 import { getCustomerDisplayName } from '../core/utils/customerUtils';
 import { lookupVehicleByVRM } from '../services/vehicleLookupService';
+import { calculatePackagePrices } from '../core/utils/packageUtils';
 
 interface SmartCreateJobModalProps {
     isOpen: boolean;
@@ -117,18 +118,82 @@ const SmartCreateJobModal: React.FC<SmartCreateJobModalProps> = ({
         };
     }, [jobs, selectedEntity, selectedDate, lineItems]);
 
-    // Financial Totals
+    // Financial Totals matching EstimateFormModal calculation exactly
     const totals = useMemo(() => {
-        const net = lineItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
-        const cost = lineItems.reduce((sum, item) => sum + (item.quantity * (item.unitCost || 0)), 0);
-        // Approximation of VAT
-        const vat = net * 0.2;
-        const gross = net + vat; 
-        const profit = net - cost;
-        const margin = net > 0 ? (profit / net) * 100 : 0;
+        const breakdown: { [key: string]: { net: number; vat: number; rate: number | string; name: string; } } = {};
+        const taxRatesMap = new Map(taxRates.map(t => [t.id, t]));
+
+        if (!lineItems) {
+            return { totalNet: 0, grandTotal: 0, vatBreakdown: [], totalCost: 0, totalProfit: 0, profitMargin: 0 };
+        }
         
-        return { net, vat, gross, cost, profit, margin };
-    }, [lineItems]);
+        let totalCost = 0;
+        const t99RateId = taxRates.find(t => t.code === 'T99')?.id;
+
+        (lineItems || []).forEach(item => {
+            if (item.isOptional) return;
+
+            const qty = Number(item.quantity) || 0;
+            const cost = Number(item.unitCost) || 0;
+            totalCost += qty * cost;
+
+            if (item.isPackageComponent) return;
+
+            const price = Number(item.unitPrice) || 0;
+            const itemNet = qty * price;
+
+            if (item.taxCodeId === t99RateId) {
+                if (!breakdown[t99RateId]) {
+                    breakdown[t99RateId] = { net: 0, vat: 0, rate: 'Mixed', name: 'Mixed VAT' };
+                }
+                breakdown[t99RateId].net += itemNet;
+                breakdown[t99RateId].vat += (item.preCalculatedVat || 0) * qty;
+            } else {
+                const effectiveTaxId = item.taxCodeId || standardTaxRateId;
+                
+                if (!effectiveTaxId) {
+                    const noTaxKey = 'no_tax';
+                    if (!breakdown[noTaxKey]) breakdown[noTaxKey] = { net: 0, vat: 0, rate: 0, name: 'No Tax' };
+                    breakdown[noTaxKey].net += itemNet;
+                    return;
+                }
+
+                const taxRate = taxRatesMap.get(effectiveTaxId);
+                if (!taxRate) {
+                    const noTaxKey = 'no_tax_rate';
+                    if (!breakdown[noTaxKey]) breakdown[noTaxKey] = { net: 0, vat: 0, rate: 0, name: 'Invalid Tax' };
+                    breakdown[noTaxKey].net += itemNet;
+                    return;
+                }
+
+                if (!breakdown[effectiveTaxId]) {
+                    breakdown[effectiveTaxId] = { net: 0, vat: 0, rate: taxRate.rate, name: taxRate.name };
+                }
+
+                breakdown[effectiveTaxId].net += itemNet;
+                if (taxRate.rate > 0) {
+                    breakdown[effectiveTaxId].vat += itemNet * (taxRate.rate / 100);
+                }
+            }
+        });
+
+        const finalVatBreakdown = Object.values(breakdown);
+        const totalNet = finalVatBreakdown.reduce((sum, b) => sum + b.net, 0);
+        const totalVat = finalVatBreakdown.reduce((sum, b) => sum + b.vat, 0);
+        const grandTotal = totalNet + totalVat;
+        
+        const profit = totalNet - totalCost;
+        const margin = totalNet > 0 ? (profit / totalNet) * 100 : 0;
+
+        return {
+            totalNet,
+            grandTotal,
+            vatBreakdown: finalVatBreakdown.filter(b => b.net > 0 || b.vat > 0),
+            totalCost,
+            totalProfit: profit,
+            profitMargin: margin
+        };
+    }, [lineItems, taxRates, standardTaxRateId]);
 
     // Segment line items into packages, custom labor, and custom parts
     const builderBreakdown = useMemo(() => {
@@ -359,16 +424,20 @@ User Request: "${userText}"`;
 
             // Helper to generate package line items
             const createPackageItems = (pkg: ServicePackage): EstimateLineItem[] => {
+                const { net, vat } = calculatePackagePrices(pkg, taxRates);
+                const t99RateId = taxRates.find(t => t.code === 'T99')?.id;
+
                 const headerItem: EstimateLineItem = {
                     id: crypto.randomUUID(),
                     description: pkg.name || '',
                     quantity: 1,
-                    unitPrice: pkg.totalPrice || 0,
+                    unitPrice: net,
                     unitCost: 0,
                     isLabor: false,
-                    taxCodeId: standardTaxRateId,
+                    taxCodeId: pkg.taxCodeId || standardTaxRateId,
                     servicePackageId: pkg.id,
                     servicePackageName: pkg.name,
+                    preCalculatedVat: pkg.taxCodeId === t99RateId ? vat : undefined
                 };
                 const childItems: EstimateLineItem[] = (pkg.costItems || []).map(ci => {
                     const part = (ci.partId ? parts.find(p => p.id === ci.partId) : null) || 
@@ -707,16 +776,21 @@ User Request: "${userText}"`;
         const pkg = servicePackages.find(p => p.id === packageId);
         if (!pkg) return;
         
+        const { net, vat } = calculatePackagePrices(pkg, taxRates);
+        const t99RateId = taxRates.find(t => t.code === 'T99')?.id;
+
         // FIX: Header cost set to 0. Children items will carry the cost.
         const headerItem: EstimateLineItem = {
             id: crypto.randomUUID(),
             description: pkg.name,
             quantity: 1,
-            unitPrice: pkg.totalPrice,
+            unitPrice: net,
             unitCost: 0, // Cost is distributed among children to avoid double counting
-            isLabor: false, taxCodeId: standardTaxRateId,
+            isLabor: false,
+            taxCodeId: pkg.taxCodeId || standardTaxRateId,
             servicePackageId: pkg.id,
             servicePackageName: pkg.name,
+            preCalculatedVat: pkg.taxCodeId === t99RateId ? vat : undefined
         };
         const childItems: EstimateLineItem[] = (pkg.costItems || []).map(ci => {
             const part = (ci.partId ? parts.find(p => p.id === ci.partId) : null) || (ci.partNumber ? parts.find(p => p.partNumber === ci.partNumber) : null);
@@ -1001,30 +1075,36 @@ User Request: "${userText}"`;
 
                  {/* Financial Summary Block */}
                  <div className="bg-white rounded-lg border shadow-sm p-4 space-y-2">
-                    <h3 className="font-bold text-gray-700 flex items-center gap-2 border-b pb-2"><Wallet size={16}/> Financial Summary</h3>
-                    <div className="space-y-1 text-sm">
-                        <div className="flex justify-between text-gray-600">
-                            <span>Total Cost Price:</span>
-                            <span>{formatCurrency(totals.cost)}</span>
-                        </div>
-                        <div className="flex justify-between text-gray-600">
-                            <span>Total Sale Price (Net):</span>
-                            <span>{formatCurrency(totals.net)}</span>
-                        </div>
-                         <div className="flex justify-between text-green-700 font-bold pt-1 border-t border-dashed">
-                            <span>Total Profit:</span>
-                            <span>{formatCurrency(totals.profit)}</span>
-                        </div>
-                        <div className="flex justify-between text-gray-600">
-                            <span>Profit Margin:</span>
-                            <span>{totals.margin.toFixed(1)}%</span>
-                        </div>
-                        <div className="flex justify-between font-bold text-lg text-indigo-700 pt-1 border-t mt-1">
-                            <span>Total Gross:</span>
-                            <span>{formatCurrency(totals.gross)}</span>
-                        </div>
-                    </div>
-                </div>
+                     <h3 className="font-bold text-gray-700 flex items-center gap-2 border-b pb-2"><Wallet size={16}/> Totals Summary</h3>
+                     <div className="w-full text-sm space-y-1">
+                         <div className="flex justify-between text-gray-600">
+                             <span>Total Cost Price:</span>
+                             <span>{formatCurrency(totals.totalCost)}</span>
+                         </div>
+                         <div className="flex justify-between text-gray-600">
+                             <span>Total Sale Price (Net):</span>
+                             <span>{formatCurrency(totals.totalNet)}</span>
+                         </div>
+                         <div className={`flex justify-between font-bold ${totals.totalProfit >= 0 ? 'text-green-700' : 'text-red-600'}`}>
+                             <span>Total Profit:</span>
+                             <span>{formatCurrency(totals.totalProfit)}</span>
+                         </div>
+                         <div className="flex justify-between text-gray-600 border-b pb-2 mb-2">
+                             <span>Profit Margin:</span>
+                             <span>{totals.profitMargin.toFixed(1)}%</span>
+                         </div>
+                         {totals.vatBreakdown.map(b => (
+                             <div key={b.name} className="flex justify-between text-gray-500 text-xs">
+                                 <span>{b.rate === 'Mixed' ? b.name : `VAT @ ${b.rate}%`}</span>
+                                 <span>{formatCurrency(b.vat)}</span>
+                             </div>
+                         ))}
+                         <div className="flex justify-between font-bold text-lg text-indigo-700 pt-2 border-t mt-2">
+                             <span>Grand Total</span>
+                             <span>{formatCurrency(totals.grandTotal)}</span>
+                         </div>
+                     </div>
+                  </div>
 
                  {/* Notes Block */}
                  <div className="bg-white rounded-lg border shadow-sm p-4 flex-grow flex flex-col min-h-[150px]">
