@@ -52,14 +52,43 @@ export const repairJsonString = (str: string): string => {
                             isClosing = true;
                         } else {
                             const nextChar = afterComma[0];
-                            // Valid next elements after a comma in JSON are:
-                            // - '"' (next key or next string element)
-                            // - '{' or '[' (next object or array element)
-                            // - '}' or ']' (trailing comma before closing brace/bracket)
-                            // - boolean, null, or a number
-                            if (nextChar === '"' || nextChar === '}' || nextChar === ']' || 
-                                nextChar === '{' || nextChar === '[' || 
-                                /^(?:true\b|false\b|null\b|-?\d)/.test(afterComma)) {
+                            if (nextChar === '}' || nextChar === ']') {
+                                isClosing = true;
+                            } else if (nextChar === '"') {
+                                // Find the end of the next string in the lookahead
+                                let nextEscaped = false;
+                                let nextEndIdx = -1;
+                                for (let j = 1; j < afterComma.length; j++) {
+                                    if (nextEscaped) {
+                                        nextEscaped = false;
+                                    } else if (afterComma[j] === '\\') {
+                                        nextEscaped = true;
+                                    } else if (afterComma[j] === '"') {
+                                        nextEndIdx = j;
+                                        break;
+                                    }
+                                }
+                                if (nextEndIdx !== -1) {
+                                    const afterNextString = afterComma.slice(nextEndIdx + 1).trimStart();
+                                    // In JSON, a key string must be followed by a colon ':'
+                                    // An array element string can be followed by a comma ',' or closing bracket ']'
+                                    if (afterNextString.length > 0 && (afterNextString[0] === ':' || afterNextString[0] === ']' || afterNextString[0] === ',')) {
+                                        if (afterNextString[0] === ',') {
+                                            // If it's followed by a comma, the token after that comma must be a valid JSON value/key start
+                                            const afterNextComma = afterNextString.slice(1).trimStart();
+                                            if (afterNextComma.length > 0) {
+                                                if (/^[{"\[tf\-0-9]/.test(afterNextComma)) {
+                                                    isClosing = true;
+                                                }
+                                            }
+                                        } else {
+                                            isClosing = true;
+                                        }
+                                    }
+                                }
+                            } else if (nextChar === '{' || nextChar === '[') {
+                                isClosing = true;
+                            } else if (/^(?:true\b|false\b|null\b|-?\d)/.test(afterComma)) {
                                 isClosing = true;
                             }
                         }
