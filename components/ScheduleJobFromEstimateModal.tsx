@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { toast } from 'react-toastify';
 import { Estimate, Customer, Vehicle, Job, BusinessEntity, AbsenceRequest, JobSegment, PurchaseOrder, Inquiry, Part, PurchaseOrderStatus, EstimateLineItem } from '../types';
 import { X, Calendar, CheckCircle, ChevronLeft, ChevronRight, AlertTriangle, Gauge, Clock, Printer } from 'lucide-react';
 import { formatDate, dateStringToDate, getRelativeDate, splitJobIntoSegments, addDays, findNextAvailableDate, formatReadableDate } from '../core/utils/dateUtils';
@@ -43,7 +44,7 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
     const [motBooking, setMotBooking] = useState<{ date: string; time: string; liftId: string } | null>(null);
     const isMotRequired = useMemo(() => 
         estimate.lineItems.some(item => 
-            (item.description.toLowerCase().includes('mot') || item.partNumber === 'MOT')
+            (/\bmot\b/i.test(item.description || '') || item.partNumber === 'MOT')
         ), 
     [estimate.lineItems]);
 
@@ -78,13 +79,18 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
 
     useEffect(() => {
         if (isOpen) {
+            if (!estimate || !estimate.vehicleId) {
+                toast.warning("This estimate does not have a vehicle registration. Please edit the estimate to add vehicle details before scheduling it as a job.");
+                onClose();
+                return;
+            }
             const initialDate = estimate.jobId ? getRelativeDate(0) : (estimate as any).requestedDate || getRelativeDate(0);
             setScheduledDate(initialDate);
             setCurrentMonth(dateStringToDate(initialDate));
             setSuggestion(null);
             setMotBooking(null);
         }
-    }, [isOpen, estimate]);
+    }, [isOpen, estimate, onClose]);
     
     const laborHours = useMemo(() => {
         const hours = (estimate?.lineItems || [])
@@ -201,7 +207,7 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
         const hasOtherLabor = estimate.lineItems.some(item => 
             (item.isLabor || item.type === 'labor' || item.partNumber === 'LABOUR') && 
             !item.isOptional && 
-            !item.description.toLowerCase().includes('mot') &&
+            !/\bmot\b/i.test(item.description || '') &&
             item.partNumber !== 'MOT'
         );
         const isMotOnlyEstimate = motBooking && !hasOtherLabor;

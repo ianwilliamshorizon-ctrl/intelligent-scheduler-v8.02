@@ -1,11 +1,16 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { X, Loader2, Wand2, Check, Car, Plus, Trash2, Calendar, AlertTriangle, Calculator, FileText, User, Phone, Mail, Edit, DollarSign, Wallet, TrendingUp, Bot, Sparkles } from 'lucide-react';
+import { X, Loader2, Wand2, Check, Car, Plus, Trash2, Calendar, AlertTriangle, Calculator, FileText, User, Phone, Mail, Edit, DollarSign, Wallet, TrendingUp, Bot, Sparkles, Info, Volume2, VolumeX } from 'lucide-react';
 import { parseJobRequest } from '../core/services/geminiService';
+import { toast } from 'react-toastify';
+import SpeechToTextButton from './shared/SpeechToTextButton';
+import { cloudSpeechSynthesis, CloudSpeechSynthesisUtterance } from '../core/utils/cloudSpeech';
+import { prepareTextForSpeech, findBestVoice } from '../core/utils/speechUtils';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Vehicle, ServicePackage, Customer, EstimateLineItem, Job, Estimate } from '../types';
 import { formatDate, getTodayISOString, getFutureDateISOString, splitJobIntoSegments } from '../core/utils/dateUtils';
 import AddNewVehicleForm from './AddNewVehicleForm';
+import CustomerFormModal from './CustomerFormModal';
 import { useData } from '../core/state/DataContext';
 import { useApp } from '../core/state/AppContext';
 import { formatCurrency } from '../utils/formatUtils';
@@ -23,6 +28,7 @@ interface SmartCreateJobModalProps {
     onVehicleAndJobCreate: (customer: Customer, vehicle: Vehicle, jobData: Job) => void;
     onEstimateCreate: (estimateData: Estimate) => void;
     onVehicleAndEstimateCreate: (customer: Customer, vehicle: Vehicle, estimateData: Estimate) => void;
+    onCustomerAndEstimateCreate?: (customer: Customer, estimateData: Estimate) => void;
     vehicles: Vehicle[];
     customers: Customer[];
     servicePackages: ServicePackage[];
@@ -38,24 +44,29 @@ const SmartCreateJobModal: React.FC<SmartCreateJobModalProps> = ({
     onVehicleAndJobCreate, 
     onEstimateCreate,
     onVehicleAndEstimateCreate,
+    onCustomerAndEstimateCreate,
     vehicles, 
     customers, 
     servicePackages, 
     defaultDate, 
     initialPrompt,
 }) => {
-    const { taxRates, jobs, businessEntities, estimates, parts } = useData();
+    const { taxRates, jobs, businessEntities, estimates, parts, suppliers } = useData();
     const { selectedEntityId, currentUser } = useApp();
 
     const [prompt, setPrompt] = useState(initialPrompt || '');
     const [parsedData, setParsedData] = useState<any>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
+    const [isSpeaking, setIsSpeaking] = useState(false);
+    const [isSpeakingExplanation, setIsSpeakingExplanation] = useState(false);
     
     // Core Entity States
     const [vehicleExists, setVehicleExists] = useState<boolean | null>(null);
     const [foundVehicle, setFoundVehicle] = useState<Vehicle | null>(null);
     const [foundCustomer, setFoundCustomer] = useState<Customer | null>(null);
+    const [customerCreated, setCustomerCreated] = useState<Customer | null>(null);
+    const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
     const [selectedDate, setSelectedDate] = useState<string>(defaultDate || getTodayISOString());
     
     // Builder States
@@ -75,9 +86,13 @@ const SmartCreateJobModal: React.FC<SmartCreateJobModalProps> = ({
             setParsedData(null);
             setIsLoading(false);
             setError('');
+            setIsSpeaking(false);
+            setIsSpeakingExplanation(false);
             setVehicleExists(null);
             setFoundVehicle(null);
             setFoundCustomer(null);
+            setCustomerCreated(null);
+            setIsCustomerModalOpen(false);
             setLineItems([]);
             setNotes('');
             setShowAddNewVehicle(false);
@@ -87,6 +102,9 @@ const SmartCreateJobModal: React.FC<SmartCreateJobModalProps> = ({
                setTimeout(() => handleParseRequest(promptToUse), 100);
            }
         }
+        return () => {
+            cloudSpeechSynthesis.cancel();
+        };
     }, [isOpen, initialPrompt]);
 
     // Capacity Calculation
@@ -191,7 +209,14 @@ const SmartCreateJobModal: React.FC<SmartCreateJobModalProps> = ({
             vatBreakdown: finalVatBreakdown.filter(b => b.net > 0 || b.vat > 0),
             totalCost,
             totalProfit: profit,
-            profitMargin: margin
+            profitMargin: margin,
+            // Backwards compatibility / aliases for footer / button usage
+            net: totalNet,
+            cost: totalCost,
+            profit: profit,
+            margin: margin,
+            gross: grandTotal,
+            vat: totalVat
         };
     }, [lineItems, taxRates, standardTaxRateId]);
 
@@ -442,11 +467,16 @@ User Request: "${userText}"`;
                 const childItems: EstimateLineItem[] = (pkg.costItems || []).map(ci => {
                     const part = (ci.partId ? parts.find(p => p.id === ci.partId) : null) || 
                                  (ci.partNumber ? parts.find(p => p.partNumber === ci.partNumber) : null);
+                    
+                    const unitCost = ci.isLabor
+                        ? (selectedEntity?.laborCostRate || 0)
+                        : (part ? part.costPrice : (ci.unitCost || (ci.unitPrice ? ci.unitPrice * 0.8 : 0)));
+
                     return {
                         ...ci,
                         id: crypto.randomUUID(),
                         unitPrice: ci.unitPrice || 0,
-                        unitCost: part ? part.costPrice : ci.unitCost,
+                        unitCost: unitCost,
                         partId: part ? part.id : ci.partId,
                         servicePackageId: pkg.id,
                         servicePackageName: pkg.name,
@@ -545,33 +575,47 @@ User Request: "${userText}"`;
                             );
                             return !isComponentMatch;
                         })
-                        .map((item: any) => ({
-                            id: crypto.randomUUID(),
-                            description: item.description,
-                            quantity: item.quantity || 1,
-                            unitPrice: item.unitPrice || 0,
-                            unitCost: item.unitCost || 0,
-                            isLabor: !!item.isLabor,
-                            isOptional: !!item.isOptional,
-                            taxCodeId: standardTaxRateId,
-                            fromStock: !item.isLabor ? false : true
-                        }));
+                        .map((item: any) => {
+                            const isLabor = !!item.isLabor;
+                            const unitPrice = item.unitPrice || 0;
+                            const unitCost = isLabor
+                                ? (selectedEntity?.laborCostRate || 0)
+                                : (item.unitCost || (unitPrice ? unitPrice * 0.8 : 0));
+                            return {
+                                id: crypto.randomUUID(),
+                                description: item.description,
+                                quantity: item.quantity || 1,
+                                unitPrice: unitPrice,
+                                unitCost: unitCost,
+                                isLabor: isLabor,
+                                isOptional: !!item.isOptional,
+                                taxCodeId: standardTaxRateId,
+                                fromStock: !isLabor ? false : true
+                            };
+                        });
 
                     items = [...items, ...customItems];
                 }
                 setLineItems(items);
             } else if (finalResult.extractedLineItems && finalResult.extractedLineItems.length > 0) {
-                const items = finalResult.extractedLineItems.map((item: any) => ({
-                    id: crypto.randomUUID(),
-                    description: item.description,
-                    quantity: item.quantity || 1,
-                    unitPrice: item.unitPrice || 0,
-                    unitCost: item.unitCost || 0,
-                    isLabor: !!item.isLabor,
-                    isOptional: !!item.isOptional,
-                    taxCodeId: standardTaxRateId,
-                    fromStock: !item.isLabor ? false : true
-                }));
+                const items = finalResult.extractedLineItems.map((item: any) => {
+                    const isLabor = !!item.isLabor;
+                    const unitPrice = item.unitPrice || 0;
+                    const unitCost = isLabor
+                        ? (selectedEntity?.laborCostRate || 0)
+                        : (item.unitCost || (unitPrice ? unitPrice * 0.8 : 0));
+                    return {
+                        id: crypto.randomUUID(),
+                        description: item.description,
+                        quantity: item.quantity || 1,
+                        unitPrice: unitPrice,
+                        unitCost: unitCost,
+                        isLabor: isLabor,
+                        isOptional: !!item.isOptional,
+                        taxCodeId: standardTaxRateId,
+                        fromStock: !isLabor ? false : true
+                    };
+                });
                 setLineItems(items);
             } else if (finalResult.estimatedHours) {
                 // Add generic labor if no package but hours found
@@ -599,16 +643,26 @@ User Request: "${userText}"`;
 
         } catch (err: any) {
             setError(err.message || 'An unknown error occurred.');
+            toast.error("Failed to parse the AI's response. Please try retyping your request as the response was not adequate.");
         } finally {
             setIsLoading(false);
         }
+    };    const handleSaveNewCustomer = (newCustomer: Customer) => {
+        setCustomerCreated(newCustomer);
+        setFoundCustomer(newCustomer);
+        setIsCustomerModalOpen(false);
     };
 
     const handleFinalCreate = () => {
         try {
             if (!vehicleExists && !foundVehicle) {
-                setShowAddNewVehicle(true);
-                return;
+                if (!isEstimateMode) {
+                    setShowAddNewVehicle(true);
+                    return;
+                } else if (!foundCustomer && !customerCreated) {
+                    setError("Please select or create a customer to continue.");
+                    return;
+                }
             }
             if (!selectedEntity) {
                 setError("Business entity configuration missing. Please contact admin.");
@@ -620,14 +674,15 @@ User Request: "${userText}"`;
             
             // Check for standalone MOT
             const isStandaloneMOT = lineItems.length > 0 && 
-                                  lineItems.every(li => li.servicePackageName?.toUpperCase().includes('MOT'));
+                                   lineItems.every(li => /\bmot\b/i.test(li.servicePackageName || ''));
 
+            const activeCustomer = foundCustomer || customerCreated;
             const newEstimate: Estimate = {
                 id: newEstimateId,
                 estimateNumber: generateEstimateNumber(estimates, entityShortCode),
                 entityId: selectedEntity.id,
-                customerId: foundVehicle!.customerId,
-                vehicleId: foundVehicle!.id,
+                customerId: activeCustomer!.id,
+                vehicleId: foundVehicle?.id || '',
                 issueDate: getTodayISOString(),
                 expiryDate: getFutureDateISOString(30),
                 status: isEstimateMode ? 'Draft' : 'Converted to Job',
@@ -638,7 +693,11 @@ User Request: "${userText}"`;
             };
 
             if (isEstimateMode) {
-                onEstimateCreate(newEstimate);
+                if (customerCreated && onCustomerAndEstimateCreate) {
+                    onCustomerAndEstimateCreate(customerCreated, newEstimate);
+                } else {
+                    onEstimateCreate(newEstimate);
+                }
                 handleClose();
                 return;
             }
@@ -704,7 +763,7 @@ User Request: "${userText}"`;
             const newEstimateId = `est_${Date.now()}`;
             
             const isStandaloneMOT = lineItems.length > 0 && 
-                                  lineItems.every(li => li.servicePackageName?.toUpperCase().includes('MOT'));
+                                  lineItems.every(li => /\bmot\b/i.test(li.servicePackageName || ''));
 
             const newEstimate: Estimate = {
                 id: newEstimateId,
@@ -794,11 +853,16 @@ User Request: "${userText}"`;
         };
         const childItems: EstimateLineItem[] = (pkg.costItems || []).map(ci => {
             const part = (ci.partId ? parts.find(p => p.id === ci.partId) : null) || (ci.partNumber ? parts.find(p => p.partNumber === ci.partNumber) : null);
+            
+            const unitCost = ci.isLabor
+                ? (selectedEntity?.laborCostRate || 0)
+                : (part ? part.costPrice : (ci.unitCost || (ci.unitPrice ? ci.unitPrice * 0.8 : 0)));
+
             return {
                 ...ci, 
                 id: crypto.randomUUID(), 
                 unitPrice: ci.unitPrice || 0, 
-                unitCost: part ? part.costPrice : ci.unitCost,
+                unitCost: unitCost,
                 partId: part ? part.id : ci.partId,
                 servicePackageId: pkg.id, 
                 servicePackageName: pkg.name, 
@@ -849,15 +913,25 @@ User Request: "${userText}"`;
         setLineItems(prev => {
             let processedValue = value;
             if (['quantity', 'unitPrice', 'unitCost'].includes(field as string)) {
-                 processedValue = parseFloat(value) || 0;
+                 processedValue = value === '' ? '' : (parseFloat(value) || 0);
             }
 
             const targetItem = prev.find(i => i.id === id);
             if (!targetItem) return prev;
 
-            let updatedLineItems = prev.map(item =>
-                item.id === id ? { ...item, [field]: processedValue } : item
-            );
+            let updatedLineItems = prev.map(item => {
+                if (item.id === id) {
+                    const updated = { ...item, [field]: processedValue };
+                    if (field === 'unitPrice' && !item.isLabor) {
+                        const parsedCost = parseFloat(item.unitCost as any);
+                        if (!item.unitCost || parsedCost === 0) {
+                            updated.unitCost = (parseFloat(processedValue) || 0) * 0.8;
+                        }
+                    }
+                    return updated;
+                }
+                return item;
+            });
 
             if (targetItem.isPackageComponent && targetItem.servicePackageId && ['quantity', 'unitPrice'].includes(field as string)) {
                 const pkgId = targetItem.servicePackageId;
@@ -869,9 +943,19 @@ User Request: "${userText}"`;
                         return sum + (qty * price);
                     }, 0);
 
+                if (packageNetTotal > 0) {
+                    updatedLineItems = updatedLineItems.map(item =>
+                        item.servicePackageId === pkgId && !item.isPackageComponent
+                            ? { ...item, unitPrice: packageNetTotal }
+                            : item
+                    );
+                }
+            }
+
+            if (targetItem && field === 'isOptional' && targetItem.servicePackageId && !targetItem.isPackageComponent) {
                 updatedLineItems = updatedLineItems.map(item =>
-                    item.servicePackageId === pkgId && !item.isPackageComponent
-                        ? { ...item, unitPrice: packageNetTotal }
+                    item.servicePackageId === targetItem.servicePackageId && item.isPackageComponent
+                        ? { ...item, isOptional: value as boolean }
                         : item
                 );
             }
@@ -885,18 +969,75 @@ User Request: "${userText}"`;
         setFoundCustomer(customer || null);
     };
 
+    const handleToggleSpeakNotes = () => {
+        if (isSpeaking) {
+            cloudSpeechSynthesis.cancel();
+            setIsSpeaking(false);
+        } else {
+            if (!notes.trim()) return;
+            if (isSpeakingExplanation) {
+                cloudSpeechSynthesis.cancel();
+                setIsSpeakingExplanation(false);
+            }
+            const plainText = prepareTextForSpeech(notes);
+            const utterance = new CloudSpeechSynthesisUtterance(plainText);
+            
+            const voices = cloudSpeechSynthesis.getVoices();
+            const preferredVoice = findBestVoice(voices);
+            utterance.voice = preferredVoice;
+
+            utterance.onstart = () => setIsSpeaking(true);
+            utterance.onend = () => setIsSpeaking(false);
+            utterance.onerror = () => setIsSpeaking(false);
+
+            cloudSpeechSynthesis.speak(utterance);
+        }
+    };
+
+    const handleToggleSpeakExplanation = () => {
+        if (isSpeakingExplanation) {
+            cloudSpeechSynthesis.cancel();
+            setIsSpeakingExplanation(false);
+        } else {
+            if (!parsedData?.explanation) return;
+            if (isSpeaking) {
+                cloudSpeechSynthesis.cancel();
+                setIsSpeaking(false);
+            }
+            const plainText = prepareTextForSpeech(parsedData.explanation);
+            const utterance = new CloudSpeechSynthesisUtterance(plainText);
+            
+            const voices = cloudSpeechSynthesis.getVoices();
+            const preferredVoice = findBestVoice(voices);
+            utterance.voice = preferredVoice;
+
+            utterance.onstart = () => setIsSpeakingExplanation(true);
+            utterance.onend = () => setIsSpeakingExplanation(false);
+            utterance.onerror = () => setIsSpeakingExplanation(false);
+
+            cloudSpeechSynthesis.speak(utterance);
+        }
+    };
+
     // --- Renderers ---
 
     const renderInitialPrompt = () => (
         <div>
             <p className="text-sm text-gray-600 mb-4">Describe the {isEstimateMode ? 'work required' : 'job'} in plain English. {defaultDate ? `Date is pre-selected as ${defaultDate}.` : `Try: "Book an MOT and a Minor Service for the Ford Transit REG123 for tomorrow."`}</p>
-            <textarea
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                placeholder="e.g., Minor service for Porsche 911 (REG456), should take about 6 hours..."
-                rows={3}
-                className="w-full mt-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-            />
+            <div className="relative">
+                <textarea
+                    value={prompt}
+                    onChange={(e) => setPrompt(e.target.value)}
+                    placeholder="e.g., Minor service for Porsche 911 (REG456), should take about 6 hours..."
+                    rows={3}
+                    className="w-full mt-1 p-3 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                />
+                <div className="absolute right-3 bottom-3">
+                    <SpeechToTextButton 
+                        onTranscript={(txt) => setPrompt(prev => prev + (prev ? ' ' : '') + txt)}
+                    />
+                </div>
+            </div>
             <button
                 onClick={() => handleParseRequest()}
                 className="mt-4 w-full flex justify-center items-center py-3 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition duration-200"
@@ -908,45 +1049,134 @@ User Request: "${userText}"`;
         </div>
     );
 
-    const renderItemRow = (item: EstimateLineItem) => (
-        <div key={item.id} className={`flex items-center gap-3 p-2 rounded-lg border text-sm transition-all shadow-sm ${item.isPackageComponent ? 'bg-gray-100 ml-6' : 'bg-white border-gray-200'}`}>
-            <div className="flex-grow flex items-center gap-2">
-                {item.servicePackageId && !item.isPackageComponent && (
-                    <div className="bg-indigo-600 text-white text-[9px] uppercase font-black px-1.5 py-0.5 rounded shadow-sm">Pkg</div>
-                )}
-                <input 
-                    value={item.description} 
-                    onChange={e => handleLineItemChange(item.id, 'description', e.target.value)}
-                    className="w-full p-1 border-none bg-transparent focus:ring-0 font-medium"
-                    placeholder="Description"
-                />
+    const renderItemRow = (item: EstimateLineItem) => {
+        const isPackageComponent = item.isPackageComponent;
+        const isPackageHeader = !!item.servicePackageId && !item.isPackageComponent;
+
+        if (isPackageHeader) {
+            return (
+                <div key={item.id} className="grid grid-cols-12 gap-2 items-center p-2 rounded-lg border bg-indigo-50 border-indigo-200 transition-all hover:shadow-md mb-2">
+                    <div className="col-span-5 flex items-center gap-2">
+                        <div className="bg-indigo-600 text-white text-[10px] uppercase font-black px-1.5 py-0.5 rounded shadow-sm">Pkg</div>
+                        <input 
+                            type="text" 
+                            value={item.description || ''} 
+                            onChange={e => handleLineItemChange(item.id, 'description', e.target.value)}
+                            className="w-full bg-transparent border-none focus:ring-0 font-bold text-indigo-900 placeholder:text-indigo-300 text-sm"
+                            placeholder="Package Description"
+                        />
+                    </div>
+                    <div className="col-span-1">
+                        <input 
+                            type="number" 
+                            step="0.1" 
+                            value={item.quantity} 
+                            onChange={e => handleLineItemChange(item.id, 'quantity', e.target.value)} 
+                            className="w-full p-1 border border-indigo-100 rounded text-right text-sm bg-white" 
+                        />
+                    </div>
+                    <div className="col-span-2 text-center text-[10px] text-indigo-400 font-bold uppercase tracking-widest bg-white/50 py-1 rounded">Package Total</div>
+                    <div className="col-span-2">
+                        <input 
+                            type="number" 
+                            step="0.01" 
+                            value={item.unitPrice} 
+                            onChange={e => handleLineItemChange(item.id, 'unitPrice', e.target.value)} 
+                            className="w-full p-1 border border-indigo-100 rounded text-right text-sm bg-white font-bold text-indigo-800" 
+                            placeholder="Sell" 
+                        />
+                    </div>
+                    <div className="col-span-1 text-center text-xs text-indigo-500 font-medium">
+                         {item.taxCodeId === 'tax_99' ? 'Mix' : 'T1'}
+                    </div>
+                    <div className="col-span-1 flex justify-center items-center gap-1">
+                        <button onClick={() => handleRemoveLineItem(item.id)} className="text-red-500 hover:text-red-700 bg-white p-1 rounded-full shadow-sm hover:shadow transition-all"><Trash2 size={14} /></button>
+                    </div>
+                </div>
+            );
+        }
+
+        return (
+            <div key={item.id} className={`grid grid-cols-12 gap-2 items-start p-2 rounded-lg border text-sm transition-all shadow-sm ${isPackageComponent ? 'bg-gray-100' : 'bg-white border-gray-200'}`}>
+                <div className="col-span-5 flex items-start gap-2">
+                    {!isPackageComponent && (
+                        <input 
+                            type="checkbox" 
+                            checked={item.isOptional || false} 
+                            onChange={e => handleLineItemChange(item.id, 'isOptional', e.target.checked)}
+                            className="h-4 w-4 mt-2 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 flex-shrink-0"
+                            title="Mark as Optional"
+                        />
+                    )}
+                    <div className="w-full space-y-1">
+                        <input 
+                            type="text" 
+                            placeholder="Part No." 
+                            value={item.partNumber || ''} 
+                            onChange={e => handleLineItemChange(item.id, 'partNumber', e.target.value)} 
+                            className="w-full p-1 border rounded disabled:bg-gray-200 text-xs bg-white" 
+                            disabled={item.isLabor} 
+                        />
+                        <textarea 
+                            placeholder="Description" 
+                            value={item.description || ''} 
+                            onChange={e => handleLineItemChange(item.id, 'description', e.target.value)}
+                            rows={1}
+                            style={{ whiteSpace: 'pre-wrap', minHeight: '38px' }}
+                            className="w-full p-1 border rounded text-xs bg-white resize-y-none overflow-hidden"
+                        />
+                    </div>
+                </div>
+                <div className="col-span-1">
+                    <input 
+                        type="number" 
+                        step="0.1" 
+                        value={item.quantity} 
+                        onChange={e => handleLineItemChange(item.id, 'quantity', e.target.value)} 
+                        className="w-full p-1 border rounded text-right text-sm bg-white" 
+                    />
+                </div>
+                <div className="col-span-2">
+                    <input 
+                        type="number" 
+                        step="0.01" 
+                        value={item.unitCost || ''} 
+                        onChange={e => handleLineItemChange(item.id, 'unitCost', e.target.value)} 
+                        className="w-full p-1 border rounded text-right text-sm bg-white" 
+                        placeholder="Cost" 
+                    />
+                </div>
+                <div className="col-span-2">
+                    <input 
+                        type="number" 
+                        step="0.01" 
+                        value={item.unitPrice} 
+                        onChange={e => handleLineItemChange(item.id, 'unitPrice', e.target.value)} 
+                        className="w-full p-1 border rounded text-right text-sm bg-white font-bold text-indigo-700" 
+                        placeholder="Sell" 
+                    />
+                </div>
+                <div className="col-span-1">
+                    <select
+                        value={item.supplierId || ''}
+                        onChange={e => handleLineItemChange(item.id, 'supplierId', e.target.value)}
+                        className="w-full p-1 border rounded text-xs bg-white h-[30px]"
+                        disabled={item.isLabor}
+                    >
+                        <option value="">-</option>
+                        {suppliers.map(s => (
+                            <option key={s.id} value={s.id}>{s.shortCode || s.name}</option>
+                        ))}
+                    </select>
+                </div>
+                <div className="col-span-1 flex justify-center items-center gap-1">
+                    {!isPackageComponent && (
+                        <button onClick={() => handleRemoveLineItem(item.id)} className="text-red-500 hover:text-red-700 p-1"><Trash2 size={14} /></button>
+                    )}
+                </div>
             </div>
-            <div className="flex items-center gap-1 w-20">
-                <input 
-                    type="number" 
-                    step="0.1"
-                    value={item.quantity} 
-                    onChange={e => handleLineItemChange(item.id, 'quantity', parseFloat(e.target.value) || 0)}
-                    className="w-full p-1 border rounded text-right bg-white/50 focus:ring-1 focus:ring-indigo-300"
-                />
-                <span className="text-[10px] text-gray-400 font-bold uppercase">{item.isLabor ? 'hrs' : 'qty'}</span>
-            </div>
-            <div className="flex items-center gap-1 w-28">
-                <span className="text-gray-400 font-mono text-xs">£</span>
-                <input 
-                    type="number" 
-                    step="0.01"
-                    value={item.unitPrice} 
-                    onChange={e => handleLineItemChange(item.id, 'unitPrice', parseFloat(e.target.value) || 0)}
-                    className="w-full p-1 border rounded text-right bg-white/50 focus:ring-1 focus:ring-indigo-300 font-bold text-indigo-700"
-                    placeholder="Sell"
-                />
-            </div>
-            {!item.isPackageComponent && (
-                <button onClick={() => handleRemoveLineItem(item.id)} className="text-gray-300 hover:text-red-500 transition-colors p-1"><Trash2 size={16}/></button>
-            )}
-        </div>
-    );
+        );
+    };
     
     const renderBuilder = () => (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full overflow-hidden">
@@ -956,7 +1186,21 @@ User Request: "${userText}"`;
                  {/* AI Estimate Breakdown Block */}
                  {parsedData?.explanation && (
                      <div className="bg-gradient-to-br from-indigo-50/50 to-white rounded-lg border border-indigo-100 shadow-sm p-4 space-y-2">
-                         <h3 className="font-bold text-indigo-900 flex items-center gap-2 border-b pb-2"><Bot size={16}/> AI Analysis & Breakdown</h3>
+                         <div className="flex justify-between items-center border-b border-indigo-100 pb-2">
+                             <h3 className="font-bold text-indigo-900 flex items-center gap-2"><Bot size={16}/> AI Analysis & Breakdown</h3>
+                             <button
+                                 onClick={handleToggleSpeakExplanation}
+                                 className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-md border transition-all ${
+                                     isSpeakingExplanation 
+                                         ? 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100' 
+                                         : 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100'
+                                 }`}
+                                 title={isSpeakingExplanation ? "Stop Speaking" : "Read Aloud"}
+                             >
+                                 {isSpeakingExplanation ? <VolumeX size={14} /> : <Volume2 size={14} />}
+                                 {isSpeakingExplanation ? "Stop" : "Listen"}
+                             </button>
+                         </div>
                          <div className="text-xs text-gray-700 leading-relaxed max-h-64 overflow-y-auto pr-2 custom-scrollbar">
                              <div className="prose prose-sm max-w-none prose-indigo prose-p:leading-relaxed prose-li:my-0 text-xs">
                                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{parsedData.explanation}</ReactMarkdown>
@@ -964,8 +1208,7 @@ User Request: "${userText}"`;
                          </div>
                      </div>
                  )}
-                 
-                 {/* Customer Block */}
+                                 {/* Customer Block */}
                  <div className="bg-white rounded-lg border shadow-sm p-4 space-y-2">
                      <h3 className="font-bold text-gray-700 flex items-center gap-2 border-b pb-2"><User size={16}/> Customer</h3>
                      {foundCustomer ? (
@@ -975,6 +1218,7 @@ User Request: "${userText}"`;
                                  <button 
                                      onClick={() => {
                                          setFoundCustomer(null);
+                                         setCustomerCreated(null);
                                          setFoundVehicle(null);
                                          setVehicleExists(false);
                                      }} 
@@ -993,13 +1237,19 @@ User Request: "${userText}"`;
                                  {parsedData?.customerName ? `AI Suggested: "${parsedData.customerName}"` : 'Customer not identified.'}
                              </div>
                              <SearchableSelect 
-                                options={customerOptions}
-                                initialValue={null}
-                                onSelect={(val) => val && handleCustomerSelect(val)}
-                                placeholder="Search existing customer..."
+                                 options={customerOptions}
+                                 initialValue={null}
+                                 onSelect={(val) => val && handleCustomerSelect(val)}
+                                 placeholder="Search existing customer..."
                              />
                              <div className="text-center text-xs text-gray-500">- OR -</div>
-                             <button onClick={() => setShowAddNewVehicle(true)} className="w-full py-1.5 text-xs bg-indigo-50 text-indigo-700 font-semibold rounded hover:bg-indigo-100">Create New Customer</button>
+                             <button onClick={() => {
+                                 if (isEstimateMode) {
+                                     setIsCustomerModalOpen(true);
+                                 } else {
+                                     setShowAddNewVehicle(true);
+                                 }
+                             }} className="w-full py-1.5 text-xs bg-indigo-50 text-indigo-700 font-semibold rounded hover:bg-indigo-100">Create New Customer</button>
                          </div>
                      )}
                  </div>
@@ -1061,60 +1311,68 @@ User Request: "${userText}"`;
                                     </div>
                                 </div>
                             )}
-                            <div className="p-2 bg-red-50 text-red-800 rounded text-sm mb-2">
-                                 Registration <strong>{parsedData?.vehicleRegistration || 'UNKNOWN'}</strong> not found.
-                            </div>
-                            {!showAddNewVehicle && (
-                                <button onClick={() => setShowAddNewVehicle(true)} className="w-full py-2 bg-green-600 text-white font-semibold rounded hover:bg-green-700 text-xs shadow-sm">
-                                    Add New Vehicle
-                                </button>
+                            {isEstimateMode ? (
+                                <div className="p-3 bg-blue-50 text-blue-800 rounded-lg text-xs border border-blue-100 flex flex-col gap-2">
+                                     <p className="font-semibold flex items-center gap-1 text-indigo-900">
+                                          <Info size={14} className="text-indigo-600" />
+                                          Vehicle Details (Optional)
+                                     </p>
+                                     <p className="text-gray-600 leading-relaxed">
+                                          A vehicle is not required for a basic estimate (e.g. registration <strong>{parsedData?.vehicleRegistration || 'UNKNOWN'}</strong>). You can proceed with just customer details.
+                                     </p>
+                                     {!showAddNewVehicle && (
+                                         <button 
+                                             onClick={() => setShowAddNewVehicle(true)} 
+                                             className="w-full py-1.5 bg-indigo-600 text-white font-semibold rounded hover:bg-indigo-700 text-[11px] shadow-sm transition"
+                                         >
+                                             Add Vehicle Details Anyway
+                                         </button>
+                                     )}
+                                </div>
+                            ) : (
+                                <>
+                                    <div className="p-2 bg-red-50 text-red-800 rounded text-sm mb-2">
+                                         Registration <strong>{parsedData?.vehicleRegistration || 'UNKNOWN'}</strong> not found.
+                                    </div>
+                                    {!showAddNewVehicle && (
+                                        <button onClick={() => setShowAddNewVehicle(true)} className="w-full py-2 bg-green-600 text-white font-semibold rounded hover:bg-green-700 text-xs shadow-sm">
+                                            Add New Vehicle
+                                        </button>
+                                    )}
+                                </>
                             )}
                         </div>
                     )}
                  </div>
 
-                 {/* Financial Summary Block */}
-                 <div className="bg-white rounded-lg border shadow-sm p-4 space-y-2">
-                     <h3 className="font-bold text-gray-700 flex items-center gap-2 border-b pb-2"><Wallet size={16}/> Totals Summary</h3>
-                     <div className="w-full text-sm space-y-1">
-                         <div className="flex justify-between text-gray-600">
-                             <span>Total Cost Price:</span>
-                             <span>{formatCurrency(totals.totalCost)}</span>
-                         </div>
-                         <div className="flex justify-between text-gray-600">
-                             <span>Total Sale Price (Net):</span>
-                             <span>{formatCurrency(totals.totalNet)}</span>
-                         </div>
-                         <div className={`flex justify-between font-bold ${totals.totalProfit >= 0 ? 'text-green-700' : 'text-red-600'}`}>
-                             <span>Total Profit:</span>
-                             <span>{formatCurrency(totals.totalProfit)}</span>
-                         </div>
-                         <div className="flex justify-between text-gray-600 border-b pb-2 mb-2">
-                             <span>Profit Margin:</span>
-                             <span>{totals.profitMargin.toFixed(1)}%</span>
-                         </div>
-                         {totals.vatBreakdown.map(b => (
-                             <div key={b.name} className="flex justify-between text-gray-500 text-xs">
-                                 <span>{b.rate === 'Mixed' ? b.name : `VAT @ ${b.rate}%`}</span>
-                                 <span>{formatCurrency(b.vat)}</span>
-                             </div>
-                         ))}
-                         <div className="flex justify-between font-bold text-lg text-indigo-700 pt-2 border-t mt-2">
-                             <span>Grand Total</span>
-                             <span>{formatCurrency(totals.grandTotal)}</span>
-                         </div>
-                     </div>
-                  </div>
-
                  {/* Notes Block */}
                  <div className="bg-white rounded-lg border shadow-sm p-4 flex-grow flex flex-col min-h-[150px]">
-                    <h3 className="font-bold text-gray-700 flex items-center gap-2 border-b pb-2 mb-2"><FileText size={16}/> Notes</h3>
-                    <textarea 
-                        value={notes} 
-                        onChange={(e) => setNotes(e.target.value)} 
-                        className="w-full flex-grow p-2 border rounded resize-none text-sm focus:ring-2 focus:ring-indigo-500"
-                        placeholder="Job instructions..."
-                    />
+                     <div className="flex justify-between items-center border-b pb-2 mb-2">
+                         <h3 className="font-bold text-gray-700 flex items-center gap-2"><FileText size={16}/> Notes</h3>
+                         <div className="flex gap-2">
+                             <SpeechToTextButton onTranscript={setNotes} />
+                             {notes.trim() && (
+                                 <button
+                                     onClick={handleToggleSpeakNotes}
+                                     className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-md border transition-all ${
+                                         isSpeaking 
+                                             ? 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100' 
+                                             : 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100'
+                                     }`}
+                                     title={isSpeaking ? "Stop Speaking" : "Read Notes"}
+                                 >
+                                     {isSpeaking ? <VolumeX size={14} /> : <Volume2 size={14} />}
+                                     {isSpeaking ? "Stop" : "Listen"}
+                                 </button>
+                             )}
+                         </div>
+                     </div>
+                     <textarea 
+                         value={notes} 
+                         onChange={(e) => setNotes(e.target.value)} 
+                         className="w-full flex-grow p-2 border rounded resize-none text-sm focus:ring-2 focus:ring-indigo-500"
+                         placeholder="Job instructions..."
+                     />
                  </div>
 
                  {/* Date & Capacity (Only in Job Mode) */}
@@ -1173,36 +1431,63 @@ User Request: "${userText}"`;
                         </div>
 
                         <div className="flex-grow overflow-y-auto p-4 space-y-4">
-                            {lineItems.length === 0 && <p className="text-center text-gray-400 italic py-10">No items added. Add packages or items to build the job.</p>}
-                            
-                            {builderBreakdown.packages.length > 0 && (
-                                <div className="space-y-2">
-                                    <h4 className="font-bold text-gray-800 text-xs uppercase tracking-wider border-b pb-1">Service Packages</h4>
-                                    <div className="space-y-2">
-                                        {builderBreakdown.packages.flatMap(({ header, children }) => [
-                                            renderItemRow(header),
-                                            ...children.map(child => renderItemRow(child))
-                                        ])}
+                            {lineItems.length === 0 ? (
+                                <p className="text-center text-gray-400 italic py-10">No items added. Add packages or items to build the job.</p>
+                            ) : (
+                                <>
+                                    {/* Grid Header */}
+                                    <div className="hidden lg:grid grid-cols-12 gap-2 text-xs text-gray-500 font-medium px-2">
+                                        <div className="col-span-5">Part / Description</div>
+                                        <div className="col-span-1 text-right">Qty/Hrs</div>
+                                        <div className="col-span-2 text-right">Cost</div>
+                                        <div className="col-span-2 text-right">Sell</div>
+                                        <div className="col-span-1 text-center">Supplier</div>
+                                        <div className="col-span-1"></div>
                                     </div>
-                                </div>
-                            )}
 
-                            {builderBreakdown.customLabor.length > 0 && (
-                                <div className="space-y-2">
-                                    <h4 className="font-bold text-gray-800 text-xs uppercase tracking-wider border-b pb-1">Labour</h4>
-                                    <div className="space-y-2">
-                                        {builderBreakdown.customLabor.map(item => renderItemRow(item))}
-                                    </div>
-                                </div>
-                            )}
+                                    {builderBreakdown.packages.length > 0 && (
+                                        <div className="space-y-2">
+                                            <h4 className="font-bold text-gray-800 text-xs uppercase tracking-wider border-b pb-1">Service Packages</h4>
+                                            <div className="space-y-2">
+                                                {builderBreakdown.packages.flatMap(({ header, children }) => [
+                                                    renderItemRow(header),
+                                                    ...children.map(child => renderItemRow(child))
+                                                ])}
+                                            </div>
+                                        </div>
+                                    )}
 
-                            {builderBreakdown.customParts.length > 0 && (
-                                <div className="space-y-2">
-                                    <h4 className="font-bold text-gray-800 text-xs uppercase tracking-wider border-b pb-1">Parts & Materials</h4>
-                                    <div className="space-y-2">
-                                        {builderBreakdown.customParts.map(item => renderItemRow(item))}
+                                    {builderBreakdown.customLabor.length > 0 && (
+                                        <div className="space-y-2">
+                                            <h4 className="font-bold text-gray-800 text-xs uppercase tracking-wider border-b pb-1">Labour</h4>
+                                            <div className="space-y-2">
+                                                {builderBreakdown.customLabor.map(item => renderItemRow(item))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {builderBreakdown.customParts.length > 0 && (
+                                        <div className="space-y-2">
+                                            <h4 className="font-bold text-gray-800 text-xs uppercase tracking-wider border-b pb-1">Parts & Materials</h4>
+                                            <div className="space-y-2">
+                                                {builderBreakdown.customParts.map(item => renderItemRow(item))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Totals Summary Block directly below line items */}
+                                    <div className="mt-6 border-t pt-4">
+                                        <h4 className="font-bold text-gray-800 mb-2 text-sm">Totals Summary</h4>
+                                        <div className="bg-white rounded-lg border shadow-sm p-4 space-y-1 text-sm">
+                                             <div className="flex justify-between text-gray-600"><span>Total Cost Price:</span><span>{formatCurrency(totals.totalCost)}</span></div>
+                                             <div className="flex justify-between text-gray-600"><span>Total Sale Price (Net):</span><span>{formatCurrency(totals.totalNet)}</span></div>
+                                             <div className={`flex justify-between font-bold ${totals.totalProfit >= 0 ? 'text-green-700' : 'text-red-600'}`}><span>Total Profit:</span><span>{formatCurrency(totals.totalProfit)}</span></div>
+                                             <div className="flex justify-between text-gray-600 border-b pb-2 mb-2"><span>Profit Margin:</span><span>{totals.profitMargin.toFixed(1)}%</span></div>
+                                             {totals.vatBreakdown.map(b => (<div key={b.name} className="flex justify-between text-gray-500 text-xs"><span>{b.rate === 'Mixed' ? b.name : `VAT @ ${b.rate}%`}</span><span>{formatCurrency(b.vat)}</span></div>))}
+                                             <div className="flex justify-between font-bold text-lg mt-2 pt-2 border-t"><span>Grand Total</span><span>{formatCurrency(totals.grandTotal)}</span></div>
+                                        </div>
                                     </div>
-                                </div>
+                                </>
                             )}
                         </div>
 
@@ -1213,8 +1498,8 @@ User Request: "${userText}"`;
                                 <button onClick={handleAddPart} className="px-3 py-2 bg-green-100 text-green-700 rounded hover:bg-green-200 text-sm font-semibold flex items-center gap-1"><Plus size={14}/> Part</button>
                             </div>
                             <div className="flex justify-between items-center font-bold text-lg text-gray-800">
-                                <span>Total Estimated Cost:</span>
-                                <span className="text-indigo-700">{formatCurrency(totals.gross)}</span>
+                                <span>Grand Total:</span>
+                                <span className="text-indigo-700">{formatCurrency(totals.grandTotal)}</span>
                             </div>
                             
                             <button 
@@ -1264,6 +1549,16 @@ User Request: "${userText}"`;
                     )}
                 </div>
             </div>
+            
+            {isCustomerModalOpen && (
+                <CustomerFormModal
+                    isOpen={true}
+                    onClose={() => setIsCustomerModalOpen(false)}
+                    onSave={handleSaveNewCustomer}
+                    customer={null}
+                    existingCustomers={customers}
+                />
+            )}
         </div>
     );
 };

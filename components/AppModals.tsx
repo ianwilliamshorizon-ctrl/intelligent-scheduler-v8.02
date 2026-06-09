@@ -230,6 +230,12 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                             if (e.jobId) await workshopActions.syncPurchaseOrdersFromEstimate(e, { forceNew: true });
                             setters.setIsSmartCreateOpen(false); 
                         }}
+                        onCustomerAndEstimateCreate={async (c, e) => { 
+                            await handleSaveItem(actions.setCustomers, c, 'brooks_customers'); 
+                            await handleSaveItem(data.setEstimates, e, 'brooks_estimates'); 
+                            if (e.jobId) await workshopActions.syncPurchaseOrdersFromEstimate(e, { forceNew: true });
+                            setters.setIsSmartCreateOpen(false); 
+                        }}
                         vehicles={data.vehicles}
                         customers={data.customers}
                         servicePackages={data.servicePackages}

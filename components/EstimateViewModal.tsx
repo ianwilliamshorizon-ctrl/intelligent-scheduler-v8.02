@@ -1,12 +1,15 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import ReactDOM from 'react-dom/client';
+import { toast } from 'react-toastify';
 import { Estimate, Customer, Vehicle, EstimateLineItem, TaxRate, BusinessEntity, Part, User, ServicePackage } from '../types';
 import { 
     X, CheckSquare, Mail, Loader2, Printer, CheckCircle, 
     MessageSquare, Monitor, Image as ImageIcon, Gauge, AlertTriangle, 
     ChevronLeft, ChevronRight, AlertCircle, CalendarCheck, Package,
-    ArrowRight, Calendar, Edit, FileText
+    ArrowRight, Calendar, Edit, FileText, Volume2, VolumeX
 } from 'lucide-react';
+import { cloudSpeechSynthesis, CloudSpeechSynthesisUtterance } from '../core/utils/cloudSpeech';
+import { prepareTextForSpeech, findBestVoice } from '../core/utils/speechUtils';
 import EmailEstimateModal from './EmailEstimateModal';
 import { sendOutboundEmail } from '../core/services/emailService';
 import { formatCurrency } from '../utils/formatUtils';
@@ -82,6 +85,7 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
     const [preferredEndDate, setPreferredEndDate] = useState(formatDate(new Date()));
     const [customerNotes, setCustomerNotes] = useState('');
     const [capacityWarning, setCapacityWarning] = useState<string | null>(null);
+    const [isSpeaking, setIsSpeaking] = useState(false);
 
     const isCustomerMode = localViewMode === 'customer';
     const isSupplementary = !!estimate.jobId;
@@ -90,6 +94,7 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
     useEffect(() => {
         if (!isOpen) return;
         
+        setIsSpeaking(false);
         const initialSelection = new Set<string>();
         const seenGroups = new Set<string>();
         
@@ -106,6 +111,10 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
             }
         });
         setSelectedOptionalItems(initialSelection);
+
+        return () => {
+            cloudSpeechSynthesis.cancel();
+        };
     }, [isOpen, estimate.id]);
 
     useEffect(() => {
@@ -119,6 +128,27 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
     const isInteractive = isCustomerMode 
         ? (!['Converted to Job', 'Closed', 'Declined', 'Approved'].includes(estimate.status))
         : (estimate.status === 'Draft' || estimate.status === 'Sent');
+
+    const handleToggleSpeakNotes = () => {
+        if (isSpeaking) {
+            cloudSpeechSynthesis.cancel();
+            setIsSpeaking(false);
+        } else {
+            if (!estimate.notes?.trim()) return;
+            const plainText = prepareTextForSpeech(estimate.notes);
+            const utterance = new CloudSpeechSynthesisUtterance(plainText);
+            
+            const voices = cloudSpeechSynthesis.getVoices();
+            const preferredVoice = findBestVoice(voices);
+            utterance.voice = preferredVoice;
+
+            utterance.onstart = () => setIsSpeaking(true);
+            utterance.onend = () => setIsSpeaking(false);
+            utterance.onerror = () => setIsSpeaking(false);
+
+            cloudSpeechSynthesis.speak(utterance);
+        }
+    };
 
     const canViewPricing = useMemo(() => {
         if (isCustomerMode) return true;
@@ -489,9 +519,23 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
 
                                 {estimate.notes && (
                                     <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 shadow-sm space-y-2">
-                                        <h3 className="text-sm font-bold text-gray-800 flex items-center gap-2 border-b pb-2">
-                                            <FileText size={16} className="text-indigo-600"/> Estimate Notes & Instructions
-                                        </h3>
+                                        <div className="flex justify-between items-center border-b pb-2">
+                                            <h3 className="text-sm font-bold text-gray-800 flex items-center gap-2">
+                                                <FileText size={16} className="text-indigo-600"/> Estimate Notes & Instructions
+                                            </h3>
+                                            <button
+                                                onClick={handleToggleSpeakNotes}
+                                                className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-md border transition-all ${
+                                                    isSpeaking 
+                                                        ? 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100' 
+                                                        : 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100'
+                                                }`}
+                                                title={isSpeaking ? "Stop Speaking" : "Read Notes"}
+                                            >
+                                                {isSpeaking ? <VolumeX size={14} /> : <Volume2 size={14} />}
+                                                {isSpeaking ? "Stop" : "Listen"}
+                                            </button>
+                                        </div>
                                         <div className="text-xs text-gray-700 leading-relaxed whitespace-pre-wrap">
                                             {estimate.notes}
                                         </div>
@@ -650,7 +694,17 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                                             <Edit size={16} className="mr-2"/> Edit Estimate
                                         </button>
                                     )}
-                                    <button onClick={() => { onScheduleEstimate?.(estimate); onClose(); }} className="flex items-center py-2 px-4 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 shadow-md transition">
+                                    <button 
+                                        onClick={() => { 
+                                            if (!estimate.vehicleId) {
+                                                toast.warning("This estimate does not have a vehicle registration. Please edit the estimate to add vehicle details before scheduling it as a job.");
+                                                return;
+                                            }
+                                            onScheduleEstimate?.(estimate); 
+                                            onClose(); 
+                                        }} 
+                                        className="flex items-center py-2 px-4 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 shadow-md transition"
+                                    >
                                         <CalendarCheck size={16} className="mr-2"/> Schedule Job
                                     </button>
                                 </div>

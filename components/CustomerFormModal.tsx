@@ -107,8 +107,9 @@ const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
         try {
             const addresses = await lookupAddressByPostcode(formData.postcode);
             setAddressList(addresses);
-        } catch (error) { 
+        } catch (error: any) { 
             console.error(error); 
+            toast.warn(error.message === 'NoResultsFound' ? 'No addresses found for this postcode. Please check the spelling.' : (error.message || 'Failed to lookup address.'));
         } finally { 
             setIsLookingUpAddress(false); 
         }

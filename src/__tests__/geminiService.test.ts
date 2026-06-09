@@ -52,4 +52,71 @@ describe('repairJsonString', () => {
             quantity: 1
         });
     });
+
+    it('handles nested braces and brackets inside string values', () => {
+        const input = '{\n  "explanation": "We need to check the following: { \'brakes\': \'worn\' } or [ \'pads\', \'discs\' ].",\n  "extractedLineItems": []\n}';
+        const repaired = repairJsonString(input);
+        expect(JSON.parse(repaired)).toEqual({
+            explanation: 'We need to check the following: { "brakes": "worn" } or [ "pads", "discs" ].',
+            extractedLineItems: []
+        });
+    });
+
+    it('handles missing commas between keys with double-quoted and unquoted keys', () => {
+        const input1 = `{
+            "description": "MOT"
+            "quantity": 1
+        }`;
+        expect(JSON.parse(repairJsonString(input1))).toEqual({
+            description: "MOT",
+            quantity: 1
+        });
+
+        const input2 = `{
+            "description": "MOT"
+            quantity_2: 1
+        }`;
+        expect(JSON.parse(repairJsonString(input2))).toEqual({
+            description: "MOT",
+            quantity_2: 1
+        });
+    });
+
+    it('handles truncated JSON ending inside key, value, or at colon', () => {
+        const inputKey = `{
+            "extractedLineItems": [
+                {
+                    "descrip`;
+        expect(JSON.parse(repairJsonString(inputKey))).toEqual({
+            extractedLineItems: [
+                {
+                    descrip: null
+                }
+            ]
+        });
+
+        const inputValue = `{
+            "extractedLineItems": [
+                {
+                    "description": "MOT`;
+        expect(JSON.parse(repairJsonString(inputValue))).toEqual({
+            extractedLineItems: [
+                {
+                    description: "MOT"
+                }
+            ]
+        });
+
+        const inputColon = `{
+            "extractedLineItems": [
+                {
+                    "description": `;
+        expect(JSON.parse(repairJsonString(inputColon))).toEqual({
+            extractedLineItems: [
+                {
+                    description: null
+                }
+            ]
+        });
+    });
 });

@@ -281,19 +281,114 @@ exports.performScheduledBackup = onSchedule({
  */
 exports.sendEmail = onCall({ 
   region: "europe-west1", 
-  secrets: ["SMTP_USER", "SMTP_PASS"] 
+  secrets: ["SMTP_USER", "SMTP_PASS", "MICROSOFT_CLIENT_ID", "MICROSOFT_CLIENT_SECRET", "MICROSOFT_TENANT_ID", "MICROSOFT_EMAIL_SENDER"] 
 }, async (request) => {
-  const smtpUser = process.env.SMTP_USER;
-  const smtpPass = process.env.SMTP_PASS;
-  if (!smtpUser || !smtpPass) {
-    logger.error("SMTP_USER or SMTP_PASS secrets are not set.");
-    throw new HttpsError("internal", "Mail service is not configured.");
-  }
+  const microsoftClientId = process.env.MICROSOFT_CLIENT_ID;
+  const microsoftClientSecret = process.env.MICROSOFT_CLIENT_SECRET;
+  const microsoftTenantId = process.env.MICROSOFT_TENANT_ID;
+  const microsoftEmailSender = process.env.MICROSOFT_EMAIL_SENDER;
 
   const { to, fromName, fromEmail, subject, body, attachment } = request.data || {};
 
   if (!to || !subject || !body) {
     throw new HttpsError("invalid-argument", "Missing required email fields (to, subject, body).");
+  }
+
+  // If MS Graph API secrets are configured, use Microsoft Graph
+  if (microsoftClientId && microsoftClientSecret && microsoftTenantId && microsoftEmailSender) {
+    try {
+      logger.info(`MS Graph API secrets found. Attempting to send email via MS Graph...`);
+      
+      // 1. Get access token from Entra ID
+      const tokenUrl = `https://login.microsoftonline.com/${microsoftTenantId}/oauth2/v2.0/token`;
+      const tokenParams = new URLSearchParams();
+      tokenParams.append("client_id", microsoftClientId);
+      tokenParams.append("scope", "https://graph.microsoft.com/.default");
+      tokenParams.append("client_secret", microsoftClientSecret);
+      tokenParams.append("grant_type", "client_credentials");
+
+      const tokenResponse = await axios.post(tokenUrl, tokenParams.toString(), {
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded"
+        }
+      });
+
+      const accessToken = tokenResponse.data.access_token;
+      if (!accessToken) {
+        throw new Error("No access token returned from Microsoft Entra ID.");
+      }
+
+      // 2. Prepare MS Graph sendMail JSON payload
+      const resolvedFromEmail = fromEmail || microsoftEmailSender;
+      const resolvedFromName = fromName || "Brookspeed";
+
+      const toRecipients = to.split(/[,;]/).map(email => ({
+        emailAddress: { address: email.trim() }
+      })).filter(r => r.emailAddress.address);
+
+      const mailBody = {
+        message: {
+          subject: subject,
+          body: {
+            contentType: "HTML",
+            content: body.replace(/\n/g, "<br>")
+          },
+          toRecipients: toRecipients,
+          replyTo: [
+            {
+              emailAddress: { address: resolvedFromEmail }
+            }
+          ],
+          bccRecipients: [
+            {
+              emailAddress: { address: microsoftEmailSender }
+            }
+          ]
+        },
+        saveToSentItems: "true"
+      };
+
+      if (attachment && attachment.content && attachment.filename) {
+        mailBody.message.attachments = [
+          {
+            "@odata.type": "#microsoft.graph.fileAttachment",
+            name: attachment.filename,
+            contentType: attachment.type || "application/pdf",
+            contentBytes: attachment.content // base64 string
+          }
+        ];
+      }
+
+      const sendMailUrl = `https://graph.microsoft.com/v1.0/users/${microsoftEmailSender}/sendMail`;
+      logger.info(`Sending email to ${to} using MS Graph API via ${microsoftEmailSender}`);
+
+      await axios.post(sendMailUrl, mailBody, {
+        headers: {
+          "Authorization": `Bearer ${accessToken}`,
+          "Content-Type": "application/json"
+        }
+      });
+
+      return { success: true };
+    } catch (msError) {
+      logger.error("MS Graph API Mail Error:", msError.response?.data || msError.message);
+      // Fallback to SMTP if configured
+      const smtpUser = process.env.SMTP_USER;
+      const smtpPass = process.env.SMTP_PASS;
+      if (smtpUser && smtpPass) {
+        logger.warn("MS Graph API failed. Attempting fallback to SMTP...");
+      } else {
+        throw new HttpsError("internal", `MS Graph API email failed: ${msError.message}`);
+      }
+    }
+  }
+
+  // Fallback / Default: SMTP implementation
+  const smtpUser = process.env.SMTP_USER;
+  const smtpPass = process.env.SMTP_PASS;
+  if (!smtpUser || !smtpPass) {
+    logger.error("SMTP_USER or SMTP_PASS secrets are not set.");
+    throw new HttpsError("internal", "Mail service is not configured.");
   }
 
   const nodemailer = require("nodemailer");

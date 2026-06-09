@@ -492,7 +492,7 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
         setEditableEstimate(prev => ({ ...prev!, lineItems: currentLineItems }));
     
         // Check if the added package contains an MOT
-        const isMot = pkg.name?.toLowerCase().includes('mot') || pkg.costItems?.some(ci => ci.description?.toLowerCase().includes('mot'));
+        const isMot = /\bmot\b/i.test(pkg.name || '') || pkg.costItems?.some(ci => /\bmot\b/i.test(ci.description || ''));
         if (isMot) {
             setIsMotBookingOpen(true);
         }
