@@ -207,7 +207,10 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
      */
     const resetPassword = async (email: string): Promise<void> => {
         try {
-            await sendPasswordResetEmail(auth, email.trim());
+            await sendPasswordResetEmail(auth, email.trim(), {
+                url: window.location.origin,
+                handleCodeInApp: false
+            });
             toast.success(`Check your inbox at ${email} for instructions to reset your password.`);
         } catch (error: any) {
             let msg = "Could not send reset email.";
@@ -222,7 +225,10 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
      */
     const adminResetPassword = async (email: string): Promise<void> => {
         try {
-            await sendPasswordResetEmail(auth, email.trim());
+            await sendPasswordResetEmail(auth, email.trim(), {
+                url: window.location.origin,
+                handleCodeInApp: false
+            });
         } catch (error: any) {
             console.error("Admin Reset Error:", error);
             throw error;
