@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useData } from '../core/state/DataContext';
+import { toast } from 'react-toastify';
 import { useApp } from '../core/state/AppContext';
 import { 
     ManagedDataPermissions,
@@ -57,13 +58,15 @@ const ManagementModal: React.FC<ManagementModalProps> = ({
     const [searchTerm, setSearchTerm] = useState('');
     const [viewAs, setViewAs] = useState<UserRole>(currentUser?.role || 'Admin');
     
-    const [statusMessage, setStatusMessage] = useState<{ type: 'info' | 'success' | 'error', text: string } | null>(null);
     const [isSaving, setIsSaving] = useState(false);
     
     const showStatus = (text: string, type: 'info' | 'success' | 'error' = 'info') => {
-        setStatusMessage({ type, text });
-        if (type !== 'info') {
-            setTimeout(() => setStatusMessage(null), 5000);
+        if (type === 'success') {
+            toast.success(text);
+        } else if (type === 'error') {
+            toast.error(text);
+        } else {
+            toast.info(text);
         }
     };
 
@@ -172,19 +175,7 @@ const ManagementModal: React.FC<ManagementModalProps> = ({
         }
     };
 
-    const renderStatusBanner = () => {
-        if (!statusMessage) return null;
-        const bgColors = { info: 'bg-blue-100 text-blue-800 border-blue-200', success: 'bg-green-100 text-green-800 border-green-200', error: 'bg-red-100 text-red-800 border-red-200' };
-        const icons = { info: Info, success: CheckCircle, error: AlertTriangle };
-        const Icon = icons[statusMessage.type];
-        return (
-            <div className={`flex items-center gap-2 p-3 mb-4 mx-6 mt-4 rounded-lg border ${bgColors[statusMessage.type]} animate-fade-in`}>
-                <Icon size={20} />
-                <span className="font-semibold text-sm">{statusMessage.text}</span>
-                <button onClick={() => setStatusMessage(null)} className="ml-auto"><X size={16}/></button>
-            </div>
-        );
-    };
+
 
     const handleTabClick = (tab) => {
         if (tab.id === 'directors-dashboard') {
@@ -282,8 +273,6 @@ const ManagementModal: React.FC<ManagementModalProps> = ({
                     </div>
                 </header>
                 
-                {renderStatusBanner()}
-
                 {renderContent()}
             </div>
         </div>

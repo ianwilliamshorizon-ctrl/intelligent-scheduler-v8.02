@@ -251,7 +251,12 @@ const App = () => {
     }, [purchaseOrders, poToViewId, setters]);
 
     if (!isAuthenticated) {
-        return <LoginView users={users} onLogin={login} environment={appEnvironment} businessEntities={businessEntities} />;
+        return (
+            <>
+                <LoginView users={users} onLogin={login} environment={appEnvironment} businessEntities={businessEntities} />
+                <ToastContainer aria-label="Notifications" />
+            </>
+        );
     }
 
     const handleSaveItem = workshopActions.handleSaveItem;

@@ -14,6 +14,7 @@ import {
     setPersistence,           // Added for session control
     browserSessionPersistence // Added for session control
 } from 'firebase/auth';
+import { toast } from 'react-toastify';
 
 interface AppState {
     currentUser: T.User | null;
@@ -207,16 +208,11 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
     const resetPassword = async (email: string): Promise<void> => {
         try {
             await sendPasswordResetEmail(auth, email.trim());
-            setConfirmation({
-                isOpen: true,
-                title: 'Reset Link Sent',
-                message: `Check your inbox at ${email} for instructions to reset your password.`,
-                type: 'success'
-            });
+            toast.success(`Check your inbox at ${email} for instructions to reset your password.`);
         } catch (error: any) {
             let msg = "Could not send reset email.";
             if (error.code === 'auth/user-not-found') msg = "No account found with that email.";
-            setConfirmation({ isOpen: true, title: 'Reset Failed', message: msg, type: 'error' });
+            toast.error(msg);
             throw error;
         }
     };
@@ -227,20 +223,9 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
     const adminResetPassword = async (email: string): Promise<void> => {
         try {
             await sendPasswordResetEmail(auth, email.trim());
-            setConfirmation({
-                isOpen: true,
-                title: 'Admin Reset Initiated',
-                message: `A password reset link has been successfully sent to ${email}.`,
-                type: 'success'
-            });
         } catch (error: any) {
             console.error("Admin Reset Error:", error);
-            setConfirmation({
-                isOpen: true,
-                title: 'Reset Failed',
-                message: "This user may not have a registered identity yet.",
-                type: 'error'
-            });
+            throw error;
         }
     };
     
@@ -256,12 +241,6 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
         
         try {
             await createUserWithEmailAndPassword(auth, email, pass);
-            setConfirmation({
-                isOpen: true,
-                title: 'Account Activated',
-                message: 'Your system access has been established successfully.',
-                type: 'success'
-            });
         } catch (error: any) {
             console.error("Registration Error:", error);
             throw error;

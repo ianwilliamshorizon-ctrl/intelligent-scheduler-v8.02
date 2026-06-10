@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { toast } from 'react-toastify';
 import * as T from '../types';
 import { useApp } from '../core/state/AppContext';
 import { MASTER_LOGO_URL } from '../constants';
@@ -44,7 +45,7 @@ const LoginView: React.FC<LoginViewProps> = ({ users, onLogin, environment, busi
                 await registerAuthorizedUser(email, password);
                 setIsRegistering(false); 
                 setError('');
-                alert("Account created successfully. You can now sign in.");
+                toast.success("Account created successfully. You can now sign in.");
             } else {
                 const success = await onLogin(email, password);
                 if (!success) {
