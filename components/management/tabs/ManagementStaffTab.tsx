@@ -143,11 +143,10 @@ export const ManagementStaffTab: React.FC<ManagementStaffTabProps> = ({ searchTe
                                         <td className="px-6 py-5 text-right">
                                             <div className="flex justify-end gap-1">
                                                 <button 
-                                                    onClick={() => {
-                                                        if(window.confirm(`Send a password reset link to ${u.email}?`)) {
-                                                            adminResetPassword(u.email).then(() => onShowStatus("Password reset email sent", 'success')).catch(() => onShowStatus("Failed to send reset email", 'error'));
-                                                        }
-                                                    }} 
+                                                onClick={() => {
+                                                    onShowStatus(`Sending password reset link to ${u.email}...`, 'info');
+                                                    adminResetPassword(u.email).then(() => onShowStatus("Password reset email sent", 'success')).catch(() => onShowStatus("Failed to send reset email", 'error'));
+                                                }} 
                                                     className="p-2 text-slate-400 hover:text-orange-600 hover:bg-orange-50 rounded-xl transition-all"
                                                     title="Reset Password"
                                                 >
