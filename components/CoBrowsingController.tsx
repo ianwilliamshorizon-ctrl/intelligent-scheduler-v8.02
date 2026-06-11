@@ -23,7 +23,7 @@ interface CoBrowsingControllerProps {
 }
 
 const CoBrowsingController: React.FC<CoBrowsingControllerProps> = ({ modals, setters }) => {
-    const { currentUser, currentView, setCurrentView } = useApp();
+    const { currentUser, currentView, setCurrentView, selectedEntityId, setSelectedEntityId } = useApp();
     
     // Session State
     const [mySessionId, setMySessionId] = useState<string | null>(null);
@@ -174,7 +174,8 @@ const CoBrowsingController: React.FC<CoBrowsingControllerProps> = ({ modals, set
                     scrollX,
                     scrollY,
                     currentView,
-                    openModalsList
+                    openModalsList,
+                    selectedEntityId
                 );
             }
         };
@@ -189,7 +190,7 @@ const CoBrowsingController: React.FC<CoBrowsingControllerProps> = ({ modals, set
             window.removeEventListener('mousemove', handleMouseMove);
             window.removeEventListener('scroll', handleScroll);
         };
-    }, [isAdmin, mySessionId, activeSession?.status, currentView, modals]);
+    }, [isAdmin, mySessionId, activeSession?.status, currentView, modals, selectedEntityId]);
 
     // 5. MIRROR USER VIEW & MODALS (Admin side -> reads states and matches them locally)
     useEffect(() => {
@@ -198,6 +199,11 @@ const CoBrowsingController: React.FC<CoBrowsingControllerProps> = ({ modals, set
         // Sync View
         if (activeSession.currentView && activeSession.currentView !== currentView) {
             setCurrentView(activeSession.currentView as any);
+        }
+
+        // Sync Selected Entity / Division
+        if (activeSession.selectedEntityId && activeSession.selectedEntityId !== selectedEntityId) {
+            setSelectedEntityId(activeSession.selectedEntityId);
         }
 
         // Sync Modal open/close actions based on the user's active modals
@@ -239,7 +245,7 @@ const CoBrowsingController: React.FC<CoBrowsingControllerProps> = ({ modals, set
             setters.setVehicleModal(prev => ({ ...prev, isOpen: userHasVehicle }));
         }
 
-    }, [isAdmin, activeSession?.currentView, activeSession?.openModals]);
+    }, [isAdmin, activeSession?.currentView, activeSession?.selectedEntityId, activeSession?.openModals, currentView, selectedEntityId, setSelectedEntityId]);
 
     // 6. INTERCEPT MOUSE/INPUT EVENTS (Admin side -> captures inputs and forwards them to user browser)
     useEffect(() => {

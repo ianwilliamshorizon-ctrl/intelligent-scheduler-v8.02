@@ -30,6 +30,7 @@ export interface RemoteSession {
     createdAt: string;
     openModals?: string[]; // Modal IDs or names that are currently open
     controlAllowed?: boolean; // Allowed control permission flag
+    selectedEntityId?: string; // Sync active business entity division
 }
 
 export interface RemoteCommand {
@@ -98,7 +99,8 @@ export const syncUserCursorAndScroll = async (
     scrollX: number,
     scrollY: number, 
     currentView: string,
-    openModals: string[]
+    openModals: string[],
+    selectedEntityId?: string
 ): Promise<void> => {
     try {
         await updateDoc(doc(db, SESSION_COLLECTION, sessionId), {
@@ -107,7 +109,8 @@ export const syncUserCursorAndScroll = async (
             scrollX,
             scrollY,
             currentView,
-            openModals
+            openModals,
+            selectedEntityId
         });
     } catch (err) {
         // Silent catch for quick updates that clash with network lag
