@@ -20,6 +20,7 @@ import AppModals from './components/AppModals';
 import LoginView from './components/LoginView';
 import VersionChecker from './components/VersionChecker';
 import EstimateViewModal from './components/EstimateViewModal';
+import CoBrowsingController from './components/CoBrowsingController';
 
 // Lazy Loaded Views
 const DashboardView = lazy(() => import('./components/DashboardView'));
@@ -630,6 +631,7 @@ const App = () => {
                     {renderCurrentView()}
                 </Suspense>
                 <AppModals modals={modalsState} setters={setters} actions={modalActions} commonProps={commonProps} />
+                <CoBrowsingController modals={modalsState} setters={setters} />
                 {isManagementOpen && (
                     <ManagementModal 
                         isOpen={isManagementOpen} 
