@@ -18,6 +18,8 @@ import { toast } from 'react-toastify';
 
 interface AppState {
     currentUser: T.User | null;
+    actualUser: T.User | null;
+    setImpersonatedUser: (user: T.User | null) => void;
     users: T.User[];
     setUsers: React.Dispatch<React.SetStateAction<T.User[]>>;
     roles: T.Role[];
@@ -66,6 +68,7 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
     
     // Data States
     const [currentUser, setCurrentUser] = useState<T.User | null>(null);
+    const [impersonatedUser, setImpersonatedUser] = useState<T.User | null>(null);
     const [users, setUsers] = useState<T.User[]>([]); 
     const [roles, setRoles] = useState<T.Role[]>(initialData.roles || []);
     const [businessEntities, setBusinessEntities] = useState<T.BusinessEntity[]>(initialData.businessEntities || []);
@@ -259,6 +262,7 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
     const logout = async () => {
         await signOut(auth);
         setCurrentUser(null);
+        setImpersonatedUser(null);
         setIsAuthenticated(false);
         setCurrentView('dashboard');
         localStorage.removeItem('selectedEntityId');
@@ -302,7 +306,10 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
     
     return (
         <AppContext.Provider value={{
-            currentUser, users, setUsers, roles, jobs, customers, vehicles,
+            currentUser: impersonatedUser || currentUser,
+            actualUser: currentUser,
+            setImpersonatedUser,
+            users, setUsers, roles, jobs, customers, vehicles,
             isAuthenticated, currentView, setCurrentView,
             login, logout, resetPassword, adminResetPassword, registerAuthorizedUser,
             selectedEntityId, setSelectedEntityId: handleSetSelectedEntityId, confirmation, 
@@ -327,6 +334,8 @@ export const useApp = () => {
         // Return a safe mock state for use outside providers (e.g., during printing)
         return {
             currentUser: null,
+            actualUser: null,
+            setImpersonatedUser: () => {},
             users: [],
             setUsers: () => {},
             roles: [],

@@ -27,6 +27,8 @@ export interface RemoteSession {
     scrollY: number;
     cursorX: number;
     cursorY: number;
+    adminCursorX?: number;
+    adminCursorY?: number;
     createdAt: string;
     openModals?: string[]; // Modal IDs or names that are currently open
     controlAllowed?: boolean; // Allowed control permission flag
@@ -38,6 +40,14 @@ export interface RemoteCommand {
     action: 'click' | 'input' | 'scroll';
     targetSelector: string;
     value?: string;
+    timestamp: number;
+}
+
+export interface RemoteMessage {
+    id: string;
+    senderId: string;
+    senderName: string;
+    text: string;
     timestamp: number;
 }
 
@@ -118,6 +128,24 @@ export const syncUserCursorAndScroll = async (
 };
 
 /**
+ * Sync admin cursor position (Admin side, throttled)
+ */
+export const syncAdminCursor = async (
+    sessionId: string,
+    adminCursorX: number,
+    adminCursorY: number
+): Promise<void> => {
+    try {
+        await updateDoc(doc(db, SESSION_COLLECTION, sessionId), {
+            adminCursorX,
+            adminCursorY
+        });
+    } catch (err) {
+        // Silent catch for quick updates that clash with network lag
+    }
+};
+
+/**
  * Push control events as commands (Admin side)
  */
 export const sendRemoteCommand = async (
@@ -126,31 +154,82 @@ export const sendRemoteCommand = async (
     targetSelector: string, 
     value?: string
 ): Promise<void> => {
+    console.log("⚡ [COBROWSE] sendRemoteCommand invoked:", { sessionId, action, targetSelector, value });
     const commandId = crypto.randomUUID();
     const commandRef = doc(db, SESSION_COLLECTION, sessionId, 'commands', commandId);
-    await setDoc(commandRef, {
+    
+    const commandDoc: any = {
         id: commandId,
-        action,
-        targetSelector,
-        value,
+        action: action || 'click',
+        targetSelector: targetSelector || '',
+        timestamp: Date.now()
+    };
+    
+    if (value !== undefined && value !== null) {
+        commandDoc.value = value;
+    }
+    
+    // Safety check: remove any keys that have undefined values to prevent Firestore crashes
+    Object.keys(commandDoc).forEach(key => {
+        if (commandDoc[key] === undefined) {
+            console.warn(`⚡ [COBROWSE] sendRemoteCommand: Key "${key}" is undefined. Deleting.`);
+            delete commandDoc[key];
+        }
+    });
+    
+    console.log("⚡ [COBROWSE] Writing command doc to Firestore:", commandDoc);
+    await setDoc(commandRef, commandDoc);
+};
+
+/**
+ * Send a chat message in the remote session
+ */
+export const sendRemoteMessage = async (
+    sessionId: string,
+    senderId: string,
+    senderName: string,
+    text: string
+): Promise<void> => {
+    const messageId = crypto.randomUUID();
+    const messageRef = doc(db, SESSION_COLLECTION, sessionId, 'messages', messageId);
+    await setDoc(messageRef, {
+        id: messageId,
+        senderId,
+        senderName,
+        text,
         timestamp: Date.now()
     });
 };
 
-/**
- * Helper to build a unique CSS selector for any HTML element.
- * Prioritizes standard IDs for reliability, falls back to tag/class hierarchies.
- */
 export const getUniqueSelector = (el: HTMLElement): string => {
-    if (el.id) return `#${el.id}`;
+    // Resolve to the nearest clickable/interactive ancestor first
+    const interactiveSelector = 'button, a, input, select, textarea, [role="button"], [data-action], [data-view], [data-id], [data-testid]';
+    let target = el;
+    try {
+        if (el.closest) {
+            const clickable = el.closest(interactiveSelector) as HTMLElement;
+            if (clickable) target = clickable;
+        }
+    } catch (e) {
+        // Ignore closest selector issues
+    }
+
+    if (target.id) return `#${CSS.escape(target.id)}`;
     
     const path: string[] = [];
-    let current: HTMLElement | null = el;
+    let current: HTMLElement | null = target;
     
     while (current && current.nodeType === Node.ELEMENT_NODE) {
         let selector = current.nodeName.toLowerCase();
         
-        // 1. Target semantic unique attributes first and terminate selector tree generation early if found
+        // Check standard ID first on current element (e.g. if we are traversing up)
+        if (current.id) {
+            selector = `#${CSS.escape(current.id)}`;
+            path.unshift(selector);
+            break;
+        }
+
+        // 1. Target semantic unique attributes
         const dataView = current.getAttribute('data-view');
         const dataAction = current.getAttribute('data-action');
         const dataId = current.getAttribute('data-id');
@@ -158,42 +237,38 @@ export const getUniqueSelector = (el: HTMLElement): string => {
         
         if (dataView) {
             selector += `[data-view="${dataView}"]`;
-            path.unshift(selector);
-            break;
-        }
-        if (dataAction) {
+        } else if (dataAction) {
             selector += `[data-action="${dataAction}"]`;
-            path.unshift(selector);
-            break;
-        }
-        if (dataId) {
+        } else if (dataId) {
             selector += `[data-id="${dataId}"]`;
-            path.unshift(selector);
-            break;
-        }
-        if (dataTestId) {
+        } else if (dataTestId) {
             selector += `[data-testid="${dataTestId}"]`;
-            path.unshift(selector);
-            break;
-        }
-        
-        // 2. Target standard identification attributes
-        const role = current.getAttribute('role');
-        const name = current.getAttribute('name');
-        const type = current.getAttribute('type');
-        
-        if (name) {
-            selector += `[name="${name}"]`;
-        } else if (type && (type === 'button' || type === 'submit' || type === 'text' || type === 'checkbox' || type === 'radio')) {
-            selector += `[type="${type}"]`;
-        } else if (role) {
-            selector += `[role="${role}"]`;
-        } else if (current.className) {
-            // Filter out tailwind classes with dynamic colons, brackets, or sizing to keep selector clean
-            const classes = current.className.split(/\s+/)
-                .filter(c => c && !c.includes(':') && !c.includes('[') && !c.includes('/') && !c.includes('translate-') && !c.includes('animate-'));
-            if (classes.length > 0) {
-                selector += `.${classes.slice(0, 3).join('.')}`;
+        } else {
+            // 2. Target standard identification attributes
+            const role = current.getAttribute('role');
+            const name = current.getAttribute('name');
+            const type = current.getAttribute('type');
+            
+            if (name) {
+                selector += `[name="${name}"]`;
+            } else if (type && (type === 'button' || type === 'submit' || type === 'text' || type === 'checkbox' || type === 'radio')) {
+                selector += `[type="${type}"]`;
+            } else if (role) {
+                selector += `[role="${role}"]`;
+            } else {
+                const classNameVal = typeof current.className === 'string'
+                    ? current.className
+                    : (current.className && typeof current.className === 'object' && 'animVal' in current.className)
+                        ? (current.className as any).animVal
+                        : '';
+
+                if (classNameVal) {
+                    const classes = classNameVal.split(/\s+/)
+                        .filter((c: string) => c && /^[a-zA-Z0-9_-]+$/.test(c) && !c.includes('translate-') && !c.includes('animate-'));
+                    if (classes.length > 0) {
+                        selector += `.${classes.slice(0, 3).join('.')}`;
+                    }
+                }
             }
         }
         
@@ -207,16 +282,22 @@ export const getUniqueSelector = (el: HTMLElement): string => {
         selector += `:nth-of-type(${nth})`;
         
         path.unshift(selector);
-        current = current.parentElement;
         
-        // Stop going up if we found an ID
-        if (current && current.id) {
-            path.unshift(`#${current.id}`);
-            break;
+        // Check if the current selector path uniquely identifies the element
+        try {
+            const currentSelector = path.join(' > ');
+            if (document.querySelectorAll(currentSelector).length === 1) {
+                break;
+            }
+        } catch (e) {
+            // Ignore select syntax issues
         }
+
+        current = current.parentElement;
     }
     return path.join(' > ');
 };
+
 
 /**
  * Toggle whether the admin is allowed to control the user's screen (User side)
