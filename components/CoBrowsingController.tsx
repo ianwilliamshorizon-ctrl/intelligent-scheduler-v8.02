@@ -103,26 +103,37 @@ const CoBrowsingController: React.FC<CoBrowsingControllerProps> = ({ modals, set
         const q = query(commandsCol, orderBy('timestamp', 'desc'), limit(5));
 
         const processedCommandIds = new Set<string>();
+        let isInitial = true;
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
-            snapshot.docs.forEach(doc => {
-                const cmd = doc.data() as RemoteCommand;
-                
-                // Only execute commands that are new (less than 3 seconds old) and not yet processed locally
-                if (Date.now() - cmd.timestamp < 3000 && !processedCommandIds.has(cmd.id)) {
-                    processedCommandIds.add(cmd.id);
-                    
-                    if (cmd.action === 'click') {
-                        executeClick(cmd.targetSelector);
-                    } else if (cmd.action === 'input') {
-                        executeInput(cmd.targetSelector, cmd.value || '');
+            if (isInitial) {
+                // Register existing commands as processed so we don't replay old ones
+                snapshot.docs.forEach(doc => {
+                    processedCommandIds.add(doc.id);
+                });
+                isInitial = false;
+                return;
+            }
+
+            snapshot.docChanges().forEach(change => {
+                if (change.type === 'added') {
+                    const docId = change.doc.id;
+                    if (!processedCommandIds.has(docId)) {
+                        processedCommandIds.add(docId);
+                        const cmd = change.doc.data() as RemoteCommand;
+                        
+                        if (cmd.action === 'click') {
+                            executeClick(cmd.targetSelector);
+                        } else if (cmd.action === 'input') {
+                            executeInput(cmd.targetSelector, cmd.value || '');
+                        }
                     }
                 }
             });
         });
 
         return () => unsubscribe();
-    }, [isAdmin, mySessionId, activeSession?.status]);
+    }, [isAdmin, mySessionId, activeSession?.status, activeSession?.controlAllowed]);
 
     // 4. SYNC VIEWPORT/STATE (User side -> pushes current states to Firestore)
     useEffect(() => {
