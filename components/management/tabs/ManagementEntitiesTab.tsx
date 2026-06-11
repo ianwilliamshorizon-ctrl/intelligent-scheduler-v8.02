@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useData } from '../../../core/state/DataContext';
 import { BusinessEntity, Job, Invoice } from '../../../types';
-import { PlusCircle, Upload, Building2, MapPin, Briefcase, FileText } from 'lucide-react';
+import { PlusCircle, Upload, Building2, MapPin, Briefcase, FileText, Mail } from 'lucide-react';
 import EntityFormModal from '../../EntityFormModal';
 import { useManagementTable } from '../hooks/useManagementTable';
 import { parseCsv } from '../../../utils/csvUtils';
@@ -171,9 +171,14 @@ export const ManagementEntitiesTab: React.FC<ManagementEntitiesTabProps> = ({ on
                                 </div>
                             </div>
 
-                            <div className="flex items-center gap-2 text-gray-500 text-sm font-medium mb-6">
+                            <div className="flex items-center gap-2 text-gray-500 text-sm font-medium mb-2">
                                 <MapPin size={14} className="text-gray-300" />
                                 {e.city || 'No city set'}
+                            </div>
+
+                            <div className="flex items-center gap-2 text-gray-500 text-sm font-medium mb-6">
+                                <Mail size={14} className="text-indigo-400" />
+                                <span className="text-xs text-indigo-600 font-semibold">{e.email || 'No email configured'}</span>
                             </div>
 
                             <div className="grid grid-cols-2 gap-2">

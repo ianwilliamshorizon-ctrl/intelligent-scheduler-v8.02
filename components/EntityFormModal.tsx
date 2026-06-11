@@ -190,7 +190,7 @@ const EntityFormModal: React.FC<EntityFormModalProps> = ({ isOpen, onClose, onSa
                 <div className="flex-grow overflow-y-auto pr-2">
                     {activeTab === 'core' && (
                         <div className="space-y-6">
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                                 <EntityFormInput label="Entity Name" name="name" value={formData.name || ''} onChange={handleChange} />
                                 <EntityFormSelect label="Type" name="type" value={formData.type || ''} onChange={handleChange}>
                                     <option value="Workshop">Workshop</option>
@@ -199,6 +199,7 @@ const EntityFormModal: React.FC<EntityFormModalProps> = ({ isOpen, onClose, onSa
                                     <option value="Rentals">Rentals</option>
                                 </EntityFormSelect>
                                 <EntityFormInput label="Short Code" name="shortCode" value={formData.shortCode || ''} onChange={handleChange} maxLength={3} />
+                                <EntityFormInput label="Outbound Email" name="email" value={formData.email || ''} onChange={handleChange} placeholder="e.g. info@brookspeed.com" />
                             </div>
                             
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

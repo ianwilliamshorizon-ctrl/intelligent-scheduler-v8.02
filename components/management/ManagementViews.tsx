@@ -15,3 +15,4 @@ export * from './tabs/ManagementInspectionTemplatesTab';
 export * from './tabs/ManagementDiscountCodesTab';
 export * from './tabs/ManagementStorageLocationsTab';
 export * from './tabs/ManagementVoiceTab';
+export * from './tabs/ManagementMailSettingsTab';

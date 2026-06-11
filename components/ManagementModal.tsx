@@ -11,7 +11,7 @@ import {
 import { 
     X, Settings, Database, User as UserIcon, Car, Wrench, Package, Briefcase, 
     ShieldCheck, Users, Truck, AlertTriangle, RefreshCw, CarFront, List, Info, CheckCircle, Server, Save,
-    ArrowUpCircle, BatteryCharging, ClipboardCheck, Search, Banknote, Tag, Lock, Eye, BarChart2, Warehouse, Volume2
+    ArrowUpCircle, BatteryCharging, ClipboardCheck, Search, Banknote, Tag, Lock, Eye, BarChart2, Warehouse, Volume2, Mail
 } from 'lucide-react';
 
 // Extracted Tab Views
@@ -21,7 +21,7 @@ import {
     ManagementSuppliersTab, ManagementPartsTab, ManagementPackagesTab,
     ManagementNominalCodesTab, ManagementTaxCodesTab, ManagementLiftsTab, ManagementBatteryChargersTab,
     ManagementInspectionTemplatesTab,ManagementDiscountCodesTab,
-    ManagementStorageLocationsTab, ManagementVoiceTab
+    ManagementStorageLocationsTab, ManagementVoiceTab, ManagementMailSettingsTab
 } from './management/ManagementViews';
 import { ManagementBackupTab } from './management/tabs/ManagementBackupTab';
 
@@ -103,6 +103,7 @@ const ManagementModal: React.FC<ManagementModalProps> = ({
         { id: 'discountCodes', label: 'Discount Codes', icon: Tag, render: () => <ManagementDiscountCodesTab />, permission: 'canManageDiscountCodes' },
         { id: 'storageLocations', label: 'Storage Locations', icon: Warehouse, render: () => <ManagementStorageLocationsTab searchTerm={searchTerm} onShowStatus={showStatus} />, permission: 'canManageStorageLocations' },
         { id: 'voiceSettings', label: 'AI & Voice Settings', icon: Volume2, render: () => <ManagementVoiceTab />, permission: 'canManageStaff' },
+        { id: 'mailSettings', label: 'Mail Settings', icon: Mail, render: () => <ManagementMailSettingsTab onShowStatus={showStatus} />, permission: 'canManageEntities' },
         { id: 'backup', label: 'Backup & Restore', icon: Database, render: () => <ManagementBackupTab backupSchedule={backupSchedule} setBackupSchedule={setBackupSchedule} onManualBackup={onManualBackup} onCloudSnapshot={onCloudSnapshot} onRestoreFromSnapshot={onRestoreFromSnapshot} onShowStatus={showStatus} />, permission: 'canManageBackups' },
     ], [searchTerm, backupSchedule, onManualBackup, onRestoreFromSnapshot, setBackupSchedule, setCurrentView, onClose, onViewCustomer, onViewVehicle, onViewJob, onViewEstimate, onViewInvoice, onOpenPurchaseOrder]); // Added handlers to dependency array
 
