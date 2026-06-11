@@ -114,6 +114,7 @@ const MainLayout: React.FC<{
                         {visibleNavItems.map(item => (
                             <button 
                                 key={item.id}
+                                data-view={item.id}
                                 onClick={() => {
                                     setCurrentView(item.id as T.ViewType);
                                     if (window.innerWidth < 1024) setIsSidebarOpen(false);
@@ -198,6 +199,7 @@ const MainLayout: React.FC<{
                     <div className="flex items-center gap-2 lg:gap-4 ml-2">
                          <button 
                             onClick={onOpenHelpCentre} 
+                            data-action="help-centre"
                             className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-full transition-colors"
                         >
                             <HelpCircle size={20} />
@@ -212,6 +214,7 @@ const MainLayout: React.FC<{
 
                         <button 
                             onClick={logout}
+                            data-action="logout"
                             className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors"
                         >
                             <LogOut size={18} />
@@ -220,6 +223,7 @@ const MainLayout: React.FC<{
                         {currentUser.role === 'Admin' && (
                             <button 
                                 onClick={onOpenManagement} 
+                                data-action="management"
                                 className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-full transition-colors"
                             >
                                 <Settings size={20} />

@@ -29,6 +29,7 @@ export interface RemoteSession {
     cursorY: number;
     createdAt: string;
     openModals?: string[]; // Modal IDs or names that are currently open
+    controlAllowed?: boolean; // Allowed control permission flag
 }
 
 export interface RemoteCommand {
@@ -146,7 +147,34 @@ export const getUniqueSelector = (el: HTMLElement): string => {
     while (current && current.nodeType === Node.ELEMENT_NODE) {
         let selector = current.nodeName.toLowerCase();
         
-        // Target specific identifiers in common modals/buttons if no ID is set
+        // 1. Target semantic unique attributes first and terminate selector tree generation early if found
+        const dataView = current.getAttribute('data-view');
+        const dataAction = current.getAttribute('data-action');
+        const dataId = current.getAttribute('data-id');
+        const dataTestId = current.getAttribute('data-testid');
+        
+        if (dataView) {
+            selector += `[data-view="${dataView}"]`;
+            path.unshift(selector);
+            break;
+        }
+        if (dataAction) {
+            selector += `[data-action="${dataAction}"]`;
+            path.unshift(selector);
+            break;
+        }
+        if (dataId) {
+            selector += `[data-id="${dataId}"]`;
+            path.unshift(selector);
+            break;
+        }
+        if (dataTestId) {
+            selector += `[data-testid="${dataTestId}"]`;
+            path.unshift(selector);
+            break;
+        }
+        
+        // 2. Target standard identification attributes
         const role = current.getAttribute('role');
         const name = current.getAttribute('name');
         const type = current.getAttribute('type');
@@ -186,3 +214,17 @@ export const getUniqueSelector = (el: HTMLElement): string => {
     }
     return path.join(' > ');
 };
+
+/**
+ * Toggle whether the admin is allowed to control the user's screen (User side)
+ */
+export const setControlAllowed = async (sessionId: string, allowed: boolean): Promise<void> => {
+    try {
+        await updateDoc(doc(db, SESSION_COLLECTION, sessionId), {
+            controlAllowed: allowed
+        });
+    } catch (err) {
+        console.error("Error setting control allowance:", err);
+    }
+};
+
