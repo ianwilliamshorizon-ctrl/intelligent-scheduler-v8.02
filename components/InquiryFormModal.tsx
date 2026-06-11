@@ -4,7 +4,7 @@ import FormModal from './FormModal';
 import SearchableSelect from './SearchableSelect';
 import { useApp } from '../core/state/AppContext';
 import { getCustomerDisplayName } from '../core/utils/customerUtils';
-import { Wand2, Loader2, Link as LinkIcon, UserCheck, Car, XCircle, User as UserIcon, FileText, CalendarCheck, Edit } from 'lucide-react';
+import { Wand2, Loader2, Link as LinkIcon, UserCheck, Car, XCircle, User as UserIcon, FileText, CalendarCheck, Edit, Camera } from 'lucide-react';
 import { parseInquiryMessage } from '../core/services/geminiService';
 import { useData } from '../core/state/DataContext';
 
@@ -237,7 +237,7 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                 <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Message*</label>
                     <div className="relative">
-                        <textarea name="message" value={formData.message || ''} onChange={handleChange} rows={4} className="w-full p-2 border rounded pr-12" required />
+                        <textarea name="message" value={formData.message || ''} onChange={handleChange} rows={12} className="w-full p-2 border rounded pr-12 text-sm" required />
                         <button 
                             type="button" 
                             onClick={handleAnalyze} 
@@ -295,8 +295,10 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                         <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
                         <select name="status" value={formData.status || 'New'} onChange={handleChange} className="w-full p-2 border rounded bg-white">
                             <option>New</option>
+                            <option>Immediate Quote</option>
+                            <option value="Escalated/Urgent">Escalated/Urgent</option>
                             <option>In Progress</option>
-                            <option>Sent</option>
+                            <option value="Quoted or Responded">Quoted or Responded</option>
                             <option>Approved</option>
                             <option>Rejected</option>
                             <option>Closed</option>
@@ -352,6 +354,46 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                         </div>
                     </div>
                 </div>
+
+                {/* Attachments Section */}
+                {formData.media && formData.media.length > 0 && (
+                    <div className="pt-4 border-t">
+                        <label className="block text-sm font-medium text-gray-700 mb-2 font-bold">Inquiry Attachments ({formData.media.length})</label>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {formData.media.map((item: any) => {
+                                const isPhoto = item.type === 'Photo';
+                                return (
+                                    <div key={item.id} className="flex items-center justify-between p-2.5 border rounded-lg bg-gray-50 text-xs">
+                                        <div className="flex items-center gap-2 min-w-0">
+                                            {isPhoto ? <Camera size={16} className="text-indigo-500 shrink-0" /> : <FileText size={16} className="text-gray-500 shrink-0" />}
+                                            <span className="truncate font-medium text-gray-700" title={item.name}>{item.name}</span>
+                                        </div>
+                                        <button 
+                                            type="button" 
+                                            onClick={async () => {
+                                                const { getImage } = await import('../utils/imageStore');
+                                                const dataUrl = await getImage(item.id);
+                                                if (dataUrl) {
+                                                    const link = document.createElement('a');
+                                                    link.href = dataUrl;
+                                                    link.download = item.name;
+                                                    document.body.appendChild(link);
+                                                    link.click();
+                                                    document.body.removeChild(link);
+                                                } else {
+                                                    alert('Could not retrieve file.');
+                                                }
+                                            }} 
+                                            className="text-[10px] bg-white px-2 py-1 rounded shadow-sm border font-bold hover:bg-gray-100 transition shrink-0"
+                                        >
+                                            Download
+                                        </button>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
             </div>
         </FormModal>
     );

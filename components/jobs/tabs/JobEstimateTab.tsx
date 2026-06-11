@@ -1,4 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
+import { toast } from 'react-toastify';
+import { useData } from '../../../core/state/DataContext';
 import { EstimateLineItem, TaxRate, Part, PurchaseOrder, ServicePackage, Estimate, Vehicle, Supplier, Customer } from '../../../types';
 import { Trash2, PlusCircle, FileText, Clock, ChevronDown, ChevronUp, Plus, Image as ImageIcon, Search, ShoppingCart, Edit, Wand2, Info, Loader2 } from 'lucide-react';
 import { formatCurrency } from '../../../core/utils/formatUtils';
@@ -334,6 +336,10 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
     const [selectedPackage, setSelectedPackage] = useState<ServicePackage | null>(null);
     const [showAllEntities, setShowAllEntities] = useState(false);
 
+    const { businessEntities } = useData();
+    const [packageSearchTerm, setPackageSearchTerm] = useState('');
+    const [hasToastedNoMatch, setHasToastedNoMatch] = useState(false);
+
     const hasPartsToOrder = useMemo(() => {
         if (!editableEstimate) return false;
         return editableEstimate.lineItems.some((li: EstimateLineItem) => 
@@ -385,21 +391,117 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
         }
     };
     
-    const sortedPackages = useMemo(() => {
-        let pkgs = servicePackages;
-        if (!showAllEntities && entityId) {
-            pkgs = servicePackages.filter(p => !p.entityId || p.entityId === entityId);
+    // Compute matches for current branch vs other branches
+    const matchingPackagesResult = useMemo(() => {
+        const term = packageSearchTerm.toLowerCase().trim();
+        const currentPkgs = servicePackages.filter(p => !p.entityId || p.entityId === entityId);
+        const otherPkgs = servicePackages.filter(p => p.entityId && p.entityId !== entityId);
+        
+        if (showAllEntities) {
+            return {
+                packages: servicePackages,
+                isShowingOthers: false
+            };
         }
+        
+        if (!term) {
+            const currentScored = getScoredServicePackages(currentPkgs, vehicle);
+            const currentVehicleMatches = currentScored.filter(res => res.status !== 'other' && res.status !== 'generic');
+            
+            if (currentVehicleMatches.length > 0) {
+                return {
+                    packages: currentPkgs,
+                    isShowingOthers: false
+                };
+            }
+            
+            const otherScored = getScoredServicePackages(otherPkgs, vehicle);
+            const otherVehicleMatches = otherScored.filter(res => res.status !== 'other' && res.status !== 'generic');
+            
+            if (otherVehicleMatches.length > 0) {
+                return {
+                    packages: [...currentPkgs, ...otherVehicleMatches.map(res => res.pkg)],
+                    isShowingOthers: true
+                };
+            }
+            
+            return {
+                packages: currentPkgs,
+                isShowingOthers: false
+            };
+        }
+        
+        const matchedCurrent = currentPkgs.filter(p => 
+            (p.name || '').toLowerCase().includes(term) ||
+            (p.description || '').toLowerCase().includes(term)
+        );
+        
+        if (matchedCurrent.length > 0) {
+            return {
+                packages: matchedCurrent,
+                isShowingOthers: false
+            };
+        }
+        
+        const matchedOthers = otherPkgs.filter(p => 
+            (p.name || '').toLowerCase().includes(term) ||
+            (p.description || '').toLowerCase().includes(term)
+        );
+        
+        if (matchedOthers.length > 0) {
+            return {
+                packages: matchedOthers,
+                isShowingOthers: true
+            };
+        }
+        
+        return {
+            packages: [],
+            isShowingOthers: false
+        };
+    }, [servicePackages, entityId, showAllEntities, packageSearchTerm, vehicle]);
+
+    // Handle toast notification when cross-entity packages are exposed
+    useEffect(() => {
+        if (!matchingPackagesResult.isShowingOthers) {
+            setHasToastedNoMatch(false);
+        }
+    }, [matchingPackagesResult.isShowingOthers]);
+
+    useEffect(() => {
+        if (matchingPackagesResult.isShowingOthers && !hasToastedNoMatch) {
+            const message = packageSearchTerm 
+                ? "No matching package found for this branch. Showing results from other branches."
+                : "No packages matching this vehicle found for this branch. Showing matching options from other branches.";
+            toast.info(message);
+            setHasToastedNoMatch(true);
+        }
+    }, [matchingPackagesResult.isShowingOthers, packageSearchTerm, hasToastedNoMatch]);
+
+    const sortedPackages = useMemo(() => {
+        const pkgs = matchingPackagesResult.packages;
         const results = getScoredServicePackages(pkgs, vehicle);
         
-        return results.map(({ pkg, matchType, color }) => ({
-            id: pkg.id,
-            value: pkg.id,
-            label: pkg.name || 'Unnamed Package',
-            description: pkg.description || 'Service Package',
-            badge: { text: matchType, className: color }
-        }));
-    }, [servicePackages, vehicle, showAllEntities, entityId]);
+        return results.map(({ pkg, matchType, color }) => {
+            let badgeText = matchType;
+            let badgeColor = color;
+            
+            if (pkg.entityId && pkg.entityId !== entityId) {
+                const branch = businessEntities.find(e => e.id === pkg.entityId);
+                const branchName = branch?.shortCode || branch?.name || 'Other';
+                badgeText = `${matchType} (${branchName})`;
+                badgeColor = 'bg-orange-100 text-orange-800 border border-orange-200';
+            }
+            
+            return {
+                id: pkg.id,
+                value: pkg.id,
+                label: pkg.name || 'Unnamed Package',
+                description: pkg.description || 'Service Package',
+                badge: { text: badgeText, className: badgeColor }
+            };
+        });
+    }, [matchingPackagesResult.packages, vehicle, entityId, businessEntities]);
 
     const customerInfoData = customer ? {
         phone: customer.phone || customer.mobile,
@@ -583,6 +685,7 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
                                             onSelect={(packageId) => { if (packageId) handlePackageSelect(packageId); }}
                                             placeholder="Add Existing Package..."
                                             dropdownClassName="min-w-[450px] right-0"
+                                            onSearchChange={setPackageSearchTerm}
                                         />
                                         <label className="flex items-center gap-1.5 whitespace-nowrap text-[10px] text-gray-500 cursor-pointer select-none">
                                             <input 

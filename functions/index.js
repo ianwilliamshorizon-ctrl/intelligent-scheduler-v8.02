@@ -283,10 +283,10 @@ exports.sendEmail = onCall({
   region: "europe-west1", 
   secrets: ["SMTP_USER", "SMTP_PASS", "MICROSOFT_CLIENT_ID", "MICROSOFT_CLIENT_SECRET", "MICROSOFT_TENANT_ID", "MICROSOFT_EMAIL_SENDER"] 
 }, async (request) => {
-  const microsoftClientId = process.env.MICROSOFT_CLIENT_ID;
-  const microsoftClientSecret = process.env.MICROSOFT_CLIENT_SECRET;
-  const microsoftTenantId = process.env.MICROSOFT_TENANT_ID;
-  const microsoftEmailSender = process.env.MICROSOFT_EMAIL_SENDER;
+  const microsoftClientId = process.env.MICROSOFT_CLIENT_ID?.trim();
+  const microsoftClientSecret = process.env.MICROSOFT_CLIENT_SECRET?.trim();
+  const microsoftTenantId = process.env.MICROSOFT_TENANT_ID?.trim();
+  const microsoftEmailSender = process.env.MICROSOFT_EMAIL_SENDER?.trim();
 
   const { to, fromName, fromEmail, subject, body, attachment } = request.data || {};
 
@@ -337,11 +337,6 @@ exports.sendEmail = onCall({
           replyTo: [
             {
               emailAddress: { address: resolvedFromEmail }
-            }
-          ],
-          bccRecipients: [
-            {
-              emailAddress: { address: microsoftEmailSender }
             }
           ]
         },
@@ -413,7 +408,6 @@ exports.sendEmail = onCall({
     from: `"${resolvedFromName}" <${smtpUser}>`,
     to: to,
     replyTo: resolvedFromEmail,
-    bcc: smtpUser,
     subject: subject,
     text: body,
     html: body.replace(/\n/g, "<br>")
@@ -551,6 +545,8 @@ exports.inboundEmailWebhook = onRequest({
 
     let entityId = null;
     let classificationReason = "";
+    let isQuoteRequest = false;
+    let isEscalated = false;
 
     const geminiApiKey = process.env.GEMINI_API_KEY;
     if (geminiApiKey) {
@@ -563,7 +559,8 @@ exports.inboundEmailWebhook = onRequest({
 Analyze the following email subject and body received by a vehicle service center.
 Determine:
 1. Is this email a new request, inquiry, or question regarding an estimate, quotation, pricing, or booking/scheduling a service? (true/false)
-2. Which business entity does this email best match? Use one of the following exact entity IDs:
+2. Does this email contain a complaint, billing dispute, or urgent escalation/update? (true/false)
+3. Which business entity does this email best match? Use one of the following exact entity IDs:
    - 'ent_porsche' (for Porsche vehicles, Porsche performance tuning, or Porsche servicing)
    - 'ent_audi' (for Audi, VW, Volkswagen, Seat, Skoda, or general German cars servicing/repair)
    - 'ent_trimming' (for car upholstery, leather repair, hood/soft top replacement, interior re-trim, coachbuilding)
@@ -575,6 +572,7 @@ Determine:
 Format your response as a valid JSON object with the following fields:
 {
   "isEstimateOrQuoteRequest": boolean,
+  "isEscalated": boolean,
   "matchedEntityId": string | null,
   "reasoning": "brief description of why this classification was made"
 }
@@ -595,7 +593,9 @@ ${textBody}
           entityId = classification.matchedEntityId;
         }
         classificationReason = classification.reasoning || "";
-        logger.info(`Gemini classified email: Entity=${entityId}, QuoteRequest=${classification.isEstimateOrQuoteRequest}, Reason=${classificationReason}`);
+        isQuoteRequest = !!classification.isEstimateOrQuoteRequest;
+        isEscalated = !!classification.isEscalated;
+        logger.info(`Gemini classified email: Entity=${entityId}, QuoteRequest=${isQuoteRequest}, Escalated=${isEscalated}, Reason=${classificationReason}`);
       } catch (geminiError) {
         logger.error("Error using Gemini for email classification:", geminiError.message);
       }
@@ -617,6 +617,15 @@ ${textBody}
     // Default to Porsche if completely unmatched
     entityId = entityId || "ent_porsche";
 
+    let status = "New";
+    if (fromEmail && fromEmail.toLowerCase().includes("info@brookspeed")) {
+      status = "Quoted or Responded";
+    } else if (isEscalated) {
+      status = "Escalated/Urgent";
+    } else if (isQuoteRequest) {
+      status = "Immediate Quote";
+    }
+
     // 3. Create Inquiry Card
     const newInquiry = {
       createdAt: new Date().toISOString(),
@@ -624,7 +633,7 @@ ${textBody}
       fromContact: fromEmail || "No Email",
       message: textBody || "Received email with empty text body.",
       takenByUserId: "system",
-      status: "New",
+      status: status,
       linkedCustomerId: matchedCustomerId,
       linkedVehicleId: matchedVehicleId,
       linkedEstimateId: matchedEstimateId,
@@ -641,3 +650,402 @@ ${textBody}
     res.status(500).send(`Internal Webhook Error: ${error.message}`);
   }
 });
+
+/**
+ * Scheduled function to sync inbound emails from Microsoft 365 Graph API
+ * Runs every 5 minutes.
+ */
+async function performEmailSync(microsoftClientId, microsoftClientSecret, microsoftTenantId, microsoftEmailSender, geminiApiKey) {
+  logger.info("Starting syncInboundEmails core processing...");
+  
+  // 1. Get access token from Entra ID
+  const tokenUrl = `https://login.microsoftonline.com/${microsoftTenantId}/oauth2/v2.0/token`;
+  const tokenParams = new URLSearchParams();
+  tokenParams.append("client_id", microsoftClientId);
+  tokenParams.append("scope", "https://graph.microsoft.com/.default");
+  tokenParams.append("client_secret", microsoftClientSecret);
+  tokenParams.append("grant_type", "client_credentials");
+
+  const tokenResponse = await axios.post(tokenUrl, tokenParams.toString(), {
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded"
+    }
+  });
+
+  const accessToken = tokenResponse.data.access_token;
+  if (!accessToken) {
+    throw new Error("No access token returned from Microsoft Entra ID.");
+  }
+
+  // 2. Fetch unread messages
+  const messagesUrl = `https://graph.microsoft.com/v1.0/users/${microsoftEmailSender}/messages?$filter=isRead eq false&$select=id,from,toRecipients,subject,body,uniqueBody,receivedDateTime,hasAttachments&$top=20`;
+  const response = await axios.get(messagesUrl, {
+    headers: {
+      "Authorization": `Bearer ${accessToken}`,
+      "Accept": "application/json"
+    }
+  });
+
+  const messages = response.data.value || [];
+  logger.info(`Found ${messages.length} unread messages in mailbox ${microsoftEmailSender}`);
+
+  const db = admin.firestore();
+  let processedCount = 0;
+
+  if (messages.length > 0) {
+    for (const message of messages) {
+      const messageId = message.id;
+      
+      // Check if duplicate inquiry exists for this microsoftMessageId
+      const existingInquirySnap = await db.collection("brooks_inquiries")
+        .where("microsoftMessageId", "==", messageId)
+        .limit(1)
+        .get();
+
+      if (!existingInquirySnap.empty) {
+        logger.info(`Inquiry for message ID ${messageId} already exists. Marking email as read anyway.`);
+        // Mark as read to clear from the unread queue
+        await markEmailAsRead(accessToken, microsoftEmailSender, messageId);
+        continue;
+      }
+
+      // Process message
+      const fromField = message.from?.emailAddress || {};
+      const fromEmail = fromField.address || "";
+      const fromName = fromField.name || "";
+      const subject = message.subject || "";
+      
+      // Use uniqueBody if available to avoid thread history, fallback to body
+      const rawBody = message.uniqueBody?.content || message.body?.content || "";
+      const bodyType = message.uniqueBody?.contentType || message.body?.contentType || "html";
+      
+      // Strip HTML if necessary, or pass to AI as-is. Clean text is better for UI and AI.
+      let textBody = rawBody;
+      if (bodyType === "html") {
+        // Simple HTML to plain text conversion
+        textBody = rawBody
+          .replace(/<style([\s\S]*?)<\/style>/gi, '')
+          .replace(/<script([\s\S]*?)<\/script>/gi, '')
+          .replace(/<\/div>/ig, '\n')
+          .replace(/<\/li>/ig, '\n')
+          .replace(/<p[^>]*>/gi, '\n')
+          .replace(/<br\s*\/?>/gi, '\n')
+          .replace(/<[^>]+>/g, '')
+          .replace(/&nbsp;/g, ' ')
+          .replace(/&amp;/g, '&')
+          .replace(/&lt;/g, '<')
+          .replace(/&gt;/g, '>')
+          .trim();
+      }
+
+      // Match recipients
+      let recipientEmail = microsoftEmailSender;
+      if (message.toRecipients && message.toRecipients.length > 0) {
+        recipientEmail = message.toRecipients[0].emailAddress?.address || microsoftEmailSender;
+      }
+
+      logger.info(`Syncing email: From=${fromEmail}, Subject="${subject}"`);
+
+      // Fetch and process attachments if they exist
+      let mediaItems = [];
+      if (message.hasAttachments) {
+        try {
+          logger.info(`Message ${messageId} has attachments. Fetching attachments from MS Graph...`);
+          const attachmentsUrl = `https://graph.microsoft.com/v1.0/users/${microsoftEmailSender}/messages/${messageId}/attachments`;
+          const attachmentsResponse = await axios.get(attachmentsUrl, {
+            headers: {
+              "Authorization": `Bearer ${accessToken}`,
+              "Accept": "application/json"
+            }
+          });
+          const attachmentsList = attachmentsResponse.data.value || [];
+          
+          const crypto = require("crypto");
+          for (const att of attachmentsList) {
+            if (att["@odata.type"] === "#microsoft.graph.fileAttachment" && att.contentBytes) {
+              const isImage = att.contentType?.startsWith("image/") || false;
+              const mediaItemId = crypto.randomUUID();
+              
+              logger.info(`Saving email attachment ${att.name} to storage...`);
+              const bucket = admin.storage().bucket();
+              const fileRef = bucket.file(`vehicle-media/${mediaItemId}`);
+              const buffer = Buffer.from(att.contentBytes, "base64");
+              await fileRef.save(buffer, {
+                contentType: att.contentType || "application/octet-stream",
+                metadata: {
+                  metadata: {
+                    name: att.name,
+                    uploadedFrom: "inbound-email"
+                  }
+                }
+              });
+
+              mediaItems.push({
+                id: mediaItemId,
+                type: isImage ? "Photo" : "Document",
+                name: att.name,
+                uploadedAt: new Date().toISOString()
+              });
+            }
+          }
+        } catch (attachmentsError) {
+          logger.error(`Error fetching attachments for message ${messageId}:`, attachmentsError.message);
+        }
+      }
+
+      let matchedCustomerId = null;
+      let matchedVehicleId = null;
+      let matchedEstimateId = null;
+
+      // 1. Look up customer by email
+      if (fromEmail) {
+        const customerSnap = await db.collection("brooks_customers")
+          .where("email", "==", fromEmail)
+          .limit(1)
+          .get();
+        
+        if (!customerSnap.empty) {
+          matchedCustomerId = customerSnap.docs[0].id;
+          logger.info(`Matched customer ID: ${matchedCustomerId}`);
+        }
+      }
+
+      // 2. Look up estimate/document reference in subject line
+      const refMatch = subject.match(/(?:Estimate|Invoice|Purchase\s*Order|Job)\s*#?\s*([a-zA-Z0-9_-]+)/i);
+      if (refMatch) {
+        const refId = refMatch[1].trim();
+        logger.info(`Found reference ID in subject: ${refId}`);
+
+        // Try searching for estimate number or ID
+        const estimateSnap = await db.collection("brooks_estimates")
+          .where("estimateNumber", "==", refId)
+          .limit(1)
+          .get();
+
+        if (!estimateSnap.empty) {
+          const estDoc = estimateSnap.docs[0];
+          matchedEstimateId = estDoc.id;
+          matchedCustomerId = matchedCustomerId || estDoc.data().customerId;
+          matchedVehicleId = estDoc.data().vehicleId;
+          logger.info(`Matched estimate ID: ${matchedEstimateId}`);
+        } else {
+          // Try exact document ID match for estimate
+          const estDocById = await db.collection("brooks_estimates").doc(refId).get();
+          if (estDocById.exists) {
+            matchedEstimateId = estDocById.id;
+            matchedCustomerId = matchedCustomerId || estDocById.data().customerId;
+            matchedVehicleId = estDocById.data().vehicleId;
+            logger.info(`Matched estimate ID by document ID: ${matchedEstimateId}`);
+          }
+        }
+      }
+
+      let entityId = null;
+      let classificationReason = "";
+      let isQuoteRequest = false;
+      let isEscalated = false;
+
+      if (geminiApiKey) {
+        try {
+          const { GoogleGenerativeAI } = require("@google/generative-ai");
+          const genAI = new GoogleGenerativeAI(geminiApiKey);
+          const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+
+          const prompt = `
+Analyze the following email subject and body received by a vehicle service center.
+Determine:
+1. Is this email a new request, inquiry, or question regarding an estimate, quotation, pricing, or booking/scheduling a service? (true/false)
+2. Does this email contain a complaint, billing dispute, or urgent escalation/update? (true/false)
+3. Which business entity does this email best match? Use one of the following exact entity IDs:
+   - 'ent_porsche' (for Porsche vehicles, Porsche performance tuning, or Porsche servicing)
+   - 'ent_audi' (for Audi, VW, Volkswagen, Seat, Skoda, or general German cars servicing/repair)
+   - 'ent_trimming' (for car upholstery, leather repair, hood/soft top replacement, interior re-trim, coachbuilding)
+   - 'ent_sales' (for buying or selling cars, vehicle sales inquiries, car showroom)
+   - 'ent_storage' (for secure vehicle storage, car storage)
+   - 'ent_rentals' (for renting cars, hire courtesy cars, courtesy cars)
+   If it's none of the above or ambiguous, return null.
+
+Format your response as a valid JSON object with the following fields:
+{
+  "isEstimateOrQuoteRequest": boolean,
+  "isEscalated": boolean,
+  "matchedEntityId": string | null,
+  "reasoning": "brief description of why this classification was made"
+}
+
+Email Subject: "${subject.replace(/"/g, '\\"')}"
+Email Body:
+${textBody}
+`;
+
+          const result = await model.generateContent(prompt);
+          const responseText = result.response.text();
+          
+          // Strip markdown code block wrappers if any
+          const cleanJsonText = responseText.replace(/```json/g, "").replace(/```/g, "").trim();
+          const classification = JSON.parse(cleanJsonText);
+
+          if (classification.matchedEntityId) {
+            entityId = classification.matchedEntityId;
+          }
+          classificationReason = classification.reasoning || "";
+          isQuoteRequest = !!classification.isEstimateOrQuoteRequest;
+          isEscalated = !!classification.isEscalated;
+          logger.info(`Gemini classified email: Entity=${entityId}, QuoteRequest=${isQuoteRequest}, Escalated=${isEscalated}, Reason=${classificationReason}`);
+        } catch (geminiError) {
+          logger.error("Error using Gemini for email classification:", geminiError.message);
+        }
+      }
+
+      // Fallback to estimate's entity if matched
+      if (!entityId && matchedEstimateId) {
+        try {
+          const estDoc = await db.collection("brooks_estimates").doc(matchedEstimateId).get();
+          if (estDoc.exists) {
+            entityId = estDoc.data().entityId;
+            logger.info(`Fallback: Matched entity ID from estimate: ${entityId}`);
+          }
+        } catch (err) {
+          logger.error("Error fetching fallback estimate entity:", err.message);
+        }
+      }
+
+      // Default to Porsche if completely unmatched
+      entityId = entityId || "ent_porsche";
+
+      let status = "New";
+      if (fromEmail && fromEmail.toLowerCase().includes("info@brookspeed")) {
+        status = "Quoted or Responded";
+      } else if (isEscalated) {
+        status = "Escalated/Urgent";
+      } else if (isQuoteRequest) {
+        status = "Immediate Quote";
+      }
+
+      // 3. Create Inquiry Card
+      const newInquiry = {
+        createdAt: message.receivedDateTime || new Date().toISOString(),
+        fromName: fromName || fromEmail || "Unknown Sender",
+        fromContact: fromEmail || "No Email",
+        message: textBody || "Received email with empty text body.",
+        takenByUserId: "system",
+        status: status,
+        linkedCustomerId: matchedCustomerId,
+        linkedVehicleId: matchedVehicleId,
+        linkedEstimateId: matchedEstimateId,
+        entityId: entityId,
+        microsoftMessageId: messageId,
+        media: mediaItems,
+        actionNotes: `[System]: Created automatically from email sync of mailbox ${recipientEmail}.\nSubject: "${subject}"${classificationReason ? `\nAI Classification: ${classificationReason}` : ''}`
+      };
+
+      const docRef = await db.collection("brooks_inquiries").add(newInquiry);
+      logger.info(`Successfully created Inquiry Card: ${docRef.id} for message ID ${messageId}`);
+
+      // 4. Mark the email as read in Microsoft 365 mailbox
+      await markEmailAsRead(accessToken, microsoftEmailSender, messageId);
+
+      processedCount++;
+    }
+  }
+
+  // 5. Escalate old Immediate Quotes (older than 24 hours)
+  const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  try {
+    logger.info("Checking for Immediate Quotes older than 24 hours to escalate...");
+    const oldQuotesSnap = await db.collection("brooks_inquiries")
+      .where("status", "==", "Immediate Quote")
+      .where("createdAt", "<=", twentyFourHoursAgo)
+      .get();
+
+    if (!oldQuotesSnap.empty) {
+      const batch = db.batch();
+      oldQuotesSnap.docs.forEach(doc => {
+        const data = doc.data();
+        const updatedNotes = `[System Escalation]: Automatically escalated because this quote request has been unanswered for more than 24 hours.\n${data.actionNotes || ''}`;
+        batch.update(doc.ref, {
+          status: "Escalated/Urgent",
+          actionNotes: updatedNotes
+        });
+        logger.info(`Escalated Inquiry ID: ${doc.id}`);
+      });
+      await batch.commit();
+      logger.info(`Successfully escalated ${oldQuotesSnap.size} inquiries.`);
+    }
+  } catch (escalateError) {
+    logger.error("Error running auto-escalation check:", escalateError.message);
+  }
+
+  return { success: true, processedCount };
+}
+
+exports.syncInboundEmails = onSchedule({
+  schedule: "*/5 * * * *",
+  timeZone: "Europe/London",
+  region: "europe-west1",
+  secrets: ["GEMINI_API_KEY", "MICROSOFT_CLIENT_ID", "MICROSOFT_CLIENT_SECRET", "MICROSOFT_TENANT_ID", "MICROSOFT_EMAIL_SENDER"],
+  timeoutSeconds: 300,
+  memory: "512MiB"
+}, async (event) => {
+  const microsoftClientId = process.env.MICROSOFT_CLIENT_ID?.trim();
+  const microsoftClientSecret = process.env.MICROSOFT_CLIENT_SECRET?.trim();
+  const microsoftTenantId = process.env.MICROSOFT_TENANT_ID?.trim();
+  const microsoftEmailSender = process.env.MICROSOFT_EMAIL_SENDER?.trim();
+  const geminiApiKey = process.env.GEMINI_API_KEY?.trim();
+
+  if (!microsoftClientId || !microsoftClientSecret || !microsoftTenantId || !microsoftEmailSender) {
+    logger.error("Microsoft Graph secrets are not fully configured. Skipping inbound email sync.");
+    return;
+  }
+
+  try {
+    logger.info("Starting syncInboundEmails...");
+    await performEmailSync(microsoftClientId, microsoftClientSecret, microsoftTenantId, microsoftEmailSender, geminiApiKey);
+  } catch (error) {
+    logger.error("Error running syncInboundEmails task:", error);
+  }
+});
+
+exports.triggerEmailSync = onCall({
+  region: "europe-west1",
+  secrets: ["GEMINI_API_KEY", "MICROSOFT_CLIENT_ID", "MICROSOFT_CLIENT_SECRET", "MICROSOFT_TENANT_ID", "MICROSOFT_EMAIL_SENDER"],
+  timeoutSeconds: 300,
+  memory: "512MiB"
+}, async (request) => {
+  const microsoftClientId = process.env.MICROSOFT_CLIENT_ID?.trim();
+  const microsoftClientSecret = process.env.MICROSOFT_CLIENT_SECRET?.trim();
+  const microsoftTenantId = process.env.MICROSOFT_TENANT_ID?.trim();
+  const microsoftEmailSender = process.env.MICROSOFT_EMAIL_SENDER?.trim();
+  const geminiApiKey = process.env.GEMINI_API_KEY?.trim();
+
+  if (!microsoftClientId || !microsoftClientSecret || !microsoftTenantId || !microsoftEmailSender) {
+    logger.error("Microsoft Graph secrets are not fully configured for triggerEmailSync.");
+    throw new HttpsError("failed-precondition", "Microsoft Graph API is not configured on the server.");
+  }
+
+  try {
+    logger.info("Starting triggerEmailSync (onCall)...");
+    const result = await performEmailSync(microsoftClientId, microsoftClientSecret, microsoftTenantId, microsoftEmailSender, geminiApiKey);
+    return result;
+  } catch (error) {
+    logger.error("Error running triggerEmailSync callable:", error);
+    throw new HttpsError("internal", error.message);
+  }
+});
+
+async function markEmailAsRead(accessToken, microsoftEmailSender, messageId) {
+  const patchUrl = `https://graph.microsoft.com/v1.0/users/${microsoftEmailSender}/messages/${messageId}`;
+  logger.info(`Marking email ${messageId} as read...`);
+  try {
+    await axios.patch(patchUrl, { isRead: true }, {
+      headers: {
+        "Authorization": `Bearer ${accessToken}`,
+        "Content-Type": "application/json"
+      }
+    });
+    logger.info(`Successfully marked email ${messageId} as read.`);
+  } catch (error) {
+    logger.error(`Failed to mark email ${messageId} as read:`, error.response?.data || error.message);
+    throw error;
+  }
+}

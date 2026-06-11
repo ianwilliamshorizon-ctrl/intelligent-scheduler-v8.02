@@ -643,13 +643,14 @@ export interface Inquiry {
     fromContact: string;
     message: string;
     takenByUserId: string;
-    status: 'New' | 'In Progress' | 'Quoted' | 'Closed' | 'Approved' | 'Rejected' | 'Sent';
+    status: 'New' | 'Immediate Quote' | 'Escalated/Urgent' | 'In Progress' | 'Quoted or Responded' | 'Closed' | 'Approved' | 'Rejected' | 'Sent';
     linkedCustomerId?: string;
     linkedVehicleId?: string;
     linkedEstimateId?: string;
     actionNotes?: string;
     linkedPurchaseOrderIds?: string[];
     linkedJobId?: string;
+    media?: any[];
 }
 
 /**

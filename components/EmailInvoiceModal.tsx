@@ -93,7 +93,7 @@ The BROOKSPEED Team`
                     
                     <div className="flex items-center p-2 bg-gray-50 rounded-md border border-gray-100">
                         <span className="font-bold text-gray-400 w-20 uppercase text-[10px]">From:</span>
-                        <span className="text-gray-700 font-medium">BROOKSPEED &lt;no-reply@brookspeed.com&gt;</span>
+                        <span className="text-gray-700 font-medium">BROOKSPEED &lt;info@brookspeed.com&gt;</span>
                     </div>
 
                     <div className="flex flex-col gap-1">

@@ -290,9 +290,11 @@ const AdminDispatcherDashboard: React.FC<DashboardViewProps & { onSelectDivision
         return { jobsToday, vehiclesOnSite, pendingQC, unallocatedJobs };
     }, [jobs, selectedEntityId, today]);
 
-    const openInquiries = useMemo(() => {
-        return inquiries.filter(i => (i.status === 'New' || i.status === 'In Progress') && (selectedEntityId === 'all' || i.entityId === selectedEntityId))
-            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    const escalatedInquiries = useMemo(() => {
+        return inquiries.filter(i => 
+            (i.status === 'Escalated/Urgent' || i.status === ('Escalated' as any)) && 
+            (selectedEntityId === 'all' || i.entityId === selectedEntityId)
+        ).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     }, [inquiries, selectedEntityId]);
 
     const unallocatedJobList = useMemo(() => {
@@ -327,9 +329,9 @@ const AdminDispatcherDashboard: React.FC<DashboardViewProps & { onSelectDivision
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6" style={{ minHeight: '400px' }}>
                 <OnSiteByDivisionCard jobs={jobs} businessEntities={businessEntities} storageBookings={storageBookings} onSelectDivision={onSelectDivision} />
-                <Widget title="Open Inquiries" icon={MessageSquare}>
+                <Widget title="Escalated / Urgent Inquiries" icon={MessageSquare}>
                     <div className="space-y-3">
-                        {openInquiries.length > 0 ? openInquiries.map(inq => (
+                        {escalatedInquiries.length > 0 ? escalatedInquiries.map(inq => (
                              <div 
                                 key={inq.id} 
                                 className="p-3 bg-red-50 rounded-lg border border-red-200 cursor-pointer hover:bg-red-100 hover:border-red-400 group transition-all duration-200 shadow-sm hover:shadow-md" 
@@ -344,7 +346,7 @@ const AdminDispatcherDashboard: React.FC<DashboardViewProps & { onSelectDivision
                                  </div>
                                  <p className="text-xs text-gray-600 truncate mt-2">{inq.message}</p>
                              </div>
-                        )) : <p className="text-sm text-gray-500 text-center py-8">No open inquiries.</p>}
+                        )) : <p className="text-sm text-gray-500 text-center py-8">No escalated/urgent inquiries.</p>}
                     </div>
                 </Widget>
                 <Widget title="Unallocated Job Queue" icon={Clock}>

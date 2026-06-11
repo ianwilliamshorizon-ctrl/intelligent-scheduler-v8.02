@@ -92,6 +92,22 @@ export const getAll = async <T>(collectionName: string): Promise<T[]> => {
 };
 
 /**
+ * FETCH SINGLE DOCUMENT BY ID
+ */
+export const getDocument = async <T>(collectionName: string, docId: string): Promise<T | null> => {
+    if (!db) return null;
+    try {
+        const snap = await getDoc(doc(db, collectionName, docId));
+        if (snap.exists()) {
+            return { ...snap.data(), id: snap.id } as unknown as T;
+        }
+    } catch (err) {
+        console.error(`[Firestore getDocument Error] ${collectionName}/${docId}:`, err);
+    }
+    return null;
+};
+
+/**
  * SAVE/UPDATE DOCUMENT
  */
 export const saveDocument = async <T extends { id: string }> (

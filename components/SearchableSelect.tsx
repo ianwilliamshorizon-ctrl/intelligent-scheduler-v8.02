@@ -24,6 +24,7 @@ interface SearchableSelectProps {
   collectionName?: string; 
   initialValue?: any;
   dropdownClassName?: string; // New prop for custom width/alignment
+  onSearchChange?: (value: string) => void;
 }
 
 const SearchableSelect: React.FC<SearchableSelectProps> = ({
@@ -38,6 +39,7 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
   loading = false,
   initialValue,
   dropdownClassName = "w-full left-0", // Default to full width of parent
+  onSearchChange,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -177,6 +179,9 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
               onChange={(e) => {
                 setSearchTerm(e.target.value);
                 setActiveIndex(0);
+                if (onSearchChange) {
+                  onSearchChange(e.target.value);
+                }
               }}
               onClick={(e) => e.stopPropagation()}
             />

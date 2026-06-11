@@ -6,18 +6,20 @@ import * as T from './types';
 import { useData } from './core/state/DataContext';
 import { useApp } from './core/state/AppContext';
 import { createBackup, downloadBackup } from './core/utils/backupUtils';
-import { setItem, uploadToStorage, downloadFromStorage } from './core/db';
+import { setItem, uploadToStorage, downloadFromStorage, getDocument } from './core/db';
 import { idbSet, idbGet } from './core/db/idb';
 import { getCustomerDisplayName } from './core/utils/customerUtils';
 import { formatDate, dateStringToDate } from './core/utils/dateUtils';
 import useModalState from './core/hooks/useModalState';
 import { useWorkshopActions } from './core/hooks/useWorkshopActions';
+import { CheckCircle2, XCircle } from 'lucide-react';
 
 // Layout & Core Components
 import MainLayout from './components/MainLayout';
 import AppModals from './components/AppModals';
 import LoginView from './components/LoginView';
 import VersionChecker from './components/VersionChecker';
+import EstimateViewModal from './components/EstimateViewModal';
 
 // Lazy Loaded Views
 const DashboardView = lazy(() => import('./components/DashboardView'));
@@ -94,6 +96,70 @@ const App = () => {
     const [managementInitialView, setManagementInitialView] = useState<{ tab: string; id: string } | null>(null);
     const lastBackupTimeRef = useRef<string | null>(null);
     const [poToViewId, setPoToViewId] = useState<string | null>(null);
+    const [customerActionState, setCustomerActionState] = useState<'pending' | 'approved' | 'declined'>('pending');
+    const [customerViewData, setCustomerViewData] = useState<{
+        estimate: T.Estimate | null;
+        customer: T.Customer | null;
+        vehicle: T.Vehicle | null;
+        entity: T.BusinessEntity | null;
+        loading: boolean;
+        error: string | null;
+    }>(() => {
+        const searchParams = new URLSearchParams(window.location.search);
+        const urlEstimateId = searchParams.get('estimateId');
+        const isCustomerView = searchParams.get('view') === 'customer' && urlEstimateId;
+        return {
+            estimate: null,
+            customer: null,
+            vehicle: null,
+            entity: null,
+            loading: !!isCustomerView,
+            error: null
+        };
+    });
+
+    useEffect(() => {
+        const searchParams = new URLSearchParams(window.location.search);
+        const urlEstimateId = searchParams.get('estimateId');
+        const isCustomerView = searchParams.get('view') === 'customer' && urlEstimateId;
+        
+        if (!isCustomerView || !urlEstimateId) return;
+
+        const loadCustomerData = async () => {
+            try {
+                const estimateDoc = await getDocument<T.Estimate>('brooks_estimates', urlEstimateId);
+                if (!estimateDoc) {
+                    setCustomerViewData(prev => ({ ...prev, loading: false, error: 'Estimate not found' }));
+                    return;
+                }
+
+                const [customerDoc, vehicleDoc] = await Promise.all([
+                    estimateDoc.customerId ? getDocument<T.Customer>('brooks_customers', estimateDoc.customerId) : null,
+                    estimateDoc.vehicleId ? getDocument<T.Vehicle>('brooks_vehicles', estimateDoc.vehicleId) : null,
+                ]);
+
+                let entityDoc = businessEntities.find(e => e.id === estimateDoc.entityId) || null;
+                if (!entityDoc && estimateDoc.entityId) {
+                    entityDoc = await getDocument<T.BusinessEntity>('brooks_business_entities', estimateDoc.entityId);
+                }
+
+                setCustomerViewData({
+                    estimate: estimateDoc,
+                    customer: customerDoc,
+                    vehicle: vehicleDoc,
+                    entity: entityDoc,
+                    loading: false,
+                    error: null
+                });
+            } catch (err: any) {
+                console.error("Error loading customer view data:", err);
+                setCustomerViewData(prev => ({ ...prev, loading: false, error: err.message || 'Failed to load data' }));
+            }
+        };
+
+        loadCustomerData();
+    }, [businessEntities]);
+
 
 
     const handleGenerateInvoice = (jobId: string) => {
@@ -250,6 +316,121 @@ const App = () => {
         }
     }, [purchaseOrders, poToViewId, setters]);
 
+    // Check if we are in customer view mode for a specific estimate
+    const searchParams = new URLSearchParams(window.location.search);
+    const urlEstimateId = searchParams.get('estimateId');
+    const isCustomerView = searchParams.get('view') === 'customer' && urlEstimateId;
+
+    if (isCustomerView) {
+        if (customerViewData.loading) {
+            return (
+                <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+                    <div className="text-center">
+                        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600 mx-auto mb-4"></div>
+                        <p className="text-gray-600 text-sm">Loading Estimate...</p>
+                    </div>
+                </div>
+            );
+        }
+
+        if (customerViewData.error || !customerViewData.estimate) {
+            return (
+                <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
+                    <div className="bg-white p-6 rounded-xl shadow-lg text-center max-w-md">
+                        <h2 className="text-xl font-bold text-red-600 mb-2">Estimate Not Found</h2>
+                        <p className="text-gray-600 text-sm mb-4">{customerViewData.error || 'The estimate link you followed is invalid or has expired.'}</p>
+                        <button onClick={() => { try { window.close(); } catch(e) {} }} className="px-4 py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition">Close Tab</button>
+                    </div>
+                </div>
+            );
+        }
+
+        if (customerActionState === 'approved') {
+            return (
+                <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+                    <div className="bg-white p-8 rounded-2xl shadow-xl text-center max-w-md border border-green-100 flex flex-col items-center">
+                        <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mb-4 text-green-600">
+                            <CheckCircle2 size={36} />
+                        </div>
+                        <h2 className="text-2xl font-bold text-gray-800 mb-2">Request Received!</h2>
+                        <p className="text-gray-600 text-sm mb-6 leading-relaxed">
+                            Thank you. We have received your approval and preferred dates. A member of our team will review the schedule and confirm your booking shortly.
+                        </p>
+                        <button 
+                            onClick={() => {
+                                try { window.close(); } catch (e) {}
+                                alert("You can now close this tab safely.");
+                            }} 
+                            className="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition shadow-md shadow-indigo-100"
+                        >
+                            Close Tab
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+
+        if (customerActionState === 'declined') {
+            return (
+                <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+                    <div className="bg-white p-8 rounded-2xl shadow-xl text-center max-w-md border border-red-100 flex flex-col items-center">
+                        <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mb-4 text-red-500">
+                            <XCircle size={36} />
+                        </div>
+                        <h2 className="text-2xl font-bold text-gray-800 mb-2">Estimate Declined</h2>
+                        <p className="text-gray-600 text-sm mb-6 leading-relaxed">
+                            You have declined this estimate. We have been notified of your response.
+                        </p>
+                        <button 
+                            onClick={() => {
+                                try { window.close(); } catch (e) {}
+                                alert("You can now close this tab safely.");
+                            }} 
+                            className="w-full py-3 bg-gray-600 text-white font-bold rounded-xl hover:bg-gray-700 transition"
+                        >
+                            Close Tab
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+
+        const dummyCustomerUser = { id: 'customer', name: 'Customer', email: '', role: 'Client' } as unknown as T.User;
+
+        return (
+            <div className="min-h-screen bg-gray-100 flex justify-center items-start">
+                <EstimateViewModal
+                    isOpen={true}
+                    onClose={() => {
+                        try { window.close(); } catch(e) {}
+                        window.location.href = window.location.origin;
+                    }}
+                    estimate={customerViewData.estimate}
+                    customer={customerViewData.customer || undefined}
+                    vehicle={customerViewData.vehicle || undefined}
+                    taxRates={taxRates}
+                    servicePackages={servicePackages}
+                    entityDetails={customerViewData.entity || undefined}
+                    onApprove={() => {}} 
+                    onCustomerApprove={(est, items, dates, notes) => {
+                        handleCustomerApproveEstimate(est, items, dates, notes);
+                        setCustomerActionState('approved');
+                    }}
+                    onDecline={(est) => {
+                        handleCustomerDeclineEstimate(est);
+                        setCustomerActionState('declined');
+                    }}
+                    onEmailSuccess={() => {}}
+                    viewMode="customer"
+                    parts={parts}
+                    users={users}
+                    currentUser={dummyCustomerUser}
+                />
+                <ToastContainer aria-label="Notifications" />
+            </div>
+        );
+    }
+
     if (!isAuthenticated) {
         return (
             <>
@@ -266,7 +447,7 @@ const App = () => {
         }
     };
 
-    const handleCustomerApproveEstimate = (estimate: T.Estimate, selectedOptionalItemIds: string[], dateRange: any, notes: string) => {
+    function handleCustomerApproveEstimate(estimate: T.Estimate, selectedOptionalItemIds: string[], dateRange: any, notes: string) {
         if (estimate.jobId) { workshopActions.handleApproveEstimate(estimate, selectedOptionalItemIds, notes); return; }
         const customer = (customers || []).find(c => c.id === estimate.customerId);
         
@@ -287,7 +468,20 @@ const App = () => {
         const approvedLineItems = activeLineItems.map(li => ({ ...li, isOptional: false }));
 
         const selectedOptionsList = (estimate.lineItems || []).filter(item => item.isOptional && selectedOptionalItemIds.includes(item.id)).map(item => `- ${item.description} (${(item.unitCost * item.quantity).toFixed(2)})`).join('\n');
-        const inquiryMessage = `ONLINE APPROVAL: Estimate #${estimate.estimateNumber}\n\n` + `Preferred Dates: ${dateRange?.start ? formatDate(new Date(dateRange.start)) : 'N/A'} to ${dateRange?.end ? formatDate(new Date(dateRange.end)) : 'N/A'}\n` + `Customer Notes: ${notes || 'None'}\n\n` + (selectedOptionsList ? `Selected Optional Extras:\n${selectedOptionsList}` : `No optional extras selected.`);
+        
+        let dateRangeStr = '';
+        let successMessage = 'Thank you. We have received your approval and preferred dates. A member of our team will review the schedule and confirm your booking shortly.';
+        
+        if (dateRange?.start === 'next-available') {
+            dateRangeStr = 'Next Available Time Slot';
+            successMessage = 'Thank you. We have received your approval. A member of our team will schedule the job in the next available time slot and confirm the booking details with you shortly.';
+        } else {
+            const startStr = dateRange?.start ? formatDate(new Date(dateRange.start)) : 'N/A';
+            const endStr = dateRange?.end ? formatDate(new Date(dateRange.end)) : 'N/A';
+            dateRangeStr = `${startStr} to ${endStr}`;
+        }
+
+        const inquiryMessage = `ONLINE APPROVAL: Estimate #${estimate.estimateNumber}\n\n` + `Preferred Dates: ${dateRangeStr}\n` + `Customer Notes: ${notes || 'None'}\n\n` + (selectedOptionsList ? `Selected Optional Extras:\n${selectedOptionsList}` : `No optional extras selected.`);
         
         const existingInquiry = (inquiries || []).find(i => i.linkedEstimateId === estimate.id);
         if (existingInquiry) {
@@ -300,16 +494,18 @@ const App = () => {
 
         const updatedEstimate: T.Estimate = { ...estimate, status: 'Approved', lineItems: approvedLineItems };
         handleSaveItem(setEstimates, updatedEstimate);
-        setConfirmation({ isOpen: true, title: 'Request Received', message: 'Thank you. We have received your approval and preferred dates. A member of our team will review the schedule and confirm your booking shortly.', type: 'success' });
-    };
+        setCustomerViewData(prev => prev.estimate ? { ...prev, estimate: updatedEstimate } : prev);
+        setConfirmation({ isOpen: true, title: 'Request Received', message: successMessage, type: 'success' });
+    }
 
-    const handleCustomerDeclineEstimate = (estimate: T.Estimate) => {
+    function handleCustomerDeclineEstimate(estimate: T.Estimate) {
         const updatedEstimate: T.Estimate = { ...estimate, status: 'Rejected' };
         handleSaveItem(setEstimates, updatedEstimate);
         // @ts-ignore
         workshopActions.updateLinkedInquiryStatus(estimate.id, 'Rejected');
+        setCustomerViewData(prev => prev.estimate ? { ...prev, estimate: updatedEstimate } : prev);
         setConfirmation({ isOpen: true, title: 'Estimate Declined', message: 'You have declined this estimate. We have been notified.', type: 'warning' });
-    };
+    }
 
     const handleMarkJobAsAwaitingCollection = (jobId: string) => {
         const job = (jobs || []).find(j => j.id === jobId);
