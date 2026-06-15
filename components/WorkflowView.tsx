@@ -39,9 +39,28 @@ const WorkflowJobCard: React.FC<{
 
     const associatedPOs = (job.purchaseOrderIds || []).map(id => (purchaseOrders || []).find(po => po.id === id)).filter(Boolean) as PurchaseOrder[];
     
+    const isMot = job.jobType === 'MOT' || /\bmot\b/i.test(job.description || '');
+
+    const cardBorderAndColorClass = useMemo(() => {
+        if (job.vehicleStatus === 'Off-Site (Partner)') {
+            return isMot ? 'bg-gray-100 border-2 border-blue-700 text-gray-500 opacity-80' : 'bg-gray-100 border border-gray-300 text-gray-500 opacity-80';
+        }
+        
+        if (isMot) {
+            const cleanClasses = statusColorClass
+                .split(' ')
+                .filter(cls => !cls.startsWith('border-') && cls !== 'border')
+                .join(' ');
+            return `${cleanClasses} border-2 border-blue-700`;
+        }
+        
+        const hasBorderClass = statusColorClass.split(' ').some(cls => cls === 'border' || cls.startsWith('border-'));
+        return `${statusColorClass}${hasBorderClass ? '' : ' border'}`;
+    }, [statusColorClass, isMot, job.vehicleStatus]);
+
     return (
         <div 
-            className={`p-4 rounded-xl shadow-sm border ${job.vehicleStatus === 'Off-Site (Partner)' ? 'bg-gray-100 border-gray-300 text-gray-500 opacity-80' : statusColorClass} cursor-pointer hover:shadow-md hover:scale-[1.01] transition-all duration-200 relative overflow-hidden group mb-3`}
+            className={`p-4 rounded-xl shadow-sm ${cardBorderAndColorClass} cursor-pointer hover:shadow-md hover:scale-[1.01] transition-all duration-200 relative overflow-hidden group mb-3`}
             onClick={() => onEdit(job.id)}
         >
             {/* Parts Status Badge */}

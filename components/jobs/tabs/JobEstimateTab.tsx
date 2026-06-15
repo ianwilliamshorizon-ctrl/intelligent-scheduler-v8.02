@@ -65,12 +65,15 @@ interface EditableLineItemRowProps {
     onAddNewPart: (lineItemId: string, searchTerm: string) => void;
     onOpenSupplierSelection: (lineItemId: string) => void;
     onEditPart: (part: Part) => void;
+    isCollapsed?: boolean;
+    onToggleCollapse?: () => void;
 }
 
 const MemoizedEditableLineItemRow = React.memo(({ 
     item, onLineItemChange, onRemoveLineItem, filteredParts, activePartSearch, onPartSearchChange, 
     onSetActivePartSearch, onSelectPart, isReadOnly, canViewPricing, onManageMedia, 
-    onAddNewPart, suppliers, onOpenSupplierSelection, purchaseOrders, packageTotal, onEditPart
+    onAddNewPart, suppliers, onOpenSupplierSelection, purchaseOrders, packageTotal, onEditPart,
+    isCollapsed, onToggleCollapse
 }: EditableLineItemRowProps) => {
     const isPackageComponent = item.isPackageComponent;
     const isPackageHeader = !!item.servicePackageId && !item.isPackageComponent;
@@ -115,7 +118,17 @@ const MemoizedEditableLineItemRow = React.memo(({
     if (isPackageHeader) {
         return (
             <div className={`grid grid-cols-12 gap-2 items-center p-2 rounded-lg border bg-indigo-50 border-indigo-200`}>
-                <div className="col-span-5 font-bold text-indigo-800">{item.description}</div>
+                <div className="col-span-5 font-bold text-indigo-800 flex items-center gap-2">
+                    <button 
+                        type="button" 
+                        onClick={(e) => { e.stopPropagation(); onToggleCollapse?.(); }}
+                        className="text-indigo-600 hover:text-indigo-800 p-0.5 rounded hover:bg-indigo-100 transition-colors flex items-center justify-center"
+                        title={isCollapsed ? "Expand Package Details" : "Collapse Package Details"}
+                    >
+                        {isCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+                    </button>
+                    <span>{item.description}</span>
+                </div>
                 <div className="col-span-1 p-1 text-right">{item.quantity}</div>
                 <div className="col-span-2"></div> {/* Cost placeholder */}
                 {canViewPricing ? (
@@ -331,6 +344,7 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
     entityId
 }) => {
     const [expandedSuppEstIds, setExpandedSuppEstIds] = useState<Set<string>>(new Set());
+    const [collapsedPackageIds, setCollapsedPackageIds] = useState<Set<string>>(new Set());
     const [isSupplierSelectionOpen, setIsSupplierSelectionOpen] = useState(false);
     const [lineItemForSupplier, setLineItemForSupplier] = useState<string | null>(null);
     const [selectedPackage, setSelectedPackage] = useState<ServicePackage | null>(null);
@@ -359,6 +373,15 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
             const newSet = new Set(prev);
             if (newSet.has(id)) newSet.delete(id);
             else newSet.add(id);
+            return newSet;
+        });
+    };
+
+    const toggleCollapsePackage = (headerId: string) => {
+        setCollapsedPackageIds(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(headerId)) newSet.delete(headerId);
+            else newSet.add(headerId);
             return newSet;
         });
     };
@@ -394,12 +417,13 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
     // Compute matches for current branch vs other branches
     const matchingPackagesResult = useMemo(() => {
         const term = packageSearchTerm.toLowerCase().trim();
-        const currentPkgs = servicePackages.filter(p => !p.entityId || p.entityId === entityId);
-        const otherPkgs = servicePackages.filter(p => p.entityId && p.entityId !== entityId);
+        const allPkgs = Array.isArray(servicePackages) ? servicePackages : [];
+        const currentPkgs = allPkgs.filter(p => !p.entityId || p.entityId === entityId);
+        const otherPkgs = allPkgs.filter(p => p.entityId && p.entityId !== entityId);
         
         if (showAllEntities) {
             return {
-                packages: servicePackages,
+                packages: allPkgs,
                 isShowingOthers: false
             };
         }
@@ -480,6 +504,29 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
 
     const sortedPackages = useMemo(() => {
         const pkgs = matchingPackagesResult.packages;
+        
+        if (!vehicle) {
+            return pkgs.map(pkg => {
+                let badgeText = 'Generic';
+                let badgeColor = 'bg-gray-100 text-gray-800';
+                
+                if (pkg.entityId && pkg.entityId !== entityId) {
+                    const branch = businessEntities.find(e => e.id === pkg.entityId);
+                    const branchName = branch?.shortCode || branch?.name || 'Other';
+                    badgeText = `Generic (${branchName})`;
+                    badgeColor = 'bg-orange-100 text-orange-800 border border-orange-200';
+                }
+                
+                return {
+                    id: pkg.id,
+                    value: pkg.id,
+                    label: pkg.name || 'Unnamed Package',
+                    description: pkg.description || 'Service Package',
+                    badge: { text: badgeText, className: badgeColor }
+                };
+            });
+        }
+        
         const results = getScoredServicePackages(pkgs, vehicle);
         
         return results.map(({ pkg, matchType, color }) => {
@@ -617,54 +664,61 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
                             </div>
                             
                             {estimateBreakdown.packages.length > 0 && <h5 className="font-bold text-gray-800 text-xs uppercase pt-2">Service Packages</h5>}
-                            {estimateBreakdown.packages.map(({ header, children, pkg, packageTotal }: any) => (
-                                <div key={header.id}>
-                                    <MemoizedEditableLineItemRow 
-                                        canViewPricing={canViewPricing} 
-                                        isReadOnly={isReadOnly} 
-                                        item={header} 
-                                        taxRates={taxRates} 
-                                        suppliers={suppliers}
-                                        purchaseOrders={purchaseOrders}
-                                        onLineItemChange={onLineItemChange} 
-                                        onRemoveLineItem={onRemoveLineItem} 
-                                        filteredParts={filteredParts} 
-                                        activePartSearch={activePartSearch} 
-                                        onPartSearchChange={onPartSearchChange} 
-                                        onSetActivePartSearch={onSetActivePartSearch} 
-                                        onSelectPart={onSelectPart} 
-                                        onManageMedia={onManageMedia} 
-                                        onAddNewPart={onAddNewPart} 
-                                        onOpenSupplierSelection={openSupplierSelection}
-                                        packageTotal={packageTotal}
-                                        onEditPart={onEditPart}
-                                    />
-                                    <div className="pl-6 border-l-2 ml-2 space-y-1 mt-1">
-                                        {children.map((child: any) => (
-                                            <MemoizedEditableLineItemRow 
-                                                key={child.id} 
-                                                canViewPricing={canViewPricing} 
-                                                isReadOnly={isReadOnly} 
-                                                item={child} 
-                                                taxRates={taxRates} 
-                                                suppliers={suppliers}
-                                                purchaseOrders={purchaseOrders}
-                                                onLineItemChange={onLineItemChange} 
-                                                onRemoveLineItem={onRemoveLineItem} 
-                                                filteredParts={filteredParts} 
-                                                activePartSearch={activePartSearch} 
-                                                onPartSearchChange={onPartSearchChange} 
-                                                onSetActivePartSearch={onSetActivePartSearch} 
-                                                onSelectPart={onSelectPart} 
-                                                onManageMedia={onManageMedia} 
-                                                onAddNewPart={onAddNewPart} 
-                                                onOpenSupplierSelection={openSupplierSelection}
-                                                onEditPart={onEditPart}
-                                            />
-                                        ))}
+                            {estimateBreakdown.packages.map(({ header, children, pkg, packageTotal }: any) => {
+                                const isCollapsed = collapsedPackageIds.has(header.id);
+                                return (
+                                    <div key={header.id}>
+                                        <MemoizedEditableLineItemRow 
+                                            canViewPricing={canViewPricing} 
+                                            isReadOnly={isReadOnly} 
+                                            item={header} 
+                                            taxRates={taxRates} 
+                                            suppliers={suppliers}
+                                            purchaseOrders={purchaseOrders}
+                                            onLineItemChange={onLineItemChange} 
+                                            onRemoveLineItem={onRemoveLineItem} 
+                                            filteredParts={filteredParts} 
+                                            activePartSearch={activePartSearch} 
+                                            onPartSearchChange={onPartSearchChange} 
+                                            onSetActivePartSearch={onSetActivePartSearch} 
+                                            onSelectPart={onSelectPart} 
+                                            onManageMedia={onManageMedia} 
+                                            onAddNewPart={onAddNewPart} 
+                                            onOpenSupplierSelection={openSupplierSelection}
+                                            packageTotal={packageTotal}
+                                            onEditPart={onEditPart}
+                                            isCollapsed={isCollapsed}
+                                            onToggleCollapse={() => toggleCollapsePackage(header.id)}
+                                        />
+                                        {!isCollapsed && (
+                                            <div className="pl-6 border-l-2 ml-2 space-y-1 mt-1">
+                                                {children.map((child: any) => (
+                                                    <MemoizedEditableLineItemRow 
+                                                        key={child.id} 
+                                                        canViewPricing={canViewPricing} 
+                                                        isReadOnly={isReadOnly} 
+                                                        item={child} 
+                                                        taxRates={taxRates} 
+                                                        suppliers={suppliers}
+                                                        purchaseOrders={purchaseOrders}
+                                                        onLineItemChange={onLineItemChange} 
+                                                        onRemoveLineItem={onRemoveLineItem} 
+                                                        filteredParts={filteredParts} 
+                                                        activePartSearch={activePartSearch} 
+                                                        onPartSearchChange={onPartSearchChange} 
+                                                        onSetActivePartSearch={onSetActivePartSearch} 
+                                                        onSelectPart={onSelectPart} 
+                                                        onManageMedia={onManageMedia} 
+                                                        onAddNewPart={onAddNewPart} 
+                                                        onOpenSupplierSelection={openSupplierSelection}
+                                                        onEditPart={onEditPart}
+                                                    />
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                             
                             {estimateBreakdown.standaloneLabor.length > 0 && <h5 className="font-bold text-gray-800 text-xs uppercase pt-2">Labor</h5>}
                             {estimateBreakdown.standaloneLabor.map((item: any) => <MemoizedEditableLineItemRow key={item.id} canViewPricing={canViewPricing} isReadOnly={isReadOnly} item={item} taxRates={taxRates} suppliers={suppliers} purchaseOrders={purchaseOrders} onLineItemChange={onLineItemChange} onRemoveLineItem={onRemoveLineItem} filteredParts={filteredParts} activePartSearch={activePartSearch} onPartSearchChange={onPartSearchChange} onSetActivePartSearch={onSetActivePartSearch} onSelectPart={onSelectPart} onManageMedia={onManageMedia} onAddNewPart={onAddNewPart} onOpenSupplierSelection={openSupplierSelection} onEditPart={onEditPart}/>)}

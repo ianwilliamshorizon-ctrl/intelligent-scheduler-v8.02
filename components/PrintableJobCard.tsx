@@ -12,10 +12,12 @@ import {
     InspectionTemplate,
     ChecklistSection,
     TyreLocation,
-    ChecklistItemStatus
+    ChecklistItemStatus,
+    InspectionDiagram
 } from '../types';
 import InspectionChecklist from './InspectionChecklist';
 import AsyncMedia from './AsyncMedia';
+import PorscheFrames from './PorscheFrames';
 
 interface PrintableJobCardProps {
     job: Job;
@@ -27,6 +29,7 @@ interface PrintableJobCardProps {
     taxRates?: TaxRate[];
     printBlankInspectionSheet?: boolean;
     inspectionTemplates?: InspectionTemplate[];
+    inspectionDiagrams?: InspectionDiagram[];
 }
 
 const PrintableJobCard: React.FC<PrintableJobCardProps> = ({
@@ -39,6 +42,7 @@ const PrintableJobCard: React.FC<PrintableJobCardProps> = ({
     taxRates = [],
     printBlankInspectionSheet,
     inspectionTemplates = [],
+    inspectionDiagrams = [],
 }) => {
     if (!job) return null;
 
@@ -69,9 +73,24 @@ const PrintableJobCard: React.FC<PrintableJobCardProps> = ({
     }, [job?.inspectionTemplateId, inspectionTemplates]);
 
     const vehicleImage = useMemo(() => {
-        const images = Array.isArray(vehicle?.images) ? vehicle.images : [];
-        return images.find(img => img.isPrimaryDiagram) || images[0];
+        if (vehicle && Array.isArray(vehicle.images)) {
+            return vehicle.images.find(img => img.isPrimaryDiagram) || vehicle.images[0];
+        }
+        return null;
     }, [vehicle]);
+
+    const matchedLibraryDiagram = useMemo(() => {
+        if (!vehicle || !inspectionDiagrams || vehicleImage) return null;
+        return inspectionDiagrams.find(d => 
+            d.make?.toLowerCase() === vehicle.make?.toLowerCase() && 
+            d.model?.toLowerCase() === vehicle.model?.toLowerCase()
+        ) || inspectionDiagrams.find(d => 
+            d.make?.toLowerCase() === vehicle.make?.toLowerCase()
+        ) || null;
+    }, [vehicle, inspectionDiagrams, vehicleImage]);
+
+    const resolvedImageId = vehicle?.inspectionDiagramId || vehicleImage?.id || matchedLibraryDiagram?.imageId || null;
+    const resolvedImageUrl = vehicleImage?.dataUrl || null;
 
     const hasFilledChecklist = useMemo(() => {
         if (!job?.inspectionChecklist) return false;
@@ -269,10 +288,14 @@ const PrintableJobCard: React.FC<PrintableJobCardProps> = ({
                     <h3 className="text-xs font-bold text-gray-400 uppercase mb-2 ml-1">Vehicle Damage & Tyre Report</h3>
                     <div className="grid grid-cols-2 gap-6">
                         <div className="relative w-full mx-auto rounded-lg overflow-hidden shadow-md bg-gray-200 border border-gray-300">
-                            {vehicleImage ? (
-                                <img src={vehicleImage.dataUrl} alt="Vehicle Diagram" className="w-full" />
+                            {resolvedImageId ? (
+                                <AsyncMedia imageId={resolvedImageId} alt="Vehicle Diagram" className="w-full h-auto mix-blend-multiply" />
+                            ) : resolvedImageUrl ? (
+                                <img src={resolvedImageUrl} alt="Vehicle Diagram" className="w-full h-auto mix-blend-multiply" />
                             ) : (
-                                <div className="h-48 flex items-center justify-center"><p className="text-gray-500">No vehicle image</p></div>
+                                <div className="p-4 bg-white flex items-center justify-center w-full">
+                                    <PorscheFrames view="top" vehicleModel={`${vehicle?.make} ${vehicle?.model}`} />
+                                </div>
                             )}
                             {(job.damagePoints || []).map(point => (
                                 <div key={point.id} className="absolute w-5 h-5 rounded-full bg-red-500 bg-opacity-75 border-2 border-white shadow-lg" style={{ top: `${point.y}%`, left: `${point.x}%`, transform: 'translate(-50%, -50%)' }} title={point.notes}></div>

@@ -110,6 +110,27 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, 
                         </div>
                     </div>
 
+                    {/* Backup Email Field */}
+                    <div className="space-y-1">
+                        <div className="flex justify-between items-center ml-1">
+                            <label className="text-[10px] font-black uppercase text-slate-400">Backup Email (Optional)</label>
+                        </div>
+                        <div className="relative">
+                            <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" />
+                            <input
+                                type="email"
+                                className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-3 text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-medium"
+                                value={formData.backupEmail || ''}
+                                onChange={(e) => setFormData({ ...formData, backupEmail: e.target.value })}
+                                placeholder="e.g. pauline.gmail@gmail.com"
+                                disabled={isSaving}
+                            />
+                        </div>
+                        <p className="text-[10px] text-slate-400 ml-1 font-medium leading-normal">
+                            For users without a corporate inbox. Password resets will be sent here.
+                        </p>
+                    </div>
+
                     <div className="grid grid-cols-2 gap-4">
                          {/* Role Selection */}
                         <div className="space-y-1">

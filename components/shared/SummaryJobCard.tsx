@@ -53,17 +53,22 @@ export const SummaryJobCard: React.FC<SummaryJobCardProps> = (props) => {
     // De-duplicate engineer names
     const uniqueEngineers = Array.from(new Set(engineerNames));
     const hasServicePackages = job.lineItems && job.lineItems.some(item => item.isPackage);
+    const isMot = job.jobType === 'MOT' || /\bmot\b/i.test(job.description || '');
+
+    const cardBorderAndColorClass = React.useMemo(() => {
+        if (job.vehicleStatus === 'Off-Site (Partner)') {
+            return isMot ? 'bg-gray-100 border-2 border-blue-700 opacity-80' : 'bg-gray-100 border-gray-300 opacity-80';
+        }
+        if (job.partsStatus === 'Awaiting Order') {
+            return isMot ? 'bg-rose-50 border-2 border-blue-700 text-rose-950 shadow-rose-50' : 'bg-rose-50 border-rose-200 text-rose-950 shadow-rose-50';
+        }
+        return isMot ? 'bg-white border-2 border-blue-700' : 'bg-white border-gray-200';
+    }, [job.vehicleStatus, job.partsStatus, isMot]);
 
     return (
         <JobHoverPopout {...props}>
             <div 
-                className={`p-2 border rounded-lg shadow-sm hover:shadow-md hover:border-indigo-400 cursor-pointer transition-all duration-200 ${
-                    job.vehicleStatus === 'Off-Site (Partner)' 
-                        ? 'bg-gray-100 border-gray-300 opacity-80' 
-                        : job.partsStatus === 'Awaiting Order'
-                            ? 'bg-rose-50 border-rose-200 text-rose-950 shadow-rose-50' 
-                            : 'bg-white border-gray-200'
-                } ${hasServicePackages && job.vehicleStatus !== 'Off-Site (Partner)' ? 'border-l-4 border-l-indigo-500' : ''}`}
+                className={`p-2 rounded-lg shadow-sm hover:shadow-md hover:border-indigo-400 cursor-pointer transition-all duration-200 ${cardBorderAndColorClass} ${hasServicePackages && job.vehicleStatus !== 'Off-Site (Partner)' ? 'border-l-4 border-l-indigo-500' : ''}`}
                 onClick={() => props.onEdit(job.id)}
             >
                 <div className="flex justify-between items-center text-[9px] font-bold mb-1">

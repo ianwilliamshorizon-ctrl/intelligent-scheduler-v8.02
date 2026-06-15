@@ -117,9 +117,17 @@ export const ManagementStaffTab: React.FC<ManagementStaffTabProps> = ({ searchTe
                                             </div>
                                         </td>
                                         <td className="px-6 py-5">
-                                            <div className="flex items-center gap-2 text-slate-500 font-medium">
-                                                <Mail size={14} className="text-slate-300" />
-                                                {u.email}
+                                            <div className="flex flex-col gap-1">
+                                                <div className="flex items-center gap-2 text-slate-500 font-medium">
+                                                    <Mail size={14} className="text-slate-300" />
+                                                    {u.email}
+                                                </div>
+                                                {u.backupEmail && (
+                                                    <div className="text-[10px] text-slate-400 font-medium flex items-center gap-1.5 ml-0.5">
+                                                        <span className="px-1.5 py-0.2 bg-slate-100 border border-slate-200 text-slate-500 rounded text-[9px] uppercase font-black tracking-wider">Backup</span>
+                                                        {u.backupEmail}
+                                                    </div>
+                                                )}
                                             </div>
                                         </td>
                                         <td className="px-6 py-5">

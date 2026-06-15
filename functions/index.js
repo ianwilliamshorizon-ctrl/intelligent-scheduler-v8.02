@@ -277,22 +277,14 @@ exports.performScheduledBackup = onSchedule({
 });
 
 /**
- * Outbound Email sending via Office 365 SMTP
+/**
+ * Outbound Email sending helper
  */
-exports.sendEmail = onCall({ 
-  region: "europe-west1", 
-  secrets: ["SMTP_USER", "SMTP_PASS", "MICROSOFT_CLIENT_ID", "MICROSOFT_CLIENT_SECRET", "MICROSOFT_TENANT_ID", "MICROSOFT_EMAIL_SENDER"] 
-}, async (request) => {
+async function sendEmailInternal({ to, fromName, fromEmail, subject, body, attachment }) {
   const microsoftClientId = process.env.MICROSOFT_CLIENT_ID?.trim();
   const microsoftClientSecret = process.env.MICROSOFT_CLIENT_SECRET?.trim();
   const microsoftTenantId = process.env.MICROSOFT_TENANT_ID?.trim();
   const microsoftEmailSender = process.env.MICROSOFT_EMAIL_SENDER?.trim();
-
-  const { to, fromName, fromEmail, subject, body, attachment } = request.data || {};
-
-  if (!to || !subject || !body) {
-    throw new HttpsError("invalid-argument", "Missing required email fields (to, subject, body).");
-  }
 
   // If MS Graph API secrets are configured, use Microsoft Graph
   if (microsoftClientId && microsoftClientSecret && microsoftTenantId && microsoftEmailSender) {
@@ -431,6 +423,93 @@ exports.sendEmail = onCall({
   } catch (error) {
     logger.error("SMTP Mail Error:", error.message);
     throw new HttpsError("internal", `Failed to send email: ${error.message}`);
+  }
+}
+
+/**
+ * Outbound Email sending via Office 365 SMTP / MS Graph
+ */
+exports.sendEmail = onCall({ 
+  region: "europe-west1", 
+  secrets: ["SMTP_USER", "SMTP_PASS", "MICROSOFT_CLIENT_ID", "MICROSOFT_CLIENT_SECRET", "MICROSOFT_TENANT_ID", "MICROSOFT_EMAIL_SENDER"] 
+}, async (request) => {
+  const { to, fromName, fromEmail, subject, body, attachment } = request.data || {};
+
+  if (!to || !subject || !body) {
+    throw new HttpsError("invalid-argument", "Missing required email fields (to, subject, body).");
+  }
+
+  return sendEmailInternal({ to, fromName, fromEmail, subject, body, attachment });
+});
+
+/**
+ * Generate a password reset link for user's auth email and send it to their backup email
+ */
+exports.sendBackupPasswordResetEmail = onCall({ 
+  region: "europe-west1", 
+  secrets: ["SMTP_USER", "SMTP_PASS", "MICROSOFT_CLIENT_ID", "MICROSOFT_CLIENT_SECRET", "MICROSOFT_TENANT_ID", "MICROSOFT_EMAIL_SENDER"] 
+}, async (request) => {
+  const { email, backupEmail, continueUrl } = request.data || {};
+
+  if (!email || !backupEmail) {
+    throw new HttpsError("invalid-argument", "Missing required fields (email, backupEmail).");
+  }
+
+  try {
+    let userExists = true;
+    try {
+      await admin.auth().getUserByEmail(email);
+    } catch (getErr) {
+      if (getErr.code === 'auth/user-not-found') {
+        userExists = false;
+      } else {
+        throw getErr;
+      }
+    }
+
+    if (!userExists) {
+      logger.info(`User ${email} does not exist in Firebase Auth. Creating account programmatically...`);
+      await admin.auth().createUser({
+        email: email,
+        emailVerified: true
+      });
+      logger.info(`User ${email} created successfully in Firebase Auth.`);
+    }
+
+    logger.info(`Generating password reset link for auth account: ${email}`);
+    const actionCodeSettings = {
+      url: continueUrl || "https://intelligent-scheduling.web.app",
+      handleCodeInApp: false
+    };
+    const resetLink = await admin.auth().generatePasswordResetLink(email, actionCodeSettings);
+
+    logger.info(`Password reset link generated. Sending to backup email: ${backupEmail}`);
+
+    const subject = "Reset your Brookspeed Password";
+    const body = `Hello,
+
+A password reset has been requested for your Brookspeed user account (${email}).
+
+Please use the link below to set a new password:
+
+${resetLink}
+
+If you did not request this reset, you can safely ignore this email. Your password will remain unchanged.
+
+Best regards,
+Brookspeed Team`;
+
+    await sendEmailInternal({
+      to: backupEmail,
+      fromName: "Brookspeed Admin",
+      subject: subject,
+      body: body
+    });
+
+    return { success: true };
+  } catch (error) {
+    logger.error("Error generating/sending backup password reset link:", error);
+    throw new HttpsError("internal", `Failed to send backup password reset link: ${error.message}`);
   }
 });
 

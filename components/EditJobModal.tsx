@@ -144,6 +144,7 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
                 taxRates={safeTaxRates}
                 printBlankInspectionSheet={printBlankSheet}
                 inspectionTemplates={safeInspectionTemplates}
+                inspectionDiagrams={inspectionDiagrams}
             />
         );
     };
@@ -301,14 +302,6 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
     }, [isOpen, mainEstimate]);
 
     const isReadOnly = !!editableJob?.invoiceId;
-
-    const sortedPackages = useMemo(() => {
-        if (!vehicle) {
-            return safeServicePackages.map(pkg => ({ ...pkg, id: pkg.id, label: pkg.name || 'Unnamed Package', value: pkg.id, description: pkg.description || 'Service Package', badge: { text: 'Generic', className: 'bg-gray-100 text-gray-800' } }));
-        }
-        const scoredResults = getScoredServicePackages(safeServicePackages, vehicle);
-        return scoredResults.map(({ pkg, matchType, color }) => ({ ...pkg, id: pkg.id, label: pkg.name || 'Unnamed Package', value: pkg.id, description: pkg.description || 'Service Package', badge: { text: matchType, className: color } }));
-    }, [safeServicePackages, vehicle]);
 
     const handleCreateEstimateIfNeeded = useCallback(() => {
         if (!editableEstimate && editableJob && currentUser) {
@@ -987,7 +980,7 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
                                     taxRates={safeTaxRates}
                                     filteredParts={filteredParts}
                                     activePartSearch={activePartSearch}
-                                    servicePackages={sortedPackages as any}
+                                    servicePackages={safeServicePackages}
                                     totalNet={totalNet}
                                     vatBreakdown={vatBreakdown}
                                     grandTotal={grandTotal}
@@ -1044,7 +1037,7 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
                                             isReadOnly={isReadOnly}
                                             vehicleModel={`${vehicle?.make} ${vehicle?.model}`}
                                             vehicleColor={vehicle?.colour}
-                                            imageId={vehicle?.inspectionDiagramId || matchedLibraryDiagram?.imageId}
+                                            imageId={vehicle?.inspectionDiagramId || vehicleImage?.id || matchedLibraryDiagram?.imageId}
                                             imageUrl={vehicleImage?.dataUrl}
                                         />
                                     </div>

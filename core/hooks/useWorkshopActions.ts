@@ -504,7 +504,7 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
                             jobLineItemId: item.id
                         }))
                     };
-                    await saveDocument('brooks_purchaseOrders', newPO);
+                    await handleSaveItem(setPurchaseOrders, newPO, 'brooks_purchaseOrders');
                     poIds.push(newPOId);
                 }
             }

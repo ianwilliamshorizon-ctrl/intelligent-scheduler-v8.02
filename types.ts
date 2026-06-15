@@ -81,6 +81,7 @@ export interface User {
     status?: 'pending' | 'active' | 'disabled';
     holidayApproverId?: string;
     holidayEntitlement?: number;
+    backupEmail?: string;
 }
 
 export interface Role {

@@ -40,6 +40,23 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, customer, 
         return businessEntities[0];
     }, [entity, invoice?.entityId, job?.entityId, data?.businessEntities]);
 
+    const vehicleImage = useMemo(() => {
+        if (vehicle && Array.isArray(vehicle.images)) {
+            return vehicle.images.find(img => img.isPrimaryDiagram) || vehicle.images[0];
+        }
+        return null;
+    }, [vehicle]);
+
+    const matchedLibraryDiagram = useMemo(() => {
+        if (!vehicle || !inspectionDiagrams || vehicleImage) return null;
+        return inspectionDiagrams.find(d => 
+            d.make?.toLowerCase() === vehicle.make?.toLowerCase() && 
+            d.model?.toLowerCase() === vehicle.model?.toLowerCase()
+        ) || inspectionDiagrams.find(d => 
+            d.make?.toLowerCase() === vehicle.make?.toLowerCase()
+        ) || null;
+    }, [vehicle, inspectionDiagrams, vehicleImage]);
+
     const [logoUrl, setLogoUrl] = useState<string | null>(null);
 
     useEffect(() => {
@@ -527,7 +544,15 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, customer, 
                                 <main style={{ paddingBottom: '30px' }}>
                                     <div style={{ breakInside: 'avoid' }}>
                                         <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '15px', borderBottom: '2px solid #000', paddingBottom: '8px' }}>Vehicle Condition Report</h3>
-                                        <VehicleDamageReport activePoints={job.damagePoints || []} onUpdate={() => { }} isReadOnly={true} vehicleModel={vehicle?.model} vehicleColor={vehicle?.colour} imageId={null} />
+                                        <VehicleDamageReport 
+                                            activePoints={job.damagePoints || []} 
+                                            onUpdate={() => { }} 
+                                            isReadOnly={true} 
+                                            vehicleModel={vehicle?.model} 
+                                            vehicleColor={vehicle?.colour} 
+                                            imageId={vehicle?.inspectionDiagramId || vehicleImage?.id || matchedLibraryDiagram?.imageId || null} 
+                                            imageUrl={vehicleImage?.dataUrl || null} 
+                                        />
                                     </div>
                                 </main>
                             </td>

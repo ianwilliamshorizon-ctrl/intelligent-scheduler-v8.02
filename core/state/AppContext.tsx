@@ -15,6 +15,7 @@ import {
     browserSessionPersistence // Added for session control
 } from 'firebase/auth';
 import { toast } from 'react-toastify';
+import { sendBackupPasswordReset } from '../services/emailService';
 
 interface AppState {
     currentUser: T.User | null;
@@ -209,17 +210,28 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
      * RESET PASSWORD (User-facing)
      */
     const resetPassword = async (email: string): Promise<void> => {
-        try {
-            await sendPasswordResetEmail(auth, email.trim(), {
-                url: window.location.origin,
-                handleCodeInApp: false
-            });
-            toast.success(`Check your inbox at ${email} for instructions to reset your password.`);
-        } catch (error: any) {
-            let msg = "Could not send reset email.";
-            if (error.code === 'auth/user-not-found') msg = "No account found with that email.";
-            toast.error(msg);
-            throw error;
+        const matchedUser = users.find(u => u.email?.toLowerCase().trim() === email.toLowerCase().trim());
+        if (matchedUser?.backupEmail?.trim()) {
+            try {
+                await sendBackupPasswordReset(email.trim(), matchedUser.backupEmail.trim(), window.location.origin);
+                toast.success(`Check your backup inbox at ${matchedUser.backupEmail.trim()} for instructions to reset your password.`);
+            } catch (error: any) {
+                toast.error("Could not send backup reset email.");
+                throw error;
+            }
+        } else {
+            try {
+                await sendPasswordResetEmail(auth, email.trim(), {
+                    url: window.location.origin,
+                    handleCodeInApp: false
+                });
+                toast.success(`Check your inbox at ${email} for instructions to reset your password.`);
+            } catch (error: any) {
+                let msg = "Could not send reset email.";
+                if (error.code === 'auth/user-not-found') msg = "No account found with that email.";
+                toast.error(msg);
+                throw error;
+            }
         }
     };
     
@@ -227,14 +239,24 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
      * ADMIN PASSWORD RESET (For Management Console)
      */
     const adminResetPassword = async (email: string): Promise<void> => {
-        try {
-            await sendPasswordResetEmail(auth, email.trim(), {
-                url: window.location.origin,
-                handleCodeInApp: false
-            });
-        } catch (error: any) {
-            console.error("Admin Reset Error:", error);
-            throw error;
+        const matchedUser = users.find(u => u.email?.toLowerCase().trim() === email.toLowerCase().trim());
+        if (matchedUser?.backupEmail?.trim()) {
+            try {
+                await sendBackupPasswordReset(email.trim(), matchedUser.backupEmail.trim(), window.location.origin);
+            } catch (error: any) {
+                console.error("Admin Backup Reset Error:", error);
+                throw error;
+            }
+        } else {
+            try {
+                await sendPasswordResetEmail(auth, email.trim(), {
+                    url: window.location.origin,
+                    handleCodeInApp: false
+                });
+            } catch (error: any) {
+                console.error("Admin Reset Error:", error);
+                throw error;
+            }
         }
     };
     
