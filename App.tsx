@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback, Suspense, lazy } from 'react';
 import { BrowserRouter as Router } from 'react-router-dom';
-import { ToastContainer } from 'react-toastify';
+import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import * as T from './types';
 import { useData } from './core/state/DataContext';
@@ -10,6 +10,7 @@ import { setItem, uploadToStorage, downloadFromStorage, getDocument } from './co
 import { idbSet, idbGet } from './core/db/idb';
 import { getCustomerDisplayName } from './core/utils/customerUtils';
 import { formatDate, dateStringToDate } from './core/utils/dateUtils';
+import { calculateJobPartsStatus } from './core/utils/jobUtils';
 import useModalState from './core/hooks/useModalState';
 import { useWorkshopActions } from './core/hooks/useWorkshopActions';
 import { CheckCircle2, XCircle } from 'lucide-react';
@@ -166,6 +167,17 @@ const App = () => {
     const handleGenerateInvoice = (jobId: string) => {
         const job = (jobs || []).find(j => j.id === jobId);
         if (!job) return;
+
+        const linkedEstimate = (estimates || []).find(e => e.id === job.estimateId || e.jobId === job.id);
+        const jobPurchaseOrders = (purchaseOrders || []).filter(po => po.jobId === job.id || (job.purchaseOrderIds || []).includes(po.id));
+        const currentPartsStatus = calculateJobPartsStatus(linkedEstimate || null, jobPurchaseOrders);
+
+        const isReconciled = currentPartsStatus === 'Fully Received' || currentPartsStatus === 'Not Required';
+        if (!isReconciled) {
+            toast.error(`Cannot generate invoice. All parts for Job #${job.id} must be receipted and reconciled first (Current parts status: ${currentPartsStatus}).`);
+            return;
+        }
+
         setters.setInvoiceFormModal({ isOpen: true, job });
     };
 
