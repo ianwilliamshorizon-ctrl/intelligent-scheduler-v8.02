@@ -631,7 +631,7 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                         onDecline={actions.handleCustomerDeclineEstimate}
                         onEmailSuccess={(est) => {
                             handleSaveItem(data.setEstimates, est, 'brooks_estimates');
-                            actions.updateLinkedInquiryStatus(est.id, 'Sent');
+                            actions.updateLinkedInquiryStatus(est.id, 'Quoted or Responded');
                         }}
                         viewMode="internal"
                         parts={data.parts}

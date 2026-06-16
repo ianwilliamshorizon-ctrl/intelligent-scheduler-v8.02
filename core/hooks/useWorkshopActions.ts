@@ -6,6 +6,7 @@ import { generateSequenceId, saveDocument, deleteDocument } from '../db';
 import { formatDate, splitJobIntoSegments } from '../utils/dateUtils';
 import { calculateJobStatus, calculateJobPartsStatus } from '../utils/jobUtils';
 import useToaster from '../../hooks/useToaster';
+import { getCustomerDisplayName } from '../utils/customerUtils';
 
 const syncingJobs = new Set<string>();
 
@@ -165,9 +166,33 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
     };
 
     const updateLinkedInquiryStatus = async (estimateId: string, newStatus: T.Inquiry['status'], extraUpdates: Partial<T.Inquiry> = {}) => {
+        const targetStatus = newStatus === 'Sent' ? 'Quoted or Responded' : newStatus;
         const targetInquiry = inquiries.find(i => i.linkedEstimateId === estimateId && i.status !== 'Closed');
+        
         if (targetInquiry) {
-            await handleSaveItem(setInquiries, { ...targetInquiry, status: newStatus, ...extraUpdates } as T.Inquiry);
+            await handleSaveItem(setInquiries, { ...targetInquiry, status: targetStatus, ...extraUpdates } as T.Inquiry);
+        } else if (targetStatus === 'Quoted or Responded') {
+            const estimate = estimates.find(e => e.id === estimateId);
+            if (estimate) {
+                const customer = customers.find(c => c.id === estimate.customerId);
+                const vehicle = vehicles.find(v => v.id === estimate.vehicleId);
+                const newInquiry: T.Inquiry = {
+                    id: crypto.randomUUID(),
+                    entityId: estimate.entityId,
+                    createdAt: new Date().toISOString(),
+                    fromName: customer ? getCustomerDisplayName(customer) : 'Unknown Customer',
+                    fromContact: customer?.email || customer?.mobile || 'N/A',
+                    message: `Estimate #${estimate.estimateNumber} sent to customer.`,
+                    takenByUserId: currentUser?.id || 'system',
+                    status: 'Quoted or Responded',
+                    linkedCustomerId: estimate.customerId,
+                    linkedVehicleId: estimate.vehicleId,
+                    linkedEstimateId: estimate.id,
+                    actionNotes: `Auto-generated when Estimate #${estimate.estimateNumber} was sent.`,
+                    ...extraUpdates
+                };
+                await handleSaveItem(setInquiries, newInquiry, 'brooks_inquiries');
+            }
         }
     };
 
@@ -378,7 +403,7 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
 
         await handleSaveItem(setEstimates, estimate);
         
-        if (estimate.status === 'Sent') await updateLinkedInquiryStatus(estimate.id, 'Sent');
+        if (estimate.status === 'Sent') await updateLinkedInquiryStatus(estimate.id, 'Quoted or Responded');
         
         if (isNew && estimate.jobId) {
              const newInquiry: T.Inquiry = {
