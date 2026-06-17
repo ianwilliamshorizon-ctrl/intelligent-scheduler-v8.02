@@ -429,8 +429,8 @@ const App = () => {
                         handleCustomerApproveEstimate(est, items, dates, notes);
                         setCustomerActionState('approved');
                     }}
-                    onDecline={(est) => {
-                        handleCustomerDeclineEstimate(est);
+                    onDecline={(est, reason) => {
+                        handleCustomerDeclineEstimate(est, reason);
                         setCustomerActionState('declined');
                     }}
                     onEmailSuccess={() => {}}
@@ -511,9 +511,41 @@ const App = () => {
         setConfirmation({ isOpen: true, title: 'Request Received', message: successMessage, type: 'success' });
     }
 
-    function handleCustomerDeclineEstimate(estimate: T.Estimate) {
+    function handleCustomerDeclineEstimate(estimate: T.Estimate, reason?: string) {
         const updatedEstimate: T.Estimate = { ...estimate, status: 'Rejected' };
         handleSaveItem(setEstimates, updatedEstimate);
+        
+        const customer = (customers || []).find(c => c.id === estimate.customerId);
+        const inquiryMessage = `ONLINE DECLINE: Estimate #${estimate.estimateNumber}\n\n` + 
+                               `Reason for declining: ${reason || 'None provided'}`;
+        
+        const existingInquiry = (inquiries || []).find(i => i.linkedEstimateId === estimate.id);
+        if (existingInquiry) {
+            const updatedInquiry = { 
+                ...existingInquiry, 
+                status: 'Rejected' as const, 
+                message: existingInquiry.message + '\n\n' + inquiryMessage,
+                actionNotes: (existingInquiry.actionNotes || '') + `\n[System]: Customer Declined Online. Reason: ${reason || 'None provided'}`
+            };
+            handleSaveItem(setInquiries, updatedInquiry);
+        } else {
+            const newInquiry: T.Inquiry = { 
+                id: crypto.randomUUID(), 
+                entityId: estimate.entityId, 
+                createdAt: new Date().toISOString(), 
+                fromName: getCustomerDisplayName(customer), 
+                fromContact: customer?.email || customer?.mobile || "Client Portal", 
+                message: inquiryMessage, 
+                takenByUserId: 'system', 
+                status: 'Rejected', 
+                linkedCustomerId: estimate.customerId, 
+                linkedVehicleId: estimate.vehicleId, 
+                linkedEstimateId: estimate.id, 
+                actionNotes: `Customer Declined Online. Reason: ${reason || 'None provided'}`
+            };
+            handleSaveItem(setInquiries, newInquiry);
+        }
+
         // @ts-ignore
         workshopActions.updateLinkedInquiryStatus(estimate.id, 'Rejected');
         setCustomerViewData(prev => prev.estimate ? { ...prev, estimate: updatedEstimate } : prev);

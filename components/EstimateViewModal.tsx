@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom/client';
 import { toast } from 'react-toastify';
 import { Estimate, Customer, Vehicle, EstimateLineItem, TaxRate, BusinessEntity, Part, User, ServicePackage } from '../types';
 import { 
-    X, CheckSquare, Mail, Loader2, Printer, CheckCircle, 
+    X, CheckSquare, Mail, Loader2, Printer, CheckCircle, XCircle,
     MessageSquare, Monitor, Image as ImageIcon, Gauge, AlertTriangle, 
     ChevronLeft, ChevronRight, AlertCircle, CalendarCheck, Package,
     ArrowRight, Calendar, Edit, FileText, Volume2, VolumeX
@@ -33,7 +33,7 @@ interface EstimateViewModalProps {
     entityDetails?: BusinessEntity;
     onApprove: (estimate: Estimate, selectedOptionalItemIds: string[], notes?: string, scheduledDate?: string) => void;
     onCustomerApprove?: (estimate: Estimate, selectedOptionalItemIds: string[], dateRange: { start: string, end: string }, notes: string) => void;
-    onDecline?: (estimate: Estimate) => void;
+    onDecline?: (estimate: Estimate, reason?: string) => void;
     onEmailSuccess: (estimate: Estimate) => void;
     viewMode?: 'internal' | 'customer';
     parts: Part[];
@@ -81,6 +81,9 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
     const isSubmitting = useRef(false);
     
     const [isConfirmingApproval, setIsConfirmingApproval] = useState(false);
+    const [isNextAvailableOnly, setIsNextAvailableOnly] = useState(false);
+    const [isConfirmingDecline, setIsConfirmingDecline] = useState(false);
+    const [declineReason, setDeclineReason] = useState('');
     const [preferredStartDate, setPreferredStartDate] = useState(formatDate(new Date()));
     const [preferredEndDate, setPreferredEndDate] = useState(formatDate(new Date()));
     const [customerNotes, setCustomerNotes] = useState('');
@@ -462,7 +465,7 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                 dateRange,
                 customerNotes
             );
-            onClose();
+            if (viewMode !== 'customer') onClose();
         }
     };
 
@@ -477,7 +480,14 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                 { start: 'next-available', end: 'next-available' },
                 customerNotes || 'Customer requested the next available workshop slot.'
             );
-            onClose();
+            if (viewMode !== 'customer') onClose();
+        }
+    };
+
+    const handleDeclineSubmit = () => {
+        if (onDecline) {
+            onDecline(estimate, declineReason);
+            if (viewMode !== 'customer') onClose();
         }
     };
 
@@ -711,9 +721,14 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                             <div className="mt-6 p-6 bg-white border-2 border-green-500 rounded-xl shadow-lg animate-fade-in-up max-w-2xl mx-auto">
                                 <h3 className="text-xl font-bold text-green-800 mb-4 flex items-center gap-2">
                                     {isSupplementary ? <CheckCircle size={24} /> : <CalendarCheck size={24} />}
-                                    {isSupplementary ? 'Confirm Approval' : 'Request Booking'}
+                                    {isSupplementary ? 'Confirm Approval' : (isNextAvailableOnly ? 'Confirm Approval & Fast Schedule' : 'Request Booking')}
                                 </h3>
 
+                                {isNextAvailableOnly ? (
+                                    <p className="text-sm text-gray-600 mb-4 bg-indigo-50/50 p-3 rounded-lg border border-indigo-100 leading-relaxed">
+                                        We will book your vehicle in the <strong>next available workshop slot</strong>. If you have any specific requirements, timing constraints, or questions, please let us know in the notes box below.
+                                    </p>
+                                ) : (
                                     <>
                                         <p className="text-sm text-gray-600 mb-4">
                                             Please select a range of dates. We will check our workshop availability and confirm the first available date closest to your preference. A minimum of 3 days lead time is required for parts ordering.
@@ -767,6 +782,7 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                                             </div>
                                         ) : null}
                                     </>
+                                )}
                                 
                                 <div className="mb-6">
                                     <label className="block text-sm font-bold text-gray-700 mb-1">{isSupplementary ? 'Notes for Technician (Optional)' : 'Notes / Special Requests'}</label>
@@ -776,17 +792,26 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                                 <div className="flex justify-between items-center flex-wrap gap-3">
                                     <button onClick={() => setIsConfirmingApproval(false)} className="px-5 py-2.5 bg-gray-100 text-gray-700 rounded-lg font-bold hover:bg-gray-200 transition">Back</button>
                                     <div className="flex gap-3 flex-wrap">
+                                        {isNextAvailableOnly ? (
+                                            <button 
+                                                onClick={() => setIsNextAvailableOnly(false)} 
+                                                className="px-5 py-2.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg font-bold hover:bg-indigo-100 transition"
+                                            >
+                                                Choose Specific Dates instead
+                                            </button>
+                                        ) : (
+                                            <button 
+                                                onClick={() => setIsNextAvailableOnly(true)} 
+                                                className="px-5 py-2.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg font-bold hover:bg-indigo-100 transition"
+                                            >
+                                                Request Next Available Slot instead
+                                            </button>
+                                        )}
                                         <button 
-                                            onClick={handleApproveNextAvailable} 
-                                            className="px-5 py-2.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg font-bold hover:bg-indigo-100 transition"
-                                        >
-                                            Request Next Available Slot instead
-                                        </button>
-                                        <button 
-                                            onClick={handleSubmitApproval} 
-                                            disabled={!!capacityOnStartDate?.isOverCapacity} 
+                                            onClick={isNextAvailableOnly ? handleApproveNextAvailable : handleSubmitApproval} 
+                                            disabled={!isNextAvailableOnly && !!capacityOnStartDate?.isOverCapacity} 
                                             className={`flex items-center gap-2 px-6 py-2.5 font-bold rounded-lg shadow-md transition transform ${
-                                                capacityOnStartDate?.isOverCapacity 
+                                                (!isNextAvailableOnly && capacityOnStartDate?.isOverCapacity) 
                                                     ? 'bg-gray-300 text-gray-500 cursor-not-allowed transform-none' 
                                                     : 'bg-green-600 text-white hover:bg-green-700 hover:scale-105'
                                             }`}
@@ -795,7 +820,43 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                                         </button>
                                     </div>
                                 </div>
-                           </div>
+                            </div>
+                        )}
+
+                        {isCustomerMode && isConfirmingDecline && (
+                            <div className="mt-6 p-6 bg-white border-2 border-red-500 rounded-xl shadow-lg animate-fade-in-up max-w-2xl mx-auto">
+                                <h3 className="text-xl font-bold text-red-800 mb-4 flex items-center gap-2">
+                                    <XCircle size={24} className="text-red-650" />
+                                    Decline Estimate
+                                </h3>
+                                <p className="text-sm text-gray-600 mb-4">
+                                    Please let us know if there is anything we can do differently or if you would like us to revise the estimate. You can enter any feedback or reasons below.
+                                </p>
+                                <div className="mb-6">
+                                    <label className="block text-sm font-bold text-gray-700 mb-1">Reason for declining (Optional)</label>
+                                    <textarea 
+                                        value={declineReason} 
+                                        onChange={(e) => setDeclineReason(e.target.value)} 
+                                        rows={3} 
+                                        className="w-full p-3 border rounded-lg bg-gray-50 focus:ring-2 focus:ring-red-500 outline-none" 
+                                        placeholder="e.g. Price too high, decided not to proceed, etc..."
+                                    />
+                                </div>
+                                <div className="flex justify-between items-center gap-3">
+                                    <button 
+                                        onClick={() => setIsConfirmingDecline(false)} 
+                                        className="px-5 py-2.5 bg-gray-100 text-gray-700 rounded-lg font-bold hover:bg-gray-200 transition"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button 
+                                        onClick={handleDeclineSubmit} 
+                                        className="px-6 py-2.5 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 shadow-md transition transform hover:scale-105"
+                                    >
+                                        Confirm Decline
+                                    </button>
+                                </div>
+                            </div>
                         )}
                     </main>
                     
@@ -838,18 +899,21 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                         ) : (
                             <div className="w-full flex justify-between items-center flex-wrap gap-4">
                                 <div className="text-xs text-gray-500">* This total is an estimate and subject to final inspection.</div>
-                                {!isConfirmingApproval && isInteractive && (
+                                {!isConfirmingApproval && !isConfirmingDecline && isInteractive && (
                                      <div className="flex gap-3 flex-wrap">
                                          {onDecline && (
                                              <button 
-                                                 onClick={() => onDecline(estimate)} 
+                                                 onClick={() => setIsConfirmingDecline(true)} 
                                                  className="px-5 py-2.5 bg-red-50 text-red-600 font-bold rounded-lg hover:bg-red-100 transition"
                                              >
                                                  Decline Estimate
                                              </button>
                                          )}
                                          <button 
-                                             onClick={handleApproveNextAvailable} 
+                                             onClick={() => {
+                                                 setIsNextAvailableOnly(true);
+                                                 setIsConfirmingApproval(true);
+                                             }} 
                                              className="flex items-center py-2.5 px-4 sm:px-6 bg-indigo-600 text-white font-bold rounded-lg shadow-lg hover:bg-indigo-700 transition transform hover:-translate-y-0.5 animate-fade-in text-xs sm:text-sm"
                                          >
                                              <CheckSquare size={18} className="mr-2 flex-shrink-0"/>
@@ -859,7 +923,10 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                                              </span>
                                          </button>
                                          <button 
-                                             onClick={() => setIsConfirmingApproval(true)} 
+                                             onClick={() => {
+                                                 setIsNextAvailableOnly(false);
+                                                 setIsConfirmingApproval(true);
+                                             }} 
                                              className="flex items-center py-2.5 px-4 sm:px-6 bg-green-600 text-white font-bold rounded-lg shadow-lg hover:bg-green-700 transition transform hover:-translate-y-0.5 animate-fade-in text-xs sm:text-sm"
                                          >
                                              <Calendar size={18} className="mr-2 flex-shrink-0"/>
