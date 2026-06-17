@@ -137,12 +137,12 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
     }, [isOpen, estimate.id]);
 
     useEffect(() => {
-        if (isConfirmingApproval && mainRef.current) {
+        if ((isConfirmingApproval || isConfirmingDecline) && mainRef.current) {
             setTimeout(() => {
                 mainRef.current?.scrollTo({ top: mainRef.current.scrollHeight, behavior: 'smooth' });
             }, 100);
         }
-    }, [isConfirmingApproval]);
+    }, [isConfirmingApproval, isConfirmingDecline]);
 
     const isInteractive = isCustomerMode 
         ? (!['Converted to Job', 'Closed', 'Declined', 'Approved'].includes(estimate.status))
@@ -465,7 +465,7 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                 dateRange,
                 customerNotes
             );
-            if (viewMode !== 'customer') onClose();
+            onClose();
         }
     };
 
@@ -480,14 +480,14 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                 { start: 'next-available', end: 'next-available' },
                 customerNotes || 'Customer requested the next available workshop slot.'
             );
-            if (viewMode !== 'customer') onClose();
+            onClose();
         }
     };
 
     const handleDeclineSubmit = () => {
         if (onDecline) {
             onDecline(estimate, declineReason);
-            if (viewMode !== 'customer') onClose();
+            onClose();
         }
     };
 
@@ -860,7 +860,7 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                         )}
                     </main>
                     
-                    <footer className="flex-shrink-0 flex justify-between items-center p-4 border-t bg-white shadow-[0_-2px_10px_rgba(0,0,0,0.05)] z-10">
+                    <footer className="flex-shrink-0 flex justify-between items-center p-2 sm:p-4 border-t bg-white shadow-[0_-2px_10px_rgba(0,0,0,0.05)] z-10">
                         {!isCustomerMode ? (
                             <>
                                 <div className="flex gap-2">
@@ -897,16 +897,17 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                                 )}
                             </>
                         ) : (
-                            <div className="w-full flex justify-between items-center flex-wrap gap-4">
-                                <div className="text-xs text-gray-500">* This total is an estimate and subject to final inspection.</div>
+                            <div className="w-full flex flex-col gap-2 sm:gap-4">
+                                <div className="text-[10px] sm:text-xs text-gray-500 text-center sm:text-left">* This total is an estimate and subject to final inspection.</div>
                                 {!isConfirmingApproval && !isConfirmingDecline && isInteractive && (
-                                     <div className="flex gap-3 flex-wrap">
+                                     <div className="flex gap-1.5 sm:gap-3 justify-between sm:justify-start w-full">
                                          {onDecline && (
                                              <button 
                                                  onClick={() => setIsConfirmingDecline(true)} 
-                                                 className="px-5 py-2.5 bg-red-50 text-red-600 font-bold rounded-lg hover:bg-red-100 transition"
+                                                 className="flex-1 sm:flex-none justify-center px-2 py-2 sm:px-5 sm:py-2.5 bg-red-50 text-red-600 font-bold rounded-lg hover:bg-red-100 transition text-[10px] sm:text-sm"
                                              >
-                                                 Decline Estimate
+                                                 <span className="hidden sm:inline">Decline Estimate</span>
+                                                 <span className="inline sm:hidden">Decline</span>
                                              </button>
                                          )}
                                          <button 
@@ -914,12 +915,12 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                                                  setIsNextAvailableOnly(true);
                                                  setIsConfirmingApproval(true);
                                              }} 
-                                             className="flex items-center py-2.5 px-4 sm:px-6 bg-indigo-600 text-white font-bold rounded-lg shadow-lg hover:bg-indigo-700 transition transform hover:-translate-y-0.5 animate-fade-in text-xs sm:text-sm"
+                                             className="flex-1 sm:flex-none justify-center flex items-center py-2 px-2 sm:py-2.5 sm:px-5 bg-indigo-600 text-white font-bold rounded-lg shadow-lg hover:bg-indigo-700 transition transform hover:-translate-y-0.5 animate-fade-in text-[10px] sm:text-sm"
                                          >
-                                             <CheckSquare size={18} className="mr-2 flex-shrink-0"/>
+                                             <CheckSquare size={14} className="mr-1 sm:mr-2 flex-shrink-0"/>
                                              <span>
                                                  <span className="hidden lg:inline">{isSupplementary ? 'Approve & Next Available' : 'Approve & Request Next Available Slot'}</span>
-                                                 <span className="inline lg:hidden">{isSupplementary ? 'Approve & Next Available' : 'Approve (Fastest)'}</span>
+                                                 <span className="inline lg:hidden">{isSupplementary ? 'Approve (Fast)' : 'Approve (Fast)'}</span>
                                              </span>
                                          </button>
                                          <button 
@@ -927,12 +928,12 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                                                  setIsNextAvailableOnly(false);
                                                  setIsConfirmingApproval(true);
                                              }} 
-                                             className="flex items-center py-2.5 px-4 sm:px-6 bg-green-600 text-white font-bold rounded-lg shadow-lg hover:bg-green-700 transition transform hover:-translate-y-0.5 animate-fade-in text-xs sm:text-sm"
+                                             className="flex-1 sm:flex-none justify-center flex items-center py-2 px-2 sm:py-2.5 sm:px-5 bg-green-600 text-white font-bold rounded-lg shadow-lg hover:bg-green-700 transition transform hover:-translate-y-0.5 animate-fade-in text-[10px] sm:text-sm"
                                          >
-                                             <Calendar size={18} className="mr-2 flex-shrink-0"/>
+                                             <Calendar size={14} className="mr-1 sm:mr-2 flex-shrink-0"/>
                                              <span>
                                                  <span className="hidden lg:inline">{isSupplementary ? 'Approve & Select Dates' : 'Approve & Choose Preferred Dates'}</span>
-                                                 <span className="inline lg:hidden">Approve & Choose Dates</span>
+                                                 <span className="inline lg:hidden">Choose Dates</span>
                                              </span>
                                          </button>
                                      </div>
