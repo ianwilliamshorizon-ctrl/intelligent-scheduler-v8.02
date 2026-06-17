@@ -59,7 +59,8 @@ Estimate Summary:
 Total Estimate Amount: £${total.toFixed(2)}
 
 You can view, approve, or decline your detailed estimate online by clicking the link below:
-<a href="${onlineViewLink}" style="color: #4f46e5; text-decoration: underline; font-weight: 600;">${onlineViewLink}</a>
+
+<a href="${onlineViewLink}" style="display: inline-block; padding: 10px 20px; background-color: #4f46e5; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: bold; margin-top: 10px; margin-bottom: 10px;">View Estimate Online</a>
 
 If you have any questions, please don't hesitate to contact us.
 

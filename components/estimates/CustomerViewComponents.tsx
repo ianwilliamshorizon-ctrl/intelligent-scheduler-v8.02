@@ -51,7 +51,7 @@ export const CustomerServicePackage: React.FC<{
             {isExpanded && (
                 <div className="bg-white p-3 pl-12 space-y-2 border-t border-gray-200">
                     {childrenItems.map(child => (
-                        <div key={child.id} className="flex justify-between text-sm text-gray-700 py-1 border-b border-gray-100 last:border-0">
+                        <div key={child.id} className="flex justify-between text-sm text-slate-700 py-1 border-b border-gray-100 last:border-0">
                             <span className="flex items-center gap-2">
                                 <span className="w-1.5 h-1.5 rounded-full bg-indigo-400"></span>
                                 {child.description} {child.quantity > 1 ? `(x${child.quantity})` : ''}
@@ -91,7 +91,7 @@ export const SelectableEstimateItemRow: React.FC<{
                 </div>
             )}
         </div>
-        <div className={`col-span-7 flex flex-col ${isOptional && isSelected ? 'font-semibold text-indigo-900' : 'text-gray-800'}`}>
+        <div className={`col-span-7 flex flex-col ${isOptional && isSelected ? 'font-semibold text-indigo-900' : 'text-slate-800'}`}>
             {item.optionLabel && (
                 <span className={`text-[9px] font-black uppercase tracking-widest mb-0.5 ${isSelected ? 'text-indigo-600' : 'text-gray-400'}`}>
                     {item.optionLabel}
