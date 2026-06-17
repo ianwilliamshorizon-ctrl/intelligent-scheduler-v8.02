@@ -91,7 +91,7 @@ export const SelectableEstimateItemRow: React.FC<{
                 </div>
             )}
         </div>
-        <div className={`col-span-7 flex flex-col ${isOptional && isSelected ? 'font-semibold text-indigo-900' : ''}`}>
+        <div className={`col-span-7 flex flex-col ${isOptional && isSelected ? 'font-semibold text-indigo-900' : 'text-gray-800'}`}>
             {item.optionLabel && (
                 <span className={`text-[9px] font-black uppercase tracking-widest mb-0.5 ${isSelected ? 'text-indigo-600' : 'text-gray-400'}`}>
                     {item.optionLabel}

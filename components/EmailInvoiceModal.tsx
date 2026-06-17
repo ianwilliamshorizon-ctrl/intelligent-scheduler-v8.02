@@ -32,7 +32,7 @@ const EmailInvoiceModal: React.FC<EmailInvoiceModalProps> = ({ isOpen, onClose, 
 
     useEffect(() => {
         if (isOpen && invoice) {
-            setSubject(`Your Invoice #${invoice.id} from BROOKSPEED`);
+            setSubject(`Your Invoice #${invoice.id} from Brookspeed`);
             setBody(
 `Dear ${customer?.forename || 'Customer'},
 
@@ -44,7 +44,7 @@ Total Amount Due: £${total.toFixed(2)}
 If you have any questions, please don't hesitate to contact us.
 
 Kind regards,
-The BROOKSPEED Team`
+The Brookspeed Team`
             );
         }
     }, [isOpen, invoice, customer, vehicle, total]);
@@ -93,7 +93,7 @@ The BROOKSPEED Team`
                     
                     <div className="flex items-center p-2 bg-gray-50 rounded-md border border-gray-100">
                         <span className="font-bold text-gray-400 w-20 uppercase text-[10px]">From:</span>
-                        <span className="text-gray-700 font-medium">BROOKSPEED &lt;info@brookspeed.com&gt;</span>
+                        <span className="text-gray-700 font-medium">Brookspeed &lt;info@brookspeed.com&gt;</span>
                     </div>
 
                     <div className="flex flex-col gap-1">

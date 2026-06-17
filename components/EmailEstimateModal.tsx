@@ -49,22 +49,22 @@ const EmailEstimateModal: React.FC<EmailEstimateModalProps> = ({ isOpen, onClose
     const handleSend = async () => {
         setIsSending(true);
         try {
-            const subject = `Your Estimate #${estimate.estimateNumber} from BROOKSPEED`;
+            const subject = `Your Estimate #${estimate.estimateNumber} from Brookspeed`;
             const onlineViewLink = `${window.location.origin}/?estimateId=${estimate.id}&view=customer`;
             const body = `Dear ${customer?.forename || 'Customer'},
 
-Thank you for choosing BROOKSPEED. Please find below the details of your estimate for the work on your ${vehicle?.make || 'Vehicle'} ${vehicle?.model || ''} (${vehicle?.registration || 'TBA'}).
+Thank you for choosing Brookspeed. Please find below the details of your estimate for the work on your ${vehicle?.make || 'Vehicle'} ${vehicle?.model || ''} (${vehicle?.registration || 'TBA'}).
 
 Estimate Summary:
 Total Estimate Amount: £${total.toFixed(2)}
 
 You can view, approve, or decline your detailed estimate online by clicking the link below:
-${onlineViewLink}
+<a href="${onlineViewLink}" style="color: #4f46e5; text-decoration: underline; font-weight: 600;">${onlineViewLink}</a>
 
 If you have any questions, please don't hesitate to contact us.
 
 Kind regards,
-The BROOKSPEED Team`;
+The Brookspeed Team`;
 
             await onSend(recipients, subject, body);
         } catch (err) {
@@ -106,16 +106,16 @@ The BROOKSPEED Team`;
                     
                     <div className="flex items-center p-2 bg-gray-50 rounded-md border border-gray-100">
                         <span className="font-bold text-gray-400 w-20 uppercase text-[10px]">From:</span>
-                        <span className="text-gray-700 font-medium">BROOKSPEED &lt;info@brookspeed.com&gt;</span>
+                        <span className="text-gray-700 font-medium">Brookspeed &lt;info@brookspeed.com&gt;</span>
                     </div>
                     <div className="flex items-center p-2 bg-gray-50 rounded-md border border-gray-100">
                         <span className="font-bold text-gray-400 w-20 uppercase text-[10px]">Subject:</span>
-                        <span className="text-gray-800 font-semibold tracking-tight">Your Estimate #{estimate.estimateNumber} from BROOKSPEED</span>
+                        <span className="text-gray-800 font-semibold tracking-tight">Your Estimate #{estimate.estimateNumber} from Brookspeed</span>
                     </div>
 
                     <div className="p-4 border border-gray-200 rounded-lg mt-4 h-80 overflow-y-auto bg-white shadow-inner">
                         <p className="mb-4">Dear {customer?.forename || 'Customer'},</p>
-                        <p className="mb-4">Thank you for choosing BROOKSPEED. Please find below the details of your estimate for the work on your {vehicle?.make} {vehicle?.model} ({vehicle?.registration || 'TBA'}).</p>
+                        <p className="mb-4">Thank you for choosing Brookspeed. Please find below the details of your estimate for the work on your {vehicle?.make} {vehicle?.model} ({vehicle?.registration || 'TBA'}).</p>
                         <div className="p-4 bg-gray-50 my-4 rounded-xl border border-gray-100 shadow-sm">
                             <h4 className="font-bold text-indigo-900 text-sm mb-3 border-b border-gray-200 pb-2 flex items-center">
                                 <span className="bg-indigo-100 p-1 rounded-md mr-2"><Mail size={14} className="text-indigo-600" /></span>
@@ -140,7 +140,7 @@ The BROOKSPEED Team`;
                         </div>
                         <p>If you have any questions, please don't hesitate to contact us.</p>
                         <p className="mt-6 text-gray-400">Kind regards,</p>
-                        <p className="font-bold text-indigo-900">The BROOKSPEED Team</p>
+                        <p className="font-bold text-indigo-900">The Brookspeed Team</p>
                     </div>
                 </div>
 

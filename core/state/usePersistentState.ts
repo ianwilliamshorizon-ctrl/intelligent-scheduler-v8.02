@@ -10,7 +10,8 @@ export type UsePersistentStateTuple<T> = [T, React.Dispatch<React.SetStateAction
  */
 export function usePersistentState<T>(
     key: string,
-    initialValue: T | (() => T)
+    initialValue: T | (() => T),
+    skipLoad = false
 ): UsePersistentStateTuple<T> {
     // Initialize state with the provided default initialValue.
     // The actual state will be loaded asynchronously from IndexedDB and/or Firestore.
@@ -19,11 +20,12 @@ export function usePersistentState<T>(
     );
     
     // Flag to prevent writing to IndexedDB before the initial state has been loaded.
-    const [isInitialized, setIsInitialized] = useState(false);
-    const [isLoading, setIsLoading] = useState(true);
+    const [isInitialized, setIsInitialized] = useState(skipLoad);
+    const [isLoading, setIsLoading] = useState(!skipLoad);
 
     // Function to refresh data from Firestore, update IndexedDB cache, and update the component state.
     const refreshStateFromDb = useCallback(async () => {
+        if (skipLoad) return;
         console.log(`[Sync] Refreshing '${key}' from Firestore...`);
         try {
             const dbValue = await getAll(key); // Fetches all documents from the Firestore collection.
@@ -37,10 +39,16 @@ export function usePersistentState<T>(
         } catch (error) {
             console.error(`[Sync] Failed to refresh '${key}' from Firestore:`, error);
         }
-    }, [key, initialValue]);
+    }, [key, initialValue, skipLoad]);
 
     // Effect to load initial data on component mount.
     useEffect(() => {
+        if (skipLoad) {
+            setIsLoading(false);
+            setIsInitialized(true);
+            return;
+        }
+
         let isMounted = true;
 
         const loadInitialState = async () => {
@@ -72,13 +80,13 @@ export function usePersistentState<T>(
         return () => {
             isMounted = false;
         };
-    }, [key, refreshStateFromDb]); // refreshStateFromDb is memoized with useCallback.
+    }, [key, refreshStateFromDb, skipLoad]); // refreshStateFromDb is memoized with useCallback.
 
     // Effect to persist local state changes to the IndexedDB cache.
     // This captures optimistic UI updates (e.g., adding an item to a list before it's saved to the backend).
     useEffect(() => {
         // Only run this effect after the initial state has been loaded.
-        if (!isInitialized) {
+        if (!isInitialized || skipLoad) {
             return;
         }
 
@@ -88,7 +96,7 @@ export function usePersistentState<T>(
         };
         
         saveStateToCache();
-    }, [key, state, isInitialized]);
+    }, [key, state, isInitialized, skipLoad]);
 
     return [state, setState, refreshStateFromDb, isLoading];
 }
