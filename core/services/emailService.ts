@@ -16,7 +16,8 @@ interface SendEmailParams {
     fromEmail: string;
     subject: string;
     body: string;
-    attachment?: EmailAttachment;
+    attachment?: EmailAttachment; // Keeping for backward compatibility
+    attachments?: EmailAttachment[];
 }
 
 const sendBackupPasswordResetCallable = httpsCallable(functions, 'sendBackupPasswordResetEmail');

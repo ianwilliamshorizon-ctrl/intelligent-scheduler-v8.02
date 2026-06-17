@@ -78,7 +78,21 @@ export const generateServicePackageName = async (lineItems: any[], make: string,
  * PARSE INQUIRY MESSAGE
  * Uses the AI to extract structured info from an inquiry message
  */
-export const parseInquiryMessage = async (prompt: string): Promise<any> => {
+export const parseInquiryMessage = async (message: string): Promise<any> => {
+    const prompt = `Analyze this customer inquiry message and extract structured information.
+    
+    Extract the following fields if present:
+    1. "summary": A brief 1-2 sentence summary of the customer's issue or request.
+    2. "fromName": The customer's full name, if mentioned.
+    3. "fromEmail": The customer's email address, if present.
+    4. "fromPhone": The customer's phone number, if present.
+    5. "fromContact": Any generic contact info that doesn't fit email/phone perfectly.
+    6. "vehicleRegistration": Any vehicle registration plate/number mentioned.
+
+    Format your response as a valid JSON object only. Do not include any conversational text outside the JSON.
+    Example: {"summary": "...", "fromName": "...", "fromEmail": "...", "fromPhone": "...", "fromContact": "...", "vehicleRegistration": "..."}
+    
+    Message: "${message}"`;
     return parseJobRequest(prompt);
 };
 
@@ -102,4 +116,13 @@ export const parseSearchQuery = async (query: string): Promise<{ searchTerm: str
             searchType: 'unknown'
         };
     }
+};
+
+/**
+ * GENERATE EMAIL REPLY
+ * Uses AI to draft an email response to an inquiry
+ */
+export const generateEmailReply = async (inquiryMessage: string, businessName: string): Promise<string> => {
+    const prompt = `You are a helpful, professional customer service agent for ${businessName}. A customer sent the following inquiry:\n"${inquiryMessage}"\nDraft a polite and concise email reply addressing their inquiry. Do not include subject lines or "[Your Name]" placeholders, just the raw email body text. Make it friendly and professional.`;
+    return await generateContent(prompt);
 };

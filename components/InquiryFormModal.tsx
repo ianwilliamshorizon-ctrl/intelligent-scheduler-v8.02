@@ -5,13 +5,14 @@ import SearchableSelect from './SearchableSelect';
 import { useApp } from '../core/state/AppContext';
 import { getCustomerDisplayName } from '../core/utils/customerUtils';
 import { Wand2, Loader2, Link as LinkIcon, UserCheck, Car, XCircle, User as UserIcon, FileText, CalendarCheck, Edit, Camera } from 'lucide-react';
-import { parseInquiryMessage } from '../core/services/geminiService';
+import { parseInquiryMessage, generateEmailReply } from '../core/services/geminiService';
+import { sendOutboundEmail } from '../core/services/emailService';
 import { useData } from '../core/state/DataContext';
 
 interface InquiryFormModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSave: (inquiry: Inquiry) => void;
+    onSave: (inquiry: Inquiry, closeModal?: boolean) => void;
     inquiry: Partial<Inquiry> | null;
     users: User[];
     customers: Customer[];
@@ -47,6 +48,12 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
     const [suggestedCustomer, setSuggestedCustomer] = useState<Customer | null>(null);
     const [suggestedVehicle, setSuggestedVehicle] = useState<Vehicle | null>(null);
 
+    // Reply state
+    const [replyText, setReplyText] = useState('');
+    const [isDraftingReply, setIsDraftingReply] = useState(false);
+    const [replyAttachments, setReplyAttachments] = useState<File[]>([]);
+    const [isSendingReply, setIsSendingReply] = useState(false);
+
     useEffect(() => {
         if (!isOpen) return;
 
@@ -63,10 +70,20 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                     entityId: selectedEntityId,
                     fromName: '',
                     fromContact: '',
+                    fromEmail: '',
+                    fromPhone: '',
                     message: '',
                     status: 'New',
                     actionNotes: '',
-                    takenByUserId: null,
+                    takenByUserId: currentUser.id,
+                    assignedToUserId: '',
+                    logs: [{
+                        id: crypto.randomUUID(),
+                        timestamp: new Date().toISOString(),
+                        userId: currentUser.id,
+                        actionType: 'Created',
+                        notes: 'Inquiry initialized'
+                    }],
                     linkedCustomerId: null,
                     linkedVehicleId: null,
                     linkedEstimateId: null,
@@ -96,58 +113,17 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
             ...formData
         } as Inquiry;
         
-        onSave(inquiryToSave);
+        onSave(inquiryToSave, true);
     };
 
-    const handleAnalyze = async () => {
-        if (!formData.message) {
-            setAiError('Please enter a message to analyze.');
-            return;
-        }
-
-        setIsAnalyzing(true);
-        setAiError('');
-        setSuggestedCustomer(null);
-        setSuggestedVehicle(null);
-
-        try {
-            const result = await parseInquiryMessage(formData.message);
-            
-            setFormData(p => ({
-                ...p,
-                fromName: p.fromName || result.fromName,
-                fromContact: p.fromContact || result.fromContact,
-                actionNotes: p.actionNotes ? `${p.actionNotes}\nAI Summary: ${result.summary}` : `AI Summary: ${result.summary}`,
-            }));
-
-            if (result.fromName) {
-                const lowerName = result.fromName.toLowerCase();
-                const foundCustomer = customers.find(c => 
-                    getCustomerDisplayName(c).toLowerCase().includes(lowerName)
-                );
-                if (foundCustomer) {
-                    setSuggestedCustomer(foundCustomer);
-                }
-            }
-
-            if (result.vehicleRegistration) {
-                const upperReg = result.vehicleRegistration.toUpperCase().replace(/\s/g, '');
-                const foundVehicle = vehicles.find(v => 
-                    v.registration.toUpperCase().replace(/\s/g, '') === upperReg
-                );
-                if (foundVehicle) {
-                    setSuggestedVehicle(foundVehicle);
-                }
-            }
-        } catch (error: any) {
-            setAiError(error.message);
-        } finally {
-            setIsAnalyzing(false);
-        }
-    };
 
     const handleLinkCustomer = (customer: Customer) => {
-        setFormData(p => ({ ...p, linkedCustomerId: customer.id }));
+        setFormData(p => ({ 
+            ...p, 
+            linkedCustomerId: customer.id,
+            fromEmail: p.fromEmail || customer.email || '',
+            fromPhone: p.fromPhone || customer.phone || customer.mobile || ''
+        }));
         setSuggestedCustomer(null);
     };
 
@@ -174,35 +150,94 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
             onClose={onClose}
             onSave={handleSave}
             title={inquiry?.id ? 'Edit Inquiry / Message' : 'Log New Inquiry / Message'}
-            maxWidth="max-w-5xl"
+            maxWidth="max-w-[90vw] lg:max-w-7xl"
         >
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                {/* Left Column - Core Message Details (7 cols) */}
-                <div className="lg:col-span-7 space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Column 1 - Core Message & Links */}
+                <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">From (Name)*</label>
                             <input name="fromName" value={formData.fromName || ''} onChange={handleChange} className="w-full p-2 border rounded" required />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Contact (Phone/Email)</label>
-                            <input name="fromContact" value={formData.fromContact || ''} onChange={handleChange} className="w-full p-2 border rounded" />
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                            <input type="email" name="fromEmail" value={formData.fromEmail || ''} onChange={handleChange} className="w-full p-2 border rounded" />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                            <input type="tel" name="fromPhone" value={formData.fromPhone || ''} onChange={handleChange} className="w-full p-2 border rounded" />
                         </div>
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Message*</label>
-                        <div className="relative">
-                            <textarea name="message" value={formData.message || ''} onChange={handleChange} rows={12} className="w-full p-2 border rounded pr-12 text-sm" required />
+                        <div className="flex justify-between items-end mb-1">
+                            <label className="block text-sm font-medium text-gray-700">Message*</label>
                             <button 
                                 type="button" 
-                                onClick={handleAnalyze} 
+                                onClick={async () => {
+                                    if (!formData.message) return;
+                                    setIsAnalyzing(true);
+                                    setAiError('');
+                                    try {
+                                        const parsed = await parseInquiryMessage(formData.message);
+                                        
+                                        // Update form data with extracted info
+                                        setFormData(p => ({
+                                            ...p,
+                                            fromName: p.fromName || parsed.fromName || '',
+                                            fromEmail: p.fromEmail || parsed.fromEmail || '',
+                                            fromPhone: p.fromPhone || parsed.fromPhone || '',
+                                        }));
+
+                                        // Try to find matching customer/vehicle
+                                        if (parsed.fromEmail || parsed.fromPhone || parsed.fromName) {
+                                            const lowerEmail = (parsed.fromEmail || '').toLowerCase();
+                                            const lowerPhone = (parsed.fromPhone || '').replace(/\D/g,'');
+                                            const lowerName = (parsed.fromName || '').toLowerCase();
+                                            
+                                            const foundCust = customers.find(c => 
+                                                (lowerEmail && c.email?.toLowerCase() === lowerEmail) ||
+                                                (lowerPhone && (c.phone?.replace(/\D/g,'') === lowerPhone || c.mobile?.replace(/\D/g,'') === lowerPhone)) ||
+                                                (lowerName && (c.forename + ' ' + c.surname).toLowerCase() === lowerName) ||
+                                                (lowerName && c.companyName?.toLowerCase() === lowerName)
+                                            );
+                                            if (foundCust) setSuggestedCustomer(foundCust);
+                                        }
+
+                                        if (parsed.vehicleRegistration) {
+                                            const lowerReg = parsed.vehicleRegistration.toLowerCase().replace(/\s/g, '');
+                                            const foundVeh = vehicles.find(v => v.registration?.toLowerCase().replace(/\s/g, '') === lowerReg);
+                                            if (foundVeh) setSuggestedVehicle(foundVeh);
+                                        }
+
+                                        if (parsed.summary) {
+                                            const newLog = {
+                                                id: crypto.randomUUID(),
+                                                timestamp: new Date().toISOString(),
+                                                userId: currentUser.id,
+                                                actionType: 'AI Scan',
+                                                notes: `AI Summary: ${parsed.summary}`
+                                            };
+                                            setFormData(p => ({ ...p, logs: [...(p.logs || []), newLog] }));
+                                        }
+
+                                    } catch (e) {
+                                        console.error(e);
+                                        setAiError('Failed to parse message with AI.');
+                                    } finally {
+                                        setIsAnalyzing(false);
+                                    }
+                                }}
                                 disabled={isAnalyzing || !formData.message}
-                                className="absolute top-2 right-2 p-2 bg-purple-100 text-purple-700 rounded-full hover:bg-purple-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                                title="Analyze message with AI"
+                                className="flex items-center gap-1 text-xs font-semibold text-indigo-700 bg-indigo-50 px-2 py-1 rounded hover:bg-indigo-100 border border-indigo-200 transition disabled:opacity-50"
                             >
-                                {isAnalyzing ? <Loader2 size={16} className="animate-spin"/> : <Wand2 size={16} />}
+                                {isAnalyzing ? <Loader2 size={12} className="animate-spin" /> : <Wand2 size={12} />} 
+                                Scan with AI
                             </button>
+                        </div>
+                        <div className="relative">
+                            <textarea name="message" value={formData.message || ''} onChange={handleChange} rows={12} className="w-full p-2 border rounded text-sm" required />
                         </div>
                     </div>
                     
@@ -237,14 +272,303 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                         </div>
                     )}
 
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Action Notes</label>
-                        <textarea name="actionNotes" value={formData.actionNotes || ''} onChange={handleChange} rows={4} className="w-full p-2 border rounded" />
+                    <div className="bg-white p-4 border border-gray-200 rounded-lg shadow-sm space-y-4">
+                        <h4 className="text-sm font-bold text-gray-800 border-b pb-2">Links & Assignments</h4>
+                        <div className="space-y-3">
+                            <div>
+                                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Customer Connection</label>
+                                {linkedCustomer ? (
+                                    <div className="p-2 bg-green-50 border border-green-200 rounded-lg flex justify-between items-center text-sm shadow-xs">
+                                        <div className="flex items-center gap-2 text-green-800">
+                                            <UserCheck size={16} className="text-green-700 shrink-0"/>
+                                            <p className="font-semibold truncate max-w-[200px]" title={getCustomerDisplayName(linkedCustomer)}>{getCustomerDisplayName(linkedCustomer)}</p>
+                                        </div>
+                                        <button type="button" onClick={handleUnlinkCustomer} title="Unlink Customer" className="text-gray-400 hover:text-red-500 transition">
+                                            <XCircle size={16}/>
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <SearchableSelect
+                                        options={customers.map(c => ({ id: c.id, label: getCustomerDisplayName(c), value: c.id }))}
+                                        defaultValue={formData.linkedCustomerId || null}
+                                        onSelect={(value) => {
+                                            const cust = customers.find(c => c.id === value);
+                                            setFormData(p => {
+                                                const customersCars = vehicles.filter(v => v.customerId === value);
+                                                let newVehicleId = p.linkedVehicleId;
+                                                if (!newVehicleId || !customersCars.some(car => car.id === newVehicleId)) {
+                                                    newVehicleId = customersCars.length === 1 ? customersCars[0].id : null;
+                                                }
+                                                return { 
+                                                    ...p, 
+                                                    linkedCustomerId: value,
+                                                    linkedVehicleId: newVehicleId,
+                                                    fromEmail: p.fromEmail || cust?.email || '',
+                                                    fromPhone: p.fromPhone || cust?.phone || cust?.mobile || ''
+                                                };
+                                            });
+                                        }}
+                                        placeholder="Link to an existing customer..."
+                                    />
+                                )}
+                            </div>
+                            
+                            <div>
+                                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Vehicle Connection</label>
+                                {linkedVehicle ? (
+                                     <div className="p-2 bg-green-50 border border-green-200 rounded-lg flex justify-between items-center text-sm shadow-xs">
+                                        <div className="flex items-center gap-2 text-green-800">
+                                            <Car size={16} className="text-green-700 shrink-0"/>
+                                            <p className="font-semibold truncate max-w-[200px]" title={`${linkedVehicle.registration} - ${linkedVehicle.make} ${linkedVehicle.model}`}>{linkedVehicle.registration}</p>
+                                        </div>
+                                        <button type="button" onClick={handleUnlinkVehicle} title="Unlink Vehicle" className="text-gray-400 hover:text-red-500 transition">
+                                            <XCircle size={16}/>
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <SearchableSelect
+                                        options={vehicles.map(v => ({ id: v.id, label: `${v.registration} - ${v.make} ${v.model}`, value: v.id }))}
+                                        defaultValue={formData.linkedVehicleId || null}
+                                        onSelect={(value) => {
+                                            const vehicle = vehicles.find(v => v.id === value);
+                                            const ownerId = vehicle?.customerId;
+                                            setFormData(p => {
+                                                const cust = customers.find(c => c.id === (ownerId || p.linkedCustomerId));
+                                                return { 
+                                                    ...p, 
+                                                    linkedVehicleId: value,
+                                                    linkedCustomerId: ownerId || p.linkedCustomerId,
+                                                    fromEmail: p.fromEmail || cust?.email || '',
+                                                    fromPhone: p.fromPhone || cust?.phone || cust?.mobile || ''
+                                                };
+                                            });
+                                        }}
+                                        placeholder="Link to an existing vehicle..."
+                                    />
+                                )}
+                            </div>
+                        </div>
                     </div>
                 </div>
 
-                {/* Right Column - Actions, Assignments & Attachments (5 cols) */}
-                <div className="lg:col-span-5 space-y-4">
+                {/* Column 2 - Status & Reply */}
+                <div className="space-y-4">
+                    <div className="bg-white p-4 border border-gray-200 rounded-lg shadow-sm space-y-4">
+                        <h4 className="text-sm font-bold text-gray-800 border-b pb-2">Status & Ownership</h4>
+                        
+                        <div className="grid grid-cols-1 gap-4">
+                            <div>
+                                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Status</label>
+                                <select name="status" value={formData.status || 'New'} onChange={handleChange} className="w-full p-2 border rounded text-sm bg-gray-50">
+                                    <option value="New">New</option>
+                                    <option value="Immediate Quote">Immediate Quote</option>
+                                    <option value="Escalated/Urgent">Escalated/Urgent</option>
+                                    <option value="In Progress">In Progress</option>
+                                    <option value="Quoted or Responded">Quoted or Responded</option>
+                                    <option>Rejected</option>
+                                    <option>Closed</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Follow Up Date</label>
+                                <input type="date" name="followUpDate" value={formData.followUpDate || ''} onChange={handleChange} className="w-full p-2 border rounded text-sm bg-gray-50" />
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Taken By</label>
+                                    <SearchableSelect
+                                        options={users.map(u => ({ id: u.id, label: u.name, value: u.id }))}
+                                        defaultValue={formData.takenByUserId || null}
+                                        onSelect={(value) => {
+                                            if (value !== formData.takenByUserId) {
+                                                const userName = users.find(u => u.id === value)?.name || value;
+                                                const newLog = {
+                                                    id: crypto.randomUUID(),
+                                                    timestamp: new Date().toISOString(),
+                                                    userId: currentUser.id,
+                                                    actionType: 'Reassigned',
+                                                    notes: `Taken By changed to: ${userName}`
+                                                };
+                                                setFormData(p => ({ ...p, takenByUserId: value, logs: [...(p.logs || []), newLog] }));
+                                            }
+                                        }}
+                                        placeholder="Taken by..."
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Assigned To</label>
+                                    <SearchableSelect
+                                        options={users.map(u => ({ id: u.id, label: u.name, value: u.id }))}
+                                        defaultValue={formData.assignedToUserId || null}
+                                        onSelect={(value) => {
+                                            if (value !== formData.assignedToUserId) {
+                                                const userName = users.find(u => u.id === value)?.name || value;
+                                                const newLog = {
+                                                    id: crypto.randomUUID(),
+                                                    timestamp: new Date().toISOString(),
+                                                    userId: currentUser.id,
+                                                    actionType: 'Assigned',
+                                                    notes: `Assigned To changed to: ${userName}`
+                                                };
+                                                setFormData(p => ({ ...p, assignedToUserId: value, logs: [...(p.logs || []), newLog] }));
+                                            }
+                                        }}
+                                        placeholder="Assign to..."
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="bg-white p-4 border border-gray-200 rounded-lg shadow-sm space-y-4">
+                        <h4 className="text-sm font-bold text-gray-800 border-b pb-2">Reply to Inquiry</h4>
+                        <div>
+                            <textarea 
+                                value={replyText} 
+                                onChange={e => setReplyText(e.target.value)} 
+                                rows={8} 
+                                className="w-full p-2 border rounded text-sm mb-2" 
+                                placeholder="Type your reply or use AI to draft one..."
+                            />
+                            
+                            <div className="flex flex-col gap-2 mb-2">
+                                <div className="flex items-center gap-2">
+                                    <label className="cursor-pointer text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded transition flex items-center gap-1 border border-gray-300">
+                                        <Camera size={14} /> Add Attachment(s)
+                                        <input 
+                                            type="file" 
+                                            multiple 
+                                            className="hidden" 
+                                            onChange={(e) => {
+                                                if (e.target.files) {
+                                                    setReplyAttachments(prev => [...prev, ...Array.from(e.target.files!)]);
+                                                }
+                                                e.target.value = ''; // Reset to allow selecting same file again
+                                            }} 
+                                        />
+                                    </label>
+                                </div>
+                                {replyAttachments.length > 0 && (
+                                    <div className="flex flex-wrap gap-2 mt-1">
+                                        {replyAttachments.map((file, idx) => (
+                                            <div key={idx} className="flex items-center gap-1 text-[10px] bg-gray-50 border rounded px-2 py-1 shadow-sm">
+                                                <span className="truncate max-w-[120px]" title={file.name}>{file.name}</span>
+                                                <button 
+                                                    type="button" 
+                                                    onClick={() => setReplyAttachments(prev => prev.filter((_, i) => i !== idx))}
+                                                    className="text-red-500 hover:text-red-700 ml-1 font-bold"
+                                                    title="Remove attachment"
+                                                >
+                                                    &times;
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                            <div className="flex justify-between items-center mt-1">
+                                <button 
+                                    type="button" 
+                                    onClick={async () => {
+                                        if (!formData.message) return;
+                                        setIsDraftingReply(true);
+                                        try {
+                                            const draft = await generateEmailReply(formData.message, 'Brookspeed');
+                                            setReplyText(draft);
+                                        } catch (e) {
+                                            console.error(e);
+                                            alert('Failed to draft reply using AI.');
+                                        } finally {
+                                            setIsDraftingReply(false);
+                                        }
+                                    }}
+                                    disabled={isDraftingReply || !formData.message}
+                                    className="flex items-center gap-1 text-xs font-semibold text-purple-700 bg-purple-50 px-3 py-1.5 rounded hover:bg-purple-100 border border-purple-200 transition disabled:opacity-50"
+                                >
+                                    {isDraftingReply ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />} Draft with AI
+                                </button>
+
+                                <button 
+                                    type="button" 
+                                    onClick={async () => {
+                                        const emailAddress = formData.fromEmail || formData.fromContact;
+                                        if (!replyText || !emailAddress || !emailAddress.includes('@')) {
+                                            alert('Please enter a valid email reply and ensure the customer has an email address.');
+                                            return;
+                                        }
+                                        setIsSendingReply(true);
+                                        try {
+                                            const emailAttachments = await Promise.all(replyAttachments.map(async file => {
+                                                return new Promise<{content: string, filename: string, type: string}>((resolve, reject) => {
+                                                    const reader = new FileReader();
+                                                    reader.readAsDataURL(file);
+                                                    reader.onload = () => {
+                                                        const result = reader.result as string;
+                                                        const base64Content = result.split(',')[1];
+                                                        resolve({
+                                                            content: base64Content,
+                                                            filename: file.name,
+                                                            type: file.type || 'application/octet-stream'
+                                                        });
+                                                    };
+                                                    reader.onerror = error => reject(error);
+                                                });
+                                            }));
+
+                                            const success = await sendOutboundEmail({
+                                                to: emailAddress,
+                                                fromName: 'Brookspeed',
+                                                fromEmail: 'info@brookspeed.com',
+                                                subject: `Re: Your Inquiry`,
+                                                body: replyText,
+                                                attachments: emailAttachments.length > 0 ? emailAttachments : undefined
+                                            });
+                                            if (success) {
+                                                const newLog = {
+                                                    id: crypto.randomUUID(),
+                                                    timestamp: new Date().toISOString(),
+                                                    userId: currentUser.id,
+                                                    actionType: 'Email Sent',
+                                                    notes: `To: ${emailAddress}\nAttachments: ${replyAttachments.length}\n\n${replyText}`
+                                                };
+                                                const updatedLogs = [...(formData.logs || []), newLog];
+                                                setFormData(p => ({ ...p, logs: updatedLogs }));
+                                                setReplyText('');
+                                                setReplyAttachments([]);
+                                                
+                                                if (formData.fromName && formData.message) {
+                                                    const inquiryToSave: Inquiry = {
+                                                        id: formData.id || crypto.randomUUID(),
+                                                        createdAt: formData.createdAt || new Date().toISOString(),
+                                                        takenByUserId: formData.takenByUserId || currentUser.id,
+                                                        ...formData,
+                                                        logs: updatedLogs
+                                                    } as Inquiry;
+                                                    onSave(inquiryToSave, false);
+                                                }
+                                                alert('Email sent successfully!');
+                                            } else {
+                                                alert('Failed to send email.');
+                                            }
+                                        } catch (e) {
+                                            console.error(e);
+                                            alert('Failed to send email.');
+                                        } finally {
+                                            setIsSendingReply(false);
+                                        }
+                                    }}
+                                    disabled={isSendingReply || !replyText}
+                                    className="flex items-center gap-1 text-xs font-bold text-white bg-indigo-600 px-4 py-1.5 rounded shadow hover:bg-indigo-700 transition disabled:opacity-50"
+                                >
+                                    {isSendingReply ? <Loader2 size={14} className="animate-spin" /> : 'Send Reply'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Column 3 - Remainder (Logs, Estimate, Attachments) */}
+                <div className="space-y-4">
                     {linkedEstimate && (
                         <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-lg shadow-sm">
                             <div className="flex flex-col gap-3">
@@ -292,82 +616,98 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                         </div>
                     )}
 
-                    <div className="bg-white p-4 border border-gray-200 rounded-lg shadow-sm space-y-4">
-                        <h4 className="text-sm font-bold text-gray-800 border-b pb-2">Status & Ownership</h4>
-                        
-                        <div className="grid grid-cols-1 gap-4">
-                            <div>
-                                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Status</label>
-                                <select name="status" value={formData.status || 'New'} onChange={handleChange} className="w-full p-2 border rounded bg-white text-sm font-medium">
-                                    <option>New</option>
-                                    <option>Immediate Quote</option>
-                                    <option value="Escalated/Urgent">Escalated/Urgent</option>
-                                    <option>In Progress</option>
-                                    <option value="Quoted or Responded">Quoted or Responded</option>
-                                    <option>Approved</option>
-                                    <option>Rejected</option>
-                                    <option>Closed</option>
-                                </select>
-                            </div>
-
-                            <div>
-                                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Assigned To</label>
-                                <SearchableSelect
-                                    options={users.map(u => ({ id: u.id, label: u.name, value: u.id }))}
-                                    defaultValue={formData.takenByUserId || null}
-                                    onSelect={(value) => setFormData(p => ({ ...p, takenByUserId: value }))}
-                                    placeholder="Assign to staff member..."
-                                />
-                            </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">CRM Logs & Notes</label>
+                        <div className="border rounded bg-gray-50 p-2 space-y-2 mb-2 max-h-60 overflow-y-auto">
+                            {(!formData.logs || formData.logs.length === 0) && !formData.actionNotes && (
+                                <p className="text-xs text-gray-500 italic">No logs recorded yet.</p>
+                            )}
+                            {formData.actionNotes && (
+                                <div className="text-xs bg-white p-2 border rounded shadow-sm">
+                                    <p className="font-semibold text-gray-600 mb-1">Legacy Notes</p>
+                                    <p className="text-gray-800 whitespace-pre-wrap">{formData.actionNotes}</p>
+                                </div>
+                            )}
+                            {(formData.logs || []).map(log => (
+                                <div key={log.id} className="text-xs bg-white p-2 border rounded shadow-sm">
+                                    <div className="flex justify-between text-gray-500 mb-1">
+                                        <span className="font-semibold">{log.userId === 'System' ? 'System' : users.find(u => u.id === log.userId)?.name || 'User'}</span>
+                                        <span>{new Date(log.timestamp).toLocaleString()}</span>
+                                    </div>
+                                    {log.actionType && <span className="inline-block bg-indigo-100 text-indigo-800 text-[10px] font-bold px-1.5 py-0.5 rounded mb-1">{log.actionType}</span>}
+                                    <p className="text-gray-800 whitespace-pre-wrap">{log.notes}</p>
+                                </div>
+                            ))}
                         </div>
-                    </div>
+                        <div className="flex gap-2">
+                            <input 
+                                type="text" 
+                                placeholder="Type a note and press enter..." 
+                                className="flex-1 p-2 border rounded text-sm"
+                                id="newLogInput"
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        const val = e.currentTarget.value.trim();
+                                        if (val) {
+                                            const newLog = {
+                                                id: crypto.randomUUID(),
+                                                timestamp: new Date().toISOString(),
+                                                userId: currentUser.id,
+                                                notes: val
+                                            };
+                                            const updatedLogs = [...(formData.logs || []), newLog];
+                                            setFormData(p => ({ ...p, logs: updatedLogs }));
+                                            
+                                            if (formData.fromName && formData.message) {
+                                                const inquiryToSave: Inquiry = {
+                                                    id: formData.id || crypto.randomUUID(),
+                                                    createdAt: formData.createdAt || new Date().toISOString(),
+                                                    takenByUserId: formData.takenByUserId || currentUser.id,
+                                                    ...formData,
+                                                    logs: updatedLogs
+                                                } as Inquiry;
+                                                onSave(inquiryToSave, false);
+                                            }
 
-                    <div className="bg-white p-4 border border-gray-200 rounded-lg shadow-sm space-y-4">
-                        <h4 className="text-sm font-bold text-gray-800 border-b pb-2">Links & Assignments</h4>
-                        <div className="space-y-3">
-                            <div>
-                                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Customer Connection</label>
-                                {linkedCustomer ? (
-                                    <div className="p-2 bg-green-50 border border-green-200 rounded-lg flex justify-between items-center text-sm shadow-xs">
-                                        <div className="flex items-center gap-2 text-green-800">
-                                            <UserCheck size={16} className="text-green-700 shrink-0"/>
-                                            <p className="font-semibold truncate max-w-[200px]" title={getCustomerDisplayName(linkedCustomer)}>{getCustomerDisplayName(linkedCustomer)}</p>
-                                        </div>
-                                        <button type="button" onClick={handleUnlinkCustomer} title="Unlink Customer" className="text-gray-400 hover:text-red-500 transition">
-                                            <XCircle size={16}/>
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <SearchableSelect
-                                        options={customers.map(c => ({ id: c.id, label: getCustomerDisplayName(c), value: c.id }))}
-                                        defaultValue={formData.linkedCustomerId || null}
-                                        onSelect={(value) => setFormData(p => ({ ...p, linkedCustomerId: value }))}
-                                        placeholder="Link to an existing customer..."
-                                    />
-                                )}
-                            </div>
-                            
-                            <div>
-                                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Vehicle Connection</label>
-                                {linkedVehicle ? (
-                                     <div className="p-2 bg-green-50 border border-green-200 rounded-lg flex justify-between items-center text-sm shadow-xs">
-                                        <div className="flex items-center gap-2 text-green-800">
-                                            <Car size={16} className="text-green-700 shrink-0"/>
-                                            <p className="font-semibold truncate max-w-[200px]" title={`${linkedVehicle.registration} - ${linkedVehicle.make} ${linkedVehicle.model}`}>{linkedVehicle.registration}</p>
-                                        </div>
-                                        <button type="button" onClick={handleUnlinkVehicle} title="Unlink Vehicle" className="text-gray-400 hover:text-red-500 transition">
-                                            <XCircle size={16}/>
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <SearchableSelect
-                                        options={vehicles.map(v => ({ id: v.id, label: `${v.registration} - ${v.make} ${v.model}`, value: v.id }))}
-                                        defaultValue={formData.linkedVehicleId || null}
-                                        onSelect={(value) => setFormData(p => ({ ...p, linkedVehicleId: value }))}
-                                        placeholder="Link to an existing vehicle..."
-                                    />
-                                )}
-                            </div>
+                                            e.currentTarget.value = '';
+                                        }
+                                    }
+                                }}
+                            />
+                            <button 
+                                type="button"
+                                className="px-3 py-1 bg-indigo-600 text-white rounded text-sm hover:bg-indigo-700"
+                                onClick={() => {
+                                    const input = document.getElementById('newLogInput') as HTMLInputElement;
+                                    const val = input?.value.trim();
+                                    if (val) {
+                                        const newLog = {
+                                            id: crypto.randomUUID(),
+                                            timestamp: new Date().toISOString(),
+                                            userId: currentUser.id,
+                                            notes: val
+                                        };
+                                        const updatedLogs = [...(formData.logs || []), newLog];
+                                        setFormData(p => ({ ...p, logs: updatedLogs }));
+
+                                        if (formData.fromName && formData.message) {
+                                            const inquiryToSave: Inquiry = {
+                                                id: formData.id || crypto.randomUUID(),
+                                                createdAt: formData.createdAt || new Date().toISOString(),
+                                                takenByUserId: formData.takenByUserId || currentUser.id,
+                                                ...formData,
+                                                logs: updatedLogs
+                                            } as Inquiry;
+                                            onSave(inquiryToSave, false);
+                                        }
+
+                                        input.value = '';
+                                    }
+                                }}
+                            >
+                                Add
+                            </button>
                         </div>
                     </div>
 

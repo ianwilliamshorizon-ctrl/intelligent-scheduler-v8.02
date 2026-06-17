@@ -90,6 +90,7 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
     const [capacityWarning, setCapacityWarning] = useState<string | null>(null);
     const [isSpeaking, setIsSpeaking] = useState(false);
     const [previewZoom, setPreviewZoom] = useState(1);
+    const [isNotesExpanded, setIsNotesExpanded] = useState(false);
 
     useEffect(() => {
         const handleResize = () => {
@@ -117,19 +118,7 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
         const initialSelection = new Set<string>();
         const seenGroups = new Set<string>();
         
-        // CUSTOMER REQUEST: Assume all items are clicked by default
-        (estimate.lineItems || []).forEach(item => {
-            if (item.isOptional) {
-                if (!item.optionGroupId) {
-                    initialSelection.add(item.id);
-                } else if (!seenGroups.has(item.optionGroupId)) {
-                    // Pre-select the first occurrence in an option group (Default option)
-                    initialSelection.add(item.id);
-                    seenGroups.add(item.optionGroupId);
-                }
-            }
-        });
-        setSelectedOptionalItems(initialSelection);
+        setSelectedOptionalItems(new Set());
 
         return () => {
             cloudSpeechSynthesis.cancel();
@@ -568,9 +557,19 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                         {isCustomerMode ? (
                             <div className="bg-white p-6 rounded-xl shadow-sm border space-y-6 max-w-3xl mx-auto">
                                 <div className="flex flex-col sm:flex-row justify-between items-start gap-4 border-b pb-6">
-                                    <div>
-                                        <h1 className="text-lg sm:text-2xl font-extrabold text-gray-900">{resolvedEntity?.name || 'Brookspeed'}</h1>
-                                        <p className="text-xs sm:text-sm text-gray-600 mt-0.5 sm:mt-1">{resolvedEntity?.addressLine1}, {resolvedEntity?.postcode}</p>
+                                    <div className="flex items-center gap-4">
+                                        {resolvedEntity?.logoImageId && (
+                                            <div className="w-16 h-16 sm:w-20 sm:h-20 flex-shrink-0 bg-gray-50 rounded-lg p-2 border border-gray-100">
+                                                <AsyncImage imageId={resolvedEntity.logoImageId} className="w-full h-full object-contain" />
+                                            </div>
+                                        )}
+                                        <div>
+                                            <h1 className="text-lg sm:text-2xl font-extrabold text-gray-900">{resolvedEntity?.name || 'Brookspeed'}</h1>
+                                            <p className="text-xs sm:text-sm text-gray-600 mt-0.5 sm:mt-1">{resolvedEntity?.addressLine1}, {resolvedEntity?.postcode}</p>
+                                            {resolvedEntity?.phone && (
+                                                <p className="text-xs sm:text-sm text-gray-600 mt-0.5">{resolvedEntity.phone}</p>
+                                            )}
+                                        </div>
                                     </div>
                                     <div className="text-left sm:text-right">
                                         <h2 className="text-base sm:text-xl font-semibold text-gray-800">{isSupplementary ? 'Supplementary ' : ''}Estimate</h2>
@@ -597,30 +596,6 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                                     </div>
                                 )}
 
-                                {estimate.notes && (
-                                    <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 shadow-sm space-y-2">
-                                        <div className="flex justify-between items-center border-b pb-2">
-                                            <h3 className="text-sm font-bold text-gray-800 flex items-center gap-2">
-                                                <FileText size={16} className="text-indigo-600"/> Estimate Notes & Instructions
-                                            </h3>
-                                            <button
-                                                onClick={handleToggleSpeakNotes}
-                                                className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-md border transition-all ${
-                                                    isSpeaking 
-                                                        ? 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100' 
-                                                        : 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100'
-                                                }`}
-                                                title={isSpeaking ? "Stop Speaking" : "Read Notes"}
-                                            >
-                                                {isSpeaking ? <VolumeX size={14} /> : <Volume2 size={14} />}
-                                                {isSpeaking ? "Stop" : "Listen"}
-                                            </button>
-                                        </div>
-                                        <div className="text-xs text-gray-700 leading-relaxed whitespace-pre-wrap">
-                                            {estimate.notes}
-                                        </div>
-                                    </div>
-                                )}
 
                                 {essentialItems.length > 0 && (
                                     <div>
@@ -693,6 +668,43 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                                         </div>
                                     </div>
                                 )}
+
+                                {estimate.notes && (
+                                    <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 shadow-sm space-y-2">
+                                        <div className="flex justify-between items-center border-b pb-2">
+                                            <h3 className="text-sm font-bold text-gray-800 flex items-center gap-2">
+                                                <FileText size={16} className="text-indigo-600"/> Estimate Notes & Instructions
+                                            </h3>
+                                            <button
+                                                onClick={handleToggleSpeakNotes}
+                                                className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-md border transition-all ${
+                                                    isSpeaking 
+                                                        ? 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100' 
+                                                        : 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100'
+                                                }`}
+                                                title={isSpeaking ? "Stop Speaking" : "Read Notes"}
+                                            >
+                                                {isSpeaking ? <VolumeX size={14} /> : <Volume2 size={14} />}
+                                                {isSpeaking ? "Stop" : "Listen"}
+                                            </button>
+                                        </div>
+                                        <div className={`text-xs text-gray-700 leading-relaxed whitespace-pre-wrap transition-all duration-300 ${!isNotesExpanded && estimate.notes.length > 300 ? 'line-clamp-4 relative overflow-hidden' : ''}`}>
+                                            {estimate.notes}
+                                            {!isNotesExpanded && estimate.notes.length > 300 && (
+                                                <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-gray-50 to-transparent pointer-events-none" />
+                                            )}
+                                        </div>
+                                        {estimate.notes.length > 300 && (
+                                            <button 
+                                                onClick={() => setIsNotesExpanded(!isNotesExpanded)}
+                                                className="text-xs text-indigo-600 font-semibold hover:underline mt-1 focus:outline-none"
+                                            >
+                                                {isNotesExpanded ? 'Show Less' : 'Read Full Narrative'}
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
+
 
                                 <div className="flex justify-end pt-6 border-t-2 border-gray-100">
                                     <div className="w-72 bg-gray-50 p-4 rounded-lg">

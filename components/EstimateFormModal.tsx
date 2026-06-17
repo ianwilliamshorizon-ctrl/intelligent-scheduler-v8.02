@@ -65,14 +65,42 @@ const MemoizedEditableLineItemRow = React.memo(({
         return (
             <div className={`grid grid-cols-12 gap-2 items-center p-2 rounded-lg border bg-indigo-50 border-indigo-200 transition-all hover:shadow-md mb-2`}>
                 <div className="col-span-5 flex items-center gap-2">
-                    <div className="bg-indigo-600 text-white text-[10px] uppercase font-black px-1.5 py-0.5 rounded shadow-sm">Pkg</div>
                     <input 
-                        type="text" 
-                        value={item.description || ''} 
-                        onChange={e => onLineItemChange(item.id, 'description', e.target.value)}
-                        className="w-full bg-transparent border-none focus:ring-0 font-bold text-indigo-900 placeholder:text-indigo-300"
-                        placeholder="Package Description"
+                        type="checkbox" 
+                        checked={item.isOptional || false} 
+                        onChange={e => onLineItemChange(item.id, 'isOptional', e.target.checked)}
+                        className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 flex-shrink-0"
+                        title="Mark Package as Optional"
                     />
+                    <div className="bg-indigo-600 text-white text-[10px] uppercase font-black px-1.5 py-0.5 rounded shadow-sm">Pkg</div>
+                    <div className="w-full flex flex-col gap-1">
+                        <input 
+                            type="text" 
+                            value={item.description || ''} 
+                            onChange={e => onLineItemChange(item.id, 'description', e.target.value)}
+                            className="w-full bg-transparent border-none focus:ring-0 font-bold text-indigo-900 placeholder:text-indigo-300"
+                            placeholder="Package Description"
+                        />
+                        {item.isOptional && (
+                            <div className="flex gap-1 pl-1">
+                                <input 
+                                    type="text" 
+                                    placeholder="Group (e.g. EXHAUST)" 
+                                    value={item.optionGroupId || ''} 
+                                    onChange={e => onLineItemChange(item.id, 'optionGroupId', e.target.value)} 
+                                    className="w-1/2 p-1 border border-indigo-200 rounded text-[10px] bg-indigo-50 font-bold" 
+                                    title="Items with same Group ID are mutually exclusive"
+                                />
+                                <input 
+                                    type="text" 
+                                    placeholder="Label (e.g. Option 1)" 
+                                    value={item.optionLabel || ''} 
+                                    onChange={e => onLineItemChange(item.id, 'optionLabel', e.target.value)} 
+                                    className="w-1/2 p-1 border border-slate-200 rounded text-[10px] bg-slate-50" 
+                                />
+                            </div>
+                        )}
+                    </div>
                 </div>
                 <div className="col-span-1">
                     <input 
@@ -156,7 +184,7 @@ const MemoizedEditableLineItemRow = React.memo(({
                             </div>
                         )}
                     </div>
-                    {item.isOptional && (
+                    {item.isOptional && !isPackageComponent && (
                         <div className="flex gap-1">
                             <input 
                                 type="text" 

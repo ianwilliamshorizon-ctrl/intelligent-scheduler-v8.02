@@ -700,8 +700,13 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                                         ...inquiry, 
                                         status: 'In Progress',
                                         linkedJobId: jobToSave.id,
-                                        actionNotes: (inquiry.actionNotes || '') + `
-    [System]: Job #${jobToSave.id} scheduled for ${formatReadableDate(jobToSave.scheduledDate)}. Parts synchronized.` 
+                                        logs: [...(inquiry.logs || []), {
+                                            id: crypto.randomUUID(),
+                                            timestamp: new Date().toISOString(),
+                                            userId: 'System',
+                                            actionType: 'Job Scheduled',
+                                            notes: `Job #${jobToSave.id} scheduled for ${formatReadableDate(jobToSave.scheduledDate)}. Parts synchronized.`
+                                        }]
                                     };
                                     await handleSaveItem(data.setInquiries, updatedInquiry, 'brooks_inquiries');
                                 }
@@ -782,9 +787,11 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                     <InquiryFormModal
                         isOpen={modals.inquiryModal.isOpen}
                         onClose={() => setters.setInquiryModal({ isOpen: false, inquiry: null })}
-                        onSave={(inq) => { 
+                        onSave={(inq, closeModal = true) => { 
                             handleSaveItem(data.setInquiries, inq, 'brooks_inquiries');
-                            setters.setInquiryModal({ isOpen: false, inquiry: null });
+                            if (closeModal) {
+                                setters.setInquiryModal({ isOpen: false, inquiry: null });
+                            }
                         }}
                         inquiry={modals.inquiryModal.inquiry}
                         users={users}

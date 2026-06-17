@@ -536,6 +536,7 @@ export interface BusinessEntity {
     addressLine2?: string;
     city?: string;
     postcode?: string;
+    phone?: string;
     vatNumber?: string;
     companyNumber?: string;
     logoUrl?: string;
@@ -636,14 +637,25 @@ export interface InspectionTemplate {
 /**
  * INQUIRY & COMMUNICATIONS
  */
+export interface InquiryLog {
+    id: string;
+    timestamp: string;
+    userId: string;
+    actionType?: string;
+    notes: string;
+}
+
 export interface Inquiry {
     id: string;
     entityId?: string;
     createdAt: string;
     fromName: string;
-    fromContact: string;
+    fromContact: string; // Legacy
+    fromEmail?: string;
+    fromPhone?: string;
     message: string;
     takenByUserId: string;
+    assignedToUserId?: string;
     status: 'New' | 'Immediate Quote' | 'Escalated/Urgent' | 'In Progress' | 'Quoted or Responded' | 'Closed' | 'Approved' | 'Rejected' | 'Sent';
     linkedCustomerId?: string;
     linkedVehicleId?: string;
@@ -652,6 +664,8 @@ export interface Inquiry {
     linkedPurchaseOrderIds?: string[];
     linkedJobId?: string;
     media?: any[];
+    logs?: InquiryLog[];
+    followUpDate?: string;
 }
 
 /**

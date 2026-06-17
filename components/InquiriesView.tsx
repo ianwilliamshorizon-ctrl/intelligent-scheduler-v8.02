@@ -78,6 +78,9 @@ const InquiryCard: React.FC<{
 
     const isApproved = inquiry.status === 'Approved' || estimate?.status === 'Approved';
     const mergeJobId = estimate?.jobId;
+    const latestLog = inquiry.logs && inquiry.logs.length > 0 ? inquiry.logs[inquiry.logs.length - 1] : null;
+    const isOverdue = inquiry.followUpDate && new Date(inquiry.followUpDate) < new Date(new Date().setHours(0,0,0,0));
+    const isToday = inquiry.followUpDate && new Date(inquiry.followUpDate).toDateString() === new Date().toDateString();
 
     if (isCompact) {
         return (
@@ -89,22 +92,34 @@ const InquiryCard: React.FC<{
                     inquiry.status === 'In Progress' ? 'border-blue-400' : 
                     inquiry.status === 'Quoted or Responded' ? 'border-gray-200' : 
                     inquiry.status === 'Approved' ? 'border-green-400' : 'border-gray-200'
-                } cursor-pointer hover:shadow-md transition-shadow mb-2`}
+                } ${isOverdue || isToday ? 'ring-2 ring-red-400 bg-red-50/10' : ''} cursor-pointer hover:shadow-md transition-shadow mb-2`}
                 onClick={() => onOpenInquiryModal(inquiry)}
             >
                 <div className="flex justify-between items-start gap-2">
                     <div className="min-w-0 flex-grow">
                         <p className="font-bold text-gray-800 text-xs truncate" title={inquiry.fromName}>{inquiry.fromName}</p>
-                        {inquiry.fromContact && (
-                            <p className="text-[10px] text-gray-500 truncate">{inquiry.fromContact}</p>
+                        {(inquiry.fromEmail || inquiry.fromPhone || inquiry.fromContact) && (
+                            <p className="text-[10px] text-gray-500 truncate">
+                                {[inquiry.fromEmail, inquiry.fromPhone, (!inquiry.fromEmail && !inquiry.fromPhone) ? inquiry.fromContact : null].filter(Boolean).join(' • ')}
+                            </p>
                         )}
                     </div>
-                    <span className="text-[10px] text-gray-400 shrink-0 font-medium">
-                        {new Date(inquiry.createdAt).toLocaleDateString()}
+                    <span className="text-[10px] text-gray-400 shrink-0 font-medium flex flex-col items-end">
+                        <span>{new Date(inquiry.createdAt).toLocaleDateString()}</span>
+                        {inquiry.followUpDate && (
+                            <span className={`mt-0.5 ${(isOverdue || isToday) ? 'text-red-500 font-bold' : 'text-blue-500'}`}>
+                                FU: {new Date(inquiry.followUpDate).toLocaleDateString()}
+                            </span>
+                        )}
                     </span>
                 </div>
                 
                 <p className="text-xs text-gray-600 my-1 line-clamp-1 whitespace-pre-wrap">{inquiry.message}</p>
+                {latestLog && (
+                    <div className="bg-gray-50 border rounded p-1 mb-1 mt-1 text-[9px] text-gray-600">
+                        <span className="font-semibold">{latestLog.userId === 'System' ? 'System' : users.find(u => u.id === latestLog.userId)?.name || 'User'}:</span> <span className="line-clamp-1">{latestLog.notes}</span>
+                    </div>
+                )}
                 
                 {/* Badges Row */}
                 <div className="flex flex-wrap gap-1 mt-1 pt-1.5 border-t border-gray-100/50">
@@ -203,20 +218,32 @@ const InquiryCard: React.FC<{
                 inquiry.status === 'In Progress' ? 'border-blue-400' : 
                 inquiry.status === 'Quoted or Responded' ? 'border-gray-200' : 
                 inquiry.status === 'Approved' ? 'border-green-400' : 'border-gray-200'
-            } cursor-pointer hover:shadow-md transition-shadow mb-3`}
+            } ${isOverdue || isToday ? 'ring-2 ring-red-400 bg-red-50/10' : ''} cursor-pointer hover:shadow-md transition-shadow mb-3`}
             onClick={() => onOpenInquiryModal(inquiry)}
         >
             <div className="flex justify-between items-start">
                 <div>
                     <p className="font-bold text-gray-800 text-sm">{inquiry.fromName}</p>
-                    <p className="text-xs text-gray-500">{inquiry.fromContact}</p>
+                    <p className="text-xs text-gray-500">
+                        {[inquiry.fromEmail, inquiry.fromPhone, (!inquiry.fromEmail && !inquiry.fromPhone) ? inquiry.fromContact : null].filter(Boolean).join(' • ')}
+                    </p>
                 </div>
                 <div className="text-right text-xs text-gray-500">
                     <p>{new Date(inquiry.createdAt).toLocaleDateString()}</p>
+                    {inquiry.followUpDate && (
+                        <p className={`mt-1 font-semibold ${(isOverdue || isToday) ? 'text-red-500' : 'text-blue-500'}`}>
+                            Follow Up: {new Date(inquiry.followUpDate).toLocaleDateString()}
+                        </p>
+                    )}
                 </div>
             </div>
             
             <p className="text-sm text-gray-700 my-2 line-clamp-3 whitespace-pre-wrap">{inquiry.message}</p>
+            {latestLog && (
+                <div className="bg-gray-50 border rounded p-2 mb-2 mt-2 text-xs text-gray-600 shadow-sm">
+                    <span className="font-semibold text-gray-700">{latestLog.userId === 'System' ? 'System' : users.find(u => u.id === latestLog.userId)?.name || 'User'}:</span> <span className="line-clamp-2">{latestLog.notes}</span>
+                </div>
+            )}
             
             <div className="mt-2 pt-2 border-t space-y-2">
                 {customer && (
@@ -376,13 +403,22 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
         });
     }, [inquiries]);
 
-    const { selectedEntityId, users } = useApp();
+    const { selectedEntityId, users, currentUser } = useApp();
+
+    const [assignedUserFilter, setAssignedUserFilter] = useState<string>('all');
+    const [stalenessFilter, setStalenessFilter] = useState<string>('all');
 
     const handleUpdateStatus = async (inquiry: Inquiry, newStatus: Inquiry['status']) => {
         const updated: Inquiry = {
             ...inquiry,
             status: newStatus,
-            actionNotes: `[System]: Status updated to ${newStatus} via fast action card button.\n${inquiry.actionNotes || ''}`
+            logs: [...(inquiry.logs || []), {
+                id: crypto.randomUUID(),
+                timestamp: new Date().toISOString(),
+                userId: 'System',
+                actionType: 'Status Update',
+                notes: `Status updated to ${newStatus} via fast action card button.`
+            }]
         };
         // Update local state immediately for visual responsiveness
         setInquiries(prev => prev.map(i => i.id === inquiry.id ? updated : i));
@@ -405,7 +441,7 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
 
     React.useEffect(() => {
         setSelectedInquiryIds([]);
-    }, [activeTab, searchTerm, dateFilter, selectedEntityId, viewLayout]);
+    }, [activeTab, searchTerm, dateFilter, selectedEntityId, viewLayout, assignedUserFilter, stalenessFilter]);
 
     const handleBulkUpdateStatus = async (newStatus: Inquiry['status']) => {
         if (selectedInquiryIds.length === 0) return;
@@ -413,7 +449,13 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
         const updatedInquiries = displayInquiries.filter(i => selectedInquiryIds.includes(i.id)).map(i => ({
             ...i,
             status: newStatus,
-            actionNotes: `[System]: Status updated to ${newStatus} via bulk action.\n${i.actionNotes || ''}`
+            logs: [...(i.logs || []), {
+                id: crypto.randomUUID(),
+                timestamp: new Date().toISOString(),
+                userId: 'System',
+                actionType: 'Status Update',
+                notes: `Status updated to ${newStatus} via bulk action.`
+            }]
         }));
         
         setInquiries(prev => prev.map(i => {
@@ -531,6 +573,22 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
     const filteredInquiries = useMemo(() => {
         let filtered = normalizedInquiries.filter(i => selectedEntityId === 'all' || i.entityId === selectedEntityId);
         
+        if (assignedUserFilter !== 'all') {
+            const targetUserId = assignedUserFilter === 'me' ? currentUser.id : assignedUserFilter;
+            filtered = filtered.filter(i => i.takenByUserId === targetUserId || i.assignedToUserId === targetUserId);
+        }
+
+        if (stalenessFilter === 'stale_24h') {
+            const twentyFourHoursAgo = new Date();
+            twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24);
+            filtered = filtered.filter(i => {
+                const latestLogTime = i.logs && i.logs.length > 0 
+                    ? new Date(i.logs[i.logs.length - 1].timestamp).getTime() 
+                    : new Date(i.createdAt).getTime();
+                return latestLogTime < twentyFourHoursAgo.getTime();
+            });
+        }
+
         if (searchTerm.trim()) {
             const low = searchTerm.toLowerCase();
             filtered = filtered.filter(i => 
@@ -547,7 +605,7 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
         }
 
         return filtered;
-    }, [normalizedInquiries, selectedEntityId, searchTerm, dateFilter]);
+    }, [normalizedInquiries, selectedEntityId, searchTerm, dateFilter, assignedUserFilter, stalenessFilter, currentUser.id]);
 
     const activeInquiries = useMemo(() => {
         const columns: { [key in Inquiry['status']]?: Inquiry[] } = {
@@ -630,6 +688,27 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                         >
                             Closed
                         </button>
+                    </div>
+                    
+                    {/* Additional Filters */}
+                    <div className="flex items-center gap-2">
+                        <select 
+                            value={assignedUserFilter} 
+                            onChange={e => setAssignedUserFilter(e.target.value)}
+                            className="bg-white border rounded-lg px-2 py-1.5 text-xs font-bold text-gray-700 shadow-sm outline-none"
+                        >
+                            <option value="all">All Users</option>
+                            <option value="me">My Inquiries</option>
+                            {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                        </select>
+                        <select 
+                            value={stalenessFilter} 
+                            onChange={e => setStalenessFilter(e.target.value)}
+                            className="bg-white border rounded-lg px-2 py-1.5 text-xs font-bold text-gray-700 shadow-sm outline-none"
+                        >
+                            <option value="all">All Activity</option>
+                            <option value="stale_24h">Unactioned &gt; 24h</option>
+                        </select>
                     </div>
                 </div>
                 <div className="flex items-center gap-4">

@@ -55,9 +55,6 @@ const EmailEstimateModal: React.FC<EmailEstimateModalProps> = ({ isOpen, onClose
 
 Thank you for choosing Brookspeed. Please find below the details of your estimate for the work on your ${vehicle?.make || 'Vehicle'} ${vehicle?.model || ''} (${vehicle?.registration || 'TBA'}).
 
-Estimate Summary:
-Total Estimate Amount: £${total.toFixed(2)}
-
 You can view, approve, or decline your detailed estimate online by clicking the link below:
 
 <a href="${onlineViewLink}" style="display: inline-block; padding: 10px 20px; background-color: #4f46e5; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: bold; margin-top: 10px; margin-bottom: 10px;">View Estimate Online</a>
@@ -117,17 +114,7 @@ The Brookspeed Team`;
                     <div className="p-4 border border-gray-200 rounded-lg mt-4 h-80 overflow-y-auto bg-white shadow-inner">
                         <p className="mb-4">Dear {customer?.forename || 'Customer'},</p>
                         <p className="mb-4">Thank you for choosing Brookspeed. Please find below the details of your estimate for the work on your {vehicle?.make} {vehicle?.model} ({vehicle?.registration || 'TBA'}).</p>
-                        <div className="p-4 bg-gray-50 my-4 rounded-xl border border-gray-100 shadow-sm">
-                            <h4 className="font-bold text-indigo-900 text-sm mb-3 border-b border-gray-200 pb-2 flex items-center">
-                                <span className="bg-indigo-100 p-1 rounded-md mr-2"><Mail size={14} className="text-indigo-600" /></span>
-                                Estimate Summary
-                            </h4>
-                            <div className="flex justify-between items-center bg-white p-3 rounded-lg border border-gray-100">
-                                <span className="text-gray-600 font-medium">Total Estimate Amount:</span>
-                                <span className="font-black text-lg text-indigo-700">£{total.toFixed(2)}</span>
-                            </div>
-                            <p className="text-[10px] text-gray-400 mt-2 italic text-center uppercase tracking-widest font-black">Inclusive of VAT where applicable</p>
-                        </div>
+
                         <p className="mb-4">You can view, approve, or decline your detailed estimate online by clicking the link below:</p>
                         <div className="text-center my-6">
                             <button 

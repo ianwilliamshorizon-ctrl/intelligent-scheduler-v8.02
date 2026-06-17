@@ -280,7 +280,10 @@ exports.performScheduledBackup = onSchedule({
 /**
  * Outbound Email sending helper
  */
-async function sendEmailInternal({ to, fromName, fromEmail, subject, body, attachment }) {
+async function sendEmailInternal({ to, fromName, fromEmail, subject, body, attachment, attachments }) {
+  let allAttachments = [];
+  if (attachment) allAttachments.push(attachment);
+  if (attachments && Array.isArray(attachments)) allAttachments.push(...attachments);
   const microsoftClientId = process.env.MICROSOFT_CLIENT_ID?.trim();
   const microsoftClientSecret = process.env.MICROSOFT_CLIENT_SECRET?.trim();
   const microsoftTenantId = process.env.MICROSOFT_TENANT_ID?.trim();
@@ -335,15 +338,13 @@ async function sendEmailInternal({ to, fromName, fromEmail, subject, body, attac
         saveToSentItems: "true"
       };
 
-      if (attachment && attachment.content && attachment.filename) {
-        mailBody.message.attachments = [
-          {
-            "@odata.type": "#microsoft.graph.fileAttachment",
-            name: attachment.filename,
-            contentType: attachment.type || "application/pdf",
-            contentBytes: attachment.content // base64 string
-          }
-        ];
+      if (allAttachments.length > 0) {
+        mailBody.message.attachments = allAttachments.map(att => ({
+          "@odata.type": "#microsoft.graph.fileAttachment",
+          name: att.filename,
+          contentType: att.type || "application/pdf",
+          contentBytes: att.content // base64 string
+        }));
       }
 
       const sendMailUrl = `https://graph.microsoft.com/v1.0/users/${microsoftEmailSender}/sendMail`;
@@ -405,15 +406,13 @@ async function sendEmailInternal({ to, fromName, fromEmail, subject, body, attac
     html: body.replace(/\n/g, "<br>")
   };
 
-  if (attachment && attachment.content && attachment.filename) {
-    mailOptions.attachments = [
-      {
-        content: attachment.content,
-        filename: attachment.filename,
-        encoding: "base64",
-        contentType: attachment.type || "application/pdf"
-      }
-    ];
+  if (allAttachments.length > 0) {
+    mailOptions.attachments = allAttachments.map(att => ({
+      content: att.content,
+      filename: att.filename,
+      encoding: "base64",
+      contentType: att.type || "application/pdf"
+    }));
   }
 
   try {
@@ -433,13 +432,13 @@ exports.sendEmail = onCall({
   region: "europe-west1", 
   secrets: ["SMTP_USER", "SMTP_PASS", "MICROSOFT_CLIENT_ID", "MICROSOFT_CLIENT_SECRET", "MICROSOFT_TENANT_ID", "MICROSOFT_EMAIL_SENDER"] 
 }, async (request) => {
-  const { to, fromName, fromEmail, subject, body, attachment } = request.data || {};
+  const { to, fromName, fromEmail, subject, body, attachment, attachments } = request.data || {};
 
   if (!to || !subject || !body) {
     throw new HttpsError("invalid-argument", "Missing required email fields (to, subject, body).");
   }
 
-  return sendEmailInternal({ to, fromName, fromEmail, subject, body, attachment });
+  return sendEmailInternal({ to, fromName, fromEmail, subject, body, attachment, attachments });
 });
 
 /**
@@ -653,6 +652,10 @@ Format your response as a valid JSON object with the following fields:
   "isEstimateOrQuoteRequest": boolean,
   "isEscalated": boolean,
   "matchedEntityId": string | null,
+  "customerName": string | null,
+  "customerPhone": string | null,
+  "vehicleRegistration": string | null,
+  "summary": "Concise 1-2 sentence summary of the customer's request",
   "reasoning": "brief description of why this classification was made"
 }
 
@@ -674,7 +677,18 @@ ${textBody}
         classificationReason = classification.reasoning || "";
         isQuoteRequest = !!classification.isEstimateOrQuoteRequest;
         isEscalated = !!classification.isEscalated;
-        logger.info(`Gemini classified email: Entity=${entityId}, QuoteRequest=${isQuoteRequest}, Escalated=${isEscalated}, Reason=${classificationReason}`);
+        
+        // Extract new fields if present
+        if (classification.customerName) fromName = classification.customerName;
+        const newSummary = classification.summary || "";
+        const cPhone = classification.customerPhone || "";
+        const cReg = classification.vehicleRegistration || "";
+        
+        if (newSummary) {
+          classificationReason = `Summary: ${newSummary}\nPhone: ${cPhone || 'N/A'}, Vehicle Reg: ${cReg || 'N/A'}\nReasoning: ${classificationReason}`;
+        }
+        
+        logger.info(`Gemini classified email: Entity=${entityId}, QuoteRequest=${isQuoteRequest}, Escalated=${isEscalated}`);
       } catch (geminiError) {
         logger.error("Error using Gemini for email classification:", geminiError.message);
       }
@@ -949,6 +963,10 @@ Format your response as a valid JSON object with the following fields:
   "isEstimateOrQuoteRequest": boolean,
   "isEscalated": boolean,
   "matchedEntityId": string | null,
+  "customerName": string | null,
+  "customerPhone": string | null,
+  "vehicleRegistration": string | null,
+  "summary": "Concise 1-2 sentence summary of the customer's request",
   "reasoning": "brief description of why this classification was made"
 }
 
@@ -970,7 +988,18 @@ ${textBody}
           classificationReason = classification.reasoning || "";
           isQuoteRequest = !!classification.isEstimateOrQuoteRequest;
           isEscalated = !!classification.isEscalated;
-          logger.info(`Gemini classified email: Entity=${entityId}, QuoteRequest=${isQuoteRequest}, Escalated=${isEscalated}, Reason=${classificationReason}`);
+          
+          // Extract new fields if present
+          if (classification.customerName) fromName = classification.customerName;
+          const newSummary = classification.summary || "";
+          const cPhone = classification.customerPhone || "";
+          const cReg = classification.vehicleRegistration || "";
+          
+          if (newSummary) {
+            classificationReason = `Summary: ${newSummary}\nPhone: ${cPhone || 'N/A'}, Vehicle Reg: ${cReg || 'N/A'}\nReasoning: ${classificationReason}`;
+          }
+          
+          logger.info(`Gemini classified email: Entity=${entityId}, QuoteRequest=${isQuoteRequest}, Escalated=${isEscalated}`);
         } catch (geminiError) {
           logger.error("Error using Gemini for email classification:", geminiError.message);
         }

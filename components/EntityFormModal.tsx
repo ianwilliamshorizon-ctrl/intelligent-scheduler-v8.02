@@ -227,6 +227,7 @@ const EntityFormModal: React.FC<EntityFormModalProps> = ({ isOpen, onClose, onSa
                                 <EntityFormInput label="Address Line 2" name="addressLine2" value={formData.addressLine2 || ''} onChange={handleChange} />
                                 <EntityFormInput label="City" name="city" value={formData.city || ''} onChange={handleChange} />
                                 <EntityFormInput label="Postcode" name="postcode" value={formData.postcode || ''} onChange={handleChange} />
+                                <EntityFormInput label="Company Phone" name="phone" value={formData.phone || ''} onChange={handleChange} />
                                 <EntityFormInput label="Company Number" name="companyNumber" value={formData.companyNumber || ''} onChange={handleChange} />
                                 <EntityFormInput label="VAT Number" name="vatNumber" value={formData.vatNumber || ''} onChange={handleChange} />
                             </div>
