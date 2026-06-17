@@ -525,8 +525,12 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                                 </div>
                              ) : (
                                 <div className="flex flex-wrap items-center gap-1 sm:gap-2 mt-0.5 sm:mt-1">
-                                    <span className="text-[10px] sm:text-xs bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">Internal Preview</span>
-                                    <p className="text-[10px] sm:text-xs text-gray-500 hidden sm:inline">Staff View (Print Preview)</p>
+                                    <span className={`text-[10px] sm:text-xs px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${viewMode === 'customer' ? 'bg-indigo-100 text-indigo-800' : 'bg-gray-200 text-gray-700'}`}>
+                                        {viewMode === 'customer' ? 'PDF Version' : 'Internal Preview'}
+                                    </span>
+                                    <p className="text-[10px] sm:text-xs text-gray-500 hidden sm:inline">
+                                        {viewMode === 'customer' ? 'Printable Estimate' : 'Staff View (Print Preview)'}
+                                    </p>
                                 </div>
                              )}
                         </div>
@@ -535,14 +539,14 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                                 {isCustomerMode ? (
                                     <>
                                         <Printer size={14}/>
-                                        <span className="hidden sm:inline">Switch to PDF Preview</span>
-                                        <span className="inline sm:hidden">PDF View</span>
+                                        <span className="hidden md:inline">Switch to PDF Preview</span>
+                                        <span className="inline md:hidden">PDF View</span>
                                     </>
                                 ) : (
                                     <>
                                         <Monitor size={14}/>
-                                        <span className="hidden sm:inline">Switch to Interactive View</span>
-                                        <span className="inline sm:hidden">Interactive</span>
+                                        <span className="hidden md:inline">Switch to Interactive View</span>
+                                        <span className="inline md:hidden">Interactive</span>
                                     </>
                                 )}
                             </button>
@@ -845,17 +849,23 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                                          )}
                                          <button 
                                              onClick={handleApproveNextAvailable} 
-                                             className="flex items-center py-2.5 px-6 bg-indigo-600 text-white font-bold rounded-lg shadow-lg hover:bg-indigo-700 transition transform hover:-translate-y-0.5 animate-fade-in"
+                                             className="flex items-center py-2.5 px-4 sm:px-6 bg-indigo-600 text-white font-bold rounded-lg shadow-lg hover:bg-indigo-700 transition transform hover:-translate-y-0.5 animate-fade-in text-xs sm:text-sm"
                                          >
-                                             <CheckSquare size={18} className="mr-2"/>
-                                             {isSupplementary ? 'Approve & Next Available' : 'Approve & Request Next Available Slot'}
+                                             <CheckSquare size={18} className="mr-2 flex-shrink-0"/>
+                                             <span>
+                                                 <span className="hidden md:inline">{isSupplementary ? 'Approve & Next Available' : 'Approve & Request Next Available Slot'}</span>
+                                                 <span className="inline md:hidden">{isSupplementary ? 'Approve & Next Available' : 'Approve (Fastest)'}</span>
+                                             </span>
                                          </button>
                                          <button 
                                              onClick={() => setIsConfirmingApproval(true)} 
-                                             className="flex items-center py-2.5 px-6 bg-green-600 text-white font-bold rounded-lg shadow-lg hover:bg-green-700 transition transform hover:-translate-y-0.5 animate-fade-in"
+                                             className="flex items-center py-2.5 px-4 sm:px-6 bg-green-600 text-white font-bold rounded-lg shadow-lg hover:bg-green-700 transition transform hover:-translate-y-0.5 animate-fade-in text-xs sm:text-sm"
                                          >
-                                             <Calendar size={18} className="mr-2"/>
-                                             {isSupplementary ? 'Approve & Select Dates' : 'Approve & Choose Preferred Dates'}
+                                             <Calendar size={18} className="mr-2 flex-shrink-0"/>
+                                             <span>
+                                                 <span className="hidden md:inline">{isSupplementary ? 'Approve & Select Dates' : 'Approve & Choose Preferred Dates'}</span>
+                                                 <span className="inline md:hidden">Approve & Choose Dates</span>
+                                             </span>
                                          </button>
                                      </div>
                                  )}
