@@ -50,7 +50,7 @@ const EmailEstimateModal: React.FC<EmailEstimateModalProps> = ({ isOpen, onClose
         setIsSending(true);
         try {
             const subject = `Your Estimate #${estimate.estimateNumber} from Brookspeed`;
-            const onlineViewLink = `${window.location.origin}/?estimateId=${estimate.id}&view=customer`;
+            const onlineViewLink = `${window.location.origin}/?estimateId=${estimate.id}&view=customer&v=${new Date().getTime()}`;
             const body = `Dear ${customer?.forename || 'Customer'},
 
 Thank you for choosing Brookspeed. Please find below the details of your estimate for the work on your ${vehicle?.make || 'Vehicle'} ${vehicle?.model || ''} (${vehicle?.registration || 'TBA'}).

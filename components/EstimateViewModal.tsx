@@ -525,11 +525,11 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                                 </div>
                              ) : (
                                 <div className="flex flex-wrap items-center gap-1 sm:gap-2 mt-0.5 sm:mt-1">
-                                    <span className={`text-[10px] sm:text-xs px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${viewMode === 'customer' ? 'bg-indigo-100 text-indigo-800' : 'bg-gray-200 text-gray-700'}`}>
-                                        {viewMode === 'customer' ? 'PDF Version' : 'Internal Preview'}
+                                    <span className="text-[10px] sm:text-xs px-2 py-0.5 rounded-full font-bold uppercase tracking-wider bg-indigo-100 text-indigo-800">
+                                        PDF Version
                                     </span>
                                     <p className="text-[10px] sm:text-xs text-gray-500 hidden sm:inline">
-                                        {viewMode === 'customer' ? 'Printable Estimate' : 'Staff View (Print Preview)'}
+                                        Printable Estimate
                                     </p>
                                 </div>
                              )}
@@ -539,14 +539,14 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                                 {isCustomerMode ? (
                                     <>
                                         <Printer size={14}/>
-                                        <span className="hidden md:inline">Switch to PDF Preview</span>
-                                        <span className="inline md:hidden">PDF View</span>
+                                        <span className="hidden lg:inline">Switch to PDF Preview</span>
+                                        <span className="inline lg:hidden">PDF View</span>
                                     </>
                                 ) : (
                                     <>
                                         <Monitor size={14}/>
-                                        <span className="hidden md:inline">Switch to Interactive View</span>
-                                        <span className="inline md:hidden">Interactive</span>
+                                        <span className="hidden lg:inline">Switch to Interactive View</span>
+                                        <span className="inline lg:hidden">Interactive</span>
                                     </>
                                 )}
                             </button>
@@ -557,15 +557,15 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                     <main ref={mainRef} className="flex-grow overflow-y-auto p-4 bg-gray-100">
                         {isCustomerMode ? (
                             <div className="bg-white p-6 rounded-xl shadow-sm border space-y-6 max-w-3xl mx-auto">
-                                <div className="flex justify-between items-start border-b pb-6">
+                                <div className="flex flex-col sm:flex-row justify-between items-start gap-4 border-b pb-6">
                                     <div>
-                                        <h1 className="text-2xl font-extrabold text-gray-900">{resolvedEntity?.name || 'Brookspeed'}</h1>
-                                        <p className="text-sm text-gray-600 mt-1">{resolvedEntity?.addressLine1}, {resolvedEntity?.postcode}</p>
+                                        <h1 className="text-lg sm:text-2xl font-extrabold text-gray-900">{resolvedEntity?.name || 'Brookspeed'}</h1>
+                                        <p className="text-xs sm:text-sm text-gray-600 mt-0.5 sm:mt-1">{resolvedEntity?.addressLine1}, {resolvedEntity?.postcode}</p>
                                     </div>
-                                    <div className="text-right">
-                                        <h2 className="text-xl font-semibold text-gray-800">{isSupplementary ? 'Supplementary ' : ''}Estimate</h2>
-                                        <p className="text-lg font-mono text-indigo-600">#{estimate.estimateNumber}</p>
-                                        <p className="text-sm text-gray-500">{getDisplayDate(estimate.issueDate)}</p>
+                                    <div className="text-left sm:text-right">
+                                        <h2 className="text-base sm:text-xl font-semibold text-gray-800">{isSupplementary ? 'Supplementary ' : ''}Estimate</h2>
+                                        <p className="text-sm sm:text-lg font-mono text-indigo-600">#{estimate.estimateNumber}</p>
+                                        <p className="text-xs sm:text-sm text-gray-500">{getDisplayDate(estimate.issueDate)}</p>
                                     </div>
                                 </div>
 
@@ -803,36 +803,37 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                         {!isCustomerMode ? (
                             <>
                                 <div className="flex gap-2">
-                                    {currentUser.role !== 'Engineer' && (
+                                    {viewMode !== 'customer' && currentUser.role !== 'Engineer' && (
                                         <button onClick={() => setIsEmailing(true)} className="flex items-center py-2 px-4 bg-gray-800 text-white font-semibold rounded-lg hover:bg-gray-900 transition"><Mail size={16} className="mr-2"/> Email Link</button>
                                     )}
                                     <button onClick={() => handlePrint()} className="flex items-center py-2 px-4 bg-gray-100 text-gray-700 font-semibold rounded-lg hover:bg-gray-200 transition">
                                         <Printer size={16} className="mr-2"/> Print Estimate
                                     </button>
-
                                 </div>
                     
-                                <div className="flex gap-2">
-                                    {onCreateInquiry && <button onClick={() => onCreateInquiry(estimate)} className="flex items-center py-2 px-4 bg-purple-100 text-purple-700 font-semibold rounded-lg hover:bg-purple-200 transition"><MessageSquare size={16} className="mr-2"/> Raise Inquiry</button>}
-                                    {onEdit && (
-                                        <button onClick={() => { onEdit(estimate); onClose(); }} className="flex items-center py-2 px-4 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 shadow-md transition">
-                                            <Edit size={16} className="mr-2"/> Edit Estimate
+                                {viewMode !== 'customer' && (
+                                    <div className="flex gap-2">
+                                        {onCreateInquiry && <button onClick={() => onCreateInquiry(estimate)} className="flex items-center py-2 px-4 bg-purple-100 text-purple-700 font-semibold rounded-lg hover:bg-purple-200 transition"><MessageSquare size={16} className="mr-2"/> Raise Inquiry</button>}
+                                        {onEdit && (
+                                            <button onClick={() => { onEdit(estimate); onClose(); }} className="flex items-center py-2 px-4 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 shadow-md transition">
+                                                <Edit size={16} className="mr-2"/> Edit Estimate
+                                            </button>
+                                        )}
+                                        <button 
+                                            onClick={() => { 
+                                                if (!estimate.vehicleId) {
+                                                    toast.warning("This estimate does not have a vehicle registration. Please edit the estimate to add vehicle details before scheduling it as a job.");
+                                                    return;
+                                                }
+                                                onScheduleEstimate?.(estimate); 
+                                                onClose(); 
+                                            }} 
+                                            className="flex items-center py-2 px-4 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 shadow-md transition"
+                                        >
+                                            <CalendarCheck size={16} className="mr-2"/> Schedule Job
                                         </button>
-                                    )}
-                                    <button 
-                                        onClick={() => { 
-                                            if (!estimate.vehicleId) {
-                                                toast.warning("This estimate does not have a vehicle registration. Please edit the estimate to add vehicle details before scheduling it as a job.");
-                                                return;
-                                            }
-                                            onScheduleEstimate?.(estimate); 
-                                            onClose(); 
-                                        }} 
-                                        className="flex items-center py-2 px-4 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 shadow-md transition"
-                                    >
-                                        <CalendarCheck size={16} className="mr-2"/> Schedule Job
-                                    </button>
-                                </div>
+                                    </div>
+                                )}
                             </>
                         ) : (
                             <div className="w-full flex justify-between items-center flex-wrap gap-4">
@@ -853,8 +854,8 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                                          >
                                              <CheckSquare size={18} className="mr-2 flex-shrink-0"/>
                                              <span>
-                                                 <span className="hidden md:inline">{isSupplementary ? 'Approve & Next Available' : 'Approve & Request Next Available Slot'}</span>
-                                                 <span className="inline md:hidden">{isSupplementary ? 'Approve & Next Available' : 'Approve (Fastest)'}</span>
+                                                 <span className="hidden lg:inline">{isSupplementary ? 'Approve & Next Available' : 'Approve & Request Next Available Slot'}</span>
+                                                 <span className="inline lg:hidden">{isSupplementary ? 'Approve & Next Available' : 'Approve (Fastest)'}</span>
                                              </span>
                                          </button>
                                          <button 
@@ -863,8 +864,8 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                                          >
                                              <Calendar size={18} className="mr-2 flex-shrink-0"/>
                                              <span>
-                                                 <span className="hidden md:inline">{isSupplementary ? 'Approve & Select Dates' : 'Approve & Choose Preferred Dates'}</span>
-                                                 <span className="inline md:hidden">Approve & Choose Dates</span>
+                                                 <span className="hidden lg:inline">{isSupplementary ? 'Approve & Select Dates' : 'Approve & Choose Preferred Dates'}</span>
+                                                 <span className="inline lg:hidden">Approve & Choose Dates</span>
                                              </span>
                                          </button>
                                      </div>
