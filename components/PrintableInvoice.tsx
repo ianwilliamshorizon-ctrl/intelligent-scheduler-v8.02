@@ -193,7 +193,7 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, customer, 
                     <div style={{ fontWeight: isPackage ? '800' : '500', color: isPackage ? '#000' : '#334155' }}>
                         {isChild ? <span style={{ color: '#ccc', marginRight: '8px' }}>—</span> : null}
                         {item.description}
-                        {item.partNumber && item.partNumber !== 'LABOUR' && (
+                        {item.partNumber && item.partNumber.toUpperCase().trim() !== 'LABOUR' && item.partNumber.toUpperCase().trim() !== 'MOT' && (
                             <span style={{ marginLeft: '8px', fontSize: '9px', color: '#94a3b8', fontFamily: 'monospace', textTransform: 'uppercase' }}>
                                 [{item.partNumber}]
                             </span>

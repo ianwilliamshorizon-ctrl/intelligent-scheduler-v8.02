@@ -149,7 +149,9 @@ export const PrintableEstimate: React.FC<PrintableEstimateProps> = ({ estimate, 
                         {isChild ? <span className="text-gray-300 mr-2">—</span> : null}
                         {item.optionLabel && <span style={{ color: '#4f46e5', fontWeight: '900', fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.05em', marginRight: '8px' }}>{item.optionLabel}</span>}
                         {item.description}
-                        {item.partNumber && <span className="ml-2 text-[9px] text-gray-400 font-mono tracking-tighter uppercase">[{item.partNumber}]</span>}
+                        {item.partNumber && item.partNumber.toUpperCase().trim() !== 'LABOUR' && item.partNumber.toUpperCase().trim() !== 'MOT' && (
+                            <span className="ml-2 text-[9px] text-gray-400 font-mono tracking-tighter uppercase">[{item.partNumber}]</span>
+                        )}
                     </div>
                 </td>
                 <td style={{ padding: '10px 4px', textAlign: 'center', fontSize: '11px', color: '#64748b' }}>{item.quantity}</td>
