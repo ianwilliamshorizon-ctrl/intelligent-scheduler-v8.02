@@ -1,5 +1,7 @@
 {
   "projects": {
-    "default": "intelligent-scheduling-v801"
+    "default": "intelligent-scheduling-v801",
+    "prod": "intelligent-scheduling-v801",
+    "dev": "intelligent-scheduling-dev"
   }
 }
