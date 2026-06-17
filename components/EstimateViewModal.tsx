@@ -86,6 +86,22 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
     const [customerNotes, setCustomerNotes] = useState('');
     const [capacityWarning, setCapacityWarning] = useState<string | null>(null);
     const [isSpeaking, setIsSpeaking] = useState(false);
+    const [previewZoom, setPreviewZoom] = useState(1);
+
+    useEffect(() => {
+        const handleResize = () => {
+            const width = window.innerWidth;
+            if (width < 840) {
+                const targetWidth = width - 32;
+                setPreviewZoom(targetWidth / 794);
+            } else {
+                setPreviewZoom(0.9);
+            }
+        };
+        handleResize();
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, [isOpen]);
 
     const isCustomerMode = localViewMode === 'customer';
     const isSupplementary = !!estimate.jobId;
@@ -499,26 +515,38 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
         <>
             <div className="fixed inset-0 bg-gray-900 bg-opacity-75 z-[60] flex justify-center items-center p-4">
                 <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
-                    <header className="flex-shrink-0 flex justify-between items-center p-4 border-b bg-gray-50 rounded-t-xl">
+                    <header className="flex-shrink-0 flex justify-between items-center p-3 sm:p-4 border-b bg-gray-50 rounded-t-xl">
                         <div>
-                            <h2 className="text-xl font-bold text-gray-800">Estimate #{estimate.estimateNumber}</h2>
+                            <h2 className="text-base sm:text-xl font-bold text-gray-800">Estimate #{estimate.estimateNumber}</h2>
                              {isCustomerMode ? (
-                                <div className="flex items-center gap-2 mt-1">
-                                    <span className="text-xs bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">Customer View</span>
-                                    <p className="text-xs text-gray-500">Interactive Approval Mode</p>
+                                <div className="flex flex-wrap items-center gap-1 sm:gap-2 mt-0.5 sm:mt-1">
+                                    <span className="text-[10px] sm:text-xs bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">Customer View</span>
+                                    <p className="text-[10px] sm:text-xs text-gray-500 hidden sm:inline">Interactive Approval Mode</p>
                                 </div>
                              ) : (
-                                <div className="flex items-center gap-2 mt-1">
-                                    <span className="text-xs bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">Internal Preview</span>
-                                    <p className="text-xs text-gray-500">Staff View (Print Preview)</p>
+                                <div className="flex flex-wrap items-center gap-1 sm:gap-2 mt-0.5 sm:mt-1">
+                                    <span className="text-[10px] sm:text-xs bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">Internal Preview</span>
+                                    <p className="text-[10px] sm:text-xs text-gray-500 hidden sm:inline">Staff View (Print Preview)</p>
                                 </div>
                              )}
                         </div>
-                        <div className="flex items-center gap-3">
-                            <button onClick={() => setLocalViewMode(isCustomerMode ? 'internal' : 'customer')} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${isCustomerMode ? 'bg-indigo-50 text-indigo-700' : 'bg-gray-100 text-gray-600'}`}>
-                                {isCustomerMode ? <><Printer size={14}/> Switch to PDF Preview</> : <><Monitor size={14}/> Switch to Interactive View</>}
+                        <div className="flex items-center gap-1.5 sm:gap-3">
+                            <button onClick={() => setLocalViewMode(isCustomerMode ? 'internal' : 'customer')} className={`px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${isCustomerMode ? 'bg-indigo-50 text-indigo-700' : 'bg-gray-100 text-gray-600'}`}>
+                                {isCustomerMode ? (
+                                    <>
+                                        <Printer size={14}/>
+                                        <span className="hidden sm:inline">Switch to PDF Preview</span>
+                                        <span className="inline sm:hidden">PDF View</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Monitor size={14}/>
+                                        <span className="hidden sm:inline">Switch to Interactive View</span>
+                                        <span className="inline sm:hidden">Interactive</span>
+                                    </>
+                                )}
                             </button>
-                            <button onClick={onClose}><X size={24} className="text-gray-400 hover:text-gray-600" /></button>
+                            <button onClick={onClose} className="p-1"><X size={20} className="text-gray-400 hover:text-gray-600 sm:w-6 sm:h-6" /></button>
                         </div>
                     </header>
 
@@ -661,8 +689,15 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                                 </div>
                             </div>
                         ) : (
-                            <div className="flex justify-center">
-                                <div className="bg-white shadow-lg scale-90 origin-top">
+                            <div className="flex justify-center w-full overflow-hidden p-2 sm:p-4">
+                                <div 
+                                    className="bg-white shadow-lg origin-top"
+                                    style={{
+                                        zoom: previewZoom,
+                                        width: '210mm',
+                                        minWidth: '210mm'
+                                    }}
+                                >
                                     <PrintableEstimate estimate={{...estimate, lineItems: estimate.lineItems}} customer={customer} vehicle={vehicle} entityDetails={resolvedEntity} taxRates={taxRates} parts={parts} canViewPricing={canViewPricing} totals={dynamicTotals}/>
                                 </div>
                             </div>

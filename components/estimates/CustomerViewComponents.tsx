@@ -91,7 +91,7 @@ export const SelectableEstimateItemRow: React.FC<{
                 </div>
             )}
         </div>
-        <div className={`col-span-7 flex flex-col ${isOptional && isSelected ? 'font-semibold text-indigo-900' : 'text-slate-800'}`}>
+        <div className={`col-span-6 sm:col-span-7 flex flex-col text-xs sm:text-sm ${isOptional && isSelected ? 'font-semibold text-indigo-900' : 'text-slate-800'}`}>
             {item.optionLabel && (
                 <span className={`text-[9px] font-black uppercase tracking-widest mb-0.5 ${isSelected ? 'text-indigo-600' : 'text-gray-400'}`}>
                     {item.optionLabel}
@@ -99,7 +99,7 @@ export const SelectableEstimateItemRow: React.FC<{
             )}
             <span>{item.description}</span>
         </div>
-        <div className="col-span-2 text-right text-sm text-gray-500">{item.quantity} {item.isLabor ? 'hr(s)' : ''}</div>
-        <div className="col-span-2 text-right font-black text-slate-900">{canViewPricing ? formatCurrency(item.unitPrice * item.quantity) : ''}</div>
+        <div className="col-span-2 sm:col-span-2 text-right text-xs sm:text-sm text-gray-500">{item.quantity} {item.isLabor ? 'hr(s)' : ''}</div>
+        <div className="col-span-3 sm:col-span-2 text-right font-black text-xs sm:text-sm text-slate-900">{canViewPricing ? formatCurrency(item.unitPrice * item.quantity) : ''}</div>
     </div>
 );
