@@ -214,16 +214,18 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                             if (foundVeh) setSuggestedVehicle(foundVeh);
                                         }
 
-                                        if (parsed.summary) {
-                                            const newLog = {
-                                                id: crypto.randomUUID(),
-                                                timestamp: new Date().toISOString(),
-                                                userId: currentUser.id,
-                                                actionType: 'AI Scan',
-                                                notes: `AI Summary: ${parsed.summary}`
-                                            };
-                                            setFormData(p => ({ ...p, logs: [...(p.logs || []), newLog] }));
-                                        }
+                                        const aiLogNotes = parsed.summary 
+                                            ? `AI Summary: ${parsed.summary}` 
+                                            : `AI Scan Completed (No summary provided). Data: ${JSON.stringify(parsed)}`;
+                                        
+                                        const newLog = {
+                                            id: crypto.randomUUID(),
+                                            timestamp: new Date().toISOString(),
+                                            userId: currentUser.id,
+                                            actionType: 'AI Scan',
+                                            notes: aiLogNotes
+                                        };
+                                        setFormData(p => ({ ...p, logs: [...(p.logs || []), newLog] }));
 
                                     } catch (e) {
                                         console.error(e);
