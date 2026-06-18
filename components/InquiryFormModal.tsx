@@ -8,6 +8,7 @@ import { Wand2, Loader2, Link as LinkIcon, UserCheck, Car, XCircle, User as User
 import { parseInquiryMessage, generateEmailReply } from '../core/services/geminiService';
 import { sendOutboundEmail } from '../core/services/emailService';
 import { useData } from '../core/state/DataContext';
+import { generateInquiryNumber } from '../core/utils/numberGenerators';
 
 interface InquiryFormModalProps {
     isOpen: boolean;
@@ -41,7 +42,7 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
     updateEstimate 
 }) => {
     const { currentUser, selectedEntityId } = useApp();
-    const { purchaseOrders } = useData();
+    const { purchaseOrders, inquiries } = useData();
     const [formData, setFormData] = useState<Partial<Inquiry>>({});
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [aiError, setAiError] = useState('');
@@ -110,7 +111,9 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
             id: formData.id || crypto.randomUUID(),
             createdAt: formData.createdAt || new Date().toISOString(),
             takenByUserId: formData.takenByUserId || currentUser.id,
-            ...formData
+            inquiryNumber: formData.inquiryNumber || generateInquiryNumber(inquiries),
+            ...formData,
+            hasNewReply: false
         } as Inquiry;
         
         onSave(inquiryToSave, true);
@@ -519,7 +522,7 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                                 to: emailAddress,
                                                 fromName: 'Brookspeed',
                                                 fromEmail: 'info@brookspeed.com',
-                                                subject: `Re: Your Inquiry`,
+                                                subject: `Re: Your Inquiry [${formData.inquiryNumber || generateInquiryNumber(inquiries)}]`,
                                                 body: replyText,
                                                 attachments: emailAttachments.length > 0 ? emailAttachments : undefined
                                             });
@@ -541,7 +544,9 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                                         id: formData.id || crypto.randomUUID(),
                                                         createdAt: formData.createdAt || new Date().toISOString(),
                                                         takenByUserId: formData.takenByUserId || currentUser.id,
+                                                        inquiryNumber: formData.inquiryNumber || generateInquiryNumber(inquiries),
                                                         ...formData,
+                                                        hasNewReply: false,
                                                         logs: updatedLogs
                                                     } as Inquiry;
                                                     onSave(inquiryToSave, false);

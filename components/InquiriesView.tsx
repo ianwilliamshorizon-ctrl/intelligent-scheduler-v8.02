@@ -92,7 +92,7 @@ const InquiryCard: React.FC<{
                     inquiry.status === 'In Progress' ? 'border-blue-400' : 
                     inquiry.status === 'Quoted or Responded' ? 'border-gray-200' : 
                     inquiry.status === 'Approved' ? 'border-green-400' : 'border-gray-200'
-                } ${isOverdue || isToday ? 'ring-2 ring-red-400 bg-red-50/10' : ''} cursor-pointer hover:shadow-md transition-shadow mb-2`}
+                } ${isOverdue || isToday ? 'ring-2 ring-red-400 bg-red-50/10' : ''} ${inquiry.hasNewReply ? 'ring-2 ring-amber-500 bg-amber-50' : ''} cursor-pointer hover:shadow-md transition-shadow mb-2`}
                 onClick={() => onOpenInquiryModal(inquiry)}
             >
                 <div className="flex justify-between items-start gap-2">
@@ -106,6 +106,7 @@ const InquiryCard: React.FC<{
                     </div>
                     <span className="text-[10px] text-gray-400 shrink-0 font-medium flex flex-col items-end">
                         <span>{new Date(inquiry.createdAt).toLocaleDateString()}</span>
+                        {inquiry.inquiryNumber && <span className="text-gray-500">{inquiry.inquiryNumber}</span>}
                         {inquiry.followUpDate && (
                             <span className={`mt-0.5 ${(isOverdue || isToday) ? 'text-red-500 font-bold' : 'text-blue-500'}`}>
                                 FU: {new Date(inquiry.followUpDate).toLocaleDateString()}
@@ -218,7 +219,7 @@ const InquiryCard: React.FC<{
                 inquiry.status === 'In Progress' ? 'border-blue-400' : 
                 inquiry.status === 'Quoted or Responded' ? 'border-gray-200' : 
                 inquiry.status === 'Approved' ? 'border-green-400' : 'border-gray-200'
-            } ${isOverdue || isToday ? 'ring-2 ring-red-400 bg-red-50/10' : ''} cursor-pointer hover:shadow-md transition-shadow mb-3`}
+            } ${isOverdue || isToday ? 'ring-2 ring-red-400 bg-red-50/10' : ''} ${inquiry.hasNewReply ? 'ring-2 ring-amber-500 bg-amber-50' : ''} cursor-pointer hover:shadow-md transition-shadow mb-3`}
             onClick={() => onOpenInquiryModal(inquiry)}
         >
             <div className="flex justify-between items-start">
@@ -228,10 +229,11 @@ const InquiryCard: React.FC<{
                         {[inquiry.fromEmail, inquiry.fromPhone, (!inquiry.fromEmail && !inquiry.fromPhone) ? inquiry.fromContact : null].filter(Boolean).join(' • ')}
                     </p>
                 </div>
-                <div className="text-right text-xs text-gray-500">
+                <div className="text-right text-xs text-gray-500 flex flex-col items-end gap-1">
                     <p>{new Date(inquiry.createdAt).toLocaleDateString()}</p>
+                    {inquiry.inquiryNumber && <p className="font-semibold text-gray-400">{inquiry.inquiryNumber}</p>}
                     {inquiry.followUpDate && (
-                        <p className={`mt-1 font-semibold ${(isOverdue || isToday) ? 'text-red-500' : 'text-blue-500'}`}>
+                        <p className={`font-semibold ${(isOverdue || isToday) ? 'text-red-500' : 'text-blue-500'}`}>
                             Follow Up: {new Date(inquiry.followUpDate).toLocaleDateString()}
                         </p>
                     )}

@@ -621,6 +621,48 @@ exports.inboundEmailWebhook = onRequest({
       }
     }
 
+    let matchedInquiryId = null;
+    let existingInquiryData = null;
+
+    // 2.5 Look up inquiry number in subject line [INQ-XXXX]
+    const inqMatch = subject.match(/\[(INQ-\d+)\]/i);
+    if (inqMatch) {
+      const inqNum = inqMatch[1].toUpperCase();
+      logger.info(`Found inquiry number in subject: ${inqNum}`);
+      const inqSnap = await db.collection("brooks_inquiries")
+        .where("inquiryNumber", "==", inqNum)
+        .limit(1)
+        .get();
+      if (!inqSnap.empty) {
+        matchedInquiryId = inqSnap.docs[0].id;
+        existingInquiryData = inqSnap.docs[0].data();
+        logger.info(`Matched existing inquiry ID: ${matchedInquiryId}`);
+      }
+    }
+
+    if (matchedInquiryId) {
+      // Update existing inquiry
+      const newLog = {
+        id: crypto.randomUUID(),
+        timestamp: new Date().toISOString(),
+        userId: 'system',
+        actionType: 'Customer Reply',
+        notes: `[Webhook] Received reply from ${fromName || fromEmail}.\nSubject: "${subject}"\nBody snippet: ${textBody.substring(0, 200)}...`
+      };
+
+      const existingLogs = existingInquiryData.logs || [];
+      existingLogs.push(newLog);
+
+      await db.collection("brooks_inquiries").doc(matchedInquiryId).update({
+        logs: existingLogs,
+        hasNewReply: true,
+        status: 'Customer Responded'
+      });
+      
+      logger.info(`Updated existing Inquiry Card: ${matchedInquiryId} with new reply`);
+      return res.status(200).json({ success: true, inquiryId: matchedInquiryId, threaded: true });
+    }
+
     let entityId = null;
     let classificationReason = "";
     let isQuoteRequest = false;
@@ -931,6 +973,53 @@ async function performEmailSync(microsoftClientId, microsoftClientSecret, micros
             logger.info(`Matched estimate ID by document ID: ${matchedEstimateId}`);
           }
         }
+      }
+
+      let matchedInquiryId = null;
+      let existingInquiryData = null;
+
+      // 2.5 Look up inquiry number in subject line [INQ-XXXX]
+      const inqMatch = subject.match(/\[(INQ-\d+)\]/i);
+      if (inqMatch) {
+        const inqNum = inqMatch[1].toUpperCase();
+        logger.info(`Found inquiry number in subject: ${inqNum}`);
+        const inqSnap = await db.collection("brooks_inquiries")
+          .where("inquiryNumber", "==", inqNum)
+          .limit(1)
+          .get();
+        if (!inqSnap.empty) {
+          matchedInquiryId = inqSnap.docs[0].id;
+          existingInquiryData = inqSnap.docs[0].data();
+          logger.info(`Matched existing inquiry ID: ${matchedInquiryId}`);
+        }
+      }
+
+      if (matchedInquiryId) {
+        // Update existing inquiry
+        const newLog = {
+          id: messageId || crypto.randomUUID(),
+          timestamp: message.receivedDateTime || new Date().toISOString(),
+          userId: 'system',
+          actionType: 'Customer Reply',
+          notes: `[Email Sync] Received reply from ${fromName || fromEmail}.\nSubject: "${subject}"\nBody snippet: ${textBody.substring(0, 200)}...`
+        };
+
+        const existingLogs = existingInquiryData.logs || [];
+        existingLogs.push(newLog);
+
+        const updatedMedia = [...(existingInquiryData.media || []), ...mediaItems];
+
+        await db.collection("brooks_inquiries").doc(matchedInquiryId).update({
+          logs: existingLogs,
+          media: updatedMedia,
+          hasNewReply: true,
+          status: 'Customer Responded'
+        });
+        
+        logger.info(`Updated existing Inquiry Card: ${matchedInquiryId} with new reply`);
+        await markEmailAsRead(accessToken, microsoftEmailSender, messageId);
+        processedCount++;
+        continue;
       }
 
       let entityId = null;

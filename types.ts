@@ -666,6 +666,8 @@ export interface Inquiry {
     media?: any[];
     logs?: InquiryLog[];
     followUpDate?: string;
+    inquiryNumber?: string;
+    hasNewReply?: boolean;
 }
 
 /**

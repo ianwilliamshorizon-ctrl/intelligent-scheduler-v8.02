@@ -1,4 +1,4 @@
-import { Estimate, Invoice, RentalBooking, Job, PurchaseOrder, Purchase } from '../../types';
+import { Estimate, Invoice, RentalBooking, Job, PurchaseOrder, Purchase, Inquiry } from '../../types';
 
 /**
  * Helper function to find the next sequential number for a given prefix.
@@ -93,4 +93,22 @@ export const generateRentalBookingId = (allBookings: RentalBooking[]): string =>
     const newNumber = maxNumber + 1;
     
     return `${prefix}${String(newNumber).padStart(6, '0')}`;
+};
+
+/**
+ * Generates a unique sequential inquiry number starting with 'INQ-'.
+ * It finds the highest existing number and increments it.
+ */
+export const generateInquiryNumber = (allInquiries: Inquiry[]): string => {
+    const prefix = 'INQ-';
+    const existingNumbers = allInquiries
+        .filter(i => i.inquiryNumber)
+        .map(i => parseInt(i.inquiryNumber!.replace(prefix, ''), 10))
+        .filter(n => !isNaN(n));
+    
+    const maxNumber = existingNumbers.length > 0 ? Math.max(...existingNumbers) : 0;
+    
+    const newNumber = maxNumber + 1;
+    
+    return `${prefix}${String(newNumber).padStart(4, '0')}`;
 };
