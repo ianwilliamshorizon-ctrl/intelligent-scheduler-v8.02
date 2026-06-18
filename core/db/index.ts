@@ -85,8 +85,12 @@ export const getAll = async <T>(collectionName: string): Promise<T[]> => {
     try {
         const snapshot = await getDocs(collection(db, collectionName));
         return snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as T[];
-    } catch (err) {
-        console.error(`[Firestore getAll Error] ${collectionName}:`, err);
+    } catch (err: any) {
+        if (err?.code === 'unavailable') {
+            console.warn(`[Firestore getAll Warning] ${collectionName} is unavailable offline.`);
+        } else {
+            console.error(`[Firestore getAll Error] ${collectionName}:`, err);
+        }
         return [];
     }
 };
@@ -101,8 +105,12 @@ export const getDocument = async <T>(collectionName: string, docId: string): Pro
         if (snap.exists()) {
             return { ...snap.data(), id: snap.id } as unknown as T;
         }
-    } catch (err) {
-        console.error(`[Firestore getDocument Error] ${collectionName}/${docId}:`, err);
+    } catch (err: any) {
+        if (err?.code === 'unavailable') {
+            console.warn(`[Firestore getDocument Warning] ${collectionName}/${docId} is unavailable offline.`);
+        } else {
+            console.error(`[Firestore getDocument Error] ${collectionName}/${docId}:`, err);
+        }
     }
     return null;
 };
@@ -186,8 +194,12 @@ export const getItem = async <T>(key: string): Promise<T | null> => {
             const data = snap.data();
             return (data.value !== undefined ? data.value : data) as T;
         }
-    } catch (err) {
-        console.error(`[DB getItem Error] ${key}:`, err);
+    } catch (err: any) {
+        if (err?.code === 'unavailable') {
+            console.warn(`[DB getItem Warning] ${key} is unavailable offline.`);
+        } else {
+            console.error(`[DB getItem Error] ${key}:`, err);
+        }
     }
     return null;
 };

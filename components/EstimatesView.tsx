@@ -5,7 +5,7 @@ import { Estimate, EstimateLineItem, Vehicle, ServicePackage } from '../types';
 import { Plus, Eye, Edit, Trash2, Search, PlusCircle, Wand2, ChevronDown, ChevronUp, Loader2, Printer } from 'lucide-react';
 import { formatCurrency } from '../core/utils/formatUtils';
 import { generateServicePackageName } from '../core/services/geminiService';
-import { getRelativeDate } from '../core/utils/dateUtils';
+import { getRelativeDate, formatDate, isWithinDateRange } from '../core/utils/dateUtils';
 import PrintableEstimateList from '../components/PrintableEstimateList';
 import { usePrint } from '../core/hooks/usePrint';
 import { useWorkshopActions } from '../core/hooks/useWorkshopActions';
@@ -37,6 +37,8 @@ const EstimatesView = ({ onOpenEstimateModal, onViewEstimate, onSmartCreateClick
 
     const [filter, setFilter] = useState('');
     const [statusFilter, setStatusFilter] = useState<Estimate['status'][]>([]);
+    const [startDate, setStartDate] = useState(() => getRelativeDate(-30));
+    const [endDate, setEndDate] = useState(() => getRelativeDate(0));
     const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
     const [isCreatingPackage, setIsCreatingPackage] = useState(false);
 
@@ -82,7 +84,7 @@ const EstimatesView = ({ onOpenEstimateModal, onViewEstimate, onSmartCreateClick
             const matchesStatus = statusFilter.length === 0 || statusFilter.includes(estimate.status);
             return matchesSearch && matchesStatus;
         }).sort((a, b) => (b.issueDate ?? '').localeCompare(a.issueDate ?? '') || (b.estimateNumber ?? '').localeCompare(a.estimateNumber ?? ''));
-    }, [estimates, filter, statusFilter, customerMap, vehicleMap, selectedEntityId, businessEntities]);
+    }, [estimates, filter, statusFilter, customerMap, vehicleMap, selectedEntityId, businessEntities, startDate, endDate]);
 
     const calculateTotal = (lineItems: EstimateLineItem[]) => {
         let totalNet = 0;
@@ -216,7 +218,7 @@ const EstimatesView = ({ onOpenEstimateModal, onViewEstimate, onSmartCreateClick
                 customers={customerMap as unknown as Map<string, any>}
                 vehicles={vehicleMap}
                 taxRates={taxRates}
-                title="Estimates Report (Last 30 Days)"
+                title={`Estimates Report (${startDate || "Any"} to ${endDate || "Any"})`}
             />
         );
     };
@@ -224,7 +226,7 @@ const EstimatesView = ({ onOpenEstimateModal, onViewEstimate, onSmartCreateClick
     return (
         <div className="w-full h-full flex flex-col p-4 sm:p-6 bg-gray-50">
             <header className="flex justify-between items-center mb-4 flex-shrink-0">
-                <h2 className="text-2xl font-bold text-gray-800">Estimates (Last 30 Days)</h2>
+                <h2 className="text-xl md:text-2xl font-bold text-gray-800 flex items-center gap-2">Estimates <span className="text-gray-500 font-medium text-lg">({startDate || "Any"} to {endDate || "Any"})</span></h2>
                 <div className="flex items-center gap-2">
                     <button onClick={handlePrintList} className="flex items-center gap-2 py-2 px-4 bg-gray-600 text-white font-semibold rounded-lg shadow-md hover:bg-gray-700">
                         <Printer size={16} /> Print List

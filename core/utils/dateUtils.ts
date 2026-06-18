@@ -239,3 +239,12 @@ export const findNextAvailableDate = (
 
     return formatDate(currentDate);
 };
+
+export const isWithinDateRange = (itemDateString?: string, startDate?: string, endDate?: string): boolean => {
+    if (!startDate && !endDate) return true;
+    if (!itemDateString) return false;
+    const normalizedItemDate = itemDateString.substring(0, 10);
+    if (startDate && normalizedItemDate < startDate) return false;
+    if (endDate && normalizedItemDate > endDate) return false;
+    return true;
+};

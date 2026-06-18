@@ -5,7 +5,7 @@ import { useApp } from '../../core/state/AppContext';
 import { Invoice, Customer, Vehicle, EstimateLineItem } from '../../types';
 import { Eye, Search, Download, PlusCircle, Edit, CalendarDays, BarChart3 } from 'lucide-react';
 import { formatCurrency } from '../../core/utils/formatUtils';
-import { formatDate, getRelativeDate } from '../../core/utils/dateUtils';
+import { formatDate, getRelativeDate, isWithinDateRange } from '../../core/utils/dateUtils';
 import { getCustomerDisplayName } from '../../core/utils/customerUtils';
 import { StatusFilter } from '../../components/shared/StatusFilter';
 
@@ -19,9 +19,10 @@ interface InvoicesViewProps {
 
 const dateFilterOptions = {
     'today': 'Today',
-    'this_month': 'This Month',
-    'last_month': 'Last Month',
+    '7days': '7 Days',
+    '30days': '30 Days',
     'all': 'All Time',
+    'custom': 'Custom',
 };
 
 type DateFilterOption = keyof typeof dateFilterOptions;
@@ -37,7 +38,25 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({
     const { selectedEntityId } = useApp();
     const [filter, setFilter] = useState('');
     const [statusFilter, setStatusFilter] = useState<Invoice['status'][]>([]);
-    const [dateFilter, setDateFilter] = useState<DateFilterOption>('this_month');
+    const [dateFilter, setDateFilter] = useState<DateFilterOption>('30days');
+    const [startDate, setStartDate] = useState(() => getRelativeDate(-30));
+    const [endDate, setEndDate] = useState(() => getRelativeDate(0));
+
+    React.useEffect(() => {
+        if (dateFilter === 'today') {
+            setStartDate(getRelativeDate(0));
+            setEndDate(getRelativeDate(0));
+        } else if (dateFilter === '7days') {
+            setStartDate(getRelativeDate(-7));
+            setEndDate(getRelativeDate(0));
+        } else if (dateFilter === '30days') {
+            setStartDate(getRelativeDate(-30));
+            setEndDate(getRelativeDate(0));
+        } else if (dateFilter === 'all') {
+            setStartDate('');
+            setEndDate('');
+        }
+    }, [dateFilter]);
     
     const customerMap = useMemo(() => new Map(customers.map(c => [c.id, c])), [customers]);
     const vehicleMap = useMemo(() => new Map(vehicles.map(v => [v.id, v])), [vehicles]);
@@ -56,25 +75,6 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({
     };
 
     const filteredInvoices = useMemo(() => {
-        let startDate: string | null = null;
-        let endDate: string | null = null;
-        const today = new Date();
-
-        switch (dateFilter) {
-            case 'today':
-                startDate = getRelativeDate(0);
-                endDate = getRelativeDate(0);
-                break;
-            case 'this_month':
-                startDate = formatDate(new Date(today.getFullYear(), today.getMonth(), 1));
-                endDate = formatDate(new Date(today.getFullYear(), today.getMonth() + 1, 0));
-                break;
-            case 'last_month':
-                startDate = formatDate(new Date(today.getFullYear(), today.getMonth() - 1, 1));
-                endDate = formatDate(new Date(today.getFullYear(), today.getMonth(), 0));
-                break;
-        }
-
         return invoices.filter(invoice => {
             if (selectedEntityId !== 'all' && invoice.entityId !== selectedEntityId) {
                 return false;
@@ -84,8 +84,9 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({
             const vehicle = invoice.vehicleId ? vehicleMap.get(invoice.vehicleId) : null;
             const lowerFilter = filter.toLowerCase();
 
-            const matchesDate = (!startDate || invoice.issueDate >= startDate) && (!endDate || invoice.issueDate <= endDate);
-            if (!matchesDate) return false;
+            if (!isWithinDateRange(invoice.issueDate, startDate, endDate)) {
+                return false;
+            }
 
             const matchesSearch = filter === '' ||
                 invoice.id.toLowerCase().includes(lowerFilter) ||
@@ -158,6 +159,13 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({
                                 </button>
                             ))}
                         </div>
+                        {dateFilter === 'custom' && (
+                            <div className="flex items-center gap-2 ml-2">
+                                <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="p-1 border rounded-md text-xs font-semibold bg-white text-gray-700 w-32" />
+                                <span className="text-gray-500 text-xs">to</span>
+                                <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="p-1 border rounded-md text-xs font-semibold bg-white text-gray-700 w-32" />
+                            </div>
+                        )}
                     </div>
                 </div>
                 <StatusFilter

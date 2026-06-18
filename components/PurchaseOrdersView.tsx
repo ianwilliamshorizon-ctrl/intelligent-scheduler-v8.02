@@ -7,7 +7,7 @@ import html2canvas from 'html2canvas';
 import { PurchaseOrder, Supplier } from '../types';
 import { Edit, Trash2, Search, PlusCircle, Eye, Download, Printer } from 'lucide-react';
 import { formatCurrency } from '../core/utils/formatUtils';
-import { formatDate } from '../core/utils/dateUtils';
+import { formatDate, isWithinDateRange } from '../core/utils/dateUtils';
 
 const StatusFilter = ({ statuses, selectedStatuses, onToggle }: { statuses: readonly PurchaseOrder['status'][]; selectedStatuses: PurchaseOrder['status'][]; onToggle: (status: PurchaseOrder['status']) => void; }) => {
     return (

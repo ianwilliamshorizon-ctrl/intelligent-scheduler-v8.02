@@ -6,7 +6,7 @@ import { Estimate, EstimateLineItem, Vehicle, ServicePackage } from '../../types
 import { Plus, Eye, Edit, Trash2, Search, PlusCircle, Wand2, ChevronDown, ChevronUp, Loader2, Printer, CalendarCheck, XCircle, CalendarDays } from 'lucide-react';
 import { formatCurrency } from '../../utils/formatUtils';
 import { generateServicePackageName } from '../../core/services/geminiService';
-import { getRelativeDate } from '../../core/utils/dateUtils';
+import { getRelativeDate, isWithinDateRange } from '../../core/utils/dateUtils';
 import PrintableEstimateList from '../../components/PrintableEstimateList';
 import { usePrint } from '../../core/hooks/usePrint';
 import ServicePackageFormModal from '../../components/ServicePackageFormModal';
@@ -23,9 +23,10 @@ interface EstimatesViewProps {
 
 const dateFilterOptions = {
     'today': 'Today',
-    '30days': 'Last 30 Days',
-    '90days': 'Last 90 Days',
+    '7days': '7 Days',
+    '30days': '30 Days',
     'all': 'All Time',
+    'custom': 'Custom',
 };
 
 type DateFilterOption = keyof typeof dateFilterOptions;
@@ -39,8 +40,26 @@ const EstimatesView: React.FC<EstimatesViewProps> = ({ onOpenEstimateModal, onVi
     const [filter, setFilter] = useState('');
     const [statusFilter, setStatusFilter] = useState<Estimate['status'][]>([]);
     const [dateFilter, setDateFilter] = useState<DateFilterOption>('30days');
+    const [startDate, setStartDate] = useState(() => getRelativeDate(-30));
+    const [endDate, setEndDate] = useState(() => getRelativeDate(0));
     const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
     const [isCreatingPackage, setIsCreatingPackage] = useState(false);
+
+    React.useEffect(() => {
+        if (dateFilter === 'today') {
+            setStartDate(getRelativeDate(0));
+            setEndDate(getRelativeDate(0));
+        } else if (dateFilter === '7days') {
+            setStartDate(getRelativeDate(-7));
+            setEndDate(getRelativeDate(0));
+        } else if (dateFilter === '30days') {
+            setStartDate(getRelativeDate(-30));
+            setEndDate(getRelativeDate(0));
+        } else if (dateFilter === 'all') {
+            setStartDate('');
+            setEndDate('');
+        }
+    }, [dateFilter]);
     
     const [isPackageModalOpen, setIsPackageModalOpen] = useState(false);
     const [suggestedPackage, setSuggestedPackage] = useState<Partial<ServicePackage> | null>(null);
@@ -54,24 +73,12 @@ const EstimatesView: React.FC<EstimatesViewProps> = ({ onOpenEstimateModal, onVi
     const estimateStatusOptions: readonly Estimate['status'][] = ['Draft', 'Sent', 'Approved', 'Rejected', 'Converted to Job', 'Closed'];
 
     const filteredEstimates = useMemo(() => {
-        let dateCutoff: string | null = null;
-        const isToday = dateFilter === 'today';
-        const todayDate = isToday ? getRelativeDate(0) : null;
-
-        if (dateFilter === '30days') {
-            dateCutoff = getRelativeDate(-30);
-        } else if (dateFilter === '90days') {
-            dateCutoff = getRelativeDate(-90);
-        }
-
         return estimates.filter(estimate => {
             if (selectedEntityId !== 'all' && estimate.entityId !== selectedEntityId) {
                 return false;
             }
 
-            if (isToday) {
-                if (estimate.issueDate !== todayDate) return false;
-            } else if (dateCutoff && estimate.issueDate < dateCutoff) {
+            if (!isWithinDateRange(estimate.issueDate, startDate, endDate)) {
                 return false;
             }
 
@@ -90,7 +97,7 @@ const EstimatesView: React.FC<EstimatesViewProps> = ({ onOpenEstimateModal, onVi
             const matchesStatus = statusFilter.length === 0 || statusFilter.includes(estimate.status);
             return matchesSearch && matchesStatus;
         }).sort((a, b) => (b.issueDate || '').localeCompare(a.issueDate || '') || (b.estimateNumber || '').localeCompare(a.estimateNumber || ''));
-    }, [estimates, filter, statusFilter, dateFilter, customerMap, vehicleMap, selectedEntityId, businessEntities]);
+    }, [estimates, filter, statusFilter, customerMap, vehicleMap, selectedEntityId, businessEntities, startDate, endDate]);
 
     const calculateTotal = (lineItems: EstimateLineItem[]) => {
         return (lineItems || []).filter(item => !item.isPackageComponent).reduce((sum, item) => {
@@ -215,6 +222,13 @@ const EstimatesView: React.FC<EstimatesViewProps> = ({ onOpenEstimateModal, onVi
                                 </button>
                             ))}
                         </div>
+                        {dateFilter === 'custom' && (
+                            <div className="flex items-center gap-2 ml-2">
+                                <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="p-1 border rounded-md text-xs font-semibold bg-white text-gray-700 w-32" />
+                                <span className="text-gray-500 text-xs">to</span>
+                                <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="p-1 border rounded-md text-xs font-semibold bg-white text-gray-700 w-32" />
+                            </div>
+                        )}
                     </div>
                 </div>
                 <StatusFilter statuses={estimateStatusOptions} selectedStatuses={statusFilter} onToggle={handleStatusToggle}/>

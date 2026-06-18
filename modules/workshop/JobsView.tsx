@@ -5,7 +5,7 @@ import { useData } from '../../core/state/DataContext';
 import { Job, Vehicle, Customer, ServicePackage, Estimate } from '../../types';
 import { Eye, Search, PlusCircle, Printer, Briefcase, Wand2, Loader2, CalendarDays, Camera } from 'lucide-react';
 import { getCustomerDisplayName } from '../../core/utils/customerUtils';
-import { getRelativeDate, formatDate, dateStringToDate, addDays, formatReadableDate } from '../../core/utils/dateUtils';
+import { getRelativeDate, formatDate, dateStringToDate, addDays, formatReadableDate, isWithinDateRange } from '../../core/utils/dateUtils';
 import PrintableJobList from '../../components/PrintableJobList';
 import { usePrint } from '../../core/hooks/usePrint';
 import { generateServicePackageName } from '../../core/services/geminiService';
@@ -21,9 +21,10 @@ const statusFilterOptions: readonly Job['status'][] = ['Unallocated', 'Allocated
 
 const dateFilterOptions = {
     'today': 'Today',
-    '30days': 'Last 30 Days',
-    '90days': 'Last 90 Days',
+    '7days': '7 Days',
+    '30days': '30 Days',
     'all': 'All Time',
+    'custom': 'Custom',
 };
 
 type DateFilterOption = keyof typeof dateFilterOptions;
@@ -45,8 +46,26 @@ const JobsView: React.FC<JobsViewProps> = ({ onEditJob, onSmartCreateClick }) =>
     const [filter, setFilter] = useState('');
     const [statusFilter, setStatusFilter] = useState<Job['status'][]>([]);
     const [dateFilter, setDateFilter] = useState<DateFilterOption>('30days');
+    const [startDate, setStartDate] = useState(() => getRelativeDate(-30));
+    const [endDate, setEndDate] = useState(() => getRelativeDate(0));
     const [displayLimit, setDisplayLimit] = useState(50);
     const [isCreatingPackage, setIsCreatingPackage] = useState(false);
+
+    React.useEffect(() => {
+        if (dateFilter === 'today') {
+            setStartDate(getRelativeDate(0));
+            setEndDate(getRelativeDate(0));
+        } else if (dateFilter === '7days') {
+            setStartDate(getRelativeDate(-7));
+            setEndDate(getRelativeDate(0));
+        } else if (dateFilter === '30days') {
+            setStartDate(getRelativeDate(-30));
+            setEndDate(getRelativeDate(0));
+        } else if (dateFilter === 'all') {
+            setStartDate('');
+            setEndDate('');
+        }
+    }, [dateFilter]);
     const [isPackageModalOpen, setIsPackageModalOpen] = useState(false);
     const [suggestedPackage, setSuggestedPackage] = useState<Partial<ServicePackage> | null>(null);
 
@@ -56,24 +75,13 @@ const JobsView: React.FC<JobsViewProps> = ({ onEditJob, onSmartCreateClick }) =>
     const standardTaxRateId = useMemo(() => safeTaxRates.find(t => t.code === 'T1')?.id, [safeTaxRates]);
 
     const filteredJobs = useMemo(() => {
-        let dateCutoff: string | null = null;
-        const isToday = dateFilter === 'today';
-        const todayDate = isToday ? getRelativeDate(0) : null;
-
-        if (dateFilter === '30days') {
-            dateCutoff = getRelativeDate(-30);
-        } else if (dateFilter === '90days') {
-            dateCutoff = getRelativeDate(-90);
-        }
-
         const initialFilter = safeJobs.filter(job => {
             if (selectedEntityId !== 'all' && job.entityId !== selectedEntityId) {
                 return false;
             }
             
-            if (isToday) {
-                if (job.scheduledDate !== todayDate) return false;
-            } else if (dateCutoff && job.createdAt < dateCutoff) {
+            const dateToUse = job.scheduledDate || job.createdAt;
+            if (!isWithinDateRange(dateToUse, startDate, endDate)) {
                 return false;
             }
 
@@ -132,12 +140,12 @@ const JobsView: React.FC<JobsViewProps> = ({ onEditJob, onSmartCreateClick }) =>
 
         return uniqueJobs;
 
-    }, [safeJobs, filter, statusFilter, dateFilter, customerMap, vehicleMap, selectedEntityId, safeBusinessEntities]);
+    }, [safeJobs, filter, statusFilter, startDate, endDate, customerMap, vehicleMap, selectedEntityId, safeBusinessEntities]);
 
 
     useEffect(() => {
         setDisplayLimit(50);
-    }, [filter, statusFilter, selectedEntityId, dateFilter]);
+    }, [filter, statusFilter, selectedEntityId, startDate, endDate]);
 
     const displayedJobs = filteredJobs.slice(0, displayLimit);
 
@@ -157,7 +165,7 @@ const JobsView: React.FC<JobsViewProps> = ({ onEditJob, onSmartCreateClick }) =>
                 jobs={filteredJobs} 
                 vehicles={vehicleMap} 
                 customers={customerMap}
-                title={`Job Report (${dateFilterOptions[dateFilter]})`}
+                title={`Job Report (${startDate || "Any"} to ${endDate || "Any"})`}
             />
         );
     };
@@ -218,7 +226,7 @@ const JobsView: React.FC<JobsViewProps> = ({ onEditJob, onSmartCreateClick }) =>
             <header className="flex justify-between items-center mb-4 flex-shrink-0">
                 <h2 className="text-xl md:text-2xl font-bold text-gray-800 flex items-center gap-2">
                     <span className="md:hidden">Brookspeed</span>
-                    <span className="hidden md:inline"><Briefcase /> Jobs <span className="text-gray-500 font-medium text-lg">({dateFilterOptions[dateFilter]})</span></span>
+                    <span className="hidden md:inline"><Briefcase /> Jobs <span className="text-gray-500 font-medium text-lg">({`${startDate || "Any"} to ${endDate || "Any"}`})</span></span>
                 </h2>
                 <div className="flex items-center gap-2">
                      <button onClick={handlePrint} className="flex items-center gap-2 py-2 px-4 bg-gray-600 text-white font-semibold rounded-lg shadow-md hover:bg-gray-700">
@@ -248,6 +256,13 @@ const JobsView: React.FC<JobsViewProps> = ({ onEditJob, onSmartCreateClick }) =>
                                 </button>
                             ))}
                         </div>
+                        {dateFilter === 'custom' && (
+                            <div className="flex items-center gap-2 ml-2">
+                                <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="p-1 border rounded-md text-xs font-semibold bg-white text-gray-700 w-32" />
+                                <span className="text-gray-500 text-xs">to</span>
+                                <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="p-1 border rounded-md text-xs font-semibold bg-white text-gray-700 w-32" />
+                            </div>
+                        )}
                     </div>
                 </div>
 

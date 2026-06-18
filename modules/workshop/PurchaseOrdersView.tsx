@@ -3,13 +3,24 @@ import React, { useState, useMemo } from 'react';
 import { PurchaseOrder } from '../../types';
 import { Edit, Trash2, Search, PlusCircle, Download, Printer, RefreshCcw } from 'lucide-react';
 import { formatCurrency } from '../../core/utils/formatUtils';
-import { getRelativeDate } from '../../core/utils/dateUtils';
+import { getRelativeDate, isWithinDateRange } from '../../core/utils/dateUtils';
 import { useData } from '../../core/state/DataContext';
 import { useApp } from '../../core/state/AppContext';
 import { usePrint } from '../../core/hooks/usePrint';
 import PrintablePurchaseOrderList from '../../components/PrintablePurchaseOrderList';
 import { StatusFilter } from '../../components/shared/StatusFilter';
 import { useWorkshopActions } from '../../core/hooks/useWorkshopActions';
+import { CalendarDays } from 'lucide-react';
+
+const dateFilterOptions = {
+    'today': 'Today',
+    '7days': '7 Days',
+    '30days': '30 Days',
+    'all': 'All Time',
+    'custom': 'Custom',
+};
+
+type DateFilterOption = keyof typeof dateFilterOptions;
 
 const PurchaseOrdersView = ({ onOpenPurchaseOrderModal, onExport, onOpenBatchUpdateRefModal }: { 
     onOpenPurchaseOrderModal: (po: PurchaseOrder | null) => void, 
@@ -25,8 +36,25 @@ const PurchaseOrdersView = ({ onOpenPurchaseOrderModal, onExport, onOpenBatchUpd
 
     const [filter, setFilter] = useState('');
     const [statusFilter, setStatusFilter] = useState<PurchaseOrder['status'][]>([]);
+    const [dateFilter, setDateFilter] = useState<DateFilterOption>('30days');
     const [startDate, setStartDate] = useState(() => getRelativeDate(-30));
     const [endDate, setEndDate] = useState(() => getRelativeDate(0));
+
+    React.useEffect(() => {
+        if (dateFilter === 'today') {
+            setStartDate(getRelativeDate(0));
+            setEndDate(getRelativeDate(0));
+        } else if (dateFilter === '7days') {
+            setStartDate(getRelativeDate(-7));
+            setEndDate(getRelativeDate(0));
+        } else if (dateFilter === '30days') {
+            setStartDate(getRelativeDate(-30));
+            setEndDate(getRelativeDate(0));
+        } else if (dateFilter === 'all') {
+            setStartDate('');
+            setEndDate('');
+        }
+    }, [dateFilter]);
 
     const supplierMap = useMemo(() => new Map(suppliers.map(s => [s.id, s.name])), [suppliers]);
 
@@ -36,7 +64,7 @@ const PurchaseOrdersView = ({ onOpenPurchaseOrderModal, onExport, onOpenBatchUpd
                 return false;
             }
 
-            if (po.orderDate < startDate || po.orderDate > endDate) return false;
+            if (!isWithinDateRange(po.orderDate, startDate, endDate)) return false;
 
             const supplier = po.supplierId ? supplierMap.get(po.supplierId) : '';
             const lowerFilter = filter.toLowerCase();
@@ -121,11 +149,25 @@ const PurchaseOrdersView = ({ onOpenPurchaseOrderModal, onExport, onOpenBatchUpd
                             className="w-full p-2 pl-9 border rounded-lg"
                         />
                     </div>
-                     <div className="flex items-center gap-2 flex-shrink-0">
-                        <label className="text-sm font-medium text-gray-700">From:</label>
-                        <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="p-2 border rounded-lg bg-white" />
-                        <label className="text-sm font-medium text-gray-700">To:</label>
-                        <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="p-2 border rounded-lg bg-white" />
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                        <span className="text-sm font-medium text-gray-700"><CalendarDays size={16} className="inline-block mr-1"/>Date Range:</span>
+                        <div className="flex items-center gap-1 p-1 bg-gray-200 rounded-lg">
+                            {Object.keys(dateFilterOptions).map((key) => (
+                                <button 
+                                    key={key}
+                                    onClick={() => setDateFilter(key as DateFilterOption)}
+                                    className={`py-1 px-3 rounded-md font-semibold text-xs transition ${dateFilter === key ? 'bg-white shadow' : 'text-gray-600 hover:bg-gray-300'}`}>
+                                    {dateFilterOptions[key as DateFilterOption]}
+                                </button>
+                            ))}
+                        </div>
+                        {dateFilter === 'custom' && (
+                            <div className="flex items-center gap-2 ml-2">
+                                <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="p-1 border rounded-md text-xs font-semibold bg-white text-gray-700 w-32" />
+                                <span className="text-gray-500 text-xs">to</span>
+                                <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="p-1 border rounded-md text-xs font-semibold bg-white text-gray-700 w-32" />
+                            </div>
+                        )}
                     </div>
                 </div>
                 <StatusFilter
