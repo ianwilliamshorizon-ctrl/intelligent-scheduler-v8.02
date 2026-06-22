@@ -103,6 +103,8 @@ const InquiryCard: React.FC<{
     const now = new Date().getTime();
     const latestActivityTime = latestLog ? new Date(latestLog.timestamp).getTime() : new Date(inquiry.createdAt).getTime();
     const hoursSinceLastActivity = (now - latestActivityTime) / (1000 * 60 * 60);
+    const daysSinceLastActivity = Math.floor(hoursSinceLastActivity / 24);
+    const showDaysBadge = daysSinceLastActivity >= 1 && !['Rejected', 'Scheduled', 'Closed', 'Approved'].includes(inquiry.status);
     
     let healthBgClass = 'bg-white';
     let ringClass = 'ring-1 ring-gray-200 hover:ring-gray-300';
@@ -149,6 +151,11 @@ const InquiryCard: React.FC<{
                     <div className="min-w-0 flex-grow pr-1">
                         <div className="flex items-center gap-1">
                             <p className="font-bold text-gray-800 text-[11px] truncate leading-tight" title={displayName}>{displayName}</p>
+                            {showDaysBadge && (
+                                <span className="bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-none shadow-sm" title={`${daysSinceLastActivity} days since last action`}>
+                                    {daysSinceLastActivity}d
+                                </span>
+                            )}
                             {(customer || vehicle || estimate || linkedPOs.length > 0) && (
                                 <div className="flex gap-0.5 group-hover:hidden">
                                     {customer && <UserCheck size={8} className="text-green-600"/>}
@@ -301,7 +308,14 @@ const InquiryCard: React.FC<{
         >
             <div className="flex justify-between items-start">
                 <div>
-                    <p className="font-bold text-gray-800 text-sm">{displayName}</p>
+                    <div className="flex items-center gap-2 mb-0.5">
+                        <p className="font-bold text-gray-800 text-sm">{displayName}</p>
+                        {showDaysBadge && (
+                            <span className="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full leading-none shadow-sm" title={`${daysSinceLastActivity} days since last action`}>
+                                {daysSinceLastActivity}d
+                            </span>
+                        )}
+                    </div>
                     <p className="text-xs text-gray-500">
                         {contactInfoString}
                     </p>
