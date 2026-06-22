@@ -118,11 +118,35 @@ export const parseSearchQuery = async (query: string): Promise<{ searchTerm: str
     }
 };
 
+import { InquiryLog } from '../../types';
+
 /**
  * GENERATE EMAIL REPLY
  * Uses AI to draft an email response to an inquiry
  */
-export const generateEmailReply = async (inquiryMessage: string, businessName: string): Promise<string> => {
-    const prompt = `You are a helpful, professional customer service agent for ${businessName}. A customer sent the following inquiry:\n"${inquiryMessage}"\nDraft a polite and concise email reply addressing their inquiry. Do not include subject lines or "[Your Name]" placeholders, just the raw email body text. Make it friendly and professional.`;
+export const generateEmailReply = async (
+    inquiryMessage: string, 
+    businessName: string,
+    actionNotes?: string,
+    logs?: InquiryLog[]
+): Promise<string> => {
+    let notesPrompt = '';
+    if (actionNotes) {
+        notesPrompt += `\n- Legacy notes / action notes: "${actionNotes}"`;
+    }
+    if (logs && logs.length > 0) {
+        notesPrompt += `\n- CRM logs / internal discussion notes:\n` + 
+            logs.map(log => `  * [${log.actionType || 'Note'}] ${log.notes}`).join('\n');
+    }
+
+    const prompt = `You are a helpful, professional customer service agent for ${businessName}. A customer sent the following inquiry:
+"${inquiryMessage}"
+${notesPrompt ? `
+Here are internal CRM/action notes detailing the background, actions taken, or information regarding this inquiry:
+${notesPrompt}
+
+Please ensure your drafted email response addresses the customer's inquiry appropriately, incorporating or considering the context from these internal notes/logs if relevant (e.g. if a note specifies a quote amount, scheduled date, parts status, or a resolution). Do not mention that you got this from "internal notes" or "CRM logs"; present the information naturally to the customer as part of your update/reply.` : ''}
+
+Draft a polite and concise email reply addressing their inquiry. Do not include subject lines or "[Your Name]" placeholders, just the raw email body text. Make it friendly and professional.`;
     return await generateContent(prompt);
 };

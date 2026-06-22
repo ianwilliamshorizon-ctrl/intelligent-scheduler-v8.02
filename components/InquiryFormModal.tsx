@@ -547,7 +547,7 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                         if (!formData.message) return;
                                         setIsDraftingReply(true);
                                         try {
-                                            const draft = await generateEmailReply(formData.message, 'Brookspeed');
+                                            const draft = await generateEmailReply(formData.message, 'Brookspeed', formData.actionNotes, formData.logs);
                                             setReplyText(draft);
                                         } catch (e) {
                                             console.error(e);
@@ -738,13 +738,7 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                             {(!formData.logs || formData.logs.length === 0) && !formData.actionNotes && (
                                 <p className="text-xs text-gray-500 italic">No logs recorded yet.</p>
                             )}
-                            {formData.actionNotes && (
-                                <div className="text-xs bg-white p-2 border rounded shadow-sm">
-                                    <p className="font-semibold text-gray-600 mb-1">Legacy Notes</p>
-                                    <p className="text-gray-800 whitespace-pre-wrap">{formData.actionNotes}</p>
-                                </div>
-                            )}
-                            {(formData.logs || []).map(log => (
+                            {[...(formData.logs || [])].reverse().map(log => (
                                 <div key={log.id} className="text-xs bg-white p-2 border rounded shadow-sm">
                                     <div className="flex justify-between text-gray-500 mb-1">
                                         <span className="font-semibold">{log.userId === 'System' ? 'System' : users.find(u => u.id === log.userId)?.name || 'User'}</span>
@@ -754,6 +748,12 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                     <p className="text-gray-800 whitespace-pre-wrap">{log.notes}</p>
                                 </div>
                             ))}
+                            {formData.actionNotes && (
+                                <div className="text-xs bg-white p-2 border rounded shadow-sm">
+                                    <p className="font-semibold text-gray-600 mb-1">Legacy Notes</p>
+                                    <p className="text-gray-800 whitespace-pre-wrap">{formData.actionNotes}</p>
+                                </div>
+                            )}
                         </div>
                         <div className="flex gap-2">
                             <input 
