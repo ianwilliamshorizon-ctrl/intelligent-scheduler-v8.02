@@ -55,7 +55,9 @@ const InquiryCard: React.FC<{
     onUpdateStatus?: (inquiry: Inquiry, status: Inquiry['status']) => void;
     onConvert?: (inquiry: Inquiry, type: 'job' | 'estimate') => void;
     draggable?: boolean;
-}> = ({ inquiry, onOpenInquiryModal, onInitiateMerge, onInitiateBooking, onViewEstimate, onOpenPurchaseOrder, isCompact, onUpdateStatus, onConvert, draggable }) => {
+    isExpanded?: boolean;
+    onMouseEnter?: () => void;
+}> = ({ inquiry, onOpenInquiryModal, onInitiateMerge, onInitiateBooking, onViewEstimate, onOpenPurchaseOrder, isCompact, onUpdateStatus, onConvert, draggable, isExpanded = false, onMouseEnter }) => {
     const { customers, vehicles, estimates, purchaseOrders, jobs } = useData();
     const { users, businessEntities: entities } = useApp();
     
@@ -146,14 +148,15 @@ const InquiryCard: React.FC<{
                         e.dataTransfer.effectAllowed = 'move';
                     }
                 }}
-                className={`group ${healthBgClass} rounded shadow p-1.5 border-l-4 ${
+                onMouseEnter={onMouseEnter}
+                className={`${healthBgClass} rounded shadow-sm p-1.5 border-l-4 ${
                     inquiry.status === 'New' ? 'border-red-400' : 
                     inquiry.status === 'Immediate Quote' ? 'border-amber-400' : 
                     inquiry.status === 'Escalated/Urgent' ? 'border-orange-500' : 
                     inquiry.status === 'Scheduled' ? 'border-blue-400' : 
                     inquiry.status === 'Quoted or Responded' ? (isStale72h(inquiry) ? 'border-red-500 bg-red-50 text-red-800' : 'border-gray-200') : 
                     inquiry.status === 'Approved' ? 'border-green-400' : 'border-gray-200'
-                } ${ringClass} cursor-pointer hover:shadow-md transition-all mb-1.5`}
+                } ${isExpanded ? 'shadow-md ring-1 ring-indigo-400' : ringClass} cursor-pointer transition-all mb-1.5`}
                 onClick={() => onOpenInquiryModal(inquiry)}
             >
                 <div className="flex justify-between items-start gap-1">
@@ -166,7 +169,7 @@ const InquiryCard: React.FC<{
                                 </span>
                             )}
                             {(customer || vehicle || estimate || linkedPOs.length > 0) && (
-                                <div className="flex gap-0.5 group-hover:hidden">
+                                <div className={`flex gap-0.5 ${isExpanded ? 'hidden' : ''}`}>
                                     {customer && <UserCheck size={8} className="text-green-600"/>}
                                     {vehicle && <Car size={8} className="text-blue-600"/>}
                                     {estimate && <FileText size={8} className="text-purple-600"/>}
@@ -175,33 +178,33 @@ const InquiryCard: React.FC<{
                             )}
                         </div>
                         {contactInfoString && (
-                            <p className="hidden group-hover:block text-[9px] text-gray-500 break-words leading-tight mt-0.5">
+                            <p className={`${isExpanded ? 'block' : 'hidden'} text-[9px] text-gray-500 break-words leading-tight mt-0.5`}>
                                 {contactInfoString}
                             </p>
                         )}
                     </div>
                     <span className="text-[9px] text-gray-400 shrink-0 font-medium flex flex-col items-end leading-tight">
                         <span>{new Date(inquiry.createdAt).toLocaleDateString()}</span>
-                        {inquiry.inquiryNumber && <span className="hidden group-hover:inline text-gray-500">{inquiry.inquiryNumber}</span>}
+                        {inquiry.inquiryNumber && <span className={`${isExpanded ? 'inline' : 'hidden'} text-gray-500`}>{inquiry.inquiryNumber}</span>}
                         {inquiry.followUpDate && (
-                            <span className={`mt-0.5 ${(isOverdue || isToday) ? 'text-red-500 font-bold' : 'text-blue-500'} ${!(isOverdue || isToday) ? 'hidden group-hover:inline' : ''}`}>
+                            <span className={`mt-0.5 ${(isOverdue || isToday) ? 'text-red-500 font-bold' : 'text-blue-500'} ${!(isOverdue || isToday) && !isExpanded ? 'hidden' : 'inline'}`}>
                                 FU: {new Date(inquiry.followUpDate).toLocaleDateString()}
                             </span>
                         )}
                     </span>
                 </div>
                 
-                <p className={`text-[10px] text-gray-600 my-0.5 whitespace-pre-wrap leading-snug line-clamp-1 group-hover:line-clamp-none group-hover:max-h-40 group-hover:overflow-y-auto`}>{inquiry.message}</p>
+                <p className={`text-[10px] text-gray-600 my-0.5 whitespace-pre-wrap leading-snug ${isExpanded ? 'line-clamp-none max-h-40 overflow-y-auto' : 'line-clamp-1'}`}>{inquiry.message}</p>
                 
                 {latestLog && (
-                    <div className="hidden group-hover:block bg-gray-50 border rounded p-1 mb-1 mt-1 text-[9px] text-gray-600">
+                    <div className={`${isExpanded ? 'block' : 'hidden'} bg-gray-50 border rounded p-1 mb-1 mt-1 text-[9px] text-gray-600`}>
                         <span className="font-semibold">{latestLog.userId === 'System' ? 'System' : users.find(u => u.id === latestLog.userId)?.name || 'User'}:</span> <span className="line-clamp-1">{latestLog.notes}</span>
                     </div>
                 )}
                 
                 {/* Badges Row */}
                 {(customer || vehicle || estimate || linkedPOs.length > 0) && (
-                    <div className="hidden group-hover:flex flex-wrap gap-1 mt-1 pt-1 border-t border-gray-100/50">
+                    <div className={`${isExpanded ? 'flex' : 'hidden'} flex-wrap gap-1 mt-1 pt-1 border-t border-gray-100/50`}>
                         {customer && (
                             <div className="flex items-center gap-0.5 bg-green-50 text-green-700 px-1 rounded text-[9px] font-semibold max-w-[100px] truncate" title={getCustomerDisplayName(customer)}>
                                 <UserCheck size={9} className="shrink-0"/>
@@ -231,7 +234,7 @@ const InquiryCard: React.FC<{
 
                 {/* Attachment Chips */}
                 {inquiry.media && inquiry.media.length > 0 && (
-                    <div className="hidden group-hover:flex flex-wrap gap-1 mt-1 pt-1 border-t border-gray-100/50">
+                    <div className={`${isExpanded ? 'flex' : 'hidden'} flex-wrap gap-1 mt-1 pt-1 border-t border-gray-100/50`}>
                         {inquiry.media.map(item => (
                             <div 
                                 key={item.id} 
@@ -251,7 +254,7 @@ const InquiryCard: React.FC<{
 
                 {/* Fast Action Buttons */}
                 {onUpdateStatus && (
-                    <div className="hidden group-hover:flex justify-end gap-1 mt-1 pt-1 border-t border-gray-100/50" onClick={(e) => e.stopPropagation()}>
+                    <div className={`${isExpanded ? 'flex' : 'hidden'} justify-end gap-1 mt-1 pt-1 border-t border-gray-100/50`} onClick={(e) => e.stopPropagation()}>
                         {(!estimate && onConvert) && (
                             <button
                                 type="button"
@@ -528,6 +531,7 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
 
     const { selectedEntityId, users, currentUser, businessEntities: entities } = useApp();
 
+    const [hoveredInquiryId, setHoveredInquiryId] = useState<string | null>(null);
     const [assignedUserFilter, setAssignedUserFilter] = useState<string>('all');
     const [stalenessFilter, setStalenessFilter] = useState<string>('all');
     const [syncStatus, setSyncStatus] = useState<{ status: 'success' | 'error', lastRunTime: string, errorMsg?: string } | null>(null);
@@ -1362,7 +1366,7 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                 </main>
             </div>
             ) : activeTab === 'active' ? (
-                <main className="flex-grow overflow-x-auto pb-2">
+                <main className="flex-grow overflow-x-auto pb-2" onMouseLeave={() => setHoveredInquiryId(null)}>
                     <div className="flex gap-4 h-full min-w-full font-sans">
                         {(['New', 'Immediate Quote', 'Escalated/Urgent', 'Quoted or Responded', 'Approved', 'Rejected', 'Scheduled'] as Inquiry['status'][]).map(status => (
                             <div 
@@ -1386,7 +1390,10 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                                     }
                                 }}
                             >
-                                <div className="p-3 border-b-2 border-indigo-200 bg-white rounded-t-xl font-bold text-gray-700">
+                                <div 
+                                    className="p-3 border-b-2 border-indigo-200 bg-white rounded-t-xl font-bold text-gray-700"
+                                    onMouseEnter={() => setHoveredInquiryId(null)}
+                                >
                                     {status} ({activeInquiries[status]?.length || 0})
                                 </div>
                                 <div className="p-3 space-y-3 overflow-y-auto flex-grow">
@@ -1394,7 +1401,10 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                                         <InquiryCard 
                                             key={i.id} 
                                             inquiry={i} 
-                                            onOpenInquiryModal={props.onOpenInquiryModal}
+                                            onOpenInquiryModal={(inq) => {
+                                                setHoveredInquiryId(null);
+                                                props.onOpenInquiryModal(inq);
+                                            }}
                                             onInitiateMerge={handleInitiateMerge}
                                             onInitiateBooking={handleInitiateBooking}
                                             onViewEstimate={props.onViewEstimate}
@@ -1403,6 +1413,8 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                                             onUpdateStatus={handleUpdateStatus}
                                             onConvert={props.onConvert}
                                             draggable={true}
+                                            isExpanded={hoveredInquiryId === i.id}
+                                            onMouseEnter={() => setHoveredInquiryId(i.id)}
                                         />
                                     ))}
                                 </div>
@@ -1411,13 +1423,16 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                     </div>
                 </main>
             ) : (
-                <main className="flex-grow overflow-y-auto">
+                <main className="flex-grow overflow-y-auto" onMouseLeave={() => setHoveredInquiryId(null)}>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {closedInquiries.map(i => (
                             <InquiryCard 
                                 key={i.id} 
                                 inquiry={i} 
-                                onOpenInquiryModal={props.onOpenInquiryModal}
+                                onOpenInquiryModal={(inq) => {
+                                    setHoveredInquiryId(null);
+                                    props.onOpenInquiryModal(inq);
+                                }}
                                 onInitiateMerge={handleInitiateMerge}
                                 onInitiateBooking={handleInitiateBooking}
                                 onViewEstimate={props.onViewEstimate}
@@ -1425,12 +1440,13 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                                 isCompact={isCompact}
                                 onUpdateStatus={handleUpdateStatus}
                                 onConvert={props.onConvert}
+                                isExpanded={hoveredInquiryId === i.id}
+                                onMouseEnter={() => setHoveredInquiryId(i.id)}
                             />
                         ))}
                     </div>
                 </main>
             )}
-
             <ConfirmationModal
                 isOpen={confirmState.isOpen}
                 title={confirmState.title}
