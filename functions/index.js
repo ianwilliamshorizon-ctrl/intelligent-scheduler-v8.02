@@ -1291,3 +1291,87 @@ async function markEmailAsRead(accessToken, microsoftEmailSender, messageId) {
     throw error;
   }
 }
+
+exports.getUsersList = onRequest({
+  region: "europe-west1",
+  cors: true
+}, async (req, res) => {
+  try {
+    const db = admin.firestore();
+    const usersSnap = await db.collection("brooks_users").get();
+    const userEmails = [];
+    usersSnap.forEach(doc => {
+      userEmails.push({
+        id: doc.id,
+        email: doc.data().email,
+        name: doc.data().name
+      });
+    });
+    res.status(200).json(userEmails);
+  } catch (error) {
+    res.status(500).send(`Error: ${error.message}`);
+  }
+});
+
+exports.debugInquiry = onRequest({
+  region: "europe-west1",
+  cors: true
+}, async (req, res) => {
+  try {
+    const db = admin.firestore();
+    const snap = await db.collection("brooks_inquiries").get();
+    let patchedCount = 0;
+    const patchedInquiries = [];
+    
+    for (const doc of snap.docs) {
+      const data = doc.data();
+      const logs = data.logs || [];
+      if (logs.length === 0) continue;
+      
+      let changed = false;
+      const updatedLogs = logs.map(log => {
+        const notes = log.notes || "";
+        const isBrookspeedSender = notes.includes("Received reply from Brookspeed") || 
+                                   notes.includes("Received reply from iw@brookspeed.com") ||
+                                   notes.includes("Received reply from info@brookspeed.com") ||
+                                   notes.includes("Received reply from MB@brookspeed.com") ||
+                                   notes.includes("Received reply from Martin") ||
+                                   notes.includes("Received reply from Vincent");
+                                   
+        if (log.actionType === 'Customer Reply' && isBrookspeedSender) {
+          changed = true;
+          return {
+            ...log,
+            actionType: 'Email Sent',
+            notes: notes
+              .replace("Received reply from", "Outbound email sent by")
+              .replace("[Email Sync]", "[Outbound Email Sync]")
+          };
+        }
+        return log;
+      });
+      
+      if (changed) {
+        await db.collection("brooks_inquiries").doc(doc.id).update({
+          logs: updatedLogs,
+          status: 'Quoted or Responded',
+          hasNewReply: false
+        });
+        patchedCount++;
+        patchedInquiries.push({
+          id: doc.id,
+          inquiryNumber: data.inquiryNumber,
+          fromName: data.fromName
+        });
+      }
+    }
+    
+    res.status(200).json({
+      success: true,
+      patchedCount,
+      patchedInquiries
+    });
+  } catch (error) {
+    res.status(500).send(`Error: ${error.message}`);
+  }
+});

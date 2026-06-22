@@ -29,7 +29,7 @@ interface InquiriesViewProps {
 export const isStale72h = (i: Inquiry) => {
     if (i.status !== 'Quoted or Responded') return false;
     const latestLogTime = i.logs && i.logs.length > 0 
-        ? new Date(i.logs[i.logs.length - 1].timestamp).getTime() 
+        ? Math.max(...i.logs.map(log => new Date(log.timestamp).getTime()))
         : new Date(i.createdAt).getTime();
     return (Date.now() - latestLogTime) > (72 * 60 * 60 * 1000);
 };
@@ -100,7 +100,9 @@ const InquiryCard: React.FC<{
 
     const isApproved = inquiry.status === 'Approved' || estimate?.status === 'Approved';
     const mergeJobId = estimate?.jobId;
-    const latestLog = inquiry.logs && inquiry.logs.length > 0 ? inquiry.logs[inquiry.logs.length - 1] : null;
+    const latestLog = inquiry.logs && inquiry.logs.length > 0 
+        ? [...inquiry.logs].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())[inquiry.logs.length - 1] 
+        : null;
     const isOverdue = inquiry.followUpDate && new Date(inquiry.followUpDate) < new Date(new Date().setHours(0,0,0,0));
     const isToday = inquiry.followUpDate && new Date(inquiry.followUpDate).toDateString() === new Date().toDateString();
 
@@ -859,7 +861,7 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
             twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24);
             filtered = filtered.filter(i => {
                 const latestLogTime = i.logs && i.logs.length > 0 
-                    ? new Date(i.logs[i.logs.length - 1].timestamp).getTime() 
+                    ? Math.max(...i.logs.map(log => new Date(log.timestamp).getTime()))
                     : new Date(i.createdAt).getTime();
                 return latestLogTime < twentyFourHoursAgo.getTime();
             });

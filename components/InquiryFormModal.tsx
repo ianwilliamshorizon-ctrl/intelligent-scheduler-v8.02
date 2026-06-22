@@ -738,7 +738,9 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                             {(!formData.logs || formData.logs.length === 0) && !formData.actionNotes && (
                                 <p className="text-xs text-gray-500 italic">No logs recorded yet.</p>
                             )}
-                            {[...(formData.logs || [])].reverse().map(log => (
+                            {[...(formData.logs || [])]
+                                .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+                                .map(log => (
                                 <div key={log.id} className="text-xs bg-white p-2 border rounded shadow-sm">
                                     <div className="flex justify-between text-gray-500 mb-1">
                                         <span className="font-semibold">{log.userId === 'System' ? 'System' : users.find(u => u.id === log.userId)?.name || 'User'}</span>
