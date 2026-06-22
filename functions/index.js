@@ -812,8 +812,8 @@ async function performEmailSync(microsoftClientId, microsoftClientSecret, micros
     throw new Error("No access token returned from Microsoft Entra ID.");
   }
 
-  // 2. Fetch recent messages (read or unread) to ensure we don't miss ones marked as read elsewhere
-  const messagesUrl = `https://graph.microsoft.com/v1.0/users/${microsoftEmailSender}/messages?$orderby=receivedDateTime desc&$select=id,from,toRecipients,subject,body,uniqueBody,receivedDateTime,hasAttachments&$top=20`;
+  // 2. Fetch recent messages from the INBOX to prevent syncing sent items
+  const messagesUrl = `https://graph.microsoft.com/v1.0/users/${microsoftEmailSender}/mailFolders/inbox/messages?$orderby=receivedDateTime desc&$select=id,from,toRecipients,subject,body,uniqueBody,receivedDateTime,hasAttachments&$top=20`;
   const response = await axios.get(messagesUrl, {
     headers: {
       "Authorization": `Bearer ${accessToken}`,
