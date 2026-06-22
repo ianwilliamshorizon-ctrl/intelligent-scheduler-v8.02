@@ -185,7 +185,7 @@ const InquiryCard: React.FC<{
                     </div>
                     <span className="text-[9px] text-gray-400 shrink-0 font-medium flex flex-col items-end leading-tight">
                         <span>{new Date(inquiry.createdAt).toLocaleDateString()}</span>
-                        {inquiry.inquiryNumber && <span className={`${isExpanded ? 'inline' : 'hidden'} text-gray-500`}>{inquiry.inquiryNumber}</span>}
+                        {inquiry.inquiryNumber && <span className="text-gray-500 font-semibold">{inquiry.inquiryNumber}</span>}
                         {inquiry.followUpDate && (
                             <span className={`mt-0.5 ${(isOverdue || isToday) ? 'text-red-500 font-bold' : 'text-blue-500'} ${!(isOverdue || isToday) && !isExpanded ? 'hidden' : 'inline'}`}>
                                 FU: {new Date(inquiry.followUpDate).toLocaleDateString()}
@@ -518,7 +518,7 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
     const normalizedInquiries = useMemo(() => {
         return (inquiries || []).map(i => {
             let status = i.status;
-            if (status === ('Quoted' as any)) {
+            if (status === ('Quoted' as any) || status === ('Customer Responded' as any)) {
                 status = 'Quoted or Responded';
             } else if (status === ('Escalated' as any)) {
                 status = 'Escalated/Urgent';
@@ -680,7 +680,7 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
     const [isCompact, setIsCompact] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [dateFilter, setDateFilter] = useState<'today' | '7' | '30' | '90' | 'all'>('all');
-    const [sortField, setSortField] = useState<'createdAt' | 'fromName' | 'registration' | 'status'>('createdAt');
+    const [sortField, setSortField] = useState<'createdAt' | 'fromName' | 'registration' | 'status' | 'inquiryNumber'>('createdAt');
     const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
     const [selectedInquiryIds, setSelectedInquiryIds] = useState<string[]>([]);
     const [isSyncing, setIsSyncing] = useState(false);
@@ -748,7 +748,7 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
         });
     };
 
-    const handleSort = (field: 'createdAt' | 'fromName' | 'registration' | 'status') => {
+    const handleSort = (field: 'createdAt' | 'fromName' | 'registration' | 'status' | 'inquiryNumber') => {
         if (sortField === field) {
             setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
         } else {
@@ -919,6 +919,9 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
             if (sortField === 'createdAt') {
                 valA = a.createdAt || '';
                 valB = b.createdAt || '';
+            } else if (sortField === 'inquiryNumber') {
+                valA = (a.inquiryNumber || '').toLowerCase();
+                valB = (b.inquiryNumber || '').toLowerCase();
             } else if (sortField === 'fromName') {
                 valA = (a.fromName || '').toLowerCase();
                 valB = (b.fromName || '').toLowerCase();
@@ -1178,6 +1181,17 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                                         </th>
                                         <th 
                                             className="p-3 text-left font-semibold text-gray-600 cursor-pointer select-none hover:bg-gray-200 transition-colors"
+                                            onClick={() => handleSort('inquiryNumber')}
+                                        >
+                                            <div className="flex items-center gap-1">
+                                                <span>Inquiry #</span>
+                                                {sortField === 'inquiryNumber' && (
+                                                    sortOrder === 'asc' ? <ChevronUp size={14} className="text-indigo-600" /> : <ChevronDown size={14} className="text-indigo-600" />
+                                                )}
+                                            </div>
+                                        </th>
+                                        <th 
+                                            className="p-3 text-left font-semibold text-gray-600 cursor-pointer select-none hover:bg-gray-200 transition-colors"
                                             onClick={() => handleSort('fromName')}
                                         >
                                             <div className="flex items-center gap-1">
@@ -1217,7 +1231,7 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                                 <tbody className="divide-y divide-gray-200 bg-white">
                                     {displayInquiries.length === 0 ? (
                                         <tr>
-                                            <td colSpan={8} className="p-8 text-center text-gray-500 font-medium">
+                                            <td colSpan={9} className="p-8 text-center text-gray-500 font-medium">
                                                 No inquiries found.
                                             </td>
                                         </tr>
@@ -1251,6 +1265,10 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                                                 {/* Date */}
                                                 <td className="py-1.5 px-3 whitespace-nowrap text-xs text-gray-600 font-mono">
                                                     {new Date(i.createdAt).toLocaleDateString()} {new Date(i.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                </td>
+                                                {/* Inquiry # */}
+                                                <td className="py-1.5 px-3 whitespace-nowrap text-xs text-gray-600 font-mono font-semibold">
+                                                    {i.inquiryNumber || '-'}
                                                 </td>
                                                 {/* Customer */}
                                                 <td className="py-1.5 px-3 max-w-[200px]">

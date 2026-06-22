@@ -185,7 +185,7 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
             isOpen={isOpen}
             onClose={onClose}
             onSave={handleSave}
-            title={inquiry?.id ? 'Edit Inquiry / Message' : 'Log New Inquiry / Message'}
+            title={formData.inquiryNumber ? `Edit Inquiry / Message [${formData.inquiryNumber}]` : inquiry?.id ? 'Edit Inquiry / Message' : 'Log New Inquiry / Message'}
             maxWidth="max-w-[90vw] lg:max-w-7xl"
         >
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
