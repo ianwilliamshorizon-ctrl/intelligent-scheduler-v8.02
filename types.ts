@@ -392,6 +392,8 @@ export interface Estimate {
     entityId?: string;
     createdByUserId?: string;
     media?: any[];
+    linkedInquiryId?: string;
+    discountCodeId?: string;
 }
 
 export interface Invoice {
@@ -656,7 +658,8 @@ export interface Inquiry {
     message: string;
     takenByUserId: string;
     assignedToUserId?: string;
-    status: 'New' | 'Immediate Quote' | 'Escalated/Urgent' | 'In Progress' | 'Quoted or Responded' | 'Closed' | 'Approved' | 'Rejected' | 'Sent';
+    assignedToEntityId?: string;
+    status: 'New' | 'Immediate Quote' | 'Escalated/Urgent' | 'Scheduled' | 'Quoted or Responded' | 'Closed' | 'Approved' | 'Rejected' | 'Sent';
     linkedCustomerId?: string;
     linkedVehicleId?: string;
     linkedEstimateId?: string;

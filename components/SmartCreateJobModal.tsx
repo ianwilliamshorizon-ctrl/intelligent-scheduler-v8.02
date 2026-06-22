@@ -34,6 +34,7 @@ interface SmartCreateJobModalProps {
     servicePackages: ServicePackage[];
     defaultDate?: string | null;
     initialPrompt?: string | null;
+    inquiryId?: string | null;
 }
 
 const SmartCreateJobModal: React.FC<SmartCreateJobModalProps> = ({ 
@@ -50,9 +51,12 @@ const SmartCreateJobModal: React.FC<SmartCreateJobModalProps> = ({
     servicePackages, 
     defaultDate, 
     initialPrompt,
+    inquiryId,
 }) => {
-    const { taxRates, jobs, businessEntities, estimates, parts, suppliers } = useData();
+    const { taxRates, jobs, businessEntities, estimates, parts, suppliers, inquiries } = useData();
     const { selectedEntityId, currentUser } = useApp();
+
+    const linkedInquiry = useMemo(() => inquiries?.find(i => i.id === inquiryId), [inquiries, inquiryId]);
 
     const [prompt, setPrompt] = useState(initialPrompt || '');
     const [parsedData, setParsedData] = useState<any>(null);
@@ -362,36 +366,38 @@ Extract:
 7. "notes": Any specific logistical considerations, turnaround times, or customer comments.
 8. "explanation": A detailed, friendly, and customer-oriented markdown-formatted text explaining the estimate. Write this directly to the customer (e.g., "Hi there, here is the breakdown for..."). Explain the reasoning clearly, answer any questions, and break down labor, materials, and options without using internal jargon. DO NOT include any prices, costs, or monetary values in this explanation, as the actual pricing will be provided in the final summary. IMPORTANT: Do NOT use raw double quotes (") inside this explanation string. Use single quotes (') instead of double quotes (") for highlighted terms, and ensure all newlines are written as escaped '\\n' characters rather than raw carriage returns/newlines.
 9. "extractedLineItems": If the user's request details specific materials, parts, labor hours, or options (such as pricing, fabric cost, or custom addons), generate a detailed array of individual line items. For each item:
-   - "description": Descriptive name of the material, part, labor task, or option.
-   - "quantity": Number of units (for parts/materials) or number of hours (for labor).
-   - "unitPrice": The sell price per unit/hour. If a range is given (e.g. £40 - £60), use the upper or average value (e.g. 50 or 60). If it is labor, use the default labor rate of £${selectedEntity?.laborRate || 90}/hr unless specified.
-   - "unitCost": The cost price if mentioned, otherwise null.
-   - "isLabor": True if the item represents labor/time, false if it is a part/material/option.
-   - "isOptional": True if the item is an optional add-on, upgrade, or alternative tier (e.g. wrapping airbag cover, adding top marker strip).
+- "description": Descriptive name of the material, part, labor task, or option.
+- "quantity": Number of units (for parts) or number of hours (for labor).
+- "unitPrice": The sell price per unit/hour. If a range is given, use the upper value. If it is labor, you MUST use the default labor rate of £${selectedEntity?.laborRate || 90} unless specified. If unknown for a part, use 0.
+- "unitCost": The cost price if mentioned, otherwise null.
+- "isLabor": true if the item is labor/time, false if part/material.
+- "isOptional": true if the item is an optional add-on or upgrade.
 
 Format your response as a valid JSON object only, using this structure:
 {
-  "vehicleRegistration": string | null,
-  "customerName": string | null,
-  "servicePackageNames": string[] | null,
-  "description": string,
-  "estimatedHours": number | null,
-  "scheduledDate": string | null,
-  "notes": string | null,
-  "explanation": string,
-  "extractedLineItems": Array<{
-    description: string,
-    quantity: number,
-    unitPrice: number,
-    unitCost: number | null,
-    isLabor: boolean,
-    isOptional: boolean
-  }> | null
+  "vehicleRegistration": "string" /* or null */,
+  "customerName": "string" /* or null */,
+  "servicePackageNames": ["string", "string"] /* or null */,
+  "description": "string",
+  "estimatedHours": 1.5 /* or null */,
+  "scheduledDate": "YYYY-MM-DDTHH:mm:ss.sssZ" /* or null */,
+  "notes": "string" /* or null */,
+  "explanation": "string (explain your reasoning)",
+  "extractedLineItems": [
+    {
+      "description": "string",
+      "quantity": 1,
+      "unitPrice": 90,
+      "unitCost": null,
+      "isLabor": true,
+      "isOptional": false
+    }
+  ] /* or null */
 }
 
-Do not include any conversational text or explanation outside the JSON. Return ONLY the JSON object.
+Do not include any conversational text or explanation outside the JSON. Return ONLY the valid JSON object.
 
-User Request: "${userText}"`;
+User Request: ${JSON.stringify(userText)}`;
             };
 
             const initialPromptText = constructSystemPrompt(currentPrompt);
@@ -655,15 +661,63 @@ User Request: "${userText}"`;
 
     const handleFinalCreate = () => {
         try {
-            if (!vehicleExists && !foundVehicle) {
-                if (!isEstimateMode) {
-                    setShowAddNewVehicle(true);
-                    return;
-                } else if (!foundCustomer && !customerCreated) {
-                    setError("Please select or create a customer to continue.");
-                    return;
+            let activeCustomer = foundCustomer || customerCreated;
+            let activeVehicle = foundVehicle;
+            let isNewCustomer = false;
+            let isNewVehicle = false;
+            
+            // Auto-create customer if missing
+            if (!activeCustomer && (parsedData?.customerName || linkedInquiry?.fromName)) {
+                const nameToCheck = (parsedData?.customerName || linkedInquiry?.fromName || 'New Customer').trim();
+                const matchedCust = customers.find(c => 
+                    getCustomerDisplayName(c).toLowerCase() === nameToCheck.toLowerCase() ||
+                    (c.companyName || '').toLowerCase() === nameToCheck.toLowerCase()
+                );
+                
+                if (matchedCust) {
+                    activeCustomer = matchedCust;
+                } else {
+                    const names = nameToCheck.split(' ');
+                    activeCustomer = {
+                        id: `cust_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+                        firstName: names[0],
+                        lastName: names.slice(1).join(' '),
+                        email: linkedInquiry?.fromEmail || '',
+                        phone: linkedInquiry?.fromPhone || '',
+                        addressLine1: '',
+                        city: '',
+                        postcode: '',
+                        businessEntities: selectedEntity ? [selectedEntity.id] : [],
+                        isProspect: true
+                    };
+                    isNewCustomer = true;
                 }
             }
+
+            // Auto-create vehicle if missing (only if registration is provided)
+            if (!activeVehicle && parsedData?.vehicleRegistration) {
+                const reg = parsedData.vehicleRegistration.toUpperCase().replace(/\s/g, '');
+                activeVehicle = {
+                    id: `veh_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+                    registration: reg,
+                    make: 'Unknown',
+                    model: 'Unknown',
+                    year: new Date().getFullYear(),
+                    color: '',
+                    customerId: activeCustomer?.id || '',
+                    businessEntities: selectedEntity ? [selectedEntity.id] : []
+                };
+                isNewVehicle = true;
+            }
+
+            if (!activeVehicle && !isEstimateMode) {
+                setShowAddNewVehicle(true);
+                return;
+            } else if (!activeCustomer) {
+                setError("Please provide a customer name in your request to continue.");
+                return;
+            }
+
             if (!selectedEntity) {
                 setError("Business entity configuration missing. Please contact admin.");
                 return;
@@ -676,13 +730,12 @@ User Request: "${userText}"`;
             const isStandaloneMOT = lineItems.length > 0 && 
                                    lineItems.every(li => /\bmot\b/i.test(li.servicePackageName || ''));
 
-            const activeCustomer = foundCustomer || customerCreated;
             const newEstimate: Estimate = {
                 id: newEstimateId,
                 estimateNumber: generateEstimateNumber(estimates, entityShortCode),
                 entityId: selectedEntity.id,
                 customerId: activeCustomer!.id,
-                vehicleId: foundVehicle?.id || '',
+                vehicleId: activeVehicle?.id || '',
                 issueDate: getTodayISOString(),
                 expiryDate: getFutureDateISOString(30),
                 status: isEstimateMode ? 'Draft' : 'Converted to Job',
@@ -693,8 +746,12 @@ User Request: "${userText}"`;
             };
 
             if (isEstimateMode) {
-                if (customerCreated && onCustomerAndEstimateCreate) {
-                    onCustomerAndEstimateCreate(customerCreated, newEstimate);
+                if (isNewVehicle && activeVehicle) {
+                    // Saves customer (new or existing), new vehicle, and estimate
+                    onVehicleAndEstimateCreate(activeCustomer!, activeVehicle, newEstimate);
+                } else if (isNewCustomer && onCustomerAndEstimateCreate) {
+                    // Saves new customer and estimate (vehicle is either existing or null)
+                    onCustomerAndEstimateCreate(activeCustomer!, newEstimate);
                 } else {
                     onEstimateCreate(newEstimate);
                 }
@@ -712,8 +769,8 @@ User Request: "${userText}"`;
             const newJob: Job = {
                 id: newJobId,
                 entityId: selectedEntity.id,
-                vehicleId: foundVehicle!.id,
-                customerId: foundVehicle!.customerId,
+                vehicleId: activeVehicle!.id,
+                customerId: activeCustomer!.id,
                 description: parsedData?.description || 'New Job',
                 estimatedHours: validEstimatedHours,
                 scheduledDate: selectedDate,
@@ -742,9 +799,14 @@ User Request: "${userText}"`;
             // Link estimate to job
             newEstimate.jobId = newJobId;
 
-            // Save both
-            onEstimateCreate(newEstimate);
-            onJobCreate(newJob);
+            // Save everything
+            if (isNewVehicle || isNewCustomer) {
+                onVehicleAndJobCreate(activeCustomer!, activeVehicle!, newJob);
+                onEstimateCreate(newEstimate); // We still need to save the estimate explicitly
+            } else {
+                onEstimateCreate(newEstimate);
+                onJobCreate(newJob);
+            }
             
             handleClose();
         } catch (e: any) {
@@ -1554,8 +1616,13 @@ User Request: "${userText}"`;
                 <CustomerFormModal
                     isOpen={true}
                     onClose={() => setIsCustomerModalOpen(false)}
-                    onSave={handleSaveNewCustomer}
-                    customer={null}
+                    onSave={(newCustomer) => { handleSaveNewCustomer(newCustomer); setIsCustomerModalOpen(false); }}
+                    customer={{
+                        firstName: parsedData?.customerName?.split(' ')[0] || linkedInquiry?.fromName?.split(' ')[0] || '',
+                        lastName: parsedData?.customerName?.split(' ').slice(1).join(' ') || linkedInquiry?.fromName?.split(' ').slice(1).join(' ') || '',
+                        email: linkedInquiry?.fromEmail || '',
+                        phone: linkedInquiry?.fromPhone || '',
+                    }}
                     existingCustomers={customers}
                 />
             )}

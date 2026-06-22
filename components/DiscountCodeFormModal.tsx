@@ -54,7 +54,7 @@ const DiscountCodeFormModal: React.FC<DiscountCodeFormModalProps> = ({ isOpen, o
 
     return (
         <div className="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-[70]">
-            <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-lg">
                 <div className="flex justify-between items-center p-4 border-b">
                     <h3 className="text-lg font-semibold">{initialData ? 'Edit Discount Code' : 'New Discount Code'}</h3>
                     <button onClick={onClose}><X size={20} className="text-gray-500 hover:text-gray-700" /></button>

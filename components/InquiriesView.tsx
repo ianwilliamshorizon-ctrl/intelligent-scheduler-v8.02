@@ -11,6 +11,8 @@ import { getCustomerDisplayName } from '../core/utils/customerUtils';
 import ConfirmationModal from './ConfirmationModal';
 import { saveDocument, deleteDocument } from '../core/db';
 import { getImage } from '../utils/imageStore';
+import { toast } from 'react-toastify';
+import { triggerEmailSync } from '../core/services/emailService';
 
 interface InquiriesViewProps {
     onOpenInquiryModal: (inquiry: Partial<Inquiry> | null) => void;
@@ -21,6 +23,14 @@ interface InquiriesViewProps {
     onEditEstimate?: (estimate: Estimate) => void;
     onMergeEstimate?: (estimate: Estimate, jobId: string) => void;
 }
+
+export const isStale72h = (i: Inquiry) => {
+    if (i.status !== 'Quoted or Responded') return false;
+    const latestLogTime = i.logs && i.logs.length > 0 
+        ? new Date(i.logs[i.logs.length - 1].timestamp).getTime() 
+        : new Date(i.createdAt).getTime();
+    return (Date.now() - latestLogTime) > (72 * 60 * 60 * 1000);
+};
 
 const getPoStatusStyles = (status: PurchaseOrder['status']) => {
     switch(status) {
@@ -41,15 +51,23 @@ const InquiryCard: React.FC<{
     onOpenPurchaseOrder?: (po: PurchaseOrder) => void;
     isCompact?: boolean;
     onUpdateStatus?: (inquiry: Inquiry, status: Inquiry['status']) => void;
-}> = ({ inquiry, onOpenInquiryModal, onInitiateMerge, onInitiateBooking, onViewEstimate, onOpenPurchaseOrder, isCompact, onUpdateStatus }) => {
+    onConvert?: (inquiry: Inquiry, type: 'job' | 'estimate') => void;
+    draggable?: boolean;
+}> = ({ inquiry, onOpenInquiryModal, onInitiateMerge, onInitiateBooking, onViewEstimate, onOpenPurchaseOrder, isCompact, onUpdateStatus, onConvert, draggable }) => {
     const { customers, vehicles, estimates, purchaseOrders, jobs } = useData();
-    const { users } = useApp();
+    const { users, businessEntities: entities } = useApp();
     
     const takenBy = users.find(u => u.id === inquiry.takenByUserId);
     const customer = inquiry.linkedCustomerId ? customers.find(c => c.id === inquiry.linkedCustomerId) : null;
     const vehicle = inquiry.linkedVehicleId ? vehicles.find(v => v.id === inquiry.linkedVehicleId) : null;
     const estimate = inquiry.linkedEstimateId ? estimates.find(e => e.id === inquiry.linkedEstimateId) : null;
     const job = estimate?.jobId ? jobs.find(j => j.id === estimate.jobId) : null;
+    
+    const displayName = customer ? getCustomerDisplayName(customer) : inquiry.fromName;
+    const displayEmail = customer?.email || inquiry.fromEmail;
+    const displayPhone = customer?.mobile || customer?.phone || inquiry.fromPhone;
+    const displayContact = (!displayEmail && !displayPhone) ? inquiry.fromContact : null;
+    const contactInfoString = [displayEmail, displayPhone, displayContact].filter(Boolean).join(' • ');
     
     const linkedPOs = useMemo(() => 
         (job?.purchaseOrderIds || [])
@@ -82,77 +100,122 @@ const InquiryCard: React.FC<{
     const isOverdue = inquiry.followUpDate && new Date(inquiry.followUpDate) < new Date(new Date().setHours(0,0,0,0));
     const isToday = inquiry.followUpDate && new Date(inquiry.followUpDate).toDateString() === new Date().toDateString();
 
+    const now = new Date().getTime();
+    const latestActivityTime = latestLog ? new Date(latestLog.timestamp).getTime() : new Date(inquiry.createdAt).getTime();
+    const hoursSinceLastActivity = (now - latestActivityTime) / (1000 * 60 * 60);
+    
+    let healthBgClass = 'bg-white';
+    let ringClass = 'ring-1 ring-gray-200 hover:ring-gray-300';
+    
+    if (inquiry.status !== 'Closed' && inquiry.status !== 'Approved') {
+        if (isOverdue || isToday) {
+            healthBgClass = 'bg-red-50';
+            ringClass = 'ring-1 ring-red-400';
+        } else if (inquiry.hasNewReply) {
+            healthBgClass = 'bg-yellow-50';
+            ringClass = 'ring-1 ring-yellow-400';
+        } else if (hoursSinceLastActivity > 48) {
+            healthBgClass = 'bg-orange-50';
+            ringClass = 'ring-1 ring-orange-400';
+        } else if (latestLog && hoursSinceLastActivity <= 48) {
+            healthBgClass = 'bg-emerald-50';
+            ringClass = 'ring-1 ring-emerald-300';
+        }
+    } else {
+        healthBgClass = 'bg-gray-50';
+    }
+
     if (isCompact) {
         return (
             <div 
-                className={`bg-white rounded-lg shadow p-2.5 border-l-4 ${
+                draggable={draggable}
+                onDragStart={(e) => {
+                    if (draggable) {
+                        e.dataTransfer.setData('inquiryId', inquiry.id);
+                        e.dataTransfer.effectAllowed = 'move';
+                    }
+                }}
+                className={`group ${healthBgClass} rounded shadow p-1.5 border-l-4 ${
                     inquiry.status === 'New' ? 'border-red-400' : 
                     inquiry.status === 'Immediate Quote' ? 'border-amber-400' : 
                     inquiry.status === 'Escalated/Urgent' ? 'border-orange-500' : 
-                    inquiry.status === 'In Progress' ? 'border-blue-400' : 
-                    inquiry.status === 'Quoted or Responded' ? 'border-gray-200' : 
+                    inquiry.status === 'Scheduled' ? 'border-blue-400' : 
+                    inquiry.status === 'Quoted or Responded' ? (isStale72h(inquiry) ? 'border-red-500 bg-red-50 text-red-800' : 'border-gray-200') : 
                     inquiry.status === 'Approved' ? 'border-green-400' : 'border-gray-200'
-                } ${isOverdue || isToday ? 'ring-2 ring-red-400 bg-red-50/10' : ''} ${inquiry.hasNewReply ? 'ring-2 ring-amber-500 bg-amber-50' : ''} cursor-pointer hover:shadow-md transition-shadow mb-2`}
+                } ${ringClass} cursor-pointer hover:shadow-md transition-all mb-1.5`}
                 onClick={() => onOpenInquiryModal(inquiry)}
             >
-                <div className="flex justify-between items-start gap-2">
-                    <div className="min-w-0 flex-grow">
-                        <p className="font-bold text-gray-800 text-xs truncate" title={inquiry.fromName}>{inquiry.fromName}</p>
-                        {(inquiry.fromEmail || inquiry.fromPhone || inquiry.fromContact) && (
-                            <p className="text-[10px] text-gray-500 truncate">
-                                {[inquiry.fromEmail, inquiry.fromPhone, (!inquiry.fromEmail && !inquiry.fromPhone) ? inquiry.fromContact : null].filter(Boolean).join(' • ')}
+                <div className="flex justify-between items-start gap-1">
+                    <div className="min-w-0 flex-grow pr-1">
+                        <div className="flex items-center gap-1">
+                            <p className="font-bold text-gray-800 text-[11px] truncate leading-tight" title={displayName}>{displayName}</p>
+                            {(customer || vehicle || estimate || linkedPOs.length > 0) && (
+                                <div className="flex gap-0.5 group-hover:hidden">
+                                    {customer && <UserCheck size={8} className="text-green-600"/>}
+                                    {vehicle && <Car size={8} className="text-blue-600"/>}
+                                    {estimate && <FileText size={8} className="text-purple-600"/>}
+                                    {linkedPOs.length > 0 && <PackageIcon size={8} className="text-amber-600"/>}
+                                </div>
+                            )}
+                        </div>
+                        {contactInfoString && (
+                            <p className="hidden group-hover:block text-[9px] text-gray-500 break-words leading-tight mt-0.5">
+                                {contactInfoString}
                             </p>
                         )}
                     </div>
-                    <span className="text-[10px] text-gray-400 shrink-0 font-medium flex flex-col items-end">
+                    <span className="text-[9px] text-gray-400 shrink-0 font-medium flex flex-col items-end leading-tight">
                         <span>{new Date(inquiry.createdAt).toLocaleDateString()}</span>
-                        {inquiry.inquiryNumber && <span className="text-gray-500">{inquiry.inquiryNumber}</span>}
+                        {inquiry.inquiryNumber && <span className="hidden group-hover:inline text-gray-500">{inquiry.inquiryNumber}</span>}
                         {inquiry.followUpDate && (
-                            <span className={`mt-0.5 ${(isOverdue || isToday) ? 'text-red-500 font-bold' : 'text-blue-500'}`}>
+                            <span className={`mt-0.5 ${(isOverdue || isToday) ? 'text-red-500 font-bold' : 'text-blue-500'} ${!(isOverdue || isToday) ? 'hidden group-hover:inline' : ''}`}>
                                 FU: {new Date(inquiry.followUpDate).toLocaleDateString()}
                             </span>
                         )}
                     </span>
                 </div>
                 
-                <p className="text-xs text-gray-600 my-1 line-clamp-1 whitespace-pre-wrap">{inquiry.message}</p>
+                <p className={`text-[10px] text-gray-600 my-0.5 whitespace-pre-wrap leading-snug line-clamp-1 group-hover:line-clamp-none`}>{inquiry.message}</p>
+                
                 {latestLog && (
-                    <div className="bg-gray-50 border rounded p-1 mb-1 mt-1 text-[9px] text-gray-600">
+                    <div className="hidden group-hover:block bg-gray-50 border rounded p-1 mb-1 mt-1 text-[9px] text-gray-600">
                         <span className="font-semibold">{latestLog.userId === 'System' ? 'System' : users.find(u => u.id === latestLog.userId)?.name || 'User'}:</span> <span className="line-clamp-1">{latestLog.notes}</span>
                     </div>
                 )}
                 
                 {/* Badges Row */}
-                <div className="flex flex-wrap gap-1 mt-1 pt-1.5 border-t border-gray-100/50">
-                    {customer && (
-                        <div className="flex items-center gap-0.5 bg-green-50 text-green-700 px-1 py-0.5 rounded text-[9px] font-semibold max-w-[100px] truncate" title={getCustomerDisplayName(customer)}>
-                            <UserCheck size={10} className="shrink-0"/>
-                            <span className="truncate">{customer.surname || customer.forename}</span>
-                        </div>
-                    )}
-                    {vehicle && (
-                        <div className="flex items-center gap-0.5 bg-blue-50 text-blue-700 px-1 py-0.5 rounded text-[9px] font-bold">
-                            <Car size={10} className="shrink-0"/>
-                            <span>{vehicle.registration}</span>
-                        </div>
-                    )}
-                    {estimate && (
-                        <div className="flex items-center gap-0.5 bg-purple-50 text-purple-700 px-1 py-0.5 rounded text-[9px] font-bold">
-                            <FileText size={10} className="shrink-0"/>
-                            <span>Est #{estimate.estimateNumber}</span>
-                        </div>
-                    )}
-                    {linkedPOs.length > 0 && (
-                        <div className="flex items-center gap-0.5 bg-amber-50 text-amber-700 px-1 py-0.5 rounded text-[9px] font-bold">
-                            <PackageIcon size={10} className="shrink-0"/>
-                            <span>{linkedPOs.length} PO{linkedPOs.length > 1 ? 's' : ''}</span>
-                        </div>
-                    )}
-                </div>
+                {(customer || vehicle || estimate || linkedPOs.length > 0) && (
+                    <div className="hidden group-hover:flex flex-wrap gap-1 mt-1 pt-1 border-t border-gray-100/50">
+                        {customer && (
+                            <div className="flex items-center gap-0.5 bg-green-50 text-green-700 px-1 rounded text-[9px] font-semibold max-w-[100px] truncate" title={getCustomerDisplayName(customer)}>
+                                <UserCheck size={9} className="shrink-0"/>
+                                <span className="truncate">{customer.surname || customer.forename}</span>
+                            </div>
+                        )}
+                        {vehicle && (
+                            <div className="flex items-center gap-0.5 bg-blue-50 text-blue-700 px-1 rounded text-[9px] font-bold">
+                                <Car size={9} className="shrink-0"/>
+                                <span>{vehicle.registration}</span>
+                            </div>
+                        )}
+                        {estimate && (
+                            <div className="flex items-center gap-0.5 bg-purple-50 text-purple-700 px-1 rounded text-[9px] font-bold">
+                                <FileText size={9} className="shrink-0"/>
+                                <span>Est #{estimate.estimateNumber}</span>
+                            </div>
+                        )}
+                        {linkedPOs.length > 0 && (
+                            <div className="flex items-center gap-0.5 bg-amber-50 text-amber-700 px-1 rounded text-[9px] font-bold">
+                                <PackageIcon size={9} className="shrink-0"/>
+                                <span>{linkedPOs.length} PO{linkedPOs.length > 1 ? 's' : ''}</span>
+                            </div>
+                        )}
+                    </div>
+                )}
 
                 {/* Attachment Chips */}
                 {inquiry.media && inquiry.media.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-1.5 pt-1.5 border-t border-gray-100/50">
+                    <div className="hidden group-hover:flex flex-wrap gap-1 mt-1 pt-1 border-t border-gray-100/50">
                         {inquiry.media.map(item => (
                             <div 
                                 key={item.id} 
@@ -161,7 +224,7 @@ const InquiryCard: React.FC<{
                                     e.stopPropagation();
                                     handleDownloadMedia(item);
                                 }}
-                                className="flex items-center gap-0.5 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded px-1 py-0.5 text-[8px] font-medium text-gray-600 transition cursor-pointer"
+                                className="flex items-center gap-0.5 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded px-1 text-[8px] font-medium text-gray-600 transition cursor-pointer"
                             >
                                 {item.type === 'Photo' ? <Camera size={8} className="text-indigo-500 shrink-0" /> : <FileText size={8} className="text-gray-500 shrink-0" />}
                                 <span className="truncate max-w-[80px]">{item.name}</span>
@@ -172,16 +235,25 @@ const InquiryCard: React.FC<{
 
                 {/* Fast Action Buttons */}
                 {onUpdateStatus && (
-                    <div className="flex justify-end gap-1.5 mt-2 pt-1.5 border-t border-gray-100/50" onClick={(e) => e.stopPropagation()}>
-                        {inquiry.status !== 'In Progress' && (
+                    <div className="hidden group-hover:flex justify-end gap-1 mt-1 pt-1 border-t border-gray-100/50" onClick={(e) => e.stopPropagation()}>
+                        {(!estimate && onConvert) && (
                             <button
                                 type="button"
-                                title="Set In Progress"
-                                onClick={() => onUpdateStatus(inquiry, 'In Progress')}
-                                className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-50 text-blue-700 hover:bg-blue-100 transition"
+                                title="Link Estimate"
+                                onClick={() => onConvert(inquiry, 'estimate')}
+                                className="p-0.5 rounded bg-purple-50 text-purple-700 hover:bg-purple-100 transition"
+                            >
+                                <FileText size={10} className="shrink-0" />
+                            </button>
+                        )}
+                        {inquiry.status !== 'Scheduled' && (
+                            <button
+                                type="button"
+                                title="Set Scheduled"
+                                onClick={() => onUpdateStatus(inquiry, 'Scheduled')}
+                                className="p-0.5 rounded bg-blue-50 text-blue-700 hover:bg-blue-100 transition"
                             >
                                 <Play size={10} className="shrink-0" />
-                                <span>In Progress</span>
                             </button>
                         )}
                         {inquiry.status !== 'Escalated/Urgent' && (
@@ -189,20 +261,18 @@ const InquiryCard: React.FC<{
                                 type="button"
                                 title="Escalate"
                                 onClick={() => onUpdateStatus(inquiry, 'Escalated/Urgent')}
-                                className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-orange-50 text-orange-700 hover:bg-orange-100 transition"
+                                className="p-0.5 rounded bg-orange-50 text-orange-700 hover:bg-orange-100 transition"
                             >
                                 <AlertTriangle size={10} className="shrink-0" />
-                                <span>Escalate</span>
                             </button>
                         )}
                         <button
                             type="button"
                             title="Close Inquiry"
                             onClick={() => onUpdateStatus(inquiry, 'Closed')}
-                            className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-green-50 text-green-700 hover:bg-green-100 transition"
+                            className="p-0.5 rounded bg-green-50 text-green-700 hover:bg-green-100 transition"
                         >
                             <CheckCircle2 size={10} className="shrink-0" />
-                            <span>Close</span>
                         </button>
                     </div>
                 )}
@@ -212,21 +282,28 @@ const InquiryCard: React.FC<{
 
     return (
         <div 
-            className={`bg-white rounded-lg shadow p-3 border-l-4 ${
+            draggable={draggable}
+            onDragStart={(e) => {
+                if (draggable) {
+                    e.dataTransfer.setData('inquiryId', inquiry.id);
+                    e.dataTransfer.effectAllowed = 'move';
+                }
+            }}
+            className={`${healthBgClass} rounded-lg shadow p-3 border-l-4 ${
                 inquiry.status === 'New' ? 'border-red-400' : 
                 inquiry.status === 'Immediate Quote' ? 'border-amber-400' : 
                 inquiry.status === 'Escalated/Urgent' ? 'border-orange-500' : 
-                inquiry.status === 'In Progress' ? 'border-blue-400' : 
-                inquiry.status === 'Quoted or Responded' ? 'border-gray-200' : 
+                inquiry.status === 'Scheduled' ? 'border-blue-400' : 
+                inquiry.status === 'Quoted or Responded' ? (isStale72h(inquiry) ? 'border-red-500 bg-red-50 text-red-800 shadow-[0_0_8px_rgba(239,68,68,0.4)]' : 'border-gray-200') : 
                 inquiry.status === 'Approved' ? 'border-green-400' : 'border-gray-200'
-            } ${isOverdue || isToday ? 'ring-2 ring-red-400 bg-red-50/10' : ''} ${inquiry.hasNewReply ? 'ring-2 ring-amber-500 bg-amber-50' : ''} cursor-pointer hover:shadow-md transition-shadow mb-3`}
+            } ${ringClass} cursor-pointer hover:shadow-md transition-shadow mb-3`}
             onClick={() => onOpenInquiryModal(inquiry)}
         >
             <div className="flex justify-between items-start">
                 <div>
-                    <p className="font-bold text-gray-800 text-sm">{inquiry.fromName}</p>
+                    <p className="font-bold text-gray-800 text-sm">{displayName}</p>
                     <p className="text-xs text-gray-500">
-                        {[inquiry.fromEmail, inquiry.fromPhone, (!inquiry.fromEmail && !inquiry.fromPhone) ? inquiry.fromContact : null].filter(Boolean).join(' • ')}
+                        {contactInfoString}
                     </p>
                 </div>
                 <div className="text-right text-xs text-gray-500 flex flex-col items-end gap-1">
@@ -247,13 +324,25 @@ const InquiryCard: React.FC<{
                 </div>
             )}
             
+            {(() => {
+                const assigneeName = inquiry.assignedToUserId 
+                    ? users.find(u => u.id === inquiry.assignedToUserId)?.name 
+                    : inquiry.assignedToEntityId 
+                        ? entities?.find(e => e.id === inquiry.assignedToEntityId)?.name 
+                        : null;
+                
+                if (assigneeName) {
+                    return (
+                        <div className="mt-1 flex items-center gap-1 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                            <UserCheck size={12} className={inquiry.assignedToEntityId ? 'text-blue-500' : 'text-purple-500'} />
+                            <span>Assigned: {assigneeName}</span>
+                        </div>
+                    );
+                }
+                return null;
+            })()}
+            
             <div className="mt-2 pt-2 border-t space-y-2">
-                {customer && (
-                    <div className="flex items-center gap-2 text-xs text-gray-600">
-                        <UserCheck size={14} className="text-green-600"/>
-                        <span className="font-semibold">{getCustomerDisplayName(customer)}</span>
-                    </div>
-                )}
                 {vehicle && (
                     <div className="flex items-center gap-2 text-xs text-gray-600">
                         <Car size={14} className="text-blue-600"/>
@@ -353,15 +442,24 @@ const InquiryCard: React.FC<{
             {/* Fast Action Buttons */}
             {onUpdateStatus && (
                 <div className="flex justify-end gap-1.5 mt-2 pt-2 border-t border-gray-100" onClick={(e) => e.stopPropagation()}>
-                    {inquiry.status !== 'In Progress' && (
+                    {(!estimate && onConvert) && (
                         <button
                             type="button"
-                            title="Set In Progress"
-                            onClick={() => onUpdateStatus(inquiry, 'In Progress')}
-                            className="flex items-center gap-1 px-2 py-1 rounded text-xs font-bold bg-blue-50 text-blue-700 hover:bg-blue-100 transition"
+                            title="Link Estimate"
+                            onClick={() => onConvert(inquiry, 'estimate')}
+                            className="p-1.5 rounded bg-purple-50 text-purple-700 hover:bg-purple-100 transition"
                         >
-                            <Play size={12} className="shrink-0" />
-                            <span>In Progress</span>
+                            <FileText size={14} className="shrink-0" />
+                        </button>
+                    )}
+                    {inquiry.status !== 'Scheduled' && (
+                        <button
+                            type="button"
+                            title="Set Scheduled"
+                            onClick={() => onUpdateStatus(inquiry, 'Scheduled')}
+                            className="p-1.5 rounded bg-blue-50 text-blue-700 hover:bg-blue-100 transition"
+                        >
+                            <Play size={14} className="shrink-0" />
                         </button>
                     )}
                     {inquiry.status !== 'Escalated/Urgent' && (
@@ -369,20 +467,18 @@ const InquiryCard: React.FC<{
                             type="button"
                             title="Escalate"
                             onClick={() => onUpdateStatus(inquiry, 'Escalated/Urgent')}
-                            className="flex items-center gap-1 px-2 py-1 rounded text-xs font-bold bg-orange-50 text-orange-700 hover:bg-orange-100 transition"
+                            className="p-1.5 rounded bg-orange-50 text-orange-700 hover:bg-orange-100 transition"
                         >
-                            <AlertTriangle size={12} className="shrink-0" />
-                            <span>Escalate</span>
+                            <AlertTriangle size={14} className="shrink-0" />
                         </button>
                     )}
                     <button
                         type="button"
                         title="Close Inquiry"
                         onClick={() => onUpdateStatus(inquiry, 'Closed')}
-                        className="flex items-center gap-1 px-2 py-1 rounded text-xs font-bold bg-green-50 text-green-700 hover:bg-green-100 transition"
+                        className="p-1.5 rounded bg-green-50 text-green-700 hover:bg-green-100 transition"
                     >
-                        <CheckCircle2 size={12} className="shrink-0" />
-                        <span>Close</span>
+                        <CheckCircle2 size={14} className="shrink-0" />
                     </button>
                 </div>
             )}
@@ -400,15 +496,125 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                 status = 'Quoted or Responded';
             } else if (status === ('Escalated' as any)) {
                 status = 'Escalated/Urgent';
+            } else if (status === ('In Progress' as any)) {
+                status = 'Scheduled';
             }
             return { ...i, status };
         });
     }, [inquiries]);
 
-    const { selectedEntityId, users, currentUser } = useApp();
+    const { selectedEntityId, users, currentUser, businessEntities: entities } = useApp();
 
     const [assignedUserFilter, setAssignedUserFilter] = useState<string>('all');
     const [stalenessFilter, setStalenessFilter] = useState<string>('all');
+
+    // Auto-parse 67 Degrees Web Inquiries
+    React.useEffect(() => {
+        if (!inquiries || inquiries.length === 0) return;
+        
+        const toUpdate = inquiries.filter(i => 
+            i.fromName?.toLowerCase().includes('67 degrees') || 
+            i.fromName?.toLowerCase().includes('67degrees')
+        );
+
+        if (toUpdate.length === 0) return;
+
+        toUpdate.forEach(async (inq) => {
+            const text = inq.message || '';
+            let updated = false;
+            const updates: Partial<Inquiry> = { id: inq.id };
+
+            // Parse Name
+            const nameMatch = text.match(/(?:Name|Customer|First Name|Last Name)\s*[:\-]\s*([^\n\r]+)/i);
+            if (nameMatch && nameMatch[1].trim()) {
+                updates.fromName = nameMatch[1].trim();
+                updated = true;
+            } else {
+                // If we can't find a name, at least rename it to Web Inquiry so it stops looping
+                updates.fromName = 'Web Inquiry (Unknown Name)';
+                updated = true;
+            }
+
+            // Parse Email
+            const emailMatch = text.match(/(?:Email|E-mail)\s*[:\-]\s*([^\n\r ]+)/i) || text.match(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/i);
+            if (emailMatch && emailMatch[1].trim()) {
+                updates.fromEmail = emailMatch[1].trim();
+                updated = true;
+            }
+
+            // Parse Phone
+            const phoneMatch = text.match(/(?:Phone|Telephone|Tel|Mobile|Contact Number)\s*[:\-]\s*([^\n\r]+)/i);
+            if (phoneMatch && phoneMatch[1].trim()) {
+                updates.fromPhone = phoneMatch[1].trim();
+                updated = true;
+            }
+
+            if (updated) {
+                try {
+                    const fullUpdate = { ...inq, ...updates };
+                    
+                    // Update locally to prevent immediate re-trigger before db sync
+                    setInquiries(prev => prev.map(p => p.id === inq.id ? fullUpdate : p));
+                    
+                    // Persist to DB
+                    await saveDocument('brooks_inquiries', fullUpdate);
+                } catch (err) {
+                    console.error("Failed to auto-parse 67 degrees inquiry:", err);
+                }
+            }
+        });
+    }, [inquiries, setInquiries]);
+
+    // Auto-close Scheduled Inquiries if job date is past
+    React.useEffect(() => {
+        if (!inquiries || inquiries.length === 0 || !jobs || jobs.length === 0) return;
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const toClose = inquiries.filter(i => {
+            if (i.status !== 'Closed' && (i.linkedEstimateId || i.linkedJobId)) {
+                let jobToUse = i.linkedJobId ? jobs.find(j => j.id === i.linkedJobId) : null;
+                
+                if (!jobToUse && i.linkedEstimateId) {
+                    const est = estimates.find(e => e.id === i.linkedEstimateId);
+                    if (est?.jobId) {
+                        jobToUse = jobs.find(j => j.id === est.jobId);
+                    }
+                }
+
+                if (jobToUse) {
+                    // Close inquiry if job is completed, invoiced, closed, or cancelled
+                    if (jobToUse.status === 'Complete' || jobToUse.status === 'Invoiced' || jobToUse.status === 'Closed' || jobToUse.status === 'Cancelled') {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        });
+
+        if (toClose.length === 0) return;
+
+        toClose.forEach(async (inq) => {
+            try {
+                const updated = {
+                    ...inq,
+                    status: 'Closed' as Inquiry['status'],
+                    logs: [...(inq.logs || []), {
+                        id: crypto.randomUUID(),
+                        timestamp: new Date().toISOString(),
+                        userId: 'System',
+                        actionType: 'Status Update',
+                        notes: 'Automatically closed because the associated job was completed.'
+                    }]
+                };
+                setInquiries(prev => prev.map(p => p.id === inq.id ? updated : p));
+                await saveDocument('brooks_inquiries', updated);
+            } catch (err) {
+                console.error("Failed to auto-close scheduled inquiry:", err);
+            }
+        });
+    }, [inquiries, jobs, estimates, setInquiries]);
 
     const handleUpdateStatus = async (inquiry: Inquiry, newStatus: Inquiry['status']) => {
         const updated: Inquiry = {
@@ -436,10 +642,27 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
     const [viewLayout, setViewLayout] = useState<'kanban' | 'list'>('kanban');
     const [isCompact, setIsCompact] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
-    const [dateFilter, setDateFilter] = useState<'7' | '30' | '90' | 'all'>('all');
+    const [dateFilter, setDateFilter] = useState<'today' | '7' | '30' | '90' | 'all'>('all');
     const [sortField, setSortField] = useState<'createdAt' | 'fromName' | 'registration' | 'status'>('createdAt');
     const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
     const [selectedInquiryIds, setSelectedInquiryIds] = useState<string[]>([]);
+    const [isSyncing, setIsSyncing] = useState(false);
+
+    const handleSyncEmails = async () => {
+        setIsSyncing(true);
+        try {
+            const result = await triggerEmailSync();
+            if (result.success) {
+                toast.success(`Successfully synced ${result.processedCount} new email(s).`);
+            } else {
+                toast.error("Sync completed but returned an unexpected result.");
+            }
+        } catch (error: any) {
+            toast.error(error.message || "Failed to sync emails.");
+        } finally {
+            setIsSyncing(false);
+        }
+    };
 
     React.useEffect(() => {
         setSelectedInquiryIds([]);
@@ -576,8 +799,22 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
         let filtered = normalizedInquiries.filter(i => selectedEntityId === 'all' || i.entityId === selectedEntityId);
         
         if (assignedUserFilter !== 'all') {
-            const targetUserId = assignedUserFilter === 'me' ? currentUser.id : assignedUserFilter;
-            filtered = filtered.filter(i => i.takenByUserId === targetUserId || i.assignedToUserId === targetUserId);
+            if (assignedUserFilter === 'me') {
+                const myEntity = currentUser.preferredEntityId;
+                filtered = filtered.filter(i => 
+                    i.takenByUserId === currentUser.id || 
+                    i.assignedToUserId === currentUser.id || 
+                    (myEntity && i.assignedToEntityId === myEntity) ||
+                    (myEntity && !i.assignedToUserId && i.entityId === myEntity)
+                );
+            } else {
+                filtered = filtered.filter(i => 
+                    i.takenByUserId === assignedUserFilter || 
+                    i.assignedToUserId === assignedUserFilter || 
+                    i.assignedToEntityId === assignedUserFilter ||
+                    (!i.assignedToUserId && i.entityId === assignedUserFilter)
+                );
+            }
         }
 
         if (stalenessFilter === 'stale_24h') {
@@ -602,16 +839,22 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
         if (dateFilter !== 'all') {
             const now = new Date();
             const cutoff = new Date();
-            cutoff.setDate(now.getDate() - parseInt(dateFilter));
+            
+            if (dateFilter === 'today') {
+                cutoff.setHours(0, 0, 0, 0);
+            } else {
+                cutoff.setDate(now.getDate() - parseInt(dateFilter));
+            }
+            
             filtered = filtered.filter(i => new Date(i.createdAt) >= cutoff);
         }
 
-        return filtered;
+        return filtered.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     }, [normalizedInquiries, selectedEntityId, searchTerm, dateFilter, assignedUserFilter, stalenessFilter, currentUser.id]);
 
     const activeInquiries = useMemo(() => {
         const columns: { [key in Inquiry['status']]?: Inquiry[] } = {
-            'New': [], 'Immediate Quote': [], 'Escalated/Urgent': [], 'In Progress': [], 'Quoted or Responded': [], 'Approved': [], 'Rejected': [],
+            'New': [], 'Immediate Quote': [], 'Escalated/Urgent': [], 'Quoted or Responded': [], 'Approved': [], 'Rejected': [], 'Scheduled': [],
         };
         filteredInquiries.forEach(i => {
             if (i.status !== 'Closed' && columns[i.status]) columns[i.status]!.push(i);
@@ -699,9 +942,16 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                             onChange={e => setAssignedUserFilter(e.target.value)}
                             className="bg-white border rounded-lg px-2 py-1.5 text-xs font-bold text-gray-700 shadow-sm outline-none"
                         >
-                            <option value="all">All Users</option>
+                            <option value="all">All Assignments</option>
                             <option value="me">My Inquiries</option>
-                            {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                            <optgroup label="Users">
+                                {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                            </optgroup>
+                            {entities && entities.length > 0 && (
+                                <optgroup label="Teams (Entities)">
+                                    {entities.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                                </optgroup>
+                            )}
                         </select>
                         <select 
                             value={stalenessFilter} 
@@ -716,7 +966,7 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                 <div className="flex items-center gap-4">
                     {/* Date filter */}
                     <div className="flex items-center gap-2 bg-white p-1 rounded-lg border shadow-sm">
-                        {(['7', '30', '90', 'all'] as const).map(days => (
+                        {(['today', '7', '30', '90', 'all'] as const).map(days => (
                             <button
                                 key={days}
                                 onClick={() => setDateFilter(days)}
@@ -726,7 +976,7 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                                     : 'text-gray-500 hover:bg-gray-100'
                                 }`}
                             >
-                                {days === 'all' ? 'All Time' : `${days} Days`}
+                                {days === 'today' ? 'Today' : days === 'all' ? 'All Time' : `${days} Days`}
                             </button>
                         ))}
                     </div>
@@ -789,6 +1039,16 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16}/>
                         <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Search..." className="pl-9 pr-4 py-2 border rounded-lg text-sm w-48"/>
                     </div>
+
+                    <button 
+                        onClick={handleSyncEmails} 
+                        disabled={isSyncing}
+                        className="flex items-center gap-2 py-2 px-4 bg-white border border-gray-300 text-gray-700 font-semibold rounded-lg shadow-sm hover:bg-gray-50 transition disabled:opacity-50"
+                        title="Manually trigger email sync from info@brookspeed.com"
+                    >
+                        {isSyncing ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+                        Sync Emails
+                    </button>
 
                     <button onClick={() => props.onOpenInquiryModal({})} className="flex items-center gap-2 py-2 px-4 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition">
                         <PlusCircle size={16}/> Log Inquiry
@@ -971,8 +1231,8 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                                                         i.status === 'New' ? 'bg-red-50 text-red-700 border-red-200' :
                                                         i.status === 'Immediate Quote' ? 'bg-amber-50 text-amber-700 border-amber-200' :
                                                         i.status === 'Escalated/Urgent' ? 'bg-orange-50 text-orange-700 border-orange-200' :
-                                                        i.status === 'In Progress' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                                                        i.status === 'Quoted or Responded' ? 'bg-gray-50 text-gray-700 border-gray-200' :
+                                                        i.status === 'Scheduled' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                                        i.status === 'Quoted or Responded' ? (isStale72h(i) ? 'bg-red-50 text-red-800 border-red-500 ring-1 ring-red-400' : 'bg-indigo-50 text-indigo-700 border-indigo-200') :
                                                         i.status === 'Approved' ? 'bg-green-50 text-green-700 border-green-200' :
                                                         i.status === 'Rejected' ? 'bg-red-100 text-red-800 border-red-200' :
                                                         'bg-gray-100 text-gray-800 border-gray-300'
@@ -1006,12 +1266,12 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                                                     <div className="flex justify-end items-center gap-1">
                                                         {i.status !== 'Closed' && i.status !== 'Approved' && (
                                                             <>
-                                                                {i.status !== 'In Progress' && (
+                                                                {i.status !== 'Scheduled' && (
                                                                     <button
                                                                         type="button"
-                                                                        onClick={() => handleUpdateStatus(i, 'In Progress')}
+                                                                        onClick={() => handleUpdateStatus(i, 'Scheduled')}
                                                                         className="p-1 rounded bg-blue-50 text-blue-700 hover:bg-blue-100 transition border border-blue-200 shadow-sm"
-                                                                        title="Set In Progress"
+                                                                        title="Set Scheduled"
                                                                     >
                                                                         <Play size={10} />
                                                                     </button>
@@ -1059,8 +1319,28 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
             ) : activeTab === 'active' ? (
                 <main className="flex-grow overflow-x-auto pb-2">
                     <div className="flex gap-4 h-full min-w-full font-sans">
-                        {(['New', 'Immediate Quote', 'Escalated/Urgent', 'In Progress', 'Quoted or Responded', 'Approved', 'Rejected'] as Inquiry['status'][]).map(status => (
-                            <div key={status} className="flex-1 flex flex-col bg-gray-100 rounded-xl min-w-[280px] h-full">
+                        {(['New', 'Immediate Quote', 'Escalated/Urgent', 'Quoted or Responded', 'Approved', 'Rejected', 'Scheduled'] as Inquiry['status'][]).map(status => (
+                            <div 
+                                key={status} 
+                                className="flex-1 flex flex-col bg-gray-100 rounded-xl min-w-[280px] h-full transition-colors border-2 border-transparent"
+                                onDragOver={(e) => {
+                                    e.preventDefault();
+                                    e.currentTarget.classList.add('border-indigo-400', 'bg-indigo-50/50');
+                                }}
+                                onDragLeave={(e) => {
+                                    e.currentTarget.classList.remove('border-indigo-400', 'bg-indigo-50/50');
+                                }}
+                                onDrop={(e) => {
+                                    e.preventDefault();
+                                    e.currentTarget.classList.remove('border-indigo-400', 'bg-indigo-50/50');
+                                    const inquiryId = e.dataTransfer.getData('inquiryId');
+                                    if (!inquiryId) return;
+                                    const inquiry = inquiries.find(i => i.id === inquiryId);
+                                    if (inquiry && inquiry.status !== status) {
+                                        handleUpdateStatus(inquiry, status);
+                                    }
+                                }}
+                            >
                                 <div className="p-3 border-b-2 border-indigo-200 bg-white rounded-t-xl font-bold text-gray-700">
                                     {status} ({activeInquiries[status]?.length || 0})
                                 </div>
@@ -1076,6 +1356,8 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                                             onOpenPurchaseOrder={props.onOpenPurchaseOrder}
                                             isCompact={isCompact}
                                             onUpdateStatus={handleUpdateStatus}
+                                            onConvert={props.onConvert}
+                                            draggable={true}
                                         />
                                     ))}
                                 </div>
@@ -1097,6 +1379,7 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                                 onOpenPurchaseOrder={props.onOpenPurchaseOrder}
                                 isCompact={isCompact}
                                 onUpdateStatus={handleUpdateStatus}
+                                onConvert={props.onConvert}
                             />
                         ))}
                     </div>

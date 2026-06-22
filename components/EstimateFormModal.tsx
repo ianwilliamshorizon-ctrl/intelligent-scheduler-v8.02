@@ -1,8 +1,8 @@
 import { cloudSpeechSynthesis, CloudSpeechSynthesisUtterance } from '../core/utils/cloudSpeech';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { toast } from 'react-toastify';
-import { Estimate, Customer, Vehicle, BusinessEntity, TaxRate, ServicePackage, Part, EstimateLineItem, Job, User, CheckInPhoto, Supplier } from '../types';
-import { Save, PlusCircle, Gauge, Info, FileText, ChevronUp, ChevronDown, Trash2, X, TrendingUp, Plus, Image as ImageIcon, History, Car, Wand2, Expand, Edit, Volume2 } from 'lucide-react';
+import { Estimate, Customer, Vehicle, BusinessEntity, TaxRate, ServicePackage, Part, EstimateLineItem, Job, User, CheckInPhoto, Supplier, DiscountCode } from '../types';
+import { Save, PlusCircle, Gauge, Info, FileText, ChevronUp, ChevronDown, Trash2, X, TrendingUp, Plus, Image as ImageIcon, History, Car, Wand2, Expand, Edit, Volume2, Tag } from 'lucide-react';
 import { formatDate, getTodayISOString, getFutureDateISOString } from '../core/utils/dateUtils';
 import { generateEstimateNumber } from '../core/utils/numberGenerators';
 import { formatCurrency } from '../utils/formatUtils';
@@ -350,15 +350,16 @@ interface EstimateFormModalProps {
     parts: Part[]; estimates: Estimate[]; currentUser: User; selectedEntityId: string;
     onSavePart?: (part: Part) => void;
     suppliers: Supplier[];
+    discountCodes?: DiscountCode[];
 }
 
 const EstimateFormModal: React.FC<EstimateFormModalProps> = ({ 
     isOpen, onClose, onSave, estimate, jobContext, customers, onSaveCustomer, 
     vehicles, onSaveVehicle, businessEntities, taxRates, servicePackages, parts, 
-    estimates, currentUser, selectedEntityId, onSavePart, suppliers
+    estimates, currentUser, selectedEntityId, onSavePart, suppliers, discountCodes
 }) => {
     const [formData, setFormData] = useState<Partial<Estimate>>({ 
-        lineItems: [], customerId: '', vehicleId: '', entityId: '', issueDate: '', expiryDate: '', status: 'Draft', notes: ''
+        lineItems: [], customerId: '', vehicleId: '', entityId: '', issueDate: '', expiryDate: '', status: 'Draft', notes: '', discountCodeId: ''
     });
     const [isAddingCustomer, setIsAddingCustomer] = useState(false);
     const [isAddingVehicle, setIsAddingVehicle] = useState(false);
@@ -378,6 +379,10 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
     const [showAllEntities, setShowAllEntities] = useState(false);
     const [packageSearchTerm, setPackageSearchTerm] = useState('');
     const [hasToastedNoMatch, setHasToastedNoMatch] = useState(false);
+
+    const [discountCodeInput, setDiscountCodeInput] = useState('');
+    const [appliedDiscount, setAppliedDiscount] = useState<DiscountCode | null>(null);
+    const [discountError, setDiscountError] = useState<string | null>(null);
 
     const [isLookupModalOpen, setIsLookupModalOpen] = useState(false);
     const [lookupTarget, setLookupTarget] = useState<'customer' | 'vehicle' | null>(null);
@@ -412,7 +417,41 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                 };
             }
         });
+        setAppliedDiscount(null);
+        setDiscountCodeInput('');
+        setDiscountError(null);
     }, [estimate, isOpen, businessEntities, selectedEntityId, currentUser.id, jobContext]);
+
+    const handleApplyDiscount = () => {
+        const codes = discountCodes || [];
+        const code = codes.find(d => d.code === discountCodeInput && d.isActive);
+        if (!code) {
+            setDiscountError('Invalid or inactive discount code.');
+            setAppliedDiscount(null);
+            return;
+        }
+        setAppliedDiscount(code);
+        setDiscountError(null);
+    };
+
+    const calculateDiscountAmount = useCallback(() => {
+        if (!appliedDiscount || !formData.lineItems) return 0;
+        let eligibleTotal = 0;
+        formData.lineItems.forEach(item => {
+            if (item.isPackageComponent) return;
+            let isEligible = false;
+            if (appliedDiscount.applicability === 'All') isEligible = true;
+            else if (appliedDiscount.applicability === 'Labor' && item.isLabor) isEligible = true;
+            else if (appliedDiscount.applicability === 'Parts' && !item.isLabor && !item.servicePackageId) isEligible = true;
+            else if (appliedDiscount.applicability === 'Packages' && item.servicePackageId) isEligible = true;
+
+            if (isEligible) {
+                eligibleTotal += (item.quantity || 0) * (item.unitPrice || 0);
+            }
+        });
+        if (appliedDiscount.type === 'Fixed' || appliedDiscount.discountType === 'Fixed') return Math.min(appliedDiscount.value, eligibleTotal);
+        return eligibleTotal * (appliedDiscount.value / 100);
+    }, [appliedDiscount, formData.lineItems]);
 
     const totals = useMemo(() => {
         const breakdown: { [key: string]: { net: number; vat: number; rate: number | string; name: string; } } = {};
@@ -472,23 +511,37 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
             }
         });
 
-        const finalVatBreakdown = Object.values(breakdown);
-        const totalNet = finalVatBreakdown.reduce((sum, b) => sum + b.net, 0);
-        const totalVat = finalVatBreakdown.reduce((sum, b) => sum + b.vat, 0);
-        const grandTotal = totalNet + totalVat;
+        const discountVal = calculateDiscountAmount();
         
-        const profit = totalNet - totalCost;
-        const margin = totalNet > 0 ? (profit / totalNet) * 100 : 0;
+        if (discountVal > 0 && standardTaxRateId && breakdown[standardTaxRateId]) {
+            breakdown[standardTaxRateId].net -= discountVal;
+            const taxRateObj = taxRatesMap.get(standardTaxRateId);
+            if (taxRateObj && taxRateObj.rate > 0) {
+                breakdown[standardTaxRateId].vat -= discountVal * (Number(taxRateObj.rate) / 100);
+            }
+        }
+
+        const finalVatBreakdownOriginal = Object.values(breakdown).map(b => ({...b})); // clone to avoid mutation reference issues
+        
+        const finalVatBreakdown = Object.values(breakdown);
+        const currentTotalNet = finalVatBreakdown.reduce((sum, b) => sum + b.net, 0) + discountVal; // Display pre-discount net as TotalNet
+        const discountedTotalNet = finalVatBreakdown.reduce((sum, b) => sum + b.net, 0); // Used for grand total
+        const totalVat = finalVatBreakdown.reduce((sum, b) => sum + b.vat, 0);
+        const grandTotal = discountedTotalNet + totalVat;
+        
+        const profit = discountedTotalNet - totalCost;
+        const margin = discountedTotalNet > 0 ? (profit / discountedTotalNet) * 100 : 0;
 
         return {
-            totalNet,
+            totalNet: currentTotalNet,
             grandTotal,
             vatBreakdown: finalVatBreakdown.filter(b => b.net > 0 || b.vat > 0),
             totalCost,
             totalProfit: profit,
-            profitMargin: margin
+            profitMargin: margin,
+            discountAmount: discountVal
         };
-    }, [formData.lineItems, taxRates, standardTaxRateId, t99RateId]);
+    }, [formData.lineItems, taxRates, standardTaxRateId, t99RateId, calculateDiscountAmount]);
 
     const currentCustomer = customers.find(c => c.id === formData.customerId);
     const currentVehicle = vehicles.find(v => v.id === formData.vehicleId);
@@ -650,7 +703,10 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
 
     const handleCustomerSelect = (selection: any) => {
         const customerId = selection?.value || selection?.id || selection;
-        const customer = customers.find(c => c.id === customerId);
+        let customer = customers.find(c => c.id === customerId);
+        if (!customer && typeof selection === 'object' && selection.id) {
+            customer = selection;
+        }
         if (!customer) return;
 
         setRecentCustomerIds(prev => [customer.id, ...prev.filter(id => id !== customer.id)].slice(0, 3));
@@ -891,10 +947,26 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
         if (!formData.customerId || !formData.entityId) return alert('Customer and Business Entity are required.');
         const entity = businessEntities.find(e => e.id === formData.entityId);
         const entityShortCode = entity?.shortCode || 'UNK';
+        let finalLineItems = [...(formData.lineItems || [])];
+        if (appliedDiscount && totals.discountAmount > 0) {
+            finalLineItems.push({
+                id: crypto.randomUUID(),
+                description: `Discount: ${appliedDiscount.code} - ${appliedDiscount.description}`,
+                quantity: 1,
+                unitPrice: -totals.discountAmount,
+                unitCost: 0,
+                isLabor: false,
+                taxCodeId: standardTaxRateId,
+                partNumber: 'DISCOUNT'
+            } as EstimateLineItem);
+        }
+
         onSave({ 
             id: formData.id || `est_${Date.now()}`,
             estimateNumber: formData.estimateNumber || generateEstimateNumber(estimates, entityShortCode), 
-            ...formData 
+            ...formData,
+            discountCodeId: appliedDiscount ? appliedDiscount.id : formData.discountCodeId,
+            lineItems: finalLineItems
         } as Estimate);
         onClose();
     };
@@ -1096,6 +1168,35 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                                 <div><label className="font-semibold">Expiry Date</label><input name="expiryDate" type="date" value={formData.expiryDate || ''} onChange={handleChange} className="w-full p-2 border rounded mt-1" /></div>
                             </div>
                             <div><label className="font-semibold">Status</label><select name="status" value={formData.status || 'Draft'} onChange={handleChange} className="w-full p-2 border rounded bg-white mt-1"><option>Draft</option><option>Sent</option><option>Approved</option><option>Declined</option><option>Converted to Job</option><option>Closed</option></select></div>
+                            <div className="pt-2 border-t mt-2">
+                                <label className="font-semibold text-gray-700 flex items-center gap-2"><Tag size={16}/> Discount Code</label>
+                                <div className="flex gap-2 mt-1">
+                                    <input 
+                                        type="text" 
+                                        value={discountCodeInput} 
+                                        onChange={(e) => setDiscountCodeInput(e.target.value.toUpperCase())} 
+                                        placeholder="Enter code" 
+                                        className="flex-1 p-2 border rounded text-sm uppercase"
+                                    />
+                                    <button 
+                                        type="button" 
+                                        onClick={handleApplyDiscount} 
+                                        className="px-3 py-1 bg-indigo-600 text-white rounded hover:bg-indigo-700 text-sm font-medium"
+                                    >
+                                        Apply
+                                    </button>
+                                </div>
+                                {discountError && <p className="text-red-500 text-xs mt-1">{discountError}</p>}
+                                {appliedDiscount && (
+                                    <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded-lg flex justify-between items-center">
+                                        <div className="text-xs">
+                                            <p className="font-bold text-green-800">{appliedDiscount.code}</p>
+                                            <p className="text-green-600">{appliedDiscount.description}</p>
+                                        </div>
+                                        <button onClick={() => setAppliedDiscount(null)} className="text-green-800 hover:text-green-900"><X size={14}/></button>
+                                    </div>
+                                )}
+                            </div>
                             <div className="bg-gray-50 p-2 rounded-lg border mt-2">
                                 <div className="flex justify-between items-center mb-2">
                                     <label className="font-semibold text-sm">Notes & Media</label>
@@ -1181,10 +1282,16 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                         </div>
                     </Section>
                                   
-                    <Section title="Totals Summary" icon={Gauge}>
+                     <Section title="Totals Summary" icon={Gauge}>
                         <div className="w-full text-sm space-y-1">
                              <div className="flex justify-between text-gray-600"><span>Total Cost Price:</span><span>{formatCurrency(totals.totalCost)}</span></div>
                              <div className="flex justify-between text-gray-600"><span>Total Sale Price (Net):</span><span>{formatCurrency(totals.totalNet)}</span></div>
+                             {totals.discountAmount > 0 && (
+                                 <div className="flex justify-between text-sm font-medium text-green-600">
+                                     <span className="flex items-center gap-1"><Tag size={12}/> Discount</span>
+                                     <span>-{formatCurrency(totals.discountAmount)}</span>
+                                 </div>
+                             )}
                              <div className={`flex justify-between font-bold ${totals.totalProfit >= 0 ? 'text-green-700' : 'text-red-600'}`}><span>Total Profit:</span><span>{formatCurrency(totals.totalProfit)}</span></div>
                             <div className="flex justify-between text-gray-600 border-b pb-2 mb-2"><span>Profit Margin:</span><span>{totals.profitMargin.toFixed(1)}%</span></div>
                             {totals.vatBreakdown.map(b => (<div key={b.name} className="flex justify-between text-gray-500 text-xs"><span>{b.rate === 'Mixed' ? b.name : `VAT @ ${b.rate}%`}</span><span>{formatCurrency(b.vat)}</span></div>))}
@@ -1265,6 +1372,13 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                     vehicles={[]}
                     estimates={[]}
                     invoices={[]}
+                    onViewVehicle={(vehicleId, customerId) => {
+                        setIsAddingCustomer(false);
+                        setInitialCustomerData(null);
+                        setFormData(prev => ({...prev, customerId}));
+                        setInitialVehicleData(null);
+                        setIsAddingVehicle(true);
+                    }}
                 />
             )}
 

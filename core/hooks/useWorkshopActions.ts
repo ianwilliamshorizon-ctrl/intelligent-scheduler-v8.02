@@ -405,7 +405,19 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
         
         if (estimate.status === 'Sent') await updateLinkedInquiryStatus(estimate.id, 'Quoted or Responded');
         
-        if (isNew && estimate.jobId) {
+        if (isNew && estimate.linkedInquiryId) {
+            const sourceInquiry = inquiries.find(i => i.id === estimate.linkedInquiryId);
+            if (sourceInquiry) {
+                await handleSaveItem(setInquiries, { 
+                    ...sourceInquiry, 
+                    linkedEstimateId: estimate.id,
+                    status: 'Scheduled',
+                    actionNotes: (sourceInquiry.actionNotes || '') + `\n[System]: Linked to newly created Estimate #${estimate.estimateNumber || estimate.id}.`
+                });
+            }
+        }
+        
+        if (isNew && estimate.jobId && !estimate.linkedInquiryId) {
              const newInquiry: T.Inquiry = {
                 id: crypto.randomUUID(),
                 entityId: estimate.entityId,
@@ -722,12 +734,21 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
              if (existingInquiry) {
                   await handleSaveItem(setInquiries, { 
                       ...existingInquiry, 
-                      status: 'Approved', 
+                      status: 'Scheduled' as const, 
                       linkedJobId: updatedEstimate.jobId,
                       linkedPurchaseOrderIds: [...(existingInquiry.linkedPurchaseOrderIds || []), ...allGeneratedPOIds]
                   }, 'brooks_inquiries');
              }
-        } 
+        } else if (!estimate.jobId && !scheduledDate) {
+             const existingInquiry = inquiries.find(i => i.linkedEstimateId === estimate.id);
+             if (existingInquiry && existingInquiry.status !== 'Approved') {
+                  await handleSaveItem(setInquiries, { 
+                      ...existingInquiry, 
+                      status: 'Approved' as const, 
+                      actionNotes: (existingInquiry.actionNotes || '') + '\n[System]: Estimate Approved.',
+                  }, 'brooks_inquiries');
+             }
+        }
         await handleSaveItem(setEstimates, updatedEstimate, 'brooks_estimates');
     };
 
@@ -782,7 +803,7 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
         await handleSaveItem(setEstimates, { ...estimate, status: 'Closed' } as T.Estimate, 'brooks_estimates');
         
         if (inquiry) {
-            await handleSaveItem(setInquiries, { ...inquiry, status: 'Closed' } as T.Inquiry, 'brooks_inquiries');
+            await handleSaveItem(setInquiries, { ...inquiry, status: inquiry.status === 'Scheduled' ? 'Scheduled' : 'Approved' } as T.Inquiry, 'brooks_inquiries');
         }
 
         setConfirmation({ isOpen: true, title: 'Work Merged', message: `Added to Job #${job.id}.`, type: 'success' });

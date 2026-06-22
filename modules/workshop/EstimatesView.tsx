@@ -3,7 +3,7 @@ import React, { useState, useMemo } from 'react';
 import { useData } from '../../core/state/DataContext';
 import { useApp } from '../../core/state/AppContext';
 import { Estimate, EstimateLineItem, Vehicle, ServicePackage } from '../../types';
-import { Plus, Eye, Edit, Trash2, Search, PlusCircle, Wand2, ChevronDown, ChevronUp, Loader2, Printer, CalendarCheck, XCircle, CalendarDays } from 'lucide-react';
+import { Plus, Eye, Edit, Trash2, Search, PlusCircle, Wand2, ChevronDown, ChevronUp, Loader2, Printer, CalendarCheck, XCircle, CalendarDays, MessageSquare } from 'lucide-react';
 import { formatCurrency } from '../../utils/formatUtils';
 import { generateServicePackageName } from '../../core/services/geminiService';
 import { getRelativeDate, isWithinDateRange } from '../../core/utils/dateUtils';
@@ -19,6 +19,7 @@ interface EstimatesViewProps {
     onViewEstimate: (estimate: Estimate) => void;
     onSmartCreateClick: () => void;
     onScheduleEstimate?: (estimate: Estimate, inquiryId?: string) => void;
+    onCreateInquiry?: (estimate: Estimate) => void;
 }
 
 const dateFilterOptions = {
@@ -31,8 +32,8 @@ const dateFilterOptions = {
 
 type DateFilterOption = keyof typeof dateFilterOptions;
 
-const EstimatesView: React.FC<EstimatesViewProps> = ({ onOpenEstimateModal, onViewEstimate, onSmartCreateClick, onScheduleEstimate }) => {
-    const { estimates, customers, vehicles, taxRates, setServicePackages, servicePackages, businessEntities, parts, setEstimates } = useData();
+const EstimatesView: React.FC<EstimatesViewProps> = ({ onOpenEstimateModal, onViewEstimate, onSmartCreateClick, onScheduleEstimate, onCreateInquiry }) => {
+    const { estimates, customers, vehicles, taxRates, setServicePackages, servicePackages, businessEntities, parts, setEstimates, inquiries } = useData();
     const { selectedEntityId, users, setConfirmation, currentUser } = useApp();
     const { handleSaveItem, updateLinkedInquiryStatus } = useWorkshopActions();
     const print = usePrint();
@@ -94,7 +95,9 @@ const EstimatesView: React.FC<EstimatesViewProps> = ({ onOpenEstimateModal, onVi
                     (vehicle.previousRegistrations || []).some(pr => pr.registration.toLowerCase().replace(/\s/g, '').includes(lowerFilter.replace(/\s/g, '')))
                 ));
             
-            const matchesStatus = statusFilter.length === 0 || statusFilter.includes(estimate.status);
+            const matchesStatus = statusFilter.length === 0 
+                ? estimate.status !== 'Closed'
+                : statusFilter.includes(estimate.status);
             return matchesSearch && matchesStatus;
         }).sort((a, b) => (b.issueDate || '').localeCompare(a.issueDate || '') || (b.estimateNumber || '').localeCompare(a.estimateNumber || ''));
     }, [estimates, filter, statusFilter, customerMap, vehicleMap, selectedEntityId, businessEntities, startDate, endDate]);
@@ -323,6 +326,18 @@ const EstimatesView: React.FC<EstimatesViewProps> = ({ onOpenEstimateModal, onVi
                                                         <XCircle size={16} />
                                                     </button>
                                                 )}
+                                                {!estimate.jobId && onCreateInquiry && (() => {
+                                                    const hasInquiry = inquiries?.some(i => i.linkedEstimateId === estimate.id || (estimate.linkedInquiryId && i.id === estimate.linkedInquiryId));
+                                                    return (
+                                                        <button 
+                                                            onClick={() => onCreateInquiry(estimate)} 
+                                                            className={`p-1.5 rounded-full ${hasInquiry ? 'text-green-600 bg-green-100 hover:bg-green-200' : 'text-orange-600 hover:bg-orange-100'}`} 
+                                                            title={hasInquiry ? 'View/Update Linked Inquiry' : 'Log Inquiry'}
+                                                        >
+                                                            <MessageSquare size={16} />
+                                                        </button>
+                                                    );
+                                                })()}
                                             </div>
                                         </td>
                                     </tr>

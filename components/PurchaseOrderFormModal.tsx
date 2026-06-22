@@ -792,7 +792,7 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({
 
     return (
          <div className="fixed inset-0 bg-gray-900 bg-opacity-75 z-[70] flex justify-center items-center p-4">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl flex flex-col max-h-[90vh]">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-7xl flex flex-col max-h-[90vh]">
                 <div className="flex justify-between items-center border-b p-4">
                     <h2 className="text-xl font-bold text-indigo-700">{title}</h2>
                     <button onClick={onClose}><X size={24} className="text-gray-500 hover:text-gray-800" /></button>

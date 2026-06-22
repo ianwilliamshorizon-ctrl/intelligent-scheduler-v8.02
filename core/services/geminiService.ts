@@ -84,15 +84,15 @@ export const parseInquiryMessage = async (message: string): Promise<any> => {
     Extract the following fields if present:
     1. "summary": A brief 1-2 sentence summary of the customer's issue or request.
     2. "fromName": The customer's full name, if mentioned.
-    3. "fromEmail": The customer's email address, if present.
-    4. "fromPhone": The customer's phone number, if present.
+    3. "fromEmail": The FULL, complete email address, exactly as written. Do NOT truncate.
+    4. "fromPhone": The FULL, complete phone number, exactly as written. Do NOT truncate.
     5. "fromContact": Any generic contact info that doesn't fit email/phone perfectly.
-    6. "vehicleRegistration": Any vehicle registration plate/number mentioned.
+    6. "vehicleRegistration": Any vehicle registration plate/number mentioned (including UK formats like AB12 CDE, regardless of spacing) found anywhere in the text including the subject/title.
 
     Format your response as a valid JSON object only. Do not include any conversational text outside the JSON.
     Example: {"summary": "...", "fromName": "...", "fromEmail": "...", "fromPhone": "...", "fromContact": "...", "vehicleRegistration": "..."}
     
-    Message: "${message}"`;
+    Message: ${JSON.stringify(message)}`;
     return parseJobRequest(prompt);
 };
 
@@ -101,7 +101,7 @@ export const parseInquiryMessage = async (message: string): Promise<any> => {
  * Uses AI to parse search queries into a search term and type
  */
 export const parseSearchQuery = async (query: string): Promise<{ searchTerm: string; searchType: 'customer' | 'vehicle' | 'unknown' }> => {
-    const prompt = `Analyze this search query: "${query}". Identify the primary search term and determine if it represents a "customer" (name, email, phone number) or a "vehicle" (registration plate, VIN, make, model). Return ONLY JSON in this format: {"searchTerm": "...", "searchType": "customer" | "vehicle" | "unknown"}`;
+    const prompt = `Analyze this search query: ${JSON.stringify(query)}. Identify the primary search term and determine if it represents a "customer" (name, email, phone number) or a "vehicle" (registration plate, VIN, make, model). Return ONLY JSON in this format: {"searchTerm": "...", "searchType": "customer" | "vehicle" | "unknown"}`;
     
     try {
         const result = await parseJobRequest(prompt);

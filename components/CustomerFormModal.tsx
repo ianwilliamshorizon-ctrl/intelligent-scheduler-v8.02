@@ -4,7 +4,7 @@ import FormModal from './FormModal';
 import { generateCustomerId } from '../core/utils/customerUtils';
 import { formatDate } from '../core/utils/dateUtils';
 import { lookupAddressByPostcode, AddressDetails } from '../services/postcodeLookupService';
-import { Loader2, Search, Briefcase, Car, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react';
+import { Loader2, Search, Briefcase, Car, ChevronDown, ChevronUp, RefreshCw, MessageSquare } from 'lucide-react';
 import { useAuditLogger } from '../core/hooks/useAuditLogger';
 import { useData } from '../core/state/DataContext';
 import { toast } from 'react-toastify';
@@ -32,19 +32,21 @@ interface CustomerFormModalProps {
     vehicles?: Vehicle[];
     estimates?: Estimate[];
     invoices?: Invoice[];
-    onViewVehicle?: (vehicleId: string) => void;
+    onViewVehicle?: (vehicleId: string | null, customerId?: string) => void;
+    onViewInquiry?: (inquiry: any) => void;
 }
 
 const CustomerFormModal: React.FC<CustomerFormModalProps> = ({ 
     isOpen, onClose, onSave, customer, existingCustomers = [], 
     jobs: propsJobs, vehicles: propsVehicles, estimates: propsEstimates, invoices: propsInvoices, 
-    onViewVehicle 
+    onViewVehicle, onViewInquiry 
 }) => {
     const globalData = useData();
     const jobs = (propsJobs && propsJobs.length > 0) ? propsJobs : (globalData.jobs || []);
     const vehicles = (propsVehicles && propsVehicles.length > 0) ? propsVehicles : (globalData.vehicles || []);
     const estimates = (propsEstimates && propsEstimates.length > 0) ? propsEstimates : (globalData.estimates || []);
     const invoices = (propsInvoices && propsInvoices.length > 0) ? propsInvoices : (globalData.invoices || []);
+    const inquiries = globalData.inquiries || [];
 
     // Using 'any' here temporarily to resolve the missing properties in your Customer type definition
     const [formData, setFormData] = useState<any>({});
@@ -153,9 +155,18 @@ const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
         onSave(finalCustomer);
     };
 
-    const customerVehicles = useMemo(() => 
-        (vehicles || []).filter(v => v.customerId === (customer?.id || formData.id)), 
-    [vehicles, customer, formData.id]);
+    const customerVehicles = useMemo(() => {
+        const id = customer?.id || formData.id;
+        if (!id) return [];
+        return (vehicles || []).filter(v => v.customerId === id);
+    }, [vehicles, customer, formData.id]);
+
+    const customerInquiries = useMemo(() => {
+        const id = customer?.id || formData.id;
+        if (!id) return [];
+        return (inquiries || []).filter((i: any) => i.linkedCustomerId === id)
+        .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }, [inquiries, customer, formData.id]);
 
     if (!isOpen) return null;
 
@@ -265,12 +276,71 @@ const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
                     <Section title={`Vehicles (${customerVehicles.length})`} icon={Car}>
                         <div className="space-y-2 max-h-[500px] overflow-y-auto pr-2">
                             {customerVehicles.length === 0 ? (
-                                <p className="text-center py-8 text-gray-400 text-sm">No vehicles linked to this customer.</p>
+                                <div className="text-center py-6">
+                                    <p className="text-gray-400 text-sm mb-3">No vehicles linked to this customer.</p>
+                                    {(!customer || !customer.id) && onViewVehicle && (
+                                        <button 
+                                            type="button"
+                                            onClick={() => {
+                                                if (!formData.forename || !formData.surname) {
+                                                    toast.error("Please enter a forename and surname first.");
+                                                    return;
+                                                }
+                                                const marketing = !!formData.marketingConsent;
+                                                const reminders = !!formData.serviceReminderConsent;
+                                                const declined = !!formData.declinedCommunication;
+
+                                                if (!marketing && !reminders && !declined) {
+                                                    toast.error("Please select at least one option: GDPR Consent, Service/MOT Reminders, or Customer Declined Communication.");
+                                                    return;
+                                                }
+                                                
+                                                const finalCustomer: Customer = {
+                                                    ...formData,
+                                                    id: formData.id || generateCustomerId(formData.surname!, existingCustomers),
+                                                    createdDate: formData.createdDate || formatDate(new Date()),
+                                                } as Customer;
+                                                onSave(finalCustomer);
+                                                onViewVehicle(null, finalCustomer.id);
+                                            }}
+                                            className="w-full py-2 bg-indigo-50 text-indigo-700 font-bold border border-indigo-200 rounded hover:bg-indigo-100 text-sm flex justify-center items-center gap-2 transition"
+                                        >
+                                            <Car size={16} /> Save Customer & Add Vehicle
+                                        </button>
+                                    )}
+                                </div>
                             ) : (
                                 customerVehicles.map(v => (
-                                    <div key={v.id} className="p-3 bg-white border rounded shadow-sm hover:border-indigo-300 transition-colors cursor-pointer" onClick={() => onViewVehicle?.(v.id)}>
+                                    <div key={v.id} className="p-3 bg-white border rounded shadow-sm hover:border-indigo-300 transition-colors cursor-pointer" onClick={() => onViewVehicle?.(v.id, formData.id)}>
                                         <p className="font-bold font-mono text-indigo-600">{v.registration}</p>
                                         <p className="text-xs text-gray-500 uppercase">{v.make} {v.model}</p>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    </Section>
+
+                    <Section title={`Inquiries (${customerInquiries.length})`} icon={MessageSquare}>
+                        <div className="space-y-2 max-h-[500px] overflow-y-auto pr-2">
+                            {customerInquiries.length === 0 ? (
+                                <p className="text-center py-8 text-gray-400 text-sm">No inquiries from this customer.</p>
+                            ) : (
+                                customerInquiries.map((inq: any) => (
+                                    <div key={inq.id} className="p-3 bg-white border rounded shadow-sm hover:border-indigo-300 transition-colors cursor-pointer" onClick={() => onViewInquiry?.(inq)}>
+                                        <div className="flex justify-between">
+                                            <p className="font-bold text-sm text-indigo-600 line-clamp-1">{inq.fromName}</p>
+                                            <span className="text-xs text-gray-500 whitespace-nowrap ml-2">{new Date(inq.createdAt).toLocaleDateString()}</span>
+                                        </div>
+                                        <p className="text-xs text-gray-700 mt-1 line-clamp-2">{inq.message}</p>
+                                        <div className="mt-2 flex">
+                                            <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${
+                                                inq.status === 'New' ? 'bg-red-100 text-red-700' :
+                                                inq.status === 'Closed' ? 'bg-green-100 text-green-700' :
+                                                'bg-blue-100 text-blue-700'
+                                            }`}>
+                                                {inq.status}
+                                            </span>
+                                        </div>
                                     </div>
                                 ))
                             )}

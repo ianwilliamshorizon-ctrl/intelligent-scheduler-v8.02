@@ -591,7 +591,7 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
                         <h4 className="font-bold text-indigo-900 mb-2 flex items-center gap-2"><FileText size={16}/> Supplementary Work</h4>
                         <div className="space-y-2">
                             {supplementaryEstimates.map(est => {
-                                const total = (est.lineItems || []).reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
+                                const total = (est.lineItems || []).reduce((sum, item) => sum + (item.isOptional ? 0 : (item.quantity * item.unitPrice)), 0);
                                 const isExpanded = expandedSuppEstIds.has(est.id);
                                 return (
                                     <div key={est.id} className="bg-white p-2 rounded border border-indigo-100 shadow-sm">

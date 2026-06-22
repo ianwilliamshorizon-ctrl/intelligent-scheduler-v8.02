@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useData } from '../core/state/DataContext';
 import { useApp } from '../core/state/AppContext';
 import { Estimate, EstimateLineItem, Vehicle, ServicePackage } from '../types';
-import { Plus, Eye, Edit, Trash2, Search, PlusCircle, Wand2, ChevronDown, ChevronUp, Loader2, Printer } from 'lucide-react';
+import { Plus, Eye, Edit, Trash2, Search, PlusCircle, Wand2, ChevronDown, ChevronUp, Loader2, Printer, Phone, MessageSquare } from 'lucide-react';
 import { formatCurrency } from '../core/utils/formatUtils';
 import { generateServicePackageName } from '../core/services/geminiService';
 import { getRelativeDate, formatDate, isWithinDateRange } from '../core/utils/dateUtils';
@@ -29,7 +29,7 @@ const StatusFilter = ({ statuses, selectedStatuses, onToggle }: { statuses: read
     </div>
 );
 
-const EstimatesView = ({ onOpenEstimateModal, onViewEstimate, onSmartCreateClick, onScheduleEstimate }: { onOpenEstimateModal: (estimate: Partial<Estimate> | null) => void; onViewEstimate: (estimate: Estimate) => void; onSmartCreateClick: () => void; onScheduleEstimate?: (estimate: Estimate) => void; }) => {
+const EstimatesView = ({ onOpenEstimateModal, onViewEstimate, onSmartCreateClick, onScheduleEstimate, onCreateInquiry }: { onOpenEstimateModal: (estimate: Partial<Estimate> | null) => void; onViewEstimate: (estimate: Estimate) => void; onSmartCreateClick: () => void; onScheduleEstimate?: (estimate: Estimate) => void; onCreateInquiry?: (estimate: Estimate) => void; }) => {
     const { estimates, setEstimates, customers, vehicles, taxRates, setServicePackages, servicePackages, businessEntities } = useData();
     const { selectedEntityId, users, setConfirmation } = useApp();
     const print = usePrint();
@@ -43,6 +43,7 @@ const EstimatesView = ({ onOpenEstimateModal, onViewEstimate, onSmartCreateClick
     const [isCreatingPackage, setIsCreatingPackage] = useState(false);
 
     const customerMap = useMemo(() => new Map(customers.map(c => [c.id, `${String(c?.forename ?? '')} ${String(c?.surname ?? '')}`])), [customers]);
+    const customerObjMap = useMemo(() => new Map(customers.map(c => [c.id, c])), [customers]);
     const vehicleMap = useMemo(() => new Map(vehicles.filter(v => v && v.id).map(v => [v.id, v])), [vehicles]);
     const userMap = useMemo(() => new Map(users.map(u => [u.id, u?.name ?? 'Unknown User'])), [users]);
     const taxRatesMap = useMemo(() => new Map(taxRates.map(t => [t.id, t.rate])), [taxRates]);
@@ -273,7 +274,15 @@ const EstimatesView = ({ onOpenEstimateModal, onViewEstimate, onSmartCreateClick
                                             </button>
                                         </td>
                                         <td className="p-3 font-mono">{estimate.estimateNumber ?? 'N/A'}</td>
-                                        <td className="p-3">{customerMap.get(estimate.customerId) ?? 'Unknown Customer'}</td>
+                                        <td className="p-3">
+                                            <div className="font-medium text-gray-900">{customerMap.get(estimate.customerId) ?? 'Unknown Customer'}</div>
+                                            {(customerObjMap.get(estimate.customerId)?.mobile || customerObjMap.get(estimate.customerId)?.phone) && (
+                                                <div className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
+                                                    <Phone size={10}/>
+                                                    {customerObjMap.get(estimate.customerId)?.mobile || customerObjMap.get(estimate.customerId)?.phone}
+                                                </div>
+                                            )}
+                                        </td>
                                         <td className="p-3 font-mono">{vehicleMap.get(estimate.vehicleId)?.registration ?? 'Unknown'}</td>
                                         <td className="p-3">{estimate.issueDate ?? 'N/A'}</td>
                                         <td className="p-3">
@@ -289,6 +298,11 @@ const EstimatesView = ({ onOpenEstimateModal, onViewEstimate, onSmartCreateClick
                                             <div className="flex gap-1" onClick={e => e.stopPropagation()}>
                                                 <button onClick={() => onViewEstimate(estimate)} className="p-1.5 text-gray-600 hover:bg-gray-100 rounded-full" title="View"><Eye size={16} /></button>
                                                 <button onClick={() => onOpenEstimateModal(estimate)} className="p-1.5 text-indigo-600 hover:bg-indigo-100 rounded-full" title="Edit"><Edit size={16} /></button>
+                                                {!estimate.jobId && onCreateInquiry && (
+                                                    <button onClick={() => onCreateInquiry(estimate)} className="p-1.5 text-orange-600 hover:bg-orange-100 rounded-full" title="Log Inquiry">
+                                                        <MessageSquare size={16} />
+                                                    </button>
+                                                )}
                                             </div>
                                         </td>
                                     </tr>

@@ -118,7 +118,7 @@ const RoleFormModal: React.FC<RoleFormModalProps> = ({ isOpen, onClose, onSave, 
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex justify-center items-center p-4">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl transform transition-all opacity-100 scale-100 m-8">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl transform transition-all opacity-100 scale-100 m-8">
                 <form onSubmit={handleSubmit}>
                     <div className="px-8 py-6 border-b border-slate-200 flex justify-between items-center">
                         <h2 className="text-xl font-black text-slate-700 uppercase tracking-wider flex items-center gap-3">

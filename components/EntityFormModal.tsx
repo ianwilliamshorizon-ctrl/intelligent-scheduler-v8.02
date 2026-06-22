@@ -171,7 +171,7 @@ const EntityFormModal: React.FC<EntityFormModalProps> = ({ isOpen, onClose, onSa
     ];
 
     return (
-        <FormModal isOpen={isOpen} onClose={onClose} onSave={handleSave} title={`Manage Entity: ${formData.name || 'New'}`} maxWidth="max-w-4xl">
+        <FormModal isOpen={isOpen} onClose={onClose} onSave={handleSave} title={`Manage Entity: ${formData.name || 'New'}`} maxWidth="max-w-5xl">
             <div className="flex flex-col h-[70vh]">
                 {/* Internal Tabs */}
                 <div className="flex border-b mb-6 overflow-x-auto no-scrollbar">

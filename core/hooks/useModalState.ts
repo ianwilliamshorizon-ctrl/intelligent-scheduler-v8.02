@@ -9,6 +9,8 @@ export interface ModalState {
     isSmartCreateOpen: boolean;
     smartCreateMode: 'job' | 'estimate';
     smartCreateDefaultDate: Date | null;
+    smartCreateInitialPrompt: string | null;
+    smartCreateInquiryId: string | null;
     poModal: { isOpen: boolean; po: T.PurchaseOrder | null };
     batchPoModalOpen: boolean;
     batchUpdatePoRefModalOpen: boolean;
@@ -40,8 +42,9 @@ export interface ModalState {
     checkOutJob: T.Job | null;
     exportModal: { isOpen: boolean; type: 'invoices' | 'purchaseOrders' | 'jobs' | 'estimates'; items: any[] };
     customerModal: { isOpen: boolean; customerId: string | null };
-    vehicleModal: { isOpen: boolean; vehicleId: string | null };
+    vehicleModal: { isOpen: boolean; vehicleId: string | null; initialCustomerId?: string | null };
     vehicleHistoryReportModal: { isOpen: boolean; vehicleId: string | null };
+    linkEstimateModal: { isOpen: boolean; inquiry: T.Inquiry | null };
 }
 
 export interface ModalSetters {
@@ -52,6 +55,8 @@ export interface ModalSetters {
     setIsSmartCreateOpen: React.Dispatch<React.SetStateAction<boolean>>;
     setSmartCreateMode: React.Dispatch<React.SetStateAction<'job' | 'estimate'>>;
     setSmartCreateDefaultDate: React.Dispatch<React.SetStateAction<Date | null>>;
+    setSmartCreateInitialPrompt: React.Dispatch<React.SetStateAction<string | null>>;
+    setSmartCreateInquiryId: React.Dispatch<React.SetStateAction<string | null>>;
     setPoModal: React.Dispatch<React.SetStateAction<{ isOpen: boolean; po: T.PurchaseOrder | null }>>;
     setBatchPoModalOpen: React.Dispatch<React.SetStateAction<boolean>>;
     setBatchUpdatePoRefModalOpen: React.Dispatch<React.SetStateAction<boolean>>;
@@ -83,8 +88,9 @@ export interface ModalSetters {
     setCheckOutJob: React.Dispatch<React.SetStateAction<T.Job | null>>;
     setExportModal: React.Dispatch<React.SetStateAction<{ isOpen: boolean; type: 'invoices' | 'purchaseOrders' | 'jobs' | 'estimates'; items: any[] }>>;
     setCustomerModal: React.Dispatch<React.SetStateAction<{ isOpen: boolean; customerId: string | null }>>;
-    setVehicleModal: React.Dispatch<React.SetStateAction<{ isOpen: boolean; vehicleId: string | null }>>;
+    setVehicleModal: React.Dispatch<React.SetStateAction<{ isOpen: boolean; vehicleId: string | null; initialCustomerId?: string | null }>>;
     setVehicleHistoryReportModal: React.Dispatch<React.SetStateAction<{ isOpen: boolean; vehicleId: string | null }>>;
+    setLinkEstimateModal: React.Dispatch<React.SetStateAction<{ isOpen: boolean; inquiry: T.Inquiry | null }>>;
 }
 
 const useModalState = (): [ModalState, ModalSetters] => {
@@ -95,6 +101,8 @@ const useModalState = (): [ModalState, ModalSetters] => {
     const [isSmartCreateOpen, setIsSmartCreateOpen] = useState(false);
     const [smartCreateMode, setSmartCreateMode] = useState<'job' | 'estimate'>('job');
     const [smartCreateDefaultDate, setSmartCreateDefaultDate] = useState<Date | null>(null);
+    const [smartCreateInitialPrompt, setSmartCreateInitialPrompt] = useState<string | null>(null);
+    const [smartCreateInquiryId, setSmartCreateInquiryId] = useState<string | null>(null);
     const [poModal, setPoModal] = useState<{ isOpen: boolean; po: T.PurchaseOrder | null }>({ isOpen: false, po: null });
     const [batchPoModalOpen, setBatchPoModalOpen] = useState(false);
     const [batchUpdatePoRefModalOpen, setBatchUpdatePoRefModalOpen] = useState(false);
@@ -126,28 +134,29 @@ const useModalState = (): [ModalState, ModalSetters] => {
     const [checkOutJob, setCheckOutJob] = useState<T.Job | null>(null);
     const [exportModal, setExportModal] = useState<{ isOpen: boolean; type: 'invoices' | 'purchaseOrders' | 'jobs' | 'estimates'; items: any[] }>({ isOpen: false, type: 'invoices', items: [] });
     const [customerModal, setCustomerModal] = useState<{ isOpen: boolean; customerId: string | null }>({ isOpen: false, customerId: null });
-    const [vehicleModal, setVehicleModal] = useState<{ isOpen: boolean; vehicleId: string | null }>({ isOpen: false, vehicleId: null });
+    const [vehicleModal, setVehicleModal] = useState<{ isOpen: boolean; vehicleId: string | null; initialCustomerId?: string | null }>({ isOpen: false, vehicleId: null });
     const [vehicleHistoryReportModal, setVehicleHistoryReportModal] = useState<{ isOpen: boolean; vehicleId: string | null }>({ isOpen: false, vehicleId: null });
+    const [linkEstimateModal, setLinkEstimateModal] = useState<{ isOpen: boolean; inquiry: T.Inquiry | null }>({ isOpen: false, inquiry: null });
 
     const state = { 
-        isEditJobModalOpen, selectedJobId, editJobInitialTab, partModal, isSmartCreateOpen, smartCreateMode, smartCreateDefaultDate,
+        isEditJobModalOpen, selectedJobId, editJobInitialTab, partModal, isSmartCreateOpen, smartCreateMode, smartCreateDefaultDate, smartCreateInitialPrompt, smartCreateInquiryId,
         poModal, batchPoModalOpen, batchUpdatePoRefModalOpen, viewPoModal, invoiceFormModal, viewInvoiceModal, salesInvoiceModal,
         rentalBookingModal, rentalConditionModal, rentalAgreementModal, rentalReturnReportModal,
         sorContractModal, ownerStatementModal, internalStatementModal, vehicleOrderFormModal, salesReportModal, prospectsReportModal, addSaleVehicleModalOpen,
         manageSaleVehicleModal, prospectModal, estimateFormModal, estimateViewModal, scheduleJobFromEstimateModal,
         scheduleEmailModal, inquiryModal, isAssistantOpen, assistantContextJobId, checkInJob, checkOutJob,
-        exportModal, customerModal, vehicleModal, vehicleHistoryReportModal
+        exportModal, customerModal, vehicleModal, vehicleHistoryReportModal, linkEstimateModal
     };
 
     const setters = { 
-        setIsEditJobModalOpen, setSelectedJobId, setEditJobInitialTab, setPartModal, setIsSmartCreateOpen, setSmartCreateMode, setSmartCreateDefaultDate, 
+        setIsEditJobModalOpen, setSelectedJobId, setEditJobInitialTab, setPartModal, setIsSmartCreateOpen, setSmartCreateMode, setSmartCreateDefaultDate, setSmartCreateInitialPrompt, setSmartCreateInquiryId,
         setPoModal, setBatchPoModalOpen, setBatchUpdatePoRefModalOpen, setViewPoModal, setInvoiceFormModal, setViewInvoiceModal,
         setSalesInvoiceModal, setRentalBookingModal, setRentalConditionModal, setRentalAgreementModal,
         setRentalReturnReportModal, setSorContractModal, setOwnerStatementModal, setInternalStatementModal, setVehicleOrderFormModal,
         setSalesReportModal, setProspectsReportModal, setAddSaleVehicleModalOpen, setManageSaleVehicleModal, setProspectModal,
         setEstimateFormModal, setEstimateViewModal, setScheduleJobFromEstimateModal, setScheduleEmailModal,
         setInquiryModal, setIsAssistantOpen, setAssistantContextJobId, setCheckInJob, setCheckOutJob, 
-        setExportModal, setCustomerModal, setVehicleModal, setVehicleHistoryReportModal
+        setExportModal, setCustomerModal, setVehicleModal, setVehicleHistoryReportModal, setLinkEstimateModal
     };
 
     return [state, setters];

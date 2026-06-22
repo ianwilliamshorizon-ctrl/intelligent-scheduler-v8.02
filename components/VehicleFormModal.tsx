@@ -6,12 +6,13 @@ import {
     Loader2, Search, Briefcase, History, 
     Eye, ArrowRightLeft, ShieldCheck, AlertCircle, 
     Printer, Car, Shield, XCircle, AlertTriangle,
-    Database, User, ExternalLink, Plus, RefreshCw
+    Database, User, ExternalLink, Plus, RefreshCw, MessageSquare
 } from 'lucide-react';
 import SearchableSelect from './SearchableSelect';
 import { useAuditLogger } from '../core/hooks/useAuditLogger';
 import VehicleImageManager from './VehicleImageManager';
 import { useApp } from '../core/state/AppContext';
+import { useData } from '../core/state/DataContext';
 import * as T from '../types';
 import { formatCurrency } from '../utils/formatUtils';
 import { formatDate, dateStringToDate } from '../core/utils/dateUtils';
@@ -62,6 +63,7 @@ interface VehicleFormModalProps {
     onViewEstimate?: (estimate: Estimate) => void;
     onViewInvoice?: (invoice: LocalInvoice) => void;
     onViewCustomer?: (customerId: string) => void;
+    onViewInquiry?: (inquiry: any) => void;
     onOpenPurchaseOrder?: (po: T.PurchaseOrder) => void;
     initialCustomerId?: string;
     initialRegistration?: string;
@@ -71,7 +73,7 @@ interface VehicleFormModalProps {
 
 const VehicleFormModal: React.FC<VehicleFormModalProps> = ({ 
     isOpen, onClose, onSave, vehicle, customers, jobs, estimates, invoices, purchaseOrders,
-    onViewJob, onViewEstimate, onViewInvoice, onViewCustomer, onOpenPurchaseOrder, initialCustomerId, onSaveWithCustomer, initialRegistration, vehicles,
+    onViewJob, onViewEstimate, onViewInvoice, onViewCustomer, onOpenPurchaseOrder, onViewInquiry, initialCustomerId, onSaveWithCustomer, initialRegistration, vehicles,
     onSaveCustomer
 }) => {
     const [formData, setFormData] = useState<any>({});
@@ -135,11 +137,16 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
     }
 
     const getInvoiceTotal = (inv: any) => inv.lineItems?.reduce((sum: number, item: any) => sum + (item.quantity * item.unitPrice), 0) || 0;
-    const getEstimateTotal = (est: Estimate) => est.lineItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
+    const getEstimateTotal = (est: Estimate) => est.lineItems.reduce((sum, item) => sum + (item.isOptional ? 0 : (item.quantity * item.unitPrice)), 0);
 
     const vehicleJobs = useMemo(() => (jobs || []).filter(j => j.vehicleId === formData.id).sort((a,b) => (b.createdAt || '').localeCompare(a.createdAt || '')), [jobs, formData.id]);
     const vehicleEstimates = useMemo(() => (estimates || []).filter(e => e.vehicleId === formData.id).sort((a,b) => (b.issueDate || '').localeCompare(a.issueDate || '')), [estimates, formData.id]);
     const vehicleInvoices = useMemo(() => (invoices || []).filter(i => i.vehicleId === formData.id).sort((a,b) => (b.issueDate || '').localeCompare(a.issueDate || '')), [invoices, formData.id]);
+    const { inquiries } = useData();
+    const vehicleInquiries = useMemo(() => 
+        (inquiries || []).filter((i: any) => i.linkedVehicleId === formData.id)
+        .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()), 
+    [inquiries, formData.id]);
     const vehiclePurchases = useMemo(() => {
         const reg = formData.registration?.toUpperCase().replace(/\s/g, '');
         if (!reg) return [];
@@ -534,6 +541,30 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
                                             <span className="text-gray-500 font-mono">{inv.issueDate}</span>
                                             <span className="flex-1 px-2 font-bold text-green-900">#{inv.id.slice(-6)}</span>
                                             <span className="font-extrabold">{formatCurrency(getInvoiceTotal(inv))}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            {vehicleInquiries.length > 0 && (
+                                <div className="space-y-1 mt-4">
+                                    <h5 className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest">Inquiries</h5>
+                                    {vehicleInquiries.map((inq: any) => (
+                                        <div key={inq.id} className="text-xs p-2 border rounded bg-white shadow-sm hover:border-indigo-300 cursor-pointer transition-colors" onClick={() => onViewInquiry?.(inq)}>
+                                            <div className="flex justify-between items-center mb-1">
+                                                <span className="font-bold text-indigo-600 line-clamp-1 flex-1">{inq.fromName}</span>
+                                                <span className="text-gray-500 font-mono shrink-0 ml-2">{new Date(inq.createdAt).toLocaleDateString()}</span>
+                                            </div>
+                                            <p className="text-gray-700 line-clamp-2">{inq.message}</p>
+                                            <div className="mt-1 flex">
+                                                <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${
+                                                    inq.status === 'New' ? 'bg-red-100 text-red-700' :
+                                                    inq.status === 'Closed' ? 'bg-green-100 text-green-700' :
+                                                    'bg-blue-100 text-blue-700'
+                                                }`}>
+                                                    {inq.status}
+                                                </span>
+                                            </div>
                                         </div>
                                     ))}
                                 </div>

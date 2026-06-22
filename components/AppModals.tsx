@@ -46,6 +46,7 @@ const VehicleFormModal = lazy(() => import('./VehicleFormModal'));
 const VehicleHistoryReportModal = lazy(() => import('./VehicleHistoryReportModal'));
 const PartFormModal = lazy(() => import('./PartFormModal'));
 const BatchUpdatePORefModal = lazy(() => import('./BatchUpdatePORefModal'));
+const LinkEstimateModal = lazy(() => import('./LinkEstimateModal'));
 
 const ModalSuspense: React.FC<{ children: React.ReactNode }> = ({ children }) => (
     <Suspense fallback={
@@ -219,28 +220,50 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                             setters.setIsSmartCreateOpen(false); 
                         }}
                         onEstimateCreate={async (estData) => { 
-                            await handleSaveItem(data.setEstimates, estData, 'brooks_estimates'); 
-                            if (estData.jobId) await workshopActions.syncPurchaseOrdersFromEstimate(estData, { forceNew: true });
+                            const estWithInquiry = { ...estData, linkedInquiryId: modals.smartCreateInquiryId || estData.linkedInquiryId };
+                            await handleSaveItem(data.setEstimates, estWithInquiry, 'brooks_estimates'); 
+                            if (estWithInquiry.jobId) await workshopActions.syncPurchaseOrdersFromEstimate(estWithInquiry, { forceNew: true });
+                            
+                            if (modals.smartCreateInquiryId) {
+                                const inq = data.inquiries.find(i => i.id === modals.smartCreateInquiryId);
+                                if (inq) await handleSaveItem(data.setInquiries, { ...inq, status: 'Quoted or Responded', linkedEstimateId: estWithInquiry.id }, 'brooks_inquiries');
+                                setters.setSmartCreateInquiryId(null);
+                            }
                             setters.setIsSmartCreateOpen(false); 
                         }}
                         onVehicleAndEstimateCreate={async (c, v, e) => { 
                             await handleSaveItem(actions.setCustomers, c, 'brooks_customers'); 
                             await handleSaveItem(actions.setVehicles, v, 'brooks_vehicles'); 
-                            await handleSaveItem(data.setEstimates, e, 'brooks_estimates'); 
-                            if (e.jobId) await workshopActions.syncPurchaseOrdersFromEstimate(e, { forceNew: true });
+                            const estWithInquiry = { ...e, linkedInquiryId: modals.smartCreateInquiryId || e.linkedInquiryId };
+                            await handleSaveItem(data.setEstimates, estWithInquiry, 'brooks_estimates'); 
+                            if (estWithInquiry.jobId) await workshopActions.syncPurchaseOrdersFromEstimate(estWithInquiry, { forceNew: true });
+
+                            if (modals.smartCreateInquiryId) {
+                                const inq = data.inquiries.find(i => i.id === modals.smartCreateInquiryId);
+                                if (inq) await handleSaveItem(data.setInquiries, { ...inq, status: 'Quoted or Responded', linkedEstimateId: estWithInquiry.id }, 'brooks_inquiries');
+                                setters.setSmartCreateInquiryId(null);
+                            }
                             setters.setIsSmartCreateOpen(false); 
                         }}
                         onCustomerAndEstimateCreate={async (c, e) => { 
                             await handleSaveItem(actions.setCustomers, c, 'brooks_customers'); 
-                            await handleSaveItem(data.setEstimates, e, 'brooks_estimates'); 
-                            if (e.jobId) await workshopActions.syncPurchaseOrdersFromEstimate(e, { forceNew: true });
+                            const estWithInquiry = { ...e, linkedInquiryId: modals.smartCreateInquiryId || e.linkedInquiryId };
+                            await handleSaveItem(data.setEstimates, estWithInquiry, 'brooks_estimates'); 
+                            if (estWithInquiry.jobId) await workshopActions.syncPurchaseOrdersFromEstimate(estWithInquiry, { forceNew: true });
+
+                            if (modals.smartCreateInquiryId) {
+                                const inq = data.inquiries.find(i => i.id === modals.smartCreateInquiryId);
+                                if (inq) await handleSaveItem(data.setInquiries, { ...inq, status: 'Quoted or Responded', linkedEstimateId: estWithInquiry.id }, 'brooks_inquiries');
+                                setters.setSmartCreateInquiryId(null);
+                            }
                             setters.setIsSmartCreateOpen(false); 
                         }}
                         vehicles={data.vehicles}
                         customers={data.customers}
                         servicePackages={data.servicePackages}
                         defaultDate={formatDate(modals.smartCreateDefaultDate)}
-                        initialPrompt={null}
+                        initialPrompt={modals.smartCreateInitialPrompt}
+                        inquiryId={modals.smartCreateInquiryId}
                     />
                 </ModalSuspense>
             )}
@@ -611,6 +634,7 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                         selectedEntityId={selectedEntityId}
                         onSavePart={(part) => handleSaveItem(data.setParts, part, 'brooks_parts')}
                         suppliers={data.suppliers}
+                        discountCodes={data.discountCodes}
                     />
                 </ModalSuspense>
             )}
@@ -640,6 +664,65 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                         onCreateInquiry={(est) => setters.setInquiryModal({isOpen: true, inquiry: { linkedEstimateId: est.id, linkedCustomerId: est.customerId, linkedVehicleId: est.vehicleId, message: `Question regarding Estimate #${est.estimateNumber}` }})}
                         onScheduleEstimate={(est, inquiryId) => setters.setScheduleJobFromEstimateModal({isOpen: true, estimate: est, inquiryId})}
                         onEdit={(est) => setters.setEstimateFormModal({ isOpen: true, estimate: est })}
+                    />
+                </ModalSuspense>
+            )}
+
+            {modals.linkEstimateModal.isOpen && modals.linkEstimateModal.inquiry && (
+                <ModalSuspense>
+                    <LinkEstimateModal 
+                        isOpen={true}
+                        onClose={() => setters.setLinkEstimateModal({ isOpen: false, inquiry: null })}
+                        inquiry={modals.linkEstimateModal.inquiry}
+                        estimates={data.estimates}
+                        customers={data.customers}
+                        vehicles={data.vehicles}
+                        onLinkExisting={async (estimateId) => {
+                            const est = data.estimates.find(e => e.id === estimateId);
+                            const inquiry = modals.linkEstimateModal.inquiry;
+                            if (est && inquiry) {
+                                const updatedEst = { ...est, linkedInquiryId: inquiry.id };
+                                await handleSaveItem(data.setEstimates, updatedEst, 'brooks_estimates');
+                                
+                                const updatedInq = { 
+                                    ...inquiry, 
+                                    status: 'Quoted or Responded' as const, 
+                                    linkedEstimateId: est.id,
+                                    logs: [...(inquiry.logs || []), {
+                                        id: crypto.randomUUID(),
+                                        timestamp: new Date().toISOString(),
+                                        userId: currentUser.id,
+                                        actionType: 'Status Update',
+                                        notes: `Status updated to Quoted or Responded via linking to Estimate #${est.estimateNumber}.`
+                                    }]
+                                };
+                                await handleSaveItem(data.setInquiries, updatedInq, 'brooks_inquiries');
+                            }
+                        }}
+                        onCreateNew={() => {
+                            const inq = modals.linkEstimateModal.inquiry;
+                            if (inq) {
+                                setters.setEstimateFormModal({
+                                    isOpen: true, 
+                                    estimate: { 
+                                        customerId: inq.linkedCustomerId || '', 
+                                        vehicleId: inq.linkedVehicleId || '', 
+                                        entityId: inq.entityId || selectedEntityId, 
+                                        status: 'Draft', 
+                                        linkedInquiryId: inq.id 
+                                    } as Partial<T.Estimate>
+                                });
+                            }
+                        }}
+                        onSmartCreate={(prompt) => {
+                            const inq = modals.linkEstimateModal.inquiry;
+                            if (inq) {
+                                setters.setSmartCreateInitialPrompt(prompt);
+                                setters.setSmartCreateInquiryId(inq.id);
+                                setters.setSmartCreateMode('estimate');
+                                setters.setIsSmartCreateOpen(true);
+                            }
+                        }}
                     />
                 </ModalSuspense>
             )}
@@ -698,7 +781,7 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                                 if (inquiry) {
                                     const updatedInquiry = {
                                         ...inquiry, 
-                                        status: 'In Progress',
+                                        status: 'Closed' as const,
                                         linkedJobId: jobToSave.id,
                                         logs: [...(inquiry.logs || []), {
                                             id: crypto.randomUUID(),
@@ -801,6 +884,27 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                         onViewEstimate={(est) => setters.setEstimateViewModal({ isOpen: true, estimate: est })}
                         onScheduleEstimate={(est, inqId) => setters.setScheduleJobFromEstimateModal({ isOpen: true, estimate: est, inquiryId: inqId })}
                         onEditEstimate={(est) => setters.setEstimateFormModal({ isOpen: true, estimate: est })}
+                        onAddNewCustomer={() => setters.setCustomerModal({ isOpen: true, customerId: null })}
+                        onCreateNewEstimate={(inq) => {
+                            setters.setInquiryModal({ isOpen: false, inquiry: null });
+                            setters.setEstimateFormModal({
+                                isOpen: true, 
+                                estimate: { 
+                                    customerId: inq.linkedCustomerId || '', 
+                                    vehicleId: inq.linkedVehicleId || '', 
+                                    entityId: inq.entityId || selectedEntityId, 
+                                    status: 'Draft', 
+                                    linkedInquiryId: inq.id 
+                                } as Partial<T.Estimate>
+                            });
+                        }}
+                        onSmartCreateEstimate={(inq, prompt) => {
+                            setters.setInquiryModal({ isOpen: false, inquiry: null });
+                            setters.setSmartCreateInitialPrompt(prompt);
+                            setters.setSmartCreateInquiryId(inq.id);
+                            setters.setSmartCreateMode('estimate');
+                            setters.setIsSmartCreateOpen(true);
+                        }}
                     />
                 </ModalSuspense>
             )}
@@ -832,7 +936,7 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                 </ModalSuspense>
             )}
 
-            {modals.customerModal?.isOpen && modals.customerModal?.customerId && (
+            {modals.customerModal?.isOpen && (
                 <ModalSuspense>
                     <CustomerFormModal
                         isOpen={modals.customerModal.isOpen}
@@ -844,18 +948,20 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                         vehicles={data.vehicles}
                         estimates={data.estimates}
                         invoices={data.invoices}
-                        onViewVehicle={(vehicleId) => { setters.setCustomerModal({ isOpen: false, customerId: null }); setters.setVehicleModal({ isOpen: true, vehicleId: vehicleId }); }}
+                        onViewVehicle={(vehicleId, customerId) => { setters.setCustomerModal({ isOpen: false, customerId: null }); setters.setVehicleModal({ isOpen: true, vehicleId: vehicleId, initialCustomerId: customerId }); }}
+                        onViewInquiry={(inquiry) => { setters.setCustomerModal({ isOpen: false, customerId: null }); setters.setInquiryModal({ isOpen: true, inquiry }); }}
                     />
                 </ModalSuspense>
             )}
 
-            {modals.vehicleModal?.isOpen && modals.vehicleModal?.vehicleId && (
+            {modals.vehicleModal?.isOpen && (
                 <ModalSuspense>
                     <VehicleFormModal
                         isOpen={modals.vehicleModal.isOpen}
                         onClose={() => setters.setVehicleModal({ isOpen: false, vehicleId: null })}
                         onSave={(v) => handleSaveItem(actions.setVehicles, v, 'brooks_vehicles')}
                         vehicle={data.vehicles.find(v => v.id === modals.vehicleModal.vehicleId) || null}
+                        initialCustomerId={modals.vehicleModal.initialCustomerId || undefined}
                         customers={data.customers}
                         onSaveCustomer={(c) => handleSaveItem(actions.setCustomers, c, 'brooks_customers')}
                         jobs={data.jobs}
@@ -867,6 +973,7 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                         onViewInvoice={(invoice) => { setters.setVehicleModal({ isOpen: false, vehicleId: null }); setters.setViewInvoiceModal({ isOpen: true, invoice: invoice }); }}
                         onViewCustomer={(customerId) => { setters.setVehicleModal({ isOpen: false, vehicleId: null }); setters.setCustomerModal({ isOpen: true, customerId: customerId }); }}
                         onOpenPurchaseOrder={(po) => { setters.setVehicleModal({ isOpen: false, vehicleId: null }); setters.setViewPoModal({ isOpen: true, po }); }}
+                        onViewInquiry={(inquiry) => { setters.setVehicleModal({ isOpen: false, vehicleId: null }); setters.setInquiryModal({ isOpen: true, inquiry }); }}
                         vehicles={data.vehicles}
                     />
                 </ModalSuspense>

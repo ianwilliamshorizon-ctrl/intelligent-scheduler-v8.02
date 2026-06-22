@@ -69,8 +69,8 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
                 canViewPricing={true}
                 depositAmount={Number(depositAmount || 0)}
                 totals={{ 
-                    totalNet: (estimate.lineItems || []).reduce((sum, item) => sum + ((item.quantity || 1) * (item.unitPrice || 0)), 0),
-                    grandTotal: (estimate.lineItems || []).reduce((sum, item) => sum + ((item.quantity || 1) * (item.unitPrice || 0)), 0),
+                    totalNet: (estimate.lineItems || []).reduce((sum, item) => sum + (item.isOptional ? 0 : ((item.quantity || 1) * (item.unitPrice || 0))), 0),
+                    grandTotal: (estimate.lineItems || []).reduce((sum, item) => sum + (item.isOptional ? 0 : ((item.quantity || 1) * (item.unitPrice || 0))), 0),
                     vatBreakdown: [] 
                 }}
             />

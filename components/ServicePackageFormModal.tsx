@@ -243,7 +243,7 @@ const ServicePackageFormModal = ({ isOpen, onClose, onSave, servicePackage, taxR
 
     return (
         <>
-            <FormModal isOpen={isOpen} onClose={onClose} onSave={handleSave} title={servicePackage?.id ? "Edit Service Package" : "Add Service Package"} maxWidth="max-w-6xl">
+            <FormModal isOpen={isOpen} onClose={onClose} onSave={handleSave} title={servicePackage?.id ? "Edit Service Package" : "Add Service Package"} maxWidth="max-w-7xl">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <div className="md:col-span-2">
                         <label className="block text-sm font-medium text-gray-700 mb-1">Business Entity</label>

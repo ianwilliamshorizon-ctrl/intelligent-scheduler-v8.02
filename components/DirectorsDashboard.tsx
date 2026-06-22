@@ -180,7 +180,7 @@ const DirectorsDashboard: React.FC = () => {
             if (buckets.has(monthKey)) {
                 const b = buckets.get(monthKey)!;
                 b.estimatesCount++;
-                b.estimatesValue += (est.lineItems || []).reduce((acc, li) => acc + ((li.unitPrice || 0) * (li.quantity || 0)), 0);
+                b.estimatesValue += (est.lineItems || []).reduce((acc, li) => acc + (li.isOptional ? 0 : ((li.unitPrice || 0) * (li.quantity || 0))), 0);
             }
         });
 

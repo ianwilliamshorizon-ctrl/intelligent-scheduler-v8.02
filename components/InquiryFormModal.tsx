@@ -4,7 +4,7 @@ import FormModal from './FormModal';
 import SearchableSelect from './SearchableSelect';
 import { useApp } from '../core/state/AppContext';
 import { getCustomerDisplayName } from '../core/utils/customerUtils';
-import { Wand2, Loader2, Link as LinkIcon, UserCheck, Car, XCircle, User as UserIcon, FileText, CalendarCheck, Edit, Camera } from 'lucide-react';
+import { Wand2, Loader2, Link as LinkIcon, UserCheck, Car, XCircle, User as UserIcon, FileText, CalendarCheck, Edit, Camera, PlusCircle } from 'lucide-react';
 import { parseInquiryMessage, generateEmailReply } from '../core/services/geminiService';
 import { sendOutboundEmail } from '../core/services/emailService';
 import { useData } from '../core/state/DataContext';
@@ -24,6 +24,9 @@ interface InquiryFormModalProps {
     onOpenPurchaseOrder?: (po: PurchaseOrder) => void;
     onEditEstimate?: (estimate: Estimate) => void;
     updateEstimate?: (estimate: Estimate) => void;
+    onAddNewCustomer?: () => void;
+    onCreateNewEstimate?: (inquiry: Inquiry) => void;
+    onSmartCreateEstimate?: (inquiry: Inquiry, prompt: string) => void;
 }
 
 // FIXED: Added updateEstimate to the destructuring list below
@@ -39,9 +42,12 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
     onViewEstimate, 
     onScheduleEstimate, 
     onEditEstimate,
-    updateEstimate 
+    updateEstimate,
+    onAddNewCustomer,
+    onCreateNewEstimate,
+    onSmartCreateEstimate
 }) => {
-    const { currentUser, selectedEntityId } = useApp();
+    const { currentUser, selectedEntityId, businessEntities: entities } = useApp();
     const { purchaseOrders, inquiries } = useData();
     const [formData, setFormData] = useState<Partial<Inquiry>>({});
     const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -64,20 +70,19 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                 if (prev && prev.id === inquiry.id) return prev;
                 return { ...inquiry };
             } else {
-                // If it's a new inquiry, only reset if we don't have a partial form already
-                if (prev && !prev.id) return prev;
-
+                // Initialize a new inquiry, using any pre-filled data provided
                 return {
-                    entityId: selectedEntityId,
-                    fromName: '',
-                    fromContact: '',
-                    fromEmail: '',
-                    fromPhone: '',
-                    message: '',
-                    status: 'New',
-                    actionNotes: '',
+                    entityId: inquiry?.entityId || (selectedEntityId === 'all' ? (entities && entities.length > 0 ? entities[0].id : '') : selectedEntityId),
+                    fromName: inquiry?.fromName || '',
+                    fromContact: inquiry?.fromContact || '',
+                    fromEmail: inquiry?.fromEmail || '',
+                    fromPhone: inquiry?.fromPhone || '',
+                    message: inquiry?.message || '',
+                    status: inquiry?.status || 'New',
+                    actionNotes: inquiry?.actionNotes || '',
                     takenByUserId: currentUser.id,
                     assignedToUserId: '',
+                    assignedToEntityId: '',
                     logs: [{
                         id: crypto.randomUUID(),
                         timestamp: new Date().toISOString(),
@@ -85,9 +90,9 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                         actionType: 'Created',
                         notes: 'Inquiry initialized'
                     }],
-                    linkedCustomerId: null,
-                    linkedVehicleId: null,
-                    linkedEstimateId: null,
+                    linkedCustomerId: inquiry?.linkedCustomerId || null,
+                    linkedVehicleId: inquiry?.linkedVehicleId || null,
+                    linkedEstimateId: inquiry?.linkedEstimateId || null,
                 };
             }
         });
@@ -98,7 +103,29 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
     }, [isOpen, inquiry, selectedEntityId]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-        setFormData(p => ({ ...p, [e.target.name]: e.target.value }));
+        const { name, value } = e.target;
+        
+        setFormData(p => {
+            const nextData = { ...p, [name]: value };
+
+            if (name === 'fromName' && value.length > 2) {
+                const lowerName = value.toLowerCase().trim();
+                const existingCustomer = customers.find(c => 
+                    getCustomerDisplayName(c).toLowerCase() === lowerName || 
+                    (c.companyName || '').toLowerCase() === lowerName
+                );
+
+                if (existingCustomer && !p.linkedCustomerId) {
+                    nextData.linkedCustomerId = existingCustomer.id;
+                    nextData.fromEmail = nextData.fromEmail || existingCustomer.email || '';
+                    nextData.fromPhone = nextData.fromPhone || existingCustomer.phone || existingCustomer.mobile || '';
+                    // Also clear suggested customer since we auto-linked
+                    setSuggestedCustomer(null);
+                }
+            }
+
+            return nextData;
+        });
     };
 
     const handleSave = () => {
@@ -158,7 +185,7 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Column 1 - Core Message & Links */}
                 <div className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-3">
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">From (Name)*</label>
                             <input name="fromName" value={formData.fromName || ''} onChange={handleChange} className="w-full p-2 border rounded" required />
@@ -188,9 +215,9 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                         // Update form data with extracted info
                                         setFormData(p => ({
                                             ...p,
-                                            fromName: p.fromName || parsed.fromName || '',
-                                            fromEmail: p.fromEmail || parsed.fromEmail || '',
-                                            fromPhone: p.fromPhone || parsed.fromPhone || '',
+                                            fromName: parsed.fromName || p.fromName || '',
+                                            fromEmail: parsed.fromEmail || p.fromEmail || '',
+                                            fromPhone: parsed.fromPhone || p.fromPhone || '',
                                         }));
 
                                         // Try to find matching customer/vehicle
@@ -352,6 +379,18 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                     />
                                 )}
                             </div>
+
+                            {(!linkedCustomer || !linkedVehicle) && onAddNewCustomer && (
+                                <div className="pt-2 border-t mt-2">
+                                    <button 
+                                        type="button" 
+                                        onClick={onAddNewCustomer}
+                                        className="w-full py-1.5 flex justify-center items-center gap-1.5 text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded transition"
+                                    >
+                                        <UserCheck size={14} /> Create Customer / Vehicle
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -363,12 +402,18 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                         
                         <div className="grid grid-cols-1 gap-4">
                             <div>
+                                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Branch / Entity</label>
+                                <select name="entityId" value={formData.entityId || ''} onChange={handleChange} className="w-full p-2 border rounded text-sm bg-gray-50">
+                                    {entities?.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                                </select>
+                            </div>
+                            <div>
                                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Status</label>
                                 <select name="status" value={formData.status || 'New'} onChange={handleChange} className="w-full p-2 border rounded text-sm bg-gray-50">
                                     <option value="New">New</option>
                                     <option value="Immediate Quote">Immediate Quote</option>
                                     <option value="Escalated/Urgent">Escalated/Urgent</option>
-                                    <option value="In Progress">In Progress</option>
+                                    <option value="Scheduled">Scheduled</option>
                                     <option value="Quoted or Responded">Quoted or Responded</option>
                                     <option>Rejected</option>
                                     <option>Closed</option>
@@ -403,22 +448,40 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                 <div>
                                     <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Assigned To</label>
                                     <SearchableSelect
-                                        options={users.map(u => ({ id: u.id, label: u.name, value: u.id }))}
-                                        defaultValue={formData.assignedToUserId || null}
+                                        options={[
+                                            ...users.map(u => ({ id: u.id, label: `👤 ${u.name}`, value: `user_${u.id}` })),
+                                            ...(entities || []).map(e => ({ id: e.id, label: `🏢 ${e.name} (Team)`, value: `entity_${e.id}` }))
+                                        ]}
+                                        defaultValue={
+                                            formData.assignedToUserId ? `user_${formData.assignedToUserId}` : 
+                                            formData.assignedToEntityId ? `entity_${formData.assignedToEntityId}` : null
+                                        }
                                         onSelect={(value) => {
-                                            if (value !== formData.assignedToUserId) {
-                                                const userName = users.find(u => u.id === value)?.name || value;
+                                            if (!value) return;
+                                            const isUser = value.startsWith('user_');
+                                            const id = value.replace(/^(user_|entity_)/, '');
+                                            
+                                            const prevId = formData.assignedToUserId || formData.assignedToEntityId;
+                                            if (id !== prevId) {
+                                                const assignName = isUser 
+                                                    ? users.find(u => u.id === id)?.name || id
+                                                    : entities?.find(e => e.id === id)?.name || id;
                                                 const newLog = {
                                                     id: crypto.randomUUID(),
                                                     timestamp: new Date().toISOString(),
                                                     userId: currentUser.id,
                                                     actionType: 'Assigned',
-                                                    notes: `Assigned To changed to: ${userName}`
+                                                    notes: `Assigned To changed to: ${assignName}`
                                                 };
-                                                setFormData(p => ({ ...p, assignedToUserId: value, logs: [...(p.logs || []), newLog] }));
+                                                setFormData(p => ({ 
+                                                    ...p, 
+                                                    assignedToUserId: isUser ? id : undefined,
+                                                    assignedToEntityId: !isUser ? id : undefined,
+                                                    logs: [...(p.logs || []), newLog] 
+                                                }));
                                             }
                                         }}
-                                        placeholder="Assign to..."
+                                        placeholder="Assign to user or team..."
                                     />
                                 </div>
                             </div>
@@ -576,7 +639,7 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
 
                 {/* Column 3 - Remainder (Logs, Estimate, Attachments) */}
                 <div className="space-y-4">
-                    {linkedEstimate && (
+                    {linkedEstimate ? (
                         <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-lg shadow-sm">
                             <div className="flex flex-col gap-3">
                                 <div>
@@ -619,6 +682,38 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                         </button>
                                     )}
                                 </div>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-lg shadow-sm">
+                            <h4 className="text-sm font-bold text-gray-800 mb-3 flex items-center gap-2"><FileText size={16} className="text-indigo-600"/> Estimates</h4>
+                            <div className="flex flex-col gap-2">
+                                {onCreateNewEstimate && (
+                                    <button
+                                        type="button"
+                                        onClick={() => onCreateNewEstimate(formData as Inquiry)}
+                                        className="w-full flex items-center justify-center gap-2 px-3 py-2 border border-indigo-300 text-indigo-700 bg-white rounded-lg font-semibold hover:bg-indigo-100 transition shadow-sm text-xs"
+                                    >
+                                        <PlusCircle size={14} /> Create Standard Estimate
+                                    </button>
+                                )}
+                                {onSmartCreateEstimate && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            const fullPrompt = [
+                                                `Customer Name: ${formData.fromName || 'Unknown'}`,
+                                                formData.fromEmail ? `Email: ${formData.fromEmail}` : null,
+                                                formData.fromPhone ? `Phone: ${formData.fromPhone}` : null,
+                                                `Request Details: ${formData.message || ''}`
+                                            ].filter(Boolean).join('\n');
+                                            onSmartCreateEstimate(formData as Inquiry, fullPrompt);
+                                        }}
+                                        className="w-full flex items-center justify-center gap-2 px-3 py-2 border border-transparent shadow-sm text-white bg-gradient-to-r from-purple-600 to-indigo-600 rounded-lg font-semibold hover:from-purple-700 hover:to-indigo-700 transition text-xs"
+                                    >
+                                        <Wand2 size={14} /> Smart Create Estimate (AI)
+                                    </button>
+                                )}
                             </div>
                         </div>
                     )}

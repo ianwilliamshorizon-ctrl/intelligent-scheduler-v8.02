@@ -21,6 +21,7 @@ interface SendEmailParams {
 }
 
 const sendBackupPasswordResetCallable = httpsCallable(functions, 'sendBackupPasswordResetEmail');
+const triggerEmailSyncCallable = httpsCallable(functions, 'triggerEmailSync', { timeout: 300000 });
 
 export const sendOutboundEmail = async (params: SendEmailParams): Promise<boolean> => {
     try {
@@ -44,6 +45,17 @@ export const sendBackupPasswordReset = async (
         return !!result.data?.success;
     } catch (error) {
         console.error("Error calling sendBackupPasswordResetEmail Cloud Function:", error);
+        throw error;
+    }
+};
+
+export const triggerEmailSync = async (): Promise<{ success: boolean; processedCount: number }> => {
+    try {
+        console.log(`Triggering manual email sync...`);
+        const result: any = await triggerEmailSyncCallable();
+        return result.data;
+    } catch (error) {
+        console.error("Error calling triggerEmailSync Cloud Function:", error);
         throw error;
     }
 };
