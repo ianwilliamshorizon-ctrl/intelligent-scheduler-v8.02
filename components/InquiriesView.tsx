@@ -189,7 +189,7 @@ const InquiryCard: React.FC<{
                     </span>
                 </div>
                 
-                <p className={`text-[10px] text-gray-600 my-0.5 whitespace-pre-wrap leading-snug line-clamp-1 group-hover:line-clamp-none`}>{inquiry.message}</p>
+                <p className={`text-[10px] text-gray-600 my-0.5 whitespace-pre-wrap leading-snug line-clamp-1 group-hover:line-clamp-none group-hover:max-h-40 group-hover:overflow-y-auto`}>{inquiry.message}</p>
                 
                 {latestLog && (
                     <div className="hidden group-hover:block bg-gray-50 border rounded p-1 mb-1 mt-1 text-[9px] text-gray-600">
