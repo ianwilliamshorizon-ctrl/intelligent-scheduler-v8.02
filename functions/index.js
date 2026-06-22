@@ -1173,6 +1173,17 @@ ${textBody}
     logger.error("Error running auto-escalation check:", escalateError.message);
   }
 
+  try {
+    await db.collection("brooks_settings").doc("email_sync_status").set({
+      lastRunTime: new Date().toISOString(),
+      status: "success",
+      processedCount: processedCount,
+      errorMsg: null
+    }, { merge: true });
+  } catch (statusErr) {
+    logger.error("Failed to update email_sync_status:", statusErr.message);
+  }
+
   return { success: true, processedCount };
 }
 
@@ -1200,6 +1211,15 @@ exports.syncInboundEmails = onSchedule({
     await performEmailSync(microsoftClientId, microsoftClientSecret, microsoftTenantId, microsoftEmailSender, geminiApiKey);
   } catch (error) {
     logger.error("Error running syncInboundEmails task:", error);
+    try {
+      await admin.firestore().collection("brooks_settings").doc("email_sync_status").set({
+        lastRunTime: new Date().toISOString(),
+        status: "error",
+        errorMsg: error.message || "Unknown error"
+      }, { merge: true });
+    } catch (e) {
+      logger.error("Failed to update error status:", e);
+    }
   }
 });
 
@@ -1226,6 +1246,13 @@ exports.triggerEmailSync = onCall({
     return result;
   } catch (error) {
     logger.error("Error running triggerEmailSync callable:", error);
+    try {
+      await admin.firestore().collection("brooks_settings").doc("email_sync_status").set({
+        lastRunTime: new Date().toISOString(),
+        status: "error",
+        errorMsg: error.message || "Unknown error"
+      }, { merge: true });
+    } catch (e) {}
     throw new HttpsError("internal", error.message);
   }
 });

@@ -13,6 +13,8 @@ import { saveDocument, deleteDocument } from '../core/db';
 import { getImage } from '../utils/imageStore';
 import { toast } from 'react-toastify';
 import { triggerEmailSync } from '../core/services/emailService';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { db } from '../core/services/firebaseServices';
 
 interface InquiriesViewProps {
     onOpenInquiryModal: (inquiry: Partial<Inquiry> | null) => void;
@@ -528,6 +530,16 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
 
     const [assignedUserFilter, setAssignedUserFilter] = useState<string>('all');
     const [stalenessFilter, setStalenessFilter] = useState<string>('all');
+    const [syncStatus, setSyncStatus] = useState<{ status: 'success' | 'error', lastRunTime: string, errorMsg?: string } | null>(null);
+
+    React.useEffect(() => {
+        const unsubscribe = onSnapshot(doc(db, "brooks_settings", "email_sync_status"), (docSnap) => {
+            if (docSnap.exists()) {
+                setSyncStatus(docSnap.data() as any);
+            }
+        });
+        return () => unsubscribe();
+    }, []);
 
     // Auto-parse 67 Degrees Web Inquiries
     React.useEffect(() => {
@@ -928,7 +940,19 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
         <div className="w-full h-full flex flex-col p-6 bg-gray-50">
             <header className="flex justify-between items-center mb-4 flex-shrink-0">
                 <div className="flex items-center gap-6">
-                    <h2 className="text-2xl font-bold text-gray-800">Inquiries</h2>
+                    <div className="flex items-center gap-2">
+                        <h2 className="text-2xl font-bold text-gray-800">Inquiries</h2>
+                        {syncStatus && (
+                            <div 
+                                className={`w-3 h-3 rounded-full shadow-sm border border-white ${
+                                    syncStatus.status === 'error' ? 'bg-red-500 animate-pulse' :
+                                    (Date.now() - new Date(syncStatus.lastRunTime).getTime() > 60 * 60 * 1000) ? 'bg-amber-500' : 
+                                    'bg-green-500'
+                                }`}
+                                title={`Email Sync Status: ${syncStatus.status === 'error' ? 'Error (' + syncStatus.errorMsg + ')' : 'OK'}\nLast run: ${new Date(syncStatus.lastRunTime).toLocaleString()}`}
+                            />
+                        )}
+                    </div>
                     
                     {/* Active/Closed Tabs */}
                     <div className="flex bg-gray-200 p-0.5 rounded-lg border shadow-sm">
