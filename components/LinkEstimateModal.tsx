@@ -34,7 +34,7 @@ const LinkEstimateModal: React.FC<LinkEstimateModalProps> = ({
     const activeEstimates = useMemo(() => {
         return estimates
             .filter(e => ['Draft', 'Pending Approval', 'Approved', 'Scheduled'].includes(e.status))
-            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+            .sort((a, b) => new Date(b.issueDate).getTime() - new Date(a.issueDate).getTime());
     }, [estimates]);
 
     const estimateOptions = useMemo(() => {

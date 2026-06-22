@@ -680,15 +680,13 @@ User Request: ${JSON.stringify(userText)}`;
                     const names = nameToCheck.split(' ');
                     activeCustomer = {
                         id: `cust_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
-                        firstName: names[0],
-                        lastName: names.slice(1).join(' '),
+                        forename: names[0],
+                        surname: names.slice(1).join(' '),
                         email: linkedInquiry?.fromEmail || '',
                         phone: linkedInquiry?.fromPhone || '',
                         addressLine1: '',
                         city: '',
-                        postcode: '',
-                        businessEntities: selectedEntity ? [selectedEntity.id] : [],
-                        isProspect: true
+                        postcode: ''
                     };
                     isNewCustomer = true;
                 }
@@ -703,9 +701,8 @@ User Request: ${JSON.stringify(userText)}`;
                     make: 'Unknown',
                     model: 'Unknown',
                     year: new Date().getFullYear(),
-                    color: '',
-                    customerId: activeCustomer?.id || '',
-                    businessEntities: selectedEntity ? [selectedEntity.id] : []
+                    colour: '',
+                    customerId: activeCustomer?.id || ''
                 };
                 isNewVehicle = true;
             }
@@ -1618,8 +1615,8 @@ User Request: ${JSON.stringify(userText)}`;
                     onClose={() => setIsCustomerModalOpen(false)}
                     onSave={(newCustomer) => { handleSaveNewCustomer(newCustomer); setIsCustomerModalOpen(false); }}
                     customer={{
-                        firstName: parsedData?.customerName?.split(' ')[0] || linkedInquiry?.fromName?.split(' ')[0] || '',
-                        lastName: parsedData?.customerName?.split(' ').slice(1).join(' ') || linkedInquiry?.fromName?.split(' ').slice(1).join(' ') || '',
+                        forename: parsedData?.customerName?.split(' ')[0] || linkedInquiry?.fromName?.split(' ')[0] || '',
+                        surname: parsedData?.customerName?.split(' ').slice(1).join(' ') || linkedInquiry?.fromName?.split(' ').slice(1).join(' ') || '',
                         email: linkedInquiry?.fromEmail || '',
                         phone: linkedInquiry?.fromPhone || '',
                     }}

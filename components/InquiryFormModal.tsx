@@ -68,7 +68,12 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
             if (inquiry && inquiry.id) {
                 // Prevent background sync from overwriting local changes if we're already editing this inquiry
                 if (prev && prev.id === inquiry.id) return prev;
-                return { ...inquiry };
+                const linkedCustomer = inquiry.linkedCustomerId ? customers.find(c => c.id === inquiry.linkedCustomerId) : null;
+                return { 
+                    ...inquiry,
+                    fromEmail: inquiry.fromEmail || linkedCustomer?.email || '',
+                    fromPhone: inquiry.fromPhone || linkedCustomer?.mobile || linkedCustomer?.phone || ''
+                };
             } else {
                 // Initialize a new inquiry, using any pre-filled data provided
                 return {
