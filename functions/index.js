@@ -641,13 +641,17 @@ exports.inboundEmailWebhook = onRequest({
     }
 
     if (matchedInquiryId) {
+      const isOutbound = fromEmail && (fromEmail.toLowerCase().includes("brookspeed") || fromEmail.toLowerCase().includes("info@brookspeed"));
+
       // Update existing inquiry
       const newLog = {
         id: crypto.randomUUID(),
         timestamp: new Date().toISOString(),
         userId: 'system',
-        actionType: 'Customer Reply',
-        notes: `[Webhook] Received reply from ${fromName || fromEmail}.\nSubject: "${subject}"\nBody snippet: ${textBody.substring(0, 200)}...`
+        actionType: isOutbound ? 'Email Sent' : 'Customer Reply',
+        notes: isOutbound
+          ? `[Webhook] Outbound email sent to customer.\nSubject: "${subject}"\nBody snippet: ${textBody.substring(0, 200)}...`
+          : `[Webhook] Received reply from ${fromName || fromEmail}.\nSubject: "${subject}"\nBody snippet: ${textBody.substring(0, 200)}...`
       };
 
       const existingLogs = existingInquiryData.logs || [];
@@ -655,11 +659,11 @@ exports.inboundEmailWebhook = onRequest({
 
       await db.collection("brooks_inquiries").doc(matchedInquiryId).update({
         logs: existingLogs,
-        hasNewReply: true,
-        status: 'Customer Responded'
+        hasNewReply: !isOutbound,
+        status: isOutbound ? 'Quoted or Responded' : 'Customer Responded'
       });
       
-      logger.info(`Updated existing Inquiry Card: ${matchedInquiryId} with new reply`);
+      logger.info(`Updated existing Inquiry Card: ${matchedInquiryId} with new reply (isOutbound: ${isOutbound})`);
       return res.status(200).json({ success: true, inquiryId: matchedInquiryId, threaded: true });
     }
 
@@ -995,16 +999,30 @@ async function performEmailSync(microsoftClientId, microsoftClientSecret, micros
       }
 
       if (matchedInquiryId) {
+        const existingLogs = existingInquiryData.logs || [];
+        
+        // Prevent duplicate logs for the same messageId
+        const isDuplicate = existingLogs.some(log => log.id === messageId);
+        if (isDuplicate) {
+          logger.info(`Reply for message ID ${messageId} is already logged in Inquiry ${matchedInquiryId}. Skipping.`);
+          await markEmailAsRead(accessToken, microsoftEmailSender, messageId);
+          processedCount++;
+          continue;
+        }
+
+        const isOutbound = fromEmail && (fromEmail.toLowerCase().includes("brookspeed") || fromEmail.toLowerCase().includes("info@brookspeed"));
+
         // Update existing inquiry
         const newLog = {
           id: messageId || crypto.randomUUID(),
           timestamp: message.receivedDateTime || new Date().toISOString(),
           userId: 'system',
-          actionType: 'Customer Reply',
-          notes: `[Email Sync] Received reply from ${fromName || fromEmail}.\nSubject: "${subject}"\nBody snippet: ${textBody.substring(0, 200)}...`
+          actionType: isOutbound ? 'Email Sent' : 'Customer Reply',
+          notes: isOutbound
+            ? `[Email Sync] Outbound email sent to customer.\nSubject: "${subject}"\nBody snippet: ${textBody.substring(0, 200)}...`
+            : `[Email Sync] Received reply from ${fromName || fromEmail}.\nSubject: "${subject}"\nBody snippet: ${textBody.substring(0, 200)}...`
         };
 
-        const existingLogs = existingInquiryData.logs || [];
         existingLogs.push(newLog);
 
         const updatedMedia = [...(existingInquiryData.media || []), ...mediaItems];
@@ -1012,11 +1030,11 @@ async function performEmailSync(microsoftClientId, microsoftClientSecret, micros
         await db.collection("brooks_inquiries").doc(matchedInquiryId).update({
           logs: existingLogs,
           media: updatedMedia,
-          hasNewReply: true,
-          status: 'Customer Responded'
+          hasNewReply: !isOutbound,
+          status: isOutbound ? 'Quoted or Responded' : 'Customer Responded'
         });
         
-        logger.info(`Updated existing Inquiry Card: ${matchedInquiryId} with new reply`);
+        logger.info(`Updated existing Inquiry Card: ${matchedInquiryId} with new reply (isOutbound: ${isOutbound})`);
         await markEmailAsRead(accessToken, microsoftEmailSender, messageId);
         processedCount++;
         continue;
