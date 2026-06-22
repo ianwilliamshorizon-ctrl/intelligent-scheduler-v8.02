@@ -106,6 +106,13 @@ const InquiryCard: React.FC<{
     const daysSinceLastActivity = Math.floor(hoursSinceLastActivity / 24);
     const showDaysBadge = daysSinceLastActivity >= 1 && !['Rejected', 'Scheduled', 'Closed', 'Approved'].includes(inquiry.status);
     
+    let badgeColorClass = 'bg-green-500 text-white';
+    if (daysSinceLastActivity > 14) {
+        badgeColorClass = 'bg-red-500 text-white';
+    } else if (daysSinceLastActivity > 7) {
+        badgeColorClass = 'bg-amber-500 text-white';
+    }
+    
     let healthBgClass = 'bg-white';
     let ringClass = 'ring-1 ring-gray-200 hover:ring-gray-300';
     
@@ -152,7 +159,7 @@ const InquiryCard: React.FC<{
                         <div className="flex items-center gap-1">
                             <p className="font-bold text-gray-800 text-[11px] truncate leading-tight" title={displayName}>{displayName}</p>
                             {showDaysBadge && (
-                                <span className="bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-none shadow-sm" title={`${daysSinceLastActivity} days since last action`}>
+                                <span className={`${badgeColorClass} text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-none shadow-sm`} title={`${daysSinceLastActivity} days since last action`}>
                                     {daysSinceLastActivity}d
                                 </span>
                             )}
@@ -311,7 +318,7 @@ const InquiryCard: React.FC<{
                     <div className="flex items-center gap-2 mb-0.5">
                         <p className="font-bold text-gray-800 text-sm">{displayName}</p>
                         {showDaysBadge && (
-                            <span className="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full leading-none shadow-sm" title={`${daysSinceLastActivity} days since last action`}>
+                            <span className={`${badgeColorClass} text-[10px] font-bold px-2 py-0.5 rounded-full leading-none shadow-sm`} title={`${daysSinceLastActivity} days since last action`}>
                                 {daysSinceLastActivity}d
                             </span>
                         )}
