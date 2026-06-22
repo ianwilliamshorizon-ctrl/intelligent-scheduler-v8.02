@@ -87,7 +87,7 @@ const InquiryCard: React.FC<{
                 link.click();
                 document.body.removeChild(link);
             } else {
-                alert('Could not retrieve file data.');
+                toast.error('Could not retrieve file data.');
             }
         } catch (err) {
             console.error("Error downloading media:", err);

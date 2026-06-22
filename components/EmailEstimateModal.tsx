@@ -27,6 +27,14 @@ const EmailEstimateModal: React.FC<EmailEstimateModalProps> = ({ isOpen, onClose
         }
     }, [isOpen, customerEmail]);
 
+    const [customMessage, setCustomMessage] = useState('');
+
+    useEffect(() => {
+        if (isOpen) {
+            setCustomMessage(`Dear ${customer?.forename || 'Customer'},\n\nThank you for choosing Brookspeed. Please find below the details of your estimate for the work on your ${vehicle?.make || 'Vehicle'} ${vehicle?.model || ''} (${vehicle?.registration || 'TBA'}).`);
+        }
+    }, [isOpen, customer, vehicle]);
+
     if (!isOpen) return null;
 
     const taxRatesMap = useMemo(() => new Map(taxRates.map(t => [t.id, t.rate])), [taxRates]);
@@ -51,17 +59,11 @@ const EmailEstimateModal: React.FC<EmailEstimateModalProps> = ({ isOpen, onClose
         try {
             const subject = `Your Estimate #${estimate.estimateNumber} from Brookspeed`;
             const onlineViewLink = `${window.location.origin}/?estimateId=${estimate.id}&view=customer&v=${new Date().getTime()}`;
-            const body = `Dear ${customer?.forename || 'Customer'},
-
-Thank you for choosing Brookspeed. Please find below the details of your estimate for the work on your ${vehicle?.make || 'Vehicle'} ${vehicle?.model || ''} (${vehicle?.registration || 'TBA'}).
-
-You can view, approve, or decline your detailed estimate online by clicking the link below:
-
-<a href="${onlineViewLink}" style="display: inline-block; padding: 10px 20px; background-color: #4f46e5; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: bold; margin-top: 10px; margin-bottom: 10px;">View Estimate Online</a>
-
-If you have any questions, please don't hesitate to contact us.
-
-Kind regards,
+            const formattedMessage = customMessage.replace(/\n/g, '<br/>');
+            const body = `${formattedMessage}<br/><br/>You can view, approve, or decline your detailed estimate online by clicking the link below:<br/><br/>
+<a href="${onlineViewLink}" style="display: inline-block; padding: 10px 20px; background-color: #4f46e5; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: bold; margin-top: 10px; margin-bottom: 10px;">View Estimate Online</a><br/><br/>
+If you have any questions, please don't hesitate to contact us.<br/><br/>
+Kind regards,<br/>
 The Brookspeed Team`;
 
             await onSend(recipients, subject, body);
@@ -111,9 +113,14 @@ The Brookspeed Team`;
                         <span className="text-gray-800 font-semibold tracking-tight">Your Estimate #{estimate.estimateNumber} from Brookspeed</span>
                     </div>
 
-                    <div className="p-4 border border-gray-200 rounded-lg mt-4 h-80 overflow-y-auto bg-white shadow-inner">
-                        <p className="mb-4">Dear {customer?.forename || 'Customer'},</p>
-                        <p className="mb-4">Thank you for choosing Brookspeed. Please find below the details of your estimate for the work on your {vehicle?.make} {vehicle?.model} ({vehicle?.registration || 'TBA'}).</p>
+                    <div className="flex flex-col p-4 border border-gray-200 rounded-lg mt-4 bg-gray-50 shadow-inner">
+                        <label className="font-bold text-gray-500 uppercase text-[10px] mb-2">Message Body</label>
+                        <textarea 
+                            value={customMessage}
+                            onChange={(e) => setCustomMessage(e.target.value)}
+                            rows={6}
+                            className="w-full bg-white border border-gray-300 rounded-md py-2 px-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-gray-800 text-sm mb-4"
+                        />
 
                         <p className="mb-4">You can view, approve, or decline your detailed estimate online by clicking the link below:</p>
                         <div className="text-center my-6">

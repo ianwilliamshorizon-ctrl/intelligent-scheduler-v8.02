@@ -9,6 +9,7 @@ import { parseInquiryMessage, generateEmailReply } from '../core/services/gemini
 import { sendOutboundEmail } from '../core/services/emailService';
 import { useData } from '../core/state/DataContext';
 import { generateInquiryNumber } from '../core/utils/numberGenerators';
+import { toast } from 'react-toastify';
 
 interface InquiryFormModalProps {
     isOpen: boolean;
@@ -135,7 +136,7 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
 
     const handleSave = () => {
         if (!formData.fromName || !formData.message) {
-            alert('"From" name and message are required.');
+            toast.error('"From" name and message are required.');
             return;
         }
 
@@ -550,7 +551,7 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                             setReplyText(draft);
                                         } catch (e) {
                                             console.error(e);
-                                            alert('Failed to draft reply using AI.');
+                                            toast.error('Failed to draft reply using AI.');
                                         } finally {
                                             setIsDraftingReply(false);
                                         }
@@ -566,7 +567,7 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                     onClick={async () => {
                                         const emailAddress = formData.fromEmail || formData.fromContact;
                                         if (!replyText || !emailAddress || !emailAddress.includes('@')) {
-                                            alert('Please enter a valid email reply and ensure the customer has an email address.');
+                                            toast.error('Please enter a valid email reply and ensure the customer has an email address.');
                                             return;
                                         }
                                         setIsSendingReply(true);
@@ -621,13 +622,13 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                                     } as Inquiry;
                                                     onSave(inquiryToSave, false);
                                                 }
-                                                alert('Email sent successfully!');
+                                                toast.success('Email sent successfully!');
                                             } else {
-                                                alert('Failed to send email.');
+                                                toast.error('Failed to send email.');
                                             }
                                         } catch (e) {
                                             console.error(e);
-                                            alert('Failed to send email.');
+                                            toast.error('Failed to send email.');
                                         } finally {
                                             setIsSendingReply(false);
                                         }
@@ -844,7 +845,7 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                                         link.click();
                                                         document.body.removeChild(link);
                                                     } else {
-                                                        alert('Could not retrieve file.');
+                                                        toast.error('Could not retrieve file.');
                                                     }
                                                 }} 
                                                 className="text-[10px] bg-white px-2 py-1 rounded shadow-sm border font-bold hover:bg-gray-100 transition shrink-0"
