@@ -589,11 +589,14 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                                 });
                                             }));
 
+                                            const generatedId = formData.id || crypto.randomUUID();
+                                            const generatedInquiryNumber = formData.inquiryNumber || generateInquiryNumber(inquiries);
+
                                             const success = await sendOutboundEmail({
                                                 to: emailAddress,
                                                 fromName: 'Brookspeed',
                                                 fromEmail: 'info@brookspeed.com',
-                                                subject: `Re: Your Inquiry [${formData.inquiryNumber || generateInquiryNumber(inquiries)}]`,
+                                                subject: `Re: Your Inquiry [${generatedInquiryNumber}]`,
                                                 body: replyText,
                                                 attachments: emailAttachments.length > 0 ? emailAttachments : undefined
                                             });
@@ -606,17 +609,22 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                                     notes: `To: ${emailAddress}\nAttachments: ${replyAttachments.length}\n\n${replyText}`
                                                 };
                                                 const updatedLogs = [...(formData.logs || []), newLog];
-                                                setFormData(p => ({ ...p, logs: updatedLogs }));
+                                                setFormData(p => ({ 
+                                                    ...p, 
+                                                    id: generatedId,
+                                                    inquiryNumber: generatedInquiryNumber,
+                                                    logs: updatedLogs 
+                                                }));
                                                 setReplyText('');
                                                 setReplyAttachments([]);
                                                 
                                                 if (formData.fromName && formData.message) {
                                                     const inquiryToSave: Inquiry = {
-                                                        id: formData.id || crypto.randomUUID(),
+                                                        ...formData,
+                                                        id: generatedId,
                                                         createdAt: formData.createdAt || new Date().toISOString(),
                                                         takenByUserId: formData.takenByUserId || currentUser.id,
-                                                        inquiryNumber: formData.inquiryNumber || generateInquiryNumber(inquiries),
-                                                        ...formData,
+                                                        inquiryNumber: generatedInquiryNumber,
                                                         hasNewReply: false,
                                                         logs: updatedLogs
                                                     } as Inquiry;
