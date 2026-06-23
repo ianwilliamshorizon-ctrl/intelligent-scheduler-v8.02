@@ -132,6 +132,10 @@ const InquiryCard: React.FC<{
             healthBgClass = 'bg-yellow-100/60';
             ringClass = 'ring-1 ring-yellow-400';
             cardExplanation = 'Customer Responded: Customer has sent a new reply (Yellow background)';
+        } else if (inquiry.status === 'Quoted or Responded' && isStale72h(inquiry)) {
+            healthBgClass = 'bg-red-100/60';
+            ringClass = 'ring-1 ring-red-400';
+            cardExplanation = 'Stale Quote: Unanswered quote for more than 72 hours (Red background)';
         } else if (hoursSinceLastActivity > 48) {
             healthBgClass = 'bg-orange-100/60';
             ringClass = 'ring-1 ring-orange-400';
@@ -162,7 +166,7 @@ const InquiryCard: React.FC<{
                     inquiry.status === 'Immediate Quote' ? 'border-amber-400' : 
                     inquiry.status === 'Escalated/Urgent' ? 'border-orange-500' : 
                     inquiry.status === 'Scheduled' ? 'border-blue-400' : 
-                    inquiry.status === 'Quoted or Responded' ? (isStale72h(inquiry) ? 'border-red-500 bg-red-100/60 text-red-800' : 'border-gray-200') : 
+                    inquiry.status === 'Quoted or Responded' ? (isStale72h(inquiry) ? 'border-red-500 text-red-800' : 'border-gray-200') : 
                     inquiry.status === 'Approved' ? 'border-green-400' : 'border-gray-200'
                 } ${isExpanded ? 'shadow-md ring-1 ring-indigo-400' : ringClass} cursor-pointer transition-all mb-1.5`}
                 onClick={() => onOpenInquiryModal(inquiry)}
@@ -322,7 +326,7 @@ const InquiryCard: React.FC<{
                 inquiry.status === 'Immediate Quote' ? 'border-amber-400' : 
                 inquiry.status === 'Escalated/Urgent' ? 'border-orange-500' : 
                 inquiry.status === 'Scheduled' ? 'border-blue-400' : 
-                inquiry.status === 'Quoted or Responded' ? (isStale72h(inquiry) ? 'border-red-500 bg-red-100/60 text-red-800 shadow-[0_0_8px_rgba(239,68,68,0.4)]' : 'border-gray-200') : 
+                inquiry.status === 'Quoted or Responded' ? (isStale72h(inquiry) ? 'border-red-500 text-red-800 shadow-[0_0_8px_rgba(239,68,68,0.4)]' : 'border-gray-200') : 
                 inquiry.status === 'Approved' ? 'border-green-400' : 'border-gray-200'
             } ${ringClass} cursor-pointer hover:shadow-md transition-shadow mb-3`}
             onClick={() => onOpenInquiryModal(inquiry)}
