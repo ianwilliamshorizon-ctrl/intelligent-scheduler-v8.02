@@ -121,23 +121,29 @@ const InquiryCard: React.FC<{
     
     let healthBgClass = 'bg-white';
     let ringClass = 'ring-1 ring-gray-200 hover:ring-gray-300';
+    let cardExplanation = 'New or normal status (White background)';
     
     if (inquiry.status !== 'Closed' && inquiry.status !== 'Approved') {
         if (isOverdue || isToday) {
             healthBgClass = 'bg-red-50';
             ringClass = 'ring-1 ring-red-400';
+            cardExplanation = 'Action Overdue: Follow-up date is today or in the past (Red background)';
         } else if (inquiry.hasNewReply) {
             healthBgClass = 'bg-yellow-50';
             ringClass = 'ring-1 ring-yellow-400';
+            cardExplanation = 'Customer Responded: Customer has sent a new reply (Yellow background)';
         } else if (hoursSinceLastActivity > 48) {
             healthBgClass = 'bg-orange-50';
             ringClass = 'ring-1 ring-orange-400';
+            cardExplanation = 'Stale Inquiry: No activity logged for more than 48 hours (Orange background)';
         } else if (latestLog && hoursSinceLastActivity <= 48) {
             healthBgClass = 'bg-emerald-50';
             ringClass = 'ring-1 ring-emerald-300';
+            cardExplanation = 'Recently Active: Updated in the last 48 hours (Green background)';
         }
     } else {
         healthBgClass = 'bg-gray-50';
+        cardExplanation = `${inquiry.status} inquiry (Gray background)`;
     }
 
     if (isCompact) {
@@ -160,6 +166,7 @@ const InquiryCard: React.FC<{
                     inquiry.status === 'Approved' ? 'border-green-400' : 'border-gray-200'
                 } ${isExpanded ? 'shadow-md ring-1 ring-indigo-400' : ringClass} cursor-pointer transition-all mb-1.5`}
                 onClick={() => onOpenInquiryModal(inquiry)}
+                title={cardExplanation}
             >
                 <div className="flex justify-between items-start gap-1">
                     <div className="min-w-0 flex-grow pr-1">
@@ -319,6 +326,7 @@ const InquiryCard: React.FC<{
                 inquiry.status === 'Approved' ? 'border-green-400' : 'border-gray-200'
             } ${ringClass} cursor-pointer hover:shadow-md transition-shadow mb-3`}
             onClick={() => onOpenInquiryModal(inquiry)}
+            title={cardExplanation}
         >
             <div className="flex justify-between items-start">
                 <div>
@@ -987,6 +995,27 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                         >
                             Closed
                         </button>
+                    </div>
+
+                    {/* Card Health Color Legend */}
+                    <div className="flex items-center gap-3.5 text-xs bg-white px-3.5 py-1.5 rounded-lg border border-gray-200 shadow-xs text-gray-600 select-none">
+                        <span className="font-semibold text-gray-400 mr-0.5">Card Status:</span>
+                        <div className="flex items-center gap-1.5" title="Updated in the last 48 hours">
+                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 border border-emerald-600 block shrink-0"></span>
+                            <span className="font-medium text-gray-700">Active</span>
+                        </div>
+                        <div className="flex items-center gap-1.5" title="No activity for more than 48 hours">
+                            <span className="w-2.5 h-2.5 rounded-full bg-orange-500 border border-orange-600 block shrink-0"></span>
+                            <span className="font-medium text-gray-700">Stale (&gt;48h)</span>
+                        </div>
+                        <div className="flex items-center gap-1.5" title="Customer has sent a new reply">
+                            <span className="w-2.5 h-2.5 rounded-full bg-yellow-400 border border-yellow-500 block shrink-0"></span>
+                            <span className="font-medium text-gray-700">New Reply</span>
+                        </div>
+                        <div className="flex items-center gap-1.5" title="Follow-up date is today or in the past">
+                            <span className="w-2.5 h-2.5 rounded-full bg-red-500 border border-red-600 animate-pulse block shrink-0"></span>
+                            <span className="font-medium text-gray-700">Overdue / Today</span>
+                        </div>
                     </div>
                     
                     {/* Additional Filters */}
