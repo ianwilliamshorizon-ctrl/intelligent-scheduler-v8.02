@@ -891,7 +891,8 @@ async function performEmailSync(microsoftClientId, microsoftClientSecret, micros
       if (message.hasAttachments) {
         try {
           logger.info(`Message ${messageId} has attachments. Fetching attachments from MS Graph...`);
-          const attachmentsUrl = `https://graph.microsoft.com/v1.0/users/${microsoftEmailSender}/messages/${messageId}/attachments`;
+          // Expand itemAttachment/item to get the body of nested/forwarded emails
+          const attachmentsUrl = `https://graph.microsoft.com/v1.0/users/${microsoftEmailSender}/messages/${messageId}/attachments?$expand=microsoft.graph.itemattachment/item`;
           const attachmentsResponse = await axios.get(attachmentsUrl, {
             headers: {
               "Authorization": `Bearer ${accessToken}`,
@@ -926,6 +927,35 @@ async function performEmailSync(microsoftClientId, microsoftClientSecret, micros
                 name: att.name,
                 uploadedAt: new Date().toISOString()
               });
+            } else if (att["@odata.type"] === "#microsoft.graph.itemAttachment" && att.item) {
+              const item = att.item;
+              if (item.body) {
+                logger.info(`Found attached email message in attachment: ${att.name || item.subject}`);
+                const attachedBody = item.body.content || "";
+                const attachedBodyType = item.body.contentType || "html";
+                let cleanAttachedBody = attachedBody;
+                
+                if (attachedBodyType === "html") {
+                  cleanAttachedBody = attachedBody
+                    .replace(/<style([\s\S]*?)<\/style>/gi, '')
+                    .replace(/<script([\s\S]*?)<\/script>/gi, '')
+                    .replace(/<\/div>/ig, '\n')
+                    .replace(/<\/li>/ig, '\n')
+                    .replace(/<p[^>]*>/gi, '\n')
+                    .replace(/<br\s*\/?>/gi, '\n')
+                    .replace(/<[^>]+>/g, '')
+                    .replace(/&nbsp;/g, ' ')
+                    .replace(/&amp;/g, '&')
+                    .replace(/&lt;/g, '<')
+                    .replace(/&gt;/g, '>')
+                    .trim();
+                }
+                
+                if (cleanAttachedBody) {
+                  textBody = textBody + "\n\n--- Attached Email Details (" + (att.name || item.subject || "No Subject") + ") ---\n" + cleanAttachedBody;
+                  logger.info("Successfully appended attached email content to textBody.");
+                }
+              }
             }
           }
         } catch (attachmentsError) {
