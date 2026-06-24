@@ -67,7 +67,7 @@ const InquiryCard: React.FC<{
     const estimate = inquiry.linkedEstimateId ? estimates.find(e => e.id === inquiry.linkedEstimateId) : null;
     const job = estimate?.jobId ? jobs.find(j => j.id === estimate.jobId) : null;
     
-    const displayName = customer ? getCustomerDisplayName(customer) : inquiry.fromName;
+    const displayName = inquiry.fromName;
     const displayEmail = customer?.email || inquiry.fromEmail;
     const displayPhone = customer?.mobile || customer?.phone || inquiry.fromPhone;
     const displayContact = (!displayEmail && !displayPhone) ? inquiry.fromContact : null;
@@ -383,6 +383,13 @@ const InquiryCard: React.FC<{
             })()}
             
             <div className="mt-2 pt-2 border-t space-y-2">
+                {customer && (
+                    <div className="flex items-center gap-2 text-xs text-gray-600">
+                        <UserCheck size={14} className="text-green-600"/>
+                        <span className="font-semibold">{getCustomerDisplayName(customer)}</span>
+                    </div>
+                )}
+                
                 {vehicle && (
                     <div className="flex items-center gap-2 text-xs text-gray-600">
                         <Car size={14} className="text-blue-600"/>
@@ -959,187 +966,196 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
 
     return (
         <div className="w-full h-full flex flex-col p-6 bg-gray-50">
-            <header className="flex justify-between items-center mb-4 flex-shrink-0">
-                <div className="flex items-center gap-6">
-                    <div className="flex items-center gap-2">
-                        <h2 className="text-2xl font-bold text-gray-800">Inquiries</h2>
-                        {syncStatus && (
-                            <div 
-                                className={`w-3 h-3 rounded-full shadow-sm border border-white ${
-                                    syncStatus.status === 'error' ? 'bg-red-500 animate-pulse' :
-                                    (Date.now() - new Date(syncStatus.lastRunTime).getTime() > 60 * 60 * 1000) ? 'bg-amber-500' : 
-                                    'bg-green-500'
+            <header className="flex flex-col gap-4 mb-4 flex-shrink-0">
+                {/* Top Row: Title, Tabs, and Action Buttons (Sync, Log Inquiry) */}
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-2">
+                            <h2 className="text-2xl font-bold text-gray-800">Inquiries</h2>
+                            {syncStatus && (
+                                <div 
+                                    className={`w-3 h-3 rounded-full shadow-sm border border-white ${
+                                        syncStatus.status === 'error' ? 'bg-red-500 animate-pulse' :
+                                        (Date.now() - new Date(syncStatus.lastRunTime).getTime() > 60 * 60 * 1000) ? 'bg-amber-500' : 
+                                        'bg-green-500'
+                                    }`}
+                                    title={`Email Sync Status: ${syncStatus.status === 'error' ? 'Error (' + syncStatus.errorMsg + ')' : 'OK'}\nLast run: ${new Date(syncStatus.lastRunTime).toLocaleString()}`}
+                                />
+                            )}
+                        </div>
+                        
+                        {/* Active/Closed Tabs */}
+                        <div className="flex bg-gray-200 p-0.5 rounded-lg border shadow-sm">
+                            <button
+                                type="button"
+                                onClick={() => setActiveTab('active')}
+                                className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${
+                                    activeTab === 'active' 
+                                    ? 'bg-white text-gray-800 shadow-sm' 
+                                    : 'text-gray-500 hover:text-gray-800'
                                 }`}
-                                title={`Email Sync Status: ${syncStatus.status === 'error' ? 'Error (' + syncStatus.errorMsg + ')' : 'OK'}\nLast run: ${new Date(syncStatus.lastRunTime).toLocaleString()}`}
-                            />
-                        )}
-                    </div>
-                    
-                    {/* Active/Closed Tabs */}
-                    <div className="flex bg-gray-200 p-0.5 rounded-lg border shadow-sm">
-                        <button
-                            type="button"
-                            onClick={() => setActiveTab('active')}
-                            className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${
-                                activeTab === 'active' 
-                                ? 'bg-white text-gray-800 shadow-sm' 
-                                : 'text-gray-500 hover:text-gray-800'
-                            }`}
-                        >
-                            Active
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setActiveTab('closed')}
-                            className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${
-                                activeTab === 'closed' 
-                                ? 'bg-white text-gray-800 shadow-sm' 
-                                : 'text-gray-500 hover:text-gray-800'
-                            }`}
-                        >
-                            Closed
-                        </button>
+                            >
+                                Active
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setActiveTab('closed')}
+                                className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${
+                                    activeTab === 'closed' 
+                                    ? 'bg-white text-gray-800 shadow-sm' 
+                                    : 'text-gray-500 hover:text-gray-800'
+                                }`}
+                            >
+                                Closed
+                            </button>
+                        </div>
                     </div>
 
-                    {/* Card Health Color Legend */}
-                    <div className="flex items-center gap-3.5 text-xs bg-white px-3.5 py-1.5 rounded-lg border border-gray-200 shadow-xs text-gray-600 select-none">
-                        <span className="font-semibold text-gray-400 mr-0.5">Card Status:</span>
-                        <div className="flex items-center gap-1.5" title="Updated in the last 48 hours">
-                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 border border-emerald-600 block shrink-0"></span>
-                            <span className="font-medium text-gray-700">Active</span>
-                        </div>
-                        <div className="flex items-center gap-1.5" title="No activity for more than 48 hours">
-                            <span className="w-2.5 h-2.5 rounded-full bg-orange-500 border border-orange-600 block shrink-0"></span>
-                            <span className="font-medium text-gray-700">Stale (&gt;48h)</span>
-                        </div>
-                        <div className="flex items-center gap-1.5" title="Customer has sent a new reply">
-                            <span className="w-2.5 h-2.5 rounded-full bg-yellow-400 border border-yellow-500 block shrink-0"></span>
-                            <span className="font-medium text-gray-700">New Reply</span>
-                        </div>
-                        <div className="flex items-center gap-1.5" title="Follow-up date is today or in the past">
-                            <span className="w-2.5 h-2.5 rounded-full bg-red-500 border border-red-600 animate-pulse block shrink-0"></span>
-                            <span className="font-medium text-gray-700">Overdue / Today</span>
-                        </div>
-                    </div>
-                    
-                    {/* Additional Filters */}
                     <div className="flex items-center gap-2">
-                        <select 
-                            value={assignedUserFilter} 
-                            onChange={e => setAssignedUserFilter(e.target.value)}
-                            className="bg-white border rounded-lg px-2 py-1.5 text-xs font-bold text-gray-700 shadow-sm outline-none"
+                        <button 
+                            onClick={handleSyncEmails} 
+                            disabled={isSyncing}
+                            className="flex items-center gap-2 py-2 px-4 bg-white border border-gray-300 text-gray-700 font-semibold rounded-lg shadow-sm hover:bg-gray-50 transition disabled:opacity-50"
+                            title="Manually trigger email sync from info@brookspeed.com"
                         >
-                            <option value="all">All Assignments</option>
-                            <option value="me">My Inquiries</option>
-                            <optgroup label="Users">
-                                {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                            </optgroup>
-                            {entities && entities.length > 0 && (
-                                <optgroup label="Teams (Entities)">
-                                    {entities.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
-                                </optgroup>
-                            )}
-                        </select>
-                        <select 
-                            value={stalenessFilter} 
-                            onChange={e => setStalenessFilter(e.target.value)}
-                            className="bg-white border rounded-lg px-2 py-1.5 text-xs font-bold text-gray-700 shadow-sm outline-none"
-                        >
-                            <option value="all">All Activity</option>
-                            <option value="stale_24h">Unactioned &gt; 24h</option>
-                        </select>
+                            {isSyncing ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+                            Sync Emails
+                        </button>
+
+                        <button onClick={() => props.onOpenInquiryModal({})} className="flex items-center gap-2 py-2 px-4 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition">
+                            <PlusCircle size={16}/> Log Inquiry
+                        </button>
                     </div>
                 </div>
-                <div className="flex items-center gap-4">
-                    {/* Date filter */}
-                    <div className="flex items-center gap-2 bg-white p-1 rounded-lg border shadow-sm">
-                        {(['today', '7', '30', '90', 'all'] as const).map(days => (
-                            <button
-                                key={days}
-                                onClick={() => setDateFilter(days)}
-                                className={`px-3 py-1 text-xs font-bold rounded-md transition-all whitespace-nowrap ${
-                                    dateFilter === days 
-                                    ? 'bg-indigo-600 text-white shadow-sm' 
-                                    : 'text-gray-500 hover:bg-gray-100'
-                                }`}
+
+                {/* Bottom Row: Filters (Legend, dropdowns, toggles, search) */}
+                <div className="flex flex-wrap items-center justify-between gap-4 border-t pt-3">
+                    <div className="flex flex-wrap items-center gap-3">
+                        {/* Card Health Color Legend */}
+                        <div className="flex items-center gap-3.5 text-xs bg-white px-3.5 py-1.5 rounded-lg border border-gray-200 shadow-xs text-gray-600 select-none">
+                            <span className="font-semibold text-gray-400 mr-0.5">Card Status:</span>
+                            <div className="flex items-center gap-1.5" title="Updated in the last 48 hours">
+                                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 border border-emerald-600 block shrink-0"></span>
+                                <span className="font-medium text-gray-700">Active</span>
+                            </div>
+                            <div className="flex items-center gap-1.5" title="No activity for more than 48 hours">
+                                <span className="w-2.5 h-2.5 rounded-full bg-orange-500 border border-orange-600 block shrink-0"></span>
+                                <span className="font-medium text-gray-700">Stale (&gt;48h)</span>
+                            </div>
+                            <div className="flex items-center gap-1.5" title="Customer has sent a new reply">
+                                <span className="w-2.5 h-2.5 rounded-full bg-yellow-400 border border-yellow-500 block shrink-0"></span>
+                                <span className="font-medium text-gray-700">New Reply</span>
+                            </div>
+                            <div className="flex items-center gap-1.5" title="Follow-up date is today or in the past">
+                                <span className="w-2.5 h-2.5 rounded-full bg-red-500 border border-red-600 animate-pulse block shrink-0"></span>
+                                <span className="font-medium text-gray-700">Overdue / Today</span>
+                            </div>
+                        </div>
+
+                        {/* Additional Filters */}
+                        <div className="flex items-center gap-2">
+                            <select 
+                                value={assignedUserFilter} 
+                                onChange={e => setAssignedUserFilter(e.target.value)}
+                                className="bg-white border rounded-lg px-2 py-1.5 text-xs font-bold text-gray-700 shadow-sm outline-none"
                             >
-                                {days === 'today' ? 'Today' : days === 'all' ? 'All Time' : `${days} Days`}
-                            </button>
-                        ))}
-                    </div>
+                                <option value="all">All Assignments</option>
+                                <option value="me">My Inquiries</option>
+                                <optgroup label="Users">
+                                    {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                                </optgroup>
+                                {entities && entities.length > 0 && (
+                                    <optgroup label="Teams (Entities)">
+                                        {entities.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                                    </optgroup>
+                                )}
+                            </select>
+                            <select 
+                                value={stalenessFilter} 
+                                onChange={e => setStalenessFilter(e.target.value)}
+                                className="bg-white border rounded-lg px-2 py-1.5 text-xs font-bold text-gray-700 shadow-sm outline-none"
+                            >
+                                <option value="all">All Activity</option>
+                                <option value="stale_24h">Unactioned &gt; 24h</option>
+                            </select>
+                        </div>
 
-                    {/* View Layout Toggle (Kanban vs List) */}
-                    <div className="flex items-center gap-1 bg-white p-1 rounded-lg border shadow-sm">
-                        <button
-                            type="button"
-                            onClick={() => setViewLayout('kanban')}
-                            className={`px-3 py-1 text-xs font-bold rounded-md transition-all whitespace-nowrap ${
-                                viewLayout === 'kanban' 
-                                ? 'bg-indigo-600 text-white shadow-sm' 
-                                : 'text-gray-500 hover:bg-gray-100'
-                            }`}
-                        >
-                            Kanban Board
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setViewLayout('list')}
-                            className={`px-3 py-1 text-xs font-bold rounded-md transition-all whitespace-nowrap ${
-                                viewLayout === 'list' 
-                                ? 'bg-indigo-600 text-white shadow-sm' 
-                                : 'text-gray-500 hover:bg-gray-100'
-                            }`}
-                        >
-                            List View
-                        </button>
-                    </div>
+                        {/* Date filter */}
+                        <div className="flex items-center gap-2 bg-white p-1 rounded-lg border shadow-sm">
+                            {(['today', '7', '30', '90', 'all'] as const).map(days => (
+                                <button
+                                    key={days}
+                                    onClick={() => setDateFilter(days)}
+                                    className={`px-3 py-1 text-xs font-bold rounded-md transition-all whitespace-nowrap ${
+                                        dateFilter === days 
+                                        ? 'bg-indigo-600 text-white shadow-sm' 
+                                        : 'text-gray-500 hover:bg-gray-100'
+                                    }`}
+                                >
+                                    {days === 'today' ? 'Today' : days === 'all' ? 'All Time' : `${days} Days`}
+                                </button>
+                            ))}
+                        </div>
 
-                    {/* Detailed vs Compact Toggle */}
-                    {viewLayout === 'kanban' && (
-                        <div className="flex items-center gap-1 bg-white p-1 rounded-lg border shadow-sm mr-2">
+                        {/* View Layout Toggle (Kanban vs List) */}
+                        <div className="flex items-center gap-1 bg-white p-1 rounded-lg border shadow-sm">
                             <button
                                 type="button"
-                                onClick={() => setIsCompact(false)}
+                                onClick={() => setViewLayout('kanban')}
                                 className={`px-3 py-1 text-xs font-bold rounded-md transition-all whitespace-nowrap ${
-                                    !isCompact 
+                                    viewLayout === 'kanban' 
                                     ? 'bg-indigo-600 text-white shadow-sm' 
                                     : 'text-gray-500 hover:bg-gray-100'
                                 }`}
                             >
-                                Detailed
+                                Kanban Board
                             </button>
                             <button
                                 type="button"
-                                onClick={() => setIsCompact(true)}
+                                onClick={() => setViewLayout('list')}
                                 className={`px-3 py-1 text-xs font-bold rounded-md transition-all whitespace-nowrap ${
-                                    isCompact 
+                                    viewLayout === 'list' 
                                     ? 'bg-indigo-600 text-white shadow-sm' 
                                     : 'text-gray-500 hover:bg-gray-100'
                                 }`}
                             >
-                                Compact
+                                List View
                             </button>
                         </div>
-                    )}
+
+                        {/* Detailed vs Compact Toggle */}
+                        {viewLayout === 'kanban' && (
+                            <div className="flex items-center gap-1 bg-white p-1 rounded-lg border shadow-sm">
+                                <button
+                                    type="button"
+                                    onClick={() => setIsCompact(false)}
+                                    className={`px-3 py-1 text-xs font-bold rounded-md transition-all whitespace-nowrap ${
+                                        !isCompact 
+                                        ? 'bg-indigo-600 text-white shadow-sm' 
+                                        : 'text-gray-500 hover:bg-gray-100'
+                                    }`}
+                                >
+                                    Detailed
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsCompact(true)}
+                                    className={`px-3 py-1 text-xs font-bold rounded-md transition-all whitespace-nowrap ${
+                                        isCompact 
+                                        ? 'bg-indigo-600 text-white shadow-sm' 
+                                        : 'text-gray-500 hover:bg-gray-100'
+                                    }`}
+                                >
+                                    Compact
+                                </button>
+                            </div>
+                        )}
+                    </div>
 
                     <div className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16}/>
                         <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Search..." className="pl-9 pr-4 py-2 border rounded-lg text-sm w-48"/>
                     </div>
-
-                    <button 
-                        onClick={handleSyncEmails} 
-                        disabled={isSyncing}
-                        className="flex items-center gap-2 py-2 px-4 bg-white border border-gray-300 text-gray-700 font-semibold rounded-lg shadow-sm hover:bg-gray-50 transition disabled:opacity-50"
-                        title="Manually trigger email sync from info@brookspeed.com"
-                    >
-                        {isSyncing ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
-                        Sync Emails
-                    </button>
-
-                    <button onClick={() => props.onOpenInquiryModal({})} className="flex items-center gap-2 py-2 px-4 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition">
-                        <PlusCircle size={16}/> Log Inquiry
-                    </button>
                 </div>
             </header>
 

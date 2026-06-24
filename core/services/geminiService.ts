@@ -81,6 +81,9 @@ export const generateServicePackageName = async (lineItems: any[], make: string,
 export const parseInquiryMessage = async (message: string): Promise<any> => {
     const prompt = `Analyze this customer inquiry message and extract structured information.
     
+    Note on Forwarded Emails:
+    If this email/message is a forwarded message (e.g. from an internal staff member forwarding a client's email, or has sections like 'From:', 'To:', 'Sent:', 'Subject:' indicating a forwarded thread), you MUST scan past the forwarder's introductory text and analyze all preceding emails (the original client's email history/predecessors) to find the original customer's actual contact information.
+    
     Extract the following fields if present:
     1. "summary": A brief 1-2 sentence summary of the customer's issue or request.
     2. "fromName": The customer's full name, if mentioned.

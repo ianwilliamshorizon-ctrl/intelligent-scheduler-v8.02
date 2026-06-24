@@ -854,9 +854,10 @@ async function performEmailSync(microsoftClientId, microsoftClientSecret, micros
       const fromName = fromField.name || "";
       const subject = message.subject || "";
       
-      // Use uniqueBody if available to avoid thread history, fallback to body
-      const rawBody = message.uniqueBody?.content || message.body?.content || "";
-      const bodyType = message.uniqueBody?.contentType || message.body?.contentType || "html";
+      // Prefer full body (message.body) to ensure that the entire thread and any forwarded email details
+      // are preserved and visible in the message panel and can be scanned by the AI model.
+      const rawBody = message.body?.content || message.uniqueBody?.content || "";
+      const bodyType = message.body?.contentType || message.uniqueBody?.contentType || "html";
       
       // Strip HTML if necessary, or pass to AI as-is. Clean text is better for UI and AI.
       let textBody = rawBody;
@@ -1045,6 +1046,10 @@ async function performEmailSync(microsoftClientId, microsoftClientSecret, micros
       let isQuoteRequest = false;
       let isEscalated = false;
 
+      let cEmail = "";
+      let cPhone = "";
+      let cReg = "";
+
       if (geminiApiKey) {
         try {
           const { GoogleGenerativeAI } = require("@google/generative-ai");
@@ -1053,6 +1058,10 @@ async function performEmailSync(microsoftClientId, microsoftClientSecret, micros
 
           const prompt = `
 Analyze the following email subject and body received by a vehicle service center.
+
+Note on Forwarded Emails:
+If this email is a forwarded message (e.g. from an internal staff member forwarding a client's email, or has 'Fwd:' in the subject, or has sections like 'From:', 'To:', 'Sent:', 'Subject:' indicating a forwarded thread), you MUST scan past the forwarder's introductory text and analyze all preceding emails (the original client's email history/predecessors) to find the original customer's actual contact information.
+
 Determine:
 1. Is this email a new request, inquiry, or question regarding an estimate, quotation, pricing, or booking/scheduling a service? (true/false)
 2. Does this email contain a complaint, billing dispute, or urgent escalation/update? (true/false)
@@ -1071,6 +1080,7 @@ Format your response as a valid JSON object with the following fields:
   "isEscalated": boolean,
   "matchedEntityId": string | null,
   "customerName": string | null,
+  "customerEmail": string | null,
   "customerPhone": string | null,
   "vehicleRegistration": string | null,
   "summary": "Concise 1-2 sentence summary of the customer's request",
@@ -1098,15 +1108,54 @@ ${textBody}
           
           // Extract new fields if present
           if (classification.customerName) fromName = classification.customerName;
+          cEmail = classification.customerEmail || "";
+          cPhone = classification.customerPhone || "";
+          cReg = classification.vehicleRegistration || "";
           const newSummary = classification.summary || "";
-          const cPhone = classification.customerPhone || "";
-          const cReg = classification.vehicleRegistration || "";
           
           if (newSummary) {
             classificationReason = `Summary: ${newSummary}\nPhone: ${cPhone || 'N/A'}, Vehicle Reg: ${cReg || 'N/A'}\nReasoning: ${classificationReason}`;
           }
           
           logger.info(`Gemini classified email: Entity=${entityId}, QuoteRequest=${isQuoteRequest}, Escalated=${isEscalated}`);
+
+          // Re-lookup customer using the extracted client email if we didn't find one with the sender email
+          if (!matchedCustomerId && cEmail) {
+            logger.info(`Attempting customer lookup with AI-extracted email: ${cEmail}`);
+            const customerSnap = await db.collection("brooks_customers")
+              .where("email", "==", cEmail.trim())
+              .limit(1)
+              .get();
+            if (!customerSnap.empty) {
+              matchedCustomerId = customerSnap.docs[0].id;
+              logger.info(`Matched customer ID via AI-extracted email: ${matchedCustomerId}`);
+            }
+          }
+
+          // Re-lookup vehicle using the extracted registration if matched
+          if (!matchedVehicleId && cReg) {
+            let cleanReg = cReg.replace(/\s/g, "").toUpperCase();
+            logger.info(`Attempting vehicle lookup with AI-extracted registration: ${cleanReg}`);
+            let vehicleSnap = await db.collection("brooks_vehicles")
+              .where("registration", "==", cleanReg)
+              .limit(1)
+              .get();
+            
+            if (vehicleSnap.empty && cleanReg.length === 7) {
+              // Try standard UK format with space (e.g. "AB12 CDE")
+              const spacedReg = cleanReg.substring(0, 4) + " " + cleanReg.substring(4);
+              vehicleSnap = await db.collection("brooks_vehicles")
+                .where("registration", "==", spacedReg)
+                .limit(1)
+                .get();
+            }
+            
+            if (!vehicleSnap.empty) {
+              matchedVehicleId = vehicleSnap.docs[0].id;
+              matchedCustomerId = matchedCustomerId || vehicleSnap.docs[0].data().customerId;
+              logger.info(`Matched vehicle ID via AI-extracted registration: ${matchedVehicleId}`);
+            }
+          }
         } catch (geminiError) {
           logger.error("Error using Gemini for email classification:", geminiError.message);
         }
@@ -1137,11 +1186,16 @@ ${textBody}
         status = "Immediate Quote";
       }
 
+      const finalEmail = cEmail || fromEmail;
+      const finalPhone = cPhone || "";
+
       // 3. Create Inquiry Card
       const newInquiry = {
         createdAt: message.receivedDateTime || new Date().toISOString(),
-        fromName: fromName || fromEmail || "Unknown Sender",
-        fromContact: fromEmail || "No Email",
+        fromName: fromName || finalEmail || "Unknown Sender",
+        fromContact: finalEmail || "No Email",
+        fromEmail: finalEmail || null,
+        fromPhone: finalPhone || null,
         message: textBody || "Received email with empty text body.",
         takenByUserId: "system",
         status: status,
@@ -1374,4 +1428,4 @@ exports.debugInquiry = onRequest({
   } catch (error) {
     res.status(500).send(`Error: ${error.message}`);
   }
-});
+});
