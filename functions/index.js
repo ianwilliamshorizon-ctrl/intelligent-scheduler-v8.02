@@ -1521,49 +1521,53 @@ exports.forceSyncAttachments = onRequest({
       const messageId = inq.microsoftMessageId;
       logger.info(`Checking attachments for Inquiry ${inq.id} (Message: ${messageId})...`);
       
-      const attachmentsUrl = `https://graph.microsoft.com/v1.0/users/${microsoftEmailSender}/messages/${messageId}/attachments?$expand=microsoft.graph.itemattachment/item`;
-      const attachmentsResponse = await axios.get(attachmentsUrl, {
-        headers: {
-          "Authorization": `Bearer ${accessToken}`,
-          "Accept": "application/json"
-        }
-      });
-      const attachmentsList = attachmentsResponse.data.value || [];
-      const mediaItems = [];
-
-      for (const att of attachmentsList) {
-        if (att["@odata.type"] === "#microsoft.graph.fileAttachment" && att.contentBytes) {
-          const isImage = att.contentType?.startsWith("image/") || false;
-          const mediaItemId = crypto.randomUUID();
-          
-          logger.info(`Saving email attachment ${att.name} to storage...`);
-          const bucket = admin.storage().bucket();
-          const fileRef = bucket.file(`vehicle-media/${mediaItemId}`);
-          const buffer = Buffer.from(att.contentBytes, "base64");
-          await fileRef.save(buffer, {
-            contentType: att.contentType || "application/octet-stream",
-            metadata: {
-              metadata: {
-                name: att.name,
-                uploadedFrom: "retroactive-email-sync"
-              }
-            }
-          });
-
-          mediaItems.push({
-            id: mediaItemId,
-            type: isImage ? "Photo" : "Document",
-            name: att.name,
-            uploadedAt: new Date().toISOString()
-          });
-        }
-      }
-
-      if (mediaItems.length > 0) {
-        await db.collection("brooks_inquiries").doc(inq.id).update({
-          media: mediaItems
+      try {
+        const attachmentsUrl = `https://graph.microsoft.com/v1.0/users/${microsoftEmailSender}/messages/${messageId}/attachments?$expand=microsoft.graph.itemattachment/item`;
+        const attachmentsResponse = await axios.get(attachmentsUrl, {
+          headers: {
+            "Authorization": `Bearer ${accessToken}`,
+            "Accept": "application/json"
+          }
         });
-        updatedList.push({ id: inq.id, fromName: inq.fromName, attachmentsCount: mediaItems.length });
+        const attachmentsList = attachmentsResponse.data.value || [];
+        const mediaItems = [];
+
+        for (const att of attachmentsList) {
+          if (att["@odata.type"] === "#microsoft.graph.fileAttachment" && att.contentBytes) {
+            const isImage = att.contentType?.startsWith("image/") || false;
+            const mediaItemId = crypto.randomUUID();
+            
+            logger.info(`Saving email attachment ${att.name} to storage...`);
+            const bucket = admin.storage().bucket();
+            const fileRef = bucket.file(`vehicle-media/${mediaItemId}`);
+            const buffer = Buffer.from(att.contentBytes, "base64");
+            await fileRef.save(buffer, {
+              contentType: att.contentType || "application/octet-stream",
+              metadata: {
+                metadata: {
+                  name: att.name,
+                  uploadedFrom: "retroactive-email-sync"
+                }
+              }
+            });
+
+            mediaItems.push({
+              id: mediaItemId,
+              type: isImage ? "Photo" : "Document",
+              name: att.name,
+              uploadedAt: new Date().toISOString()
+            });
+          }
+        }
+
+        if (mediaItems.length > 0) {
+          await db.collection("brooks_inquiries").doc(inq.id).update({
+            media: mediaItems
+          });
+          updatedList.push({ id: inq.id, fromName: inq.fromName, attachmentsCount: mediaItems.length });
+        }
+      } catch (inqError) {
+        logger.error(`Failed to retrieve attachments for inquiry ${inq.id}:`, inqError.message);
       }
     }
 
