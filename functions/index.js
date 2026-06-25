@@ -1462,6 +1462,7 @@ exports.debugInquiry = onRequest({
 
 exports.forceSyncAttachments = onRequest({
   region: "europe-west1",
+  cors: true,
   secrets: ["GEMINI_API_KEY", "MICROSOFT_CLIENT_ID", "MICROSOFT_CLIENT_SECRET", "MICROSOFT_TENANT_ID", "MICROSOFT_EMAIL_SENDER"],
   timeoutSeconds: 300,
   memory: "512MiB"
