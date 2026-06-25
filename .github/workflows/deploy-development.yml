@@ -31,5 +31,11 @@ jobs:
       - name: Create Unique Build Timestamp
         run: echo "$(date)" > dist/build-timestamp.txt
 
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEV }}'
+
       - name: Deploy to Firebase (Hosting & Functions)
-        run: npx -y firebase-tools@15.11.0 deploy --project dev --only hosting,functions --token "${{ secrets.FIREBASE_TOKEN_DEV }}" --force
+        run: npx -y firebase-tools@15.11.0 deploy --project dev --only hosting,functions --force
