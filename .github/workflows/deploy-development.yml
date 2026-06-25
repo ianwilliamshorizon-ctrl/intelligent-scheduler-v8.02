@@ -1,9 +1,11 @@
 name: Deploy Development
 
 on:
-  push:
-    branches:
-      - dev
+  # Temporarily disabled
+  # push:
+  #   branches:
+  #     - dev
+  workflow_dispatch:
 
 jobs:
   deploy:
