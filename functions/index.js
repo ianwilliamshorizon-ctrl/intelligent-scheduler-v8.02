@@ -861,33 +861,56 @@ async function performEmailSync(microsoftClientId, microsoftClientSecret, micros
       
       // Strip HTML if necessary, or pass to AI as-is. Clean text is better for UI and AI.
       let textBody = rawBody;
+      let mediaItems = [];
+
+      // Extract inline base64 images from HTML body before stripping HTML tags
       if (bodyType === "html") {
-        // Simple HTML to plain text conversion
-        textBody = rawBody
-          .replace(/<style([\s\S]*?)<\/style>/gi, '')
-          .replace(/<script([\s\S]*?)<\/script>/gi, '')
-          .replace(/<\/div>/ig, '\n')
-          .replace(/<\/li>/ig, '\n')
-          .replace(/<p[^>]*>/gi, '\n')
-          .replace(/<br\s*\/?>/gi, '\n')
-          .replace(/<[^>]+>/g, '')
-          .replace(/&nbsp;/g, ' ')
-          .replace(/&amp;/g, '&')
-          .replace(/&lt;/g, '<')
-          .replace(/&gt;/g, '>')
-          .trim();
-      }
+        const crypto = require("crypto");
+        const imgRegex = /<img[^>]+src=["']data:(image\/([a-zA-Z0-9]+));base64,([^"']+)["'][^>]*>/gi;
+        let match;
+        let imgIndex = 1;
+        
+        while ((match = imgRegex.exec(rawBody)) !== null) {
+          const contentType = match[1]; // e.g. "image/png"
+          const extension = match[2]; // e.g. "png"
+          const base64Data = match[3]; // the base64 string
+          
+          const mediaItemId = crypto.randomUUID();
+          const fileName = `embedded_image_${imgIndex}.${extension}`;
+          
+          try {
+            logger.info(`Extracting inline base64 image and saving to storage as ${fileName}...`);
+            const bucket = admin.storage().bucket();
+            const fileRef = bucket.file(`vehicle-media/${mediaItemId}`);
+            const buffer = Buffer.from(base64Data, "base64");
+            await fileRef.save(buffer, {
+              contentType: contentType || "application/octet-stream",
+              metadata: {
+                metadata: {
+                  name: fileName,
+                  uploadedFrom: "inbound-email-inline"
+                }
+              }
+            });
 
-      // Match recipients
-      let recipientEmail = microsoftEmailSender;
-      if (message.toRecipients && message.toRecipients.length > 0) {
-        recipientEmail = message.toRecipients[0].emailAddress?.address || microsoftEmailSender;
-      }
+            mediaItems.push({
+              id: mediaItemId,
+              type: "Photo",
+              name: fileName,
+              uploadedAt: new Date().toISOString()
+            });
 
-      logger.info(`Syncing email: From=${fromEmail}, Subject="${subject}"`);
+            // Replace the image tag in textBody with a text placeholder
+            const placeholder = `\n[Embedded Image: ${fileName}]\n`;
+            textBody = textBody.replace(match[0], placeholder);
+            imgIndex++;
+          } catch (uploadErr) {
+            logger.error(`Failed to save inline base64 image ${fileName}:`, uploadErr.message);
+          }
+        }
+      }
 
       // Fetch and process attachments if they exist
-      let mediaItems = [];
       if (message.hasAttachments) {
         try {
           logger.info(`Message ${messageId} has attachments. Fetching attachments from MS Graph...`);
@@ -902,6 +925,19 @@ async function performEmailSync(microsoftClientId, microsoftClientSecret, micros
           const attachmentsList = attachmentsResponse.data.value || [];
           
           const crypto = require("crypto");
+
+          // Replace CID image references with filenames in textBody
+          if (bodyType === "html") {
+            const cidRegex = /<img[^>]+src=["']cid:([^"']+)["'][^>]*>/gi;
+            let cidMatch;
+            while ((cidMatch = cidRegex.exec(rawBody)) !== null) {
+              const cid = cidMatch[1];
+              const matchingAtt = attachmentsList.find(a => a.contentId === cid || a.name?.includes(cid));
+              const fileName = matchingAtt ? matchingAtt.name : `inline_image_${cid}`;
+              textBody = textBody.replace(cidMatch[0], `\n[Embedded Image: ${fileName}]\n`);
+            }
+          }
+
           for (const att of attachmentsList) {
             if (att["@odata.type"] === "#microsoft.graph.fileAttachment" && att.contentBytes) {
               const isImage = att.contentType?.startsWith("image/") || false;
@@ -921,12 +957,14 @@ async function performEmailSync(microsoftClientId, microsoftClientSecret, micros
                 }
               });
 
-              mediaItems.push({
-                id: mediaItemId,
-                type: isImage ? "Photo" : "Document",
-                name: att.name,
-                uploadedAt: new Date().toISOString()
-              });
+              if (!mediaItems.some(item => item.name === att.name)) {
+                mediaItems.push({
+                  id: mediaItemId,
+                  type: isImage ? "Photo" : "Document",
+                  name: att.name,
+                  uploadedAt: new Date().toISOString()
+                });
+              }
             } else if (att["@odata.type"] === "#microsoft.graph.itemAttachment" && att.item) {
               const item = att.item;
               if (item.body) {
@@ -962,6 +1000,31 @@ async function performEmailSync(microsoftClientId, microsoftClientSecret, micros
           logger.error(`Error fetching attachments for message ${messageId}:`, attachmentsError.message);
         }
       }
+
+      // Convert the rest of HTML body to plain text
+      if (bodyType === "html") {
+        textBody = textBody
+          .replace(/<style([\s\S]*?)<\/style>/gi, '')
+          .replace(/<script([\s\S]*?)<\/script>/gi, '')
+          .replace(/<\/div>/ig, '\n')
+          .replace(/<\/li>/ig, '\n')
+          .replace(/<p[^>]*>/gi, '\n')
+          .replace(/<br\s*\/?>/gi, '\n')
+          .replace(/<[^>]+>/g, '')
+          .replace(/&nbsp;/g, ' ')
+          .replace(/&amp;/g, '&')
+          .replace(/&lt;/g, '<')
+          .replace(/&gt;/g, '>')
+          .trim();
+      }
+
+      // Match recipients
+      let recipientEmail = microsoftEmailSender;
+      if (message.toRecipients && message.toRecipients.length > 0) {
+        recipientEmail = message.toRecipients[0].emailAddress?.address || microsoftEmailSender;
+      }
+
+      logger.info(`Syncing email: From=${fromEmail}, Subject="${subject}"`);
 
       let matchedCustomerId = null;
       let matchedVehicleId = null;
@@ -1522,6 +1585,65 @@ exports.forceSyncAttachments = onRequest({
       logger.info(`Checking attachments for Inquiry ${inq.id} (Message: ${messageId})...`);
       
       try {
+        // Fetch original message details to get the raw HTML body
+        const messageUrl = `https://graph.microsoft.com/v1.0/users/${microsoftEmailSender}/messages/${messageId}?$select=body,uniqueBody,hasAttachments`;
+        const messageResponse = await axios.get(messageUrl, {
+          headers: {
+            "Authorization": `Bearer ${accessToken}`,
+            "Accept": "application/json"
+          }
+        });
+        const msgDetails = messageResponse.data;
+        const rawBody = msgDetails.body?.content || msgDetails.uniqueBody?.content || "";
+        const bodyType = msgDetails.body?.contentType || msgDetails.uniqueBody?.contentType || "html";
+        let textBody = rawBody;
+        const mediaItems = [];
+
+        // 1. Extract base64 embedded images
+        if (bodyType === "html") {
+          const imgRegex = /<img[^>]+src=["']data:(image\/([a-zA-Z0-9]+));base64,([^"']+)["'][^>]*>/gi;
+          let match;
+          let imgIndex = 1;
+          
+          while ((match = imgRegex.exec(rawBody)) !== null) {
+            const contentType = match[1];
+            const extension = match[2];
+            const base64Data = match[3];
+            
+            const mediaItemId = crypto.randomUUID();
+            const fileName = `embedded_image_${imgIndex}.${extension}`;
+            
+            try {
+              logger.info(`Saving email attachment ${fileName} to storage...`);
+              const bucket = admin.storage().bucket();
+              const fileRef = bucket.file(`vehicle-media/${mediaItemId}`);
+              const buffer = Buffer.from(base64Data, "base64");
+              await fileRef.save(buffer, {
+                contentType: contentType || "application/octet-stream",
+                metadata: {
+                  metadata: {
+                    name: fileName,
+                    uploadedFrom: "retroactive-email-sync"
+                  }
+                }
+              });
+
+              mediaItems.push({
+                id: mediaItemId,
+                type: "Photo",
+                name: fileName,
+                uploadedAt: new Date().toISOString()
+              });
+
+              textBody = textBody.replace(match[0], `\n[Embedded Image: ${fileName}]\n`);
+              imgIndex++;
+            } catch (uploadErr) {
+              logger.error(`Failed to save inline base64 image ${fileName}:`, uploadErr.message);
+            }
+          }
+        }
+
+        // 2. Fetch Graph attachments
         const attachmentsUrl = `https://graph.microsoft.com/v1.0/users/${microsoftEmailSender}/messages/${messageId}/attachments?$expand=microsoft.graph.itemattachment/item`;
         const attachmentsResponse = await axios.get(attachmentsUrl, {
           headers: {
@@ -1530,8 +1652,20 @@ exports.forceSyncAttachments = onRequest({
           }
         });
         const attachmentsList = attachmentsResponse.data.value || [];
-        const mediaItems = [];
 
+        // 3. Replace CID inline images
+        if (bodyType === "html") {
+          const cidRegex = /<img[^>]+src=["']cid:([^"']+)["'][^>]*>/gi;
+          let cidMatch;
+          while ((cidMatch = cidRegex.exec(rawBody)) !== null) {
+            const cid = cidMatch[1];
+            const matchingAtt = attachmentsList.find(a => a.contentId === cid || a.name?.includes(cid));
+            const fileName = matchingAtt ? matchingAtt.name : `inline_image_${cid}`;
+            textBody = textBody.replace(cidMatch[0], `\n[Embedded Image: ${fileName}]\n`);
+          }
+        }
+
+        // 4. Save file attachments
         for (const att of attachmentsList) {
           if (att["@odata.type"] === "#microsoft.graph.fileAttachment" && att.contentBytes) {
             const isImage = att.contentType?.startsWith("image/") || false;
@@ -1551,20 +1685,46 @@ exports.forceSyncAttachments = onRequest({
               }
             });
 
-            mediaItems.push({
-              id: mediaItemId,
-              type: isImage ? "Photo" : "Document",
-              name: att.name,
-              uploadedAt: new Date().toISOString()
-            });
+            if (!mediaItems.some(item => item.name === att.name)) {
+              mediaItems.push({
+                id: mediaItemId,
+                type: isImage ? "Photo" : "Document",
+                name: att.name,
+                uploadedAt: new Date().toISOString()
+              });
+            }
           }
         }
 
+        // Convert the rest of HTML body to plain text
+        if (bodyType === "html") {
+          textBody = textBody
+            .replace(/<style([\s\S]*?)<\/style>/gi, '')
+            .replace(/<script([\s\S]*?)<\/script>/gi, '')
+            .replace(/<\/div>/ig, '\n')
+            .replace(/<\/li>/ig, '\n')
+            .replace(/<p[^>]*>/gi, '\n')
+            .replace(/<br\s*\/?>/gi, '\n')
+            .replace(/<[^>]+>/g, '')
+            .replace(/&nbsp;/g, ' ')
+            .replace(/&amp;/g, '&')
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .trim();
+        }
+
+        // Update inquiry in Firestore
+        const updates = {};
         if (mediaItems.length > 0) {
-          await db.collection("brooks_inquiries").doc(inq.id).update({
-            media: mediaItems
-          });
-          updatedList.push({ id: inq.id, fromName: inq.fromName, attachmentsCount: mediaItems.length });
+          updates.media = mediaItems;
+        }
+        if (textBody && textBody !== rawBody) {
+          updates.message = textBody;
+        }
+
+        if (Object.keys(updates).length > 0) {
+          await db.collection("brooks_inquiries").doc(inq.id).update(updates);
+          updatedList.push({ id: inq.id, fromName: inq.fromName, attachmentsCount: mediaItems.length, messageUpdated: !!updates.message });
         }
       } catch (inqError) {
         logger.error(`Failed to retrieve attachments for inquiry ${inq.id}:`, inqError.message);
