@@ -29,7 +29,7 @@ interface InquiriesViewProps {
 }
 
 export const isStale72h = (i: Inquiry) => {
-    if (i.status !== 'Quoted or Responded') return false;
+    if (i.status !== 'Awaiting Customer' && i.status !== 'Quoted or Responded') return false;
     const latestLogTime = i.logs && i.logs.length > 0 
         ? Math.max(...i.logs.map(log => new Date(log.timestamp).getTime()))
         : new Date(i.createdAt).getTime();
@@ -127,8 +127,12 @@ const InquiryCard: React.FC<{
     let ringClass = 'ring-1 ring-gray-200 hover:ring-gray-300';
     let cardExplanation = 'New or normal status (White background)';
     
-    if (inquiry.status !== 'Closed' && inquiry.status !== 'Approved') {
-        if (isOverdue || isToday) {
+    if (inquiry.status !== 'Closed') {
+        if (inquiry.isUrgent) {
+            healthBgClass = 'bg-red-50/80';
+            ringClass = 'ring-2 ring-red-500 shadow-md';
+            cardExplanation = 'Urgent Inquiry (Red border)';
+        } else if (isOverdue || isToday) {
             healthBgClass = 'bg-red-100/60';
             ringClass = 'ring-1 ring-red-400';
             cardExplanation = 'Action Overdue: Follow-up date is today or in the past (Red background)';
@@ -136,7 +140,7 @@ const InquiryCard: React.FC<{
             healthBgClass = 'bg-yellow-100/60';
             ringClass = 'ring-1 ring-yellow-400';
             cardExplanation = 'Customer Responded: Customer has sent a new reply (Yellow background)';
-        } else if (inquiry.status === 'Quoted or Responded' && isStale72h(inquiry)) {
+        } else if (isStale72h(inquiry)) {
             healthBgClass = 'bg-red-100/60';
             ringClass = 'ring-1 ring-red-400';
             cardExplanation = 'Stale Quote: Unanswered quote for more than 72 hours (Red background)';
@@ -151,7 +155,7 @@ const InquiryCard: React.FC<{
         }
     } else {
         healthBgClass = 'bg-gray-50';
-        cardExplanation = `${inquiry.status} inquiry (Gray background)`;
+        cardExplanation = `Closed inquiry (Gray background)`;
     }
 
     if (isCompact) {
@@ -166,12 +170,13 @@ const InquiryCard: React.FC<{
                 }}
                 onMouseEnter={onMouseEnter}
                 className={`${healthBgClass} rounded shadow-sm p-1.5 border-l-4 ${
-                    inquiry.status === 'New' ? 'border-red-400' : 
-                    inquiry.status === 'Immediate Quote' ? 'border-amber-400' : 
-                    inquiry.status === 'Escalated/Urgent' ? 'border-orange-500' : 
-                    inquiry.status === 'Scheduled' ? 'border-blue-400' : 
-                    inquiry.status === 'Quoted or Responded' ? (isStale72h(inquiry) ? 'border-red-500 text-red-800' : 'border-gray-200') : 
-                    inquiry.status === 'Approved' ? 'border-green-400' : 'border-gray-200'
+                    inquiry.isUrgent ? 'border-red-600' :
+                    inquiry.status === 'Inbox' || inquiry.status === 'New' ? 'border-gray-400' : 
+                    inquiry.status === 'New Requests' ? 'border-blue-400' : 
+                    inquiry.status === 'In-Flight' || inquiry.status === 'Approved' || inquiry.status === 'Rejected' || inquiry.status === 'Immediate Quote' || inquiry.status === 'Escalated/Urgent' ? 'border-amber-400' : 
+                    inquiry.status === 'Scheduled' ? 'border-indigo-400' : 
+                    inquiry.status === 'Awaiting Customer' || inquiry.status === 'Quoted or Responded' ? (isStale72h(inquiry) ? 'border-red-500 text-red-800' : 'border-gray-200') : 
+                    'border-gray-200'
                 } ${isExpanded ? 'shadow-md ring-1 ring-indigo-400' : ringClass} cursor-pointer transition-all mb-1.5`}
                 onClick={() => onOpenInquiryModal(inquiry)}
                 title={cardExplanation}
@@ -342,12 +347,13 @@ const InquiryCard: React.FC<{
                 }
             }}
             className={`${healthBgClass} rounded-lg shadow p-3 border-l-4 ${
-                inquiry.status === 'New' ? 'border-red-400' : 
-                inquiry.status === 'Immediate Quote' ? 'border-amber-400' : 
-                inquiry.status === 'Escalated/Urgent' ? 'border-orange-500' : 
-                inquiry.status === 'Scheduled' ? 'border-blue-400' : 
-                inquiry.status === 'Quoted or Responded' ? (isStale72h(inquiry) ? 'border-red-500 text-red-800 shadow-[0_0_8px_rgba(239,68,68,0.4)]' : 'border-gray-200') : 
-                inquiry.status === 'Approved' ? 'border-green-400' : 'border-gray-200'
+                inquiry.isUrgent ? 'border-red-600' :
+                inquiry.status === 'Inbox' || inquiry.status === 'New' ? 'border-gray-400' : 
+                inquiry.status === 'New Requests' ? 'border-blue-400' : 
+                inquiry.status === 'In-Flight' || inquiry.status === 'Approved' || inquiry.status === 'Rejected' || inquiry.status === 'Immediate Quote' || inquiry.status === 'Escalated/Urgent' ? 'border-amber-400' : 
+                inquiry.status === 'Scheduled' ? 'border-indigo-400' : 
+                inquiry.status === 'Awaiting Customer' || inquiry.status === 'Quoted or Responded' ? (isStale72h(inquiry) ? 'border-red-500 text-red-800 shadow-[0_0_8px_rgba(239,68,68,0.4)]' : 'border-gray-200') : 
+                'border-gray-200'
             } ${ringClass} cursor-pointer hover:shadow-md transition-shadow mb-3`}
             onClick={() => onOpenInquiryModal(inquiry)}
             title={cardExplanation}
@@ -575,12 +581,15 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
     const normalizedInquiries = useMemo(() => {
         return (inquiries || []).map(i => {
             let status = i.status;
-            if (status === ('Quoted' as any) || status === ('Customer Responded' as any)) {
-                status = 'Quoted or Responded';
-            } else if (status === ('Escalated' as any)) {
-                status = 'Escalated/Urgent';
-            } else if (status === ('In Progress' as any)) {
-                status = 'Scheduled';
+            // Map legacy statuses to new 5-stage funnel for safety
+            if (status === ('New' as any)) status = 'Inbox';
+            if (status === ('Immediate Quote' as any) || status === ('Escalated/Urgent' as any) || status === ('Approved' as any) || status === ('Rejected' as any)) status = 'In-Flight';
+            if (status === ('Quoted or Responded' as any) || status === ('Sent' as any) || status === ('Quoted' as any) || status === ('Customer Responded' as any)) status = 'Awaiting Customer';
+            if (status === ('In Progress' as any)) status = 'Scheduled';
+            
+            // Auto-bounce to In-Flight if they reply
+            if (status === 'Awaiting Customer' && i.hasNewReply) {
+                status = 'In-Flight';
             }
             return { ...i, status };
         });
@@ -678,8 +687,8 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                 }
 
                 if (jobToUse) {
-                    // Close inquiry if job is completed, invoiced, closed, or cancelled
-                    if (jobToUse.status === 'Complete' || jobToUse.status === 'Invoiced' || jobToUse.status === 'Closed' || jobToUse.status === 'Cancelled') {
+                    // Close inquiry if job has started (In Progress, Complete, etc.)
+                    if (jobToUse.status === 'In Progress' || jobToUse.status === 'Complete' || jobToUse.status === 'Invoiced' || jobToUse.status === 'Closed' || jobToUse.status === 'Cancelled') {
                         return true;
                     }
                 }
@@ -949,7 +958,7 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
 
     const activeInquiries = useMemo(() => {
         const columns: { [key in Inquiry['status']]?: Inquiry[] } = {
-            'New': [], 'Immediate Quote': [], 'Escalated/Urgent': [], 'Quoted or Responded': [], 'Approved': [], 'Rejected': [], 'Scheduled': [],
+            'Inbox': [], 'New Requests': [], 'In-Flight': [], 'Awaiting Customer': [], 'Scheduled': [],
         };
         filteredInquiries.forEach(i => {
             if (i.status !== 'Closed' && columns[i.status]) columns[i.status]!.push(i);
@@ -1474,7 +1483,7 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
             ) : activeTab === 'active' ? (
                 <main className="flex-grow overflow-x-auto pb-2" onMouseLeave={() => setHoveredInquiryId(null)}>
                     <div className="flex gap-4 h-full min-w-full font-sans">
-                        {(['New', 'Immediate Quote', 'Escalated/Urgent', 'Quoted or Responded', 'Approved', 'Rejected', 'Scheduled'] as Inquiry['status'][]).map(status => (
+                        {(['Inbox', 'New Requests', 'In-Flight', 'Awaiting Customer', 'Scheduled'] as Inquiry['status'][]).map(status => (
                             <div 
                                 key={status} 
                                 className="flex-1 flex flex-col bg-gray-100 rounded-xl min-w-[280px] h-full transition-colors border-2 border-transparent"
