@@ -88,7 +88,8 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                     fromEmail: inquiry?.fromEmail || '',
                     fromPhone: inquiry?.fromPhone || '',
                     message: inquiry?.message || '',
-                    status: inquiry?.status || 'New',
+                    status: inquiry?.status || 'Inbox',
+                    isUrgent: inquiry?.isUrgent || false,
                     actionNotes: inquiry?.actionNotes || '',
                     takenByUserId: currentUser.id,
                     assignedToUserId: '',
@@ -427,17 +428,25 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                     {entities?.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
                                 </select>
                             </div>
-                            <div>
-                                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Status</label>
-                                <select name="status" value={formData.status || 'New'} onChange={handleChange} className="w-full p-2 border rounded text-sm bg-gray-50">
-                                    <option value="New">New</option>
-                                    <option value="Immediate Quote">Immediate Quote</option>
-                                    <option value="Escalated/Urgent">Escalated/Urgent</option>
-                                    <option value="Scheduled">Scheduled</option>
-                                    <option value="Quoted or Responded">Quoted or Responded</option>
-                                    <option>Rejected</option>
-                                    <option>Closed</option>
-                                </select>
+                            <div className="flex gap-4">
+                                <div className="flex-1">
+                                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Status</label>
+                                    <select name="status" value={formData.status || 'Inbox'} onChange={handleChange} className="w-full p-2 border rounded text-sm bg-gray-50">
+                                        <option value="Inbox">Inbox</option>
+                                        <option value="New Requests">New Requests</option>
+                                        <option value="In-Flight">In-Flight (Priority)</option>
+                                        <option value="Awaiting Customer">Awaiting Customer</option>
+                                        <option value="Scheduled">Scheduled</option>
+                                        <option value="Closed">Closed</option>
+                                    </select>
+                                </div>
+                                <div className="w-24">
+                                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Urgent</label>
+                                    <label className="relative inline-flex items-center cursor-pointer mt-1">
+                                        <input type="checkbox" className="sr-only peer" checked={!!formData.isUrgent} onChange={e => setFormData(p => ({ ...p, isUrgent: e.target.checked }))} />
+                                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-500"></div>
+                                    </label>
+                                </div>
                             </div>
                             <div>
                                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Follow Up Date</label>
@@ -628,7 +637,7 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                                     id: generatedId,
                                                     inquiryNumber: generatedInquiryNumber,
                                                     hasNewReply: false,
-                                                    status: 'Quoted or Responded',
+                                                    status: 'Awaiting Customer',
                                                     followUpDate: null,
                                                     logs: updatedLogs 
                                                 }));
@@ -643,7 +652,7 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                                         takenByUserId: formData.takenByUserId || currentUser.id,
                                                         inquiryNumber: generatedInquiryNumber,
                                                         hasNewReply: false,
-                                                        status: 'Quoted or Responded',
+                                                        status: 'Awaiting Customer',
                                                         followUpDate: null,
                                                         logs: updatedLogs
                                                     } as Inquiry;

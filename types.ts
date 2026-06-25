@@ -659,7 +659,7 @@ export interface Inquiry {
     takenByUserId: string;
     assignedToUserId?: string;
     assignedToEntityId?: string;
-    status: 'New' | 'Immediate Quote' | 'Escalated/Urgent' | 'Scheduled' | 'Quoted or Responded' | 'Closed' | 'Approved' | 'Rejected' | 'Sent';
+    status: 'Inbox' | 'New Requests' | 'In-Flight' | 'Awaiting Customer' | 'Scheduled' | 'Closed';
     linkedCustomerId?: string;
     linkedVehicleId?: string;
     linkedEstimateId?: string;
@@ -671,6 +671,7 @@ export interface Inquiry {
     followUpDate?: string;
     inquiryNumber?: string;
     hasNewReply?: boolean;
+    isUrgent?: boolean;
 }
 
 /**
