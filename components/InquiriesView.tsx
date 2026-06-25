@@ -534,7 +534,7 @@ const InquiryCard: React.FC<{
 };
 
 const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
-    const { inquiries, setInquiries, customers, vehicles, estimates, purchaseOrders, jobs } = useData();
+    const { inquiries, setInquiries, customers, vehicles, estimates, purchaseOrders, jobs, forceRefresh } = useData();
     
     const normalizedInquiries = useMemo(() => {
         return (inquiries || []).map(i => {
@@ -712,6 +712,7 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
             const result = await triggerEmailSync();
             if (result.success) {
                 toast.success(`Successfully synced ${result.processedCount} new email(s).`);
+                await forceRefresh('brooks_inquiries' as any);
             } else {
                 toast.error("Sync completed but returned an unexpected result.");
             }

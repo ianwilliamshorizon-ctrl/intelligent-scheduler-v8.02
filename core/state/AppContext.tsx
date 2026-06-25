@@ -113,7 +113,7 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
                 getAll<T.Job>(getPath('jobs')),
                 getAll<T.User>(getPath('users')),
                 getAll<T.Role>(getPath('roles')),
-                getAll<T.BusinessEntity>(getPath('business_entities')),
+                getAll<T.BusinessEntity>(getPath('businessEntities')),
                 getAll<T.Customer>(getPath('customers')),
                 getAll<T.Vehicle>(getPath('vehicles'))
             ]);
