@@ -627,6 +627,9 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                                     ...p, 
                                                     id: generatedId,
                                                     inquiryNumber: generatedInquiryNumber,
+                                                    hasNewReply: false,
+                                                    status: 'Quoted or Responded',
+                                                    followUpDate: null,
                                                     logs: updatedLogs 
                                                 }));
                                                 setReplyText('');
@@ -640,6 +643,8 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                                         takenByUserId: formData.takenByUserId || currentUser.id,
                                                         inquiryNumber: generatedInquiryNumber,
                                                         hasNewReply: false,
+                                                        status: 'Quoted or Responded',
+                                                        followUpDate: null,
                                                         logs: updatedLogs
                                                     } as Inquiry;
                                                     onSave(inquiryToSave, false);

@@ -1125,7 +1125,8 @@ async function performEmailSync(microsoftClientId, microsoftClientSecret, micros
           logs: existingLogs,
           media: updatedMedia,
           hasNewReply: !isOutbound,
-          status: isOutbound ? 'Quoted or Responded' : 'Customer Responded'
+          status: isOutbound ? 'Quoted or Responded' : 'Customer Responded',
+          followUpDate: null
         });
         
         logger.info(`Updated existing Inquiry Card: ${matchedInquiryId} with new reply (isOutbound: ${isOutbound})`);
