@@ -32,4 +32,4 @@ jobs:
         run: echo "$(date)" > dist/build-timestamp.txt
 
       - name: Deploy to Firebase (Hosting & Functions)
-        run: npx firebase-tools deploy --project prod --token "${{ secrets.FIREBASE_TOKEN_PROD }}" --force
+        run: npx -y firebase-tools@15.11.0 deploy --project prod --token "${{ secrets.FIREBASE_TOKEN_PROD }}" --force
