@@ -1458,4 +1458,117 @@ exports.debugInquiry = onRequest({
   } catch (error) {
     res.status(500).send(`Error: ${error.message}`);
   }
+});
+
+exports.forceSyncAttachments = onRequest({
+  region: "europe-west1",
+  secrets: ["GEMINI_API_KEY", "MICROSOFT_CLIENT_ID", "MICROSOFT_CLIENT_SECRET", "MICROSOFT_TENANT_ID", "MICROSOFT_EMAIL_SENDER"],
+  timeoutSeconds: 300,
+  memory: "512MiB"
+}, async (req, res) => {
+  const microsoftClientId = process.env.MICROSOFT_CLIENT_ID?.trim();
+  const microsoftClientSecret = process.env.MICROSOFT_CLIENT_SECRET?.trim();
+  const microsoftTenantId = process.env.MICROSOFT_TENANT_ID?.trim();
+  const microsoftEmailSender = process.env.MICROSOFT_EMAIL_SENDER?.trim();
+
+  if (!microsoftClientId || !microsoftClientSecret || !microsoftTenantId || !microsoftEmailSender) {
+    return res.status(500).send("Microsoft Graph API is not fully configured on the server.");
+  }
+
+  try {
+    const db = admin.firestore();
+    
+    // Get inquiries from the last 5 days
+    const fiveDaysAgo = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString();
+    const snap = await db.collection("brooks_inquiries")
+      .where("createdAt", ">=", fiveDaysAgo)
+      .get();
+
+    const inquiriesToFix = [];
+    snap.forEach(doc => {
+      const data = doc.data();
+      if (data.microsoftMessageId && (!data.media || data.media.length === 0)) {
+        inquiriesToFix.push({ id: doc.id, ...data });
+      }
+    });
+
+    if (inquiriesToFix.length === 0) {
+      return res.status(200).json({ message: "No inquiries from the last 5 days need attachment syncing.", count: 0 });
+    }
+
+    // Get Microsoft access token
+    const tokenUrl = `https://login.microsoftonline.com/${microsoftTenantId}/oauth2/v2.0/token`;
+    const tokenParams = new URLSearchParams();
+    tokenParams.append("client_id", microsoftClientId);
+    tokenParams.append("scope", "https://graph.microsoft.com/.default");
+    tokenParams.append("client_secret", microsoftClientSecret);
+    tokenParams.append("grant_type", "client_credentials");
+
+    const tokenResponse = await axios.post(tokenUrl, tokenParams.toString(), {
+      headers: { "Content-Type": "application/x-www-form-urlencoded" }
+    });
+
+    const accessToken = tokenResponse.data.access_token;
+    if (!accessToken) {
+      throw new Error("No access token returned from Microsoft Entra ID.");
+    }
+
+    const updatedList = [];
+    const crypto = require("crypto");
+
+    for (const inq of inquiriesToFix) {
+      const messageId = inq.microsoftMessageId;
+      logger.info(`Checking attachments for Inquiry ${inq.id} (Message: ${messageId})...`);
+      
+      const attachmentsUrl = `https://graph.microsoft.com/v1.0/users/${microsoftEmailSender}/messages/${messageId}/attachments?$expand=microsoft.graph.itemattachment/item`;
+      const attachmentsResponse = await axios.get(attachmentsUrl, {
+        headers: {
+          "Authorization": `Bearer ${accessToken}`,
+          "Accept": "application/json"
+        }
+      });
+      const attachmentsList = attachmentsResponse.data.value || [];
+      const mediaItems = [];
+
+      for (const att of attachmentsList) {
+        if (att["@odata.type"] === "#microsoft.graph.fileAttachment" && att.contentBytes) {
+          const isImage = att.contentType?.startsWith("image/") || false;
+          const mediaItemId = crypto.randomUUID();
+          
+          logger.info(`Saving email attachment ${att.name} to storage...`);
+          const bucket = admin.storage().bucket();
+          const fileRef = bucket.file(`vehicle-media/${mediaItemId}`);
+          const buffer = Buffer.from(att.contentBytes, "base64");
+          await fileRef.save(buffer, {
+            contentType: att.contentType || "application/octet-stream",
+            metadata: {
+              metadata: {
+                name: att.name,
+                uploadedFrom: "retroactive-email-sync"
+              }
+            }
+          });
+
+          mediaItems.push({
+            id: mediaItemId,
+            type: isImage ? "Photo" : "Document",
+            name: att.name,
+            uploadedAt: new Date().toISOString()
+          });
+        }
+      }
+
+      if (mediaItems.length > 0) {
+        await db.collection("brooks_inquiries").doc(inq.id).update({
+          media: mediaItems
+        });
+        updatedList.push({ id: inq.id, fromName: inq.fromName, attachmentsCount: mediaItems.length });
+      }
+    }
+
+    return res.status(200).json({ message: "Retroactive attachment sync completed.", updated: updatedList });
+  } catch (error) {
+    logger.error("Retroactive sync error:", error);
+    return res.status(500).send(`Error: ${error.message}`);
+  }
 });
