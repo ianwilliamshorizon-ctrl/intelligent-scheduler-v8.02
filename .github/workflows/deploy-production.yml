@@ -36,8 +36,9 @@ jobs:
         uses: google-github-actions/auth@v2
         with:
           credentials_json: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_PROD }}'
+          create_credentials_file: true
 
       - name: Deploy to Firebase (Hosting & Functions)
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
-        run: npx -y firebase-tools@15.11.0 deploy --project prod --force
+        run: npx -y firebase-tools@15.11.0 deploy --project prod --non-interactive --force
