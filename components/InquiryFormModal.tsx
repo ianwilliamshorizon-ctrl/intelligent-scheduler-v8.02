@@ -28,6 +28,8 @@ interface InquiryFormModalProps {
     onAddNewCustomer?: () => void;
     onCreateNewEstimate?: (inquiry: Inquiry) => void;
     onSmartCreateEstimate?: (inquiry: Inquiry, prompt: string) => void;
+    onViewCustomer?: (customerId: string) => void;
+    onViewVehicle?: (vehicleId: string) => void;
 }
 
 // FIXED: Added updateEstimate to the destructuring list below
@@ -46,7 +48,9 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
     updateEstimate,
     onAddNewCustomer,
     onCreateNewEstimate,
-    onSmartCreateEstimate
+    onSmartCreateEstimate,
+    onViewCustomer,
+    onViewVehicle
 }) => {
     const { currentUser, selectedEntityId, businessEntities: entities } = useApp();
     const { purchaseOrders, inquiries } = useData();
@@ -317,10 +321,15 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Customer Connection</label>
                                 {linkedCustomer ? (
                                     <div className="p-2 bg-green-50 border border-green-200 rounded-lg flex justify-between items-center text-sm shadow-xs">
-                                        <div className="flex items-center gap-2 text-green-800">
+                                        <button 
+                                            type="button" 
+                                            onClick={() => onViewCustomer?.(linkedCustomer.id)}
+                                            className="flex items-center gap-2 text-green-800 hover:text-green-600 hover:underline text-left cursor-pointer transition font-semibold"
+                                            title={getCustomerDisplayName(linkedCustomer)}
+                                        >
                                             <UserCheck size={16} className="text-green-700 shrink-0"/>
-                                            <p className="font-semibold truncate max-w-[200px]" title={getCustomerDisplayName(linkedCustomer)}>{getCustomerDisplayName(linkedCustomer)}</p>
-                                        </div>
+                                            <span className="truncate max-w-[200px]">{getCustomerDisplayName(linkedCustomer)}</span>
+                                        </button>
                                         <button type="button" onClick={handleUnlinkCustomer} title="Unlink Customer" className="text-gray-400 hover:text-red-500 transition">
                                             <XCircle size={16}/>
                                         </button>
@@ -355,10 +364,15 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Vehicle Connection</label>
                                 {linkedVehicle ? (
                                      <div className="p-2 bg-green-50 border border-green-200 rounded-lg flex justify-between items-center text-sm shadow-xs">
-                                        <div className="flex items-center gap-2 text-green-800">
+                                        <button 
+                                            type="button" 
+                                            onClick={() => onViewVehicle?.(linkedVehicle.id)}
+                                            className="flex items-center gap-2 text-green-800 hover:text-green-600 hover:underline text-left cursor-pointer transition font-semibold"
+                                            title={`${linkedVehicle.registration} - ${linkedVehicle.make} ${linkedVehicle.model}`}
+                                        >
                                             <Car size={16} className="text-green-700 shrink-0"/>
-                                            <p className="font-semibold truncate max-w-[200px]" title={`${linkedVehicle.registration} - ${linkedVehicle.make} ${linkedVehicle.model}`}>{linkedVehicle.registration}</p>
-                                        </div>
+                                            <span className="font-semibold truncate max-w-[200px]">{linkedVehicle.registration} {linkedVehicle.make ? `(${linkedVehicle.make} ${linkedVehicle.model})` : ''}</span>
+                                        </button>
                                         <button type="button" onClick={handleUnlinkVehicle} title="Unlink Vehicle" className="text-gray-400 hover:text-red-500 transition">
                                             <XCircle size={16}/>
                                         </button>
