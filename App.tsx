@@ -659,7 +659,17 @@ const App = () => {
             case 'financials':
                 return <FinancialReporting />;
             case 'inquiries':
-                return <InquiriesView onOpenInquiryModal={(inq) => setters.setInquiryModal({isOpen: true, inquiry: inq})} onConvert={(inq) => setters.setLinkEstimateModal({isOpen: true, inquiry: inq})} onViewEstimate={(est) => setters.setEstimateViewModal({isOpen: true, estimate: est})} onScheduleEstimate={(est, inquiryId) => setters.setScheduleJobFromEstimateModal({isOpen: true, estimate: est, inquiryId})} onOpenPurchaseOrder={(po) => setters.setPoModal({isOpen: true, po})} onEditEstimate={(est) => setters.setEstimateFormModal({isOpen: true, estimate: est})} onMergeEstimate={workshopActions.handleMergeEstimateToJob} />;
+                return <InquiriesView 
+                    onOpenInquiryModal={(inq) => setters.setInquiryModal({isOpen: true, inquiry: inq})} 
+                    onConvert={(inq) => setters.setLinkEstimateModal({isOpen: true, inquiry: inq})} 
+                    onViewEstimate={(est) => setters.setEstimateViewModal({isOpen: true, estimate: est})} 
+                    onScheduleEstimate={(est, inquiryId) => setters.setScheduleJobFromEstimateModal({isOpen: true, estimate: est, inquiryId})} 
+                    onOpenPurchaseOrder={(po) => setters.setPoModal({isOpen: true, po})} 
+                    onEditEstimate={(est) => setters.setEstimateFormModal({isOpen: true, estimate: est})} 
+                    onMergeEstimate={workshopActions.handleMergeEstimateToJob} 
+                    onViewCustomer={(customerId) => setters.setCustomerModal({isOpen: true, customerId})}
+                    onViewVehicle={(vehicleId) => setters.setVehicleModal({isOpen: true, vehicleId})}
+                />;
             case 'absence':
                 return <AbsenceView currentUser={currentUser} users={users} absenceRequests={absenceRequests} setAbsenceRequests={setAbsenceRequests} />;
             default:

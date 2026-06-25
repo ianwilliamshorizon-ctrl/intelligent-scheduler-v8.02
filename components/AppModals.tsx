@@ -885,6 +885,14 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                         onScheduleEstimate={(est, inqId) => setters.setScheduleJobFromEstimateModal({ isOpen: true, estimate: est, inquiryId: inqId })}
                         onEditEstimate={(est) => setters.setEstimateFormModal({ isOpen: true, estimate: est })}
                         onAddNewCustomer={() => setters.setCustomerModal({ isOpen: true, customerId: null })}
+                        onViewCustomer={(customerId) => {
+                            setters.setInquiryModal({ isOpen: false, inquiry: null });
+                            setters.setCustomerModal({ isOpen: true, customerId });
+                        }}
+                        onViewVehicle={(vehicleId) => {
+                            setters.setInquiryModal({ isOpen: false, inquiry: null });
+                            setters.setVehicleModal({ isOpen: true, vehicleId });
+                        }}
                         onCreateNewEstimate={(inq) => {
                             setters.setInquiryModal({ isOpen: false, inquiry: null });
                             setters.setEstimateFormModal({

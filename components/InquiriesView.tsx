@@ -24,6 +24,8 @@ interface InquiriesViewProps {
     onOpenPurchaseOrder?: (po: PurchaseOrder) => void;
     onEditEstimate?: (estimate: Estimate) => void;
     onMergeEstimate?: (estimate: Estimate, jobId: string) => void;
+    onViewCustomer?: (customerId: string) => void;
+    onViewVehicle?: (vehicleId: string) => void;
 }
 
 export const isStale72h = (i: Inquiry) => {
@@ -51,13 +53,15 @@ const InquiryCard: React.FC<{
     onInitiateBooking: (estimate: Estimate, inquiryId: string) => void;
     onViewEstimate?: (estimate: Estimate) => void;
     onOpenPurchaseOrder?: (po: PurchaseOrder) => void;
+    onViewCustomer?: (customerId: string) => void;
+    onViewVehicle?: (vehicleId: string) => void;
     isCompact?: boolean;
     onUpdateStatus?: (inquiry: Inquiry, status: Inquiry['status']) => void;
     onConvert?: (inquiry: Inquiry, type: 'job' | 'estimate') => void;
     draggable?: boolean;
     isExpanded?: boolean;
     onMouseEnter?: () => void;
-}> = ({ inquiry, onOpenInquiryModal, onInitiateMerge, onInitiateBooking, onViewEstimate, onOpenPurchaseOrder, isCompact, onUpdateStatus, onConvert, draggable, isExpanded = false, onMouseEnter }) => {
+}> = ({ inquiry, onOpenInquiryModal, onInitiateMerge, onInitiateBooking, onViewEstimate, onOpenPurchaseOrder, onViewCustomer, onViewVehicle, isCompact, onUpdateStatus, onConvert, draggable, isExpanded = false, onMouseEnter }) => {
     const { customers, vehicles, estimates, purchaseOrders, jobs } = useData();
     const { users, businessEntities: entities } = useApp();
     
@@ -219,16 +223,32 @@ const InquiryCard: React.FC<{
                 {(customer || vehicle || estimate || linkedPOs.length > 0) && (
                     <div className={`${isExpanded ? 'flex' : 'hidden'} flex-wrap gap-1 mt-1 pt-1 border-t border-gray-100/50`}>
                         {customer && (
-                            <div className="flex items-center gap-0.5 bg-green-50 text-green-700 px-1 rounded text-[9px] font-semibold max-w-[100px] truncate" title={getCustomerDisplayName(customer)}>
-                                <UserCheck size={9} className="shrink-0"/>
+                            <button
+                                type="button"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onViewCustomer?.(customer.id);
+                                }}
+                                className="flex items-center gap-0.5 bg-green-50 text-green-700 px-1 rounded text-[9px] font-semibold max-w-[100px] truncate hover:bg-green-100 hover:underline cursor-pointer border border-green-200/30 text-left transition" 
+                                title={getCustomerDisplayName(customer)}
+                            >
+                                <UserCheck size={9} className="shrink-0 text-green-600"/>
                                 <span className="truncate">{customer.surname || customer.forename}</span>
-                            </div>
+                            </button>
                         )}
                         {vehicle && (
-                            <div className="flex items-center gap-0.5 bg-blue-50 text-blue-700 px-1 rounded text-[9px] font-bold">
-                                <Car size={9} className="shrink-0"/>
+                            <button
+                                type="button"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onViewVehicle?.(vehicle.id);
+                                }}
+                                className="flex items-center gap-0.5 bg-blue-50 text-blue-700 px-1 rounded text-[9px] font-bold hover:bg-blue-100 hover:underline cursor-pointer border border-blue-200/30 text-left transition"
+                                title={`${vehicle.registration} - ${vehicle.make} ${vehicle.model}`}
+                            >
+                                <Car size={9} className="shrink-0 text-blue-600"/>
                                 <span>{vehicle.registration}</span>
-                            </div>
+                            </button>
                         )}
                         {estimate && (
                             <div className="flex items-center gap-0.5 bg-purple-50 text-purple-700 px-1 rounded text-[9px] font-bold">
@@ -384,17 +404,33 @@ const InquiryCard: React.FC<{
             
             <div className="mt-2 pt-2 border-t space-y-2">
                 {customer && (
-                    <div className="flex items-center gap-2 text-xs text-gray-600">
-                        <UserCheck size={14} className="text-green-600"/>
-                        <span className="font-semibold">{getCustomerDisplayName(customer)}</span>
-                    </div>
+                    <button
+                        type="button"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onViewCustomer?.(customer.id);
+                        }}
+                        className="flex items-center gap-2 text-xs text-green-700 bg-green-50 px-2 py-1 rounded hover:bg-green-100 hover:underline cursor-pointer border border-green-200/50 w-fit text-left transition font-semibold"
+                        title={getCustomerDisplayName(customer)}
+                    >
+                        <UserCheck size={14} className="text-green-600 shrink-0"/>
+                        <span>{getCustomerDisplayName(customer)}</span>
+                    </button>
                 )}
                 
                 {vehicle && (
-                    <div className="flex items-center gap-2 text-xs text-gray-600">
-                        <Car size={14} className="text-blue-600"/>
-                        <span className="font-semibold">{vehicle.registration}</span>
-                    </div>
+                    <button
+                        type="button"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onViewVehicle?.(vehicle.id);
+                        }}
+                        className="flex items-center gap-2 text-xs text-blue-700 bg-blue-50 px-2 py-1 rounded hover:bg-blue-100 hover:underline cursor-pointer border border-blue-200/50 w-fit text-left transition font-semibold"
+                        title={`${vehicle.registration} - ${vehicle.make} ${vehicle.model}`}
+                    >
+                        <Car size={14} className="text-blue-600 shrink-0"/>
+                        <span>{vehicle.registration} {vehicle.make ? `(${vehicle.make} ${vehicle.model})` : ''}</span>
+                    </button>
                 )}
                 
                 {estimate && (
@@ -1479,6 +1515,8 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                                             onInitiateBooking={handleInitiateBooking}
                                             onViewEstimate={props.onViewEstimate}
                                             onOpenPurchaseOrder={props.onOpenPurchaseOrder}
+                                            onViewCustomer={props.onViewCustomer}
+                                            onViewVehicle={props.onViewVehicle}
                                             isCompact={isCompact}
                                             onUpdateStatus={handleUpdateStatus}
                                             onConvert={props.onConvert}
@@ -1507,6 +1545,8 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                                 onInitiateBooking={handleInitiateBooking}
                                 onViewEstimate={props.onViewEstimate}
                                 onOpenPurchaseOrder={props.onOpenPurchaseOrder}
+                                onViewCustomer={props.onViewCustomer}
+                                onViewVehicle={props.onViewVehicle}
                                 isCompact={isCompact}
                                 onUpdateStatus={handleUpdateStatus}
                                 onConvert={props.onConvert}
