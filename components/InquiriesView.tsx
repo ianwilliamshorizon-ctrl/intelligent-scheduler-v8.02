@@ -583,8 +583,9 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
             let status = i.status;
             // Map legacy statuses to new 5-stage funnel for safety
             if (status === ('New' as any)) status = 'Inbox';
-            if (status === ('Immediate Quote' as any) || status === ('Escalated/Urgent' as any) || status === ('Approved' as any) || status === ('Rejected' as any)) status = 'In-Flight';
-            if (status === ('Quoted or Responded' as any) || status === ('Sent' as any) || status === ('Quoted' as any) || status === ('Customer Responded' as any)) status = 'Awaiting Customer';
+            if (status === ('Immediate Quote' as any)) status = 'New Requests';
+            if (status === ('Escalated/Urgent' as any) || status === ('Approved' as any) || status === ('Rejected' as any) || status === ('Customer Responded' as any)) status = 'In-Flight';
+            if (status === ('Quoted or Responded' as any) || status === ('Sent' as any) || status === ('Quoted' as any)) status = 'Awaiting Customer';
             if (status === ('In Progress' as any)) status = 'Scheduled';
             
             // Auto-bounce to In-Flight if they reply
