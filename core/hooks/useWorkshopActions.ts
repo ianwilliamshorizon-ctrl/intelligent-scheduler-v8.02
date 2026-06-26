@@ -165,13 +165,13 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
         showSuccess(`Purchase Order #${purchaseOrderId} has been permanently deleted.`);
     };
 
-    const updateLinkedInquiryStatus = async (estimateId: string, newStatus: T.Inquiry['status'], extraUpdates: Partial<T.Inquiry> = {}) => {
-        const targetStatus = newStatus === 'Sent' ? 'Quoted or Responded' : newStatus;
+    const updateLinkedInquiryStatus = async (estimateId: string, newStatus: T.Inquiry['status'] | 'Sent', extraUpdates: Partial<T.Inquiry> = {}) => {
+        const targetStatus = newStatus === 'Sent' ? 'Awaiting Customer' : newStatus;
         const targetInquiry = inquiries.find(i => i.linkedEstimateId === estimateId && i.status !== 'Closed');
         
         if (targetInquiry) {
             await handleSaveItem(setInquiries, { ...targetInquiry, status: targetStatus, ...extraUpdates } as T.Inquiry);
-        } else if (targetStatus === 'Quoted or Responded') {
+        } else if (targetStatus === 'Awaiting Customer') {
             const estimate = estimates.find(e => e.id === estimateId);
             if (estimate) {
                 const customer = customers.find(c => c.id === estimate.customerId);
@@ -184,7 +184,7 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
                     fromContact: customer?.email || customer?.mobile || 'N/A',
                     message: `Estimate #${estimate.estimateNumber} sent to customer.`,
                     takenByUserId: currentUser?.id || 'system',
-                    status: 'Quoted or Responded',
+                    status: 'Awaiting Customer',
                     linkedCustomerId: estimate.customerId,
                     linkedVehicleId: estimate.vehicleId,
                     linkedEstimateId: estimate.id,
@@ -403,7 +403,7 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
 
         await handleSaveItem(setEstimates, estimate);
         
-        if (estimate.status === 'Sent') await updateLinkedInquiryStatus(estimate.id, 'Quoted or Responded');
+        if (estimate.status === 'Sent') await updateLinkedInquiryStatus(estimate.id, 'Awaiting Customer');
         
         if (isNew && estimate.linkedInquiryId) {
             const sourceInquiry = inquiries.find(i => i.id === estimate.linkedInquiryId);
@@ -426,7 +426,7 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
                 fromContact: 'Internal',
                 message: `Supplementary Estimate #${estimate.estimateNumber} created for Job #${estimate.jobId}.`,
                 takenByUserId: currentUser.id,
-                status: 'New',
+                status: 'Inbox',
                 linkedCustomerId: estimate.customerId,
                 linkedVehicleId: estimate.vehicleId,
                 linkedEstimateId: estimate.id,
@@ -592,7 +592,7 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
                 if (existingInquiry) {
                     const updatedInquiry = {
                         ...existingInquiry,
-                        status: 'Approved' as const,
+                        status: 'In-Flight' as const,
                         linkedPurchaseOrderIds: [...(existingInquiry.linkedPurchaseOrderIds || []), ...allGeneratedPOIds],
                         actionNotes: (existingInquiry.actionNotes || '') + '\n[System]: Approved and POs generated.',
                     };
@@ -741,10 +741,10 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
              }
         } else if (!estimate.jobId && !scheduledDate) {
              const existingInquiry = inquiries.find(i => i.linkedEstimateId === estimate.id);
-             if (existingInquiry && existingInquiry.status !== 'Approved') {
+             if (existingInquiry && existingInquiry.status !== 'In-Flight') {
                   await handleSaveItem(setInquiries, { 
                       ...existingInquiry, 
-                      status: 'Approved' as const, 
+                      status: 'In-Flight' as const, 
                       actionNotes: (existingInquiry.actionNotes || '') + '\n[System]: Estimate Approved.',
                   }, 'brooks_inquiries');
              }

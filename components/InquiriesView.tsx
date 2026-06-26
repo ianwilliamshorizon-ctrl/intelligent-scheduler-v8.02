@@ -29,7 +29,7 @@ interface InquiriesViewProps {
 }
 
 export const isStale72h = (i: Inquiry) => {
-    if (i.status !== 'Awaiting Customer' && i.status !== 'Quoted or Responded') return false;
+    if (i.status !== 'Awaiting Customer') return false;
     const latestLogTime = i.logs && i.logs.length > 0 
         ? Math.max(...i.logs.map(log => new Date(log.timestamp).getTime()))
         : new Date(i.createdAt).getTime();
@@ -102,7 +102,7 @@ const InquiryCard: React.FC<{
         }
     };
 
-    const isApproved = inquiry.status === 'Approved' || estimate?.status === 'Approved';
+    const isApproved = estimate?.status === 'Approved';
     const mergeJobId = estimate?.jobId;
     const latestLog = inquiry.logs && inquiry.logs.length > 0 
         ? [...inquiry.logs].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())[inquiry.logs.length - 1] 
@@ -171,11 +171,11 @@ const InquiryCard: React.FC<{
                 onMouseEnter={onMouseEnter}
                 className={`${healthBgClass} rounded shadow-sm p-1.5 border-l-4 ${
                     inquiry.isUrgent ? 'border-red-600' :
-                    inquiry.status === 'Inbox' || inquiry.status === 'New' ? 'border-gray-400' : 
+                    inquiry.status === 'Inbox' ? 'border-gray-400' : 
                     inquiry.status === 'New Requests' ? 'border-blue-400' : 
-                    inquiry.status === 'In-Flight' || inquiry.status === 'Approved' || inquiry.status === 'Rejected' || inquiry.status === 'Immediate Quote' || inquiry.status === 'Escalated/Urgent' ? 'border-amber-400' : 
+                    inquiry.status === 'In-Flight' ? 'border-amber-400' : 
                     inquiry.status === 'Scheduled' ? 'border-indigo-400' : 
-                    inquiry.status === 'Awaiting Customer' || inquiry.status === 'Quoted or Responded' ? (isStale72h(inquiry) ? 'border-red-500 text-red-800' : 'border-gray-200') : 
+                    inquiry.status === 'Awaiting Customer' ? (isStale72h(inquiry) ? 'border-red-500 text-red-800' : 'border-gray-200') : 
                     'border-gray-200'
                 } ${isExpanded ? 'shadow-md ring-1 ring-indigo-400' : ringClass} cursor-pointer transition-all mb-1.5`}
                 onClick={() => onOpenInquiryModal(inquiry)}
@@ -313,16 +313,6 @@ const InquiryCard: React.FC<{
                                 <Play size={10} className="shrink-0" />
                             </button>
                         )}
-                        {inquiry.status !== 'Escalated/Urgent' && (
-                            <button
-                                type="button"
-                                title="Escalate"
-                                onClick={() => onUpdateStatus(inquiry, 'Escalated/Urgent')}
-                                className="p-0.5 rounded bg-orange-50 text-orange-700 hover:bg-orange-100 transition"
-                            >
-                                <AlertTriangle size={10} className="shrink-0" />
-                            </button>
-                        )}
                         <button
                             type="button"
                             title="Close Inquiry"
@@ -348,11 +338,11 @@ const InquiryCard: React.FC<{
             }}
             className={`${healthBgClass} rounded-lg shadow p-3 border-l-4 ${
                 inquiry.isUrgent ? 'border-red-600' :
-                inquiry.status === 'Inbox' || inquiry.status === 'New' ? 'border-gray-400' : 
+                inquiry.status === 'Inbox' ? 'border-gray-400' : 
                 inquiry.status === 'New Requests' ? 'border-blue-400' : 
-                inquiry.status === 'In-Flight' || inquiry.status === 'Approved' || inquiry.status === 'Rejected' || inquiry.status === 'Immediate Quote' || inquiry.status === 'Escalated/Urgent' ? 'border-amber-400' : 
+                inquiry.status === 'In-Flight' ? 'border-amber-400' : 
                 inquiry.status === 'Scheduled' ? 'border-indigo-400' : 
-                inquiry.status === 'Awaiting Customer' || inquiry.status === 'Quoted or Responded' ? (isStale72h(inquiry) ? 'border-red-500 text-red-800 shadow-[0_0_8px_rgba(239,68,68,0.4)]' : 'border-gray-200') : 
+                inquiry.status === 'Awaiting Customer' ? (isStale72h(inquiry) ? 'border-red-500 text-red-800 shadow-[0_0_8px_rgba(239,68,68,0.4)]' : 'border-gray-200') : 
                 'border-gray-200'
             } ${ringClass} cursor-pointer hover:shadow-md transition-shadow mb-3`}
             onClick={() => onOpenInquiryModal(inquiry)}
@@ -549,16 +539,6 @@ const InquiryCard: React.FC<{
                             className="p-1.5 rounded bg-blue-50 text-blue-700 hover:bg-blue-100 transition"
                         >
                             <Play size={14} className="shrink-0" />
-                        </button>
-                    )}
-                    {inquiry.status !== 'Escalated/Urgent' && (
-                        <button
-                            type="button"
-                            title="Escalate"
-                            onClick={() => onUpdateStatus(inquiry, 'Escalated/Urgent')}
-                            className="p-1.5 rounded bg-orange-50 text-orange-700 hover:bg-orange-100 transition"
-                        >
-                            <AlertTriangle size={14} className="shrink-0" />
                         </button>
                     )}
                     <button
@@ -1225,10 +1205,10 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                             <div className="flex items-center gap-2">
                                 <button
                                     type="button"
-                                    onClick={() => handleBulkUpdateStatus('Quoted or Responded')}
+                                    onClick={() => handleBulkUpdateStatus('Awaiting Customer')}
                                     className="px-3 py-1 bg-white border border-indigo-200 hover:bg-indigo-50 text-indigo-700 font-bold text-xs rounded-lg transition"
                                 >
-                                    Move to Quoted/Responded
+                                    Move to Awaiting Customer
                                 </button>
                                 <button
                                     type="button"
@@ -1393,13 +1373,11 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                                                 {/* Status */}
                                                 <td className="py-1.5 px-3 whitespace-nowrap">
                                                     <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold border ${
-                                                        i.status === 'New' ? 'bg-red-50 text-red-700 border-red-200' :
-                                                        i.status === 'Immediate Quote' ? 'bg-amber-50 text-amber-700 border-amber-200' :
-                                                        i.status === 'Escalated/Urgent' ? 'bg-orange-50 text-orange-700 border-orange-200' :
-                                                        i.status === 'Scheduled' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                                                        i.status === 'Quoted or Responded' ? (isStale72h(i) ? 'bg-red-50 text-red-800 border-red-500 ring-1 ring-red-400' : 'bg-indigo-50 text-indigo-700 border-indigo-200') :
-                                                        i.status === 'Approved' ? 'bg-green-50 text-green-700 border-green-200' :
-                                                        i.status === 'Rejected' ? 'bg-red-100 text-red-800 border-red-200' :
+                                                        i.status === 'Inbox' ? 'bg-gray-50 text-gray-700 border-gray-200' :
+                                                        i.status === 'New Requests' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                                        i.status === 'In-Flight' ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                                                        i.status === 'Scheduled' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' :
+                                                        i.status === 'Awaiting Customer' ? (isStale72h(i) ? 'bg-red-50 text-red-800 border-red-500 ring-1 ring-red-400' : 'bg-purple-50 text-purple-700 border-purple-200') :
                                                         'bg-gray-100 text-gray-800 border-gray-300'
                                                     }`}>
                                                         {i.status}
@@ -1429,7 +1407,7 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                                                 {/* Actions */}
                                                 <td className="py-1.5 px-3 text-right" onClick={e => e.stopPropagation()}>
                                                     <div className="flex justify-end items-center gap-1">
-                                                        {i.status !== 'Closed' && i.status !== 'Approved' && (
+                                                        {i.status !== 'Closed' && (
                                                             <>
                                                                 {i.status !== 'Scheduled' && (
                                                                     <button
@@ -1441,27 +1419,15 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                                                                         <Play size={10} />
                                                                     </button>
                                                                 )}
-                                                                {i.status !== 'Escalated/Urgent' && (
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => handleUpdateStatus(i, 'Escalated/Urgent')}
-                                                                        className="p-1 rounded bg-orange-50 text-orange-700 hover:bg-orange-100 transition border border-orange-200 shadow-sm"
-                                                                        title="Escalate"
-                                                                    >
-                                                                        <AlertTriangle size={10} />
-                                                                    </button>
-                                                                )}
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleUpdateStatus(i, 'Closed')}
+                                                                    className="p-1 rounded bg-green-50 text-green-700 hover:bg-green-100 transition border border-green-200 shadow-sm"
+                                                                    title="Close Inquiry"
+                                                                >
+                                                                    <CheckCircle2 size={10} />
+                                                                </button>
                                                             </>
-                                                        )}
-                                                        {i.status !== 'Closed' && (
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => handleUpdateStatus(i, 'Closed')}
-                                                                className="p-1 rounded bg-green-50 text-green-700 hover:bg-green-100 transition border border-green-200 shadow-sm"
-                                                                title="Close Inquiry"
-                                                            >
-                                                                <CheckCircle2 size={10} />
-                                                            </button>
                                                         )}
                                                         <button
                                                             type="button"

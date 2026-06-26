@@ -498,10 +498,10 @@ const App = () => {
         
         const existingInquiry = (inquiries || []).find(i => i.linkedEstimateId === estimate.id);
         if (existingInquiry) {
-            const updatedInquiry = { ...existingInquiry, status: 'Approved' as const, message: existingInquiry.message + '\n\n' + inquiryMessage, actionNotes: (existingInquiry.actionNotes || '') + '\n[System]: Customer Approved Online. Action Required.' };
+            const updatedInquiry = { ...existingInquiry, status: 'In-Flight' as const, message: existingInquiry.message + '\n\n' + inquiryMessage, actionNotes: (existingInquiry.actionNotes || '') + '\n[System]: Customer Approved Online. Action Required.' };
             handleSaveItem(setInquiries, updatedInquiry);
         } else {
-            const newInquiry: T.Inquiry = { id: crypto.randomUUID(), entityId: estimate.entityId, createdAt: new Date().toISOString(), fromName: getCustomerDisplayName(customer), fromContact: customer?.email || customer?.mobile || "Client Portal", message: inquiryMessage, takenByUserId: 'system', status: 'Approved', linkedCustomerId: estimate.customerId, linkedVehicleId: estimate.vehicleId, linkedEstimateId: estimate.id, actionNotes: 'Auto-generated from Customer Estimate Approval. Please review dates and convert to Job.' };
+            const newInquiry: T.Inquiry = { id: crypto.randomUUID(), entityId: estimate.entityId, createdAt: new Date().toISOString(), fromName: getCustomerDisplayName(customer), fromContact: customer?.email || customer?.mobile || "Client Portal", message: inquiryMessage, takenByUserId: 'system', status: 'In-Flight', linkedCustomerId: estimate.customerId, linkedVehicleId: estimate.vehicleId, linkedEstimateId: estimate.id, actionNotes: 'Auto-generated from Customer Estimate Approval. Please review dates and convert to Job.' };
             handleSaveItem(setInquiries, newInquiry);
         }
 
@@ -523,7 +523,7 @@ const App = () => {
         if (existingInquiry) {
             const updatedInquiry = { 
                 ...existingInquiry, 
-                status: 'Rejected' as const, 
+                status: 'In-Flight' as const, 
                 message: existingInquiry.message + '\n\n' + inquiryMessage,
                 actionNotes: (existingInquiry.actionNotes || '') + `\n[System]: Customer Declined Online. Reason: ${reason || 'None provided'}`
             };
@@ -537,7 +537,7 @@ const App = () => {
                 fromContact: customer?.email || customer?.mobile || "Client Portal", 
                 message: inquiryMessage, 
                 takenByUserId: 'system', 
-                status: 'Rejected', 
+                status: 'In-Flight', 
                 linkedCustomerId: estimate.customerId, 
                 linkedVehicleId: estimate.vehicleId, 
                 linkedEstimateId: estimate.id, 
