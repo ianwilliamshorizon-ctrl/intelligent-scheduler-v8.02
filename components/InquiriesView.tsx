@@ -769,7 +769,7 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
 
     React.useEffect(() => {
         setSelectedInquiryIds([]);
-    }, [activeTab, searchTerm, dateFilter, selectedEntityId, viewLayout, assignedUserFilter, stalenessFilter]);
+    }, [activeTab, searchTerm, dateFilter, selectedEntityId, viewLayout, assignedUserFilter, healthFilter]);
 
     const handleBulkUpdateStatus = async (newStatus: Inquiry['status']) => {
         if (selectedInquiryIds.length === 0) return;
