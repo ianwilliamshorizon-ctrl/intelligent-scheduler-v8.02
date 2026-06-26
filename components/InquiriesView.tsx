@@ -28,12 +28,30 @@ interface InquiriesViewProps {
     onViewVehicle?: (vehicleId: string) => void;
 }
 
+export const getInquiryHealth = (inquiry: Inquiry) => {
+    if (inquiry.status === 'Closed') return 'closed';
+
+    const isOverdue = inquiry.followUpDate && new Date(inquiry.followUpDate) < new Date(new Date().setHours(0,0,0,0));
+    const isToday = inquiry.followUpDate && new Date(inquiry.followUpDate).toDateString() === new Date().toDateString();
+
+    const latestLogTime = inquiry.logs && inquiry.logs.length > 0 
+        ? Math.max(...inquiry.logs.map(log => new Date(log.timestamp).getTime()))
+        : new Date(inquiry.createdAt).getTime();
+    
+    const hoursSinceLastActivity = (Date.now() - latestLogTime) / (1000 * 60 * 60);
+
+    if (inquiry.isUrgent) return 'urgent';
+    if (isOverdue || isToday) return 'overdue';
+    if (inquiry.hasNewReply) return 'responded';
+    if (inquiry.status === 'Awaiting Customer' && hoursSinceLastActivity > 72) return 'stale_quote';
+    if (hoursSinceLastActivity > 48) return 'stale_activity';
+    if (inquiry.logs && inquiry.logs.length > 0 && hoursSinceLastActivity <= 48) return 'active';
+    
+    return 'normal';
+};
+
 export const isStale72h = (i: Inquiry) => {
-    if (i.status !== 'Awaiting Customer') return false;
-    const latestLogTime = i.logs && i.logs.length > 0 
-        ? Math.max(...i.logs.map(log => new Date(log.timestamp).getTime()))
-        : new Date(i.createdAt).getTime();
-    return (Date.now() - latestLogTime) > (72 * 60 * 60 * 1000);
+    return getInquiryHealth(i) === 'stale_quote';
 };
 
 const getPoStatusStyles = (status: PurchaseOrder['status']) => {
@@ -580,7 +598,7 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
 
     const [hoveredInquiryId, setHoveredInquiryId] = useState<string | null>(null);
     const [assignedUserFilter, setAssignedUserFilter] = useState<string>('all');
-    const [stalenessFilter, setStalenessFilter] = useState<string>('all');
+    const [healthFilter, setHealthFilter] = useState<string>('all');
     const [syncStatus, setSyncStatus] = useState<{ status: 'success' | 'error', lastRunTime: string, errorMsg?: string } | null>(null);
 
     React.useEffect(() => {
@@ -902,15 +920,8 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
             }
         }
 
-        if (stalenessFilter === 'stale_24h') {
-            const twentyFourHoursAgo = new Date();
-            twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24);
-            filtered = filtered.filter(i => {
-                const latestLogTime = i.logs && i.logs.length > 0 
-                    ? Math.max(...i.logs.map(log => new Date(log.timestamp).getTime()))
-                    : new Date(i.createdAt).getTime();
-                return latestLogTime < twentyFourHoursAgo.getTime();
-            });
+        if (healthFilter !== 'all') {
+            filtered = filtered.filter(i => getInquiryHealth(i) === healthFilter);
         }
 
         if (searchTerm.trim()) {
@@ -934,8 +945,12 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
             filtered = filtered.filter(i => new Date(i.createdAt) >= cutoff);
         }
 
-        return filtered.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    }, [normalizedInquiries, selectedEntityId, searchTerm, dateFilter, assignedUserFilter, stalenessFilter, currentUser.id]);
+        return filtered.sort((a,b) => {
+            const aAction = a.logs && a.logs.length > 0 ? Math.max(...a.logs.map(l => new Date(l.timestamp).getTime())) : new Date(a.createdAt).getTime();
+            const bAction = b.logs && b.logs.length > 0 ? Math.max(...b.logs.map(l => new Date(l.timestamp).getTime())) : new Date(b.createdAt).getTime();
+            return bAction - aAction;
+        });
+    }, [normalizedInquiries, selectedEntityId, searchTerm, dateFilter, assignedUserFilter, healthFilter, currentUser.id]);
 
     const activeInquiries = useMemo(() => {
         const columns: { [key in Inquiry['status']]?: Inquiry[] } = {
@@ -1098,12 +1113,17 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                                 )}
                             </select>
                             <select 
-                                value={stalenessFilter} 
-                                onChange={e => setStalenessFilter(e.target.value)}
+                                value={healthFilter} 
+                                onChange={e => setHealthFilter(e.target.value)}
                                 className="bg-white border rounded-lg px-2 py-1.5 text-xs font-bold text-gray-700 shadow-sm outline-none"
                             >
-                                <option value="all">All Activity</option>
-                                <option value="stale_24h">Unactioned &gt; 24h</option>
+                                <option value="all">All Card Health</option>
+                                <option value="urgent">Urgent (Red Border)</option>
+                                <option value="overdue">Overdue / Today</option>
+                                <option value="responded">New Reply</option>
+                                <option value="stale_quote">Stale Quote (&gt;72h)</option>
+                                <option value="stale_activity">Stale Activity (&gt;48h)</option>
+                                <option value="active">Recently Active (&lt;48h)</option>
                             </select>
                         </div>
 
