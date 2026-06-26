@@ -151,12 +151,34 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
             return;
         }
 
+        let updatedLogs = formData.logs || [];
+        let updatedFollowUpDate = formData.followUpDate;
+
+        if (inquiry && formData.actionNotes !== inquiry.actionNotes) {
+            const newLog = {
+                id: crypto.randomUUID(),
+                timestamp: new Date().toISOString(),
+                userId: currentUser.id,
+                actionType: 'Notes Updated',
+                notes: `Action Notes updated.`
+            };
+            updatedLogs = [...updatedLogs, newLog];
+            
+            if (formData.status === 'Awaiting Customer') {
+                const fDate = new Date();
+                fDate.setDate(fDate.getDate() + 3);
+                updatedFollowUpDate = fDate.toISOString().split('T')[0];
+            }
+        }
+
         const inquiryToSave: Inquiry = {
             id: formData.id || crypto.randomUUID(),
             createdAt: formData.createdAt || new Date().toISOString(),
             takenByUserId: formData.takenByUserId || currentUser.id,
             inquiryNumber: formData.inquiryNumber || generateInquiryNumber(inquiries),
             ...formData,
+            logs: updatedLogs,
+            followUpDate: updatedFollowUpDate,
             hasNewReply: false
         } as Inquiry;
         

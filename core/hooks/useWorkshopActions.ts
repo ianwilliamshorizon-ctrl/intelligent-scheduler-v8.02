@@ -170,7 +170,24 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
         const targetInquiry = inquiries.find(i => i.linkedEstimateId === estimateId && i.status !== 'Closed');
         
         if (targetInquiry) {
-            await handleSaveItem(setInquiries, { ...targetInquiry, status: targetStatus, ...extraUpdates } as T.Inquiry);
+            let updatedLogs = targetInquiry.logs || [];
+            let updatedFollowUpDate = targetInquiry.followUpDate;
+
+            if (targetStatus === 'Awaiting Customer' && targetInquiry.status !== 'Awaiting Customer') {
+                const fDate = new Date();
+                fDate.setDate(fDate.getDate() + 3);
+                updatedFollowUpDate = fDate.toISOString().split('T')[0];
+
+                updatedLogs = [...updatedLogs, {
+                    id: crypto.randomUUID(),
+                    timestamp: new Date().toISOString(),
+                    userId: currentUser?.id || 'system',
+                    actionType: 'Status Update',
+                    notes: `Status changed to Awaiting Customer.`
+                }];
+            }
+
+            await handleSaveItem(setInquiries, { ...targetInquiry, status: targetStatus, logs: updatedLogs, followUpDate: updatedFollowUpDate, ...extraUpdates } as T.Inquiry);
         } else if (targetStatus === 'Awaiting Customer') {
             const estimate = estimates.find(e => e.id === estimateId);
             if (estimate) {
