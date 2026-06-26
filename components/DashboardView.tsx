@@ -292,7 +292,7 @@ const AdminDispatcherDashboard: React.FC<DashboardViewProps & { onSelectDivision
 
     const escalatedInquiries = useMemo(() => {
         return inquiries.filter(i => 
-            (i.status === 'Escalated/Urgent' || i.status === ('Escalated' as any)) && 
+            (i.isUrgent) && 
             (selectedEntityId === 'all' || i.entityId === selectedEntityId)
         ).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     }, [inquiries, selectedEntityId]);
