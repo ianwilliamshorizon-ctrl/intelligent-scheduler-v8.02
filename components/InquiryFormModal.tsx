@@ -135,6 +135,12 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                 }
             }
 
+            if (name === 'status' && value === 'Awaiting Customer') {
+                const fDate = new Date();
+                fDate.setDate(fDate.getDate() + 3);
+                nextData.followUpDate = fDate.toISOString().split('T')[0];
+            }
+
             return nextData;
         });
     };
@@ -803,7 +809,17 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                                 notes: val
                                             };
                                             const updatedLogs = [...(formData.logs || []), newLog];
-                                            setFormData(p => ({ ...p, logs: updatedLogs }));
+                                            
+                                            let nextFollowUp = formData.followUpDate;
+                                            if (formData.status === 'Awaiting Customer') {
+                                                const fDate = new Date();
+                                                fDate.setDate(fDate.getDate() + 3);
+                                                nextFollowUp = fDate.toISOString().split('T')[0];
+                                            } else if (formData.followUpDate && new Date(formData.followUpDate) <= new Date()) {
+                                                nextFollowUp = null;
+                                            }
+
+                                            setFormData(p => ({ ...p, logs: updatedLogs, followUpDate: nextFollowUp }));
                                             
                                             if (formData.fromName && formData.message) {
                                                 const inquiryToSave: Inquiry = {
@@ -811,6 +827,7 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                                     createdAt: formData.createdAt || new Date().toISOString(),
                                                     takenByUserId: formData.takenByUserId || currentUser.id,
                                                     ...formData,
+                                                    followUpDate: nextFollowUp,
                                                     logs: updatedLogs
                                                 } as Inquiry;
                                                 onSave(inquiryToSave, false);
@@ -835,7 +852,17 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                             notes: val
                                         };
                                         const updatedLogs = [...(formData.logs || []), newLog];
-                                        setFormData(p => ({ ...p, logs: updatedLogs }));
+                                        
+                                        let nextFollowUp = formData.followUpDate;
+                                        if (formData.status === 'Awaiting Customer') {
+                                            const fDate = new Date();
+                                            fDate.setDate(fDate.getDate() + 3);
+                                            nextFollowUp = fDate.toISOString().split('T')[0];
+                                        } else if (formData.followUpDate && new Date(formData.followUpDate) <= new Date()) {
+                                            nextFollowUp = null;
+                                        }
+
+                                        setFormData(p => ({ ...p, logs: updatedLogs, followUpDate: nextFollowUp }));
 
                                         if (formData.fromName && formData.message) {
                                             const inquiryToSave: Inquiry = {
@@ -843,6 +870,7 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                                 createdAt: formData.createdAt || new Date().toISOString(),
                                                 takenByUserId: formData.takenByUserId || currentUser.id,
                                                 ...formData,
+                                                followUpDate: nextFollowUp,
                                                 logs: updatedLogs
                                             } as Inquiry;
                                             onSave(inquiryToSave, false);
