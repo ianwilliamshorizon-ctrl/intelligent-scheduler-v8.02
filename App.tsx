@@ -566,8 +566,7 @@ const App = () => {
 
     // New handler to process navigation within the Management Modal
     const handleViewCustomerFromManagement = (customerId: string) => {
-        // We close the management modal and open the specific customer detail view
-        setIsManagementOpen(false);
+        // We open the specific customer detail view without closing the management modal
         setters.setCustomerModal({ isOpen: true, customerId: customerId });
     };
 
@@ -699,12 +698,12 @@ const App = () => {
                         onClose={() => setIsManagementOpen(false)} 
                         initialView={managementInitialView} 
                         selectedEntityId={selectedEntityId} 
-                        onViewJob={(id) => { setIsManagementOpen(false); setters.setSelectedJobId(id); setters.setIsEditJobModalOpen(true); }}
-                        onViewEstimate={(est) => { setIsManagementOpen(false); setters.setEstimateViewModal({isOpen: true, estimate: est}); }}
+                        onViewJob={(id) => { setters.setSelectedJobId(id); setters.setIsEditJobModalOpen(true); }}
+                        onViewEstimate={(est) => { setters.setEstimateViewModal({isOpen: true, estimate: est}); }}
                         onViewCustomer={handleViewCustomerFromManagement}
-                        onViewVehicle={(id) => { setIsManagementOpen(false); setters.setVehicleModal({ isOpen: true, vehicleId: id }); }}
-                        onViewInvoice={(inv) => { setIsManagementOpen(false); setters.setViewInvoiceModal({ isOpen: true, invoice: inv }); }}
-                        onOpenPurchaseOrder={(po) => { setIsManagementOpen(false); setters.setViewPoModal({ isOpen: true, po }); }}
+                        onViewVehicle={(id) => { setters.setVehicleModal({ isOpen: true, vehicleId: id }); }}
+                        onViewInvoice={(inv) => { setters.setViewInvoiceModal({ isOpen: true, invoice: inv }); }}
+                        onOpenPurchaseOrder={(po) => { setters.setViewPoModal({ isOpen: true, po }); }}
                         backupSchedule={backupSchedule}
                         setBackupSchedule={setBackupSchedule}
                         onManualBackup={handleManualBackup}

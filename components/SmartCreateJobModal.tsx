@@ -1370,36 +1370,23 @@ User Request: ${JSON.stringify(userText)}`;
                                     </div>
                                 </div>
                             )}
-                            {isEstimateMode ? (
-                                <div className="p-3 bg-blue-50 text-blue-800 rounded-lg text-xs border border-blue-100 flex flex-col gap-2">
-                                     <p className="font-semibold flex items-center gap-1 text-indigo-900">
-                                          <Info size={14} className="text-indigo-600" />
-                                          Vehicle Details (Optional)
-                                     </p>
-                                     <p className="text-gray-600 leading-relaxed">
-                                          A vehicle is not required for a basic estimate (e.g. registration <strong>{parsedData?.vehicleRegistration || 'UNKNOWN'}</strong>). You can proceed with just customer details.
-                                     </p>
-                                     {!showAddNewVehicle && (
-                                         <button 
-                                             onClick={() => setShowAddNewVehicle(true)} 
-                                             className="w-full py-1.5 bg-indigo-600 text-white font-semibold rounded hover:bg-indigo-700 text-[11px] shadow-sm transition"
-                                         >
-                                             Add Vehicle Details Anyway
-                                         </button>
-                                     )}
-                                </div>
-                            ) : (
-                                <>
-                                    <div className="p-2 bg-red-50 text-red-800 rounded text-sm mb-2">
-                                         Registration <strong>{parsedData?.vehicleRegistration || 'UNKNOWN'}</strong> not found.
-                                    </div>
-                                    {!showAddNewVehicle && (
-                                        <button onClick={() => setShowAddNewVehicle(true)} className="w-full py-2 bg-green-600 text-white font-semibold rounded hover:bg-green-700 text-xs shadow-sm">
-                                            Add New Vehicle
-                                        </button>
-                                    )}
-                                </>
-                            )}
+                            <div className="p-3 bg-blue-50 text-blue-800 rounded-lg text-xs border border-blue-100 flex flex-col gap-2">
+                                 <p className="font-semibold flex items-center gap-1 text-indigo-900">
+                                      <Info size={14} className="text-indigo-600" />
+                                      Vehicle Details (Optional)
+                                 </p>
+                                 <p className="text-gray-600 leading-relaxed">
+                                      A vehicle is not required. You can proceed with just customer details for non-vehicle related jobs/purchases.
+                                 </p>
+                                 {!showAddNewVehicle && (
+                                     <button 
+                                         onClick={() => setShowAddNewVehicle(true)} 
+                                         className="w-full py-1.5 bg-indigo-600 text-white font-semibold rounded hover:bg-indigo-700 text-[11px] shadow-sm transition"
+                                     >
+                                         Add Vehicle Details
+                                     </button>
+                                 )}
+                            </div>
                         </div>
                     )}
                  </div>

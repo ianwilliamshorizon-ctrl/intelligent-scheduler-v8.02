@@ -34,10 +34,10 @@ if (!rootElement) {
 const root = ReactDOM.createRoot(rootElement);
 root.render(
     <React.StrictMode>
-        <DataContextProvider>
-            <AppProvider>
+        <AppProvider>
+            <DataContextProvider>
                 <App />
-            </AppProvider>
-        </DataContextProvider>
+            </DataContextProvider>
+        </AppProvider>
     </React.StrictMode>
 );

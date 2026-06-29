@@ -139,14 +139,28 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
     const getInvoiceTotal = (inv: any) => inv.lineItems?.reduce((sum: number, item: any) => sum + (item.quantity * item.unitPrice), 0) || 0;
     const getEstimateTotal = (est: Estimate) => est.lineItems.reduce((sum, item) => sum + (item.isOptional ? 0 : (item.quantity * item.unitPrice)), 0);
 
-    const vehicleJobs = useMemo(() => (jobs || []).filter(j => j.vehicleId === formData.id).sort((a,b) => (b.createdAt || '').localeCompare(a.createdAt || '')), [jobs, formData.id]);
-    const vehicleEstimates = useMemo(() => (estimates || []).filter(e => e.vehicleId === formData.id).sort((a,b) => (b.issueDate || '').localeCompare(a.issueDate || '')), [estimates, formData.id]);
-    const vehicleInvoices = useMemo(() => (invoices || []).filter(i => i.vehicleId === formData.id).sort((a,b) => (b.issueDate || '').localeCompare(a.issueDate || '')), [invoices, formData.id]);
+    const vehicleJobs = useMemo(() => {
+        if (!formData.id) return [];
+        return (jobs || []).filter(j => j.vehicleId === formData.id).sort((a,b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+    }, [jobs, formData.id]);
+    
+    const vehicleEstimates = useMemo(() => {
+        if (!formData.id) return [];
+        return (estimates || []).filter(e => e.vehicleId === formData.id).sort((a,b) => (b.issueDate || '').localeCompare(a.issueDate || ''));
+    }, [estimates, formData.id]);
+    
+    const vehicleInvoices = useMemo(() => {
+        if (!formData.id) return [];
+        return (invoices || []).filter(i => i.vehicleId === formData.id).sort((a,b) => (b.issueDate || '').localeCompare(a.issueDate || ''));
+    }, [invoices, formData.id]);
+    
     const { inquiries } = useData();
-    const vehicleInquiries = useMemo(() => 
-        (inquiries || []).filter((i: any) => i.linkedVehicleId === formData.id)
-        .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()), 
-    [inquiries, formData.id]);
+    
+    const vehicleInquiries = useMemo(() => {
+        if (!formData.id) return [];
+        return (inquiries || []).filter((i: any) => i.linkedVehicleId === formData.id)
+        .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }, [inquiries, formData.id]);
     const vehiclePurchases = useMemo(() => {
         const reg = formData.registration?.toUpperCase().replace(/\s/g, '');
         if (!reg) return [];

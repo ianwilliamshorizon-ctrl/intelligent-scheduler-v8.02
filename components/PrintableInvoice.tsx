@@ -254,22 +254,25 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, customer, 
         </div>
     );
 
-    const renderVehicleBlock = (alignment: 'left' | 'right' | 'center') => (
-        <div style={{ 
-            textAlign: alignment,
-            marginTop: '12px', 
-            paddingLeft: alignment === 'left' ? '12px' : '0',
-            paddingRight: alignment === 'right' ? '12px' : '0',
-            marginBottom: '10px'
-        }}>
-            <h3 style={{ fontSize: '8px', fontWeight: 'bold', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '4px' }}>Vehicle</h3>
-            <p style={{ display: 'inline-block', fontSize: '14px', fontWeight: '900', backgroundColor: '#FFD700', color: '#000', padding: '1px 6px', borderRadius: '3px', border: '1px solid rgba(0,0,0,0.1)' }}>{vehicle?.registration}</p>
-            <p style={{ fontSize: '10px', fontWeight: 'bold', color: '#64748b', marginTop: '2px' }}>
-                {vehicle?.make} {vehicle?.model}
-                {job?.mileage ? ` | ${job.mileage.toLocaleString()} miles` : ''}
-            </p>
-        </div>
-    );
+    const renderVehicleBlock = (alignment: 'left' | 'right' | 'center') => {
+        if (!vehicle) return null;
+        return (
+            <div style={{ 
+                textAlign: alignment,
+                marginTop: '12px', 
+                paddingLeft: alignment === 'left' ? '12px' : '0',
+                paddingRight: alignment === 'right' ? '12px' : '0',
+                marginBottom: '10px'
+            }}>
+                <h3 style={{ fontSize: '8px', fontWeight: 'bold', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '4px' }}>Vehicle</h3>
+                <p style={{ display: 'inline-block', fontSize: '14px', fontWeight: '900', backgroundColor: '#FFD700', color: '#000', padding: '1px 6px', borderRadius: '3px', border: '1px solid rgba(0,0,0,0.1)' }}>{vehicle?.registration}</p>
+                <p style={{ fontSize: '10px', fontWeight: 'bold', color: '#64748b', marginTop: '2px' }}>
+                    {vehicle?.make} {vehicle?.model}
+                    {job?.mileage ? ` | ${job.mileage.toLocaleString()} miles` : ''}
+                </p>
+            </div>
+        );
+    };
 
     const renderCustomerBlock = (alignment: 'left' | 'right' | 'center') => (
         <div style={{ 

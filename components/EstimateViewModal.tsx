@@ -894,10 +894,6 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                                         )}
                                         <button 
                                             onClick={() => { 
-                                                if (!estimate.vehicleId) {
-                                                    toast.warning("This estimate does not have a vehicle registration. Please edit the estimate to add vehicle details before scheduling it as a job.");
-                                                    return;
-                                                }
                                                 onScheduleEstimate?.(estimate); 
                                                 onClose(); 
                                             }} 

@@ -181,7 +181,7 @@ export type TyreCheckData = {
 export interface Job {
     id: string;
     entityId?: string;
-    vehicleId: string;
+    vehicleId?: string;
     customerId?: string;
     description: string;
     // Added 'Cancelled' to this union to allow the comparison in your Modal

@@ -142,19 +142,23 @@ const MainLayout: React.FC<{
                             <Menu size={24} />
                         </button>
 
-                        <div className="hidden md:flex items-center gap-2 flex-shrink-0">
-                             <Building2 size={18} className="text-indigo-600" />
+                        <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0 bg-indigo-50 sm:bg-transparent px-2 py-1 sm:p-0 rounded-md border border-indigo-100 sm:border-none">
+                             <Building2 size={16} className="text-indigo-600 sm:w-[18px] sm:h-[18px]" />
                              <select 
                                 value={selectedEntityId} 
                                 onChange={(e) => setSelectedEntityId(e.target.value)}
-                                className="border-none bg-transparent font-semibold text-gray-700 focus:ring-0 cursor-pointer outline-none hover:text-indigo-700 transition-colors"
+                                className="border-none bg-transparent font-bold text-indigo-900 sm:text-gray-800 focus:ring-0 cursor-pointer outline-none hover:text-indigo-700 transition-colors text-[11px] sm:text-base p-0 m-0 w-16 sm:w-auto truncate"
+                                style={{ WebkitAppearance: 'none', MozAppearance: 'none' }}
                              >
                                  {allWorkshops.map(e => (
                                      <option key={e.id} value={e.id}>
-                                         {window.innerWidth < 1024 ? (e.shortCode || 'Brookspeed') : e.name}
+                                         {e.name}
                                      </option>
                                  ))}
                              </select>
+                             <div className="sm:hidden pointer-events-none text-indigo-500">
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                             </div>
                         </div>
 
                         <div className="relative w-full max-w-[140px] sm:max-w-xs lg:max-w-md">

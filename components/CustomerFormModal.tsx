@@ -4,7 +4,7 @@ import FormModal from './FormModal';
 import { generateCustomerId } from '../core/utils/customerUtils';
 import { formatDate } from '../core/utils/dateUtils';
 import { lookupAddressByPostcode, AddressDetails } from '../services/postcodeLookupService';
-import { Loader2, Search, Briefcase, Car, ChevronDown, ChevronUp, RefreshCw, MessageSquare } from 'lucide-react';
+import { Loader2, Search, Briefcase, Car, ChevronDown, ChevronUp, RefreshCw, MessageSquare, PlusCircle } from 'lucide-react';
 import { useAuditLogger } from '../core/hooks/useAuditLogger';
 import { useData } from '../core/state/DataContext';
 import { toast } from 'react-toastify';
@@ -278,7 +278,7 @@ const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
                             {customerVehicles.length === 0 ? (
                                 <div className="text-center py-6">
                                     <p className="text-gray-400 text-sm mb-3">No vehicles linked to this customer.</p>
-                                    {(!customer || !customer.id) && onViewVehicle && (
+                                    {(!customer || !customer.id) && onViewVehicle ? (
                                         <button 
                                             type="button"
                                             onClick={() => {
@@ -307,15 +307,34 @@ const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
                                         >
                                             <Car size={16} /> Save Customer & Add Vehicle
                                         </button>
+                                    ) : onViewVehicle && (
+                                        <button 
+                                            type="button"
+                                            onClick={() => onViewVehicle(null, formData.id)}
+                                            className="w-full py-2 bg-indigo-50 text-indigo-700 font-bold border border-indigo-200 rounded hover:bg-indigo-100 text-sm flex justify-center items-center gap-2 transition"
+                                        >
+                                            <PlusCircle size={16} /> Add Vehicle
+                                        </button>
                                     )}
                                 </div>
                             ) : (
-                                customerVehicles.map(v => (
-                                    <div key={v.id} className="p-3 bg-white border rounded shadow-sm hover:border-indigo-300 transition-colors cursor-pointer" onClick={() => onViewVehicle?.(v.id, formData.id)}>
-                                        <p className="font-bold font-mono text-indigo-600">{v.registration}</p>
-                                        <p className="text-xs text-gray-500 uppercase">{v.make} {v.model}</p>
-                                    </div>
-                                ))
+                                <>
+                                    {customerVehicles.map(v => (
+                                        <div key={v.id} className="p-3 bg-white border rounded shadow-sm hover:border-indigo-300 transition-colors cursor-pointer" onClick={() => onViewVehicle?.(v.id, formData.id)}>
+                                            <p className="font-bold font-mono text-indigo-600">{v.registration}</p>
+                                            <p className="text-xs text-gray-500 uppercase">{v.make} {v.model}</p>
+                                        </div>
+                                    ))}
+                                    {onViewVehicle && (
+                                        <button 
+                                            type="button"
+                                            onClick={() => onViewVehicle(null, formData.id)}
+                                            className="mt-2 w-full py-2 bg-indigo-50 text-indigo-700 font-bold border border-indigo-200 rounded hover:bg-indigo-100 text-sm flex justify-center items-center gap-2 transition"
+                                        >
+                                            <PlusCircle size={16} /> Add Another Vehicle
+                                        </button>
+                                    )}
+                                </>
                             )}
                         </div>
                     </Section>

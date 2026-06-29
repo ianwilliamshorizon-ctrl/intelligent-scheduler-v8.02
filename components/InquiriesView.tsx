@@ -104,16 +104,14 @@ const InquiryCard: React.FC<{
 
     const handleDownloadMedia = async (item: any) => {
         try {
+            // Open window immediately to bypass popup blockers
+            const win = window.open('about:blank', '_blank');
             const dataUrl = await getImage(item.id);
-            if (dataUrl) {
-                const link = document.createElement('a');
-                link.href = dataUrl;
-                link.download = item.name;
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
+            if (dataUrl && win) {
+                win.location.href = dataUrl;
             } else {
-                toast.error('Could not retrieve file data.');
+                win?.close();
+                if (!dataUrl) toast.error('Could not retrieve file data.');
             }
         } catch (err) {
             console.error("Error downloading media:", err);
@@ -686,8 +684,8 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                 }
 
                 if (jobToUse) {
-                    // Close inquiry if job has started (In Progress, Complete, etc.)
-                    if (jobToUse.status === 'In Progress' || jobToUse.status === 'Complete' || jobToUse.status === 'Invoiced' || jobToUse.status === 'Closed' || jobToUse.status === 'Cancelled') {
+                    // Close inquiry only if job is Invoiced, Closed, or Cancelled. Leave it as Scheduled until then.
+                    if (jobToUse.status === 'Invoiced' || jobToUse.status === 'Closed' || jobToUse.status === 'Cancelled') {
                         return true;
                     }
                 }
