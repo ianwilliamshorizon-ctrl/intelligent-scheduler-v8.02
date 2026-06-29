@@ -664,6 +664,7 @@ export interface Inquiry {
     linkedVehicleId?: string;
     linkedEstimateId?: string;
     actionNotes?: string;
+    closedReason?: string;
     linkedPurchaseOrderIds?: string[];
     linkedJobId?: string;
     media?: any[];

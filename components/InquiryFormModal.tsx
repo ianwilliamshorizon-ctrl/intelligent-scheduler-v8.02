@@ -255,14 +255,14 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                         onClick={() => setActiveTab('estimates')}
                         className={`${activeTab === 'estimates' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition flex items-center gap-2`}
                     >
-                        Estimates, Notes & Logs
+                        Estimates
                     </button>
                     <button
                         type="button"
                         onClick={() => setActiveTab('communication')}
                         className={`${activeTab === 'communication' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition flex items-center gap-2`}
                     >
-                        Communication & Reply
+                        Communication, Notes & Logs
                     </button>
                 </nav>
             </div>
@@ -421,6 +421,21 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                     </label>
                                 </div>
                             </div>
+                            {formData.status === 'Closed' && (
+                                <div>
+                                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1 text-red-600">Reason for Closing</label>
+                                    <select name="closedReason" value={formData.closedReason || ''} onChange={handleChange} className="w-full p-2 border border-red-200 rounded text-sm bg-red-50">
+                                        <option value="">Select a reason...</option>
+                                        <option value="Lost to Competitor">Lost to Competitor</option>
+                                        <option value="Too Expensive">Too Expensive</option>
+                                        <option value="No Response / Ghosted">No Response / Ghosted</option>
+                                        <option value="Project Cancelled / Changed Mind">Project Cancelled / Changed Mind</option>
+                                        <option value="Duplicate Inquiry">Duplicate Inquiry</option>
+                                        <option value="Spam / Invalid">Spam / Invalid</option>
+                                        <option value="Other">Other</option>
+                                    </select>
+                                </div>
+                            )}
                             <div>
                                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Follow Up Date</label>
                                 <input type="date" name="followUpDate" value={formData.followUpDate || ''} onChange={handleChange} className="w-full p-2 border rounded text-sm bg-gray-50" />
@@ -594,7 +609,7 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                 )}
 
                 {activeTab === 'communication' && (
-                    <div className="grid grid-cols-1 gap-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         <div className="space-y-4">
                             <div className="bg-white p-4 border border-gray-200 rounded-lg shadow-sm space-y-4">
                         <h4 className="text-sm font-bold text-gray-800 border-b pb-2">Reply to Inquiry</h4>
@@ -757,151 +772,7 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                             </div>
                         </div>
                     </div>
-                        </div>
                     </div>
-                )}
-
-                {activeTab === 'estimates' && (
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <div className="space-y-4">
-                            {linkedEstimate ? (
-                        <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-lg shadow-sm">
-                            <div className="flex flex-col gap-3">
-                                <div>
-                                    <p className="font-bold text-indigo-800 flex items-center gap-2 text-sm"><FileText size={16}/> Linked Estimate</p>
-                                    <p className="text-xs text-indigo-600 font-medium mt-0.5">#{linkedEstimate.estimateNumber} - {linkedEstimate.status}</p>
-                                </div>
-                                <div className="flex flex-wrap gap-2">
-                                    {onViewEstimate && (
-                                        <button 
-                                            onClick={() => {
-                                                onViewEstimate(linkedEstimate);
-                                                onClose(); 
-                                            }}
-                                            className="px-3 py-1.5 bg-white text-indigo-700 border border-indigo-200 font-bold rounded-lg hover:bg-indigo-50 text-xs shadow-sm transition"
-                                        >
-                                            Review Estimate
-                                        </button>
-                                    )}
-                                    {onEditEstimate && linkedEstimate.status === 'Draft' && (
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                onEditEstimate(linkedEstimate);
-                                                onClose();
-                                            }}
-                                            className="flex items-center gap-1.5 text-xs py-1.5 px-3 bg-yellow-500 text-white font-bold rounded-lg hover:bg-yellow-600 shadow-sm transition"
-                                        >
-                                            <Edit size={14}/> Edit Estimate
-                                        </button>
-                                    )}
-                                    {linkedEstimate.status === 'Approved' && !linkedEstimate.jobId && onScheduleEstimate && (
-                                         <button 
-                                            onClick={() => {
-                                                onScheduleEstimate(linkedEstimate, formData.id);
-                                                onClose();
-                                            }}
-                                            className="px-3 py-1.5 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 shadow-sm flex items-center gap-1 text-xs transition"
-                                        >
-                                            <CalendarCheck size={14}/> Schedule Job
-                                        </button>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-lg shadow-sm">
-                            <h4 className="text-sm font-bold text-gray-800 mb-3 flex items-center gap-2"><FileText size={16} className="text-indigo-600"/> Estimates</h4>
-                            <div className="flex flex-col gap-2">
-                                {onCreateNewEstimate && (
-                                    <button
-                                        type="button"
-                                        onClick={() => onCreateNewEstimate(formData as Inquiry)}
-                                        className="w-full flex items-center justify-center gap-2 px-3 py-2 border border-indigo-300 text-indigo-700 bg-white rounded-lg font-semibold hover:bg-indigo-100 transition shadow-sm text-xs"
-                                    >
-                                        <PlusCircle size={14} /> Create Standard Estimate
-                                    </button>
-                                )}
-                                {onSmartCreateEstimate && (
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            const fullPrompt = [
-                                                `Customer Name: ${formData.fromName || 'Unknown'}`,
-                                                formData.fromEmail ? `Email: ${formData.fromEmail}` : null,
-                                                formData.fromPhone ? `Phone: ${formData.fromPhone}` : null,
-                                                `Request Details: ${formData.message || ''}`
-                                            ].filter(Boolean).join('\n');
-                                            onSmartCreateEstimate(formData as Inquiry, fullPrompt);
-                                        }}
-                                        className="w-full flex items-center justify-center gap-2 px-3 py-2 border border-transparent shadow-sm text-white bg-gradient-to-r from-purple-600 to-indigo-600 rounded-lg font-semibold hover:from-purple-700 hover:to-indigo-700 transition text-xs"
-                                    >
-                                        <Wand2 size={14} /> Smart Create Estimate (AI)
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-                    )}
-                            {/* Attachments Section */}
-                    {formData.media && formData.media.length > 0 && (
-                        <div className="bg-white p-4 border border-gray-200 rounded-lg shadow-sm">
-                            <label className="block text-sm font-bold text-gray-800 border-b pb-2 mb-3">Attachments ({formData.media.length})</label>
-                            <div className="grid grid-cols-1 gap-2 max-h-[200px] overflow-y-auto pr-1">
-                                {formData.media.map((item: any) => {
-                                    const isPhoto = item.type === 'Photo';
-                                    return (
-                                        <div key={item.id} className="flex items-center justify-between p-2 border rounded-lg bg-gray-50 text-xs">
-                                            <div className="flex items-center gap-2 min-w-0">
-                                                {isPhoto ? <Camera size={16} className="text-indigo-500 shrink-0" /> : <FileText size={16} className="text-gray-500 shrink-0" />}
-                                                <span className="truncate font-medium text-gray-700 text-[11px]" title={item.name}>{item.name}</span>
-                                            </div>
-                                            <button 
-                                                type="button" 
-                                                onClick={async () => {
-                                                      // Open window immediately to bypass popup blockers
-                                                      const win = window.open('about:blank', '_blank');
-                                                      
-                                                      const { getImage } = await import('../utils/imageStore');
-                                                      const dataUrl = await getImage(item.id);
-                                                      
-                                                      if (dataUrl && win) {
-                                                          const isPhoto = item.type === 'Photo';
-                                                          win.document.write(`
-                                                              <!DOCTYPE html>
-                                                              <html>
-                                                              <head>
-                                                                  <title>Attachment: ${item.name || 'File'}</title>
-                                                                  <style>
-                                                                      body { margin: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; background: #1f2937; min-height: 100vh; font-family: system-ui, sans-serif; }
-                                                                      .download-btn { padding: 12px 24px; background: #4f46e5; color: white; text-decoration: none; border-radius: 8px; margin-bottom: 24px; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-                                                                      .download-btn:hover { background: #4338ca; }
-                                                                      img { max-width: 90vw; max-height: 80vh; object-fit: contain; box-shadow: 0 10px 15px rgba(0,0,0,0.5); }
-                                                                      p { color: white; font-size: 1.2rem; }
-                                                                  </style>
-                                                              </head>
-                                                              <body>
-                                                                  <a href="${dataUrl}" download="${item.name || 'attachment'}" class="download-btn">Download ${item.name || 'File'}</a>
-                                                                  ${isPhoto ? `<img src="${dataUrl}" alt="Attachment preview" />` : `<p>This file type cannot be previewed in the browser.</p>`}
-                                                              </body>
-                                                              </html>
-                                                          `);
-                                                          win.document.close();
-                                                      } else {
-                                                          win?.close();
-                                                          if (!dataUrl) toast.error('Could not retrieve file data.');
-                                                      }
-                                                  }} 
-                                                className="text-[10px] bg-white px-2 py-1 rounded shadow-sm border font-bold hover:bg-gray-100 transition shrink-0"
-                                            >
-                                                View / Download
-                                            </button>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    )}
-                        </div>
                         <div className="space-y-4">
                             <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">CRM Logs & Notes</label>
@@ -1021,6 +892,181 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                             </button>
                         </div>
                     </div>
+                        </div>
+                    </div>
+                )}
+
+                {activeTab === 'estimates' && (
+                    <div className="grid grid-cols-1 gap-6">
+                        <div className="space-y-4">
+                            {linkedEstimate ? (
+                        <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-lg shadow-sm">
+                            <div className="flex flex-col gap-3">
+                                <div>
+                                    <p className="font-bold text-indigo-800 flex items-center gap-2 text-sm"><FileText size={16}/> Linked Estimate</p>
+                                    <p className="text-xs text-indigo-600 font-medium mt-0.5">#{linkedEstimate.estimateNumber} - {linkedEstimate.status}</p>
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                    {onViewEstimate && (
+                                        <button 
+                                            onClick={() => {
+                                                onViewEstimate(linkedEstimate);
+                                                onClose(); 
+                                            }}
+                                            className="px-3 py-1.5 bg-white text-indigo-700 border border-indigo-200 font-bold rounded-lg hover:bg-indigo-50 text-xs shadow-sm transition"
+                                        >
+                                            Review Estimate
+                                        </button>
+                                    )}
+                                    {onEditEstimate && linkedEstimate.status === 'Draft' && (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                onEditEstimate(linkedEstimate);
+                                                onClose();
+                                            }}
+                                            className="flex items-center gap-1.5 text-xs py-1.5 px-3 bg-yellow-500 text-white font-bold rounded-lg hover:bg-yellow-600 shadow-sm transition"
+                                        >
+                                            <Edit size={14}/> Edit Estimate
+                                        </button>
+                                    )}
+                                    {linkedEstimate.status === 'Approved' && !linkedEstimate.jobId && onScheduleEstimate && (
+                                         <button 
+                                            onClick={() => {
+                                                onScheduleEstimate(linkedEstimate, formData.id);
+                                                onClose();
+                                            }}
+                                            className="px-3 py-1.5 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 shadow-sm flex items-center gap-1 text-xs transition"
+                                        >
+                                            <CalendarCheck size={14}/> Schedule Job
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-lg shadow-sm">
+                            <h4 className="text-sm font-bold text-gray-800 mb-3 flex items-center gap-2"><FileText size={16} className="text-indigo-600"/> Estimates</h4>
+                            <div className="flex flex-col gap-2">
+                                {onCreateNewEstimate && (
+                                    <button
+                                        type="button"
+                                        onClick={() => onCreateNewEstimate(formData as Inquiry)}
+                                        className="w-full flex items-center justify-center gap-2 px-3 py-2 border border-indigo-300 text-indigo-700 bg-white rounded-lg font-semibold hover:bg-indigo-100 transition shadow-sm text-xs"
+                                    >
+                                        <PlusCircle size={14} /> Create Standard Estimate
+                                    </button>
+                                )}
+                                {onSmartCreateEstimate && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            const fullPrompt = [
+                                                `Customer Name: ${formData.fromName || 'Unknown'}`,
+                                                formData.fromEmail ? `Email: ${formData.fromEmail}` : null,
+                                                formData.fromPhone ? `Phone: ${formData.fromPhone}` : null,
+                                                `Request Details: ${formData.message || ''}`
+                                            ].filter(Boolean).join('\n');
+                                            onSmartCreateEstimate(formData as Inquiry, fullPrompt);
+                                        }}
+                                        className="w-full flex items-center justify-center gap-2 px-3 py-2 border border-transparent shadow-sm text-white bg-gradient-to-r from-purple-600 to-indigo-600 rounded-lg font-semibold hover:from-purple-700 hover:to-indigo-700 transition text-xs"
+                                    >
+                                        <Wand2 size={14} /> Smart Create Estimate (AI)
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                            {/* Attachments Section */}
+                        <div className="bg-white p-4 border border-gray-200 rounded-lg shadow-sm">
+                            <div className="flex justify-between items-center border-b pb-2 mb-3">
+                                <label className="block text-sm font-bold text-gray-800">Attachments ({formData.media ? formData.media.length : 0})</label>
+                                <label className="cursor-pointer text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded transition flex items-center gap-1 border border-indigo-200 shadow-sm">
+                                    <PlusCircle size={14} /> Add Attachment
+                                    <input 
+                                        type="file" 
+                                        multiple 
+                                        className="hidden" 
+                                        onChange={async (e) => {
+                                            if (e.target.files && e.target.files.length > 0) {
+                                                const { saveImage } = await import('../utils/imageStore');
+                                                const newMedia = [];
+                                                for (const file of e.target.files) {
+                                                    const isImage = file.type.startsWith('image/');
+                                                    const mediaItem = {
+                                                        id: crypto.randomUUID(),
+                                                        type: isImage ? 'Photo' : 'Document',
+                                                        name: file.name,
+                                                        uploadedAt: new Date().toISOString()
+                                                    };
+                                                    await saveImage(mediaItem.id, file);
+                                                    newMedia.push(mediaItem);
+                                                }
+                                                setFormData(p => ({ ...p, media: [...(p.media || []), ...newMedia] }));
+                                            }
+                                            e.target.value = '';
+                                        }} 
+                                    />
+                                </label>
+                            </div>
+                            {formData.media && formData.media.length > 0 ? (
+                            <div className="grid grid-cols-1 gap-2 max-h-[200px] overflow-y-auto pr-1">
+                                {formData.media.map((item: any) => {
+                                    const isPhoto = item.type === 'Photo';
+                                    return (
+                                        <div key={item.id} className="flex items-center justify-between p-2 border rounded-lg bg-gray-50 text-xs">
+                                            <div className="flex items-center gap-2 min-w-0">
+                                                {isPhoto ? <Camera size={16} className="text-indigo-500 shrink-0" /> : <FileText size={16} className="text-gray-500 shrink-0" />}
+                                                <span className="truncate font-medium text-gray-700 text-[11px]" title={item.name}>{item.name}</span>
+                                            </div>
+                                            <button 
+                                                type="button" 
+                                                onClick={async () => {
+                                                      // Open window immediately to bypass popup blockers
+                                                      const win = window.open('about:blank', '_blank');
+                                                      
+                                                      const { getImage } = await import('../utils/imageStore');
+                                                      const dataUrl = await getImage(item.id);
+                                                      
+                                                      if (dataUrl && win) {
+                                                          const isPhoto = item.type === 'Photo';
+                                                          win.document.write(`
+                                                              <!DOCTYPE html>
+                                                              <html>
+                                                              <head>
+                                                                  <title>Attachment: ${item.name || 'File'}</title>
+                                                                  <style>
+                                                                      body { margin: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; background: #1f2937; min-height: 100vh; font-family: system-ui, sans-serif; }
+                                                                      .download-btn { padding: 12px 24px; background: #4f46e5; color: white; text-decoration: none; border-radius: 8px; margin-bottom: 24px; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+                                                                      .download-btn:hover { background: #4338ca; }
+                                                                      img { max-width: 90vw; max-height: 80vh; object-fit: contain; box-shadow: 0 10px 15px rgba(0,0,0,0.5); }
+                                                                      p { color: white; font-size: 1.2rem; }
+                                                                  </style>
+                                                              </head>
+                                                              <body>
+                                                                  <a href="${dataUrl}" download="${item.name || 'attachment'}" class="download-btn">Download ${item.name || 'File'}</a>
+                                                                  ${isPhoto ? `<img src="${dataUrl}" alt="Attachment preview" />` : `<p>This file type cannot be previewed in the browser.</p>`}
+                                                              </body>
+                                                              </html>
+                                                          `);
+                                                          win.document.close();
+                                                      } else {
+                                                          win?.close();
+                                                          if (!dataUrl) toast.error('Could not retrieve file data.');
+                                                      }
+                                                  }} 
+                                                className="text-[10px] bg-white px-2 py-1 rounded shadow-sm border font-bold hover:bg-gray-100 transition shrink-0"
+                                            >
+                                                View / Download
+                                            </button>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                            ) : (
+                                <div className="text-gray-400 text-xs py-6 text-center border-2 border-dashed rounded-lg">No attachments found</div>
+                            )}
+                        </div>
                         </div>
                     </div>
                 )}

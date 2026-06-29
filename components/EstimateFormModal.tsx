@@ -2,7 +2,7 @@ import { cloudSpeechSynthesis, CloudSpeechSynthesisUtterance } from '../core/uti
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { toast } from 'react-toastify';
 import { Estimate, Customer, Vehicle, BusinessEntity, TaxRate, ServicePackage, Part, EstimateLineItem, Job, User, CheckInPhoto, Supplier, DiscountCode } from '../types';
-import { Save, PlusCircle, Gauge, Info, FileText, ChevronUp, ChevronDown, Trash2, X, TrendingUp, Plus, Image as ImageIcon, History, Car, Wand2, Expand, Edit, Volume2, Tag } from 'lucide-react';
+import { Save, PlusCircle, Gauge, Info, FileText, ChevronUp, ChevronDown, Trash2, X, TrendingUp, Plus, Image as ImageIcon, History, Car, Wand2, Expand, Edit, Volume2, Tag, Film } from 'lucide-react';
 import { formatDate, getTodayISOString, getFutureDateISOString } from '../core/utils/dateUtils';
 import { generateEstimateNumber } from '../core/utils/numberGenerators';
 import { formatCurrency } from '../utils/formatUtils';
@@ -22,7 +22,8 @@ import { AddressDetails } from '../services/postcodeLookupService';
 import SpeechToTextButton from './shared/SpeechToTextButton';
 import { findBestVoice, prepareTextForSpeech } from '../core/utils/speechUtils';
 import { useApp } from '../core/state/AppContext';
-
+import AsyncImage from './AsyncImage';
+import AsyncMedia from './AsyncMedia';
 
 interface EditableLineItemRowProps {
     item: EstimateLineItem;
@@ -973,15 +974,7 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
     
     const handleManageMedia = () => setIsMediaModalOpen(true);
     const handleSaveMedia = (media: CheckInPhoto[]) => {
-        setFormData(prev => {
-            const updatedLineItems = prev.lineItems?.map(item => {
-                if (item.id === 'some_id') { // Replace with the actual line item ID
-                    return { ...item, media };
-                }
-                return item;
-            });
-            return { ...prev, lineItems: updatedLineItems };
-        });
+        setFormData(prev => ({ ...prev, media }));
     };
     const openSupplierSelection = (lineItemId: string) => {
         setLineItemForSupplier(lineItemId);
@@ -1197,15 +1190,43 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                                     </div>
                                 )}
                             </div>
-                            <div className="bg-gray-50 p-2 rounded-lg border mt-2">
-                                <div className="flex justify-between items-center mb-2">
-                                    <label className="font-semibold text-sm">Notes & Media</label>
-                                    <div className="flex items-center gap-2">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                                <div className="bg-gray-50 p-2 rounded-lg border flex flex-col">
+                                    <div className="flex justify-between items-center mb-2">
+                                        <label className="font-semibold text-sm">Internal Notes</label>
                                         <button type="button" onClick={() => setIsNotesModalOpen(true)} className="text-xs bg-white border border-gray-300 text-indigo-600 px-2 py-1 rounded flex items-center gap-1 hover:bg-indigo-50 shadow-sm"><Expand size={14}/> Expand</button>
-                                        <button type="button" onClick={handleManageMedia} className="text-xs bg-white border border-gray-300 text-indigo-600 px-2 py-1 rounded flex items-center gap-1 hover:bg-indigo-50 shadow-sm"><ImageIcon size={14}/> Photos & Videos</button>
+                                    </div>
+                                    <textarea name="notes" value={formData.notes || ''} onChange={handleChange} className="w-full p-2 border rounded text-sm flex-1 min-h-[120px] bg-white" placeholder="Internal notes..." />
+                                </div>
+                                <div className="bg-gray-50 p-2 rounded-lg border flex flex-col h-full min-h-[160px]">
+                                    <div className="flex justify-between items-center mb-2">
+                                        <label className="font-semibold text-sm">Photos & Videos</label>
+                                        <button type="button" onClick={handleManageMedia} className="text-xs bg-white border border-gray-300 text-indigo-600 px-2 py-1 rounded flex items-center gap-1 hover:bg-indigo-50 shadow-sm"><ImageIcon size={14}/> Manage Media</button>
+                                    </div>
+                                    <div className="flex-1 overflow-y-auto bg-white border rounded p-2">
+                                        {formData.media && formData.media.length > 0 ? (
+                                            <div className="grid grid-cols-3 gap-2">
+                                                {formData.media.map((m: any, idx: number) => (
+                                                    <div key={idx} className="relative aspect-square border rounded overflow-hidden group bg-gray-100 flex items-center justify-center cursor-pointer" onClick={handleManageMedia}>
+                                                        {m.type === 'video' ? (
+                                                            <div className="flex flex-col items-center justify-center text-gray-400">
+                                                                <Film size={20} />
+                                                            </div>
+                                                        ) : (
+                                                            <AsyncImage imageId={m.id} className="w-full h-full object-cover" />
+                                                        )}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <div className="flex flex-col items-center justify-center h-full text-gray-400 py-4" onClick={handleManageMedia}>
+                                                <ImageIcon size={32} className="mb-2 opacity-30 cursor-pointer hover:opacity-50 transition" />
+                                                <span className="text-xs">No media attached</span>
+                                                <button type="button" className="text-indigo-600 text-xs font-semibold mt-1 hover:underline">Click to upload</button>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
-                                <textarea name="notes" value={formData.notes || ''} onChange={handleChange} rows={8} className="w-full p-2 border rounded text-sm" placeholder="Internal notes..." />
                             </div>
                         </div>
                     </Section>
@@ -1387,7 +1408,7 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                     isOpen={isMediaModalOpen}
                     onClose={() => setIsMediaModalOpen(false)}
                     onSave={handleSaveMedia}
-                    initialMedia={[] as CheckInPhoto[]} 
+                    initialMedia={formData.media || []} 
                     title="Estimate Photos & Videos"
                 />
             )}
