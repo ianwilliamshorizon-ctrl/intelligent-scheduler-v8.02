@@ -5,7 +5,7 @@ import SearchableSelect from './SearchableSelect';
 import { useApp } from '../core/state/AppContext';
 import { getCustomerDisplayName } from '../core/utils/customerUtils';
 import { Wand2, Loader2, Link as LinkIcon, UserCheck, Car, XCircle, User as UserIcon, FileText, CalendarCheck, Edit, Camera, PlusCircle } from 'lucide-react';
-import { parseInquiryMessage, generateEmailReply } from '../core/services/geminiService';
+import { parseInquiryMessage, generateEmailReply, updateEstimateWithAI } from '../core/services/geminiService';
 import { sendOutboundEmail } from '../core/services/emailService';
 import { useData } from '../core/state/DataContext';
 import { generateInquiryNumber } from '../core/utils/numberGenerators';
@@ -57,6 +57,7 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
     const [formData, setFormData] = useState<Partial<Inquiry>>({});
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [aiError, setAiError] = useState('');
+    const [isUpdatingAI, setIsUpdatingAI] = useState(false);
     const [suggestedCustomer, setSuggestedCustomer] = useState<Customer | null>(null);
     const [suggestedVehicle, setSuggestedVehicle] = useState<Vehicle | null>(null);
 
@@ -150,6 +151,37 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
 
             return nextData;
         });
+    };
+
+    const handleAIUpdateEstimate = async (linkedEstimate: Estimate) => {
+        if (!updateEstimate) {
+            toast.error("Estimate updating is not available here.");
+            return;
+        }
+        
+        try {
+            setIsUpdatingAI(true);
+            const newItems = await updateEstimateWithAI(linkedEstimate.items || [], formData.message || '', formData.logs || []);
+            const subtotal = newItems.reduce((acc, item) => acc + (item.quantity * item.unitPrice), 0);
+            const vat = subtotal * 0.20; // 20% VAT
+            const totalAmount = subtotal + vat;
+            
+            const updatedEstimate = {
+                ...linkedEstimate,
+                items: newItems,
+                subtotal,
+                vat,
+                totalAmount
+            };
+            
+            updateEstimate(updatedEstimate);
+            toast.success("Estimate updated via AI!");
+        } catch (err: any) {
+            console.error("AI Update failed:", err);
+            toast.error(err.message || "Failed to update estimate via AI");
+        } finally {
+            setIsUpdatingAI(false);
+        }
     };
 
     const handleSave = () => {
@@ -928,6 +960,17 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                             className="flex items-center gap-1.5 text-xs py-1.5 px-3 bg-yellow-500 text-white font-bold rounded-lg hover:bg-yellow-600 shadow-sm transition"
                                         >
                                             <Edit size={14}/> Edit Estimate
+                                        </button>
+                                    )}
+                                    {linkedEstimate.status === 'Draft' && (
+                                        <button
+                                            type="button"
+                                            onClick={() => handleAIUpdateEstimate(linkedEstimate)}
+                                            disabled={isUpdatingAI}
+                                            className="flex items-center gap-1.5 text-xs py-1.5 px-3 bg-purple-600 text-white font-bold rounded-lg hover:bg-purple-700 disabled:opacity-50 shadow-sm transition"
+                                        >
+                                            {isUpdatingAI ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />}
+                                            {isUpdatingAI ? 'Updating...' : 'AI Update'}
                                         </button>
                                     )}
                                     {linkedEstimate.status === 'Approved' && !linkedEstimate.jobId && onScheduleEstimate && (

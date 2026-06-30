@@ -884,6 +884,7 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                         onViewEstimate={(est) => setters.setEstimateViewModal({ isOpen: true, estimate: est })}
                         onScheduleEstimate={(est, inqId) => setters.setScheduleJobFromEstimateModal({ isOpen: true, estimate: est, inquiryId: inqId })}
                         onEditEstimate={(est) => setters.setEstimateFormModal({ isOpen: true, estimate: est })}
+                        updateEstimate={(est) => handleSaveItem(data.setEstimates, est, 'brooks_estimates')}
                         onAddNewCustomer={() => setters.setCustomerModal({ isOpen: true, customerId: null })}
                         onViewCustomer={(customerId) => {
                             setters.setInquiryModal({ isOpen: false, inquiry: null });

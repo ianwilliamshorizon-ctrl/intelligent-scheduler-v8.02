@@ -153,3 +153,59 @@ Please ensure your drafted email response addresses the customer's inquiry appro
 Draft a polite and concise email reply addressing their inquiry. Do not include subject lines or "[Your Name]" placeholders, just the raw email body text. Make it friendly and professional.`;
     return await generateContent(prompt);
 };
+
+import { EstimateLineItem } from '../../types';
+
+/**
+ * UPDATE ESTIMATE VIA AI
+ * Uses AI to update estimate line items based on customer correspondence
+ */
+export const updateEstimateWithAI = async (
+    currentItems: EstimateLineItem[],
+    inquiryMessage: string,
+    logs: InquiryLog[]
+): Promise<EstimateLineItem[]> => {
+    let contextPrompt = '';
+    if (inquiryMessage) {
+        contextPrompt += `Customer Inquiry Message:\n"${inquiryMessage}"\n\n`;
+    }
+    if (logs && logs.length > 0) {
+        contextPrompt += `CRM Logs / Internal Notes:\n` + 
+            logs.map(log => `  * [${log.actionType || 'Note'}] ${log.notes}`).join('\n') + `\n\n`;
+    }
+
+    const currentItemsJson = JSON.stringify(currentItems, null, 2);
+
+    const prompt = `You are a helpful assistant for an automotive workshop software. You are tasked with updating an estimate's line items based on recent correspondence and CRM notes.
+
+${contextPrompt}
+
+Here are the current line items in the estimate (JSON format):
+${currentItemsJson}
+
+Your task:
+Analyze the context. Have they asked to add new parts or services (e.g. spark plugs, timing belt, brake fluid)? Have they asked to remove something? Have the mechanics noted extra labor time?
+Modify the line items array accordingly.
+- Keep the existing "id" for unchanged or modified items.
+- If you need to add a new item, assign a blank "" string for "id".
+- Set a sensible "description", "quantity", and "unitPrice".
+- If "taxCodeId" is needed, provide a default like "TAX_STANDARD".
+
+Output ONLY a JSON array representing the updated list of EstimateLineItem objects.
+Example Output:
+[
+  { "id": "...", "description": "...", "quantity": 1, "unitPrice": 50.00, "taxCodeId": "TAX_STANDARD" }
+]
+`;
+    
+    try {
+        const result = await parseJobRequest(prompt);
+        if (Array.isArray(result)) {
+            return result as EstimateLineItem[];
+        }
+        throw new Error("AI did not return an array.");
+    } catch (error) {
+        console.error("Error updating estimate with AI:", error);
+        throw error;
+    }
+};

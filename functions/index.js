@@ -937,8 +937,9 @@ async function performEmailSync(microsoftClientId, microsoftClientSecret, micros
         }
       }
 
-      // Fetch and process attachments if they exist
-      if (message.hasAttachments) {
+      const hasInlineImages = bodyType === "html" && /<img[^>]+src=["']cid:/i.test(rawBody);
+      // Fetch and process attachments if they exist or if there are inline images
+      if (message.hasAttachments || hasInlineImages) {
         try {
           logger.info(`Message ${messageId} has attachments. Fetching attachments from MS Graph...`);
           // Expand itemAttachment/item to get the body of nested/forwarded emails
@@ -1624,8 +1625,8 @@ exports.forceSyncAttachments = onRequest({
           }
         });
         const msgDetails = messageResponse.data;
-        const rawBody = msgDetails.body?.content || msgDetails.uniqueBody?.content || "";
-        const bodyType = msgDetails.body?.contentType || msgDetails.uniqueBody?.contentType || "html";
+        const rawBody = msgDetails.uniqueBody?.content || msgDetails.body?.content || "";
+        const bodyType = msgDetails.uniqueBody?.contentType || msgDetails.body?.contentType || "html";
         let textBody = rawBody;
         const mediaItems = [];
 
