@@ -6,6 +6,9 @@ import { Save, PlusCircle, Gauge, Info, FileText, ChevronUp, ChevronDown, Trash2
 import { formatDate, getTodayISOString, getFutureDateISOString } from '../core/utils/dateUtils';
 import { generateEstimateNumber } from '../core/utils/numberGenerators';
 import { formatCurrency } from '../utils/formatUtils';
+import { db } from '../core/services/firebaseServices';
+import { doc, getDoc } from 'firebase/firestore';
+import { updateEstimateWithAI } from '../core/services/geminiService';
 import CustomerFormModal from './CustomerFormModal';
 import VehicleFormModal from './VehicleFormModal';
 import SearchableSelect from './SearchableSelect';
@@ -379,6 +382,44 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
     const [selectedPackage, setSelectedPackage] = useState<ServicePackage | null>(null);
     const [showAllEntities, setShowAllEntities] = useState(false);
     const [packageSearchTerm, setPackageSearchTerm] = useState('');
+    const [isAIUpdating, setIsAIUpdating] = useState(false);
+    
+    const handleAIUpdate = async () => {
+        if (!formData.linkedInquiryId) {
+            toast.error("This estimate is not linked to an inquiry.");
+            return;
+        }
+        setIsAIUpdating(true);
+        try {
+            const inquiryDoc = await getDoc(doc(db, 'brooks_inquiries', formData.linkedInquiryId));
+            if (!inquiryDoc.exists()) {
+                toast.error("Linked inquiry not found.");
+                setIsAIUpdating(false);
+                return;
+            }
+            const inquiryData = inquiryDoc.data();
+            const message = inquiryData.message || '';
+            const logs = inquiryData.logs || [];
+            
+            const updatedItems = await updateEstimateWithAI(formData.lineItems || [], message, logs);
+            
+            // Ensure any new items get a unique ID if they don't have one
+            const parsedItems = updatedItems.map(item => ({
+                ...item,
+                id: item.id || Date.now().toString() + Math.random().toString(36).substr(2, 5),
+                taxCodeId: item.taxCodeId || taxRates[0]?.id || ''
+            }));
+            
+            setFormData(prev => ({ ...prev, lineItems: parsedItems }));
+            toast.success("Estimate updated by AI successfully!");
+        } catch (error) {
+            console.error(error);
+            toast.error("Failed to update estimate via AI.");
+        } finally {
+            setIsAIUpdating(false);
+        }
+    };
+
     const [hasToastedNoMatch, setHasToastedNoMatch] = useState(false);
 
     const [discountCodeInput, setDiscountCodeInput] = useState('');
@@ -1278,9 +1319,20 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                              )}
                             <div className="flex justify-between items-center pt-2">
                                 <div className="flex gap-2">
-                                    <button onClick={() => addLineItem(true)} className="flex items-center text-sm text-indigo-600 font-semibold hover:text-indigo-800"><PlusCircle size={16} className="mr-1" /> Add Labor</button>
-                                    <button onClick={() => addLineItem(false)} className="flex items-center text-sm text-indigo-600 font-semibold hover:text-indigo-800"><PlusCircle size={16} className="mr-1" /> Add Part</button>
-                                 </div>
+                                      <button onClick={() => addLineItem(true)} className="flex items-center text-sm text-indigo-600 font-semibold hover:text-indigo-800"><PlusCircle size={16} className="mr-1" /> Add Labor</button>
+                                      <button onClick={() => addLineItem(false)} className="flex items-center text-sm text-indigo-600 font-semibold hover:text-indigo-800"><PlusCircle size={16} className="mr-1" /> Add Part</button>
+                                      {formData.linkedInquiryId && (
+                                          <button 
+                                              onClick={handleAIUpdate} 
+                                              disabled={isAIUpdating}
+                                              className="flex items-center text-sm text-fuchsia-600 font-semibold hover:text-fuchsia-800 disabled:opacity-50 ml-2"
+                                              title="Update line items using AI based on the customer inquiry"
+                                          >
+                                              <Wand2 size={16} className={`mr-1 ${isAIUpdating ? 'animate-spin' : ''}`} /> 
+                                              {isAIUpdating ? 'Updating...' : 'AI Update'}
+                                          </button>
+                                      )}
+                                   </div>
                                  <div className="flex items-center gap-2">
                                      <SearchableSelect 
                                          options={sortedPackages}

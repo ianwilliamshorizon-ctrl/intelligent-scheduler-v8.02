@@ -581,56 +581,12 @@ const InquiryCard: React.FC<{
                     </button>
                 </div>
             )}
-
-            {inquiryToClose && (
-                <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-                    <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md border border-gray-200">
-                        <h2 className="text-lg font-bold text-gray-800 mb-2">Close Inquiry</h2>
-                        <p className="text-sm text-gray-600 mb-4">Please select a reason for closing this inquiry.</p>
-                        
-                        <div className="mb-6">
-                            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Reason for Closing</label>
-                            <select 
-                                id="closeReasonSelect"
-                                className="w-full p-2 border border-gray-300 rounded text-sm bg-gray-50 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                            >
-                                <option value="Lost to Competitor">Lost to Competitor</option>
-                                <option value="Too Expensive">Too Expensive</option>
-                                <option value="No Response / Ghosted">No Response / Ghosted</option>
-                                <option value="Project Cancelled / Changed Mind">Project Cancelled / Changed Mind</option>
-                                <option value="Duplicate Inquiry">Duplicate Inquiry</option>
-                                <option value="Spam / Invalid">Spam / Invalid</option>
-                                <option value="Other">Other</option>
-                            </select>
-                        </div>
-                        
-                        <div className="flex justify-end gap-2">
-                            <button 
-                                onClick={() => setInquiryToClose(null)}
-                                className="px-4 py-2 border rounded font-medium text-gray-600 hover:bg-gray-50"
-                            >
-                                Cancel
-                            </button>
-                            <button 
-                                onClick={() => {
-                                    const select = document.getElementById('closeReasonSelect') as HTMLSelectElement;
-                                    handleUpdateStatus(inquiryToClose, 'Closed', select.value);
-                                    setInquiryToClose(null);
-                                }}
-                                className="px-4 py-2 bg-red-600 text-white rounded font-medium shadow-sm hover:bg-red-700"
-                            >
-                                Close Inquiry
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
     );
 };
 
 const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
-    const { inquiries, setInquiries, customers, vehicles, estimates, purchaseOrders, jobs, forceRefresh } = useData();
+    const { inquiries, setInquiries, customers, vehicles, estimates, setEstimates, purchaseOrders, jobs, forceRefresh } = useData();
     
     const normalizedInquiries = useMemo(() => {
         return (inquiries || []).map(i => {
@@ -800,6 +756,14 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
         // Persist to database in background
         try {
             await saveDocument('brooks_inquiries', updated);
+            if (newStatus === 'Closed') {
+                const linkedEstimate = estimates.find(e => e.linkedInquiryId === inquiry.id);
+                if (linkedEstimate && linkedEstimate.status !== 'Closed') {
+                    const closedEstimate = { ...linkedEstimate, status: 'Closed' as const };
+                    setEstimates(prev => prev.map(e => e.id === closedEstimate.id ? closedEstimate : e));
+                    await saveDocument('brooks_estimates', closedEstimate);
+                }
+            }
         } catch (e) {
             console.error("Failed to update inquiry status:", e);
         }
@@ -856,7 +820,17 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
             return up ? up : i;
         }));
         
-        const promises = updatedInquiries.map(up => saveDocument('brooks_inquiries', up));
+        const promises = updatedInquiries.map(async (up) => {
+            await saveDocument('brooks_inquiries', up);
+            if (newStatus === 'Closed') {
+                const linkedEstimate = estimates.find(e => e.linkedInquiryId === up.id);
+                if (linkedEstimate && linkedEstimate.status !== 'Closed') {
+                    const closedEstimate = { ...linkedEstimate, status: 'Closed' as const };
+                    setEstimates(prev => prev.map(e => e.id === closedEstimate.id ? closedEstimate : e));
+                    await saveDocument('brooks_estimates', closedEstimate);
+                }
+            }
+        });
         try {
             await Promise.all(promises);
         } catch (err) {
