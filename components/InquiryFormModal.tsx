@@ -161,14 +161,14 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
         
         try {
             setIsUpdatingAI(true);
-            const newItems = await updateEstimateWithAI(linkedEstimate.items || [], formData.message || '', formData.logs || [], formData.actionNotes);
+            const newItems = await updateEstimateWithAI(linkedEstimate.lineItems || [], formData.message || '', formData.logs || [], formData.actionNotes);
             const subtotal = newItems.reduce((acc, item) => acc + (item.quantity * item.unitPrice), 0);
             const vat = subtotal * 0.20; // 20% VAT
             const totalAmount = subtotal + vat;
             
             const updatedEstimate = {
                 ...linkedEstimate,
-                items: newItems,
+                lineItems: newItems,
                 subtotal,
                 vat,
                 totalAmount
