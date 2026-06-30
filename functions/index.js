@@ -887,7 +887,7 @@ async function performEmailSync(microsoftClientId, microsoftClientSecret, micros
       const bodyType = message.body?.contentType || message.uniqueBody?.contentType || "html";
       
       // Strip HTML if necessary, or pass to AI as-is. Clean text is better for UI and AI.
-      let textBody = rawBody;
+      let textBody = message.uniqueBody?.content || rawBody;
       let mediaItems = [];
 
       // Extract inline base64 images from HTML body before stripping HTML tags
@@ -1625,9 +1625,9 @@ exports.forceSyncAttachments = onRequest({
           }
         });
         const msgDetails = messageResponse.data;
-        const rawBody = msgDetails.uniqueBody?.content || msgDetails.body?.content || "";
-        const bodyType = msgDetails.uniqueBody?.contentType || msgDetails.body?.contentType || "html";
-        let textBody = rawBody;
+        const rawBody = msgDetails.body?.content || msgDetails.uniqueBody?.content || "";
+        const bodyType = msgDetails.body?.contentType || msgDetails.uniqueBody?.contentType || "html";
+        let textBody = msgDetails.uniqueBody?.content || rawBody;
         const mediaItems = [];
 
         // 1. Extract base64 embedded images
