@@ -28,11 +28,14 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ isOpen, onClose, invoice, c
     const print = usePrint();
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
     const [isEmailing, setIsEmailing] = useState(false);
-    const [printOptions, setPrintOptions] = useState({
-        showInvoice: true,
-        showTechNotes: true,
-        showInspections: true,
-        showMedia: true
+    const [printOptions, setPrintOptions] = useState(() => {
+        const isTrimming = entity?.id === 'ent_trimming' || entity?.name?.toLowerCase().includes('trimming');
+        return {
+            showInvoice: true,
+            showTechNotes: !isTrimming,
+            showInspections: !isTrimming,
+            showMedia: !isTrimming
+        };
     });
 
     // Calculate Grand Total including VAT (Mirroring PrintableInvoice logic)
