@@ -33,6 +33,7 @@ export const getInquiryHealth = (inquiry: Inquiry) => {
 
     const isOverdue = inquiry.followUpDate && new Date(inquiry.followUpDate) < new Date(new Date().setHours(0,0,0,0));
     const isToday = inquiry.followUpDate && new Date(inquiry.followUpDate).toDateString() === new Date().toDateString();
+    const isFutureFollowUp = inquiry.followUpDate && !isOverdue && !isToday;
 
     const latestLogTime = inquiry.logs && inquiry.logs.length > 0 
         ? Math.max(...inquiry.logs.map(log => new Date(log.timestamp).getTime()))
@@ -43,6 +44,7 @@ export const getInquiryHealth = (inquiry: Inquiry) => {
     if (inquiry.isUrgent) return 'urgent';
     if (isOverdue || isToday) return 'overdue';
     if (inquiry.hasNewReply) return 'responded';
+    if (isFutureFollowUp) return 'future_follow_up';
     if (inquiry.status === 'Awaiting Customer' && hoursSinceLastActivity > 72) return 'stale_quote';
     if (hoursSinceLastActivity > 48) return 'stale_activity';
     if (inquiry.logs && inquiry.logs.length > 0 && hoursSinceLastActivity <= 48) return 'active';
@@ -104,16 +106,14 @@ const InquiryCard: React.FC<{
 
     const handleDownloadMedia = async (item: any) => {
         try {
+            // Open window immediately to bypass popup blockers
+            const win = window.open('about:blank', '_blank');
             const dataUrl = await getImage(item.id);
-            if (dataUrl) {
-                const link = document.createElement('a');
-                link.href = dataUrl;
-                link.download = item.name;
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
+            if (dataUrl && win) {
+                win.location.href = dataUrl;
             } else {
-                toast.error('Could not retrieve file data.');
+                win?.close();
+                if (!dataUrl) toast.error('Could not retrieve file data.');
             }
         } catch (err) {
             console.error("Error downloading media:", err);
@@ -146,6 +146,8 @@ const InquiryCard: React.FC<{
     let cardExplanation = 'New or normal status (White background)';
     
     if (inquiry.status !== 'Closed') {
+        const isFutureFollowUp = inquiry.followUpDate && !isOverdue && !isToday;
+
         if (inquiry.isUrgent) {
             healthBgClass = 'bg-red-50/80';
             ringClass = 'ring-2 ring-red-500 shadow-md';
@@ -158,6 +160,10 @@ const InquiryCard: React.FC<{
             healthBgClass = 'bg-yellow-100/60';
             ringClass = 'ring-1 ring-yellow-400';
             cardExplanation = 'Customer Responded: Customer has sent a new reply (Yellow background)';
+        } else if (isFutureFollowUp) {
+            healthBgClass = 'bg-emerald-100/60';
+            ringClass = 'ring-1 ring-emerald-300';
+            cardExplanation = 'Follow-up Scheduled: A future follow-up date is set (Green background)';
         } else if (isStale72h(inquiry)) {
             healthBgClass = 'bg-red-100/60';
             ringClass = 'ring-1 ring-red-400';
@@ -239,6 +245,12 @@ const InquiryCard: React.FC<{
                 {latestLog && (
                     <div className={`${isExpanded ? 'block' : 'hidden'} bg-gray-50 border rounded p-1 mb-1 mt-1 text-[9px] text-gray-600`}>
                         <span className="font-semibold">{latestLog.userId === 'System' ? 'System' : users.find(u => u.id === latestLog.userId)?.name || 'User'}:</span> <span className="line-clamp-1">{latestLog.notes}</span>
+                    </div>
+                )}
+
+                {inquiry.status === 'Closed' && inquiry.closedReason && (
+                    <div className={`${isExpanded ? 'block' : 'hidden'} bg-red-50 border border-red-100 rounded p-1 mb-1 mt-1 text-[9px] text-red-700 font-bold`}>
+                        Closed Reason: <span className="font-normal">{inquiry.closedReason}</span>
                     </div>
                 )}
                 
@@ -569,6 +581,50 @@ const InquiryCard: React.FC<{
                     </button>
                 </div>
             )}
+
+            {inquiryToClose && (
+                <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md border border-gray-200">
+                        <h2 className="text-lg font-bold text-gray-800 mb-2">Close Inquiry</h2>
+                        <p className="text-sm text-gray-600 mb-4">Please select a reason for closing this inquiry.</p>
+                        
+                        <div className="mb-6">
+                            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Reason for Closing</label>
+                            <select 
+                                id="closeReasonSelect"
+                                className="w-full p-2 border border-gray-300 rounded text-sm bg-gray-50 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                            >
+                                <option value="Lost to Competitor">Lost to Competitor</option>
+                                <option value="Too Expensive">Too Expensive</option>
+                                <option value="No Response / Ghosted">No Response / Ghosted</option>
+                                <option value="Project Cancelled / Changed Mind">Project Cancelled / Changed Mind</option>
+                                <option value="Duplicate Inquiry">Duplicate Inquiry</option>
+                                <option value="Spam / Invalid">Spam / Invalid</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                        
+                        <div className="flex justify-end gap-2">
+                            <button 
+                                onClick={() => setInquiryToClose(null)}
+                                className="px-4 py-2 border rounded font-medium text-gray-600 hover:bg-gray-50"
+                            >
+                                Cancel
+                            </button>
+                            <button 
+                                onClick={() => {
+                                    const select = document.getElementById('closeReasonSelect') as HTMLSelectElement;
+                                    handleUpdateStatus(inquiryToClose, 'Closed', select.value);
+                                    setInquiryToClose(null);
+                                }}
+                                className="px-4 py-2 bg-red-600 text-white rounded font-medium shadow-sm hover:bg-red-700"
+                            >
+                                Close Inquiry
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
@@ -597,6 +653,7 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
     const { selectedEntityId, users, currentUser, businessEntities: entities } = useApp();
 
     const [hoveredInquiryId, setHoveredInquiryId] = useState<string | null>(null);
+    const [inquiryToClose, setInquiryToClose] = useState<Inquiry | null>(null);
     const [assignedUserFilter, setAssignedUserFilter] = useState<string>('all');
     const [healthFilter, setHealthFilter] = useState<string>('all');
     const [syncStatus, setSyncStatus] = useState<{ status: 'success' | 'error', lastRunTime: string, errorMsg?: string } | null>(null);
@@ -686,8 +743,8 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                 }
 
                 if (jobToUse) {
-                    // Close inquiry if job has started (In Progress, Complete, etc.)
-                    if (jobToUse.status === 'In Progress' || jobToUse.status === 'Complete' || jobToUse.status === 'Invoiced' || jobToUse.status === 'Closed' || jobToUse.status === 'Cancelled') {
+                    // Close inquiry only if job is Invoiced, Closed, or Cancelled. Leave it as Scheduled until then.
+                    if (jobToUse.status === 'Invoiced' || jobToUse.status === 'Closed' || jobToUse.status === 'Cancelled') {
                         return true;
                     }
                 }
@@ -718,16 +775,24 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
         });
     }, [inquiries, jobs, estimates, setInquiries]);
 
-    const handleUpdateStatus = async (inquiry: Inquiry, newStatus: Inquiry['status']) => {
+    const handleUpdateStatus = async (inquiry: Inquiry, newStatus: Inquiry['status'], providedReason?: string) => {
+        let closedReason = providedReason || inquiry.closedReason;
+        if (newStatus === 'Closed' && inquiry.status !== 'Closed' && !providedReason) {
+            setInquiryToClose(inquiry);
+            return;
+        }
+
+
         const updated: Inquiry = {
             ...inquiry,
             status: newStatus,
+            closedReason,
             logs: [...(inquiry.logs || []), {
                 id: crypto.randomUUID(),
                 timestamp: new Date().toISOString(),
                 userId: 'System',
                 actionType: 'Status Update',
-                notes: `Status updated to ${newStatus} via fast action card button.`
+                notes: `Status updated to ${newStatus} via fast action card button.` + (closedReason ? ` Reason: ${closedReason}` : '')
             }]
         };
         // Update local state immediately for visual responsiveness
@@ -1399,19 +1464,25 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                                                         i.status === 'Scheduled' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' :
                                                         i.status === 'Awaiting Customer' ? (isStale72h(i) ? 'bg-red-50 text-red-800 border-red-500 ring-1 ring-red-400' : 'bg-purple-50 text-purple-700 border-purple-200') :
                                                         'bg-gray-100 text-gray-800 border-gray-300'
-                                                    }`}>
+                                                    }`}
+                                                    title={i.status === 'Closed' && i.closedReason ? `Reason: ${i.closedReason}` : undefined}
+                                                    >
                                                         {i.status}
                                                     </span>
                                                 </td>
                                                 {/* Message */}
-                                                <td className="py-1.5 px-3 text-xs text-gray-600 max-w-[320px] truncate" title={i.message}>
+                                                <td className="py-1.5 px-3 text-xs text-gray-600 max-w-[320px] truncate" title={i.status === 'Closed' && i.closedReason ? `Closed Reason: ${i.closedReason}` : i.message}>
                                                     <div className="flex items-center gap-1.5 truncate">
                                                         {estimate && (
                                                             <span className="bg-purple-50 text-purple-700 px-1 py-0.5 rounded text-[9px] font-bold shrink-0">
                                                                 Est #{estimate.estimateNumber}
                                                             </span>
                                                         )}
-                                                        <span className="truncate">{i.message.replace(/\s+/g, ' ')}</span>
+                                                        {i.status === 'Closed' && i.closedReason ? (
+                                                            <span className="truncate text-red-600 font-medium">Closed Reason: {i.closedReason}</span>
+                                                        ) : (
+                                                            <span className="truncate">{i.message.replace(/\s+/g, ' ')}</span>
+                                                        )}
                                                     </div>
                                                 </td>
                                                 {/* Attachments */}
@@ -1563,6 +1634,50 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                 confirmText={confirmState.type === 'warning' ? 'OK' : 'Proceed'}
                 cancelText={confirmState.type === 'warning' ? '' : 'Cancel'}
             />
+
+            {inquiryToClose && (
+                <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md border border-gray-200">
+                        <h2 className="text-lg font-bold text-gray-800 mb-2">Close Inquiry</h2>
+                        <p className="text-sm text-gray-600 mb-4">Please select a reason for closing this inquiry.</p>
+                        
+                        <div className="mb-6">
+                            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Reason for Closing</label>
+                            <select 
+                                id="closeReasonSelect"
+                                className="w-full p-2 border border-gray-300 rounded text-sm bg-gray-50 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                            >
+                                <option value="Lost to Competitor">Lost to Competitor</option>
+                                <option value="Too Expensive">Too Expensive</option>
+                                <option value="No Response / Ghosted">No Response / Ghosted</option>
+                                <option value="Project Cancelled / Changed Mind">Project Cancelled / Changed Mind</option>
+                                <option value="Duplicate Inquiry">Duplicate Inquiry</option>
+                                <option value="Spam / Invalid">Spam / Invalid</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                        
+                        <div className="flex justify-end gap-2">
+                            <button 
+                                onClick={() => setInquiryToClose(null)}
+                                className="px-4 py-2 border rounded font-medium text-gray-600 hover:bg-gray-50"
+                            >
+                                Cancel
+                            </button>
+                            <button 
+                                onClick={() => {
+                                    const select = document.getElementById('closeReasonSelect') as HTMLSelectElement;
+                                    handleUpdateStatus(inquiryToClose, 'Closed', select.value);
+                                    setInquiryToClose(null);
+                                }}
+                                className="px-4 py-2 bg-red-600 text-white rounded font-medium shadow-sm hover:bg-red-700"
+                            >
+                                Close Inquiry
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

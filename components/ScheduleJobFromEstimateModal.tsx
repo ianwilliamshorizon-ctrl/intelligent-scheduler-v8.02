@@ -79,8 +79,7 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
 
     useEffect(() => {
         if (isOpen) {
-            if (!estimate || !estimate.vehicleId) {
-                toast.warning("This estimate does not have a vehicle registration. Please edit the estimate to add vehicle details before scheduling it as a job.");
+            if (!estimate) {
                 onClose();
                 return;
             }

@@ -3,7 +3,6 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import './index.css';
 import './styles/printable.css';
-import { DataContextProvider } from './core/state/DataContext';
 import { AppProvider } from './core/state/AppContext';
 import { initializeGenerativeAI } from './core/services/geminiService';
 import { cloudSpeechSynthesis, CloudSpeechSynthesisUtterance } from './core/utils/cloudSpeech';
@@ -25,7 +24,6 @@ setTimeout(() => {
     }
 }, 500);
 
-
 const rootElement = document.getElementById('root');
 if (!rootElement) {
     throw new Error("Could not find root element to mount the app.");
@@ -34,10 +32,8 @@ if (!rootElement) {
 const root = ReactDOM.createRoot(rootElement);
 root.render(
     <React.StrictMode>
-        <DataContextProvider>
-            <AppProvider>
-                <App />
-            </AppProvider>
-        </DataContextProvider>
+        <AppProvider>
+            <App />
+        </AppProvider>
     </React.StrictMode>
 );

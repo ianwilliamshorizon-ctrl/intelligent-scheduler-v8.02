@@ -9,6 +9,32 @@ const logger = require("firebase-functions/logger");
 let ttsClient = null;
 
 /**
+ * Helper to strip quoted email history from incoming replies.
+ */
+function extractLatestReply(text) {
+  if (!text) return "";
+  
+  const delimiters = [
+    /On\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|Mon|Tue|Wed|Thu|Fri|Sat|Sun).*?wrote:/i,
+    /On\s+\d{1,4}[-/]\d{1,2}[-/]\d{1,4}.*?wrote:/i,
+    /^-{3,}\s*Original Message\s*-{3,}/im,
+    /^_{5,}/m,
+    /^From:\s*.*?\n(?:Sent|To|Date):\s*.*/m
+  ];
+
+  let latestText = text;
+  for (const delimiter of delimiters) {
+    const match = latestText.match(delimiter);
+    if (match && match.index > 0) {
+      latestText = latestText.substring(0, match.index);
+    }
+  }
+
+  // Remove lines that start with >
+  return latestText.split('\n').filter(line => !line.trim().startsWith('>')).join('\n').trim();
+}
+
+/**
  * Universal Proxy Function
  * Handles: Vehicle Details, MOT History, and Postcode Lookups
  */
@@ -549,6 +575,7 @@ exports.inboundEmailWebhook = onRequest({
     const toField = fields.to || ""; // e.g. "trimming@brookspeed.com"
     const subject = fields.subject || "";
     const textBody = fields.text || fields.body || fields.html || "";
+    const cleanTextBody = extractLatestReply(textBody);
 
     logger.info(`Received inbound email from ${fromField} to ${toField}. Subject: "${subject}"`);
 
@@ -624,11 +651,11 @@ exports.inboundEmailWebhook = onRequest({
     let matchedInquiryId = null;
     let existingInquiryData = null;
 
-    // 2.5 Look up inquiry number in subject line [INQ-XXXX]
-    const inqMatch = subject.match(/\[(INQ-\d+)\]/i);
+    // 2.5 Look up inquiry number in subject line or body (INQ-XXXX)
+    const inqMatch = subject.match(/(INQ-\d+)/i) || textBody.match(/(INQ-\d+)/i);
     if (inqMatch) {
       const inqNum = inqMatch[1].toUpperCase();
-      logger.info(`Found inquiry number in subject: ${inqNum}`);
+      logger.info(`Found inquiry number in subject or body: ${inqNum}`);
       const inqSnap = await db.collection("brooks_inquiries")
         .where("inquiryNumber", "==", inqNum)
         .limit(1)
@@ -650,8 +677,8 @@ exports.inboundEmailWebhook = onRequest({
         userId: 'system',
         actionType: isOutbound ? 'Email Sent' : 'Customer Reply',
         notes: isOutbound
-          ? `[Webhook] Outbound email sent to customer.\nSubject: "${subject}"\nBody snippet: ${textBody.substring(0, 200)}...`
-          : `[Webhook] Received reply from ${fromName || fromEmail}.\nSubject: "${subject}"\nBody snippet: ${textBody.substring(0, 200)}...`
+          ? `[Webhook] Outbound email sent to customer.\nSubject: "${subject}"\nBody snippet: ${cleanTextBody.substring(0, 200)}...`
+          : `[Webhook] Received reply from ${fromName || fromEmail}.\nSubject: "${subject}"\nBody snippet: ${cleanTextBody.substring(0, 200)}...`
       };
 
       const existingLogs = existingInquiryData.logs || [];
@@ -770,7 +797,7 @@ ${textBody}
       createdAt: new Date().toISOString(),
       fromName: fromName || fromEmail || "Unknown Sender",
       fromContact: fromEmail || "No Email",
-      message: textBody || "Received email with empty text body.",
+      message: cleanTextBody || "Received email with empty text body.",
       takenByUserId: "system",
       status: status,
       linkedCustomerId: matchedCustomerId,
@@ -1024,6 +1051,8 @@ async function performEmailSync(microsoftClientId, microsoftClientSecret, micros
         recipientEmail = message.toRecipients[0].emailAddress?.address || microsoftEmailSender;
       }
 
+      const cleanTextBody = extractLatestReply(textBody);
+
       logger.info(`Syncing email: From=${fromEmail}, Subject="${subject}"`);
 
       let matchedCustomerId = null;
@@ -1076,11 +1105,11 @@ async function performEmailSync(microsoftClientId, microsoftClientSecret, micros
       let matchedInquiryId = null;
       let existingInquiryData = null;
 
-      // 2.5 Look up inquiry number in subject line [INQ-XXXX]
-      const inqMatch = subject.match(/\[(INQ-\d+)\]/i);
+      // 2.5 Look up inquiry number in subject line or body (INQ-XXXX)
+      const inqMatch = subject.match(/(INQ-\d+)/i) || textBody.match(/(INQ-\d+)/i);
       if (inqMatch) {
         const inqNum = inqMatch[1].toUpperCase();
-        logger.info(`Found inquiry number in subject: ${inqNum}`);
+        logger.info(`Found inquiry number in subject or body: ${inqNum}`);
         const inqSnap = await db.collection("brooks_inquiries")
           .where("inquiryNumber", "==", inqNum)
           .limit(1)
@@ -1113,8 +1142,8 @@ async function performEmailSync(microsoftClientId, microsoftClientSecret, micros
           userId: 'system',
           actionType: isOutbound ? 'Email Sent' : 'Customer Reply',
           notes: isOutbound
-            ? `[Email Sync] Outbound email sent to customer.\nSubject: "${subject}"\nBody snippet: ${textBody.substring(0, 200)}...`
-            : `[Email Sync] Received reply from ${fromName || fromEmail}.\nSubject: "${subject}"\nBody snippet: ${textBody.substring(0, 200)}...`
+            ? `[Email Sync] Outbound email sent to customer.\nSubject: "${subject}"\nBody snippet: ${cleanTextBody.substring(0, 200)}...`
+            : `[Email Sync] Received reply from ${fromName || fromEmail}.\nSubject: "${subject}"\nBody snippet: ${cleanTextBody.substring(0, 200)}...`
         };
 
         existingLogs.push(newLog);
@@ -1290,7 +1319,7 @@ ${textBody}
         fromContact: finalEmail || "No Email",
         fromEmail: finalEmail || null,
         fromPhone: finalPhone || null,
-        message: textBody || "Received email with empty text body.",
+        message: cleanTextBody || "Received email with empty text body.",
         takenByUserId: "system",
         status: status,
         linkedCustomerId: matchedCustomerId,

@@ -2,6 +2,7 @@ import React, { createContext, useContext, useMemo, useCallback, useRef } from '
 import { saveDocument } from '../db';
 import * as T from '../../types';
 import { usePersistentState, UsePersistentStateTuple } from './usePersistentState';
+import { useApp } from './AppContext';
 import {
     getInitialJobs, getInitialVehicles, getInitialCustomers, getInitialEngineers,
     getInitialEstimates, getInitialInvoices, getInitialPurchaseOrders,
@@ -58,43 +59,45 @@ interface DataContextType {
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    const { isAuthenticated } = useApp();
     const searchParams = new URLSearchParams(window.location.search);
     const isCustomerView = searchParams.get('view') === 'customer' && !!searchParams.get('estimateId');
+    const skipLoad = isCustomerView || !isAuthenticated;
 
     const stateHooks = {
-        brooks_jobs: usePersistentState<T.Job[]>('brooks_jobs', getInitialJobs, isCustomerView),
-        brooks_vehicles: usePersistentState<T.Vehicle[]>('brooks_vehicles', getInitialVehicles, isCustomerView),
-        brooks_customers: usePersistentState<T.Customer[]>('brooks_customers', getInitialCustomers, isCustomerView),
-        brooks_estimates: usePersistentState<T.Estimate[]>('brooks_estimates', getInitialEstimates, isCustomerView),
-        brooks_invoices: usePersistentState<T.Invoice[]>('brooks_invoices', getInitialInvoices, isCustomerView),
-        brooks_purchaseOrders: usePersistentState<T.PurchaseOrder[]>('brooks_purchaseOrders', getInitialPurchaseOrders, isCustomerView),
-        brooks_purchases: usePersistentState<T.Purchase[]>('brooks_purchases', getInitialPurchases, isCustomerView),
-        brooks_parts: usePersistentState<T.Part[]>('brooks_parts', getInitialParts, isCustomerView),
-        brooks_servicePackages: usePersistentState<T.ServicePackage[]>('brooks_servicePackages', getInitialServicePackages, false),
-        brooks_suppliers: usePersistentState<T.Supplier[]>('brooks_suppliers', getInitialSuppliers, isCustomerView),
-        brooks_engineers: usePersistentState<T.Engineer[]>('brooks_engineers', getInitialEngineers, isCustomerView),
-        brooks_lifts: usePersistentState<T.Lift[]>('brooks_lifts', getInitialLifts, isCustomerView),
-        brooks_rentalVehicles: usePersistentState<T.RentalVehicle[]>('brooks_rentalVehicles', getInitialRentalVehicles, isCustomerView),
-        brooks_rentalBookings: usePersistentState<T.RentalBooking[]>('brooks_rentalBookings', getInitialRentalBookings, isCustomerView),
-        brooks_saleVehicles: usePersistentState<T.SaleVehicle[]>('brooks_saleVehicles', getInitialSaleVehicles, isCustomerView),
-        brooks_saleOverheadPackages: usePersistentState<T.SaleOverheadPackage[]>('brooks_saleOverheadPackages', getInitialSaleOverheadPackages, isCustomerView),
-        brooks_prospects: usePersistentState<T.Prospect[]>('brooks_prospects', getInitialProspects, isCustomerView),
-        brooks_storageBookings: usePersistentState<T.StorageBooking[]>('brooks_storageBookings', getInitialStorageBookings, isCustomerView),
-        brooks_storageLocations: usePersistentState<T.StorageLocation[]>('brooks_storageLocations', getInitialStorageLocations, isCustomerView),
-        brooks_batteryChargers: usePersistentState<T.BatteryCharger[]>('brooks_batteryChargers', getInitialBatteryChargers, isCustomerView),
-        brooks_nominalCodes: usePersistentState<T.NominalCode[]>('brooks_nominalCodes', getInitialNominalCodes, isCustomerView),
-        brooks_nominalCodeRules: usePersistentState<T.NominalCodeRule[]>('brooks_nominalCodeRules', getInitialNominalCodeRules, isCustomerView),
-        brooks_absenceRequests: usePersistentState<T.AbsenceRequest[]>('brooks_absenceRequests', getInitialAbsenceRequests, isCustomerView),
-        brooks_inquiries: usePersistentState<T.Inquiry[]>('brooks_inquiries', getInitialInquiries, isCustomerView),
-        brooks_reminders: usePersistentState<T.Reminder[]>('brooks_reminders', getInitialReminders, isCustomerView),
-        brooks_auditLog: usePersistentState<T.AuditLogEntry[]>('brooks_auditLog', getInitialAuditLog, isCustomerView),
-        brooks_businessEntities: usePersistentState<T.BusinessEntity[]>('brooks_businessEntities', getInitialBusinessEntities, false),
-        brooks_taxRates: usePersistentState<T.TaxRate[]>('brooks_taxRates', getInitialTaxRates, false),
-        brooks_roles: usePersistentState<T.Role[]>('brooks_roles', getInitialRoles, isCustomerView),
-        brooks_inspectionDiagrams: usePersistentState<T.InspectionDiagram[]>('brooks_inspectionDiagrams', getInitialInspectionDiagrams, isCustomerView),
-        brooks_inspectionTemplates: usePersistentState<T.InspectionTemplate[]>('brooks_inspectionTemplates', getInitialInspectionTemplates, isCustomerView),
-        brooks_discountCodes: usePersistentState<T.DiscountCode[]>('brooks_discountCodes', getInitialDiscountCodes, isCustomerView),
-        brooks_financialBaselines: usePersistentState<T.FinancialBaseline[]>('brooks_financialBaselines', getInitialFinancialBaselines, isCustomerView),
+        brooks_jobs: usePersistentState<T.Job[]>('brooks_jobs', getInitialJobs, skipLoad),
+        brooks_vehicles: usePersistentState<T.Vehicle[]>('brooks_vehicles', getInitialVehicles, skipLoad),
+        brooks_customers: usePersistentState<T.Customer[]>('brooks_customers', getInitialCustomers, skipLoad),
+        brooks_estimates: usePersistentState<T.Estimate[]>('brooks_estimates', getInitialEstimates, skipLoad),
+        brooks_invoices: usePersistentState<T.Invoice[]>('brooks_invoices', getInitialInvoices, skipLoad),
+        brooks_purchaseOrders: usePersistentState<T.PurchaseOrder[]>('brooks_purchaseOrders', getInitialPurchaseOrders, skipLoad),
+        brooks_purchases: usePersistentState<T.Purchase[]>('brooks_purchases', getInitialPurchases, skipLoad),
+        brooks_parts: usePersistentState<T.Part[]>('brooks_parts', getInitialParts, skipLoad),
+        brooks_servicePackages: usePersistentState<T.ServicePackage[]>('brooks_servicePackages', getInitialServicePackages, skipLoad),
+        brooks_suppliers: usePersistentState<T.Supplier[]>('brooks_suppliers', getInitialSuppliers, skipLoad),
+        brooks_engineers: usePersistentState<T.Engineer[]>('brooks_engineers', getInitialEngineers, skipLoad),
+        brooks_lifts: usePersistentState<T.Lift[]>('brooks_lifts', getInitialLifts, skipLoad),
+        brooks_rentalVehicles: usePersistentState<T.RentalVehicle[]>('brooks_rentalVehicles', getInitialRentalVehicles, skipLoad),
+        brooks_rentalBookings: usePersistentState<T.RentalBooking[]>('brooks_rentalBookings', getInitialRentalBookings, skipLoad),
+        brooks_saleVehicles: usePersistentState<T.SaleVehicle[]>('brooks_saleVehicles', getInitialSaleVehicles, skipLoad),
+        brooks_saleOverheadPackages: usePersistentState<T.SaleOverheadPackage[]>('brooks_saleOverheadPackages', getInitialSaleOverheadPackages, skipLoad),
+        brooks_prospects: usePersistentState<T.Prospect[]>('brooks_prospects', getInitialProspects, skipLoad),
+        brooks_storageBookings: usePersistentState<T.StorageBooking[]>('brooks_storageBookings', getInitialStorageBookings, skipLoad),
+        brooks_storageLocations: usePersistentState<T.StorageLocation[]>('brooks_storageLocations', getInitialStorageLocations, skipLoad),
+        brooks_batteryChargers: usePersistentState<T.BatteryCharger[]>('brooks_batteryChargers', getInitialBatteryChargers, skipLoad),
+        brooks_nominalCodes: usePersistentState<T.NominalCode[]>('brooks_nominalCodes', getInitialNominalCodes, skipLoad),
+        brooks_nominalCodeRules: usePersistentState<T.NominalCodeRule[]>('brooks_nominalCodeRules', getInitialNominalCodeRules, skipLoad),
+        brooks_absenceRequests: usePersistentState<T.AbsenceRequest[]>('brooks_absenceRequests', getInitialAbsenceRequests, skipLoad),
+        brooks_inquiries: usePersistentState<T.Inquiry[]>('brooks_inquiries', getInitialInquiries, skipLoad),
+        brooks_reminders: usePersistentState<T.Reminder[]>('brooks_reminders', getInitialReminders, skipLoad),
+        brooks_auditLog: usePersistentState<T.AuditLogEntry[]>('brooks_auditLog', getInitialAuditLog, skipLoad),
+        brooks_businessEntities: usePersistentState<T.BusinessEntity[]>('brooks_businessEntities', getInitialBusinessEntities, skipLoad),
+        brooks_taxRates: usePersistentState<T.TaxRate[]>('brooks_taxRates', getInitialTaxRates, skipLoad),
+        brooks_roles: usePersistentState<T.Role[]>('brooks_roles', getInitialRoles, skipLoad),
+        brooks_inspectionDiagrams: usePersistentState<T.InspectionDiagram[]>('brooks_inspectionDiagrams', getInitialInspectionDiagrams, skipLoad),
+        brooks_inspectionTemplates: usePersistentState<T.InspectionTemplate[]>('brooks_inspectionTemplates', getInitialInspectionTemplates, skipLoad),
+        brooks_discountCodes: usePersistentState<T.DiscountCode[]>('brooks_discountCodes', getInitialDiscountCodes, skipLoad),
+        brooks_financialBaselines: usePersistentState<T.FinancialBaseline[]>('brooks_financialBaselines', getInitialFinancialBaselines, skipLoad),
     };
     
     const stateHooksRef = useRef(stateHooks);
@@ -160,7 +163,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     return (
         <DataContext.Provider value={value}>
-            {isDataLoaded ? children : <div>Loading...</div>}
+            {isDataLoaded ? children : (
+                <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 dark:bg-gray-900">
+                    <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                    <h2 className="mt-4 text-xl font-semibold text-gray-900 dark:text-white">Synchronizing System Data</h2>
+                    <p className="mt-2 text-gray-500 dark:text-gray-400">Please wait while we load your workspace...</p>
+                </div>
+            )}
         </DataContext.Provider>
     );
 };

@@ -65,6 +65,7 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
     const [isDraftingReply, setIsDraftingReply] = useState(false);
     const [replyAttachments, setReplyAttachments] = useState<File[]>([]);
     const [isSendingReply, setIsSendingReply] = useState(false);
+    const [activeTab, setActiveTab] = useState<'details' | 'communication' | 'estimates'>('details');
 
     useEffect(() => {
         if (!isOpen) return;
@@ -111,6 +112,12 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
         setAiError('');
         setSuggestedCustomer(null);
         setSuggestedVehicle(null);
+
+        if (inquiry && inquiry.logs && inquiry.logs.some(l => l.actionType === 'Email Sent')) {
+            setActiveTab('estimates');
+        } else {
+            setActiveTab('details');
+        }
     }, [isOpen, inquiry, selectedEntityId]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -154,20 +161,33 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
         let updatedLogs = formData.logs || [];
         let updatedFollowUpDate = formData.followUpDate;
 
-        if (inquiry && formData.actionNotes !== inquiry.actionNotes) {
-            const newLog = {
-                id: crypto.randomUUID(),
-                timestamp: new Date().toISOString(),
-                userId: currentUser.id,
-                actionType: 'Notes Updated',
-                notes: `Action Notes updated.`
-            };
-            updatedLogs = [...updatedLogs, newLog];
+        if (inquiry) {
+            if (formData.actionNotes !== inquiry.actionNotes) {
+                const newLog = {
+                    id: crypto.randomUUID(),
+                    timestamp: new Date().toISOString(),
+                    userId: currentUser.id,
+                    actionType: 'Notes Updated',
+                    notes: `Action Notes updated.`
+                };
+                updatedLogs = [...updatedLogs, newLog];
+            }
             
-            if (formData.status === 'Awaiting Customer') {
-                const fDate = new Date();
-                fDate.setDate(fDate.getDate() + 3);
-                updatedFollowUpDate = fDate.toISOString().split('T')[0];
+            if (formData.status !== inquiry.status) {
+                const newLog = {
+                    id: crypto.randomUUID(),
+                    timestamp: new Date().toISOString(),
+                    userId: currentUser.id,
+                    actionType: 'Status Update',
+                    notes: `Status changed from ${inquiry.status} to ${formData.status}.`
+                };
+                updatedLogs = [...updatedLogs, newLog];
+                
+                if (formData.status === 'Awaiting Customer') {
+                    const fDate = new Date();
+                    fDate.setDate(fDate.getDate() + 3);
+                    updatedFollowUpDate = fDate.toISOString().split('T')[0];
+                }
             }
         }
 
@@ -221,10 +241,36 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
             title={formData.inquiryNumber ? `Edit Inquiry / Message [${formData.inquiryNumber}]` : inquiry?.id ? 'Edit Inquiry / Message' : 'Log New Inquiry / Message'}
             maxWidth="max-w-[90vw] lg:max-w-7xl"
         >
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Column 1 - Core Message & Links */}
-                <div className="space-y-4">
-                    <div className="space-y-3">
+            <div className="border-b border-gray-200 mb-4">
+                <nav className="-mb-px flex space-x-8" aria-label="Tabs">
+                    <button
+                        type="button"
+                        onClick={() => setActiveTab('details')}
+                        className={`${activeTab === 'details' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition flex items-center gap-2`}
+                    >
+                        Initial Email & Details
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setActiveTab('estimates')}
+                        className={`${activeTab === 'estimates' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition flex items-center gap-2`}
+                    >
+                        Estimates
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setActiveTab('communication')}
+                        className={`${activeTab === 'communication' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition flex items-center gap-2`}
+                    >
+                        Communication, Notes & Logs
+                    </button>
+                </nav>
+            </div>
+            <div className="min-h-[500px]">
+                {activeTab === 'details' && (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div className="space-y-4">
+                            <div className="space-y-3">
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">From (Name)*</label>
                             <input name="fromName" value={formData.fromName || ''} onChange={handleChange} className="w-full p-2 border rounded" required />
@@ -308,7 +354,7 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                             </button>
                         </div>
                         <div className="relative">
-                            <textarea name="message" value={formData.message || ''} onChange={handleChange} rows={12} className="w-full p-2 border rounded text-sm" required />
+                            <textarea name="message" value={formData.message || ''} onChange={handleChange} rows={18} className="w-full p-2 border rounded text-sm" required />
                         </div>
                     </div>
                     
@@ -342,6 +388,122 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                             )}
                         </div>
                     )}
+
+                        </div>
+                        <div className="space-y-4">
+                            <div className="bg-white p-4 border border-gray-200 rounded-lg shadow-sm space-y-4">
+                        <h4 className="text-sm font-bold text-gray-800 border-b pb-2">Status & Ownership</h4>
+                        
+                        <div className="grid grid-cols-1 gap-4">
+                            <div>
+                                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Branch / Entity</label>
+                                <select name="entityId" value={formData.entityId || ''} onChange={handleChange} className="w-full p-2 border rounded text-sm bg-gray-50">
+                                    {entities?.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                                </select>
+                            </div>
+                            <div className="flex gap-4">
+                                <div className="flex-1">
+                                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Status</label>
+                                    <select name="status" value={formData.status || 'Inbox'} onChange={handleChange} className="w-full p-2 border rounded text-sm bg-gray-50">
+                                        <option value="Inbox">Inbox</option>
+                                        <option value="New Requests">New Requests</option>
+                                        <option value="In-Flight">In-Flight (Priority)</option>
+                                        <option value="Awaiting Customer">Awaiting Customer</option>
+                                        <option value="Scheduled">Scheduled</option>
+                                        <option value="Closed">Closed</option>
+                                    </select>
+                                </div>
+                                <div className="w-24">
+                                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Urgent</label>
+                                    <label className="relative inline-flex items-center cursor-pointer mt-1">
+                                        <input type="checkbox" className="sr-only peer" checked={!!formData.isUrgent} onChange={e => setFormData(p => ({ ...p, isUrgent: e.target.checked }))} />
+                                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-500"></div>
+                                    </label>
+                                </div>
+                            </div>
+                            {formData.status === 'Closed' && (
+                                <div>
+                                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1 text-red-600">Reason for Closing</label>
+                                    <select name="closedReason" value={formData.closedReason || ''} onChange={handleChange} className="w-full p-2 border border-red-200 rounded text-sm bg-red-50">
+                                        <option value="">Select a reason...</option>
+                                        <option value="Lost to Competitor">Lost to Competitor</option>
+                                        <option value="Too Expensive">Too Expensive</option>
+                                        <option value="No Response / Ghosted">No Response / Ghosted</option>
+                                        <option value="Project Cancelled / Changed Mind">Project Cancelled / Changed Mind</option>
+                                        <option value="Duplicate Inquiry">Duplicate Inquiry</option>
+                                        <option value="Spam / Invalid">Spam / Invalid</option>
+                                        <option value="Other">Other</option>
+                                    </select>
+                                </div>
+                            )}
+                            <div>
+                                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Follow Up Date</label>
+                                <input type="date" name="followUpDate" value={formData.followUpDate || ''} onChange={handleChange} className="w-full p-2 border rounded text-sm bg-gray-50" />
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Taken By</label>
+                                    <SearchableSelect
+                                        options={users.map(u => ({ id: u.id, label: u.name, value: u.id }))}
+                                        defaultValue={formData.takenByUserId || null}
+                                        onSelect={(value) => {
+                                            if (value !== formData.takenByUserId) {
+                                                const userName = users.find(u => u.id === value)?.name || value;
+                                                const newLog = {
+                                                    id: crypto.randomUUID(),
+                                                    timestamp: new Date().toISOString(),
+                                                    userId: currentUser.id,
+                                                    actionType: 'Reassigned',
+                                                    notes: `Taken By changed to: ${userName}`
+                                                };
+                                                setFormData(p => ({ ...p, takenByUserId: value, logs: [...(p.logs || []), newLog] }));
+                                            }
+                                        }}
+                                        placeholder="Taken by..."
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Assigned To</label>
+                                    <SearchableSelect
+                                        options={[
+                                            ...users.map(u => ({ id: u.id, label: `👤 ${u.name}`, value: `user_${u.id}` })),
+                                            ...(entities || []).map(e => ({ id: e.id, label: `🏢 ${e.name} (Team)`, value: `entity_${e.id}` }))
+                                        ]}
+                                        defaultValue={
+                                            formData.assignedToUserId ? `user_${formData.assignedToUserId}` : 
+                                            formData.assignedToEntityId ? `entity_${formData.assignedToEntityId}` : null
+                                        }
+                                        onSelect={(value) => {
+                                            if (!value) return;
+                                            const isUser = value.startsWith('user_');
+                                            const id = value.replace(/^(user_|entity_)/, '');
+                                            
+                                            const prevId = formData.assignedToUserId || formData.assignedToEntityId;
+                                            if (id !== prevId) {
+                                                const assignName = isUser 
+                                                    ? users.find(u => u.id === id)?.name || id
+                                                    : entities?.find(e => e.id === id)?.name || id;
+                                                const newLog = {
+                                                    id: crypto.randomUUID(),
+                                                    timestamp: new Date().toISOString(),
+                                                    userId: currentUser.id,
+                                                    actionType: 'Assigned',
+                                                    notes: `Assigned To changed to: ${assignName}`
+                                                };
+                                                setFormData(p => ({ 
+                                                    ...p, 
+                                                    assignedToUserId: isUser ? id : undefined,
+                                                    assignedToEntityId: !isUser ? id : undefined,
+                                                    logs: [...(p.logs || []), newLog] 
+                                                }));
+                                            }
+                                        }}
+                                        placeholder="Assign to user or team..."
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
 
                     <div className="bg-white p-4 border border-gray-200 rounded-lg shadow-sm space-y-4">
                         <h4 className="text-sm font-bold text-gray-800 border-b pb-2">Links & Assignments</h4>
@@ -442,116 +604,20 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                             )}
                         </div>
                     </div>
-                </div>
-
-                {/* Column 2 - Status & Reply */}
-                <div className="space-y-4">
-                    <div className="bg-white p-4 border border-gray-200 rounded-lg shadow-sm space-y-4">
-                        <h4 className="text-sm font-bold text-gray-800 border-b pb-2">Status & Ownership</h4>
-                        
-                        <div className="grid grid-cols-1 gap-4">
-                            <div>
-                                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Branch / Entity</label>
-                                <select name="entityId" value={formData.entityId || ''} onChange={handleChange} className="w-full p-2 border rounded text-sm bg-gray-50">
-                                    {entities?.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
-                                </select>
-                            </div>
-                            <div className="flex gap-4">
-                                <div className="flex-1">
-                                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Status</label>
-                                    <select name="status" value={formData.status || 'Inbox'} onChange={handleChange} className="w-full p-2 border rounded text-sm bg-gray-50">
-                                        <option value="Inbox">Inbox</option>
-                                        <option value="New Requests">New Requests</option>
-                                        <option value="In-Flight">In-Flight (Priority)</option>
-                                        <option value="Awaiting Customer">Awaiting Customer</option>
-                                        <option value="Scheduled">Scheduled</option>
-                                        <option value="Closed">Closed</option>
-                                    </select>
-                                </div>
-                                <div className="w-24">
-                                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Urgent</label>
-                                    <label className="relative inline-flex items-center cursor-pointer mt-1">
-                                        <input type="checkbox" className="sr-only peer" checked={!!formData.isUrgent} onChange={e => setFormData(p => ({ ...p, isUrgent: e.target.checked }))} />
-                                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-500"></div>
-                                    </label>
-                                </div>
-                            </div>
-                            <div>
-                                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Follow Up Date</label>
-                                <input type="date" name="followUpDate" value={formData.followUpDate || ''} onChange={handleChange} className="w-full p-2 border rounded text-sm bg-gray-50" />
-                            </div>
-                            <div className="grid grid-cols-2 gap-2">
-                                <div>
-                                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Taken By</label>
-                                    <SearchableSelect
-                                        options={users.map(u => ({ id: u.id, label: u.name, value: u.id }))}
-                                        defaultValue={formData.takenByUserId || null}
-                                        onSelect={(value) => {
-                                            if (value !== formData.takenByUserId) {
-                                                const userName = users.find(u => u.id === value)?.name || value;
-                                                const newLog = {
-                                                    id: crypto.randomUUID(),
-                                                    timestamp: new Date().toISOString(),
-                                                    userId: currentUser.id,
-                                                    actionType: 'Reassigned',
-                                                    notes: `Taken By changed to: ${userName}`
-                                                };
-                                                setFormData(p => ({ ...p, takenByUserId: value, logs: [...(p.logs || []), newLog] }));
-                                            }
-                                        }}
-                                        placeholder="Taken by..."
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Assigned To</label>
-                                    <SearchableSelect
-                                        options={[
-                                            ...users.map(u => ({ id: u.id, label: `👤 ${u.name}`, value: `user_${u.id}` })),
-                                            ...(entities || []).map(e => ({ id: e.id, label: `🏢 ${e.name} (Team)`, value: `entity_${e.id}` }))
-                                        ]}
-                                        defaultValue={
-                                            formData.assignedToUserId ? `user_${formData.assignedToUserId}` : 
-                                            formData.assignedToEntityId ? `entity_${formData.assignedToEntityId}` : null
-                                        }
-                                        onSelect={(value) => {
-                                            if (!value) return;
-                                            const isUser = value.startsWith('user_');
-                                            const id = value.replace(/^(user_|entity_)/, '');
-                                            
-                                            const prevId = formData.assignedToUserId || formData.assignedToEntityId;
-                                            if (id !== prevId) {
-                                                const assignName = isUser 
-                                                    ? users.find(u => u.id === id)?.name || id
-                                                    : entities?.find(e => e.id === id)?.name || id;
-                                                const newLog = {
-                                                    id: crypto.randomUUID(),
-                                                    timestamp: new Date().toISOString(),
-                                                    userId: currentUser.id,
-                                                    actionType: 'Assigned',
-                                                    notes: `Assigned To changed to: ${assignName}`
-                                                };
-                                                setFormData(p => ({ 
-                                                    ...p, 
-                                                    assignedToUserId: isUser ? id : undefined,
-                                                    assignedToEntityId: !isUser ? id : undefined,
-                                                    logs: [...(p.logs || []), newLog] 
-                                                }));
-                                            }
-                                        }}
-                                        placeholder="Assign to user or team..."
-                                    />
-                                </div>
-                            </div>
                         </div>
                     </div>
+                )}
 
-                    <div className="bg-white p-4 border border-gray-200 rounded-lg shadow-sm space-y-4">
+                {activeTab === 'communication' && (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div className="space-y-4">
+                            <div className="bg-white p-4 border border-gray-200 rounded-lg shadow-sm space-y-4">
                         <h4 className="text-sm font-bold text-gray-800 border-b pb-2">Reply to Inquiry</h4>
                         <div>
                             <textarea 
                                 value={replyText} 
                                 onChange={e => setReplyText(e.target.value)} 
-                                rows={8} 
+                                rows={18} 
                                 className="w-full p-2 border rounded text-sm mb-2" 
                                 placeholder="Type your reply or use AI to draft one..."
                             />
@@ -671,6 +737,7 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                                 }));
                                                 setReplyText('');
                                                 setReplyAttachments([]);
+                                                setActiveTab('estimates');
                                                 
                                                 if (formData.fromName && formData.message) {
                                                     const inquiryToSave: Inquiry = {
@@ -705,92 +772,11 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                             </div>
                         </div>
                     </div>
-                </div>
-
-                {/* Column 3 - Remainder (Logs, Estimate, Attachments) */}
-                <div className="space-y-4">
-                    {linkedEstimate ? (
-                        <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-lg shadow-sm">
-                            <div className="flex flex-col gap-3">
-                                <div>
-                                    <p className="font-bold text-indigo-800 flex items-center gap-2 text-sm"><FileText size={16}/> Linked Estimate</p>
-                                    <p className="text-xs text-indigo-600 font-medium mt-0.5">#{linkedEstimate.estimateNumber} - {linkedEstimate.status}</p>
-                                </div>
-                                <div className="flex flex-wrap gap-2">
-                                    {onViewEstimate && (
-                                        <button 
-                                            onClick={() => {
-                                                onViewEstimate(linkedEstimate);
-                                                onClose(); 
-                                            }}
-                                            className="px-3 py-1.5 bg-white text-indigo-700 border border-indigo-200 font-bold rounded-lg hover:bg-indigo-50 text-xs shadow-sm transition"
-                                        >
-                                            Review Estimate
-                                        </button>
-                                    )}
-                                    {onEditEstimate && linkedEstimate.status === 'Draft' && (
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                onEditEstimate(linkedEstimate);
-                                                onClose();
-                                            }}
-                                            className="flex items-center gap-1.5 text-xs py-1.5 px-3 bg-yellow-500 text-white font-bold rounded-lg hover:bg-yellow-600 shadow-sm transition"
-                                        >
-                                            <Edit size={14}/> Edit Estimate
-                                        </button>
-                                    )}
-                                    {linkedEstimate.status === 'Approved' && !linkedEstimate.jobId && onScheduleEstimate && (
-                                         <button 
-                                            onClick={() => {
-                                                onScheduleEstimate(linkedEstimate, formData.id);
-                                                onClose();
-                                            }}
-                                            className="px-3 py-1.5 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 shadow-sm flex items-center gap-1 text-xs transition"
-                                        >
-                                            <CalendarCheck size={14}/> Schedule Job
-                                        </button>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-lg shadow-sm">
-                            <h4 className="text-sm font-bold text-gray-800 mb-3 flex items-center gap-2"><FileText size={16} className="text-indigo-600"/> Estimates</h4>
-                            <div className="flex flex-col gap-2">
-                                {onCreateNewEstimate && (
-                                    <button
-                                        type="button"
-                                        onClick={() => onCreateNewEstimate(formData as Inquiry)}
-                                        className="w-full flex items-center justify-center gap-2 px-3 py-2 border border-indigo-300 text-indigo-700 bg-white rounded-lg font-semibold hover:bg-indigo-100 transition shadow-sm text-xs"
-                                    >
-                                        <PlusCircle size={14} /> Create Standard Estimate
-                                    </button>
-                                )}
-                                {onSmartCreateEstimate && (
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            const fullPrompt = [
-                                                `Customer Name: ${formData.fromName || 'Unknown'}`,
-                                                formData.fromEmail ? `Email: ${formData.fromEmail}` : null,
-                                                formData.fromPhone ? `Phone: ${formData.fromPhone}` : null,
-                                                `Request Details: ${formData.message || ''}`
-                                            ].filter(Boolean).join('\n');
-                                            onSmartCreateEstimate(formData as Inquiry, fullPrompt);
-                                        }}
-                                        className="w-full flex items-center justify-center gap-2 px-3 py-2 border border-transparent shadow-sm text-white bg-gradient-to-r from-purple-600 to-indigo-600 rounded-lg font-semibold hover:from-purple-700 hover:to-indigo-700 transition text-xs"
-                                    >
-                                        <Wand2 size={14} /> Smart Create Estimate (AI)
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-                    )}
-
-                    <div>
+                    </div>
+                        <div className="space-y-4">
+                            <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">CRM Logs & Notes</label>
-                        <div className="border rounded bg-gray-50 p-2 space-y-2 mb-2 max-h-60 overflow-y-auto">
+                        <div className="border rounded bg-gray-50 p-2 space-y-2 mb-2 h-96 overflow-y-auto">
                             {(!formData.logs || formData.logs.length === 0) && !formData.actionNotes && (
                                 <p className="text-xs text-gray-500 italic">No logs recorded yet.</p>
                             )}
@@ -906,11 +892,124 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                             </button>
                         </div>
                     </div>
+                        </div>
+                    </div>
+                )}
 
-                    {/* Attachments Section */}
-                    {formData.media && formData.media.length > 0 && (
+                {activeTab === 'estimates' && (
+                    <div className="grid grid-cols-1 gap-6">
+                        <div className="space-y-4">
+                            {linkedEstimate ? (
+                        <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-lg shadow-sm">
+                            <div className="flex flex-col gap-3">
+                                <div>
+                                    <p className="font-bold text-indigo-800 flex items-center gap-2 text-sm"><FileText size={16}/> Linked Estimate</p>
+                                    <p className="text-xs text-indigo-600 font-medium mt-0.5">#{linkedEstimate.estimateNumber} - {linkedEstimate.status}</p>
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                    {onViewEstimate && (
+                                        <button 
+                                            onClick={() => {
+                                                onViewEstimate(linkedEstimate);
+                                                onClose(); 
+                                            }}
+                                            className="px-3 py-1.5 bg-white text-indigo-700 border border-indigo-200 font-bold rounded-lg hover:bg-indigo-50 text-xs shadow-sm transition"
+                                        >
+                                            Review Estimate
+                                        </button>
+                                    )}
+                                    {onEditEstimate && linkedEstimate.status === 'Draft' && (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                onEditEstimate(linkedEstimate);
+                                                onClose();
+                                            }}
+                                            className="flex items-center gap-1.5 text-xs py-1.5 px-3 bg-yellow-500 text-white font-bold rounded-lg hover:bg-yellow-600 shadow-sm transition"
+                                        >
+                                            <Edit size={14}/> Edit Estimate
+                                        </button>
+                                    )}
+                                    {linkedEstimate.status === 'Approved' && !linkedEstimate.jobId && onScheduleEstimate && (
+                                         <button 
+                                            onClick={() => {
+                                                onScheduleEstimate(linkedEstimate, formData.id);
+                                                onClose();
+                                            }}
+                                            className="px-3 py-1.5 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 shadow-sm flex items-center gap-1 text-xs transition"
+                                        >
+                                            <CalendarCheck size={14}/> Schedule Job
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-lg shadow-sm">
+                            <h4 className="text-sm font-bold text-gray-800 mb-3 flex items-center gap-2"><FileText size={16} className="text-indigo-600"/> Estimates</h4>
+                            <div className="flex flex-col gap-2">
+                                {onCreateNewEstimate && (
+                                    <button
+                                        type="button"
+                                        onClick={() => onCreateNewEstimate(formData as Inquiry)}
+                                        className="w-full flex items-center justify-center gap-2 px-3 py-2 border border-indigo-300 text-indigo-700 bg-white rounded-lg font-semibold hover:bg-indigo-100 transition shadow-sm text-xs"
+                                    >
+                                        <PlusCircle size={14} /> Create Standard Estimate
+                                    </button>
+                                )}
+                                {onSmartCreateEstimate && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            const fullPrompt = [
+                                                `Customer Name: ${formData.fromName || 'Unknown'}`,
+                                                formData.fromEmail ? `Email: ${formData.fromEmail}` : null,
+                                                formData.fromPhone ? `Phone: ${formData.fromPhone}` : null,
+                                                `Request Details: ${formData.message || ''}`
+                                            ].filter(Boolean).join('\n');
+                                            onSmartCreateEstimate(formData as Inquiry, fullPrompt);
+                                        }}
+                                        className="w-full flex items-center justify-center gap-2 px-3 py-2 border border-transparent shadow-sm text-white bg-gradient-to-r from-purple-600 to-indigo-600 rounded-lg font-semibold hover:from-purple-700 hover:to-indigo-700 transition text-xs"
+                                    >
+                                        <Wand2 size={14} /> Smart Create Estimate (AI)
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                            {/* Attachments Section */}
                         <div className="bg-white p-4 border border-gray-200 rounded-lg shadow-sm">
-                            <label className="block text-sm font-bold text-gray-800 border-b pb-2 mb-3">Attachments ({formData.media.length})</label>
+                            <div className="flex justify-between items-center border-b pb-2 mb-3">
+                                <label className="block text-sm font-bold text-gray-800">Attachments ({formData.media ? formData.media.length : 0})</label>
+                                <label className="cursor-pointer text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded transition flex items-center gap-1 border border-indigo-200 shadow-sm">
+                                    <PlusCircle size={14} /> Add Attachment
+                                    <input 
+                                        type="file" 
+                                        multiple 
+                                        className="hidden" 
+                                        onChange={async (e) => {
+                                            if (e.target.files && e.target.files.length > 0) {
+                                                const { saveImage } = await import('../utils/imageStore');
+                                                const newMedia = [];
+                                                for (const file of e.target.files) {
+                                                    const isImage = file.type.startsWith('image/');
+                                                    const mediaItem = {
+                                                        id: crypto.randomUUID(),
+                                                        type: isImage ? 'Photo' : 'Document',
+                                                        name: file.name,
+                                                        uploadedAt: new Date().toISOString()
+                                                    };
+                                                    await saveImage(mediaItem.id, file);
+                                                    newMedia.push(mediaItem);
+                                                }
+                                                setFormData(p => ({ ...p, media: [...(p.media || []), ...newMedia] }));
+                                            }
+                                            e.target.value = '';
+                                        }} 
+                                    />
+                                </label>
+                            </div>
+                            {formData.media && formData.media.length > 0 ? (
                             <div className="grid grid-cols-1 gap-2 max-h-[200px] overflow-y-auto pr-1">
                                 {formData.media.map((item: any) => {
                                     const isPhoto = item.type === 'Photo';
@@ -923,30 +1022,54 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                             <button 
                                                 type="button" 
                                                 onClick={async () => {
-                                                    const { getImage } = await import('../utils/imageStore');
-                                                    const dataUrl = await getImage(item.id);
-                                                    if (dataUrl) {
-                                                        const link = document.createElement('a');
-                                                        link.href = dataUrl;
-                                                        link.download = item.name;
-                                                        document.body.appendChild(link);
-                                                        link.click();
-                                                        document.body.removeChild(link);
-                                                    } else {
-                                                        toast.error('Could not retrieve file.');
-                                                    }
-                                                }} 
+                                                      // Open window immediately to bypass popup blockers
+                                                      const win = window.open('about:blank', '_blank');
+                                                      
+                                                      const { getImage } = await import('../utils/imageStore');
+                                                      const dataUrl = await getImage(item.id);
+                                                      
+                                                      if (dataUrl && win) {
+                                                          const isPhoto = item.type === 'Photo';
+                                                          win.document.write(`
+                                                              <!DOCTYPE html>
+                                                              <html>
+                                                              <head>
+                                                                  <title>Attachment: ${item.name || 'File'}</title>
+                                                                  <style>
+                                                                      body { margin: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; background: #1f2937; min-height: 100vh; font-family: system-ui, sans-serif; }
+                                                                      .download-btn { padding: 12px 24px; background: #4f46e5; color: white; text-decoration: none; border-radius: 8px; margin-bottom: 24px; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+                                                                      .download-btn:hover { background: #4338ca; }
+                                                                      img { max-width: 90vw; max-height: 80vh; object-fit: contain; box-shadow: 0 10px 15px rgba(0,0,0,0.5); }
+                                                                      p { color: white; font-size: 1.2rem; }
+                                                                  </style>
+                                                              </head>
+                                                              <body>
+                                                                  <a href="${dataUrl}" download="${item.name || 'attachment'}" class="download-btn">Download ${item.name || 'File'}</a>
+                                                                  ${isPhoto ? `<img src="${dataUrl}" alt="Attachment preview" />` : `<p>This file type cannot be previewed in the browser.</p>`}
+                                                              </body>
+                                                              </html>
+                                                          `);
+                                                          win.document.close();
+                                                      } else {
+                                                          win?.close();
+                                                          if (!dataUrl) toast.error('Could not retrieve file data.');
+                                                      }
+                                                  }} 
                                                 className="text-[10px] bg-white px-2 py-1 rounded shadow-sm border font-bold hover:bg-gray-100 transition shrink-0"
                                             >
-                                                Download
+                                                View / Download
                                             </button>
                                         </div>
                                     );
                                 })}
                             </div>
+                            ) : (
+                                <div className="text-gray-400 text-xs py-6 text-center border-2 border-dashed rounded-lg">No attachments found</div>
+                            )}
                         </div>
-                    )}
-                </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </FormModal>
     );
