@@ -41,4 +41,4 @@ jobs:
       - name: Deploy to Firebase (Hosting & Functions)
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
-        run: npx -y firebase-tools@15.11.0 deploy --project prod --only hosting,functions --except functions:performScheduledBackup,functions:syncInboundEmails --non-interactive --force
+        run: npx -y firebase-tools@15.11.0 deploy --project prod --only hosting,functions:generatecontent,functions:geminiGenerateContent,functions:synthesizeSpeech,functions:transcribeSpeech,functions:sendEmail,functions:sendBackupPasswordResetEmail,functions:inboundEmailWebhook,functions:getUsersList,functions:debugInquiry,functions:triggerEmailSync,functions:forceSyncAttachments --non-interactive --force
