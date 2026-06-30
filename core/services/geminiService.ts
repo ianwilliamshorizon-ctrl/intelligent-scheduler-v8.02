@@ -163,7 +163,8 @@ import { EstimateLineItem } from '../../types';
 export const updateEstimateWithAI = async (
     currentItems: EstimateLineItem[],
     inquiryMessage: string,
-    logs: InquiryLog[]
+    logs: InquiryLog[],
+    actionNotes?: string
 ): Promise<EstimateLineItem[]> => {
     let contextPrompt = '';
     if (inquiryMessage) {
@@ -172,6 +173,9 @@ export const updateEstimateWithAI = async (
     if (logs && logs.length > 0) {
         contextPrompt += `CRM Logs / Internal Notes:\n` + 
             logs.map(log => `  * [${log.actionType || 'Note'}] ${log.notes}`).join('\n') + `\n\n`;
+    }
+    if (actionNotes) {
+        contextPrompt += `Recent Action Notes:\n"${actionNotes}"\n\n`;
     }
 
     const currentItemsJson = JSON.stringify(currentItems, null, 2);
