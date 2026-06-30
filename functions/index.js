@@ -1573,22 +1573,23 @@ exports.forceSyncAttachments = onRequest({
   try {
     const db = admin.firestore();
     
-    // Get inquiries from the last 5 days
-    const fiveDaysAgo = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString();
+    // Get inquiries from the last 14 days to ensure older legacy issues like Malcolm Webb are caught
+    const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
     const snap = await db.collection("brooks_inquiries")
-      .where("createdAt", ">=", fiveDaysAgo)
+      .where("createdAt", ">=", fourteenDaysAgo)
       .get();
 
     const inquiriesToFix = [];
     snap.forEach(doc => {
       const data = doc.data();
-      if (data.microsoftMessageId && (!data.media || data.media.length === 0)) {
+      // Allow syncing even if they already have media, to catch missed legacy images
+      if (data.microsoftMessageId) {
         inquiriesToFix.push({ id: doc.id, ...data });
       }
     });
 
     if (inquiriesToFix.length === 0) {
-      return res.status(200).json({ message: "No inquiries from the last 5 days need attachment syncing.", count: 0 });
+      return res.status(200).json({ message: "No inquiries from the last 14 days need attachment syncing.", count: 0 });
     }
 
     // Get Microsoft access token
@@ -1628,7 +1629,7 @@ exports.forceSyncAttachments = onRequest({
         const rawBody = msgDetails.body?.content || msgDetails.uniqueBody?.content || "";
         const bodyType = msgDetails.body?.contentType || msgDetails.uniqueBody?.contentType || "html";
         let textBody = msgDetails.uniqueBody?.content || rawBody;
-        const mediaItems = [];
+        const mediaItems = inq.media ? [...inq.media] : [];
 
         // 1. Extract base64 embedded images
         if (bodyType === "html") {
@@ -1641,8 +1642,16 @@ exports.forceSyncAttachments = onRequest({
             const extension = match[2];
             const base64Data = match[3];
             
-            const mediaItemId = crypto.randomUUID();
             const fileName = `embedded_image_${imgIndex}.${extension}`;
+            
+            // Skip if this embedded image was already processed
+            if (mediaItems.some(item => item.name === fileName)) {
+              textBody = textBody.replace(match[0], `\n[Embedded Image: ${fileName}]\n`);
+              imgIndex++;
+              continue;
+            }
+
+            const mediaItemId = crypto.randomUUID();
             
             try {
               logger.info(`Saving email attachment ${fileName} to storage...`);
