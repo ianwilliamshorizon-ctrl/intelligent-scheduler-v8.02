@@ -967,31 +967,49 @@ async function performEmailSync(microsoftClientId, microsoftClientSecret, micros
           }
 
           for (const att of attachmentsList) {
-            if (att["@odata.type"] === "#microsoft.graph.fileAttachment" && att.contentBytes) {
-              const isImage = att.contentType?.startsWith("image/") || false;
-              const mediaItemId = crypto.randomUUID();
+            if (att["@odata.type"] === "#microsoft.graph.fileAttachment") {
+              let contentBytes = att.contentBytes;
               
-              logger.info(`Saving email attachment ${att.name} to storage...`);
-              const bucket = admin.storage().bucket();
-              const fileRef = bucket.file(`vehicle-media/${mediaItemId}`);
-              const buffer = Buffer.from(att.contentBytes, "base64");
-              await fileRef.save(buffer, {
-                contentType: att.contentType || "application/octet-stream",
-                metadata: {
-                  metadata: {
-                    name: att.name,
-                    uploadedFrom: "inbound-email"
-                  }
+              // MS Graph omits contentBytes in list views for files > 3MB. Fetch directly.
+              if (!contentBytes && att.size > 0 && att.id) {
+                try {
+                  logger.info(`Attachment ${att.name} is large (${att.size} bytes). Fetching content directly...`);
+                  const singleAttUrl = `https://graph.microsoft.com/v1.0/users/${microsoftEmailSender}/messages/${messageId}/attachments/${att.id}`;
+                  const singleAttRes = await axios.get(singleAttUrl, {
+                    headers: { "Authorization": `Bearer ${accessToken}`, "Accept": "application/json" }
+                  });
+                  contentBytes = singleAttRes.data.contentBytes;
+                } catch (fetchAttErr) {
+                  logger.error(`Failed to fetch large attachment ${att.name}:`, fetchAttErr.message);
                 }
-              });
+              }
 
-              if (!mediaItems.some(item => item.name === att.name)) {
-                mediaItems.push({
-                  id: mediaItemId,
-                  type: isImage ? "Photo" : "Document",
-                  name: att.name,
-                  uploadedAt: new Date().toISOString()
+              if (contentBytes) {
+                const isImage = att.contentType?.startsWith("image/") || false;
+                const mediaItemId = crypto.randomUUID();
+                
+                logger.info(`Saving email attachment ${att.name} to storage...`);
+                const bucket = admin.storage().bucket();
+                const fileRef = bucket.file(`vehicle-media/${mediaItemId}`);
+                const buffer = Buffer.from(contentBytes, "base64");
+                await fileRef.save(buffer, {
+                  contentType: att.contentType || "application/octet-stream",
+                  metadata: {
+                    metadata: {
+                      name: att.name,
+                      uploadedFrom: "inbound-email"
+                    }
+                  }
                 });
+
+                if (!mediaItems.some(item => item.name === att.name)) {
+                  mediaItems.push({
+                    id: mediaItemId,
+                    type: isImage ? "Photo" : "Document",
+                    name: att.name,
+                    uploadedAt: new Date().toISOString()
+                  });
+                }
               }
             } else if (att["@odata.type"] === "#microsoft.graph.itemAttachment" && att.item) {
               const item = att.item;
@@ -1707,31 +1725,49 @@ exports.forceSyncAttachments = onRequest({
 
         // 4. Save file attachments
         for (const att of attachmentsList) {
-          if (att["@odata.type"] === "#microsoft.graph.fileAttachment" && att.contentBytes) {
-            const isImage = att.contentType?.startsWith("image/") || false;
-            const mediaItemId = crypto.randomUUID();
+          if (att["@odata.type"] === "#microsoft.graph.fileAttachment") {
+            let contentBytes = att.contentBytes;
             
-            logger.info(`Saving email attachment ${att.name} to storage...`);
-            const bucket = admin.storage().bucket();
-            const fileRef = bucket.file(`vehicle-media/${mediaItemId}`);
-            const buffer = Buffer.from(att.contentBytes, "base64");
-            await fileRef.save(buffer, {
-              contentType: att.contentType || "application/octet-stream",
-              metadata: {
-                metadata: {
-                  name: att.name,
-                  uploadedFrom: "retroactive-email-sync"
-                }
+            // MS Graph omits contentBytes in list views for files > 3MB. Fetch directly.
+            if (!contentBytes && att.size > 0 && att.id) {
+              try {
+                logger.info(`Attachment ${att.name} is large (${att.size} bytes). Fetching content directly in retroactive sync...`);
+                const singleAttUrl = `https://graph.microsoft.com/v1.0/users/${microsoftEmailSender}/messages/${messageId}/attachments/${att.id}`;
+                const singleAttRes = await axios.get(singleAttUrl, {
+                  headers: { "Authorization": `Bearer ${accessToken}`, "Accept": "application/json" }
+                });
+                contentBytes = singleAttRes.data.contentBytes;
+              } catch (fetchAttErr) {
+                logger.error(`Failed to fetch large attachment ${att.name}:`, fetchAttErr.message);
               }
-            });
+            }
 
-            if (!mediaItems.some(item => item.name === att.name)) {
-              mediaItems.push({
-                id: mediaItemId,
-                type: isImage ? "Photo" : "Document",
-                name: att.name,
-                uploadedAt: new Date().toISOString()
+            if (contentBytes) {
+              const isImage = att.contentType?.startsWith("image/") || false;
+              const mediaItemId = crypto.randomUUID();
+              
+              logger.info(`Saving email attachment ${att.name} to storage...`);
+              const bucket = admin.storage().bucket();
+              const fileRef = bucket.file(`vehicle-media/${mediaItemId}`);
+              const buffer = Buffer.from(contentBytes, "base64");
+              await fileRef.save(buffer, {
+                contentType: att.contentType || "application/octet-stream",
+                metadata: {
+                  metadata: {
+                    name: att.name,
+                    uploadedFrom: "retroactive-email-sync"
+                  }
+                }
               });
+
+              if (!mediaItems.some(item => item.name === att.name)) {
+                mediaItems.push({
+                  id: mediaItemId,
+                  type: isImage ? "Photo" : "Document",
+                  name: att.name,
+                  uploadedAt: new Date().toISOString()
+                });
+              }
             }
           }
         }
