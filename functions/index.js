@@ -792,9 +792,35 @@ ${textBody}
       status = "Immediate Quote";
     }
 
+    // Generate inquiryNumber
+    const yearSuffix = new Date().getFullYear().toString().slice(-2);
+    const prefix = `INQ${yearSuffix}-`;
+    let nextNum = 1;
+    try {
+      const highestInqSnap = await db.collection("brooks_inquiries")
+        .where("inquiryNumber", ">=", prefix)
+        .where("inquiryNumber", "<", prefix + "\uf8ff")
+        .orderBy("inquiryNumber", "desc")
+        .limit(1)
+        .get();
+
+      if (!highestInqSnap.empty) {
+        const highestId = highestInqSnap.docs[0].data().inquiryNumber;
+        const parts = highestId.split('-');
+        if (parts.length === 2) {
+           const numPart = parseInt(parts[1], 10);
+           if (!isNaN(numPart)) nextNum = numPart + 1;
+        }
+      }
+    } catch (err) {
+      logger.error("Error generating inquiry number", err);
+    }
+    const generatedInquiryNumber = `${prefix}${String(nextNum).padStart(5, '0')}`;
+
     // 3. Create Inquiry Card
     const newInquiry = {
       createdAt: new Date().toISOString(),
+      inquiryNumber: generatedInquiryNumber,
       fromName: fromName || fromEmail || "Unknown Sender",
       fromContact: fromEmail || "No Email",
       message: cleanTextBody || "Received email with empty text body.",
@@ -1334,6 +1360,7 @@ ${textBody}
       // 3. Create Inquiry Card
       const newInquiry = {
         createdAt: message.receivedDateTime || new Date().toISOString(),
+        inquiryNumber: generatedInquiryNumber,
         fromName: fromName || finalEmail || "Unknown Sender",
         fromContact: finalEmail || "No Email",
         fromEmail: finalEmail || null,
@@ -1347,7 +1374,15 @@ ${textBody}
         entityId: entityId,
         microsoftMessageId: messageId,
         media: mediaItems,
-        actionNotes: `[System]: Created automatically from email sync of mailbox ${recipientEmail}.\nSubject: "${subject}"${classificationReason ? `\nAI Classification: ${classificationReason}` : ''}`
+        logs: [
+          {
+            id: messageId || crypto.randomUUID(),
+            timestamp: new Date().toISOString(),
+            userId: 'system',
+            actionType: 'Created',
+            notes: `[Email Sync] Inbound email received.\nSubject: "${subject}"\nBody snippet: ${cleanTextBody.substring(0, 200)}...${classificationReason ? `\nAI Classification: ${classificationReason}` : ''}`
+          }
+        ]
       };
 
       const docRef = await db.collection("brooks_inquiries").add(newInquiry);
