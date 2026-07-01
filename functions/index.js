@@ -651,8 +651,8 @@ exports.inboundEmailWebhook = onRequest({
     let matchedInquiryId = null;
     let existingInquiryData = null;
 
-    // 2.5 Look up inquiry number in subject line or body (INQ-XXXX)
-    const inqMatch = subject.match(/(INQ-\d+)/i) || textBody.match(/(INQ-\d+)/i);
+    // 2.5 Look up inquiry number in subject line or body (INQ-XXXX or INQYY-XXXXX)
+    const inqMatch = subject.match(/(INQ(?:\d{2})?-\d+)/i) || textBody.match(/(INQ(?:\d{2})?-\d+)/i);
     if (inqMatch) {
       const inqNum = inqMatch[1].toUpperCase();
       logger.info(`Found inquiry number in subject or body: ${inqNum}`);
@@ -792,9 +792,35 @@ ${textBody}
       status = "Immediate Quote";
     }
 
+    // Generate inquiryNumber
+    const yearSuffix = new Date().getFullYear().toString().slice(-2);
+    const prefix = `INQ${yearSuffix}-`;
+    let nextNum = 1;
+    try {
+      const highestInqSnap = await db.collection("brooks_inquiries")
+        .where("inquiryNumber", ">=", prefix)
+        .where("inquiryNumber", "<", prefix + "\uf8ff")
+        .orderBy("inquiryNumber", "desc")
+        .limit(1)
+        .get();
+
+      if (!highestInqSnap.empty) {
+        const highestId = highestInqSnap.docs[0].data().inquiryNumber;
+        const parts = highestId.split('-');
+        if (parts.length === 2) {
+           const numPart = parseInt(parts[1], 10);
+           if (!isNaN(numPart)) nextNum = numPart + 1;
+        }
+      }
+    } catch (err) {
+      logger.error("Error generating inquiry number", err);
+    }
+    const generatedInquiryNumber = `${prefix}${String(nextNum).padStart(5, '0')}`;
+
     // 3. Create Inquiry Card
     const newInquiry = {
       createdAt: new Date().toISOString(),
+      inquiryNumber: generatedInquiryNumber,
       fromName: fromName || fromEmail || "Unknown Sender",
       fromContact: fromEmail || "No Email",
       message: cleanTextBody || "Received email with empty text body.",
@@ -1124,8 +1150,8 @@ async function performEmailSync(microsoftClientId, microsoftClientSecret, micros
       let matchedInquiryId = null;
       let existingInquiryData = null;
 
-      // 2.5 Look up inquiry number in subject line or body (INQ-XXXX)
-      const inqMatch = subject.match(/(INQ-\d+)/i) || textBody.match(/(INQ-\d+)/i);
+      // 2.5 Look up inquiry number in subject line or body (INQ-XXXX or INQYY-XXXXX)
+      const inqMatch = subject.match(/(INQ(?:\d{2})?-\d+)/i) || textBody.match(/(INQ(?:\d{2})?-\d+)/i);
       if (inqMatch) {
         const inqNum = inqMatch[1].toUpperCase();
         logger.info(`Found inquiry number in subject or body: ${inqNum}`);
@@ -1334,6 +1360,7 @@ ${textBody}
       // 3. Create Inquiry Card
       const newInquiry = {
         createdAt: message.receivedDateTime || new Date().toISOString(),
+        inquiryNumber: generatedInquiryNumber,
         fromName: fromName || finalEmail || "Unknown Sender",
         fromContact: finalEmail || "No Email",
         fromEmail: finalEmail || null,
@@ -1347,7 +1374,15 @@ ${textBody}
         entityId: entityId,
         microsoftMessageId: messageId,
         media: mediaItems,
-        actionNotes: `[System]: Created automatically from email sync of mailbox ${recipientEmail}.\nSubject: "${subject}"${classificationReason ? `\nAI Classification: ${classificationReason}` : ''}`
+        logs: [
+          {
+            id: messageId || crypto.randomUUID(),
+            timestamp: new Date().toISOString(),
+            userId: 'system',
+            actionType: 'Created',
+            notes: `[Email Sync] Inbound email received.\nSubject: "${subject}"\nBody snippet: ${cleanTextBody.substring(0, 200)}...${classificationReason ? `\nAI Classification: ${classificationReason}` : ''}`
+          }
+        ]
       };
 
       const docRef = await db.collection("brooks_inquiries").add(newInquiry);
@@ -1532,9 +1567,9 @@ exports.debugInquiry = onRequest({
 
     const doc = snap.docs[0];
     const data = doc.data();
-    const messageId = data.microsoftMessageId;
+    const oldMessageId = data.microsoftMessageId;
     
-    if (!messageId) {
+    if (!oldMessageId) {
       return res.status(200).json({ error: "Malcolm Webb inquiry has no microsoftMessageId", data });
     }
 
@@ -1550,6 +1585,21 @@ exports.debugInquiry = onRequest({
       headers: { "Content-Type": "application/x-www-form-urlencoded" }
     });
     const accessToken = tokenResponse.data.access_token;
+
+    const searchUrl = `https://graph.microsoft.com/v1.0/users/${microsoftEmailSender}/mailFolders/inbox/messages?$search="Malcolm Webb"`;
+    const searchResponse = await axios.get(searchUrl, {
+      headers: { "Authorization": `Bearer ${accessToken}`, "Accept": "application/json", "Prefer": 'outlook.body-content-type="html"' }
+    });
+    
+    if (!searchResponse.data.value || searchResponse.data.value.length === 0) {
+      return res.status(200).json({ error: "Malcolm Webb email not found in Inbox", data });
+    }
+    
+    const newMsg = searchResponse.data.value[0];
+    const messageId = newMsg.id;
+
+    // Save the new message ID to Firestore so forceSyncAttachments can use it
+    await doc.ref.update({ microsoftMessageId: messageId });
 
     const messageUrl = `https://graph.microsoft.com/v1.0/users/${microsoftEmailSender}/messages/${messageId}?$select=body,uniqueBody,hasAttachments`;
     const messageResponse = await axios.get(messageUrl, {

@@ -642,26 +642,37 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
             // Parse Name
             const nameMatch = text.match(/(?:Name|Customer|First Name|Last Name)\s*[:\-]\s*([^\n\r]+)/i);
             if (nameMatch && nameMatch[1].trim()) {
-                updates.fromName = nameMatch[1].trim();
-                updated = true;
+                const newName = nameMatch[1].trim();
+                if (inq.fromName !== newName) {
+                    updates.fromName = newName;
+                    updated = true;
+                }
             } else {
                 // If we can't find a name, at least rename it to Web Inquiry so it stops looping
-                updates.fromName = 'Web Inquiry (Unknown Name)';
-                updated = true;
+                if (inq.fromName !== 'Web Inquiry (Unknown Name)') {
+                    updates.fromName = 'Web Inquiry (Unknown Name)';
+                    updated = true;
+                }
             }
 
             // Parse Email
             const emailMatch = text.match(/(?:Email|E-mail)\s*[:\-]\s*([^\n\r ]+)/i) || text.match(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/i);
             if (emailMatch && emailMatch[1].trim()) {
-                updates.fromEmail = emailMatch[1].trim();
-                updated = true;
+                const newEmail = emailMatch[1].trim();
+                if (inq.fromEmail !== newEmail) {
+                    updates.fromEmail = newEmail;
+                    updated = true;
+                }
             }
 
             // Parse Phone
             const phoneMatch = text.match(/(?:Phone|Telephone|Tel|Mobile|Contact Number)\s*[:\-]\s*([^\n\r]+)/i);
             if (phoneMatch && phoneMatch[1].trim()) {
-                updates.fromPhone = phoneMatch[1].trim();
-                updated = true;
+                const newPhone = phoneMatch[1].trim();
+                if (inq.fromPhone !== newPhone) {
+                    updates.fromPhone = newPhone;
+                    updated = true;
+                }
             }
 
             if (updated) {
@@ -1182,7 +1193,9 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                                 </button>
                             ))}
                         </div>
+                    </div>
 
+                    <div className="flex items-center gap-3">
                         {/* Search */}
                         <div className="relative">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16}/>

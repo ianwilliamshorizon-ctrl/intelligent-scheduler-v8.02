@@ -173,6 +173,19 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
             let updatedLogs = targetInquiry.logs || [];
             let updatedFollowUpDate = targetInquiry.followUpDate;
 
+            if (newStatus === 'Sent') {
+                const now = new Date();
+                const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const dateString = now.toLocaleDateString();
+                updatedLogs = [...updatedLogs, {
+                    id: crypto.randomUUID(),
+                    timestamp: now.toISOString(),
+                    userId: currentUser?.id || 'system',
+                    actionType: 'Estimate Sent',
+                    notes: `Estimate sent at ${timeString} on ${dateString}`
+                }];
+            }
+
             if (targetStatus === 'Awaiting Customer' && targetInquiry.status !== 'Awaiting Customer') {
                 const fDate = new Date();
                 fDate.setDate(fDate.getDate() + 3);
