@@ -12,6 +12,7 @@ export interface PrintOptions {
     showTechNotes?: boolean;
     showInspections?: boolean;
     showMedia?: boolean;
+    invoiceNotes?: string;
 }
 
 interface PrintableInvoiceProps {
@@ -445,8 +446,16 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, customer, 
                                     </tbody>
                                 </table>
 
-                                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px', breakInside: 'avoid', pageBreakInside: 'avoid' }}>
-                                    <div style={{ width: '288px', backgroundColor: '#f9fafb', padding: '20px', borderRadius: '12px', border: '1px solid #f3f4f6', breakInside: 'avoid', pageBreakInside: 'avoid' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: '20px', breakInside: 'avoid', pageBreakInside: 'avoid' }}>
+                                    <div style={{ flex: 1, paddingRight: '40px' }}>
+                                        {printOptions.invoiceNotes && (
+                                            <div style={{ backgroundColor: '#f9fafb', padding: '15px', borderRadius: '12px', border: '1px solid #f3f4f6' }}>
+                                                <h4 style={{ fontSize: '10px', fontWeight: 'bold', textTransform: 'uppercase', color: '#6b7280', marginBottom: '8px', marginTop: 0 }}>Notes</h4>
+                                                <p style={{ fontSize: '11px', color: '#374151', whiteSpace: 'pre-wrap', margin: 0 }}>{printOptions.invoiceNotes}</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div style={{ width: '288px', backgroundColor: '#f9fafb', padding: '20px', borderRadius: '12px', border: '1px solid #f3f4f6', breakInside: 'avoid', pageBreakInside: 'avoid', flexShrink: 0 }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#9ca3af', marginBottom: '8px' }}>
                                             <span style={{ fontWeight: 'bold', textTransform: 'uppercase', fontSize: '9px' }}>Subtotal Net</span>
                                             <span style={{ color: '#111827', fontWeight: 'bold' }}>{formatCurrency(totals.subtotal)}</span>
