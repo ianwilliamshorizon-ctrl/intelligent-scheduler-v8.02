@@ -1,10 +1,11 @@
 import React, { useState, useMemo } from 'react';
 import { Invoice, Customer, Vehicle, BusinessEntity, Job, TaxRate, ServicePackage, InspectionTemplate, InspectionDiagram } from '../types';
-import { X, Printer, CheckCircle, Mail, Edit } from 'lucide-react';
+import { X, Printer, CheckCircle, Mail, Edit, Sparkles, Loader2 } from 'lucide-react';
 import { usePrint } from '../core/hooks/usePrint';
 import PrintableInvoice from './PrintableInvoice';
 import EmailInvoiceModal from './EmailInvoiceModal';
 import { sendOutboundEmail } from '../core/services/emailService';
+import { generateFinalInvoiceNotes } from '../core/services/geminiService';
 
 interface InvoiceModalProps {
     isOpen: boolean;
@@ -26,6 +27,7 @@ interface InvoiceModalProps {
 const InvoiceModal: React.FC<InvoiceModalProps> = ({ isOpen, onClose, invoice, customer, vehicle, entity, job, taxRates, servicePackages, inspectionTemplates, inspectionDiagrams, onUpdateInvoice, onInvoiceAction, onEdit }) => {
     const print = usePrint();
     const [isEmailing, setIsEmailing] = useState(false);
+    const [isGeneratingNotes, setIsGeneratingNotes] = useState(false);
     const [invoiceNotes, setInvoiceNotes] = useState('');
     const [printOptions, setPrintOptions] = useState(() => {
         const isTrimming = entity?.id === 'ent_trimming' || entity?.name?.toLowerCase().includes('trimming');
@@ -95,6 +97,24 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ isOpen, onClose, invoice, c
         }
     };
 
+    const handleGenerateNotes = async () => {
+        setIsGeneratingNotes(true);
+        try {
+            // Gather context
+            const techNotes = job?.notes || '';
+            const comments = (job?.technicianObservations || []).join('. ');
+            const items = invoice?.lineItems || [];
+            
+            const generated = await generateFinalInvoiceNotes(items, techNotes, comments);
+            setInvoiceNotes(generated);
+        } catch (error) {
+            alert("Failed to generate AI notes. Please try again.");
+            console.error(error);
+        } finally {
+            setIsGeneratingNotes(false);
+        }
+    };
+
     if (!isOpen) return null;
 
     return (
@@ -157,8 +177,20 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ isOpen, onClose, invoice, c
                                     <span className="text-xs font-bold text-gray-700 group-hover:text-indigo-600 transition-colors">Media Shots</span>
                                 </label>
                             </div>
-                            <div className="flex flex-col gap-1">
-                                <label className="text-[10px] font-black text-indigo-900 uppercase tracking-widest">Final Invoice Notes (Optional):</label>
+                            <div className="flex flex-col gap-1 relative">
+                                <div className="flex items-center justify-between">
+                                    <label className="text-[10px] font-black text-indigo-900 uppercase tracking-widest">Final Invoice Notes (Optional):</label>
+                                    <button 
+                                        type="button"
+                                        onClick={handleGenerateNotes}
+                                        disabled={isGeneratingNotes}
+                                        className="flex items-center gap-1 text-[10px] bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded border border-indigo-200 hover:bg-indigo-100 transition-colors disabled:opacity-50 font-bold"
+                                        title="Use AI to generate a summary thank-you note from the job's context"
+                                    >
+                                        {isGeneratingNotes ? <Loader2 size={10} className="animate-spin" /> : <Sparkles size={10} />}
+                                        {isGeneratingNotes ? 'Generating...' : 'AI Generate'}
+                                    </button>
+                                </div>
                                 <textarea 
                                     value={invoiceNotes} 
                                     onChange={(e) => setInvoiceNotes(e.target.value)}
