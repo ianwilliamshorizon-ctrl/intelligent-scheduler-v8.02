@@ -125,8 +125,13 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
                     initialRegistration={initialRegistration || ''}
                     initialCustomerId={initialCustomerId}
                     onSave={(customer, v) => {
-                        if (onSaveWithCustomer) onSaveWithCustomer(customer, v);
-                        onClose();
+                        if (onSaveWithCustomer) {
+                            onSaveWithCustomer(customer, v);
+                        } else {
+                            if (onSaveCustomer) onSaveCustomer(customer);
+                            onSave(v);
+                            onClose();
+                        }
                     }}
                     onCancel={onClose}
                     customers={customers}

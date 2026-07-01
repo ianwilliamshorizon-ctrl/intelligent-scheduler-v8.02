@@ -68,6 +68,34 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
     const [isSendingReply, setIsSendingReply] = useState(false);
     const [activeTab, setActiveTab] = useState<'details' | 'communication' | 'estimates'>('details');
 
+    // Split Name states
+    const [firstNameInput, setFirstNameInput] = useState('');
+    const [surnameInput, setSurnameInput] = useState('');
+
+    useEffect(() => {
+        const parts = (formData.fromName || '').split(' ');
+        const derivedFirst = parts[0] || '';
+        const derivedSurname = parts.slice(1).join(' ') || '';
+        
+        const currentLocal = `${firstNameInput} ${surnameInput}`.trim();
+        if (currentLocal !== (formData.fromName || '').trim()) {
+            setFirstNameInput(derivedFirst);
+            setSurnameInput(derivedSurname);
+        }
+    }, [formData.fromName, firstNameInput, surnameInput]);
+
+    const handleFirstNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const val = e.target.value;
+        setFirstNameInput(val);
+        setFormData(p => ({ ...p, fromName: `${val} ${surnameInput}`.trim() }));
+    };
+
+    const handleSurnameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const val = e.target.value;
+        setSurnameInput(val);
+        setFormData(p => ({ ...p, fromName: `${firstNameInput} ${val}`.trim() }));
+    };
+
     useEffect(() => {
         if (!isOpen) return;
 
@@ -303,9 +331,15 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         <div className="space-y-4">
                             <div className="space-y-3">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">From (Name)*</label>
-                            <input name="fromName" value={formData.fromName || ''} onChange={handleChange} className="w-full p-2 border rounded" required />
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">First Name*</label>
+                                <input value={firstNameInput} onChange={handleFirstNameChange} className="w-full p-2 border rounded" required />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Surname</label>
+                                <input value={surnameInput} onChange={handleSurnameChange} className="w-full p-2 border rounded" />
+                            </div>
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
