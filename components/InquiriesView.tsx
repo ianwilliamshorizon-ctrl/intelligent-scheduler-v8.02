@@ -623,6 +623,46 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
         return () => unsubscribe();
     }, []);
 
+    // Auto-fix missing inquiry numbers
+    React.useEffect(() => {
+        if (!inquiries || inquiries.length === 0) return;
+        
+        const missingNumbers = inquiries.filter(i => !i.inquiryNumber || i.inquiryNumber.trim() === '');
+        if (missingNumbers.length === 0) return;
+
+        let fixedCount = 0;
+        
+        // Find current max number
+        const yearSuffix = new Date().getFullYear().toString().slice(-2);
+        const prefix = `INQ${yearSuffix}-`;
+        const existingNumbers = inquiries
+            .filter(i => i.inquiryNumber && i.inquiryNumber.includes('-'))
+            .map(i => {
+                const parts = i.inquiryNumber!.split('-');
+                return parseInt(parts[1], 10);
+            })
+            .filter(n => !isNaN(n));
+        
+        let maxNumber = existingNumbers.length > 0 ? Math.max(...existingNumbers) : 0;
+        
+        // Fix each missing inquiry
+        missingNumbers.forEach(async (inq) => {
+            maxNumber++;
+            const newNumber = `${prefix}${String(maxNumber).padStart(5, '0')}`;
+            try {
+                // Ensure we don't spam saves if it's already running
+                await saveDocument('brooks_inquiries', { ...inq, inquiryNumber: newNumber });
+                console.log(`Auto-fixed inquiry ${inq.id} with new number ${newNumber}`);
+            } catch (err) {
+                console.error("Failed to auto-fix inquiry number", err);
+            }
+        });
+        
+        if (missingNumbers.length > 0) {
+            toast.success(`Automatically fixed ${missingNumbers.length} inquiries that were missing an ID number.`);
+        }
+    }, [inquiries.length]); // Intentionally using .length to avoid infinite loops if saveDocument triggers a re-fetch
+
     // Auto-parse 67 Degrees Web Inquiries
     React.useEffect(() => {
         if (!inquiries || inquiries.length === 0) return;
