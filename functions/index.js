@@ -651,8 +651,8 @@ exports.inboundEmailWebhook = onRequest({
     let matchedInquiryId = null;
     let existingInquiryData = null;
 
-    // 2.5 Look up inquiry number in subject line or body (INQ-XXXX)
-    const inqMatch = subject.match(/(INQ-\d+)/i) || textBody.match(/(INQ-\d+)/i);
+    // 2.5 Look up inquiry number in subject line or body (INQ-XXXX or INQYY-XXXXX)
+    const inqMatch = subject.match(/(INQ(?:\d{2})?-\d+)/i) || textBody.match(/(INQ(?:\d{2})?-\d+)/i);
     if (inqMatch) {
       const inqNum = inqMatch[1].toUpperCase();
       logger.info(`Found inquiry number in subject or body: ${inqNum}`);
@@ -1124,8 +1124,8 @@ async function performEmailSync(microsoftClientId, microsoftClientSecret, micros
       let matchedInquiryId = null;
       let existingInquiryData = null;
 
-      // 2.5 Look up inquiry number in subject line or body (INQ-XXXX)
-      const inqMatch = subject.match(/(INQ-\d+)/i) || textBody.match(/(INQ-\d+)/i);
+      // 2.5 Look up inquiry number in subject line or body (INQ-XXXX or INQYY-XXXXX)
+      const inqMatch = subject.match(/(INQ(?:\d{2})?-\d+)/i) || textBody.match(/(INQ(?:\d{2})?-\d+)/i);
       if (inqMatch) {
         const inqNum = inqMatch[1].toUpperCase();
         logger.info(`Found inquiry number in subject or body: ${inqNum}`);

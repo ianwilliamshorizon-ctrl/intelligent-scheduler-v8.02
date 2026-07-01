@@ -100,15 +100,20 @@ export const generateRentalBookingId = (allBookings: RentalBooking[]): string =>
  * It finds the highest existing number and increments it.
  */
 export const generateInquiryNumber = (allInquiries: Inquiry[]): string => {
-    const prefix = 'INQ-';
+    const yearSuffix = new Date().getFullYear().toString().slice(-2);
+    const prefix = `INQ${yearSuffix}-`;
+    
     const existingNumbers = allInquiries
-        .filter(i => i.inquiryNumber)
-        .map(i => parseInt(i.inquiryNumber!.replace(prefix, ''), 10))
+        .filter(i => i.inquiryNumber && i.inquiryNumber.includes('-'))
+        .map(i => {
+            const parts = i.inquiryNumber!.split('-');
+            return parseInt(parts[1], 10);
+        })
         .filter(n => !isNaN(n));
     
     const maxNumber = existingNumbers.length > 0 ? Math.max(...existingNumbers) : 0;
     
     const newNumber = maxNumber + 1;
     
-    return `${prefix}${String(newNumber).padStart(4, '0')}`;
+    return `${prefix}${String(newNumber).padStart(5, '0')}`;
 };
