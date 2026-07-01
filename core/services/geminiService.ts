@@ -213,3 +213,33 @@ Example Output:
         throw error;
     }
 };
+
+/**
+ * GENERATE FINAL INVOICE NOTES
+ * Uses AI to construct a summary of what was done as a thank you note,
+ * based on tech notes, comments, and estimate/invoice line items.
+ */
+export const generateFinalInvoiceNotes = async (
+    lineItems: any[],
+    techNotes: string,
+    comments: string
+): Promise<string> => {
+    const itemsText = (lineItems || []).map(item => item.description).join(', ');
+    
+    const prompt = `You are a professional and polite automotive workshop manager writing the final "thank you" note to a customer to be printed at the bottom of their invoice.
+
+Context of what was done:
+- Parts/Services Billed: ${itemsText || 'Standard service'}
+- Technician Notes: ${techNotes || 'None'}
+- Internal Comments/Logs: ${comments || 'None'}
+
+Your task:
+Write a short, friendly, and professional paragraph (3-4 sentences max) summarizing the work that was done, thanking the customer for their business, and wishing them well. Do not use generic placeholders like [Your Name]. Ensure the tone is appreciative and reassuring about the quality of the work. Return ONLY the raw text of the note, nothing else.`;
+
+    try {
+        return await generateContent(prompt);
+    } catch (error) {
+        console.error("Error generating final invoice notes:", error);
+        throw error;
+    }
+};
