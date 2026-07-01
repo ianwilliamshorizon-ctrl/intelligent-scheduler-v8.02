@@ -2,9 +2,9 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Vehicle, Customer, Job, Estimate, MotTest } from '../types';
 import FormModal from './FormModal';
 import { lookupVehicleByVRM } from '../services/vehicleLookupService';
-import { 
-    Loader2, Search, Briefcase, History, 
-    Eye, ArrowRightLeft, ShieldCheck, AlertCircle, 
+import {
+    Loader2, Search, Briefcase, History,
+    Eye, ArrowRightLeft, ShieldCheck, AlertCircle,
     Printer, Car, Shield, XCircle, AlertTriangle,
     Database, User, ExternalLink, Plus, RefreshCw, MessageSquare
 } from 'lucide-react';
@@ -23,14 +23,13 @@ type LocalInvoice = any;
 type LocalPrevReg = { registration: string; changedAt: string; changedByUserId: string };
 
 const TabButton = ({ isActive, onClick, children }: { isActive: boolean, onClick: () => void, children: React.ReactNode }) => (
-    <button 
-        type="button" 
-        onClick={onClick} 
-        className={`px-4 py-2 text-sm font-medium transition-colors flex items-center gap-2 border-b-2 ${
-            isActive 
-                ? 'border-indigo-600 text-indigo-600 bg-indigo-50/50' 
+    <button
+        type="button"
+        onClick={onClick}
+        className={`px-4 py-2 text-sm font-medium transition-colors flex items-center gap-2 border-b-2 ${isActive
+                ? 'border-indigo-600 text-indigo-600 bg-indigo-50/50'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-        }`}
+            }`}
     >
         {children}
     </button>
@@ -41,7 +40,7 @@ const Section = ({ title, icon: Icon, children, defaultOpen = true }: { title: s
     return (
         <div className="border rounded-lg bg-white shadow-sm">
             <h3 onClick={() => setIsOpen(!isOpen)} className="text-md font-bold p-3 flex justify-between items-center cursor-pointer bg-gray-50 rounded-t-lg">
-                <span className="flex items-center gap-2">{Icon && <Icon size={16}/>} {title}</span>
+                <span className="flex items-center gap-2">{Icon && <Icon size={16} />} {title}</span>
             </h3>
             {isOpen && <div className="p-3">{children}</div>}
         </div>
@@ -71,7 +70,7 @@ interface VehicleFormModalProps {
     onSaveCustomer?: (customer: Customer) => void;
 }
 
-const VehicleFormModal: React.FC<VehicleFormModalProps> = ({ 
+const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
     isOpen, onClose, onSave, vehicle, customers, jobs, estimates, invoices, purchaseOrders,
     onViewJob, onViewEstimate, onViewInvoice, onViewCustomer, onOpenPurchaseOrder, onViewInquiry, initialCustomerId, onSaveWithCustomer, initialRegistration, vehicles,
     onSaveCustomer
@@ -86,7 +85,7 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
     const [isTransferMode, setIsTransferMode] = useState(false);
     const [includeMotHistory, setIncludeMotHistory] = useState(false);
     const [isAddingCustomer, setIsAddingCustomer] = useState(false);
-    
+
     const hasAutoLookedUp = useRef(false);
 
     useEffect(() => {
@@ -107,7 +106,7 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
             motHistory: [],
             previousRegistrations: []
         };
-        
+
         setFormData(initialData);
         setIsTransferMode(!vehicle?.id);
         setActiveTab('details');
@@ -117,10 +116,10 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
             handleLookup(initialRegistration);
         }
     }, [isOpen, vehicle, initialRegistration, initialCustomerId]);
-    
+
     if (!vehicle && !initialRegistration && !initialCustomerId) {
         return (
-             <FormModal isOpen={isOpen} onClose={onClose} onSave={() => {}} title="Add New Vehicle & Customer" maxWidth="max-w-4xl">
+            <FormModal isOpen={isOpen} onClose={onClose} onSave={() => { }} title="Add New Vehicle & Customer" maxWidth="max-w-4xl">
                 <AddNewVehicleForm
                     initialRegistration={initialRegistration || ''}
                     initialCustomerId={initialCustomerId}
@@ -146,32 +145,32 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
 
     const vehicleJobs = useMemo(() => {
         if (!formData.id) return [];
-        return (jobs || []).filter(j => j.vehicleId === formData.id).sort((a,b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+        return (jobs || []).filter(j => j.vehicleId === formData.id).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
     }, [jobs, formData.id]);
-    
+
     const vehicleEstimates = useMemo(() => {
         if (!formData.id) return [];
-        return (estimates || []).filter(e => e.vehicleId === formData.id).sort((a,b) => (b.issueDate || '').localeCompare(a.issueDate || ''));
+        return (estimates || []).filter(e => e.vehicleId === formData.id).sort((a, b) => (b.issueDate || '').localeCompare(a.issueDate || ''));
     }, [estimates, formData.id]);
-    
+
     const vehicleInvoices = useMemo(() => {
         if (!formData.id) return [];
-        return (invoices || []).filter(i => i.vehicleId === formData.id).sort((a,b) => (b.issueDate || '').localeCompare(a.issueDate || ''));
+        return (invoices || []).filter(i => i.vehicleId === formData.id).sort((a, b) => (b.issueDate || '').localeCompare(a.issueDate || ''));
     }, [invoices, formData.id]);
-    
+
     const { inquiries } = useData();
-    
+
     const vehicleInquiries = useMemo(() => {
         if (!formData.id) return [];
         return (inquiries || []).filter((i: any) => i.linkedVehicleId === formData.id)
-        .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+            .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     }, [inquiries, formData.id]);
     const vehiclePurchases = useMemo(() => {
         const reg = formData.registration?.toUpperCase().replace(/\s/g, '');
         if (!reg) return [];
-        return (purchaseOrders || []).filter(po => 
+        return (purchaseOrders || []).filter(po =>
             po.vehicleRegistrationRef?.toUpperCase().replace(/\s/g, '') === reg
-        ).sort((a,b) => (b.orderDate || '').localeCompare(a.orderDate || ''));
+        ).sort((a, b) => (b.orderDate || '').localeCompare(a.orderDate || ''));
     }, [purchaseOrders, formData.registration]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -198,7 +197,7 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
                 if (details.images && details.images.length > 0) {
                     const hasExistingPrimary = updatedImages.some((img: any) => img.isPrimaryDiagram);
                     const existingIds = new Set(updatedImages.map((img: any) => img.id));
-                    
+
                     const newImages = details.images
                         .filter((img: any) => !existingIds.has(img.id))
                         .map((img: any) => ({
@@ -206,7 +205,7 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
                             // If we already have any images, or if there is a primary diagram, set the API image's isPrimaryDiagram to false
                             isPrimaryDiagram: updatedImages.length === 0 && !hasExistingPrimary
                         }));
-                        
+
                     updatedImages = [...updatedImages, ...newImages];
                 }
 
@@ -246,7 +245,7 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
 
         const cleanReg = formData.registration.toUpperCase().replace(/\s/g, '');
         const duplicate = vehicles.find(v => v.id !== formData.id && v.registration.toUpperCase().replace(/\s/g, '') === cleanReg);
-        
+
         if (duplicate) {
             const owner = customers.find(c => c.id === duplicate.customerId);
             if (!window.confirm(`Vehicle with registration ${cleanReg} already exists and is owned by ${owner ? `${owner.forename} ${owner.surname}` : 'another customer'}. Do you want to continue? This may create duplicate data.`)) {
@@ -270,7 +269,7 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
             id: vehicleToSave.id || crypto.randomUUID(),
             ...vehicleToSave,
         } as Vehicle;
-        
+
         onSave(finalVehicle);
         logEvent(isNew ? 'CREATE' : 'UPDATE', 'Vehicle', finalVehicle.id, `${isNew ? 'Created' : 'Updated'} vehicle ${finalVehicle.registration}.`);
     };
@@ -281,7 +280,7 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
             onViewCustomer(formData.customerId);
         }
     };
-    
+
     const customerOptions = customers.map(c => ({
         value: c.id,
         label: `${c.forename} ${c.surname} ${c.companyName ? `(${c.companyName})` : ''} - ${c.postcode}`
@@ -298,10 +297,10 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
                     <div className="flex border-b border-gray-200 justify-between items-center pr-2">
                         <div className="flex">
                             <TabButton isActive={activeTab === 'details'} onClick={() => setActiveTab('details')}>
-                                <Car size={16}/> Vehicle Specifications
+                                <Car size={16} /> Vehicle Specifications
                             </TabButton>
                             <TabButton isActive={activeTab === 'mot'} onClick={() => setActiveTab('mot')}>
-                                <Shield size={16}/> Official MOT Records
+                                <Shield size={16} /> Official MOT Records
                             </TabButton>
                         </div>
                         {remainingQuota !== null && (
@@ -321,7 +320,7 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
                                         <div className="flex-1">
                                             <SearchableSelect
                                                 options={customerOptions}
-                                                onSelect={(value) => setFormData((prev: any) => ({...prev, customerId: value || ''}))}
+                                                onSelect={(value) => setFormData((prev: any) => ({ ...prev, customerId: value || '' }))}
                                                 defaultValue={formData.customerId}
                                                 placeholder="Search customers..."
                                             />
@@ -347,14 +346,14 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
                                         )}
                                     </div>
                                 </div>
-                                
+
                                 <div className="relative">
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Registration*</label>
-                                     <div className="relative">
-                                        <input 
-                                            name="registration" 
-                                            value={formData.registration || ''} 
-                                            onChange={handleChange} 
+                                    <div className="relative">
+                                        <input
+                                            name="registration"
+                                            value={formData.registration || ''}
+                                            onChange={handleChange}
                                             className={`w-full p-2 border rounded font-bold uppercase tracking-widest ${isTransferMode ? 'bg-white border-indigo-500 ring-1 ring-indigo-500' : 'bg-gray-100'}`}
                                             disabled={!isTransferMode}
                                         />
@@ -367,7 +366,7 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
                                             {isLookingUp ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
                                         </button>
                                     </div>
-                                     <div className="flex items-center mt-2">
+                                    <div className="flex items-center mt-2">
                                         <input
                                             type="checkbox"
                                             id="includeMotHistory"
@@ -380,22 +379,22 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
                                         </label>
                                     </div>
 
-                                     {!isTransferMode && formData.id && (
-                                         <div className="flex items-center gap-3 mt-1">
-                                             <button type="button" onClick={() => setIsTransferMode(true)} className="text-[10px] text-indigo-600 font-bold flex items-center gap-1 uppercase hover:text-indigo-800">
-                                                 <ArrowRightLeft size={10}/> Plate Transfer
-                                             </button>
-                                             <span className="text-[10px] text-gray-300">|</span>
-                                             <button 
-                                                 type="button" 
-                                                 onClick={() => handleLookup(formData.registration!)} 
-                                                 className="text-[10px] text-indigo-600 font-bold flex items-center gap-1 uppercase hover:text-indigo-800 disabled:opacity-50"
-                                                 disabled={isLookingUp}
-                                             >
-                                                 {isLookingUp ? <Loader2 size={10} className="animate-spin" /> : <RefreshCw size={10}/>} Refresh Specs
-                                             </button>
-                                         </div>
-                                     )}
+                                    {!isTransferMode && formData.id && (
+                                        <div className="flex items-center gap-3 mt-1">
+                                            <button type="button" onClick={() => setIsTransferMode(true)} className="text-[10px] text-indigo-600 font-bold flex items-center gap-1 uppercase hover:text-indigo-800">
+                                                <ArrowRightLeft size={10} /> Plate Transfer
+                                            </button>
+                                            <span className="text-[10px] text-gray-300">|</span>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleLookup(formData.registration!)}
+                                                className="text-[10px] text-indigo-600 font-bold flex items-center gap-1 uppercase hover:text-indigo-800 disabled:opacity-50"
+                                                disabled={isLookingUp}
+                                            >
+                                                {isLookingUp ? <Loader2 size={10} className="animate-spin" /> : <RefreshCw size={10} />} Refresh Specs
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Make*</label>
@@ -406,13 +405,13 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
                                     <input name="model" value={formData.model || ''} onChange={handleChange} className="w-full p-2 border rounded" required />
                                 </div>
 
-                                {lookupError && <p className="text-sm text-red-600 md:col-span-3 -mt-2 flex items-center gap-1 font-medium bg-red-50 p-2 rounded border border-red-100"><AlertCircle size={14}/> {lookupError}</p>}
-                                
+                                {lookupError && <p className="text-sm text-red-600 md:col-span-3 -mt-2 flex items-center gap-1 font-medium bg-red-50 p-2 rounded border border-red-100"><AlertCircle size={14} /> {lookupError}</p>}
+
                                 <div className="md:col-span-3">
-                                     <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">VIN / Chassis <ShieldCheck size={14} className="text-green-600"/></label>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">VIN / Chassis <ShieldCheck size={14} className="text-green-600" /></label>
                                     <input name="vin" value={formData.vin || ''} onChange={handleChange} className="w-full p-2 border rounded bg-gray-50 font-mono text-sm" />
                                 </div>
-                                
+
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Colour</label>
                                     <input name="colour" value={formData.colour || ''} onChange={handleChange} className="w-full p-2 border rounded" />
@@ -429,7 +428,7 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Fuel Type</label>
                                     <input name="fuelType" value={formData.fuelType || ''} onChange={handleChange} className="w-full p-2 border rounded" />
                                 </div>
-                                
+
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Transmission</label>
                                     <select name="transmissionType" value={formData.transmissionType || 'Manual'} onChange={handleChange} className="w-full p-2 border rounded bg-white font-medium">
@@ -450,7 +449,7 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Next Service</label>
                                     <input name="nextServiceDate" type="date" value={formData.nextServiceDate || ''} onChange={handleChange} className="w-full p-2 border rounded" />
                                 </div>
-                                
+
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Manufacture Date</label>
                                     <input name="manufactureDate" type="date" value={formData.manufactureDate || ''} onChange={handleChange} className="w-full p-2 border rounded" />
@@ -496,13 +495,13 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
                     )}
                 </div>
 
-                 <div className="md:col-span-2 space-y-4">
+                <div className="md:col-span-2 space-y-4">
                     <Section title="Internal Garage History" icon={Briefcase}>
                         <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2">
                             <div className="p-2 bg-gray-100 rounded text-[10px] flex justify-between border border-gray-200">
                                 <span className="font-mono font-bold text-gray-600 uppercase">VIN: {formData.vin || 'N/A'}</span>
                                 {formData.id && (
-                                    <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('open-vehicle-history-report', { detail: { vehicleId: formData.id } }))} className="text-indigo-600 hover:text-indigo-800"><Printer size={14}/></button>
+                                    <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('open-vehicle-history-report', { detail: { vehicleId: formData.id } }))} className="text-indigo-600 hover:text-indigo-800"><Printer size={14} /></button>
                                 )}
                             </div>
 
@@ -576,11 +575,10 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
                                             </div>
                                             <p className="text-gray-700 line-clamp-2">{inq.message}</p>
                                             <div className="mt-1 flex">
-                                                <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${
-                                                    inq.status === 'New' ? 'bg-red-100 text-red-700' :
-                                                    inq.status === 'Closed' ? 'bg-green-100 text-green-700' :
-                                                    'bg-blue-100 text-blue-700'
-                                                }`}>
+                                                <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${inq.status === 'New' ? 'bg-red-100 text-red-700' :
+                                                        inq.status === 'Closed' ? 'bg-green-100 text-green-700' :
+                                                            'bg-blue-100 text-blue-700'
+                                                    }`}>
                                                     {inq.status}
                                                 </span>
                                             </div>
@@ -590,7 +588,7 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
                             )}
                         </div>
                     </Section>
-                    
+
                     {(formData.previousRegistrations || []).length > 0 && (
                         <Section title="Plate History" icon={History}>
                             <div className="space-y-2">
@@ -607,10 +605,10 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
             </div>
 
             {isAddingCustomer && (
-                <CustomerFormModal 
-                    isOpen={isAddingCustomer} 
-                    onClose={() => setIsAddingCustomer(false)} 
-                    onSave={(newCustomer) => { 
+                <CustomerFormModal
+                    isOpen={isAddingCustomer}
+                    onClose={() => setIsAddingCustomer(false)}
+                    onSave={(newCustomer) => {
                         if (onSaveCustomer) {
                             onSaveCustomer(newCustomer);
                         }
@@ -619,7 +617,7 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
                             customerId: newCustomer.id
                         }));
                         setIsAddingCustomer(false);
-                    }} 
+                    }}
                     customer={null}
                     existingCustomers={customers}
                     jobs={[]}

@@ -1532,9 +1532,9 @@ exports.debugInquiry = onRequest({
 
     const doc = snap.docs[0];
     const data = doc.data();
-    const messageId = data.microsoftMessageId;
+    const oldMessageId = data.microsoftMessageId;
     
-    if (!messageId) {
+    if (!oldMessageId) {
       return res.status(200).json({ error: "Malcolm Webb inquiry has no microsoftMessageId", data });
     }
 
@@ -1550,6 +1550,21 @@ exports.debugInquiry = onRequest({
       headers: { "Content-Type": "application/x-www-form-urlencoded" }
     });
     const accessToken = tokenResponse.data.access_token;
+
+    const searchUrl = `https://graph.microsoft.com/v1.0/users/${microsoftEmailSender}/mailFolders/inbox/messages?$search="Malcolm Webb"`;
+    const searchResponse = await axios.get(searchUrl, {
+      headers: { "Authorization": `Bearer ${accessToken}`, "Accept": "application/json", "Prefer": 'outlook.body-content-type="html"' }
+    });
+    
+    if (!searchResponse.data.value || searchResponse.data.value.length === 0) {
+      return res.status(200).json({ error: "Malcolm Webb email not found in Inbox", data });
+    }
+    
+    const newMsg = searchResponse.data.value[0];
+    const messageId = newMsg.id;
+
+    // Save the new message ID to Firestore so forceSyncAttachments can use it
+    await doc.ref.update({ microsoftMessageId: messageId });
 
     const messageUrl = `https://graph.microsoft.com/v1.0/users/${microsoftEmailSender}/messages/${messageId}?$select=body,uniqueBody,hasAttachments`;
     const messageResponse = await axios.get(messageUrl, {
