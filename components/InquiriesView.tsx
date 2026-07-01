@@ -1183,6 +1183,12 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                             ))}
                         </div>
 
+                        {/* Search */}
+                        <div className="relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16}/>
+                            <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Search..." className="pl-9 pr-4 py-2 border rounded-lg text-sm w-48"/>
+                        </div>
+
                         {/* View Layout Toggle (Kanban vs List) */}
                         <div className="flex items-center gap-1 bg-white p-1 rounded-lg border shadow-sm">
                             <button
@@ -1236,11 +1242,6 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                                 </button>
                             </div>
                         )}
-                    </div>
-
-                    <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16}/>
-                        <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Search..." className="pl-9 pr-4 py-2 border rounded-lg text-sm w-48"/>
                     </div>
                 </div>
             </header>
