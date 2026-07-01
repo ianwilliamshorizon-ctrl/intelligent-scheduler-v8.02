@@ -887,7 +887,7 @@ async function performEmailSync(microsoftClientId, microsoftClientSecret, micros
       const bodyType = message.body?.contentType || message.uniqueBody?.contentType || "html";
       
       // Strip HTML if necessary, or pass to AI as-is. Clean text is better for UI and AI.
-      let textBody = message.uniqueBody?.content || rawBody;
+      let textBody = rawBody || message.uniqueBody?.content;
       let mediaItems = [];
 
       // Extract inline base64 images from HTML body before stripping HTML tags
@@ -1511,64 +1511,67 @@ exports.getUsersList = onRequest({
 
 exports.debugInquiry = onRequest({
   region: "europe-west1",
-  cors: true
+  cors: true,
+  secrets: ["MICROSOFT_CLIENT_ID", "MICROSOFT_CLIENT_SECRET", "MICROSOFT_TENANT_ID", "MICROSOFT_EMAIL_SENDER"]
 }, async (req, res) => {
   try {
+    const microsoftClientId = process.env.MICROSOFT_CLIENT_ID?.trim();
+    const microsoftClientSecret = process.env.MICROSOFT_CLIENT_SECRET?.trim();
+    const microsoftTenantId = process.env.MICROSOFT_TENANT_ID?.trim();
+    const microsoftEmailSender = process.env.MICROSOFT_EMAIL_SENDER?.trim();
+
     const db = admin.firestore();
-    const snap = await db.collection("brooks_inquiries").get();
-    let patchedCount = 0;
-    const patchedInquiries = [];
-    
-    for (const doc of snap.docs) {
-      const data = doc.data();
-      const logs = data.logs || [];
-      if (logs.length === 0) continue;
+    const snap = await db.collection("brooks_inquiries")
+      .where("fromName", "==", "Malcolm Webb")
+      .limit(1)
+      .get();
       
-      let changed = false;
-      const updatedLogs = logs.map(log => {
-        const notes = log.notes || "";
-        const isBrookspeedSender = notes.includes("Received reply from Brookspeed") || 
-                                   notes.includes("Received reply from iw@brookspeed.com") ||
-                                   notes.includes("Received reply from info@brookspeed.com") ||
-                                   notes.includes("Received reply from MB@brookspeed.com") ||
-                                   notes.includes("Received reply from Martin") ||
-                                   notes.includes("Received reply from Vincent");
-                                   
-        if (log.actionType === 'Customer Reply' && isBrookspeedSender) {
-          changed = true;
-          return {
-            ...log,
-            actionType: 'Email Sent',
-            notes: notes
-              .replace("Received reply from", "Outbound email sent by")
-              .replace("[Email Sync]", "[Outbound Email Sync]")
-          };
-        }
-        return log;
-      });
-      
-      if (changed) {
-        await db.collection("brooks_inquiries").doc(doc.id).update({
-          logs: updatedLogs,
-          status: 'Quoted or Responded',
-          hasNewReply: false
-        });
-        patchedCount++;
-        patchedInquiries.push({
-          id: doc.id,
-          inquiryNumber: data.inquiryNumber,
-          fromName: data.fromName
-        });
-      }
+    if (snap.empty) {
+      return res.status(200).json({ error: "No Malcolm Webb inquiries found" });
     }
+
+    const doc = snap.docs[0];
+    const data = doc.data();
+    const messageId = data.microsoftMessageId;
     
-    res.status(200).json({
-      success: true,
-      patchedCount,
-      patchedInquiries
+    if (!messageId) {
+      return res.status(200).json({ error: "Malcolm Webb inquiry has no microsoftMessageId", data });
+    }
+
+    const tokenUrl = `https://login.microsoftonline.com/${microsoftTenantId}/oauth2/v2.0/token`;
+    const tokenParams = new URLSearchParams();
+    tokenParams.append("client_id", microsoftClientId);
+    tokenParams.append("scope", "https://graph.microsoft.com/.default");
+    tokenParams.append("client_secret", microsoftClientSecret);
+    tokenParams.append("grant_type", "client_credentials");
+
+    const axios = require("axios");
+    const tokenResponse = await axios.post(tokenUrl, tokenParams.toString(), {
+      headers: { "Content-Type": "application/x-www-form-urlencoded" }
+    });
+    const accessToken = tokenResponse.data.access_token;
+
+    const messageUrl = `https://graph.microsoft.com/v1.0/users/${microsoftEmailSender}/messages/${messageId}?$select=body,uniqueBody,hasAttachments`;
+    const messageResponse = await axios.get(messageUrl, {
+      headers: { "Authorization": `Bearer ${accessToken}`, "Accept": "application/json" }
+    });
+    
+    const attachmentsUrl = `https://graph.microsoft.com/v1.0/users/${microsoftEmailSender}/messages/${messageId}/attachments?$expand=microsoft.graph.itemattachment/item`;
+    let attachmentsResponse = null;
+    try {
+        const attResp = await axios.get(attachmentsUrl, {
+          headers: { "Authorization": `Bearer ${accessToken}`, "Accept": "application/json" }
+        });
+        attachmentsResponse = attResp.data;
+    } catch(e) {}
+
+    return res.status(200).json({
+      inquiry: data,
+      messageDetails: messageResponse.data,
+      attachments: attachmentsResponse
     });
   } catch (error) {
-    res.status(500).send(`Error: ${error.message}`);
+    return res.status(500).json({ error: error.message, stack: error.stack });
   }
 });
 
@@ -1646,7 +1649,7 @@ exports.forceSyncAttachments = onRequest({
         const msgDetails = messageResponse.data;
         const rawBody = msgDetails.body?.content || msgDetails.uniqueBody?.content || "";
         const bodyType = msgDetails.body?.contentType || msgDetails.uniqueBody?.contentType || "html";
-        let textBody = msgDetails.uniqueBody?.content || rawBody;
+        let textBody = rawBody || msgDetails.uniqueBody?.content;
         const mediaItems = inq.media ? [...inq.media] : [];
 
         // 1. Extract base64 embedded images
@@ -1794,7 +1797,7 @@ exports.forceSyncAttachments = onRequest({
         if (mediaItems.length > 0) {
           updates.media = mediaItems;
         }
-        if (textBody && textBody !== rawBody) {
+        if (textBody && textBody !== inq.message) {
           updates.message = textBody;
         }
 
