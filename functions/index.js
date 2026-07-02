@@ -575,7 +575,8 @@ exports.inboundEmailWebhook = onRequest({
     const toField = fields.to || ""; // e.g. "trimming@brookspeed.com"
     const subject = fields.subject || "";
     const textBody = fields.text || fields.body || fields.html || "";
-    const cleanTextBody = extractLatestReply(textBody);
+    const isForward = /^(fwd|fw):\s*/i.test(subject);
+    const cleanTextBody = isForward ? textBody.trim() : extractLatestReply(textBody);
 
     logger.info(`Received inbound email from ${fromField} to ${toField}. Subject: "${subject}"`);
 
@@ -1100,7 +1101,8 @@ async function performEmailSync(microsoftClientId, microsoftClientSecret, micros
         recipientEmail = message.toRecipients[0].emailAddress?.address || microsoftEmailSender;
       }
 
-      const cleanTextBody = extractLatestReply(textBody);
+      const isForward = /^(fwd|fw):\s*/i.test(subject);
+      const cleanTextBody = isForward ? textBody.trim() : extractLatestReply(textBody);
 
       logger.info(`Syncing email: From=${fromEmail}, Subject="${subject}"`);
 
