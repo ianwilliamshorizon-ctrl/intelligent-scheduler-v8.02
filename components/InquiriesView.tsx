@@ -1157,7 +1157,7 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                             onClick={handleSyncEmails} 
                             disabled={isSyncing}
                             className="flex items-center gap-2 py-2 px-4 bg-white border border-gray-300 text-gray-700 font-semibold rounded-lg shadow-sm hover:bg-gray-50 transition disabled:opacity-50"
-                            title="Manually trigger email sync from info@brookspeed.com"
+                            title="Manually trigger email sync from all configured mailboxes"
                         >
                             {isSyncing ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
                             Sync Emails
