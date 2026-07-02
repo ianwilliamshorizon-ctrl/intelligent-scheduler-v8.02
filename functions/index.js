@@ -824,7 +824,7 @@ ${textBody}
       inquiryNumber: generatedInquiryNumber,
       fromName: fromName || fromEmail || "Unknown Sender",
       fromContact: fromEmail || "No Email",
-      message: cleanTextBody || "Received email with empty text body.",
+      message: textBody.trim() || "Received email with empty text body.",
       takenByUserId: "system",
       status: status,
       linkedCustomerId: matchedCustomerId,
@@ -1206,8 +1206,8 @@ async function performEmailSync(microsoftClientId, microsoftClientSecret, micros
           userId: 'system',
           actionType: isOutbound ? 'Email Sent' : 'Customer Reply',
           notes: isOutbound
-            ? `[Email Sync] Outbound email sent to customer.\nSubject: "${subject}"\nBody snippet: ${cleanTextBody.substring(0, 200)}...`
-            : `[Email Sync] Received reply from ${fromName || fromEmail}.\nSubject: "${subject}"\nBody snippet: ${cleanTextBody.substring(0, 200)}...`
+            ? `[Email Sync] Outbound email sent to customer.\nSubject: "${subject}"\nBody:\n${cleanTextBody}`
+            : `[Email Sync] Received reply from ${fromName || fromEmail}.\nSubject: "${subject}"\nBody:\n${cleanTextBody}`
         };
 
         existingLogs.push(newLog);
@@ -1415,7 +1415,7 @@ ${textBody}
         fromContact: finalEmail || "No Email",
         fromEmail: finalEmail || null,
         fromPhone: finalPhone || null,
-        message: cleanTextBody || "Received email with empty text body.",
+        message: textBody.trim() || "Received email with empty text body.",
         takenByUserId: "system",
         status: status,
         linkedCustomerId: matchedCustomerId,
