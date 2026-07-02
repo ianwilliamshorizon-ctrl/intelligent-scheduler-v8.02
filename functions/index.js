@@ -883,6 +883,10 @@ async function performEmailSync(microsoftClientId, microsoftClientSecret, micros
 
   const db = admin.firestore();
   let processedCount = 0;
+  
+  let syncNextNum = null;
+  const yearSuffix = new Date().getFullYear().toString().slice(-2);
+  const prefix = `INQ${yearSuffix}-`;
 
   if (messages.length > 0) {
     for (const message of messages) {
@@ -1356,6 +1360,32 @@ ${textBody}
 
       const finalEmail = cEmail || fromEmail;
       const finalPhone = cPhone || "";
+
+      // Generate inquiryNumber safely for email sync loop
+      if (syncNextNum === null) {
+        syncNextNum = 1;
+        try {
+          const highestInqSnap = await db.collection("brooks_inquiries")
+            .where("inquiryNumber", ">=", prefix)
+            .where("inquiryNumber", "<", prefix + "\uf8ff")
+            .orderBy("inquiryNumber", "desc")
+            .limit(1)
+            .get();
+
+          if (!highestInqSnap.empty) {
+            const highestId = highestInqSnap.docs[0].data().inquiryNumber;
+            const parts = highestId.split('-');
+            if (parts.length === 2) {
+               const numPart = parseInt(parts[1], 10);
+               if (!isNaN(numPart)) syncNextNum = numPart + 1;
+            }
+          }
+        } catch (err) {
+          logger.error("Error generating inquiry number in sync", err);
+        }
+      }
+      const generatedInquiryNumber = `${prefix}${String(syncNextNum).padStart(5, '0')}`;
+      syncNextNum++;
 
       // 3. Create Inquiry Card
       const newInquiry = {
