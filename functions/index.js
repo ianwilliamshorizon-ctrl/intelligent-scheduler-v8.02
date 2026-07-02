@@ -871,7 +871,7 @@ async function performEmailSync(microsoftClientId, microsoftClientSecret, micros
   }
 
   // 2. Fetch recent messages from the INBOX to prevent syncing sent items
-  const messagesUrl = `https://graph.microsoft.com/v1.0/users/${microsoftEmailSender}/mailFolders/inbox/messages?$orderby=receivedDateTime desc&$select=id,internetMessageId,from,toRecipients,subject,body,uniqueBody,receivedDateTime,hasAttachments&$top=20`;
+  const messagesUrl = `https://graph.microsoft.com/v1.0/users/${microsoftEmailSender}/mailFolders/inbox/messages?$orderby=receivedDateTime desc&$select=id,internetMessageId,from,toRecipients,subject,body,uniqueBody,receivedDateTime,hasAttachments&$top=200`;
   const response = await axios.get(messagesUrl, {
     headers: {
       "Authorization": `Bearer ${accessToken}`,
