@@ -871,7 +871,7 @@ async function performEmailSync(microsoftClientId, microsoftClientSecret, micros
   }
 
   // 2. Fetch recent messages from the INBOX to prevent syncing sent items
-  const messagesUrl = `https://graph.microsoft.com/v1.0/users/${microsoftEmailSender}/mailFolders/inbox/messages?$orderby=receivedDateTime desc&$select=id,from,toRecipients,subject,body,uniqueBody,receivedDateTime,hasAttachments&$top=20`;
+  const messagesUrl = `https://graph.microsoft.com/v1.0/users/${microsoftEmailSender}/mailFolders/inbox/messages?$orderby=receivedDateTime desc&$select=id,internetMessageId,from,toRecipients,subject,body,uniqueBody,receivedDateTime,hasAttachments&$top=20`;
   const response = await axios.get(messagesUrl, {
     headers: {
       "Authorization": `Bearer ${accessToken}`,
@@ -892,14 +892,27 @@ async function performEmailSync(microsoftClientId, microsoftClientSecret, micros
   if (messages.length > 0) {
     for (const message of messages) {
       const messageId = message.id;
+      const internetMessageId = message.internetMessageId || messageId;
       
-      // Check if duplicate inquiry exists for this microsoftMessageId
+      // Check if duplicate inquiry exists for this internetMessageId
       const existingInquirySnap = await db.collection("brooks_inquiries")
-        .where("microsoftMessageId", "==", messageId)
+        .where("internetMessageId", "==", internetMessageId)
         .limit(1)
         .get();
 
       if (!existingInquirySnap.empty) {
+        logger.info(`Inquiry for internetMessageId ${internetMessageId} already exists. Marking email as read to prevent cross-mailbox duplicates.`);
+        await markEmailAsRead(accessToken, microsoftEmailSender, messageId);
+        continue;
+      }
+
+      // Legacy fallback for old emails that might not have internetMessageId saved
+      const legacyInquirySnap = await db.collection("brooks_inquiries")
+        .where("microsoftMessageId", "==", messageId)
+        .limit(1)
+        .get();
+
+      if (!legacyInquirySnap.empty) {
         logger.info(`Inquiry for message ID ${messageId} already exists. Marking email as read anyway.`);
         // Mark as read to clear from the unread queue
         await markEmailAsRead(accessToken, microsoftEmailSender, messageId);
@@ -1348,8 +1361,12 @@ ${textBody}
         }
       }
 
-      // Default to Porsche if completely unmatched
-      entityId = entityId || "ent_porsche";
+      // Default to Porsche if completely unmatched, unless the mailbox dictates otherwise
+      let defaultEntity = "ent_porsche";
+      if (microsoftEmailSender.toLowerCase() === "trimming@brookspeed.com") {
+        defaultEntity = "ent_trimming";
+      }
+      entityId = entityId || defaultEntity;
 
       let status = "New";
       if (fromEmail && fromEmail.toLowerCase().includes("info@brookspeed")) {
@@ -1393,6 +1410,7 @@ ${textBody}
       const newInquiry = {
         createdAt: message.receivedDateTime || new Date().toISOString(),
         inquiryNumber: generatedInquiryNumber,
+        internetMessageId: internetMessageId,
         fromName: fromName || finalEmail || "Unknown Sender",
         fromContact: finalEmail || "No Email",
         fromEmail: finalEmail || null,
@@ -1489,7 +1507,15 @@ exports.syncInboundEmails = onSchedule({
 
   try {
     logger.info("Starting syncInboundEmails...");
-    await performEmailSync(microsoftClientId, microsoftClientSecret, microsoftTenantId, microsoftEmailSender, geminiApiKey);
+    const mailboxes = [microsoftEmailSender, 'trimming@brookspeed.com'];
+    for (const mailbox of mailboxes) {
+      if (!mailbox) continue;
+      try {
+        await performEmailSync(microsoftClientId, microsoftClientSecret, microsoftTenantId, mailbox, geminiApiKey);
+      } catch (err) {
+        logger.error(`Error syncing mailbox ${mailbox}:`, err);
+      }
+    }
   } catch (error) {
     logger.error("Error running syncInboundEmails task:", error);
     try {
@@ -1523,8 +1549,19 @@ exports.triggerEmailSync = onCall({
 
   try {
     logger.info("Starting triggerEmailSync (onCall)...");
-    const result = await performEmailSync(microsoftClientId, microsoftClientSecret, microsoftTenantId, microsoftEmailSender, geminiApiKey);
-    return result;
+    const mailboxes = [microsoftEmailSender, 'trimming@brookspeed.com'];
+    let totalProcessed = 0;
+    
+    for (const mailbox of mailboxes) {
+      if (!mailbox) continue;
+      try {
+        const result = await performEmailSync(microsoftClientId, microsoftClientSecret, microsoftTenantId, mailbox, geminiApiKey);
+        totalProcessed += result.processedCount || 0;
+      } catch (err) {
+        logger.error(`Error syncing mailbox ${mailbox}:`, err);
+      }
+    }
+    return { success: true, processedCount: totalProcessed };
   } catch (error) {
     logger.error("Error running triggerEmailSync callable:", error);
     try {
