@@ -165,15 +165,16 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
         showSuccess(`Purchase Order #${purchaseOrderId} has been permanently deleted.`);
     };
 
-    const updateLinkedInquiryStatus = async (estimateId: string, newStatus: T.Inquiry['status'] | 'Sent', extraUpdates: Partial<T.Inquiry> = {}) => {
-        const targetStatus = newStatus === 'Sent' ? 'Awaiting Customer' : newStatus;
+    const updateLinkedInquiryStatus = async (estimateId: string, newStatus: T.Inquiry['status'] | 'Sent' | 'Approved' | 'Declined', extraUpdates: Partial<T.Inquiry> = {}) => {
         const targetInquiry = inquiries.find(i => i.linkedEstimateId === estimateId && i.status !== 'Closed');
+        const targetStatus = newStatus === 'Sent' ? 'Awaiting Customer' : (newStatus === 'Approved' || newStatus === 'Declined' ? (targetInquiry?.status || 'Awaiting Customer') : newStatus);
         
         if (targetInquiry) {
             let updatedLogs = targetInquiry.logs || [];
             let updatedFollowUpDate = targetInquiry.followUpDate;
 
             if (newStatus === 'Sent') {
+                extraUpdates.actionStatus = 'Estimate Sent';
                 const now = new Date();
                 const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                 const dateString = now.toLocaleDateString();
@@ -184,6 +185,10 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
                     actionType: 'Estimate Sent',
                     notes: `Estimate sent at ${timeString} on ${dateString}`
                 }];
+            } else if (newStatus === 'Approved') {
+                extraUpdates.actionStatus = 'Estimate Approved';
+            } else if (newStatus === 'Declined') {
+                extraUpdates.actionStatus = 'Estimate Rejected';
             }
 
             if (targetStatus === 'Awaiting Customer' && targetInquiry.status !== 'Awaiting Customer') {

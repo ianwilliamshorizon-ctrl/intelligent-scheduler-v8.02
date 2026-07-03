@@ -639,6 +639,18 @@ export interface InspectionTemplate {
 /**
  * INQUIRY & COMMUNICATIONS
  */
+export type ActionStatus = 
+    | 'New Mail' 
+    | 'Email Sent' 
+    | 'Email Responded' 
+    | 'Call Required' 
+    | 'Voicemail Left' 
+    | 'Estimate Required' 
+    | 'Estimate Sent' 
+    | 'Estimate Approved' 
+    | 'Estimate Rejected' 
+    | 'Internal Review';
+
 export interface InquiryLog {
     id: string;
     timestamp: string;
@@ -655,6 +667,8 @@ export interface Inquiry {
     fromContact: string; // Legacy
     fromEmail?: string;
     fromPhone?: string;
+    subject?: string;
+    internetMessageId?: string;
     message: string;
     takenByUserId: string;
     assignedToUserId?: string;
@@ -673,6 +687,7 @@ export interface Inquiry {
     inquiryNumber?: string;
     hasNewReply?: boolean;
     isUrgent?: boolean;
+    actionStatus?: ActionStatus;
 }
 
 /**

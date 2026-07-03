@@ -5,15 +5,16 @@ import { Inquiry, Estimate, Customer, Vehicle, User, PurchaseOrder } from '../ty
 import { 
     Search, PlusCircle, Car, FileText, CalendarCheck, UserCheck, 
     Package as PackageIcon, ArrowRightCircle, CheckCircle2, Play, AlertTriangle, Camera,
-    ChevronDown, ChevronUp, RefreshCw, Loader2
+    ChevronDown, ChevronUp, RefreshCw, Loader2, Copy
 } from 'lucide-react';
 import { getCustomerDisplayName } from '../core/utils/customerUtils';
 import ConfirmationModal from './ConfirmationModal';
+import DuplicateInquiriesModal from './DuplicateInquiriesModal';
 import { saveDocument, deleteDocument } from '../core/db';
 import { getImage } from '../utils/imageStore';
 import { toast } from 'react-toastify';
 import { triggerEmailSync } from '../core/services/emailService';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../core/services/firebaseServices';
 
 interface InquiriesViewProps {
@@ -63,6 +64,22 @@ const getPoStatusStyles = (status: PurchaseOrder['status']) => {
         case 'Partially Received': return { container: 'bg-amber-50 border-amber-200', text: 'text-amber-800', icon: 'text-amber-700' };
         case 'Received': return { container: 'bg-green-50 border-green-200', text: 'text-green-800', icon: 'text-green-700' };
         default: return { container: 'bg-gray-50 border-gray-200', text: 'text-gray-800', icon: 'text-gray-700' };
+    }
+};
+
+const getActionStatusStyles = (status: string) => {
+    switch (status) {
+        case 'New Mail': return 'bg-blue-100 text-blue-800 border-blue-200';
+        case 'Email Sent': return 'bg-indigo-100 text-indigo-800 border-indigo-200';
+        case 'Email Responded': return 'bg-sky-100 text-sky-800 border-sky-200';
+        case 'Call Required': return 'bg-red-100 text-red-800 border-red-200';
+        case 'Voicemail Left': return 'bg-orange-100 text-orange-800 border-orange-200';
+        case 'Estimate Required': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+        case 'Estimate Sent': return 'bg-purple-100 text-purple-800 border-purple-200';
+        case 'Estimate Approved': return 'bg-green-100 text-green-800 border-green-200';
+        case 'Estimate Rejected': return 'bg-gray-100 text-gray-800 border-gray-300';
+        case 'Internal Review': return 'bg-pink-100 text-pink-800 border-pink-200';
+        default: return 'bg-gray-100 text-gray-600 border-gray-200';
     }
 };
 
@@ -240,6 +257,14 @@ const InquiryCard: React.FC<{
                     </span>
                 </div>
                 
+                {inquiry.actionStatus && (
+                    <div className="mt-0.5 mb-0.5">
+                        <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-bold border ${getActionStatusStyles(inquiry.actionStatus)}`}>
+                            {inquiry.actionStatus}
+                        </span>
+                    </div>
+                )}
+                
                 <p className={`text-[10px] text-gray-600 my-0.5 whitespace-pre-wrap leading-snug ${isExpanded ? 'line-clamp-none max-h-40 overflow-y-auto' : 'line-clamp-1'}`}>{inquiry.message}</p>
                 
                 {latestLog && (
@@ -402,6 +427,14 @@ const InquiryCard: React.FC<{
                     )}
                 </div>
             </div>
+            
+            {inquiry.actionStatus && (
+                <div className="mt-2 mb-1">
+                    <span className={`inline-block px-2 py-1 rounded text-xs font-bold border ${getActionStatusStyles(inquiry.actionStatus)}`}>
+                        {inquiry.actionStatus}
+                    </span>
+                </div>
+            )}
             
             <p className="text-sm text-gray-700 my-2 line-clamp-3 whitespace-pre-wrap">{inquiry.message}</p>
             {latestLog && (
@@ -610,9 +643,11 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
 
     const [hoveredInquiryId, setHoveredInquiryId] = useState<string | null>(null);
     const [inquiryToClose, setInquiryToClose] = useState<Inquiry | null>(null);
+    const [inquiryToDelete, setInquiryToDelete] = useState<Inquiry | null>(null);
     const [assignedUserFilter, setAssignedUserFilter] = useState<string>('all');
     const [healthFilter, setHealthFilter] = useState<string>('all');
     const [syncStatus, setSyncStatus] = useState<{ status: 'success' | 'error', lastRunTime: string, errorMsg?: string } | null>(null);
+    const [showDuplicateFinder, setShowDuplicateFinder] = useState(false);
 
     React.useEffect(() => {
         const unsubscribe = onSnapshot(doc(db, "brooks_settings", "email_sync_status"), (docSnap) => {
@@ -671,6 +706,29 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
 
         runFixes();
     }, [inquiries.length]); // Intentionally using .length to avoid infinite loops if saveDocument triggers a re-fetch
+
+    const handleUnarchiveMB = async () => {
+        try {
+            const mbInquiries = inquiries.filter(i => 
+                i.fromEmail?.toLowerCase().trim() === 'mb@brookspeed.com' && 
+                i.status === 'Closed'
+            );
+            
+            console.log("Found closed MB inquiries:", mbInquiries.length, mbInquiries);
+            
+            let count = 0;
+            for (const inq of mbInquiries) {
+                await updateDoc(doc(db, 'brooks_inquiries', inq.id), {
+                    status: 'Inbox'
+                });
+                count++;
+            }
+            toast.success(`Un-archived ${count} inquiries! You can now delete the giant merged inquiry (INQ26-02143).`);
+        } catch (e: any) {
+            console.error(e);
+            toast.error("Failed to un-archive: " + e.message);
+        }
+    };
 
     // Auto-parse 67 Degrees Web Inquiries
     React.useEffect(() => {
@@ -855,7 +913,6 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
             setIsSyncing(false);
         }
     };
-
     React.useEffect(() => {
         setSelectedInquiryIds([]);
     }, [activeTab, searchTerm, dateFilter, selectedEntityId, viewLayout, assignedUserFilter, healthFilter]);
@@ -922,6 +979,17 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
         }
     };
 
+    const handleDeleteConfirm = async () => {
+        if (!inquiryToDelete) return;
+        try {
+            await deleteDocument('brooks_inquiries', inquiryToDelete.id);
+            setInquiries(prev => prev.filter(i => i.id !== inquiryToDelete.id));
+            toast.success("Inquiry deleted successfully");
+        } catch (err) {
+            toast.error("Failed to delete inquiry");
+        }
+        setInquiryToDelete(null);
+    };
 
 
     const [confirmState, setConfirmState] = useState<{
@@ -1045,9 +1113,9 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
         }
 
         return filtered.sort((a,b) => {
-            const aAction = a.logs && a.logs.length > 0 ? Math.max(...a.logs.map(l => new Date(l.timestamp).getTime())) : new Date(a.createdAt).getTime();
-            const bAction = b.logs && b.logs.length > 0 ? Math.max(...b.logs.map(l => new Date(l.timestamp).getTime())) : new Date(b.createdAt).getTime();
-            return bAction - aAction;
+            const aTime = new Date(a.createdAt).getTime();
+            const bTime = new Date(b.createdAt).getTime();
+            return bTime - aTime;
         });
     }, [normalizedInquiries, selectedEntityId, searchTerm, dateFilter, assignedUserFilter, healthFilter, currentUser.id]);
 
@@ -1062,15 +1130,24 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
     }, [filteredInquiries]);
 
     const closedInquiries = useMemo(() => {
-        return filteredInquiries.filter(i => i.status === 'Closed').sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        return filteredInquiries.filter(i => {
+            const s = (i.status || '').toLowerCase();
+            return s === 'closed' || s === 'archived';
+        }).sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     }, [filteredInquiries]);
 
     const displayInquiries = useMemo(() => {
         let list = filteredInquiries;
         if (activeTab === 'active') {
-            list = list.filter(i => i.status !== 'Closed');
+            list = list.filter(i => {
+                const s = (i.status || '').toLowerCase();
+                return s !== 'closed' && s !== 'archived';
+            });
         } else {
-            list = list.filter(i => i.status === 'Closed');
+            list = list.filter(i => {
+                const s = (i.status || '').toLowerCase();
+                return s === 'closed' || s === 'archived';
+            });
         }
         
         const items = [...list];
@@ -1079,8 +1156,8 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
             let valB: any = '';
             
             if (sortField === 'createdAt') {
-                valA = a.createdAt || '';
-                valB = b.createdAt || '';
+                valA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+                valB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
             } else if (sortField === 'inquiryNumber') {
                 valA = (a.inquiryNumber || '').toLowerCase();
                 valB = (b.inquiryNumber || '').toLowerCase();
@@ -1126,30 +1203,32 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                         </div>
                         
                         {/* Active/Closed Tabs */}
-                        <div className="flex bg-gray-200 p-0.5 rounded-lg border shadow-sm">
-                            <button
-                                type="button"
-                                onClick={() => setActiveTab('active')}
-                                className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${
-                                    activeTab === 'active' 
-                                    ? 'bg-white text-gray-800 shadow-sm' 
-                                    : 'text-gray-500 hover:text-gray-800'
-                                }`}
-                            >
-                                Active
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setActiveTab('closed')}
-                                className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${
-                                    activeTab === 'closed' 
-                                    ? 'bg-white text-gray-800 shadow-sm' 
-                                    : 'text-gray-500 hover:text-gray-800'
-                                }`}
-                            >
-                                Closed
-                            </button>
-                        </div>
+                        {viewLayout === 'list' && (
+                            <div className="flex bg-gray-200 p-0.5 rounded-lg border shadow-sm">
+                                <button
+                                    type="button"
+                                    onClick={() => setActiveTab('active')}
+                                    className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${
+                                        activeTab === 'active' 
+                                        ? 'bg-white text-gray-800 shadow-sm' 
+                                        : 'text-gray-500 hover:text-gray-800'
+                                    }`}
+                                >
+                                    Active
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setActiveTab('closed')}
+                                    className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${
+                                        activeTab === 'closed' 
+                                        ? 'bg-white text-gray-800 shadow-sm' 
+                                        : 'text-gray-500 hover:text-gray-800'
+                                    }`}
+                                >
+                                    Closed
+                                </button>
+                            </div>
+                        )}
                     </div>
 
                     <div className="flex items-center gap-2">
@@ -1161,6 +1240,14 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                         >
                             {isSyncing ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
                             Sync Emails
+                        </button>
+
+                        <button 
+                            onClick={() => setShowDuplicateFinder(true)} 
+                            className="flex items-center gap-2 py-2 px-4 bg-white border border-gray-300 text-gray-700 font-semibold rounded-lg shadow-sm hover:bg-gray-50 transition"
+                            title="Find and merge duplicate active inquiries"
+                        >
+                            <Copy size={16} /> Find Duplicates
                         </button>
 
                         <button onClick={() => props.onOpenInquiryModal({})} className="flex items-center gap-2 py-2 px-4 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition">
@@ -1255,7 +1342,10 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                         <div className="flex items-center gap-1 bg-white p-1 rounded-lg border shadow-sm">
                             <button
                                 type="button"
-                                onClick={() => setViewLayout('kanban')}
+                                onClick={() => {
+                                    setViewLayout('kanban');
+                                    setActiveTab('active');
+                                }}
                                 className={`px-3 py-1 text-xs font-bold rounded-md transition-all whitespace-nowrap ${
                                     viewLayout === 'kanban' 
                                     ? 'bg-indigo-600 text-white shadow-sm' 
@@ -1661,6 +1751,26 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                     </div>
                 </main>
             )}
+
+            <ConfirmationModal
+                isOpen={!!inquiryToDelete}
+                onClose={() => setInquiryToDelete(null)}
+                onConfirm={handleDeleteConfirm}
+                title="Delete Inquiry"
+                message={`Are you sure you want to delete this inquiry? This action cannot be undone.`}
+                type="warning"
+            />
+
+            <DuplicateInquiriesModal
+                isOpen={showDuplicateFinder}
+                onClose={() => setShowDuplicateFinder(false)}
+                activeInquiries={filteredInquiries.filter(i => {
+                    const s = (i.status || '').toLowerCase();
+                    return s !== 'closed' && s !== 'archived';
+                })}
+                onViewInquiry={props.onOpenInquiryModal}
+            />
+
             <ConfirmationModal
                 isOpen={confirmState.isOpen}
                 title={confirmState.title}
