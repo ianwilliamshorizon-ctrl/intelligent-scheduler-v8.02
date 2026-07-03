@@ -18,6 +18,7 @@ export default function DuplicateInquiriesModal({ isOpen, onClose, activeInquiri
     const [processingId, setProcessingId] = useState<string | null>(null);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [matchMode, setMatchMode] = useState<'email' | 'text' | 'name'>('email');
+    const [searchQuery, setSearchQuery] = useState('');
     const { forceRefresh } = useData();
 
     React.useEffect(() => {
@@ -42,15 +43,14 @@ export default function DuplicateInquiriesModal({ isOpen, onClose, activeInquiri
         const groups: Record<string, Inquiry[]> = {};
         
         activeInquiries.forEach(inq => {
-            if (inq.inquiryNumber === 'INQ26-02233' || inq.inquiryNumber === 'inq0023' || (inq.fromName && inq.fromName.toLowerCase().includes('stuart'))) {
-                console.log('DEBUG STUART INQUIRY:', inq.inquiryNumber, { name: inq.fromName, email: inq.fromEmail, text: inq.message?.substring(0,20) });
-            }
             let key = '';
             if (matchMode === 'email') {
                 key = inq.fromEmail?.trim().toLowerCase() || '';
                 if (key === 'unknown') key = '';
             } else if (matchMode === 'name') {
-                key = (inq.fromName || '').replace(/[^a-z0-9]/gi, '').toLowerCase();
+                // If fromName is missing, fallback to the prefix of fromEmail to help catch loose name matches
+                const rawName = inq.fromName || (inq.fromEmail ? inq.fromEmail.split('@')[0] : '');
+                key = rawName.replace(/[^a-z0-9]/gi, '').toLowerCase();
                 if (key === 'unknown' || key.length < 3) key = '';
             } else {
                 // Match by text (first 100 characters alphanumeric to strip out whitespace/formatting noise)
@@ -64,7 +64,7 @@ export default function DuplicateInquiriesModal({ isOpen, onClose, activeInquiri
             }
         });
 
-        // Filter to only groups with > 1 inquiry, and sort them
+        // Filter to only groups with > 1 inquiry, apply search query, and sort them
         const duplicates = Object.entries(groups)
             .filter(([_, inqs]) => inqs.length > 1)
             .map(([key, inqs]) => ({
@@ -73,6 +73,13 @@ export default function DuplicateInquiriesModal({ isOpen, onClose, activeInquiri
                 email: matchMode === 'text' ? `${inqs[0].message?.substring(0, 40)}...` : (inqs[0].fromEmail || 'No Email'),
                 inquiries: inqs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
             }))
+            .filter(group => {
+                if (!searchQuery) return true;
+                const lowerQ = searchQuery.toLowerCase();
+                return group.name.toLowerCase().includes(lowerQ) || 
+                       group.email.toLowerCase().includes(lowerQ) || 
+                       group.inquiries.some(i => i.subject?.toLowerCase().includes(lowerQ) || i.inquiryNumber?.toLowerCase().includes(lowerQ));
+            })
             .sort((a, b) => {
                 const latestA = a.inquiries[0] ? new Date(a.inquiries[0].createdAt).getTime() : 0;
                 const latestB = b.inquiries[0] ? new Date(b.inquiries[0].createdAt).getTime() : 0;
@@ -80,7 +87,7 @@ export default function DuplicateInquiriesModal({ isOpen, onClose, activeInquiri
             });
 
         return duplicates;
-    }, [activeInquiries, matchMode]);
+    }, [activeInquiries, matchMode, searchQuery]);
 
     if (!isOpen) return null;
 
@@ -163,27 +170,38 @@ export default function DuplicateInquiriesModal({ isOpen, onClose, activeInquiri
                     </button>
                 </div>
 
-                <div className="bg-indigo-50 px-6 py-3 border-b border-indigo-100 flex items-center justify-between shrink-0">
-                    <span className="text-sm font-semibold text-indigo-800">Match by:</span>
-                    <div className="flex bg-white rounded-lg p-1 border border-indigo-200 shadow-sm">
-                        <button
-                            onClick={() => setMatchMode('email')}
-                            className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${matchMode === 'email' ? 'bg-indigo-600 text-white shadow' : 'text-indigo-600 hover:bg-indigo-50'}`}
-                        >
-                            Email Address
-                        </button>
-                        <button
-                            onClick={() => setMatchMode('name')}
-                            className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${matchMode === 'name' ? 'bg-indigo-600 text-white shadow' : 'text-indigo-600 hover:bg-indigo-50'}`}
-                        >
-                            Sender Name
-                        </button>
-                        <button
-                            onClick={() => setMatchMode('text')}
-                            className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${matchMode === 'text' ? 'bg-indigo-600 text-white shadow' : 'text-indigo-600 hover:bg-indigo-50'}`}
-                        >
-                            Message Content
-                        </button>
+                <div className="bg-indigo-50 px-6 py-3 border-b border-indigo-100 flex flex-col md:flex-row md:items-center justify-between gap-3 shrink-0">
+                    <div className="flex-1 max-w-md">
+                        <input
+                            type="text"
+                            placeholder="Filter duplicates by name, email, subject..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="w-full px-4 py-2 text-sm border-indigo-200 focus:ring-indigo-500 focus:border-indigo-500 rounded-lg shadow-sm"
+                        />
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <span className="text-sm font-semibold text-indigo-800 whitespace-nowrap">Match by:</span>
+                        <div className="flex bg-white rounded-lg p-1 border border-indigo-200 shadow-sm overflow-x-auto">
+                            <button
+                                onClick={() => setMatchMode('email')}
+                                className={`px-3 md:px-4 py-1.5 text-xs md:text-sm font-medium rounded-md transition-colors whitespace-nowrap ${matchMode === 'email' ? 'bg-indigo-600 text-white shadow' : 'text-indigo-600 hover:bg-indigo-50'}`}
+                            >
+                                Email Address
+                            </button>
+                            <button
+                                onClick={() => setMatchMode('name')}
+                                className={`px-3 md:px-4 py-1.5 text-xs md:text-sm font-medium rounded-md transition-colors whitespace-nowrap ${matchMode === 'name' ? 'bg-indigo-600 text-white shadow' : 'text-indigo-600 hover:bg-indigo-50'}`}
+                            >
+                                Sender Name
+                            </button>
+                            <button
+                                onClick={() => setMatchMode('text')}
+                                className={`px-3 md:px-4 py-1.5 text-xs md:text-sm font-medium rounded-md transition-colors whitespace-nowrap ${matchMode === 'text' ? 'bg-indigo-600 text-white shadow' : 'text-indigo-600 hover:bg-indigo-50'}`}
+                            >
+                                Message Content
+                            </button>
+                        </div>
                     </div>
                 </div>
 

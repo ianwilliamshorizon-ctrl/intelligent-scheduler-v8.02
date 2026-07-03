@@ -1121,10 +1121,29 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
 
     const activeInquiries = useMemo(() => {
         const columns: { [key in Inquiry['status']]?: Inquiry[] } = {
-            'Inbox': [], 'New Requests': [], 'In-Flight': [], 'Awaiting Customer': [], 'Scheduled': [],
+            'Inbox': [],
+            'New Requests': [],
+            'In-Flight': [],
+            'Awaiting Customer': [],
+            'Scheduled': []
         };
         filteredInquiries.forEach(i => {
-            if (i.status !== 'Closed' && columns[i.status]) columns[i.status]!.push(i);
+            const rawStatus = (i.status || '').trim();
+            const lowerStatus = rawStatus.toLowerCase();
+            
+            // Skip closed/archived entirely so they never show on the active Kanban board
+            if (lowerStatus === 'closed' || lowerStatus === 'archived') {
+                return; 
+            }
+            
+            // Find the proper cased key if it exists, otherwise default to Inbox
+            const properKey = Object.keys(columns).find(k => k.toLowerCase() === lowerStatus) as Inquiry['status'];
+            
+            if (properKey && columns[properKey]) {
+                columns[properKey]!.push(i);
+            } else {
+                columns['Inbox']!.push(i);
+            }
         });
         return columns;
     }, [filteredInquiries]);
@@ -1764,7 +1783,7 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
             <DuplicateInquiriesModal
                 isOpen={showDuplicateFinder}
                 onClose={() => setShowDuplicateFinder(false)}
-                activeInquiries={filteredInquiries.filter(i => {
+                activeInquiries={(inquiries || []).filter(i => {
                     const s = (i.status || '').toLowerCase();
                     return s !== 'closed' && s !== 'archived';
                 })}
