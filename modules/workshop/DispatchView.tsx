@@ -244,7 +244,7 @@ const DispatchView: React.FC<DispatchViewProps> = ({
             )}
             
             {viewMode === 'calendar' && (
-                <div className="flex-grow p-4 min-h-0 bg-gray-100">
+                <div className="flex-grow p-4 min-h-0 bg-gray-100 print:bg-white print:p-0">
                     <BookingCalendarView
                         jobs={jobs.filter(j => selectedEntityId === 'all' || j.entityId === selectedEntityId)}
                         vehicles={vehicles}

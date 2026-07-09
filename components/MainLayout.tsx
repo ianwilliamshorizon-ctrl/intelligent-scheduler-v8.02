@@ -80,11 +80,11 @@ const MainLayout: React.FC<{
     const visibleNavItems = navItems.filter(item => allowedViews.includes(item.id as T.ViewType));
 
     return (
-        <div className="flex h-screen bg-gray-100 font-sans text-gray-900 overflow-hidden">
+        <div className="flex h-screen bg-gray-100 print:bg-white font-sans text-gray-900 overflow-hidden">
             
             {isSidebarOpen && (
                 <div 
-                    className="fixed inset-0 bg-black/50 z-40 lg:hidden" 
+                    className="fixed inset-0 bg-black/50 z-40 lg:hidden print:hidden" 
                     onClick={() => setIsSidebarOpen(false)}
                 />
             )}
@@ -236,7 +236,7 @@ const MainLayout: React.FC<{
                     </div>
                 </header>
 
-                <main className="flex-grow overflow-auto relative bg-gray-100">
+                <main className="flex-grow overflow-auto relative bg-gray-100 print:bg-white">
                     {children}
                 </main>
             </div>

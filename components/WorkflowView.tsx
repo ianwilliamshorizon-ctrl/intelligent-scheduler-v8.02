@@ -387,7 +387,7 @@ const WorkflowView: React.FC<WorkflowViewProps> = ({ jobs, vehicles, customers, 
     };
 
     return (
-        <div className="w-full h-full flex flex-col bg-gray-100 p-4">
+        <div className="w-full h-full flex flex-col bg-gray-100 print:bg-white print:p-0 p-4">
             <header className="flex-shrink-0 mb-6 bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
                 <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
                     <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full xl:w-auto">

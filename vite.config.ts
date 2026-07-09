@@ -2,8 +2,6 @@ import fs from 'fs';
 import path from 'path';
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
-import tailwindcss from '@tailwindcss/vite';
-
 // Read package.json version
 const pkgPath = path.resolve(__dirname, 'package.json');
 const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
@@ -36,7 +34,6 @@ export default defineConfig(({ mode }) => {
         },
       },
       plugins: [
-        tailwindcss(), // Move Tailwind to the top of the array
         react()
       ], 
       resolve: {
