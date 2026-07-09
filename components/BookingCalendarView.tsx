@@ -143,8 +143,8 @@ export const BookingCalendarView: React.FC<BookingCalendarViewProps> = ({ jobs, 
             <div className="grid grid-cols-7 text-xs font-bold text-center text-gray-500 border-b pb-2 mb-2 flex-shrink-0">
                 {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map(day => <div key={day}>{day}</div>)}
             </div>
-            <div className="flex-grow min-h-0">
-                <div className={`grid grid-cols-7 ${gridRowsClass} gap-2 h-full`}>
+            <div className="flex-grow min-h-0 print:min-h-full">
+                <div className={`grid grid-cols-7 ${gridRowsClass} print:grid-rows-none print:auto-rows-fr gap-2 h-full print:h-auto`}>
                     {calendarDays.map(dayInfo => {
                         if (dayInfo.isPlaceholder) {
                             return <div key={dayInfo.key} className="bg-gray-50 rounded-lg"></div>;
@@ -174,7 +174,7 @@ export const BookingCalendarView: React.FC<BookingCalendarViewProps> = ({ jobs, 
                                     </div>
                                 </div>
                                 
-                                <div className="flex-1 min-h-0 overflow-y-auto mt-1 space-y-1 pr-1">
+                                <div className="flex-1 min-h-0 overflow-y-auto print:overflow-visible mt-1 space-y-1 pr-1">
                                     {dayJobs.map(({ job, segment }) => (
                                         <DraggableJobItem
                                             key={segment.segmentId}

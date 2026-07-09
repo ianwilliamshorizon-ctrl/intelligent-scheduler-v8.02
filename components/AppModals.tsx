@@ -94,9 +94,7 @@ interface AppModalActions {
     handleSaveEstimate: (estimate: T.Estimate) => Promise<void>;
     handleSavePart: (part: T.Part) => Promise<any>;
     handleApproveEstimate: (estimate: T.Estimate, selectedOptionalItemIds: string[], notes?: string, scheduledDate?: string) => Promise<void>;
-    handleCustomerApproveEstimate: (estimate: T.Estimate, selectedOptionalItemIds: string[], dateRange: any, notes: string) => void;
-    handleCustomerDeclineEstimate: (estimate: T.Estimate) => void;
-    updateLinkedInquiryStatus: (estimateId: string, newStatus: T.Inquiry['status'], extraUpdates?: Partial<T.Inquiry>) => Promise<void>;
+    updateLinkedInquiryStatus: (estimateId: string, newStatus: T.Inquiry['status'] | 'Sent' | 'Approved' | 'Declined', extraUpdates?: Partial<T.Inquiry>) => Promise<void>;
     handleMarkJobAsAwaitingCollection: (jobId: string) => void;
     handleDeleteJob: (jobId: string) => Promise<void>;
     handleRefreshPurchaseOrder: (poId: string) => Promise<T.PurchaseOrder | void>;
@@ -651,8 +649,6 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                         servicePackages={data.servicePackages}
                         entityDetails={data.businessEntities.find(e => e.id === modals.estimateViewModal.estimate!.entityId)}
                         onApprove={actions.handleApproveEstimate}
-                        onCustomerApprove={actions.handleCustomerApproveEstimate}
-                        onDecline={actions.handleCustomerDeclineEstimate}
                         onEmailSuccess={(est) => {
                             handleSaveItem(data.setEstimates, est, 'brooks_estimates');
                             actions.updateLinkedInquiryStatus(est.id, 'Sent');
@@ -950,7 +946,10 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                     <CustomerFormModal
                         isOpen={modals.customerModal.isOpen}
                         onClose={() => setters.setCustomerModal({ isOpen: false, customerId: null })}
-                        onSave={(c) => handleSaveItem(actions.setCustomers, c, 'brooks_customers')}
+                        onSave={async (c) => {
+                            await handleSaveItem(actions.setCustomers, c, 'brooks_customers');
+                            setters.setCustomerModal({ isOpen: false, customerId: null });
+                        }}
                         customer={data.customers.find(c => c.id === modals.customerModal.customerId) || null}
                         existingCustomers={data.customers}
                         jobs={data.jobs}
@@ -972,7 +971,10 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                         vehicle={data.vehicles.find(v => v.id === modals.vehicleModal.vehicleId) || null}
                         initialCustomerId={modals.vehicleModal.initialCustomerId || undefined}
                         customers={data.customers}
-                        onSaveCustomer={(c) => handleSaveItem(actions.setCustomers, c, 'brooks_customers')}
+                        onSaveCustomer={(c) => {
+                            handleSaveItem(actions.setCustomers, c, 'brooks_customers');
+                            setters.setCustomerModal({ isOpen: false, customerId: null });
+                        }}
                         jobs={data.jobs}
                         estimates={data.estimates}
                         invoices={data.invoices}

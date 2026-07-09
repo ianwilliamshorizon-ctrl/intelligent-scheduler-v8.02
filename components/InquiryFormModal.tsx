@@ -487,6 +487,29 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                     </label>
                                 </div>
                             </div>
+                            
+                            <div>
+                                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Action Status (Optional)</label>
+                                <select name="actionStatus" value={formData.actionStatus || ''} onChange={handleChange} className="w-full p-2 border rounded text-sm bg-gray-50">
+                                    <option value="">-- None --</option>
+                                    <optgroup label="Communication">
+                                        <option value="New Mail">New Mail</option>
+                                        <option value="Email Sent">Email Sent</option>
+                                        <option value="Email Responded">Email Responded</option>
+                                        <option value="Call Required">Call Required</option>
+                                        <option value="Voicemail Left">Voicemail Left</option>
+                                    </optgroup>
+                                    <optgroup label="Estimates">
+                                        <option value="Estimate Required">Estimate Required</option>
+                                        <option value="Estimate Sent">Estimate Sent</option>
+                                        <option value="Estimate Approved">Estimate Approved</option>
+                                        <option value="Estimate Rejected">Estimate Rejected</option>
+                                    </optgroup>
+                                    <optgroup label="Operations">
+                                        <option value="Internal Review">Internal Review</option>
+                                    </optgroup>
+                                </select>
+                            </div>
                             {formData.status === 'Closed' && (
                                 <div>
                                     <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1 text-red-600">Reason for Closing</label>
@@ -798,6 +821,7 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                                     inquiryNumber: generatedInquiryNumber,
                                                     hasNewReply: false,
                                                     status: 'Awaiting Customer',
+                                                    actionStatus: 'Email Sent',
                                                     followUpDate: null,
                                                     logs: updatedLogs 
                                                 }));
@@ -805,20 +829,20 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                                 setReplyAttachments([]);
                                                 setActiveTab('estimates');
                                                 
-                                                if (formData.fromName && formData.message) {
-                                                    const inquiryToSave: Inquiry = {
-                                                        ...formData,
-                                                        id: generatedId,
-                                                        createdAt: formData.createdAt || new Date().toISOString(),
-                                                        takenByUserId: formData.takenByUserId || currentUser.id,
-                                                        inquiryNumber: generatedInquiryNumber,
-                                                        hasNewReply: false,
-                                                        status: 'Awaiting Customer',
-                                                        followUpDate: null,
-                                                        logs: updatedLogs
-                                                    } as Inquiry;
-                                                    onSave(inquiryToSave, false);
-                                                }
+                                                const inquiryToSave: Inquiry = {
+                                                    ...formData,
+                                                    id: generatedId,
+                                                    createdAt: formData.createdAt || new Date().toISOString(),
+                                                    takenByUserId: formData.takenByUserId || currentUser.id,
+                                                    inquiryNumber: generatedInquiryNumber,
+                                                    hasNewReply: false,
+                                                    status: 'Awaiting Customer',
+                                                    followUpDate: null,
+                                                    logs: updatedLogs,
+                                                    fromName: formData.fromName || formData.fromEmail || 'Unknown Customer',
+                                                    message: formData.message || `Outbound reply sent to ${emailAddress}`
+                                                } as Inquiry;
+                                                onSave(inquiryToSave, false);
                                                 toast.success('Email sent successfully!');
                                             } else {
                                                 toast.error('Failed to send email.');

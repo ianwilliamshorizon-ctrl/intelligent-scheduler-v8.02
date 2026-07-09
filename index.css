@@ -1,4 +1,4 @@
-@import "tailwindcss";
+/* @import "tailwindcss"; */
 
 @theme {
   --background: #ffffff;
@@ -63,7 +63,19 @@
     print-color-adjust: exact !important;
   }
   
-  #root, .modal-backdrop, [role="dialog"], header, nav, .no-print, .modal-header, .modal-footer {
+  body:not(.print-calendar) #root, .modal-backdrop, [role="dialog"], nav, aside, .no-print, .modal-header, .modal-footer, .fixed.inset-0.bg-black\/50 {
+    display: none !important;
+  }
+  
+  body:not(.print-calendar) header {
+    display: none !important;
+  }
+  
+  body.print-calendar #print-mount-point-wrapper {
+    display: none !important;
+  }
+  
+  body.print-calendar header:not(.calendar-header) {
     display: none !important;
   }
 

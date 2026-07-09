@@ -1185,6 +1185,21 @@ async function performEmailSync(microsoftClientId, microsoftClientSecret, micros
         }
       }
 
+      // 2.6 Fallback: Look up existing inquiry by matchedEstimateId
+      if (!matchedInquiryId && matchedEstimateId) {
+        logger.info(`No inquiry number found, falling back to linkedEstimateId: ${matchedEstimateId}`);
+        const estInqSnap = await db.collection("brooks_inquiries")
+          .where("linkedEstimateId", "==", matchedEstimateId)
+          .orderBy("createdAt", "desc")
+          .limit(1)
+          .get();
+        if (!estInqSnap.empty) {
+          matchedInquiryId = estInqSnap.docs[0].id;
+          existingInquiryData = estInqSnap.docs[0].data();
+          logger.info(`Matched existing inquiry ID by linkedEstimateId: ${matchedInquiryId}`);
+        }
+      }
+
       if (matchedInquiryId) {
         const existingLogs = existingInquiryData.logs || [];
         
@@ -1219,6 +1234,7 @@ async function performEmailSync(microsoftClientId, microsoftClientSecret, micros
           media: updatedMedia,
           hasNewReply: !isOutbound,
           status: isOutbound ? 'Quoted or Responded' : 'Customer Responded',
+          actionStatus: isOutbound ? 'Email Sent' : 'Email Responded',
           followUpDate: null
         });
         
@@ -1418,6 +1434,7 @@ ${textBody}
         message: textBody.trim() || "Received email with empty text body.",
         takenByUserId: "system",
         status: status,
+        actionStatus: (fromEmail && (fromEmail.toLowerCase().includes("brookspeed") || fromEmail.toLowerCase().includes("info@brookspeed"))) ? "Email Sent" : "New Mail",
         linkedCustomerId: matchedCustomerId,
         linkedVehicleId: matchedVehicleId,
         linkedEstimateId: matchedEstimateId,

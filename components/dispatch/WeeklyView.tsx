@@ -95,7 +95,7 @@ export const WeeklyView: React.FC<WeeklyViewProps> = (props) => {
     }, [jobs, days, selectedEntityId]);
     
     return (
-        <div className="flex-grow flex flex-col p-4 bg-gray-100 min-h-0">
+        <div className="flex-grow flex flex-col p-4 bg-gray-100 print:bg-white print:p-0 min-h-0">
             <div className="flex justify-between items-center bg-white p-2 mb-2 rounded-lg shadow-sm border border-gray-200">
                 <div className="flex items-center gap-2 text-gray-700">
                     <span className="text-sm font-bold uppercase tracking-tight ml-2">Weekly View</span>
@@ -113,8 +113,8 @@ export const WeeklyView: React.FC<WeeklyViewProps> = (props) => {
                 </div>
             </div>
 
-            <div className="flex bg-white sticky top-0 py-2 rounded-t-lg z-10 shadow-sm border-b mb-2 overflow-x-auto no-scrollbar">
-                <div className="grid grid-cols-7 min-w-[700px] lg:min-w-0 w-full text-xs font-bold text-center text-gray-500 pb-2">
+            <div className="flex bg-white sticky top-0 py-2 rounded-t-lg z-10 shadow-sm border-b mb-2 overflow-x-auto print:overflow-visible no-scrollbar">
+                <div className="grid grid-cols-7 min-w-[700px] lg:min-w-0 print:min-w-0 w-full text-xs font-bold text-center text-gray-500 pb-2">
                     {days.map(day => {
                         const dateStr = formatDate(day);
                         const allocatedHours = allocatedHoursByDay.get(dateStr) || 0;
@@ -135,14 +135,14 @@ export const WeeklyView: React.FC<WeeklyViewProps> = (props) => {
                     })}
                 </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 flex-grow min-h-0">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 print:grid-cols-7 gap-3 print:gap-1 flex-grow min-h-0 print:min-h-full">
                 {days.map(day => {
                     const dateStr = formatDate(day);
                     const dailyJobs = jobsByDay.get(dateStr) || [];
                     const isWeekend = day.getUTCDay() === 0 || day.getUTCDay() === 6;
 
                     return (
-                        <div key={dateStr} className={`rounded-xl p-2 space-y-3 overflow-y-auto ${isWeekend ? 'bg-gray-200/50' : 'bg-white shadow-inner border border-gray-200'}`}>
+                        <div key={dateStr} className={`rounded-xl p-2 space-y-3 overflow-y-auto print:overflow-visible ${isWeekend ? 'bg-gray-200/50' : 'bg-white shadow-inner border border-gray-200'}`}>
                             {dailyJobs.map(job => {
                                 const vehicle = vehiclesById.get(job.vehicleId);
                                 const customer = customersById.get(job.customerId);
