@@ -263,6 +263,17 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
         } as Inquiry;
         
         onSave(inquiryToSave, true);
+
+        // TRIGGER AI NEXT STEP SUGGESTION
+        const isStatusChanged = !inquiry || formData.status !== inquiry.status || formData.actionStatus !== inquiry.actionStatus;
+        if (isStatusChanged) {
+            import('../core/services/geminiService').then(({ generateNextStepSuggestion }) => {
+                generateNextStepSuggestion(inquiryToSave).then(suggestion => {
+                    const updatedInquiry = { ...inquiryToSave, aiNextStepSuggestion: suggestion };
+                    onSave(updatedInquiry, false);
+                }).catch(err => console.error("Failed to generate AI next step suggestion:", err));
+            });
+        }
     };
 
 

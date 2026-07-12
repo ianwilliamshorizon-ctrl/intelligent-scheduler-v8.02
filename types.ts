@@ -688,6 +688,7 @@ export interface Inquiry {
     hasNewReply?: boolean;
     isUrgent?: boolean;
     actionStatus?: ActionStatus;
+    aiNextStepSuggestion?: string;
 }
 
 /**

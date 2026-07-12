@@ -243,3 +243,51 @@ Write a short, friendly, and professional paragraph (3-4 sentences max) summariz
         throw error;
     }
 };
+
+import { Inquiry } from '../../types';
+
+/**
+ * GENERATE NEXT STEP SUGGESTION
+ * Uses AI to suggest the next best action for a CRM inquiry based on its status and history.
+ */
+export const generateNextStepSuggestion = async (inquiry: Inquiry): Promise<string> => {
+    let contextPrompt = '';
+    
+    if (inquiry.message) {
+        contextPrompt += `Customer Original Message:\n"${inquiry.message}"\n\n`;
+    }
+    
+    if (inquiry.logs && inquiry.logs.length > 0) {
+        contextPrompt += `Recent CRM Logs / Internal Notes:\n` + 
+            inquiry.logs.slice(-3).map(log => `  * [${log.actionType || 'Note'}] ${log.notes}`).join('\n') + `\n\n`;
+    }
+    
+    if (inquiry.actionNotes) {
+        contextPrompt += `Recent Action Notes:\n"${inquiry.actionNotes}"\n\n`;
+    }
+
+    const prompt = `You are a helpful assistant for an automotive workshop CRM. Based on the following customer inquiry and recent updates, suggest the BEST NEXT STEP for the human agent to take.
+    
+Current Primary Status: ${inquiry.status}
+Current Action Status: ${inquiry.actionStatus || 'None'}
+Follow Up Date Scheduled: ${inquiry.followUpDate ? new Date(inquiry.followUpDate).toLocaleDateString() : 'None'}
+
+${contextPrompt}
+
+Your task:
+Output ONLY a short, punchy 1-sentence suggestion (max 10-15 words) starting with an action verb. Do not include quotes or conversational filler.
+Examples: 
+- "Call customer to discuss estimate #1234."
+- "Wait for customer to reply to the email."
+- "Schedule the job in the calendar."
+- "Order parts for the approved estimate."
+`;
+
+    try {
+        const result = await generateContent(prompt);
+        return result.replace(/^"|"$/g, '').trim();
+    } catch (error) {
+        console.error("Error generating next step suggestion:", error);
+        throw error;
+    }
+};
