@@ -5,7 +5,7 @@ import { Inquiry, Estimate, Customer, Vehicle, User, PurchaseOrder } from '../ty
 import { 
     Search, PlusCircle, Car, FileText, CalendarCheck, UserCheck, 
     Package as PackageIcon, ArrowRightCircle, CheckCircle2, Play, AlertTriangle, Camera,
-    ChevronDown, ChevronUp, RefreshCw, Loader2, Copy
+    ChevronDown, ChevronUp, RefreshCw, Loader2, Copy, Wand2
 } from 'lucide-react';
 import { getCustomerDisplayName } from '../core/utils/customerUtils';
 import ConfirmationModal from './ConfirmationModal';
@@ -265,6 +265,13 @@ const InquiryCard: React.FC<{
                     </div>
                 )}
                 
+                {inquiry.aiNextStepSuggestion && (
+                    <div className="mt-0.5 mb-0.5 flex items-start gap-1 p-1 bg-purple-50/80 border border-purple-200 rounded text-[9px] text-purple-800">
+                        <Wand2 size={10} className="shrink-0 mt-0.5 text-purple-600" />
+                        <span className="leading-tight font-medium">AI: {inquiry.aiNextStepSuggestion}</span>
+                    </div>
+                )}
+                
                 <p className={`text-[10px] text-gray-600 my-0.5 whitespace-pre-wrap leading-snug ${isExpanded ? 'line-clamp-none max-h-40 overflow-y-auto' : 'line-clamp-1'}`}>{inquiry.message}</p>
                 
                 {latestLog && (
@@ -433,6 +440,13 @@ const InquiryCard: React.FC<{
                     <span className={`inline-block px-2 py-1 rounded text-xs font-bold border ${getActionStatusStyles(inquiry.actionStatus)}`}>
                         {inquiry.actionStatus}
                     </span>
+                </div>
+            )}
+
+            {inquiry.aiNextStepSuggestion && (
+                <div className="mt-2 mb-1 flex items-start gap-1.5 p-2 bg-purple-50 border border-purple-200 rounded text-xs text-purple-800 shadow-sm">
+                    <Wand2 size={14} className="shrink-0 mt-0.5 text-purple-600" />
+                    <span className="leading-snug font-medium"><strong>AI Next Step:</strong> {inquiry.aiNextStepSuggestion}</span>
                 </div>
             )}
             
@@ -874,6 +888,16 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
         // Persist to database in background
         try {
             await saveDocument('brooks_inquiries', updated);
+            
+            // TRIGGER AI NEXT STEP SUGGESTION
+            import('../core/services/geminiService').then(({ generateNextStepSuggestion }) => {
+                generateNextStepSuggestion(updated).then(suggestion => {
+                    const finalUpdated = { ...updated, aiNextStepSuggestion: suggestion };
+                    setInquiries(prev => prev.map(i => i.id === updated.id ? finalUpdated : i));
+                    saveDocument('brooks_inquiries', finalUpdated).catch(err => console.error("Failed to save AI suggestion:", err));
+                }).catch(err => console.error("Failed to generate AI next step suggestion:", err));
+            });
+
             if (newStatus === 'Closed') {
                 const linkedEstimate = estimates.find(e => e.linkedInquiryId === inquiry.id);
                 if (linkedEstimate && linkedEstimate.status !== 'Closed') {
