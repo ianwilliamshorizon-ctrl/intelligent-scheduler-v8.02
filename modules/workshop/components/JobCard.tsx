@@ -102,12 +102,29 @@ export const JobCard: React.FC<JobCardProps> = ({
                     <Wrench size={14} className="inline-block mr-1 text-gray-400" />
                     {job.description || <span className="italic text-gray-400">No description provided</span>}
                 </div>
+
+                {/* Purchase Orders */}
+                {associatedPOs.length > 0 && onOpenPurchaseOrder && (
+                    <div className="flex flex-wrap gap-1.5 mt-1">
+                        {associatedPOs.map(po => (
+                            <button
+                                key={po.id}
+                                onClick={(e) => { e.stopPropagation(); onOpenPurchaseOrder(po); }}
+                                className={`flex items-center gap-1 px-2 py-1 rounded border text-[11px] font-bold tracking-wider hover:opacity-80 transition-opacity shadow-sm ${getPoStatusColor(po.status, 'bg')} ${getPoStatusColor(po.status, 'text')}`}
+                                title={`View PO #${po.id} (${po.status})`}
+                            >
+                                <Package size={12} />
+                                <span>PO #{po.id}</span>
+                            </button>
+                        ))}
+                    </div>
+                )}
             </div>
 
             {/* Footer with badges and actions */}
-            <div className="px-4 py-3 bg-white border-t border-gray-100 flex items-center justify-between mt-auto">
+            <div className="px-4 py-3 bg-white border-t border-gray-100 flex flex-col gap-3 mt-auto">
                 {/* Badges / Check-ins / Parts */}
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                     {hasPhotos && (
                         <div 
                             title={`${job.checkInPhotos!.length} Check-in Photos`}
@@ -153,25 +170,8 @@ export const JobCard: React.FC<JobCardProps> = ({
                     )}
                 </div>
 
-                {/* Purchase Orders */}
-                {associatedPOs.length > 0 && onOpenPurchaseOrder && (
-                    <div className="flex flex-wrap gap-1 mt-3">
-                        {associatedPOs.map(po => (
-                            <button
-                                key={po.id}
-                                onClick={(e) => { e.stopPropagation(); onOpenPurchaseOrder(po); }}
-                                className={`flex items-center gap-1 px-1.5 py-0.5 rounded border text-[10px] font-bold tracking-wider hover:opacity-80 transition-opacity ${getPoStatusColor(po.status, 'bg')} ${getPoStatusColor(po.status, 'text')}`}
-                                title={`View PO #${po.id} (${po.status})`}
-                            >
-                                <Package size={10} />
-                                <span>{po.id}</span>
-                            </button>
-                        ))}
-                    </div>
-                )}
-
                 {/* Actions */}
-                <div className="flex gap-1.5 mt-3 pt-3 border-t border-gray-100">
+                <div className="flex gap-1.5">
                     {onCheckIn && job.vehicleStatus !== 'On-Site' && (
                         <button
                             onClick={(e) => { e.stopPropagation(); onCheckIn(job.id); }}
