@@ -4,12 +4,14 @@ import FormModal from './FormModal';
 import SearchableSelect from './SearchableSelect';
 import { useApp } from '../core/state/AppContext';
 import { getCustomerDisplayName } from '../core/utils/customerUtils';
-import { Wand2, Loader2, Link as LinkIcon, UserCheck, Car, XCircle, User as UserIcon, FileText, CalendarCheck, Edit, Camera, PlusCircle } from 'lucide-react';
+import { Wand2, Loader2, Link as LinkIcon, UserCheck, Car, XCircle, User as UserIcon, FileText, CalendarCheck, Edit, Camera, PlusCircle, Search } from 'lucide-react';
 import { parseInquiryMessage, generateEmailReply, updateEstimateWithAI } from '../core/services/geminiService';
 import { sendOutboundEmail } from '../core/services/emailService';
 import { useData } from '../core/state/DataContext';
 import { generateInquiryNumber } from '../core/utils/numberGenerators';
 import { toast } from 'react-toastify';
+import { lookupVehicleByVRM } from '../services/vehicleLookupService';
+import { lookupAddressByPostcode, AddressDetails } from '../services/postcodeLookupService';
 
 interface InquiryFormModalProps {
     isOpen: boolean;
@@ -60,6 +62,9 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
     const [isUpdatingAI, setIsUpdatingAI] = useState(false);
     const [suggestedCustomer, setSuggestedCustomer] = useState<Customer | null>(null);
     const [suggestedVehicle, setSuggestedVehicle] = useState<Vehicle | null>(null);
+    const [isLookingUpAddress, setIsLookingUpAddress] = useState(false);
+    const [addressList, setAddressList] = useState<AddressDetails[]>([]);
+    const [isLookingUpVehicle, setIsLookingUpVehicle] = useState(false);
 
     // Reply state
     const [replyText, setReplyText] = useState('');
@@ -84,16 +89,86 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
         }
     }, [formData.fromName, firstNameInput, surnameInput]);
 
+    const checkCustomerMatch = (first: string, last: string) => {
+        const lowerName = `${first} ${last}`.toLowerCase().trim();
+        if (lowerName.length > 2) {
+            const existingCustomer = customers.find(c => 
+                getCustomerDisplayName(c).toLowerCase() === lowerName || 
+                (c.companyName || '').toLowerCase() === lowerName
+            );
+            if (existingCustomer && !formData.linkedCustomerId) {
+                setSuggestedCustomer(existingCustomer);
+            } else {
+                setSuggestedCustomer(null);
+            }
+        } else {
+            setSuggestedCustomer(null);
+        }
+    };
+
     const handleFirstNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const val = e.target.value;
         setFirstNameInput(val);
         setFormData(p => ({ ...p, fromName: `${val} ${surnameInput}`.trim() }));
+        checkCustomerMatch(val, surnameInput);
     };
 
     const handleSurnameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const val = e.target.value;
         setSurnameInput(val);
         setFormData(p => ({ ...p, fromName: `${firstNameInput} ${val}`.trim() }));
+        checkCustomerMatch(firstNameInput, val);
+    };
+
+    const checkVehicleMatch = (reg: string) => {
+        const cleanReg = reg.toUpperCase().replace(/\s/g, '');
+        if (cleanReg.length >= 2) {
+            const existingVehicle = vehicles.find(v => v.registration.toUpperCase().replace(/\s/g, '') === cleanReg);
+            if (existingVehicle && !formData.linkedVehicleId) {
+                setSuggestedVehicle(existingVehicle);
+            } else {
+                setSuggestedVehicle(null);
+            }
+        } else {
+            setSuggestedVehicle(null);
+        }
+    };
+
+    const handleLookupAddress = async () => {
+        if (!formData.postcode) return;
+        setIsLookingUpAddress(true);
+        setAddressList([]);
+        try {
+            const addresses = await lookupAddressByPostcode(formData.postcode);
+            setAddressList(addresses);
+        } catch (error: any) { 
+            toast.warn(error.message === 'NoResultsFound' ? 'No addresses found for this postcode.' : (error.message || 'Failed to lookup address.'));
+        } finally { 
+            setIsLookingUpAddress(false); 
+        }
+    };
+
+    const handleLookupVehicle = async () => {
+        if (!formData.vehicleRegistration) return;
+        setIsLookingUpVehicle(true);
+        try {
+            const data = await lookupVehicleByVRM(formData.vehicleRegistration);
+            if (data && data.make) {
+                setFormData(p => ({
+                    ...p,
+                    vehicleMake: data.make || p.vehicleMake,
+                    vehicleModel: data.model || p.vehicleModel,
+                    vehicleYear: data.yearOfManufacture?.toString() || p.vehicleYear,
+                }));
+                toast.success('Vehicle details found via DVLA');
+            } else {
+                toast.warn('Vehicle found but no make/model returned.');
+            }
+        } catch (error: any) {
+            toast.error(error.message || 'Failed to lookup vehicle');
+        } finally {
+            setIsLookingUpVehicle(false);
+        }
     };
 
     useEffect(() => {
@@ -157,6 +232,10 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
         
+        if (name === 'vehicleRegistration') {
+            checkVehicleMatch(value);
+        }
+
         setFormData(p => {
             const nextData = { ...p, [name]: value };
 
@@ -365,6 +444,127 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                             <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
                             <input type="tel" name="fromPhone" value={formData.fromPhone || ''} onChange={handleChange} className="w-full p-2 border rounded" />
                         </div>
+
+                        {suggestedCustomer && !formData.linkedCustomerId && (
+                            <div className="bg-blue-50 border border-blue-200 text-blue-800 p-2 rounded text-sm flex justify-between items-center">
+                                <span>Found existing client: <strong>{getCustomerDisplayName(suggestedCustomer)}</strong></span>
+                                <button 
+                                    type="button" 
+                                    onClick={() => {
+                                        setFormData(p => ({
+                                            ...p,
+                                            linkedCustomerId: suggestedCustomer.id,
+                                            fromEmail: p.fromEmail || suggestedCustomer.email || '',
+                                            fromPhone: p.fromPhone || suggestedCustomer.phone || suggestedCustomer.mobile || ''
+                                        }));
+                                        setSuggestedCustomer(null);
+                                    }}
+                                    className="bg-blue-600 text-white px-2 py-1 rounded text-xs hover:bg-blue-700"
+                                >
+                                    Link Client
+                                </button>
+                            </div>
+                        )}
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Vehicle Reg.</label>
+                                <div className="flex gap-2">
+                                    <input type="text" name="vehicleRegistration" value={formData.vehicleRegistration || ''} onChange={handleChange} className="w-full p-2 border rounded uppercase" placeholder="e.g. AB12 CDE" />
+                                    <button
+                                        type="button"
+                                        onClick={handleLookupVehicle}
+                                        disabled={!formData.vehicleRegistration || isLookingUpVehicle || !!formData.linkedVehicleId}
+                                        className="bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded px-3 flex items-center justify-center disabled:opacity-50"
+                                        title="Lookup DVLA"
+                                    >
+                                        {isLookingUpVehicle ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
+                                    </button>
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Postcode</label>
+                                <div className="flex gap-2">
+                                    <input type="text" name="postcode" value={formData.postcode || ''} onChange={handleChange} className="w-full p-2 border rounded uppercase" placeholder="e.g. GU24 9NY" />
+                                    <button
+                                        type="button"
+                                        onClick={handleLookupAddress}
+                                        disabled={!formData.postcode || isLookingUpAddress}
+                                        className="bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded px-3 flex items-center justify-center disabled:opacity-50"
+                                        title="Lookup Address"
+                                    >
+                                        {isLookingUpAddress ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        {suggestedVehicle && !formData.linkedVehicleId && (
+                            <div className="bg-amber-50 border border-amber-200 text-amber-800 p-2 rounded text-sm flex justify-between items-center mt-2">
+                                <span>Found existing vehicle: <strong>{suggestedVehicle.make} {suggestedVehicle.model}</strong></span>
+                                <button 
+                                    type="button" 
+                                    onClick={() => {
+                                        setFormData(p => ({
+                                            ...p,
+                                            linkedVehicleId: suggestedVehicle.id,
+                                            vehicleMake: suggestedVehicle.make,
+                                            vehicleModel: suggestedVehicle.model,
+                                        }));
+                                        setSuggestedVehicle(null);
+                                    }}
+                                    className="bg-amber-600 text-white px-2 py-1 rounded text-xs hover:bg-amber-700"
+                                >
+                                    Link Vehicle
+                                </button>
+                            </div>
+                        )}
+
+                        {addressList.length > 0 && (
+                            <div className="bg-white border rounded shadow-sm mt-2">
+                                <div className="bg-gray-50 p-2 text-xs font-semibold border-b text-gray-500">
+                                    Select an Address
+                                </div>
+                                <ul className="max-h-48 overflow-y-auto">
+                                    {addressList.map((addr, idx) => (
+                                        <li key={idx}>
+                                            <button
+                                                type="button"
+                                                className="w-full text-left px-3 py-2 text-sm hover:bg-indigo-50 border-b last:border-0"
+                                                onClick={() => {
+                                                    setFormData(prev => ({
+                                                        ...prev,
+                                                        addressLine1: addr.addressLine1,
+                                                        addressLine2: addr.addressLine2,
+                                                        city: addr.city,
+                                                        county: addr.county,
+                                                        postcode: addr.postcode || prev.postcode
+                                                    }));
+                                                    setAddressList([]);
+                                                }}
+                                            >
+                                                {addr.addressLine1}{addr.addressLine2 ? `, ${addr.addressLine2}` : ''}, {addr.city}
+                                            </button>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
+
+                        {(formData.vehicleMake || formData.vehicleModel || formData.addressLine1) && (
+                            <div className="grid grid-cols-2 gap-4 text-xs text-gray-600 bg-gray-50 p-3 rounded border border-gray-100 mt-2">
+                                <div>
+                                    <span className="font-semibold block mb-1">Vehicle Details:</span>
+                                    {formData.vehicleMake} {formData.vehicleModel} {formData.vehicleYear}
+                                </div>
+                                <div>
+                                    <span className="font-semibold block mb-1">Address Details:</span>
+                                    {formData.addressLine1}<br/>
+                                    {formData.addressLine2 && <>{formData.addressLine2}<br/></>}
+                                    {formData.city} {formData.county} {formData.postcode}
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     <div>

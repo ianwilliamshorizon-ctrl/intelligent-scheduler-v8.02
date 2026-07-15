@@ -679,6 +679,15 @@ export interface Inquiry {
     status: 'Inbox' | 'New Requests' | 'Our Action' | 'Waiting on Customer' | 'Scheduled' | 'Closed';
     linkedCustomerId?: string;
     linkedVehicleId?: string;
+    vehicleRegistration?: string;
+    vehicleMake?: string;
+    vehicleModel?: string;
+    vehicleYear?: string;
+    postcode?: string;
+    addressLine1?: string;
+    addressLine2?: string;
+    city?: string;
+    county?: string;
     linkedEstimateId?: string;
     actionNotes?: string;
     closedReason?: string;
