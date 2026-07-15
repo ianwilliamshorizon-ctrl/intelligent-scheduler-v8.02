@@ -32,7 +32,10 @@ export const JobCard: React.FC<JobCardProps> = ({
     const isAwaitingParts = job.partsStatus === 'Awaiting Order';
     const isPartsReady = job.partsStatus === 'Fully Received';
 
-    const associatedPOs = (job.purchaseOrderIds || []).map(id => purchaseOrders.find(po => po.id === id)).filter(Boolean) as PurchaseOrder[];
+    const fromJobRef = (job.purchaseOrderIds || []).map(id => purchaseOrders.find(po => po.id === id)).filter(Boolean) as PurchaseOrder[];
+    const fromPOJobId = (purchaseOrders || []).filter(po => po.jobId === job.id && po.status !== 'Cancelled');
+    const allPOs = [...fromJobRef, ...fromPOJobId];
+    const associatedPOs = Array.from(new Set(allPOs.map(po => po.id))).map(id => allPOs.find(po => po.id === id) as PurchaseOrder);
 
     const hasPhotos = job.checkInPhotos && job.checkInPhotos.length > 0;
 

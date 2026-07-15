@@ -93,7 +93,10 @@ export const ConciergeJobCard: React.FC<ConciergeJobCardProps> = (props) => {
     };
     
     const isVibrant = getCardColorClasses().includes('text-white');
-    const associatedPOs = (job.purchaseOrderIds || []).map(id => purchaseOrders.find(po => po.id === id)).filter(Boolean) as PurchaseOrder[];
+    const fromJobRef = (job.purchaseOrderIds || []).map(id => purchaseOrders.find(po => po.id === id)).filter(Boolean) as PurchaseOrder[];
+    const fromPOJobId = (purchaseOrders || []).filter(po => po.jobId === job.id && po.status !== 'Cancelled');
+    const allPOs = [...fromJobRef, ...fromPOJobId];
+    const associatedPOs = Array.from(new Set(allPOs.map(po => po.id))).map(id => allPOs.find(po => po.id === id) as PurchaseOrder);
     
     const canControl = (segment: JobSegment) => {
         if (!segment.engineerId) return false;
