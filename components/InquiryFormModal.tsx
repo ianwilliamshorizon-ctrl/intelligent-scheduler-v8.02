@@ -159,7 +159,7 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
         const surname = names.slice(1).join(' ') || '';
 
         const newCustomer: Customer = {
-            id: generateCustomerId(),
+            id: generateCustomerId(surname, customers),
             forename,
             surname,
             email: formData.fromEmail,
@@ -172,7 +172,7 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
             postcode: formData.postcode || '',
             category: 'Retail',
             isBusinessCustomer: false,
-            createdAt: new Date().toISOString(),
+            createdDate: new Date().toISOString(),
             marketingConsent: false,
             serviceReminderConsent: false,
             declinedCommunication: false,
