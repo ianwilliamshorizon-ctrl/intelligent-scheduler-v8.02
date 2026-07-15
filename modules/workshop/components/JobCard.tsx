@@ -1,6 +1,6 @@
 import React from 'react';
 import { Job, Vehicle, Customer } from '../../../types';
-import { Calendar, User, Truck, Wrench, Package, PackageOpen, Camera, Share, ArrowRightCircle } from 'lucide-react';
+import { Calendar, User, Truck, Wrench, Package, PackageOpen, Camera, Share, ArrowRightCircle, LogIn } from 'lucide-react';
 import { getCustomerDisplayName } from '../../../core/utils/customerUtils';
 import { formatReadableDate } from '../../../core/utils/dateUtils';
 
@@ -9,6 +9,7 @@ interface JobCardProps {
     vehicle?: Vehicle;
     customer?: Customer;
     onEditJob: (jobId: string, initialTab?: string) => void;
+    onCheckIn?: (jobId: string) => void;
     onGoToDispatch?: (jobId: string) => void;
 }
 
@@ -17,6 +18,7 @@ export const JobCard: React.FC<JobCardProps> = ({
     vehicle,
     customer,
     onEditJob,
+    onCheckIn,
     onGoToDispatch
 }) => {
     // Check parts status (assumes job.partsStatus is calculated somewhere, or we use a heuristic)
@@ -111,21 +113,33 @@ export const JobCard: React.FC<JobCardProps> = ({
                     )}
                     
                     {isAwaitingParts && (
-                        <div title="Awaiting Parts to be ordered" className="flex items-center gap-1 px-2 py-1 bg-rose-50 text-rose-700 rounded-md text-xs font-bold">
+                        <div 
+                            title="Awaiting Parts to be ordered" 
+                            onClick={(e) => { e.stopPropagation(); onEditJob(job.id, 'parts'); }}
+                            className="flex items-center gap-1 px-2 py-1 bg-rose-50 text-rose-700 rounded-md text-xs font-bold hover:bg-rose-100 transition-colors"
+                        >
                             <PackageOpen size={14} />
                             <span className="hidden sm:inline">Needs Parts</span>
                         </div>
                     )}
                     
                     {hasOrderedParts && (
-                        <div title="Parts Ordered" className="flex items-center gap-1 px-2 py-1 bg-amber-50 text-amber-700 rounded-md text-xs font-bold">
+                        <div 
+                            title="Parts Ordered" 
+                            onClick={(e) => { e.stopPropagation(); onEditJob(job.id, 'parts'); }}
+                            className="flex items-center gap-1 px-2 py-1 bg-amber-50 text-amber-700 rounded-md text-xs font-bold hover:bg-amber-100 transition-colors"
+                        >
                             <Truck size={14} />
                             <span className="hidden sm:inline">Parts on way</span>
                         </div>
                     )}
 
                     {isPartsReady && (
-                        <div title="Parts Ready" className="flex items-center gap-1 px-2 py-1 bg-emerald-50 text-emerald-700 rounded-md text-xs font-bold">
+                        <div 
+                            title="Parts Ready" 
+                            onClick={(e) => { e.stopPropagation(); onEditJob(job.id, 'parts'); }}
+                            className="flex items-center gap-1 px-2 py-1 bg-emerald-50 text-emerald-700 rounded-md text-xs font-bold hover:bg-emerald-100 transition-colors"
+                        >
                             <Package size={14} />
                             <span className="hidden sm:inline">Parts Ready</span>
                         </div>
@@ -133,10 +147,19 @@ export const JobCard: React.FC<JobCardProps> = ({
                 </div>
 
                 {/* Actions */}
-                <div className="flex gap-1.5">
+                <div className="flex gap-1.5 mt-3 pt-3 border-t border-gray-100">
+                    {onCheckIn && job.vehicleStatus !== 'On-Site' && (
+                        <button
+                            onClick={(e) => { e.stopPropagation(); onCheckIn(job.id); }}
+                            className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 bg-blue-100 text-blue-700 rounded-md text-xs font-bold uppercase tracking-wider hover:bg-blue-200 transition-all shadow-sm active:scale-95"
+                            title="Check In Vehicle"
+                        >
+                            <LogIn size={14} /> Check In
+                        </button>
+                    )}
                     <button
                         onClick={(e) => { e.stopPropagation(); onEditJob(job.id, 'schedule'); }}
-                        className="flex items-center gap-1 px-3 py-1.5 bg-indigo-600 text-white rounded-md text-xs font-bold uppercase tracking-wider hover:bg-indigo-700 transition-all shadow-sm active:scale-95"
+                        className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 bg-indigo-600 text-white rounded-md text-xs font-bold uppercase tracking-wider hover:bg-indigo-700 transition-all shadow-sm active:scale-95"
                         title="Allocate to Lift & Individual"
                     >
                         <Share size={14} /> Allocate
@@ -144,7 +167,7 @@ export const JobCard: React.FC<JobCardProps> = ({
                     {onGoToDispatch && (
                         <button
                             onClick={(e) => { e.stopPropagation(); onGoToDispatch(job.id); }}
-                            className="p-1.5 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors"
+                            className="px-2 py-1.5 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors"
                             title="Go to Dispatch View"
                         >
                             <ArrowRightCircle size={16} />

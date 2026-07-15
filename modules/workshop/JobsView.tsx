@@ -15,6 +15,7 @@ import { JobsBoard } from './components/JobsBoard';
 
 interface JobsViewProps {
     onEditJob: (jobId: string, initialTab?: string) => void;
+    onCheckIn?: (jobId: string) => void;
     onSmartCreateClick: () => void;
 }
 
@@ -30,7 +31,7 @@ const dateFilterOptions = {
 
 type DateFilterOption = keyof typeof dateFilterOptions;
 
-const JobsView: React.FC<JobsViewProps> = ({ onEditJob, onSmartCreateClick }) => {
+const JobsView: React.FC<JobsViewProps> = ({ onEditJob, onCheckIn, onSmartCreateClick }) => {
     const { jobs, customers, vehicles, businessEntities, estimates, taxRates, inspectionTemplates, setServicePackages, parts } = useData();
     const { selectedEntityId, setConfirmation } = useApp();
     const print = usePrint();
@@ -46,6 +47,7 @@ const JobsView: React.FC<JobsViewProps> = ({ onEditJob, onSmartCreateClick }) =>
     
     const [filter, setFilter] = useState('');
     const [statusFilter, setStatusFilter] = useState<Job['status'][]>([]);
+    const [showOnSiteOnly, setShowOnSiteOnly] = useState(false);
     const [dateFilter, setDateFilter] = useState<DateFilterOption>('30days');
     const [startDate, setStartDate] = useState(() => getRelativeDate(-30));
     const [endDate, setEndDate] = useState(() => getRelativeDate(0));
@@ -80,6 +82,10 @@ const JobsView: React.FC<JobsViewProps> = ({ onEditJob, onSmartCreateClick }) =>
     const filteredJobs = useMemo(() => {
         const initialFilter = safeJobs.filter(job => {
             if (selectedEntityId !== 'all' && job.entityId !== selectedEntityId) {
+                return false;
+            }
+            
+            if (showOnSiteOnly && job.vehicleStatus !== 'On-Site') {
                 return false;
             }
             
@@ -143,12 +149,12 @@ const JobsView: React.FC<JobsViewProps> = ({ onEditJob, onSmartCreateClick }) =>
 
         return uniqueJobs;
 
-    }, [safeJobs, filter, statusFilter, startDate, endDate, customerMap, vehicleMap, selectedEntityId, safeBusinessEntities]);
+    }, [safeJobs, filter, statusFilter, showOnSiteOnly, startDate, endDate, customerMap, vehicleMap, selectedEntityId, safeBusinessEntities]);
 
 
     useEffect(() => {
         setDisplayLimit(50);
-    }, [filter, statusFilter, selectedEntityId, startDate, endDate]);
+    }, [filter, statusFilter, showOnSiteOnly, selectedEntityId, startDate, endDate]);
 
     const displayedJobs = filteredJobs.slice(0, displayLimit);
 
@@ -292,6 +298,11 @@ const JobsView: React.FC<JobsViewProps> = ({ onEditJob, onSmartCreateClick }) =>
                             {status}
                         </button>
                     ))}
+                    <div className="h-4 w-px bg-gray-300 mx-2"></div>
+                    <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 cursor-pointer">
+                        <input type="checkbox" checked={showOnSiteOnly} onChange={e => setShowOnSiteOnly(e.target.checked)} className="rounded text-indigo-600 focus:ring-indigo-500" />
+                        Checked In (On-Site)
+                    </label>
                 </div>
             </div>
             
@@ -358,7 +369,8 @@ const JobsView: React.FC<JobsViewProps> = ({ onEditJob, onSmartCreateClick }) =>
                         jobs={displayedJobs} 
                         vehicleMap={vehicleMap} 
                         customerMap={customerMap} 
-                        onEditJob={onEditJob} 
+                        onEditJob={onEditJob}
+                        onCheckIn={onCheckIn}
                         onGoToDispatch={(id) => {
                             // This routes to dispatch view if setCurrentView is available
                             setCurrentView('dispatch');

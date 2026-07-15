@@ -7,6 +7,7 @@ interface JobsBoardProps {
     vehicleMap: Map<string, Vehicle>;
     customerMap: Map<string, Customer>;
     onEditJob: (jobId: string, initialTab?: string) => void;
+    onCheckIn?: (jobId: string) => void;
     onGoToDispatch?: (jobId: string) => void;
 }
 
@@ -15,6 +16,7 @@ export const JobsBoard: React.FC<JobsBoardProps> = ({
     vehicleMap,
     customerMap,
     onEditJob,
+    onCheckIn,
     onGoToDispatch
 }) => {
     if (jobs.length === 0) {
@@ -35,6 +37,7 @@ export const JobsBoard: React.FC<JobsBoardProps> = ({
                     vehicle={vehicleMap.get(job.vehicleId)}
                     customer={customerMap.get(job.customerId)}
                     onEditJob={onEditJob}
+                    onCheckIn={onCheckIn}
                     onGoToDispatch={onGoToDispatch}
                 />
             ))}
