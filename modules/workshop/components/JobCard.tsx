@@ -1,6 +1,6 @@
 import React from 'react';
 import { Job, Vehicle, Customer, PurchaseOrder } from '../../../types';
-import { Calendar, User, Truck, Wrench, Package, PackageOpen, Camera, Share, ArrowRightCircle, LogIn } from 'lucide-react';
+import { Calendar, User, Truck, Wrench, Package, PackageOpen, Camera, Share, ArrowRightCircle, LogIn, KeyRound } from 'lucide-react';
 import { getCustomerDisplayName } from '../../../core/utils/customerUtils';
 import { formatReadableDate } from '../../../core/utils/dateUtils';
 import { getPoStatusColor } from '../../../core/utils/statusUtils';
@@ -74,8 +74,16 @@ export const JobCard: React.FC<JobCardProps> = ({
                     <Calendar size={14} className="text-gray-400" />
                     {job.createdAt ? formatReadableDate(job.createdAt) : 'No Date'}
                 </div>
-                <div className="font-mono text-xs font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded">
-                    #{job.id}
+                <div className="flex items-center gap-2">
+                    {job.keyNumber && (
+                        <span className="flex items-center gap-1 font-mono text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded shadow-sm">
+                            <KeyRound size={12} />
+                            {job.keyNumber}
+                        </span>
+                    )}
+                    <div className="font-mono text-xs font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded">
+                        #{job.id}
+                    </div>
                 </div>
             </div>
 
