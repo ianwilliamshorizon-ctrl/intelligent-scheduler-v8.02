@@ -167,7 +167,7 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
 
     const updateLinkedInquiryStatus = async (estimateId: string, newStatus: T.Inquiry['status'] | 'Sent' | 'Approved' | 'Declined', extraUpdates: Partial<T.Inquiry> = {}) => {
         const targetInquiry = inquiries.find(i => i.linkedEstimateId === estimateId && i.status !== 'Closed');
-        const targetStatus = newStatus === 'Sent' ? 'Awaiting Customer' : (newStatus === 'Approved' || newStatus === 'Declined' ? (targetInquiry?.status || 'Awaiting Customer') : newStatus);
+        const targetStatus = newStatus === 'Sent' ? 'Waiting on Customer' : (newStatus === 'Approved' || newStatus === 'Declined' ? (targetInquiry?.status || 'Waiting on Customer') : newStatus);
         
         if (targetInquiry) {
             let updatedLogs = targetInquiry.logs || [];
@@ -191,7 +191,7 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
                 extraUpdates.actionStatus = 'Estimate Rejected';
             }
 
-            if (targetStatus === 'Awaiting Customer' && targetInquiry.status !== 'Awaiting Customer') {
+            if (targetStatus === 'Waiting on Customer' && targetInquiry.status !== 'Waiting on Customer') {
                 const fDate = new Date();
                 fDate.setDate(fDate.getDate() + 3);
                 updatedFollowUpDate = fDate.toISOString().split('T')[0];
@@ -201,12 +201,12 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
                     timestamp: new Date().toISOString(),
                     userId: currentUser?.id || 'system',
                     actionType: 'Status Update',
-                    notes: `Status changed to Awaiting Customer.`
+                    notes: `Status changed to Waiting on Customer.`
                 }];
             }
 
             await handleSaveItem(setInquiries, { ...targetInquiry, status: targetStatus, logs: updatedLogs, followUpDate: updatedFollowUpDate, ...extraUpdates } as T.Inquiry);
-        } else if (targetStatus === 'Awaiting Customer') {
+        } else if (targetStatus === 'Waiting on Customer') {
             const estimate = estimates.find(e => e.id === estimateId);
             if (estimate) {
                 const customer = customers.find(c => c.id === estimate.customerId);
@@ -219,7 +219,7 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
                     fromContact: customer?.email || customer?.mobile || 'N/A',
                     message: `Estimate #${estimate.estimateNumber} sent to customer.`,
                     takenByUserId: currentUser?.id || 'system',
-                    status: 'Awaiting Customer',
+                    status: 'Waiting on Customer',
                     linkedCustomerId: estimate.customerId,
                     linkedVehicleId: estimate.vehicleId,
                     linkedEstimateId: estimate.id,
@@ -438,7 +438,7 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
 
         await handleSaveItem(setEstimates, estimate);
         
-        if (estimate.status === 'Sent') await updateLinkedInquiryStatus(estimate.id, 'Awaiting Customer');
+        if (estimate.status === 'Sent') await updateLinkedInquiryStatus(estimate.id, 'Waiting on Customer');
         
         if (isNew && estimate.linkedInquiryId) {
             const sourceInquiry = inquiries.find(i => i.id === estimate.linkedInquiryId);
@@ -627,7 +627,7 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
                 if (existingInquiry) {
                     const updatedInquiry = {
                         ...existingInquiry,
-                        status: 'In-Flight' as const,
+                        status: 'Our Action' as const,
                         linkedPurchaseOrderIds: [...(existingInquiry.linkedPurchaseOrderIds || []), ...allGeneratedPOIds],
                         actionNotes: (existingInquiry.actionNotes || '') + '\n[System]: Approved and POs generated.',
                     };
@@ -776,10 +776,10 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
              }
         } else if (!estimate.jobId && !scheduledDate) {
              const existingInquiry = inquiries.find(i => i.linkedEstimateId === estimate.id);
-             if (existingInquiry && existingInquiry.status !== 'In-Flight') {
+             if (existingInquiry && existingInquiry.status !== 'Our Action') {
                   await handleSaveItem(setInquiries, { 
                       ...existingInquiry, 
-                      status: 'In-Flight' as const, 
+                      status: 'Our Action' as const, 
                       actionNotes: (existingInquiry.actionNotes || '') + '\n[System]: Estimate Approved.',
                   }, 'brooks_inquiries');
              }

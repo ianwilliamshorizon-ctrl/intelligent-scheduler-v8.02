@@ -3,7 +3,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useApp } from '../../core/state/AppContext';
 import { useData } from '../../core/state/DataContext';
 import { Job, Vehicle, Customer, ServicePackage, Estimate } from '../../types';
-import { Eye, Search, PlusCircle, Printer, Briefcase, Wand2, Loader2, CalendarDays, Camera } from 'lucide-react';
+import { Eye, Search, PlusCircle, Printer, Briefcase, Wand2, Loader2, CalendarDays, Camera, LayoutList, LayoutGrid } from 'lucide-react';
 import { getCustomerDisplayName } from '../../core/utils/customerUtils';
 import { getRelativeDate, formatDate, dateStringToDate, addDays, formatReadableDate, isWithinDateRange } from '../../core/utils/dateUtils';
 import PrintableJobList from '../../components/PrintableJobList';
@@ -11,6 +11,7 @@ import { usePrint } from '../../core/hooks/usePrint';
 import { generateServicePackageName } from '../../core/services/geminiService';
 import ServicePackageFormModal from '../../components/ServicePackageFormModal';
 import { useWorkshopActions } from '../../core/hooks/useWorkshopActions';
+import { JobsBoard } from './components/JobsBoard';
 
 interface JobsViewProps {
     onEditJob: (jobId: string, initialTab?: string) => void;
@@ -50,6 +51,8 @@ const JobsView: React.FC<JobsViewProps> = ({ onEditJob, onSmartCreateClick }) =>
     const [endDate, setEndDate] = useState(() => getRelativeDate(0));
     const [displayLimit, setDisplayLimit] = useState(50);
     const [isCreatingPackage, setIsCreatingPackage] = useState(false);
+    const [viewMode, setViewMode] = useState<'list' | 'board'>('list');
+    const { setCurrentView } = useApp();
 
     React.useEffect(() => {
         if (dateFilter === 'today') {
@@ -235,6 +238,22 @@ const JobsView: React.FC<JobsViewProps> = ({ onEditJob, onSmartCreateClick }) =>
                     <button onClick={onSmartCreateClick} className="flex items-center gap-2 py-2 px-4 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700">
                         <PlusCircle size={16}/> New Job
                     </button>
+                    <div className="flex bg-gray-200 p-1 rounded-lg ml-2">
+                        <button 
+                            onClick={() => setViewMode('list')} 
+                            className={`p-1.5 rounded-md transition-colors ${viewMode === 'list' ? 'bg-white shadow text-indigo-600' : 'text-gray-500 hover:bg-gray-300'}`}
+                            title="List View"
+                        >
+                            <LayoutList size={18} />
+                        </button>
+                        <button 
+                            onClick={() => setViewMode('board')} 
+                            className={`p-1.5 rounded-md transition-colors ${viewMode === 'board' ? 'bg-white shadow text-indigo-600' : 'text-gray-500 hover:bg-gray-300'}`}
+                            title="Board View"
+                        >
+                            <LayoutGrid size={18} />
+                        </button>
+                    </div>
                 </div>
             </header>
             
@@ -277,7 +296,8 @@ const JobsView: React.FC<JobsViewProps> = ({ onEditJob, onSmartCreateClick }) =>
             </div>
             
             <main className="flex-grow overflow-y-auto">
-                <div className="border rounded-lg overflow-hidden bg-white shadow">
+                {viewMode === 'list' ? (
+                    <div className="border rounded-lg overflow-hidden bg-white shadow">
                     <table className="min-w-full text-sm">
                         <thead className="bg-gray-100">
                             <tr>
@@ -333,6 +353,18 @@ const JobsView: React.FC<JobsViewProps> = ({ onEditJob, onSmartCreateClick }) =>
                          </tbody>
                     </table>
                 </div>
+                ) : (
+                    <JobsBoard 
+                        jobs={displayedJobs} 
+                        vehicleMap={vehicleMap} 
+                        customerMap={customerMap} 
+                        onEditJob={onEditJob} 
+                        onGoToDispatch={(id) => {
+                            // This routes to dispatch view if setCurrentView is available
+                            setCurrentView('dispatch');
+                        }}
+                    />
+                )}
                 {filteredJobs.length > displayLimit && (
                     <div className="flex justify-center pt-4">
                         <button onClick={handleLoadMore} className="flex items-center gap-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-full hover:bg-gray-300 font-semibold text-sm">

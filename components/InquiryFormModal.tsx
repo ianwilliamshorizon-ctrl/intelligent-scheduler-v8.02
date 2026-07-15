@@ -53,7 +53,7 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
     onViewVehicle
 }) => {
     const { currentUser, selectedEntityId, businessEntities: entities } = useApp();
-    const { purchaseOrders, inquiries } = useData();
+    const { purchaseOrders, inquiries, saveRecord } = useData();
     const [formData, setFormData] = useState<Partial<Inquiry>>({});
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [aiError, setAiError] = useState('');
@@ -137,6 +137,11 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                 };
             }
         });
+        
+        if (inquiry && inquiry.id && inquiry.hasNewReply) {
+            saveRecord('inquiries', { ...inquiry, hasNewReply: false } as Inquiry);
+        }
+        
         setIsAnalyzing(false);
         setAiError('');
         setSuggestedCustomer(null);
@@ -171,7 +176,7 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                 }
             }
 
-            if (name === 'status' && value === 'Awaiting Customer') {
+            if (name === 'status' && value === 'Waiting on Customer') {
                 const fDate = new Date();
                 fDate.setDate(fDate.getDate() + 3);
                 nextData.followUpDate = fDate.toISOString().split('T')[0];
@@ -243,7 +248,7 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                 };
                 updatedLogs = [...updatedLogs, newLog];
                 
-                if (formData.status === 'Awaiting Customer') {
+                if (formData.status === 'Waiting on Customer') {
                     const fDate = new Date();
                     fDate.setDate(fDate.getDate() + 3);
                     updatedFollowUpDate = fDate.toISOString().split('T')[0];
@@ -484,8 +489,8 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                     <select name="status" value={formData.status || 'Inbox'} onChange={handleChange} className="w-full p-2 border rounded text-sm bg-gray-50">
                                         <option value="Inbox">Inbox</option>
                                         <option value="New Requests">New Requests</option>
-                                        <option value="In-Flight">In-Flight (Priority)</option>
-                                        <option value="Awaiting Customer">Awaiting Customer</option>
+                                        <option value="Our Action">Our Action (Priority)</option>
+                                        <option value="Waiting on Customer">Waiting on Customer</option>
                                         <option value="Scheduled">Scheduled</option>
                                         <option value="Closed">Closed</option>
                                     </select>
@@ -831,7 +836,7 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                                     id: generatedId,
                                                     inquiryNumber: generatedInquiryNumber,
                                                     hasNewReply: false,
-                                                    status: 'Awaiting Customer',
+                                                    status: 'Waiting on Customer',
                                                     actionStatus: 'Email Sent',
                                                     followUpDate: null,
                                                     logs: updatedLogs 
@@ -847,7 +852,7 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                                     takenByUserId: formData.takenByUserId || currentUser.id,
                                                     inquiryNumber: generatedInquiryNumber,
                                                     hasNewReply: false,
-                                                    status: 'Awaiting Customer',
+                                                    status: 'Waiting on Customer',
                                                     followUpDate: null,
                                                     logs: updatedLogs,
                                                     fromName: formData.fromName || formData.fromEmail || 'Unknown Customer',
@@ -920,7 +925,7 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                             const updatedLogs = [...(formData.logs || []), newLog];
                                             
                                             let nextFollowUp = formData.followUpDate;
-                                            if (formData.status === 'Awaiting Customer') {
+                                            if (formData.status === 'Waiting on Customer') {
                                                 const fDate = new Date();
                                                 fDate.setDate(fDate.getDate() + 3);
                                                 nextFollowUp = fDate.toISOString().split('T')[0];
@@ -963,7 +968,7 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                         const updatedLogs = [...(formData.logs || []), newLog];
                                         
                                         let nextFollowUp = formData.followUpDate;
-                                        if (formData.status === 'Awaiting Customer') {
+                                        if (formData.status === 'Waiting on Customer') {
                                             const fDate = new Date();
                                             fDate.setDate(fDate.getDate() + 3);
                                             nextFollowUp = fDate.toISOString().split('T')[0];

@@ -29,6 +29,12 @@ interface InquiriesViewProps {
     onViewVehicle?: (vehicleId: string) => void;
 }
 
+export const getLatestActivityTime = (inquiry: Inquiry) => {
+    return inquiry.logs && inquiry.logs.length > 0 
+        ? Math.max(...inquiry.logs.map(log => new Date(log.timestamp).getTime()))
+        : new Date(inquiry.createdAt).getTime();
+};
+
 export const getInquiryHealth = (inquiry: Inquiry) => {
     if (inquiry.status === 'Closed') return 'closed';
 
@@ -36,9 +42,7 @@ export const getInquiryHealth = (inquiry: Inquiry) => {
     const isToday = inquiry.followUpDate && new Date(inquiry.followUpDate).toDateString() === new Date().toDateString();
     const isFutureFollowUp = inquiry.followUpDate && !isOverdue && !isToday;
 
-    const latestLogTime = inquiry.logs && inquiry.logs.length > 0 
-        ? Math.max(...inquiry.logs.map(log => new Date(log.timestamp).getTime()))
-        : new Date(inquiry.createdAt).getTime();
+    const latestLogTime = getLatestActivityTime(inquiry);
     
     const hoursSinceLastActivity = (Date.now() - latestLogTime) / (1000 * 60 * 60);
 
@@ -46,7 +50,7 @@ export const getInquiryHealth = (inquiry: Inquiry) => {
     if (isOverdue || isToday) return 'overdue';
     if (inquiry.hasNewReply) return 'responded';
     if (isFutureFollowUp) return 'future_follow_up';
-    if (inquiry.status === 'Awaiting Customer' && hoursSinceLastActivity > 72) return 'stale_quote';
+    if (inquiry.status === 'Waiting on Customer' && hoursSinceLastActivity > 72) return 'stale_quote';
     if (hoursSinceLastActivity > 48) return 'stale_activity';
     if (inquiry.logs && inquiry.logs.length > 0 && hoursSinceLastActivity <= 48) return 'active';
     
@@ -214,9 +218,9 @@ const InquiryCard: React.FC<{
                     inquiry.isUrgent ? 'border-red-600' :
                     inquiry.status === 'Inbox' ? 'border-gray-400' : 
                     inquiry.status === 'New Requests' ? 'border-blue-400' : 
-                    inquiry.status === 'In-Flight' ? 'border-amber-400' : 
+                    inquiry.status === 'Our Action' ? 'border-amber-400' : 
                     inquiry.status === 'Scheduled' ? 'border-indigo-400' : 
-                    inquiry.status === 'Awaiting Customer' ? (isStale72h(inquiry) ? 'border-red-500 text-red-800' : 'border-gray-200') : 
+                    inquiry.status === 'Waiting on Customer' ? (isStale72h(inquiry) ? 'border-red-500 text-red-800' : 'border-gray-200') : 
                     'border-gray-200'
                 } ${isExpanded ? 'shadow-md ring-1 ring-indigo-400' : ringClass} cursor-pointer transition-all mb-1.5`}
                 onClick={() => onOpenInquiryModal(inquiry)}
@@ -402,9 +406,9 @@ const InquiryCard: React.FC<{
                 inquiry.isUrgent ? 'border-red-600' :
                 inquiry.status === 'Inbox' ? 'border-gray-400' : 
                 inquiry.status === 'New Requests' ? 'border-blue-400' : 
-                inquiry.status === 'In-Flight' ? 'border-amber-400' : 
+                inquiry.status === 'Our Action' ? 'border-amber-400' : 
                 inquiry.status === 'Scheduled' ? 'border-indigo-400' : 
-                inquiry.status === 'Awaiting Customer' ? (isStale72h(inquiry) ? 'border-red-500 text-red-800 shadow-[0_0_8px_rgba(239,68,68,0.4)]' : 'border-gray-200') : 
+                inquiry.status === 'Waiting on Customer' ? (isStale72h(inquiry) ? 'border-red-500 text-red-800 shadow-[0_0_8px_rgba(239,68,68,0.4)]' : 'border-gray-200') : 
                 'border-gray-200'
             } ${ringClass} cursor-pointer hover:shadow-md transition-shadow mb-3`}
             onClick={() => onOpenInquiryModal(inquiry)}
@@ -641,13 +645,13 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
             // Map legacy statuses to new 5-stage funnel for safety
             if (status === ('New' as any)) status = 'Inbox';
             if (status === ('Immediate Quote' as any)) status = 'New Requests';
-            if (status === ('Escalated/Urgent' as any) || status === ('Approved' as any) || status === ('Rejected' as any) || status === ('Customer Responded' as any)) status = 'In-Flight';
-            if (status === ('Quoted or Responded' as any) || status === ('Sent' as any) || status === ('Quoted' as any)) status = 'Awaiting Customer';
+            if (status === ('Escalated/Urgent' as any) || status === ('Approved' as any) || status === ('Rejected' as any) || status === ('Customer Responded' as any)) status = 'Our Action';
+            if (status === ('Quoted or Responded' as any) || status === ('Sent' as any) || status === ('Quoted' as any)) status = 'Waiting on Customer';
             if (status === ('In Progress' as any)) status = 'Scheduled';
             
-            // Auto-bounce to In-Flight if they reply
-            if (status === 'Awaiting Customer' && i.hasNewReply) {
-                status = 'In-Flight';
+            // Auto-bounce to Our Action if they reply
+            if (status === 'Waiting on Customer' && i.hasNewReply) {
+                status = 'Our Action';
             }
             return { ...i, status };
         });
@@ -831,8 +835,8 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                 }
 
                 if (jobToUse) {
-                    // Close inquiry only if job is Invoiced, Closed, or Cancelled. Leave it as Scheduled until then.
-                    if (jobToUse.status === 'Invoiced' || jobToUse.status === 'Closed' || jobToUse.status === 'Cancelled') {
+                    // Close inquiry only if job is Invoiced or Cancelled. Leave it as Scheduled until then.
+                    if (jobToUse.status === 'Invoiced' || jobToUse.status === 'Cancelled') {
                         return true;
                     }
                 }
@@ -1137,8 +1141,8 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
         }
 
         return filtered.sort((a,b) => {
-            const aTime = new Date(a.createdAt).getTime();
-            const bTime = new Date(b.createdAt).getTime();
+            const aTime = getLatestActivityTime(a);
+            const bTime = getLatestActivityTime(b);
             return bTime - aTime;
         });
     }, [normalizedInquiries, selectedEntityId, searchTerm, dateFilter, assignedUserFilter, healthFilter, currentUser.id]);
@@ -1147,8 +1151,8 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
         const columns: { [key in Inquiry['status']]?: Inquiry[] } = {
             'Inbox': [],
             'New Requests': [],
-            'In-Flight': [],
-            'Awaiting Customer': [],
+            'Our Action': [],
+            'Waiting on Customer': [],
             'Scheduled': []
         };
         filteredInquiries.forEach(i => {
@@ -1176,7 +1180,7 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
         return filteredInquiries.filter(i => {
             const s = (i.status || '').toLowerCase();
             return s === 'closed' || s === 'archived';
-        }).sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        }).sort((a,b) => getLatestActivityTime(b) - getLatestActivityTime(a));
     }, [filteredInquiries]);
 
     const displayInquiries = useMemo(() => {
@@ -1199,8 +1203,8 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
             let valB: any = '';
             
             if (sortField === 'createdAt') {
-                valA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-                valB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+                valA = getLatestActivityTime(a);
+                valB = getLatestActivityTime(b);
             } else if (sortField === 'inquiryNumber') {
                 valA = (a.inquiryNumber || '').toLowerCase();
                 valB = (b.inquiryNumber || '').toLowerCase();
@@ -1460,10 +1464,10 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                             <div className="flex items-center gap-2">
                                 <button
                                     type="button"
-                                    onClick={() => handleBulkUpdateStatus('Awaiting Customer')}
+                                    onClick={() => handleBulkUpdateStatus('Waiting on Customer')}
                                     className="px-3 py-1 bg-white border border-indigo-200 hover:bg-indigo-50 text-indigo-700 font-bold text-xs rounded-lg transition"
                                 >
-                                    Move to Awaiting Customer
+                                    Move to Waiting on Customer
                                 </button>
                                 <button
                                     type="button"
@@ -1506,7 +1510,7 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                                             onClick={() => handleSort('createdAt')}
                                         >
                                             <div className="flex items-center gap-1">
-                                                <span>Date</span>
+                                                <span>Last Action</span>
                                                 {sortField === 'createdAt' && (
                                                     sortOrder === 'asc' ? <ChevronUp size={14} className="text-indigo-600" /> : <ChevronDown size={14} className="text-indigo-600" />
                                                 )}
@@ -1597,7 +1601,7 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                                                     </td>
                                                 {/* Date */}
                                                 <td className="py-1.5 px-3 whitespace-nowrap text-xs text-gray-600 font-mono">
-                                                    {new Date(i.createdAt).toLocaleDateString()} {new Date(i.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                    {new Date(getLatestActivityTime(i)).toLocaleDateString()} {new Date(getLatestActivityTime(i)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                                 </td>
                                                 {/* Inquiry # */}
                                                 <td className="py-1.5 px-3 whitespace-nowrap text-xs text-gray-600 font-mono font-semibold">
@@ -1630,9 +1634,9 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                                                     <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold border ${
                                                         i.status === 'Inbox' ? 'bg-gray-50 text-gray-700 border-gray-200' :
                                                         i.status === 'New Requests' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                                                        i.status === 'In-Flight' ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                                                        i.status === 'Our Action' ? 'bg-orange-50 text-orange-700 border-orange-200' :
                                                         i.status === 'Scheduled' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' :
-                                                        i.status === 'Awaiting Customer' ? (isStale72h(i) ? 'bg-red-50 text-red-800 border-red-500 ring-1 ring-red-400' : 'bg-purple-50 text-purple-700 border-purple-200') :
+                                                        i.status === 'Waiting on Customer' ? (isStale72h(i) ? 'bg-red-50 text-red-800 border-red-500 ring-1 ring-red-400' : 'bg-purple-50 text-purple-700 border-purple-200') :
                                                         'bg-gray-100 text-gray-800 border-gray-300'
                                                     }`}
                                                     title={i.status === 'Closed' && i.closedReason ? `Reason: ${i.closedReason}` : undefined}
@@ -1711,7 +1715,7 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
             ) : activeTab === 'active' ? (
                 <main className="flex-grow overflow-x-auto pb-2" onMouseLeave={() => setHoveredInquiryId(null)}>
                     <div className="flex gap-4 h-full min-w-full font-sans">
-                        {(['Inbox', 'New Requests', 'In-Flight', 'Awaiting Customer', 'Scheduled'] as Inquiry['status'][]).map(status => (
+                        {(['Inbox', 'New Requests', 'Our Action', 'Waiting on Customer', 'Scheduled'] as Inquiry['status'][]).map(status => (
                             <div 
                                 key={status} 
                                 className="flex-1 flex flex-col bg-gray-100 rounded-xl min-w-[280px] h-full transition-colors border-2 border-transparent"

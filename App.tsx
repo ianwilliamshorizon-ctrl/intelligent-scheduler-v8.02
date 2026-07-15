@@ -4,7 +4,7 @@ import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import * as T from './types';
 import { useApp } from './core/state/AppContext';
-import { getDocument, setItem } from './core/db';
+import { getDocument, saveDocument } from './core/db';
 import { getCustomerDisplayName } from './core/utils/customerUtils';
 import { formatDate } from './core/utils/dateUtils';
 import { DataProvider } from './core/state/DataContext';
@@ -140,28 +140,57 @@ const App = () => {
         const inquiryMessage = `ONLINE APPROVAL: Estimate #${estimate.estimateNumber}\n\n` + `Preferred Dates: ${dateRangeStr}\n` + `Customer Notes: ${notes || 'None'}\n\n` + (selectedOptionsList ? `Selected Optional Extras:\n${selectedOptionsList}` : `No optional extras selected.`);
         
         try {
-            // Check for existing inquiry using a query or fallback to creating a new one
-            // Without `inquiries` context, we just create a new one to be safe, or we could fetch it.
-            // For simplicity, we just create a new one.
-            const newInquiry: T.Inquiry = { 
-                id: crypto.randomUUID(), 
-                entityId: estimate.entityId, 
-                createdAt: new Date().toISOString(), 
-                fromName: customer ? getCustomerDisplayName(customer) : "Customer", 
-                fromContact: customer?.email || customer?.mobile || "Client Portal", 
-                message: inquiryMessage, 
-                takenByUserId: 'system', 
-                status: 'In-Flight', 
-                linkedCustomerId: estimate.customerId, 
-                linkedVehicleId: estimate.vehicleId, 
-                linkedEstimateId: estimate.id, 
-                actionNotes: 'Auto-generated from Customer Estimate Approval. Please review dates and convert to Job.' 
-            };
-            
-            await setItem(`brooks_inquiries`, newInquiry);
+            let inquiryToSave: T.Inquiry | null = null;
+            if (estimate.linkedInquiryId) {
+                const existingInquiry = await getDocument<T.Inquiry>('brooks_inquiries', estimate.linkedInquiryId);
+                if (existingInquiry) {
+                    inquiryToSave = {
+                        ...existingInquiry,
+                        status: 'Our Action',
+                        hasNewReply: true,
+                        actionNotes: inquiryMessage,
+                        logs: [
+                            ...(existingInquiry.logs || []),
+                            {
+                                id: crypto.randomUUID(),
+                                timestamp: new Date().toISOString(),
+                                userId: 'system',
+                                actionType: 'Portal Approval',
+                                notes: inquiryMessage
+                            }
+                        ]
+                    };
+                }
+            }
 
-            const updatedEstimate: T.Estimate = { ...estimate, status: 'Approved', lineItems: approvedLineItems };
-            await setItem(`brooks_estimates`, updatedEstimate);
+            if (!inquiryToSave) {
+                inquiryToSave = { 
+                    id: crypto.randomUUID(), 
+                    entityId: estimate.entityId, 
+                    createdAt: new Date().toISOString(), 
+                    fromName: customer ? getCustomerDisplayName(customer) : "Customer", 
+                    fromContact: customer?.email || customer?.mobile || "Client Portal", 
+                    message: inquiryMessage, 
+                    takenByUserId: 'system', 
+                    status: 'Our Action', 
+                    linkedCustomerId: estimate.customerId, 
+                    linkedVehicleId: estimate.vehicleId, 
+                    linkedEstimateId: estimate.id, 
+                    actionNotes: inquiryMessage,
+                    hasNewReply: true
+                };
+            }
+            
+            await saveDocument(`brooks_inquiries`, inquiryToSave);
+
+            const updatedEstimate: T.Estimate = { 
+                ...estimate, 
+                status: 'Approved', 
+                lineItems: approvedLineItems, 
+                hasNewReply: true,
+                ...(dateRange?.start && dateRange.start !== 'next-available' ? { requestedDate: dateRange.start } : {})
+            };
+            await saveDocument(`brooks_estimates`, updatedEstimate);
             setCustomerViewData(prev => prev.estimate ? { ...prev, estimate: updatedEstimate } : prev);
             
             toast.success(successMessage);
@@ -176,26 +205,52 @@ const App = () => {
         const customer = customerViewData.customer;
         
         try {
-            await setItem(`brooks_estimates`, updatedEstimate);
+            await saveDocument(`brooks_estimates`, updatedEstimate);
             
             const inquiryMessage = `ONLINE DECLINE: Estimate #${estimate.estimateNumber}\n\n` + 
                                    `Reason for declining: ${reason || 'None provided'}`;
             
-            const newInquiry: T.Inquiry = { 
-                id: crypto.randomUUID(), 
-                entityId: estimate.entityId, 
-                createdAt: new Date().toISOString(), 
-                fromName: customer ? getCustomerDisplayName(customer) : "Customer", 
-                fromContact: customer?.email || customer?.mobile || "Client Portal", 
-                message: inquiryMessage, 
-                takenByUserId: 'system', 
-                status: 'In-Flight', 
-                linkedCustomerId: estimate.customerId, 
-                linkedVehicleId: estimate.vehicleId, 
-                linkedEstimateId: estimate.id, 
-                actionNotes: `Customer Declined Online. Reason: ${reason || 'None provided'}`
-            };
-            await setItem(`brooks_inquiries`, newInquiry);
+            let inquiryToSave: T.Inquiry | null = null;
+            if (estimate.linkedInquiryId) {
+                const existingInquiry = await getDocument<T.Inquiry>('brooks_inquiries', estimate.linkedInquiryId);
+                if (existingInquiry) {
+                    inquiryToSave = {
+                        ...existingInquiry,
+                        hasNewReply: true,
+                        actionNotes: inquiryMessage,
+                        logs: [
+                            ...(existingInquiry.logs || []),
+                            {
+                                id: crypto.randomUUID(),
+                                timestamp: new Date().toISOString(),
+                                userId: 'system',
+                                actionType: 'Portal Decline',
+                                notes: inquiryMessage
+                            }
+                        ]
+                    };
+                }
+            }
+
+            if (!inquiryToSave) {
+                inquiryToSave = { 
+                    id: crypto.randomUUID(), 
+                    entityId: estimate.entityId, 
+                    createdAt: new Date().toISOString(), 
+                    fromName: customer ? getCustomerDisplayName(customer) : "Customer", 
+                    fromContact: customer?.email || customer?.mobile || "Client Portal", 
+                    message: inquiryMessage, 
+                    takenByUserId: 'system', 
+                    status: 'Our Action', 
+                    linkedCustomerId: estimate.customerId, 
+                    linkedVehicleId: estimate.vehicleId, 
+                    linkedEstimateId: estimate.id, 
+                    actionNotes: inquiryMessage,
+                    hasNewReply: true
+                };
+            }
+            
+            await saveDocument(`brooks_inquiries`, inquiryToSave);
 
             setCustomerViewData(prev => prev.estimate ? { ...prev, estimate: updatedEstimate } : prev);
             toast.success("We have received your decision. Thank you.");
@@ -255,12 +310,12 @@ const App = () => {
                     servicePackages={customerViewData.servicePackages}
                     entityDetails={customerViewData.entity || undefined}
                     onApprove={() => {}} 
-                    onCustomerApprove={(est, items, dates, notes) => {
-                        handleCustomerApproveEstimate(est, items, dates, notes);
+                    onCustomerApprove={async (est, items, dates, notes) => {
+                        await handleCustomerApproveEstimate(est, items, dates, notes);
                         setCustomerActionState('approved');
                     }}
-                    onDecline={(est, reason) => {
-                        handleCustomerDeclineEstimate(est, reason);
+                    onDecline={async (est, reason) => {
+                        await handleCustomerDeclineEstimate(est, reason);
                         setCustomerActionState('declined');
                     }}
                     onEmailSuccess={() => {}}

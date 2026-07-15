@@ -4,7 +4,7 @@ import { useData } from '../core/state/DataContext';
 import { findBestVoice, prepareTextForSpeech } from '../core/utils/speechUtils';
 import { useApp } from '../core/state/AppContext';
 import * as T from '../types';
-import { X, Save, Car, User, FileText, Wrench, Package, DollarSign, Edit, Plus, Trash2, KeyRound, MessageSquare, ChevronUp, ChevronDown, ListChecks, PlusCircle, ClipboardCheck, CarFront, Image as ImageIcon, Ban, Expand, Loader2, Printer, CalendarDays, PlayCircle, PauseCircle, CheckCircle, RotateCcw, UserCheck, UserPlus, MoreHorizontal, Camera, Info, Volume2 } from 'lucide-react';
+import { X, Save, Car, User, FileText, Wrench, Package, DollarSign, Edit, Plus, Trash2, KeyRound, MessageSquare, ChevronUp, ChevronDown, ListChecks, PlusCircle, ClipboardCheck, CarFront, Image as ImageIcon, Ban, Expand, Loader2, Printer, CalendarDays, PlayCircle, PauseCircle, CheckCircle, RotateCcw, UserCheck, UserPlus, MoreHorizontal, Camera, Info, Volume2, History } from 'lucide-react';
 import { formatCurrency } from '../utils/formatUtils';
 import { formatDate, addDays } from '../core/utils/dateUtils';
 import { generateEstimateNumber } from '../core/utils/numberGenerators';
@@ -97,6 +97,11 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
     const [editableJob, setEditableJob] = useState<T.Job | null>(null);
     const [editableEstimate, setEditableEstimate] = useState<T.Estimate | null>(null);
     const [isPrinting, setIsPrinting] = useState(false);
+
+    const relatedInquiries = useMemo(() => {
+        if (!editableJob?.id) return [];
+        return data.inquiries.filter(inq => inq.linkedJobId === editableJob.id || (editableJob.estimateId && inq.linkedEstimateId === editableJob.estimateId)).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }, [data.inquiries, editableJob?.id, editableJob?.estimateId]);
     const [printBlankSheet, setPrintBlankSheet] = useState(false);
     const [voices, setVoices] = useState<any[]>([]);
 
@@ -263,6 +268,10 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
             setEditableJob(prev => {
                 // If we are already editing this job, don't overwrite local changes with background syncs
                 if (prev && prev.id === job.id) return prev;
+
+                if (job.hasNewReply) {
+                    data.saveRecord('jobs', { ...job, hasNewReply: false });
+                }
 
                 const jobCopy = JSON.parse(JSON.stringify(job));
                 const obs = jobCopy.technicianObservations || [];
@@ -961,6 +970,7 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
                            <TabButton tabId="inspection" label="Inspection" icon={<ListChecks size={16}/>} />
                            <TabButton tabId="notes" label="Notes" icon={<MessageSquare size={16}/>} />
                            <TabButton tabId="segments" label="Segments" icon={<CalendarDays size={16}/>} />
+                           <TabButton tabId="communications" label="Comms" icon={<History size={16}/>} />
                            <TabButton tabId="media" label="Media" icon={<ImageIcon size={16}/>} isLast />
                         </div>
                         <div className="bg-white border-x border-b border-gray-200 rounded-b-lg shadow-sm flex-grow p-4">
@@ -1093,6 +1103,26 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
                                             </table>
                                         </div>
                                     </div>
+                                </div>
+                            )}
+                            {activeTab === 'communications' && (
+                                <div className="space-y-4">
+                                    <h3 className="text-md font-bold text-gray-800 border-b pb-2">Booking Requests & Communications</h3>
+                                    {relatedInquiries.length > 0 ? (
+                                        <div className="flex flex-col gap-3 max-h-96 overflow-y-auto pr-2">
+                                            {relatedInquiries.map(inq => (
+                                                <div key={inq.id} className="bg-white border border-gray-200 rounded-lg p-3 shadow-sm">
+                                                    <div className="flex justify-between items-start mb-2">
+                                                        <div className="font-bold text-sm text-gray-800">{inq.fromName || inq.fromContact}</div>
+                                                        <div className="text-xs text-gray-500">{formatDate(new Date(inq.createdAt))}</div>
+                                                    </div>
+                                                    <div className="text-sm text-gray-700 whitespace-pre-wrap">{inq.message || inq.actionNotes}</div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <p className="text-sm text-gray-500 text-center py-4">No communications found for this job.</p>
+                                    )}
                                 </div>
                             )}
                             {activeTab === 'media' && (

@@ -454,7 +454,6 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                 dateRange,
                 customerNotes
             );
-            onClose();
         }
     };
 
@@ -469,14 +468,12 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                 { start: 'next-available', end: 'next-available' },
                 customerNotes || 'Customer requested the next available workshop slot.'
             );
-            onClose();
         }
     };
 
     const handleDeclineSubmit = () => {
         if (onDecline) {
             onDecline(estimate, declineReason);
-            onClose();
         }
     };
 

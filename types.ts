@@ -204,6 +204,7 @@ export interface Job {
     tyreCheck?: TyreCheckData;
     inspectionChecklist?: ChecklistSection[];
     mileage?: number;
+    hasNewReply?: boolean;
     createdByUserId?: string;
     lineItems?: EstimateLineItem[];
     associatedJobId?: string;
@@ -394,6 +395,8 @@ export interface Estimate {
     media?: any[];
     linkedInquiryId?: string;
     discountCodeId?: string;
+    hasNewReply?: boolean;
+    requestedDate?: string;
 }
 
 export interface Invoice {
@@ -673,7 +676,7 @@ export interface Inquiry {
     takenByUserId: string;
     assignedToUserId?: string;
     assignedToEntityId?: string;
-    status: 'Inbox' | 'New Requests' | 'In-Flight' | 'Awaiting Customer' | 'Scheduled' | 'Closed';
+    status: 'Inbox' | 'New Requests' | 'Our Action' | 'Waiting on Customer' | 'Scheduled' | 'Closed';
     linkedCustomerId?: string;
     linkedVehicleId?: string;
     linkedEstimateId?: string;

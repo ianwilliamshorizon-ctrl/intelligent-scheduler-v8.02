@@ -417,6 +417,12 @@ Linked MOT Booking: #${motJobId} @ ${motBooking.time}`;
                                 </div>
 
                                 <div className="border-t pt-4">
+                                    {(estimate as any).requestedDate && (
+                                        <div className="bg-blue-50 border border-blue-200 text-blue-800 px-3 py-2 rounded-lg text-sm mb-4">
+                                            <p className="flex items-center mb-1"><Calendar size={16} className="mr-2" /><strong>Customer Requested Date:&nbsp;</strong> {formatReadableDate((estimate as any).requestedDate)}</p>
+                                            <p className="text-xs text-blue-700 ml-6">This is their preferred start date. Please select the actual scheduled date below based on availability.</p>
+                                        </div>
+                                    )}
                                     <label htmlFor="scheduledDate" className="block text-sm font-medium text-gray-700 mb-1">Selected Start Date</label>
                                     <input type="date" id="scheduledDate" value={scheduledDate} onChange={(e) => { setScheduledDate(e.target.value); setMotBooking(null); }} className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" required />
                                 </div>

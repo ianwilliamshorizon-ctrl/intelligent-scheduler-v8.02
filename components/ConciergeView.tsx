@@ -4,7 +4,7 @@ import { useData } from '../core/state/DataContext';
 import { Job, PurchaseOrder } from '../types';
 import { Search, X } from 'lucide-react';
 import { getCustomerDisplayName } from '../core/utils/customerUtils';
-import { getRelativeDate } from '../core/utils/dateUtils';
+import { getRelativeDate, formatDate } from '../core/utils/dateUtils';
 import PauseReasonModal from './PauseReasonModal';
 import { ConciergeJobCard } from './concierge/ConciergeJobCard';
 import { SummaryJobCard } from './shared/SummaryJobCard';
@@ -23,10 +23,12 @@ interface ConciergeViewProps {
     onEngineerComplete: (job: Job, segmentId: string) => void;
     onPause: (jobId: string, segmentId: string, reason: string) => void;
     onRestart: (jobId: string, segmentId: string) => void;
+    onEditEstimate?: (estimate: any) => void;
+    onOpenInquiry?: (inquiry: any) => void;
 }
 
 const ConciergeView: React.FC<ConciergeViewProps> = (props) => {
-    const { jobs, customers, vehicles, purchaseOrders, invoices, engineers, saveRecord, forceRefresh, storageLocations } = useData();
+    const { jobs, customers, vehicles, purchaseOrders, invoices, engineers, saveRecord, forceRefresh, storageLocations, inquiries, estimates } = useData();
     
     // Auto-refresh data every 30 seconds to keep all users in sync
     useEffect(() => {
@@ -141,6 +143,16 @@ const ConciergeView: React.FC<ConciergeViewProps> = (props) => {
         return { arrivals, allocated, inProgress, pendingQC, invoicing, handover }; 
     }, [filteredJobs, arrivalFilter]);
 
+    const actionRequiredInquiries = useMemo(() => {
+        return inquiries.filter(inq => 
+            inq.hasNewReply === true &&
+            inq.status !== 'Closed' &&
+            inq.linkedEstimateId &&
+            !inq.linkedJobId &&
+            (selectedEntityId === 'all' || inq.entityId === selectedEntityId)
+        );
+    }, [inquiries, selectedEntityId]);
+
     const handlePauseClick = (jobId: string, segmentId: string) => {
         setPauseData({ jobId, segmentId });
     };
@@ -238,6 +250,37 @@ const ConciergeView: React.FC<ConciergeViewProps> = (props) => {
             
             <main className="flex-grow overflow-x-auto pb-2">
                 <div className="flex gap-3 h-full min-w-full">
+                    {actionRequiredInquiries.length > 0 && (
+                        <KanbanColumn title="Action Required" count={actionRequiredInquiries.length} colorClass="border-red-500">
+                            {actionRequiredInquiries.map(inq => {
+                                const customer = customersById.get(inq.linkedCustomerId || '');
+                                const estimate = estimates.find(e => e.id === inq.linkedEstimateId);
+                                return (
+                                    <div 
+                                        key={inq.id} 
+                                        onClick={() => {
+                                            if (props.onOpenInquiry) {
+                                                props.onOpenInquiry(inq);
+                                            }
+                                        }}
+                                        className="bg-red-50 border border-red-200 rounded-lg p-3 shadow-sm cursor-pointer hover:bg-red-100 transition"
+                                    >
+                                        <div className="flex justify-between items-start mb-2">
+                                            <span className="text-xs font-bold text-red-700 bg-red-100 px-2 py-0.5 rounded-full">New Reply</span>
+                                            <span className="text-[10px] text-gray-500">{formatDate(new Date(inq.createdAt))}</span>
+                                        </div>
+                                        <div className="font-bold text-sm text-gray-800 mb-1">{customer ? getCustomerDisplayName(customer) : inq.fromName}</div>
+                                        <div className="text-xs text-gray-600 line-clamp-2 italic mb-2">"{inq.message || inq.actionNotes}"</div>
+                                        {estimate && (
+                                            <div className="text-xs font-medium text-indigo-600 bg-indigo-50 px-2 py-1 rounded inline-block">
+                                                Estimate #{estimate.estimateNumber || estimate.id.substring(0,6)}
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </KanbanColumn>
+                    )}
                     <KanbanColumn title={arrivalsTitle} count={arrivals.length} colorClass="border-blue-400">
                         {arrivals.length > 0 ? arrivals.map(j => renderJobCard(j, 'checkIn')) : <p className="text-center text-gray-400 py-4 text-xs">No pending arrivals.</p>}
                     </KanbanColumn>

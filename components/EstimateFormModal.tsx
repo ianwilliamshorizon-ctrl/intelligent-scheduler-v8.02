@@ -25,6 +25,7 @@ import { AddressDetails } from '../services/postcodeLookupService';
 import SpeechToTextButton from './shared/SpeechToTextButton';
 import { findBestVoice, prepareTextForSpeech } from '../core/utils/speechUtils';
 import { useApp } from '../core/state/AppContext';
+import { useData } from '../core/state/DataContext';
 import AsyncImage from './AsyncImage';
 import AsyncMedia from './AsyncMedia';
 
@@ -371,7 +372,20 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
     const [newPart, setNewPart] = useState<Part | null>(null);
     const [isAssistantOpen, setIsAssistantOpen] = useState(false);
     const [isNotesModalOpen, setIsNotesModalOpen] = useState(false);
+    const { inquiries, saveRecord } = useData();
     const [targetLineItemId, setTargetLineItemId] = useState<string | null>(null);
+
+    const relatedInquiries = useMemo(() => {
+        if (!formData.id) return [];
+        return inquiries.filter(inq => inq.linkedEstimateId === formData.id).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }, [inquiries, formData.id]);
+
+    useEffect(() => {
+        if (isOpen && formData.id && formData.hasNewReply) {
+            // Clear new reply flag when opening the modal
+            saveRecord('estimates', { ...formData, hasNewReply: false } as Estimate);
+        }
+    }, [isOpen, formData.id, formData.hasNewReply]);
     const [lineItemForSupplier, setLineItemForSupplier] = useState<string | null>(null);
     const [newPartDescription, setNewPartDescription] = useState('');
     const [partSearchTerm, setPartSearchTerm] = useState('');
@@ -1371,6 +1385,22 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                             <div className="flex justify-between font-bold text-lg mt-2 pt-2 border-t"><span>Grand Total</span><span>{formatCurrency(totals.grandTotal)}</span></div>
                         </div>
                     </Section>
+
+                    {relatedInquiries.length > 0 && (
+                        <Section title="Booking Requests & Communications" icon={History} defaultOpen={false}>
+                            <div className="p-4 bg-gray-50 flex flex-col gap-3 max-h-80 overflow-y-auto">
+                                {relatedInquiries.map(inq => (
+                                    <div key={inq.id} className="bg-white border border-gray-200 rounded-lg p-3 shadow-sm">
+                                        <div className="flex justify-between items-start mb-2">
+                                            <div className="font-bold text-sm text-gray-800">{inq.fromName || inq.fromContact}</div>
+                                            <div className="text-xs text-gray-500">{formatDate(new Date(inq.createdAt))}</div>
+                                        </div>
+                                        <div className="text-sm text-gray-700 whitespace-pre-wrap">{inq.message || inq.actionNotes}</div>
+                                    </div>
+                                ))}
+                            </div>
+                        </Section>
+                    )}
                 </div>
             </div>
 

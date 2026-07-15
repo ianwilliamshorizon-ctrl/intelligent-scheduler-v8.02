@@ -794,10 +794,43 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                                 
                                 const extraJobMsg = extraJobs && extraJobs.length > 0 ? ` plus ${extraJobs.length} linked job(s)` : '';
                                 
+                                let emailMsg = '';
+                                const customer = data.customers.find(c => c.id === est.customerId);
+                                const vehicle = data.vehicles.find(v => v.id === est.vehicleId);
+
+                                if (customer && (customer.email || customer.workEmail)) {
+                                    const emailAddress = customer.email || customer.workEmail;
+                                    const vehicleName = vehicle ? `${vehicle.make} ${vehicle.model} (${vehicle.registration})` : 'your vehicle';
+                                    const entity = data.businessEntities.find(e => e.id === est.entityId) || data.businessEntities[0];
+                                    
+                                    const emailBody = `<div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #333;">` +
+                                        `<h2 style="color: #4f46e5;">Job Scheduled Confirmation</h2>` +
+                                        `<p>Dear ${customer.firstName || customer.name},</p>` +
+                                        `<p>We are pleased to confirm that your job for <strong>${vehicleName}</strong> (Estimate #${est.estimateNumber}) has been successfully scheduled.</p>` +
+                                        `<div style="background-color: #f3f4f6; padding: 15px; border-radius: 8px; margin: 20px 0;">` +
+                                        `<p style="margin: 0;"><strong>Scheduled Start Date:</strong> ${formatReadableDate(jobToSave.scheduledDate)}</p>` +
+                                        `</div>` +
+                                        `<p>If you need to make any changes or have any questions, please don't hesitate to contact us.</p>` +
+                                        `<p>Best regards,<br/><strong>${entity?.name || 'The Service Team'}</strong></p>` +
+                                        `</div>`;
+
+                                    try {
+                                        await sendOutboundEmail({
+                                            to: emailAddress!,
+                                            fromName: entity?.name || 'Service Team',
+                                            subject: `Job Scheduled: ${vehicleName}`,
+                                            body: emailBody,
+                                        });
+                                        emailMsg = `\n\nA confirmation email has been automatically sent to ${emailAddress}.`;
+                                    } catch (e) {
+                                        emailMsg = `\n\n(Note: Failed to automatically send confirmation email to ${emailAddress})`;
+                                    }
+                                }
+                                
                                 setConfirmation({
                                     isOpen: true, 
                                     title: 'Job Scheduled', 
-                                    message: `Job #${jobToSave.id} has been scheduled for ${formatReadableDate(jobToSave.scheduledDate)}${extraJobMsg}. Purchase orders have been synchronized according to the latest rules.`,
+                                    message: `Job #${jobToSave.id} has been scheduled for ${formatReadableDate(jobToSave.scheduledDate)}${extraJobMsg}. Purchase orders have been synchronized according to the latest rules.${emailMsg}`,
                                     type: 'success'
                                 });
                             }}

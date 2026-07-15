@@ -73,6 +73,9 @@ export const SummaryJobCard: React.FC<SummaryJobCardProps> = (props) => {
             >
                 <div className="flex justify-between items-center text-[9px] font-bold mb-1">
                     <div className="flex items-center gap-1">
+                        {job.hasNewReply && (
+                            <span className="bg-red-500 text-white px-1 rounded font-black uppercase tracking-tighter shadow-sm animate-pulse">REPLY</span>
+                        )}
                         <span className="text-gray-400 font-mono">#{job.id}</span>
                         {job.vehicleStatus === 'Off-Site (Partner)' && (
                             <span className="bg-amber-500 text-white px-1 rounded font-black uppercase tracking-tighter shadow-sm border border-amber-600/20">OFFSITE</span>

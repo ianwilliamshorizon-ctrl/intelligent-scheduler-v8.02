@@ -116,6 +116,11 @@ export const ConciergeJobCard: React.FC<ConciergeJobCardProps> = (props) => {
                     {job.description}
                 </h4>
                 <div className="flex flex-col items-end gap-0.5 sm:gap-1 flex-shrink-0 ml-1 sm:ml-2">
+                    {job.hasNewReply && (
+                        <span className="text-[9px] sm:text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 animate-pulse border border-red-200 shadow-sm mb-0.5">
+                            New Reply
+                        </span>
+                    )}
                     <span className="font-mono text-[9px] sm:text-xs font-bold px-1.5 sm:px-2 py-0.5 rounded-full border bg-white/50 border-gray-200 text-gray-600">
                         #{job.id}
                     </span>
