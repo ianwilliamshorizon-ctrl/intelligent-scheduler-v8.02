@@ -1,15 +1,18 @@
 import React from 'react';
-import { Job, Vehicle, Customer } from '../../../types';
+import { Job, Vehicle, Customer, PurchaseOrder } from '../../../types';
 import { Calendar, User, Truck, Wrench, Package, PackageOpen, Camera, Share, ArrowRightCircle, LogIn } from 'lucide-react';
 import { getCustomerDisplayName } from '../../../core/utils/customerUtils';
 import { formatReadableDate } from '../../../core/utils/dateUtils';
+import { getPoStatusColor } from '../../../core/utils/statusUtils';
 
 interface JobCardProps {
     job: Job;
     vehicle?: Vehicle;
     customer?: Customer;
+    purchaseOrders?: PurchaseOrder[];
     onEditJob: (jobId: string, initialTab?: string) => void;
     onCheckIn?: (jobId: string) => void;
+    onOpenPurchaseOrder?: (po: PurchaseOrder) => void;
     onGoToDispatch?: (jobId: string) => void;
 }
 
@@ -17,8 +20,10 @@ export const JobCard: React.FC<JobCardProps> = ({
     job,
     vehicle,
     customer,
+    purchaseOrders = [],
     onEditJob,
     onCheckIn,
+    onOpenPurchaseOrder,
     onGoToDispatch
 }) => {
     // Check parts status (assumes job.partsStatus is calculated somewhere, or we use a heuristic)
@@ -26,6 +31,8 @@ export const JobCard: React.FC<JobCardProps> = ({
     const hasOrderedParts = job.partsStatus === 'Ordered' || job.partsStatus === 'Partially Received';
     const isAwaitingParts = job.partsStatus === 'Awaiting Order';
     const isPartsReady = job.partsStatus === 'Fully Received';
+
+    const associatedPOs = (job.purchaseOrderIds || []).map(id => purchaseOrders.find(po => po.id === id)).filter(Boolean) as PurchaseOrder[];
 
     const hasPhotos = job.checkInPhotos && job.checkInPhotos.length > 0;
 
@@ -145,6 +152,23 @@ export const JobCard: React.FC<JobCardProps> = ({
                         </div>
                     )}
                 </div>
+
+                {/* Purchase Orders */}
+                {associatedPOs.length > 0 && onOpenPurchaseOrder && (
+                    <div className="flex flex-wrap gap-1 mt-3">
+                        {associatedPOs.map(po => (
+                            <button
+                                key={po.id}
+                                onClick={(e) => { e.stopPropagation(); onOpenPurchaseOrder(po); }}
+                                className={`flex items-center gap-1 px-1.5 py-0.5 rounded border text-[10px] font-bold tracking-wider hover:opacity-80 transition-opacity ${getPoStatusColor(po.status, 'bg')} ${getPoStatusColor(po.status, 'text')}`}
+                                title={`View PO #${po.id} (${po.status})`}
+                            >
+                                <Package size={10} />
+                                <span>{po.id}</span>
+                            </button>
+                        ))}
+                    </div>
+                )}
 
                 {/* Actions */}
                 <div className="flex gap-1.5 mt-3 pt-3 border-t border-gray-100">

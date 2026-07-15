@@ -1,13 +1,15 @@
 import React from 'react';
-import { Job, Vehicle, Customer } from '../../../types';
+import { Job, Vehicle, Customer, PurchaseOrder } from '../../../types';
 import { JobCard } from './JobCard';
 
 interface JobsBoardProps {
     jobs: Job[];
     vehicleMap: Map<string, Vehicle>;
     customerMap: Map<string, Customer>;
+    purchaseOrders?: PurchaseOrder[];
     onEditJob: (jobId: string, initialTab?: string) => void;
     onCheckIn?: (jobId: string) => void;
+    onOpenPurchaseOrder?: (po: PurchaseOrder) => void;
     onGoToDispatch?: (jobId: string) => void;
 }
 
@@ -15,8 +17,10 @@ export const JobsBoard: React.FC<JobsBoardProps> = ({
     jobs,
     vehicleMap,
     customerMap,
+    purchaseOrders = [],
     onEditJob,
     onCheckIn,
+    onOpenPurchaseOrder,
     onGoToDispatch
 }) => {
     if (jobs.length === 0) {
@@ -36,8 +40,10 @@ export const JobsBoard: React.FC<JobsBoardProps> = ({
                     job={job}
                     vehicle={vehicleMap.get(job.vehicleId)}
                     customer={customerMap.get(job.customerId)}
+                    purchaseOrders={purchaseOrders}
                     onEditJob={onEditJob}
                     onCheckIn={onCheckIn}
+                    onOpenPurchaseOrder={onOpenPurchaseOrder}
                     onGoToDispatch={onGoToDispatch}
                 />
             ))}

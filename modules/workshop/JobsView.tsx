@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useApp } from '../../core/state/AppContext';
 import { useData } from '../../core/state/DataContext';
-import { Job, Vehicle, Customer, ServicePackage, Estimate } from '../../types';
+import { Job, Vehicle, Customer, ServicePackage, Estimate, PurchaseOrder } from '../../types';
 import { Eye, Search, PlusCircle, Printer, Briefcase, Wand2, Loader2, CalendarDays, Camera, LayoutList, LayoutGrid } from 'lucide-react';
 import { getCustomerDisplayName } from '../../core/utils/customerUtils';
 import { getRelativeDate, formatDate, dateStringToDate, addDays, formatReadableDate, isWithinDateRange } from '../../core/utils/dateUtils';
@@ -16,6 +16,7 @@ import { JobsBoard } from './components/JobsBoard';
 interface JobsViewProps {
     onEditJob: (jobId: string, initialTab?: string) => void;
     onCheckIn?: (jobId: string) => void;
+    onOpenPurchaseOrder?: (po: PurchaseOrder) => void;
     onSmartCreateClick: () => void;
 }
 
@@ -31,8 +32,8 @@ const dateFilterOptions = {
 
 type DateFilterOption = keyof typeof dateFilterOptions;
 
-const JobsView: React.FC<JobsViewProps> = ({ onEditJob, onCheckIn, onSmartCreateClick }) => {
-    const { jobs, customers, vehicles, businessEntities, estimates, taxRates, inspectionTemplates, setServicePackages, parts } = useData();
+const JobsView: React.FC<JobsViewProps> = ({ onEditJob, onCheckIn, onOpenPurchaseOrder, onSmartCreateClick }) => {
+    const { jobs, customers, vehicles, businessEntities, estimates, taxRates, inspectionTemplates, setServicePackages, parts, purchaseOrders } = useData();
     const { selectedEntityId, setConfirmation } = useApp();
     const print = usePrint();
     const { handleSaveItem } = useWorkshopActions();
@@ -371,6 +372,8 @@ const JobsView: React.FC<JobsViewProps> = ({ onEditJob, onCheckIn, onSmartCreate
                         customerMap={customerMap} 
                         onEditJob={onEditJob}
                         onCheckIn={onCheckIn}
+                        onOpenPurchaseOrder={onOpenPurchaseOrder}
+                        purchaseOrders={purchaseOrders}
                         onGoToDispatch={(id) => {
                             // This routes to dispatch view if setCurrentView is available
                             setCurrentView('dispatch');
