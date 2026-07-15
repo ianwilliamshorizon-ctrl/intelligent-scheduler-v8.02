@@ -441,6 +441,7 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
     };
 
     const linkedCustomer = customers.find(c => c.id === formData.linkedCustomerId);
+    const customerVehicles = formData.linkedCustomerId ? vehicles.filter(v => v.customerId === formData.linkedCustomerId) : [];
     const linkedVehicle = vehicles.find(v => v.id === formData.linkedVehicleId);
     const linkedEstimate = formData.linkedEstimateId ? estimates.find(e => e.id === formData.linkedEstimateId) : null;
 
@@ -914,6 +915,46 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                             
                             <div>
                                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Vehicle Connection</label>
+                                {!linkedVehicle && customerVehicles.length > 0 && (
+                                    <div className="mb-3 space-y-2">
+                                        <div className="text-xs font-semibold text-indigo-700 bg-indigo-50 px-2 py-1 rounded inline-block border border-indigo-100">
+                                            Client's Vehicles
+                                        </div>
+                                        <div className="flex flex-col gap-2">
+                                            {customerVehicles.map(v => (
+                                                <button
+                                                    key={v.id}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setFormData(p => {
+                                                            const cust = customers.find(c => c.id === (v.customerId || p.linkedCustomerId));
+                                                            return { 
+                                                                ...p, 
+                                                                linkedVehicleId: v.id,
+                                                                linkedCustomerId: v.customerId || p.linkedCustomerId,
+                                                                fromEmail: p.fromEmail || cust?.email || '',
+                                                                fromPhone: p.fromPhone || cust?.phone || cust?.mobile || '',
+                                                                vehicleMake: v.make || p.vehicleMake,
+                                                                vehicleModel: v.model || p.vehicleModel,
+                                                                vehicleRegistration: v.registration || p.vehicleRegistration
+                                                            };
+                                                        });
+                                                    }}
+                                                    className="flex items-center justify-between p-2 text-sm bg-white border border-indigo-200 rounded-lg shadow-sm hover:bg-indigo-50 hover:border-indigo-300 transition text-left"
+                                                >
+                                                    <div>
+                                                        <div className="font-bold text-gray-800">{v.registration || 'No Reg'}</div>
+                                                        <div className="text-xs text-gray-500">{v.make} {v.model} {v.year || ''}</div>
+                                                    </div>
+                                                    <div className="text-xs font-semibold bg-indigo-600 text-white px-2 py-1 rounded shadow-sm hover:bg-indigo-700 transition">
+                                                        Use Vehicle
+                                                    </div>
+                                                </button>
+                                            ))}
+                                        </div>
+                                        <div className="text-xs text-gray-500 text-center py-1">or search for a different vehicle below</div>
+                                    </div>
+                                )}
                                 {linkedVehicle ? (
                                      <div className="p-2 bg-green-50 border border-green-200 rounded-lg flex justify-between items-center text-sm shadow-xs">
                                         <button 

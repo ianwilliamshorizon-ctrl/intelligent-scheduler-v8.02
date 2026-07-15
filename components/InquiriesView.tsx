@@ -1813,7 +1813,8 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                 onClose={() => setShowDuplicateFinder(false)}
                 activeInquiries={(inquiries || []).filter(i => {
                     const s = (i.status || '').toLowerCase();
-                    return s !== 'closed' && s !== 'archived';
+                    const isEntityMatch = selectedEntityId === 'all' || i.entityId === selectedEntityId;
+                    return s !== 'closed' && s !== 'archived' && isEntityMatch;
                 })}
                 onViewInquiry={props.onOpenInquiryModal}
             />
