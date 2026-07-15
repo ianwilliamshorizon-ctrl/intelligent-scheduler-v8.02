@@ -534,16 +534,16 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                                 onClick={() => {
                                                     setFormData(prev => ({
                                                         ...prev,
-                                                        addressLine1: addr.addressLine1,
-                                                        addressLine2: addr.addressLine2,
-                                                        city: addr.city,
-                                                        county: addr.county,
+                                                        addressLine1: addr.street || '',
+                                                        addressLine2: addr.locality || '',
+                                                        city: addr.postTown || '',
+                                                        county: addr.county || '',
                                                         postcode: addr.postcode || prev.postcode
                                                     }));
                                                     setAddressList([]);
                                                 }}
                                             >
-                                                {addr.addressLine1}{addr.addressLine2 ? `, ${addr.addressLine2}` : ''}, {addr.city}
+                                                {addr.summaryAddress || `${addr.street || ''} ${addr.locality || ''} ${addr.postTown || ''}`}
                                             </button>
                                         </li>
                                     ))}
