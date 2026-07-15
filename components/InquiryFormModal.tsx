@@ -3,7 +3,7 @@ import { Inquiry, User, Customer, Vehicle, Estimate, PurchaseOrder } from '../ty
 import FormModal from './FormModal';
 import SearchableSelect from './SearchableSelect';
 import { useApp } from '../core/state/AppContext';
-import { getCustomerDisplayName } from '../core/utils/customerUtils';
+import { getCustomerDisplayName, generateCustomerId } from '../core/utils/customerUtils';
 import { Wand2, Loader2, Link as LinkIcon, UserCheck, Car, XCircle, User as UserIcon, FileText, CalendarCheck, Edit, Camera, PlusCircle, Search } from 'lucide-react';
 import { parseInquiryMessage, generateEmailReply, updateEstimateWithAI } from '../core/services/geminiService';
 import { sendOutboundEmail } from '../core/services/emailService';
@@ -146,6 +146,62 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
         } finally { 
             setIsLookingUpAddress(false); 
         }
+    };
+
+    const handleAutoCreateCustomer = () => {
+        if (!formData.fromName || !formData.fromEmail) {
+            toast.error("Need at least a name and email to create a customer.");
+            return;
+        }
+
+        const names = formData.fromName.split(' ');
+        const forename = names[0] || '';
+        const surname = names.slice(1).join(' ') || '';
+
+        const newCustomer: Customer = {
+            id: generateCustomerId(),
+            forename,
+            surname,
+            email: formData.fromEmail,
+            phone: formData.fromPhone || '',
+            mobile: formData.fromPhone || '',
+            addressLine1: formData.addressLine1 || '',
+            addressLine2: formData.addressLine2 || '',
+            city: formData.city || '',
+            county: formData.county || '',
+            postcode: formData.postcode || '',
+            category: 'Retail',
+            isBusinessCustomer: false,
+            createdAt: new Date().toISOString(),
+            marketingConsent: false,
+            serviceReminderConsent: false,
+            declinedCommunication: false,
+            communicationPreference: 'None'
+        };
+
+        saveRecord('customers', newCustomer);
+        
+        let newVehicleId = null;
+        if (formData.vehicleRegistration) {
+            newVehicleId = crypto.randomUUID();
+            const newVehicle: Vehicle = {
+                id: newVehicleId,
+                registration: formData.vehicleRegistration,
+                make: formData.vehicleMake || '',
+                model: formData.vehicleModel || '',
+                year: formData.vehicleYear ? parseInt(formData.vehicleYear) : undefined,
+                customerId: newCustomer.id,
+            };
+            saveRecord('vehicles', newVehicle);
+        }
+
+        setFormData(p => ({
+            ...p,
+            linkedCustomerId: newCustomer.id,
+            linkedVehicleId: newVehicleId || p.linkedVehicleId
+        }));
+
+        toast.success("Customer and Vehicle automatically created and linked!");
     };
 
     const handleLookupVehicle = async () => {
@@ -896,15 +952,25 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                 )}
                             </div>
 
-                            {(!linkedCustomer || !linkedVehicle) && onAddNewCustomer && (
-                                <div className="pt-2 border-t mt-2">
+                            {(!linkedCustomer || !linkedVehicle) && (
+                                <div className="pt-2 border-t mt-2 flex flex-col gap-2">
                                     <button 
                                         type="button" 
-                                        onClick={onAddNewCustomer}
-                                        className="w-full py-1.5 flex justify-center items-center gap-1.5 text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded transition"
+                                        onClick={handleAutoCreateCustomer}
+                                        className="w-full py-1.5 flex justify-center items-center gap-1.5 text-xs font-bold text-green-700 bg-green-50 hover:bg-green-100 border border-green-200 rounded transition"
+                                        title="Instantly create Customer/Vehicle from captured details"
                                     >
-                                        <UserCheck size={14} /> Create Customer / Vehicle
+                                        <Wand2 size={14} /> Auto-Create from Details
                                     </button>
+                                    {onAddNewCustomer && (
+                                        <button 
+                                            type="button" 
+                                            onClick={onAddNewCustomer}
+                                            className="w-full py-1.5 flex justify-center items-center gap-1.5 text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded transition"
+                                        >
+                                            <UserCheck size={14} /> Open Full Creation Form
+                                        </button>
+                                    )}
                                 </div>
                             )}
                         </div>
