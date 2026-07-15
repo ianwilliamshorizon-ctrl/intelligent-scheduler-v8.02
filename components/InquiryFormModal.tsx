@@ -158,7 +158,7 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                     ...p,
                     vehicleMake: data.make || p.vehicleMake,
                     vehicleModel: data.model || p.vehicleModel,
-                    vehicleYear: data.yearOfManufacture?.toString() || p.vehicleYear,
+                    vehicleYear: data.year?.toString() || p.vehicleYear,
                 }));
                 toast.success('Vehicle details found via DVLA');
             } else {
