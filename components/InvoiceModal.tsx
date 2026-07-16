@@ -30,6 +30,7 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ isOpen, onClose, invoice, c
     const [isGeneratingNotes, setIsGeneratingNotes] = useState(false);
     const [invoiceNotes, setInvoiceNotes] = useState('');
     const [printOptions, setPrintOptions] = useState(() => {
+        if (invoice.printOptions) return invoice.printOptions;
         const isTrimming = entity?.id === 'ent_trimming' || entity?.name?.toLowerCase().includes('trimming');
         return {
             showInvoice: true,
@@ -38,6 +39,12 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ isOpen, onClose, invoice, c
             showMedia: !isTrimming
         };
     });
+
+    const handlePrintOptionChange = (key: keyof typeof printOptions, value: boolean) => {
+        const newOptions = { ...printOptions, [key]: value };
+        setPrintOptions(newOptions);
+        onUpdateInvoice({ ...invoice, printOptions: newOptions });
+    };
 
     // Calculate Grand Total including VAT (Mirroring PrintableInvoice logic)
     const grandTotal = useMemo(() => {
@@ -127,7 +134,7 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ isOpen, onClose, invoice, c
                             <div className="flex items-center gap-3">
                                 <button 
                                     onClick={() => setIsEmailing(true)}
-                                    className="flex items-center py-2 px-4 bg-gray-100 text-gray-700 font-semibold rounded-lg hover:bg-gray-200 transition-colors"
+                                    className="flex items-center py-2 px-4 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-700 shadow-sm transition-colors"
                                 >
                                     <Mail size={16} className="mr-2"/> 
                                     <span>Email</span>
@@ -161,19 +168,19 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ isOpen, onClose, invoice, c
                             <div className="flex items-center gap-6">
                                 <span className="text-[10px] font-black text-indigo-900 uppercase tracking-widest mr-2">Print Sections:</span>
                                 <label className="flex items-center gap-2 cursor-pointer group">
-                                    <input type="checkbox" checked={printOptions.showInvoice} onChange={(e) => setPrintOptions(prev => ({ ...prev, showInvoice: e.target.checked }))} className="h-4 w-4 text-indigo-600 rounded border-indigo-300 focus:ring-indigo-500" />
+                                    <input type="checkbox" checked={printOptions.showInvoice} onChange={(e) => handlePrintOptionChange('showInvoice', e.target.checked)} className="h-4 w-4 text-indigo-600 rounded border-indigo-300 focus:ring-indigo-500" />
                                     <span className="text-xs font-bold text-gray-700 group-hover:text-indigo-600 transition-colors">Invoice</span>
                                 </label>
                                 <label className="flex items-center gap-2 cursor-pointer group">
-                                    <input type="checkbox" checked={printOptions.showTechNotes} onChange={(e) => setPrintOptions(prev => ({ ...prev, showTechNotes: e.target.checked }))} className="h-4 w-4 text-indigo-600 rounded border-indigo-300 focus:ring-indigo-500" />
+                                    <input type="checkbox" checked={printOptions.showTechNotes} onChange={(e) => handlePrintOptionChange('showTechNotes', e.target.checked)} className="h-4 w-4 text-indigo-600 rounded border-indigo-300 focus:ring-indigo-500" />
                                     <span className="text-xs font-bold text-gray-700 group-hover:text-indigo-600 transition-colors">Tech Notes</span>
                                 </label>
                                 <label className="flex items-center gap-2 cursor-pointer group">
-                                    <input type="checkbox" checked={printOptions.showInspections} onChange={(e) => setPrintOptions(prev => ({ ...prev, showInspections: e.target.checked }))} className="h-4 w-4 text-indigo-600 rounded border-indigo-300 focus:ring-indigo-500" />
+                                    <input type="checkbox" checked={printOptions.showInspections} onChange={(e) => handlePrintOptionChange('showInspections', e.target.checked)} className="h-4 w-4 text-indigo-600 rounded border-indigo-300 focus:ring-indigo-500" />
                                     <span className="text-xs font-bold text-gray-700 group-hover:text-indigo-600 transition-colors">Inspections</span>
                                 </label>
                                 <label className="flex items-center gap-2 cursor-pointer group">
-                                    <input type="checkbox" checked={printOptions.showMedia} onChange={(e) => setPrintOptions(prev => ({ ...prev, showMedia: e.target.checked }))} className="h-4 w-4 text-indigo-600 rounded border-indigo-300 focus:ring-indigo-500" />
+                                    <input type="checkbox" checked={printOptions.showMedia} onChange={(e) => handlePrintOptionChange('showMedia', e.target.checked)} className="h-4 w-4 text-indigo-600 rounded border-indigo-300 focus:ring-indigo-500" />
                                     <span className="text-xs font-bold text-gray-700 group-hover:text-indigo-600 transition-colors">Media Shots</span>
                                 </label>
                             </div>

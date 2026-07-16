@@ -5,7 +5,7 @@ import { Inquiry, Estimate, Customer, Vehicle, User, PurchaseOrder } from '../ty
 import { 
     Search, PlusCircle, Car, FileText, CalendarCheck, UserCheck, 
     Package as PackageIcon, ArrowRightCircle, CheckCircle2, Play, AlertTriangle, Camera,
-    ChevronDown, ChevronUp, RefreshCw, Loader2, Copy, Wand2
+    ChevronDown, ChevronUp, RefreshCw, Loader2, Copy, Wand2, MapPin
 } from 'lucide-react';
 import { getCustomerDisplayName } from '../core/utils/customerUtils';
 import ConfirmationModal from './ConfirmationModal';
@@ -117,6 +117,13 @@ const InquiryCard: React.FC<{
     const displayPhone = customer?.mobile || customer?.phone || inquiry.fromPhone;
     const displayContact = (!displayEmail && !displayPhone) ? inquiry.fromContact : null;
     const contactInfoString = [displayEmail, displayPhone, displayContact].filter(Boolean).join(' • ');
+    
+    const addrParts = [
+        customer?.addressLine1 || inquiry.addressLine1,
+        customer?.city || inquiry.city,
+        customer?.postcode || inquiry.postcode
+    ].filter(Boolean);
+    const displayAddress = addrParts.length > 0 ? addrParts.join(', ') : null;
     
     const linkedPOs = useMemo(() => 
         (job?.purchaseOrderIds || [])
@@ -247,6 +254,11 @@ const InquiryCard: React.FC<{
                         {contactInfoString && (
                             <p className={`${isExpanded ? 'block' : 'hidden'} text-[9px] text-gray-500 break-words leading-tight mt-0.5`}>
                                 {contactInfoString}
+                            </p>
+                        )}
+                        {displayAddress && (
+                            <p className={`${isExpanded ? 'block' : 'hidden'} text-[9px] text-gray-500 break-words leading-tight mt-0.5 flex items-center gap-1`}>
+                                <MapPin size={8} className="shrink-0"/> {displayAddress}
                             </p>
                         )}
                     </div>

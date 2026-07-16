@@ -57,12 +57,12 @@ export const SummaryJobCard: React.FC<SummaryJobCardProps> = (props) => {
 
     const cardBorderAndColorClass = React.useMemo(() => {
         if (job.vehicleStatus === 'Off-Site (Partner)') {
-            return isMot ? 'bg-gray-100 border-2 border-blue-700 opacity-80' : 'bg-gray-100 border-gray-300 opacity-80';
+            return isMot ? 'bg-gray-100 border-2 border-blue-700 opacity-80' : 'bg-gray-100 border border-gray-300 opacity-80';
         }
         if (job.partsStatus === 'Awaiting Order') {
-            return isMot ? 'bg-rose-50 border-2 border-blue-700 text-rose-950 shadow-rose-50' : 'bg-rose-50 border-rose-200 text-rose-950 shadow-rose-50';
+            return isMot ? 'bg-rose-50 border-2 border-blue-700 text-rose-950 shadow-rose-50' : 'bg-rose-50 border-2 border-rose-500 text-rose-950 shadow-rose-50';
         }
-        return isMot ? 'bg-white border-2 border-blue-700' : 'bg-white border-gray-200';
+        return isMot ? 'bg-white border-2 border-blue-700' : 'bg-white border border-gray-200';
     }, [job.vehicleStatus, job.partsStatus, isMot]);
 
     return (

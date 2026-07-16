@@ -63,6 +63,20 @@ export const JobCard: React.FC<JobCardProps> = ({
         );
     };
 
+    const getJobDatesText = () => {
+        if (job.segments && job.segments.length > 0) {
+            // Find earliest date by sorting YYYY-MM-DD strings
+            const dates = job.segments.filter(s => s.date).map(s => s.date!);
+            if (dates.length > 0) {
+                dates.sort();
+                return formatReadableDate(dates[0]);
+            }
+        }
+        if (job.scheduledDate) return formatReadableDate(job.scheduledDate);
+        if (job.createdAt) return formatReadableDate(job.createdAt.substring(0, 10));
+        return 'No Date';
+    };
+
     return (
         <div 
             onClick={() => onEditJob(job.id)}
@@ -70,9 +84,9 @@ export const JobCard: React.FC<JobCardProps> = ({
         >
             {/* Header: Date and ID */}
             <div className="bg-gray-50 px-4 py-3 border-b border-gray-100 flex justify-between items-center">
-                <div className="flex items-center text-xs font-semibold text-gray-500 gap-1.5">
-                    <Calendar size={14} className="text-gray-400" />
-                    {job.createdAt ? formatReadableDate(job.createdAt) : 'No Date'}
+                <div className="flex items-center text-xs font-semibold text-indigo-700 bg-indigo-50 px-2 py-1 rounded-md border border-indigo-100 gap-1.5 cursor-pointer hover:bg-indigo-100" onClick={(e) => { e.stopPropagation(); onEditJob(job.id, 'segments'); }} title="Click to view/edit schedule">
+                    <Calendar size={14} className="text-indigo-500" />
+                    {getJobDatesText()}
                 </div>
                 <div className="flex items-center gap-2">
                     {job.keyNumber && (
@@ -150,7 +164,7 @@ export const JobCard: React.FC<JobCardProps> = ({
                     {isAwaitingParts && (
                         <div 
                             title="Awaiting Parts to be ordered" 
-                            onClick={(e) => { e.stopPropagation(); onEditJob(job.id, 'parts'); }}
+                            onClick={(e) => { e.stopPropagation(); onEditJob(job.id, 'estimates'); }}
                             className="flex items-center gap-1 px-2 py-1 bg-rose-50 text-rose-700 rounded-md text-xs font-bold hover:bg-rose-100 transition-colors"
                         >
                             <PackageOpen size={14} />
@@ -161,7 +175,7 @@ export const JobCard: React.FC<JobCardProps> = ({
                     {hasOrderedParts && (
                         <div 
                             title="Parts Ordered" 
-                            onClick={(e) => { e.stopPropagation(); onEditJob(job.id, 'parts'); }}
+                            onClick={(e) => { e.stopPropagation(); onEditJob(job.id, 'estimates'); }}
                             className="flex items-center gap-1 px-2 py-1 bg-amber-50 text-amber-700 rounded-md text-xs font-bold hover:bg-amber-100 transition-colors"
                         >
                             <Truck size={14} />
@@ -172,7 +186,7 @@ export const JobCard: React.FC<JobCardProps> = ({
                     {isPartsReady && (
                         <div 
                             title="Parts Ready" 
-                            onClick={(e) => { e.stopPropagation(); onEditJob(job.id, 'parts'); }}
+                            onClick={(e) => { e.stopPropagation(); onEditJob(job.id, 'estimates'); }}
                             className="flex items-center gap-1 px-2 py-1 bg-emerald-50 text-emerald-700 rounded-md text-xs font-bold hover:bg-emerald-100 transition-colors"
                         >
                             <Package size={14} />
@@ -193,7 +207,7 @@ export const JobCard: React.FC<JobCardProps> = ({
                         </button>
                     )}
                     <button
-                        onClick={(e) => { e.stopPropagation(); onEditJob(job.id, 'schedule'); }}
+                        onClick={(e) => { e.stopPropagation(); onEditJob(job.id, 'segments'); }}
                         className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 bg-indigo-600 text-white rounded-md text-xs font-bold uppercase tracking-wider hover:bg-indigo-700 transition-all shadow-sm active:scale-95"
                         title="Allocate to Lift & Individual"
                     >

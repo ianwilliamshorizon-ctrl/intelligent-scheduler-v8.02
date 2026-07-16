@@ -7,15 +7,15 @@ import { CAPACITY_THRESHOLD_WARNING } from '../constants';
 import { getCustomerDisplayName } from '../core/utils/customerUtils';
 
 const getCapacityInfo = (totalHours: number, maxHours: number) => {
-    if (maxHours <= 0) return { status: 'Normal', classes: 'bg-gray-100 text-gray-800' };
+    if (maxHours <= 0) return { status: 'CLOSED', classes: 'bg-gray-100 text-gray-500' };
     const loadPercentage = totalHours / maxHours;
     if (totalHours > maxHours) {
-        return { status: 'OVERLOADED', classes: 'bg-red-100 text-red-800 font-bold' };
+        return { status: 'OVERLOADED', classes: 'bg-red-100 text-red-800 font-bold border border-red-300 shadow-sm' };
     }
     if (loadPercentage >= CAPACITY_THRESHOLD_WARNING) {
-        return { status: 'High Load', classes: 'bg-amber-100 text-amber-800' };
+        return { status: 'HIGH LOAD', classes: 'bg-amber-100 text-amber-800 font-bold border border-amber-300 shadow-sm' };
     }
-    return { status: 'Normal', classes: 'bg-green-100 text-green-800' };
+    return { status: 'AVAILABLE', classes: 'bg-emerald-100 text-emerald-800 font-bold border border-emerald-300 shadow-sm' };
 };
 
 interface DraggableJobItemProps {
@@ -168,10 +168,14 @@ export const BookingCalendarView: React.FC<BookingCalendarViewProps> = ({ jobs, 
                                 `}>
                                 <div className="flex justify-between items-start flex-shrink-0">
                                     <span className={`text-sm font-semibold ${isSelected || dayInfo.isToday ? 'text-indigo-700' : 'text-gray-700'}`}>{dayInfo.day}</span>
-                                    <div className={`flex items-center gap-1.5 px-1.5 py-0.5 rounded text-xs ${capacity.classes}`}>
-                                        <Gauge size={12} />
-                                        <span className="font-semibold">{dayInfo.totalHours.toFixed(1)}h</span>
+                                <div className="flex flex-col items-end gap-1">
+                                    <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wider ${capacity.classes}`}>
+                                        <Gauge size={10} /> {capacity.status}
                                     </div>
+                                    {effectiveCapacity > 0 && (
+                                        <span className="text-[10px] text-gray-500 font-semibold">{dayInfo.totalHours.toFixed(1)}h / {effectiveCapacity}h</span>
+                                    )}
+                                </div>
                                 </div>
                                 
                                 <div className="flex-1 min-h-0 overflow-y-auto print:overflow-visible mt-1 space-y-1 pr-1">

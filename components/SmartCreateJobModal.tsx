@@ -24,8 +24,8 @@ interface SmartCreateJobModalProps {
     isOpen: boolean;
     onClose: () => void;
     creationMode: 'job' | 'estimate';
-    onJobCreate: (jobData: Job) => void;
-    onVehicleAndJobCreate: (customer: Customer, vehicle: Vehicle, jobData: Job) => void;
+    onJobCreate: (jobData: Job, estimateData?: Estimate) => void;
+    onVehicleAndJobCreate: (customer: Customer, vehicle: Vehicle, jobData: Job, estimateData?: Estimate) => void;
     onEstimateCreate: (estimateData: Estimate) => void;
     onVehicleAndEstimateCreate: (customer: Customer, vehicle: Vehicle, estimateData: Estimate) => void;
     onCustomerAndEstimateCreate?: (customer: Customer, estimateData: Estimate) => void;
@@ -798,11 +798,11 @@ User Request: ${JSON.stringify(userText)}`;
 
             // Save everything
             if (isNewVehicle || isNewCustomer) {
-                onVehicleAndJobCreate(activeCustomer!, activeVehicle!, newJob);
-                onEstimateCreate(newEstimate); // We still need to save the estimate explicitly
+                onVehicleAndJobCreate(activeCustomer!, activeVehicle!, newJob, newEstimate);
+                onEstimateCreate(newEstimate);
             } else {
                 onEstimateCreate(newEstimate);
-                onJobCreate(newJob);
+                onJobCreate(newJob, newEstimate);
             }
             
             handleClose();

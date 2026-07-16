@@ -399,6 +399,14 @@ export interface Estimate {
     requestedDate?: string;
 }
 
+export interface PrintOptions {
+    showInvoice?: boolean;
+    showTechNotes?: boolean;
+    showInspections?: boolean;
+    showMedia?: boolean;
+    invoiceNotes?: string;
+}
+
 export interface Invoice {
     id: string;
     vehicleId: string;
@@ -419,6 +427,7 @@ export interface Invoice {
     saleVehicleId?: string;
     storageBookingId?: string;
     grandTotal?: number;
+    printOptions?: PrintOptions;
 }
 
 export interface Payment {

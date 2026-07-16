@@ -264,6 +264,7 @@ const DispatchView: React.FC<DispatchViewProps> = ({
             {viewMode === 'week' && (
                 <WeeklyView 
                     weekStart={weekStart}
+                    onAddJob={(date) => { setDefaultDateForModal(dateStringToDate(date)); setIsSmartCreateOpen(true); setSmartCreateMode('job'); }}
                     onEditJob={handleEditJob}
                     onOpenAssistant={(id) => { setSelectedJobId(id); onOpenAssistant(id); }}
                     onCheckIn={(id) => { setSelectedJobId(id); onCheckIn(id); }}

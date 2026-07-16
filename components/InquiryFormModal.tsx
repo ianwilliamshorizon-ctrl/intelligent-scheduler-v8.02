@@ -60,7 +60,7 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [aiError, setAiError] = useState('');
     const [isUpdatingAI, setIsUpdatingAI] = useState(false);
-    const [suggestedCustomer, setSuggestedCustomer] = useState<Customer | null>(null);
+    const [suggestedCustomers, setSuggestedCustomers] = useState<Customer[]>([]);
     const [suggestedVehicle, setSuggestedVehicle] = useState<Vehicle | null>(null);
     const [isLookingUpAddress, setIsLookingUpAddress] = useState(false);
     const [addressList, setAddressList] = useState<AddressDetails[]>([]);
@@ -92,17 +92,22 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
     const checkCustomerMatch = (first: string, last: string) => {
         const lowerName = `${first} ${last}`.toLowerCase().trim();
         if (lowerName.length > 2) {
-            const existingCustomer = customers.find(c => 
-                getCustomerDisplayName(c).toLowerCase() === lowerName || 
-                (c.companyName || '').toLowerCase() === lowerName
-            );
-            if (existingCustomer && !formData.linkedCustomerId) {
-                setSuggestedCustomer(existingCustomer);
+            const searchWords = lowerName.split(/\s+/).filter(w => w.length > 1);
+            const matches = customers.filter(c => {
+                const fullName = `${c.title || ''} ${c.forename || ''} ${c.surname || ''}`.toLowerCase();
+                const company = (c.companyName || '').toLowerCase();
+                if (fullName.includes(lowerName) || company.includes(lowerName)) return true;
+                if (lowerName.includes(fullName.trim()) && fullName.trim().length > 3) return true;
+                if (searchWords.length > 0 && searchWords.every(w => fullName.includes(w))) return true;
+                return false;
+            });
+            if (matches.length > 0 && !formData.linkedCustomerId) {
+                setSuggestedCustomers(matches);
             } else {
-                setSuggestedCustomer(null);
+                setSuggestedCustomers([]);
             }
         } else {
-            setSuggestedCustomer(null);
+            setSuggestedCustomers([]);
         }
     };
 
@@ -235,10 +240,20 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                 // Prevent background sync from overwriting local changes if we're already editing this inquiry
                 if (prev && prev.id === inquiry.id) return prev;
                 const linkedCustomer = inquiry.linkedCustomerId ? customers.find(c => c.id === inquiry.linkedCustomerId) : null;
+                const linkedVehicle = inquiry.linkedVehicleId ? vehicles.find(v => v.id === inquiry.linkedVehicleId) : null;
                 return { 
                     ...inquiry,
-                    fromEmail: inquiry.fromEmail || linkedCustomer?.email || '',
-                    fromPhone: inquiry.fromPhone || linkedCustomer?.mobile || linkedCustomer?.phone || ''
+                    fromEmail: linkedCustomer?.email || inquiry.fromEmail || '',
+                    fromPhone: linkedCustomer?.mobile || linkedCustomer?.phone || inquiry.fromPhone || '',
+                    addressLine1: linkedCustomer?.addressLine1 || inquiry.addressLine1 || '',
+                    addressLine2: linkedCustomer?.addressLine2 || inquiry.addressLine2 || '',
+                    city: linkedCustomer?.city || inquiry.city || '',
+                    county: linkedCustomer?.county || inquiry.county || '',
+                    postcode: linkedCustomer?.postcode || inquiry.postcode || '',
+                    vehicleMake: linkedVehicle?.make || inquiry.vehicleMake || '',
+                    vehicleModel: linkedVehicle?.model || inquiry.vehicleModel || '',
+                    vehicleRegistration: linkedVehicle?.registration || inquiry.vehicleRegistration || '',
+                    vehicleYear: linkedVehicle?.year?.toString() || inquiry.vehicleYear || ''
                 };
             } else {
                 // Initialize a new inquiry, using any pre-filled data provided
@@ -275,7 +290,7 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
         
         setIsAnalyzing(false);
         setAiError('');
-        setSuggestedCustomer(null);
+        setSuggestedCustomers([]);
         setSuggestedVehicle(null);
 
         if (inquiry && inquiry.logs && inquiry.logs.some(l => l.actionType === 'Email Sent')) {
@@ -304,10 +319,15 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
 
                 if (existingCustomer && !p.linkedCustomerId) {
                     nextData.linkedCustomerId = existingCustomer.id;
-                    nextData.fromEmail = nextData.fromEmail || existingCustomer.email || '';
-                    nextData.fromPhone = nextData.fromPhone || existingCustomer.phone || existingCustomer.mobile || '';
+                    nextData.fromEmail = existingCustomer.email || nextData.fromEmail || '';
+                    nextData.fromPhone = existingCustomer.mobile || existingCustomer.phone || nextData.fromPhone || '';
+                    nextData.addressLine1 = existingCustomer.addressLine1 || nextData.addressLine1 || '';
+                    nextData.addressLine2 = existingCustomer.addressLine2 || nextData.addressLine2 || '';
+                    nextData.city = existingCustomer.city || nextData.city || '';
+                    nextData.county = existingCustomer.county || nextData.county || '';
+                    nextData.postcode = existingCustomer.postcode || nextData.postcode || '';
                     // Also clear suggested customer since we auto-linked
-                    setSuggestedCustomer(null);
+                    setSuggestedCustomers([]);
                 }
             }
 
@@ -421,14 +441,26 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
         setFormData(p => ({ 
             ...p, 
             linkedCustomerId: customer.id,
-            fromEmail: p.fromEmail || customer.email || '',
-            fromPhone: p.fromPhone || customer.phone || customer.mobile || ''
+            fromEmail: customer.email || p.fromEmail || '',
+            fromPhone: customer.mobile || customer.phone || p.fromPhone || '',
+            addressLine1: customer.addressLine1 || p.addressLine1 || '',
+            addressLine2: customer.addressLine2 || p.addressLine2 || '',
+            city: customer.city || p.city || '',
+            county: customer.county || p.county || '',
+            postcode: customer.postcode || p.postcode || ''
         }));
-        setSuggestedCustomer(null);
+        setSuggestedCustomers([]);
     };
 
     const handleLinkVehicle = (vehicle: Vehicle) => {
-        setFormData(p => ({ ...p, linkedVehicleId: vehicle.id }));
+        setFormData(p => ({ 
+            ...p, 
+            linkedVehicleId: vehicle.id,
+            vehicleMake: vehicle.make || p.vehicleMake,
+            vehicleModel: vehicle.model || p.vehicleModel,
+            vehicleRegistration: vehicle.registration || p.vehicleRegistration,
+            vehicleYear: vehicle.year?.toString() || p.vehicleYear
+        }));
         setSuggestedVehicle(null);
     };
 
@@ -502,26 +534,7 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                             <input type="tel" name="fromPhone" value={formData.fromPhone || ''} onChange={handleChange} className="w-full p-2 border rounded" />
                         </div>
 
-                        {suggestedCustomer && !formData.linkedCustomerId && (
-                            <div className="bg-blue-50 border border-blue-200 text-blue-800 p-2 rounded text-sm flex justify-between items-center">
-                                <span>Found existing client: <strong>{getCustomerDisplayName(suggestedCustomer)}</strong></span>
-                                <button 
-                                    type="button" 
-                                    onClick={() => {
-                                        setFormData(p => ({
-                                            ...p,
-                                            linkedCustomerId: suggestedCustomer.id,
-                                            fromEmail: p.fromEmail || suggestedCustomer.email || '',
-                                            fromPhone: p.fromPhone || suggestedCustomer.phone || suggestedCustomer.mobile || ''
-                                        }));
-                                        setSuggestedCustomer(null);
-                                    }}
-                                    className="bg-blue-600 text-white px-2 py-1 rounded text-xs hover:bg-blue-700"
-                                >
-                                    Link Client
-                                </button>
-                            </div>
-                        )}
+
 
                         <div className="grid grid-cols-2 gap-4">
                             <div>
@@ -608,10 +621,11 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                             </div>
                         )}
 
-                        {(formData.vehicleMake || formData.vehicleModel || formData.addressLine1) && (
+                        {(formData.vehicleRegistration || formData.vehicleMake || formData.vehicleModel || formData.addressLine1) && (
                             <div className="grid grid-cols-2 gap-4 text-xs text-gray-600 bg-gray-50 p-3 rounded border border-gray-100 mt-2">
                                 <div>
                                     <span className="font-semibold block mb-1">Vehicle Details:</span>
+                                    {formData.vehicleRegistration && <div className="font-bold text-gray-800 uppercase mb-1">{formData.vehicleRegistration}</div>}
                                     {formData.vehicleMake} {formData.vehicleModel} {formData.vehicleYear}
                                 </div>
                                 <div>
@@ -649,14 +663,22 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                             const lowerEmail = (parsed.fromEmail || '').toLowerCase();
                                             const lowerPhone = (parsed.fromPhone || '').replace(/\D/g,'');
                                             const lowerName = (parsed.fromName || '').toLowerCase();
+                                            const searchWords = lowerName.split(/\s+/).filter(w => w.length > 1);
                                             
-                                            const foundCust = customers.find(c => 
-                                                (lowerEmail && c.email?.toLowerCase() === lowerEmail) ||
-                                                (lowerPhone && (c.phone?.replace(/\D/g,'') === lowerPhone || c.mobile?.replace(/\D/g,'') === lowerPhone)) ||
-                                                (lowerName && (c.forename + ' ' + c.surname).toLowerCase() === lowerName) ||
-                                                (lowerName && c.companyName?.toLowerCase() === lowerName)
-                                            );
-                                            if (foundCust) setSuggestedCustomer(foundCust);
+                                            const matches = customers.filter(c => {
+                                                if (lowerEmail && c.email?.toLowerCase() === lowerEmail) return true;
+                                                if (lowerPhone && (c.phone?.replace(/\D/g,'') === lowerPhone || c.mobile?.replace(/\D/g,'') === lowerPhone)) return true;
+                                                
+                                                if (lowerName) {
+                                                    const fullName = `${c.title || ''} ${c.forename || ''} ${c.surname || ''}`.toLowerCase();
+                                                    const company = (c.companyName || '').toLowerCase();
+                                                    if (fullName.includes(lowerName) || company.includes(lowerName)) return true;
+                                                    if (lowerName.includes(fullName.trim()) && fullName.trim().length > 3) return true;
+                                                    if (searchWords.length > 0 && searchWords.every(w => fullName.includes(w))) return true;
+                                                }
+                                                return false;
+                                            });
+                                            if (matches.length > 0) setSuggestedCustomers(matches);
                                         }
 
                                         if (parsed.vehicleRegistration) {
@@ -696,40 +718,212 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                             <textarea name="message" value={formData.message || ''} onChange={handleChange} rows={18} className="w-full p-2 border rounded text-sm" required />
                         </div>
                     </div>
-                    
-                    { (suggestedCustomer || suggestedVehicle || aiError) && (
-                        <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-lg space-y-2 animate-fade-in">
-                            <h4 className="font-semibold text-indigo-800 text-sm">AI Suggestions</h4>
-                            {aiError && <p className="text-red-600 text-xs">{aiError}</p>}
-                            
-                            {suggestedCustomer && !formData.linkedCustomerId && (
-                            <div className="flex justify-between items-center text-sm p-2 bg-white rounded-md border">
-                                <div className="flex items-center gap-2">
-                                    <UserIcon size={14} className="text-blue-500" />
-                                    <p>Found Customer: <span className="font-semibold">{getCustomerDisplayName(suggestedCustomer)}</span></p>
-                                </div>
-                                <button type="button" onClick={() => handleLinkCustomer(suggestedCustomer)} className="flex items-center gap-1 text-xs py-1 px-2 bg-green-100 text-green-700 font-semibold rounded hover:bg-green-200">
-                                <LinkIcon size={12}/> Link
-                                </button>
-                            </div>
-                            )}
-                            
-                            {suggestedVehicle && !formData.linkedVehicleId && (
-                            <div className="flex justify-between items-center text-sm p-2 bg-white rounded-md border">
-                                <div className="flex items-center gap-2">
-                                    <Car size={14} className="text-green-500" />
-                                    <p>Found Vehicle: <span className="font-semibold">{suggestedVehicle.registration}</span> ({suggestedVehicle.make} {suggestedVehicle.model})</p>
-                                </div>
-                                <button type="button" onClick={() => handleLinkVehicle(suggestedVehicle)} className="flex items-center gap-1 text-xs py-1 px-2 bg-green-100 text-green-700 font-semibold rounded hover:bg-green-200">
-                                <LinkIcon size={12}/> Link
-                                </button>
-                            </div>
-                            )}
-                        </div>
-                    )}
-
                         </div>
                         <div className="space-y-4">
+                            { (suggestedCustomers.length > 0 || suggestedVehicle || aiError) && (
+                                <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-lg space-y-2 animate-fade-in mb-4">
+                                    <h4 className="font-semibold text-indigo-800 text-sm flex items-center gap-1"><Wand2 size={16}/> AI Suggestions</h4>
+                                    {aiError && <p className="text-red-600 text-xs">{aiError}</p>}
+                                    
+                                    {suggestedCustomers.length > 0 && !formData.linkedCustomerId && (
+                                        <div className="flex flex-col gap-2">
+                                            {suggestedCustomers.map(cust => (
+                                                <div key={cust.id} className="flex justify-between items-center text-sm p-2 bg-white rounded-md border shadow-sm">
+                                                    <div className="flex items-center gap-2">
+                                                        <UserIcon size={14} className="text-blue-500" />
+                                                        <p>Found Customer: <span className="font-semibold">{getCustomerDisplayName(cust)}</span></p>
+                                                    </div>
+                                                    <button type="button" onClick={() => handleLinkCustomer(cust)} className="flex items-center gap-1 text-sm py-1.5 px-3 bg-green-600 text-white font-bold rounded shadow hover:bg-green-700 transition">
+                                                    <LinkIcon size={14}/> Link
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                    
+                                    {suggestedVehicle && !formData.linkedVehicleId && (
+                                    <div className="flex justify-between items-center text-sm p-2 bg-white rounded-md border shadow-sm">
+                                        <div className="flex items-center gap-2">
+                                            <Car size={14} className="text-green-500" />
+                                            <p>Found Vehicle: <span className="font-semibold">{suggestedVehicle.registration}</span> ({suggestedVehicle.make} {suggestedVehicle.model})</p>
+                                        </div>
+                                        <button type="button" onClick={() => handleLinkVehicle(suggestedVehicle)} className="flex items-center gap-1 text-sm py-1.5 px-3 bg-green-600 text-white font-bold rounded shadow hover:bg-green-700 transition">
+                                        <LinkIcon size={14}/> Link
+                                        </button>
+                                    </div>
+                                    )}
+                                </div>
+                            )}
+
+                            <div className="bg-white p-4 border border-gray-200 rounded-lg shadow-sm space-y-4">
+                                <h4 className="text-sm font-bold text-gray-800 border-b pb-2">Links & Assignments</h4>
+                                <div className="space-y-3">
+                                    <div>
+                                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Customer Connection</label>
+                                        {linkedCustomer ? (
+                                            <div className="p-2 bg-green-50 border border-green-200 rounded-lg flex justify-between items-center text-sm shadow-xs">
+                                                <button 
+                                                    type="button" 
+                                                    onClick={() => onViewCustomer?.(linkedCustomer.id)}
+                                                    className="flex items-center gap-2 text-green-800 hover:text-green-600 hover:underline text-left cursor-pointer transition font-semibold"
+                                                    title={getCustomerDisplayName(linkedCustomer)}
+                                                >
+                                                    <UserCheck size={16} className="text-green-700 shrink-0"/>
+                                                    <span className="truncate max-w-[200px]">{getCustomerDisplayName(linkedCustomer)}</span>
+                                                </button>
+                                                <button type="button" onClick={handleUnlinkCustomer} title="Unlink Customer" className="text-gray-400 hover:text-red-500 transition">
+                                                    <XCircle size={16}/>
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <SearchableSelect
+                                                options={customers.map(c => ({ id: c.id, label: getCustomerDisplayName(c), value: c.id }))}
+                                                defaultValue={formData.linkedCustomerId || null}
+                                                onSelect={(value) => {
+                                                    const cust = customers.find(c => c.id === value);
+                                                    setFormData(p => {
+                                                        const customersCars = vehicles.filter(v => v.customerId === value);
+                                                        let newVehicleId = p.linkedVehicleId;
+                                                        if (!newVehicleId || !customersCars.some(car => car.id === newVehicleId)) {
+                                                            newVehicleId = customersCars.length === 1 ? customersCars[0].id : null;
+                                                        }
+                                                        return { 
+                                                            ...p, 
+                                                            linkedCustomerId: value,
+                                                            linkedVehicleId: newVehicleId,
+                                                            fromEmail: cust?.email || p.fromEmail || '',
+                                                            fromPhone: cust?.mobile || cust?.phone || p.fromPhone || '',
+                                                            addressLine1: cust?.addressLine1 || p.addressLine1 || '',
+                                                            addressLine2: cust?.addressLine2 || p.addressLine2 || '',
+                                                            city: cust?.city || p.city || '',
+                                                            county: cust?.county || p.county || '',
+                                                            postcode: cust?.postcode || p.postcode || ''
+                                                        };
+                                                    });
+                                                    setSuggestedCustomers([]);
+                                                }}
+                                                placeholder="Link to an existing customer..."
+                                            />
+                                        )}
+                                    </div>
+                                    
+                                    <div>
+                                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Vehicle Connection</label>
+                                        {!linkedVehicle && customerVehicles.length > 0 && (
+                                            <div className="mb-3 space-y-2">
+                                                <div className="text-xs font-semibold text-indigo-700 bg-indigo-50 px-2 py-1 rounded inline-block border border-indigo-100">
+                                                    Client's Vehicles
+                                                </div>
+                                                <div className="flex flex-col gap-2">
+                                                    {customerVehicles.map(v => (
+                                                        <button
+                                                            key={v.id}
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setFormData(p => {
+                                                                    const cust = customers.find(c => c.id === (v.customerId || p.linkedCustomerId));
+                                                                    return { 
+                                                                        ...p, 
+                                                                        linkedVehicleId: v.id,
+                                                                        linkedCustomerId: v.customerId || p.linkedCustomerId,
+                                                                        fromEmail: cust?.email || p.fromEmail || '',
+                                                                        fromPhone: cust?.mobile || cust?.phone || p.fromPhone || '',
+                                                                        vehicleMake: v.make || p.vehicleMake,
+                                                                        vehicleModel: v.model || p.vehicleModel,
+                                                                        vehicleRegistration: v.registration || p.vehicleRegistration,
+                                                                        vehicleYear: v.year?.toString() || p.vehicleYear
+                                                                    };
+                                                                });
+                                                            }}
+                                                            className="flex items-center justify-between p-2 text-sm bg-white border border-indigo-200 rounded-lg shadow-sm hover:bg-indigo-50 hover:border-indigo-300 transition text-left"
+                                                        >
+                                                            <div>
+                                                                <div className="font-bold text-gray-800">{v.registration || 'No Reg'}</div>
+                                                                <div className="text-xs text-gray-500">{v.make} {v.model} {v.year || ''}</div>
+                                                            </div>
+                                                            <div className="text-xs font-semibold bg-indigo-600 text-white px-2 py-1 rounded shadow-sm hover:bg-indigo-700 transition">
+                                                                Use Vehicle
+                                                            </div>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                                <div className="text-xs text-gray-500 text-center py-1">or search for a different vehicle below</div>
+                                            </div>
+                                        )}
+                                        {linkedVehicle ? (
+                                             <div className="p-2 bg-green-50 border border-green-200 rounded-lg flex justify-between items-center text-sm shadow-xs">
+                                                <button 
+                                                    type="button" 
+                                                    onClick={() => onViewVehicle?.(linkedVehicle.id)}
+                                                    className="flex items-center gap-2 text-green-800 hover:text-green-600 hover:underline text-left cursor-pointer transition font-semibold"
+                                                    title={`${linkedVehicle.registration} - ${linkedVehicle.make} ${linkedVehicle.model}`}
+                                                >
+                                                    <Car size={16} className="text-green-700 shrink-0"/>
+                                                    <span className="font-semibold truncate max-w-[200px]">{linkedVehicle.registration} {linkedVehicle.make ? `(${linkedVehicle.make} ${linkedVehicle.model})` : ''}</span>
+                                                </button>
+                                                <button type="button" onClick={handleUnlinkVehicle} title="Unlink Vehicle" className="text-gray-400 hover:text-red-500 transition">
+                                                    <XCircle size={16}/>
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <SearchableSelect
+                                                options={vehicles
+                                                    .map(v => {
+                                                        const isCust = v.customerId === formData.linkedCustomerId;
+                                                        return { 
+                                                            id: v.id, 
+                                                            label: `${v.registration} - ${v.make} ${v.model}`, 
+                                                            value: v.id,
+                                                            badge: isCust ? { text: "Client's", className: "bg-indigo-100 text-indigo-800" } : undefined,
+                                                            isCust
+                                                        };
+                                                    })
+                                                    .sort((a, b) => (b.isCust ? 1 : 0) - (a.isCust ? 1 : 0))
+                                                }
+                                                defaultValue={formData.linkedVehicleId || null}
+                                                onSelect={(value) => {
+                                                    const vehicle = vehicles.find(v => v.id === value);
+                                                    const ownerId = vehicle?.customerId;
+                                                    setFormData(p => {
+                                                        const cust = customers.find(c => c.id === (ownerId || p.linkedCustomerId));
+                                                        return { 
+                                                            ...p, 
+                                                            linkedVehicleId: value,
+                                                            linkedCustomerId: ownerId || p.linkedCustomerId,
+                                                            fromEmail: p.fromEmail || cust?.email || '',
+                                                            fromPhone: p.fromPhone || cust?.phone || cust?.mobile || ''
+                                                        };
+                                                    });
+                                                }}
+                                                placeholder="Link to an existing vehicle..."
+                                            />
+                                        )}
+                                    </div>
+
+                                    {(!linkedCustomer || !linkedVehicle) && (
+                                        <div className="pt-2 border-t mt-2 flex flex-col gap-2">
+                                            <button 
+                                                type="button" 
+                                                onClick={handleAutoCreateCustomer}
+                                                className="w-full py-1.5 flex justify-center items-center gap-1.5 text-xs font-bold text-green-700 bg-green-50 hover:bg-green-100 border border-green-200 rounded transition"
+                                                title="Instantly create Customer/Vehicle from captured details"
+                                            >
+                                                <Wand2 size={14} /> Auto-Create from Details
+                                            </button>
+                                            {onAddNewCustomer && (
+                                                <button 
+                                                    type="button" 
+                                                    onClick={onAddNewCustomer}
+                                                    className="w-full py-1.5 flex justify-center items-center gap-1.5 text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded transition"
+                                                >
+                                                    <UserCheck size={14} /> Open Full Creation Form
+                                                </button>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
                             <div className="bg-white p-4 border border-gray-200 rounded-lg shadow-sm space-y-4">
                         <h4 className="text-sm font-bold text-gray-800 border-b pb-2">Status & Ownership</h4>
                         
@@ -867,155 +1061,7 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                         </div>
                     </div>
 
-                    <div className="bg-white p-4 border border-gray-200 rounded-lg shadow-sm space-y-4">
-                        <h4 className="text-sm font-bold text-gray-800 border-b pb-2">Links & Assignments</h4>
-                        <div className="space-y-3">
-                            <div>
-                                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Customer Connection</label>
-                                {linkedCustomer ? (
-                                    <div className="p-2 bg-green-50 border border-green-200 rounded-lg flex justify-between items-center text-sm shadow-xs">
-                                        <button 
-                                            type="button" 
-                                            onClick={() => onViewCustomer?.(linkedCustomer.id)}
-                                            className="flex items-center gap-2 text-green-800 hover:text-green-600 hover:underline text-left cursor-pointer transition font-semibold"
-                                            title={getCustomerDisplayName(linkedCustomer)}
-                                        >
-                                            <UserCheck size={16} className="text-green-700 shrink-0"/>
-                                            <span className="truncate max-w-[200px]">{getCustomerDisplayName(linkedCustomer)}</span>
-                                        </button>
-                                        <button type="button" onClick={handleUnlinkCustomer} title="Unlink Customer" className="text-gray-400 hover:text-red-500 transition">
-                                            <XCircle size={16}/>
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <SearchableSelect
-                                        options={customers.map(c => ({ id: c.id, label: getCustomerDisplayName(c), value: c.id }))}
-                                        defaultValue={formData.linkedCustomerId || null}
-                                        onSelect={(value) => {
-                                            const cust = customers.find(c => c.id === value);
-                                            setFormData(p => {
-                                                const customersCars = vehicles.filter(v => v.customerId === value);
-                                                let newVehicleId = p.linkedVehicleId;
-                                                if (!newVehicleId || !customersCars.some(car => car.id === newVehicleId)) {
-                                                    newVehicleId = customersCars.length === 1 ? customersCars[0].id : null;
-                                                }
-                                                return { 
-                                                    ...p, 
-                                                    linkedCustomerId: value,
-                                                    linkedVehicleId: newVehicleId,
-                                                    fromEmail: p.fromEmail || cust?.email || '',
-                                                    fromPhone: p.fromPhone || cust?.phone || cust?.mobile || ''
-                                                };
-                                            });
-                                        }}
-                                        placeholder="Link to an existing customer..."
-                                    />
-                                )}
-                            </div>
-                            
-                            <div>
-                                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Vehicle Connection</label>
-                                {!linkedVehicle && customerVehicles.length > 0 && (
-                                    <div className="mb-3 space-y-2">
-                                        <div className="text-xs font-semibold text-indigo-700 bg-indigo-50 px-2 py-1 rounded inline-block border border-indigo-100">
-                                            Client's Vehicles
-                                        </div>
-                                        <div className="flex flex-col gap-2">
-                                            {customerVehicles.map(v => (
-                                                <button
-                                                    key={v.id}
-                                                    type="button"
-                                                    onClick={() => {
-                                                        setFormData(p => {
-                                                            const cust = customers.find(c => c.id === (v.customerId || p.linkedCustomerId));
-                                                            return { 
-                                                                ...p, 
-                                                                linkedVehicleId: v.id,
-                                                                linkedCustomerId: v.customerId || p.linkedCustomerId,
-                                                                fromEmail: p.fromEmail || cust?.email || '',
-                                                                fromPhone: p.fromPhone || cust?.phone || cust?.mobile || '',
-                                                                vehicleMake: v.make || p.vehicleMake,
-                                                                vehicleModel: v.model || p.vehicleModel,
-                                                                vehicleRegistration: v.registration || p.vehicleRegistration
-                                                            };
-                                                        });
-                                                    }}
-                                                    className="flex items-center justify-between p-2 text-sm bg-white border border-indigo-200 rounded-lg shadow-sm hover:bg-indigo-50 hover:border-indigo-300 transition text-left"
-                                                >
-                                                    <div>
-                                                        <div className="font-bold text-gray-800">{v.registration || 'No Reg'}</div>
-                                                        <div className="text-xs text-gray-500">{v.make} {v.model} {v.year || ''}</div>
-                                                    </div>
-                                                    <div className="text-xs font-semibold bg-indigo-600 text-white px-2 py-1 rounded shadow-sm hover:bg-indigo-700 transition">
-                                                        Use Vehicle
-                                                    </div>
-                                                </button>
-                                            ))}
-                                        </div>
-                                        <div className="text-xs text-gray-500 text-center py-1">or search for a different vehicle below</div>
-                                    </div>
-                                )}
-                                {linkedVehicle ? (
-                                     <div className="p-2 bg-green-50 border border-green-200 rounded-lg flex justify-between items-center text-sm shadow-xs">
-                                        <button 
-                                            type="button" 
-                                            onClick={() => onViewVehicle?.(linkedVehicle.id)}
-                                            className="flex items-center gap-2 text-green-800 hover:text-green-600 hover:underline text-left cursor-pointer transition font-semibold"
-                                            title={`${linkedVehicle.registration} - ${linkedVehicle.make} ${linkedVehicle.model}`}
-                                        >
-                                            <Car size={16} className="text-green-700 shrink-0"/>
-                                            <span className="font-semibold truncate max-w-[200px]">{linkedVehicle.registration} {linkedVehicle.make ? `(${linkedVehicle.make} ${linkedVehicle.model})` : ''}</span>
-                                        </button>
-                                        <button type="button" onClick={handleUnlinkVehicle} title="Unlink Vehicle" className="text-gray-400 hover:text-red-500 transition">
-                                            <XCircle size={16}/>
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <SearchableSelect
-                                        options={vehicles.map(v => ({ id: v.id, label: `${v.registration} - ${v.make} ${v.model}`, value: v.id }))}
-                                        defaultValue={formData.linkedVehicleId || null}
-                                        onSelect={(value) => {
-                                            const vehicle = vehicles.find(v => v.id === value);
-                                            const ownerId = vehicle?.customerId;
-                                            setFormData(p => {
-                                                const cust = customers.find(c => c.id === (ownerId || p.linkedCustomerId));
-                                                return { 
-                                                    ...p, 
-                                                    linkedVehicleId: value,
-                                                    linkedCustomerId: ownerId || p.linkedCustomerId,
-                                                    fromEmail: p.fromEmail || cust?.email || '',
-                                                    fromPhone: p.fromPhone || cust?.phone || cust?.mobile || ''
-                                                };
-                                            });
-                                        }}
-                                        placeholder="Link to an existing vehicle..."
-                                    />
-                                )}
-                            </div>
-
-                            {(!linkedCustomer || !linkedVehicle) && (
-                                <div className="pt-2 border-t mt-2 flex flex-col gap-2">
-                                    <button 
-                                        type="button" 
-                                        onClick={handleAutoCreateCustomer}
-                                        className="w-full py-1.5 flex justify-center items-center gap-1.5 text-xs font-bold text-green-700 bg-green-50 hover:bg-green-100 border border-green-200 rounded transition"
-                                        title="Instantly create Customer/Vehicle from captured details"
-                                    >
-                                        <Wand2 size={14} /> Auto-Create from Details
-                                    </button>
-                                    {onAddNewCustomer && (
-                                        <button 
-                                            type="button" 
-                                            onClick={onAddNewCustomer}
-                                            className="w-full py-1.5 flex justify-center items-center gap-1.5 text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded transition"
-                                        >
-                                            <UserCheck size={14} /> Open Full Creation Form
-                                        </button>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-                    </div>
+                    {/* End of swapped blocks */}
                         </div>
                     </div>
                 )}

@@ -1,7 +1,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { Job, PurchaseOrder, Vehicle, Customer, Engineer, User } from '../../types';
-import { Gauge, Settings2, Warehouse } from 'lucide-react';
+import { Gauge, Settings2, Warehouse, Plus } from 'lucide-react';
 import { useData } from '../../core/state/DataContext';
 import { useApp } from '../../core/state/AppContext';
 import { addDays, formatDate } from '../../core/utils/dateUtils';
@@ -11,19 +11,20 @@ import { SummaryJobCard } from '../shared/SummaryJobCard';
 import { JobHoverPopout } from '../shared/JobHoverPopout';
 
 const getCapacityInfo = (totalHours: number, maxHours: number) => {
-    if (maxHours <= 0) return { status: 'Normal', classes: 'bg-gray-100 text-gray-800' };
+    if (maxHours <= 0) return { status: 'CLOSED', classes: 'bg-gray-100 text-gray-500' };
     const loadPercentage = totalHours / maxHours;
     if (totalHours > maxHours) {
-        return { status: 'OVERLOADED', classes: 'bg-red-100 text-red-800 font-bold' };
+        return { status: 'OVERLOADED', classes: 'bg-red-100 text-red-800 font-bold border border-red-300 shadow-sm' };
     }
     if (loadPercentage >= CAPACITY_THRESHOLD_WARNING) {
-        return { status: 'High Load', classes: 'bg-amber-100 text-amber-800' };
+        return { status: 'HIGH LOAD', classes: 'bg-amber-100 text-amber-800 font-bold border border-amber-300 shadow-sm' };
     }
-    return { status: 'Normal', classes: 'bg-green-100 text-green-800' };
+    return { status: 'AVAILABLE', classes: 'bg-emerald-100 text-emerald-800 font-bold border border-emerald-300 shadow-sm' };
 };
 
 interface WeeklyViewProps {
     weekStart: Date;
+    onAddJob?: (date: string) => void;
     onEditJob: (jobId: string, initialTab?: string) => void;
     onOpenAssistant: (jobId: string) => void;
     onCheckIn: (jobId: string) => void;
@@ -37,7 +38,7 @@ interface WeeklyViewProps {
 
 export const WeeklyView: React.FC<WeeklyViewProps> = (props) => {
     const { 
-        weekStart, onEditJob, onOpenAssistant, onCheckIn, 
+        weekStart, onAddJob, onEditJob, onOpenAssistant, onCheckIn, 
         onOpenPurchaseOrder, onStartWork, onPause, onRestart, 
         onQcApprove, onEngineerComplete 
     } = props;
@@ -121,14 +122,28 @@ export const WeeklyView: React.FC<WeeklyViewProps> = (props) => {
                         const capacityInfo = getCapacityInfo(allocatedHours, dailyCapacityHours);
 
                         return (
-                            <div key={day.toISOString()} className="flex flex-col items-center justify-start gap-1">
-                                <span className="font-bold text-gray-700">
+                            <div key={day.toISOString()} className="flex flex-col items-center justify-start gap-1 group relative">
+                                <span className="font-bold text-gray-700 flex items-center justify-center gap-1 w-full">
                                     {day.toLocaleDateString('en-GB', { weekday: 'short' })}
-                                    <span className="text-gray-500 font-medium ml-1">{day.getUTCDate()}</span>
+                                    <span className="text-gray-500 font-medium">{day.getUTCDate()}</span>
+                                    {onAddJob && (
+                                        <button 
+                                            onClick={(e) => { e.stopPropagation(); onAddJob(dateStr); }}
+                                            className="ml-1 p-0.5 rounded-full text-indigo-500 hover:bg-indigo-100 hover:text-indigo-700 transition-colors opacity-0 group-hover:opacity-100"
+                                            title="Add job on this day"
+                                        >
+                                            <Plus size={14} strokeWidth={3} />
+                                        </button>
+                                    )}
                                 </span>
-                                <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] ${capacityInfo.classes} border border-black/10`}>
-                                    <Gauge size={10} />
-                                    <span className="font-bold">{allocatedHours.toFixed(1)}h</span>
+                                <div className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-md w-full border border-black/10 shadow-sm ${capacityInfo.classes}`}>
+                                    <span className="text-[10px] uppercase font-black tracking-widest leading-none text-center">
+                                        {capacityInfo.status}
+                                    </span>
+                                    <span className="text-xs font-bold whitespace-nowrap flex items-center gap-1 opacity-80">
+                                        <Gauge size={10} />
+                                        {allocatedHours.toFixed(1)}h / {dailyCapacityHours}h
+                                    </span>
                                 </div>
                             </div>
                         );

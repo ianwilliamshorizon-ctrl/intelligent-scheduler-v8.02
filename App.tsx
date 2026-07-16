@@ -11,6 +11,7 @@ import { DataProvider } from './core/state/DataContext';
 
 import LoginView from './components/LoginView';
 import EstimateViewModal from './components/EstimateViewModal';
+import PrintableInvoice from './components/PrintableInvoice';
 
 // Trigger background prefetch for the authenticated app
 const AuthenticatedAppPromise = import('./AuthenticatedApp');
@@ -24,27 +25,37 @@ const App = () => {
     const [customerActionState, setCustomerActionState] = useState<'pending' | 'approved' | 'declined'>('pending');
     const [customerViewData, setCustomerViewData] = useState<{
         estimate: T.Estimate | null;
+        invoice: T.Invoice | null;
+        job: T.Job | null;
         customer: T.Customer | null;
         vehicle: T.Vehicle | null;
         entity: T.BusinessEntity | null;
         taxRates: T.TaxRate[];
         servicePackages: T.ServicePackage[];
         parts: T.Part[];
+        inspectionTemplates: T.InspectionTemplate[];
+        inspectionDiagrams: T.InspectionDiagram[];
         loading: boolean;
         error: string | null;
     }>(() => {
         const searchParams = new URLSearchParams(window.location.search);
         const urlEstimateId = searchParams.get('estimateId');
+        const urlInvoiceId = searchParams.get('invoiceId');
         const isCustomerView = searchParams.get('view') === 'customer' && urlEstimateId;
+        const isInvoiceView = searchParams.get('view') === 'invoice' && urlInvoiceId;
         return {
             estimate: null,
+            invoice: null,
+            job: null,
             customer: null,
             vehicle: null,
             entity: null,
             taxRates: [],
             servicePackages: [],
             parts: [],
-            loading: !!isCustomerView,
+            inspectionTemplates: [],
+            inspectionDiagrams: [],
+            loading: !!(isCustomerView || isInvoiceView),
             error: null
         };
     });
@@ -52,48 +63,94 @@ const App = () => {
     useEffect(() => {
         const searchParams = new URLSearchParams(window.location.search);
         const urlEstimateId = searchParams.get('estimateId');
+        const urlInvoiceId = searchParams.get('invoiceId');
         const isCustomerView = searchParams.get('view') === 'customer' && urlEstimateId;
+        const isInvoiceView = searchParams.get('view') === 'invoice' && urlInvoiceId;
         
-        if (!isCustomerView || !urlEstimateId) return;
+        if (!isCustomerView && !isInvoiceView) return;
 
         const loadCustomerData = async () => {
             try {
-                const estimateDoc = await getDocument<T.Estimate>('brooks_estimates', urlEstimateId);
-                if (!estimateDoc) {
-                    setCustomerViewData(prev => ({ ...prev, loading: false, error: 'Estimate not found' }));
-                    return;
+                if (isCustomerView && urlEstimateId) {
+                    const estimateDoc = await getDocument<T.Estimate>('brooks_estimates', urlEstimateId);
+                    if (!estimateDoc) {
+                        setCustomerViewData(prev => ({ ...prev, loading: false, error: 'Estimate not found' }));
+                        return;
+                    }
+
+                    const [customerDoc, vehicleDoc] = await Promise.all([
+                        estimateDoc.customerId ? getDocument<T.Customer>('brooks_customers', estimateDoc.customerId) : null,
+                        estimateDoc.vehicleId ? getDocument<T.Vehicle>('brooks_vehicles', estimateDoc.vehicleId) : null,
+                    ]);
+
+                    let entityDoc = businessEntities.find(e => e.id === estimateDoc.entityId) || null;
+                    if (!entityDoc && estimateDoc.entityId) {
+                        entityDoc = await getDocument<T.BusinessEntity>('brooks_business_entities', estimateDoc.entityId);
+                    }
+                    
+                    const partsModule = await import('./core/data/initialData');
+                    const [taxRatesData, spData, partsData] = await Promise.all([
+                        partsModule.getInitialTaxRates(),
+                        partsModule.getInitialServicePackages(),
+                        partsModule.getInitialParts()
+                    ]);
+
+                    setCustomerViewData(prev => ({
+                        ...prev,
+                        estimate: estimateDoc,
+                        customer: customerDoc,
+                        vehicle: vehicleDoc,
+                        entity: entityDoc,
+                        taxRates: taxRatesData,
+                        servicePackages: spData,
+                        parts: partsData,
+                        loading: false,
+                        error: null
+                    }));
+                } else if (isInvoiceView && urlInvoiceId) {
+                    const invoiceDoc = await getDocument<T.Invoice>('brooks_invoices', urlInvoiceId);
+                    if (!invoiceDoc) {
+                        setCustomerViewData(prev => ({ ...prev, loading: false, error: 'Invoice not found' }));
+                        return;
+                    }
+
+                    const [customerDoc, vehicleDoc, jobDoc] = await Promise.all([
+                        invoiceDoc.customerId ? getDocument<T.Customer>('brooks_customers', invoiceDoc.customerId) : null,
+                        invoiceDoc.vehicleId ? getDocument<T.Vehicle>('brooks_vehicles', invoiceDoc.vehicleId) : null,
+                        invoiceDoc.jobId ? getDocument<T.Job>('brooks_jobs', invoiceDoc.jobId) : null,
+                    ]);
+
+                    let entityDoc = businessEntities.find(e => e.id === invoiceDoc.entityId) || null;
+                    if (!entityDoc && invoiceDoc.entityId) {
+                        entityDoc = await getDocument<T.BusinessEntity>('brooks_business_entities', invoiceDoc.entityId);
+                    }
+                    if (!entityDoc && jobDoc?.entityId) {
+                        entityDoc = await getDocument<T.BusinessEntity>('brooks_business_entities', jobDoc.entityId);
+                    }
+                    
+                    const partsModule = await import('./core/data/initialData');
+                    const [taxRatesData, spData, templatesData, diagramsData] = await Promise.all([
+                        partsModule.getInitialTaxRates(),
+                        partsModule.getInitialServicePackages(),
+                        partsModule.getInitialInspectionTemplates(),
+                        partsModule.getInitialInspectionDiagrams()
+                    ]);
+
+                    setCustomerViewData(prev => ({
+                        ...prev,
+                        invoice: invoiceDoc,
+                        job: jobDoc,
+                        customer: customerDoc,
+                        vehicle: vehicleDoc,
+                        entity: entityDoc,
+                        taxRates: taxRatesData,
+                        servicePackages: spData,
+                        inspectionTemplates: templatesData,
+                        inspectionDiagrams: diagramsData,
+                        loading: false,
+                        error: null
+                    }));
                 }
-
-                const [customerDoc, vehicleDoc] = await Promise.all([
-                    estimateDoc.customerId ? getDocument<T.Customer>('brooks_customers', estimateDoc.customerId) : null,
-                    estimateDoc.vehicleId ? getDocument<T.Vehicle>('brooks_vehicles', estimateDoc.vehicleId) : null,
-                ]);
-
-                let entityDoc = businessEntities.find(e => e.id === estimateDoc.entityId) || null;
-                if (!entityDoc && estimateDoc.entityId) {
-                    entityDoc = await getDocument<T.BusinessEntity>('brooks_business_entities', estimateDoc.entityId);
-                }
-                
-                // Fetch required data for rendering estimate
-                // Normally this is in DataContext, but we are isolated here
-                const partsModule = await import('./core/data/initialData');
-                const [taxRatesData, spData, partsData] = await Promise.all([
-                    partsModule.getInitialTaxRates(),
-                    partsModule.getInitialServicePackages(),
-                    partsModule.getInitialParts()
-                ]);
-
-                setCustomerViewData({
-                    estimate: estimateDoc,
-                    customer: customerDoc,
-                    vehicle: vehicleDoc,
-                    entity: entityDoc,
-                    taxRates: taxRatesData,
-                    servicePackages: spData,
-                    parts: partsData,
-                    loading: false,
-                    error: null
-                });
             } catch (err: any) {
                 console.error("Error loading customer view data:", err);
                 setCustomerViewData(prev => ({ ...prev, loading: false, error: err.message || 'Failed to load data' }));
@@ -324,6 +381,28 @@ const App = () => {
                     users={users}
                     currentUser={dummyCustomerUser}
                 />
+                <ToastContainer aria-label="Notifications" />
+            </div>
+        );
+    }
+
+    if (customerViewData.invoice) {
+        return (
+            <div className="min-h-screen bg-gray-100 p-8 overflow-y-auto flex justify-center items-start">
+                <div className="bg-white shadow-2xl rounded-xl w-full max-w-5xl">
+                    <PrintableInvoice
+                        invoice={customerViewData.invoice}
+                        customer={customerViewData.customer || undefined}
+                        vehicle={customerViewData.vehicle || undefined}
+                        entity={customerViewData.entity || undefined}
+                        job={customerViewData.job || undefined}
+                        taxRates={customerViewData.taxRates}
+                        servicePackages={customerViewData.servicePackages}
+                        inspectionTemplates={customerViewData.inspectionTemplates || []}
+                        inspectionDiagrams={customerViewData.inspectionDiagrams || []}
+                        printOptions={customerViewData.invoice.printOptions}
+                    />
+                </div>
                 <ToastContainer aria-label="Notifications" />
             </div>
         );

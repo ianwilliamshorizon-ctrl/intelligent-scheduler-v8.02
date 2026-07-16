@@ -41,6 +41,9 @@ Please find below the invoice summary for recent work completed on your ${vehicl
 Invoice Summary:
 Total Amount Due: £${total.toFixed(2)}
 
+You can view, download, and print your full detailed invoice securely online:
+<a href="${window.location.origin}/?view=invoice&invoiceId=${invoice.id}" style="display: inline-block; padding: 10px 20px; background-color: #4f46e5; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: bold; margin-top: 10px; margin-bottom: 10px;">View Invoice Online</a>
+
 If you have any questions, please don't hesitate to contact us.
 
 Kind regards,

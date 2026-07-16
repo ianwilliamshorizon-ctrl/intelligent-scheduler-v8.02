@@ -203,17 +203,17 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                         isOpen={true}
                         onClose={() => setters.setIsSmartCreateOpen(false)}
                         creationMode={modals.smartCreateMode}
-                        onJobCreate={async (jobData) => { 
+                        onJobCreate={async (jobData, estimateData) => { 
                             await handleSaveItem(data.setJobs, { ...jobData, createdByUserId: currentUser.id }, 'brooks_jobs'); 
-                            const est = data.estimates.find(e => e.id === jobData.estimateId);
+                            const est = estimateData || data.estimates.find(e => e.id === jobData.estimateId);
                             if (est) await workshopActions.syncPurchaseOrdersFromEstimate(est, { forceNew: true });
                             setters.setIsSmartCreateOpen(false); 
                         }}
-                        onVehicleAndJobCreate={async (c, v, j) => { 
+                        onVehicleAndJobCreate={async (c, v, j, estimateData) => { 
                             await handleSaveItem(actions.setCustomers, c, 'brooks_customers'); 
                             await handleSaveItem(actions.setVehicles, v, 'brooks_vehicles'); 
                             await handleSaveItem(data.setJobs, { ...j, createdByUserId: currentUser.id }, 'brooks_jobs'); 
-                            const est = data.estimates.find(e => e.id === j.estimateId);
+                            const est = estimateData || data.estimates.find(e => e.id === j.estimateId);
                             if (est) await workshopActions.syncPurchaseOrdersFromEstimate(est, { forceNew: true });
                             setters.setIsSmartCreateOpen(false); 
                         }}
@@ -777,7 +777,7 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                                 if (inquiry) {
                                     const updatedInquiry = {
                                         ...inquiry, 
-                                        status: 'Closed' as const,
+                                        status: 'Scheduled' as const,
                                         linkedJobId: jobToSave.id,
                                         logs: [...(inquiry.logs || []), {
                                             id: crypto.randomUUID(),
@@ -798,14 +798,14 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                                 const customer = data.customers.find(c => c.id === est.customerId);
                                 const vehicle = data.vehicles.find(v => v.id === est.vehicleId);
 
-                                if (customer && (customer.email || customer.workEmail)) {
-                                    const emailAddress = customer.email || customer.workEmail;
+                                if (customer && customer.email) {
+                                    const emailAddress = customer.email;
                                     const vehicleName = vehicle ? `${vehicle.make} ${vehicle.model} (${vehicle.registration})` : 'your vehicle';
                                     const entity = data.businessEntities.find(e => e.id === est.entityId) || data.businessEntities[0];
                                     
                                     const emailBody = `<div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #333;">` +
                                         `<h2 style="color: #4f46e5;">Job Scheduled Confirmation</h2>` +
-                                        `<p>Dear ${customer.firstName || customer.name},</p>` +
+                                        `<p>Dear ${customer.forename || customer.companyName || 'Customer'},</p>` +
                                         `<p>We are pleased to confirm that your job for <strong>${vehicleName}</strong> (Estimate #${est.estimateNumber}) has been successfully scheduled.</p>` +
                                         `<div style="background-color: #f3f4f6; padding: 15px; border-radius: 8px; margin: 20px 0;">` +
                                         `<p style="margin: 0;"><strong>Scheduled Start Date:</strong> ${formatReadableDate(jobToSave.scheduledDate)}</p>` +
@@ -816,8 +816,9 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
 
                                     try {
                                         await sendOutboundEmail({
-                                            to: emailAddress!,
+                                            to: emailAddress,
                                             fromName: entity?.name || 'Service Team',
+                                            fromEmail: entity?.email || 'noreply@ourworkshop.com',
                                             subject: `Job Scheduled: ${vehicleName}`,
                                             body: emailBody,
                                         });

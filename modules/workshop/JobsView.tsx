@@ -3,7 +3,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useApp } from '../../core/state/AppContext';
 import { useData } from '../../core/state/DataContext';
 import { Job, Vehicle, Customer, ServicePackage, Estimate, PurchaseOrder } from '../../types';
-import { Eye, Search, PlusCircle, Printer, Briefcase, Wand2, Loader2, CalendarDays, Camera, LayoutList, LayoutGrid } from 'lucide-react';
+import { Eye, Search, PlusCircle, Printer, Briefcase, Wand2, Loader2, CalendarDays, Camera, LayoutList, LayoutGrid, MessageSquare } from 'lucide-react';
 import { getCustomerDisplayName } from '../../core/utils/customerUtils';
 import { getRelativeDate, formatDate, dateStringToDate, addDays, formatReadableDate, isWithinDateRange } from '../../core/utils/dateUtils';
 import PrintableJobList from '../../components/PrintableJobList';
@@ -18,6 +18,7 @@ interface JobsViewProps {
     onCheckIn?: (jobId: string) => void;
     onOpenPurchaseOrder?: (po: PurchaseOrder) => void;
     onSmartCreateClick: () => void;
+    onOpenInquiry?: (inquiry: any) => void;
 }
 
 const statusFilterOptions: readonly Job['status'][] = ['Unallocated', 'Allocated', 'In Progress', 'Pending QC', 'Complete', 'Invoiced', 'Cancelled', 'Closed'];
@@ -32,8 +33,8 @@ const dateFilterOptions = {
 
 type DateFilterOption = keyof typeof dateFilterOptions;
 
-const JobsView: React.FC<JobsViewProps> = ({ onEditJob, onCheckIn, onOpenPurchaseOrder, onSmartCreateClick }) => {
-    const { jobs, customers, vehicles, businessEntities, estimates, taxRates, inspectionTemplates, setServicePackages, parts, purchaseOrders } = useData();
+const JobsView: React.FC<JobsViewProps> = ({ onEditJob, onCheckIn, onOpenPurchaseOrder, onSmartCreateClick, onOpenInquiry }) => {
+    const { jobs, customers, vehicles, businessEntities, estimates, taxRates, inspectionTemplates, setServicePackages, parts, purchaseOrders, inquiries } = useData();
     const { selectedEntityId, setConfirmation } = useApp();
     const print = usePrint();
     const { handleSaveItem } = useWorkshopActions();
@@ -63,10 +64,10 @@ const JobsView: React.FC<JobsViewProps> = ({ onEditJob, onCheckIn, onOpenPurchas
             setEndDate(getRelativeDate(0));
         } else if (dateFilter === '7days') {
             setStartDate(getRelativeDate(-7));
-            setEndDate(getRelativeDate(0));
+            setEndDate(''); // Show all future scheduled jobs
         } else if (dateFilter === '30days') {
             setStartDate(getRelativeDate(-30));
-            setEndDate(getRelativeDate(0));
+            setEndDate(''); // Show all future scheduled jobs
         } else if (dateFilter === 'all') {
             setStartDate('');
             setEndDate('');
@@ -90,7 +91,15 @@ const JobsView: React.FC<JobsViewProps> = ({ onEditJob, onCheckIn, onOpenPurchas
                 return false;
             }
             
-            const dateToUse = job.scheduledDate || job.createdAt;
+            let dateToUse = job.scheduledDate || job.createdAt;
+            if (job.segments && job.segments.length > 0) {
+                const dates = job.segments.filter(s => s.date).map(s => s.date!);
+                if (dates.length > 0) {
+                    dates.sort();
+                    dateToUse = dates[0];
+                }
+            }
+            
             if (!isWithinDateRange(dateToUse, startDate, endDate)) {
                 return false;
             }
@@ -264,6 +273,18 @@ const JobsView: React.FC<JobsViewProps> = ({ onEditJob, onCheckIn, onOpenPurchas
                 </div>
             </header>
             
+            <div className="flex gap-2 mb-4 bg-indigo-50 border border-indigo-100 p-3 rounded-lg shadow-sm">
+                <span className="text-sm font-bold text-indigo-900 flex items-center gap-1.5 mr-2">
+                    <CalendarDays size={18} /> Capacity & Scheduling
+                </span>
+                <button 
+                    onClick={() => setCurrentView('dispatch')} 
+                    className="px-4 py-1.5 bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-600 hover:text-white rounded shadow-sm text-xs font-bold transition-colors flex items-center gap-2"
+                >
+                    View Dispatch Board (Weekly / Monthly)
+                </button>
+            </div>
+            
             <div className="space-y-4 mb-4 flex-shrink-0">
                 <div className='flex gap-4'>
                     <div className="relative flex-grow">
@@ -358,6 +379,26 @@ const JobsView: React.FC<JobsViewProps> = ({ onEditJob, onCheckIn, onOpenPurchas
                                             <button onClick={() => handleCreatePackage(job)} disabled={isCreatingPackage} className="p-1.5 text-teal-600 hover:bg-teal-100 rounded-full disabled:opacity-50" title="Create Service Package">
                                                 {isCreatingPackage ? <Loader2 className="animate-spin" size={16} /> : <Wand2 size={16} />}
                                             </button>
+                                            {onOpenInquiry && (() => {
+                                                const hasInquiry = (inquiries || []).some(i => i.linkedJobId === job.id);
+                                                return (
+                                                    <button 
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            const existingInquiry = (inquiries || []).find(inq => inq.linkedJobId === job.id);
+                                                            if (existingInquiry) {
+                                                                onOpenInquiry(existingInquiry);
+                                                            } else {
+                                                                onOpenInquiry({ entityId: job.entityId, linkedJobId: job.id, linkedCustomerId: job.customerId, linkedVehicleId: job.vehicleId, message: `Question regarding Job #${job.id}` });
+                                                            }
+                                                        }}
+                                                        className={`p-1.5 rounded-full ${hasInquiry ? 'text-green-600 bg-green-100 hover:bg-green-200' : 'text-orange-600 hover:bg-orange-100'}`} 
+                                                        title={hasInquiry ? 'View/Update Linked Inquiry' : 'Log Inquiry'}
+                                                    >
+                                                        <MessageSquare size={16} />
+                                                    </button>
+                                                );
+                                            })()}
                                         </div>
                                     </td>
                                 </tr>

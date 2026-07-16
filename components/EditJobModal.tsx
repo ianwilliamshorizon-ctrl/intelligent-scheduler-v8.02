@@ -1366,7 +1366,22 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
                                                                     {seg.description || `Segment ${idx + 1}`}
                                                                 </h4>
                                                                 <div className="flex items-center gap-2 text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-0.5">
-                                                                    <span>{seg.date ? formatDate(new Date(seg.date)) : 'TBA'}</span>
+                                                                    <input 
+                                                                        type="date"
+                                                                        value={seg.date || ''}
+                                                                        onChange={(e) => {
+                                                                            const newDate = e.target.value;
+                                                                            setEditableJob(prev => {
+                                                                                if (!prev) return prev;
+                                                                                const newSegments = (prev.segments || []).map(s => 
+                                                                                    s.segmentId === seg.segmentId ? { ...s, date: newDate } : s
+                                                                                );
+                                                                                return { ...prev, segments: newSegments };
+                                                                            });
+                                                                        }}
+                                                                        className="bg-transparent border-b border-gray-300 focus:border-indigo-500 hover:border-indigo-400 outline-none p-0 cursor-pointer"
+                                                                        title="Click to reschedule"
+                                                                    />
                                                                     <span>•</span>
                                                                     <span>{seg.duration} hrs</span>
                                                                 </div>

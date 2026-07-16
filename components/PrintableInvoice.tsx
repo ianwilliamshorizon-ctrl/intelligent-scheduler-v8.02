@@ -1,19 +1,11 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { Invoice, Customer, Vehicle, BusinessEntity, Job, TaxRate, EstimateLineItem, ChecklistSection, ServicePackage, InspectionTemplate, InspectionDiagram, DocumentLayoutSettings } from '../types';
+import { Invoice, Customer, Vehicle, BusinessEntity, Job, TaxRate, EstimateLineItem, ChecklistSection, ServicePackage, InspectionTemplate, InspectionDiagram, DocumentLayoutSettings, PrintOptions } from '../types';
 import { formatCurrency } from '../core/utils/formatUtils';
 import InspectionChecklist from './InspectionChecklist';
 import VehicleDamageReport from './VehicleDamageReport';
 import TyreCheck from './TyreCheck';
 import { getImage } from '../utils/imageStore';
 import { useData } from '../core/state/DataContext';
-
-export interface PrintOptions {
-    showInvoice?: boolean;
-    showTechNotes?: boolean;
-    showInspections?: boolean;
-    showMedia?: boolean;
-    invoiceNotes?: string;
-}
 
 interface PrintableInvoiceProps {
     invoice: Invoice;
