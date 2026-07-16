@@ -48,7 +48,7 @@ const JobsView: React.FC<JobsViewProps> = ({ onEditJob, onCheckIn, onOpenPurchas
     const safeParts = Array.isArray(parts) ? parts : [];
     
     const [filter, setFilter] = useState('');
-    const [statusFilter, setStatusFilter] = useState<Job['status'][]>([]);
+    const [statusFilter, setStatusFilter] = useState<Job['status'][]>(['Unallocated', 'Allocated', 'In Progress', 'Pending QC', 'Complete', 'Invoiced']);
     const [showOnSiteOnly, setShowOnSiteOnly] = useState(false);
     const [dateFilter, setDateFilter] = useState<DateFilterOption>('30days');
     const [startDate, setStartDate] = useState(() => getRelativeDate(-30));
@@ -104,7 +104,10 @@ const JobsView: React.FC<JobsViewProps> = ({ onEditJob, onCheckIn, onOpenPurchas
                 return false;
             }
 
-            const matchesStatus = statusFilter.length === 0 || statusFilter.includes(job.status);
+            const isExcludedByDefault = ['Closed', 'Cancelled'].includes(job.status);
+            const matchesStatus = statusFilter.length === 0 
+                ? !isExcludedByDefault 
+                : statusFilter.includes(job.status);
             if (!matchesStatus) return false;
 
             const lowerFilter = filter.toLowerCase();
