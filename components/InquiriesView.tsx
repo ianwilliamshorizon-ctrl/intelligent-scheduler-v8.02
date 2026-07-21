@@ -5,7 +5,7 @@ import { Inquiry, Estimate, Customer, Vehicle, User, PurchaseOrder } from '../ty
 import { 
     Search, PlusCircle, Car, FileText, CalendarCheck, UserCheck, 
     Package as PackageIcon, ArrowRightCircle, CheckCircle2, Play, AlertTriangle, Camera,
-    ChevronDown, ChevronUp, RefreshCw, Loader2, Copy, Wand2, MapPin
+    ChevronDown, ChevronUp, RefreshCw, Loader2, Copy, Wand2, MapPin, Calendar, Archive
 } from 'lucide-react';
 import { getCustomerDisplayName } from '../core/utils/customerUtils';
 import ConfirmationModal from './ConfirmationModal';
@@ -669,7 +669,7 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
         });
     }, [inquiries]);
 
-    const { selectedEntityId, users, currentUser, businessEntities: entities } = useApp();
+    const { selectedEntityId, users, currentUser, businessEntities: entities, setCurrentView } = useApp();
 
     const [hoveredInquiryId, setHoveredInquiryId] = useState<string | null>(null);
     const [inquiryToClose, setInquiryToClose] = useState<Inquiry | null>(null);
@@ -1291,6 +1291,23 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                     </div>
 
                     <div className="flex items-center gap-2">
+                        <button 
+                            onClick={() => setCurrentView('dispatch' as any)}
+                            className="flex items-center gap-2 py-2 px-4 bg-white border border-gray-300 text-gray-700 font-semibold rounded-lg shadow-sm hover:bg-gray-50 transition"
+                            title="View Dispatch Board (Weekly / Monthly)"
+                        >
+                            <Calendar size={16} /> Capacity & Scheduling
+                        </button>
+
+                        <button 
+                            onClick={handleBulkDelete} 
+                            className="flex items-center gap-2 py-2 px-4 bg-white border border-red-300 text-red-600 font-semibold rounded-lg shadow-sm hover:bg-red-50 transition disabled:opacity-50"
+                            title="Bulk delete selected inquiries"
+                            disabled={selectedInquiryIds.length === 0}
+                        >
+                            <Archive size={16} /> Bulk Action (Remove)
+                        </button>
+
                         <button 
                             onClick={handleSyncEmails} 
                             disabled={isSyncing}
