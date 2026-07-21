@@ -65,7 +65,7 @@ export const WeeklyView: React.FC<WeeklyViewProps> = (props) => {
                 if (job.status === 'Cancelled') return;
                 if (selectedEntityId !== 'all' && job.entityId !== selectedEntityId) return;
                 (job.segments || []).forEach(segment => {
-                    if (segment.date === dateStr && segment.status !== 'Unallocated') {
+                    if (segment.date === dateStr) {
                         totalHours += segment.duration || 0;
                     }
                 });
