@@ -624,6 +624,16 @@ const InquiryCard: React.FC<{
                             <FileText size={14} className="shrink-0" />
                         </button>
                     )}
+                    {(!job && onConvert) && (
+                        <button
+                            type="button"
+                            title="Book New Job"
+                            onClick={() => onConvert(inquiry, 'job')}
+                            className="p-1.5 rounded bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition"
+                        >
+                            <CalendarCheck size={14} className="shrink-0" />
+                        </button>
+                    )}
                     {inquiry.status !== 'Scheduled' && (
                         <button
                             type="button"
