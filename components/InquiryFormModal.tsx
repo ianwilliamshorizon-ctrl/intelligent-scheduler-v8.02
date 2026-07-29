@@ -256,7 +256,10 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                     vehicleYear: linkedVehicle?.year?.toString() || inquiry.vehicleYear || ''
                 };
             } else {
-                // Initialize a new inquiry, using any pre-filled data provided
+                // Initialize a new inquiry, using any pre-filled data provided.
+                // Returning a completely fresh object guarantees that linkedCustomerId
+                // and linkedVehicleId from a previously-viewed inquiry can never
+                // carry forward into a new one.
                 return {
                     entityId: inquiry?.entityId || (selectedEntityId === 'all' ? (entities && entities.length > 0 ? entities[0].id : '') : selectedEntityId),
                     fromName: inquiry?.fromName || '',
@@ -288,10 +291,25 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
             saveRecord('inquiries', { ...inquiry, hasNewReply: false } as Inquiry);
         }
         
+        // Always explicitly reset all auxiliary/local state so that no stale values
+        // bleed through when the modal is re-opened or switched to a different inquiry
+        // while still mounted (e.g. the modal stays open and the inquiry prop changes).
         setIsAnalyzing(false);
         setAiError('');
         setSuggestedCustomers([]);
         setSuggestedVehicle(null);
+        setAddressList([]);
+        setReplyText('');
+        setReplyAttachments([]);
+        setIsDraftingReply(false);
+        setIsSendingReply(false);
+
+        // Reset split-name inputs directly from the incoming inquiry so they
+        // cannot retain a previously typed name across sessions.
+        const incomingName = (inquiry?.fromName || '').trim();
+        const nameParts = incomingName.split(' ');
+        setFirstNameInput(nameParts[0] || '');
+        setSurnameInput(nameParts.slice(1).join(' ') || '');
 
         if (inquiry && inquiry.logs && inquiry.logs.some(l => l.actionType === 'Email Sent')) {
             setActiveTab('estimates');
