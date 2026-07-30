@@ -4,6 +4,7 @@ import FormModal from './FormModal';
 import SearchableSelect from './SearchableSelect';
 import { useApp } from '../core/state/AppContext';
 import { getCustomerDisplayName, generateCustomerId } from '../core/utils/customerUtils';
+import { formatTitleCase } from '../core/utils/formatUtils';
 import { Wand2, Loader2, Link as LinkIcon, UserCheck, Car, XCircle, User as UserIcon, FileText, CalendarCheck, Edit, Camera, PlusCircle, Search } from 'lucide-react';
 import { parseInquiryMessage, generateEmailReply, updateEstimateWithAI } from '../core/services/geminiService';
 import { sendOutboundEmail } from '../core/services/emailService';
@@ -191,9 +192,9 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
             newVehicleId = crypto.randomUUID();
             const newVehicle: Vehicle = {
                 id: newVehicleId,
-                registration: formData.vehicleRegistration,
-                make: formData.vehicleMake || '',
-                model: formData.vehicleModel || '',
+                registration: (formData.vehicleRegistration || '').toUpperCase().trim(),
+                make: formatTitleCase(formData.vehicleMake || ''),
+                model: formatTitleCase(formData.vehicleModel || ''),
                 year: formData.vehicleYear ? parseInt(formData.vehicleYear) : undefined,
                 customerId: newCustomer.id,
             };
@@ -203,7 +204,10 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
         setFormData(p => ({
             ...p,
             linkedCustomerId: newCustomer.id,
-            linkedVehicleId: newVehicleId || p.linkedVehicleId
+            linkedVehicleId: newVehicleId || p.linkedVehicleId,
+            vehicleRegistration: p.vehicleRegistration ? p.vehicleRegistration.toUpperCase().trim() : p.vehicleRegistration,
+            vehicleMake: formatTitleCase(p.vehicleMake || ''),
+            vehicleModel: formatTitleCase(p.vehicleModel || ''),
         }));
 
         toast.success("Customer and Vehicle automatically created and linked!");
@@ -217,9 +221,10 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
             if (data && data.make) {
                 setFormData(p => ({
                     ...p,
-                    vehicleMake: data.make || p.vehicleMake,
-                    vehicleModel: data.model || p.vehicleModel,
+                    vehicleMake: formatTitleCase(data.make || p.vehicleMake || ''),
+                    vehicleModel: formatTitleCase(data.model || p.vehicleModel || ''),
                     vehicleYear: data.year?.toString() || p.vehicleYear,
+                    vehicleRegistration: (data.registration || p.vehicleRegistration || '').toUpperCase().trim(),
                 }));
                 toast.success('Vehicle details found via DVLA');
             } else {
@@ -326,7 +331,8 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
         }
 
         setFormData(p => {
-            const nextData = { ...p, [name]: value };
+            const val = name === 'vehicleRegistration' ? value.toUpperCase() : value;
+            const nextData = { ...p, [name]: val };
 
             if (name === 'fromName' && value.length > 2) {
                 const lowerName = value.toLowerCase().trim();
@@ -474,9 +480,9 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
         setFormData(p => ({ 
             ...p, 
             linkedVehicleId: vehicle.id,
-            vehicleMake: vehicle.make || p.vehicleMake,
-            vehicleModel: vehicle.model || p.vehicleModel,
-            vehicleRegistration: vehicle.registration || p.vehicleRegistration,
+            vehicleMake: vehicle.make ? formatTitleCase(vehicle.make) : p.vehicleMake,
+            vehicleModel: vehicle.model ? formatTitleCase(vehicle.model) : p.vehicleModel,
+            vehicleRegistration: (vehicle.registration || p.vehicleRegistration || '').toUpperCase().trim(),
             vehicleYear: vehicle.year?.toString() || p.vehicleYear
         }));
         setSuggestedVehicle(null);
@@ -674,6 +680,11 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                             fromName: parsed.fromName || p.fromName || '',
                                             fromEmail: parsed.fromEmail || p.fromEmail || '',
                                             fromPhone: parsed.fromPhone || p.fromPhone || '',
+                                            vehicleRegistration: parsed.vehicleRegistration
+                                                ? parsed.vehicleRegistration.toUpperCase().trim()
+                                                : p.vehicleRegistration ? p.vehicleRegistration.toUpperCase().trim() : '',
+                                            vehicleMake: parsed.vehicleMake ? formatTitleCase(parsed.vehicleMake) : (p.vehicleMake ? formatTitleCase(p.vehicleMake) : ''),
+                                            vehicleModel: parsed.vehicleModel ? formatTitleCase(parsed.vehicleModel) : (p.vehicleModel ? formatTitleCase(p.vehicleModel) : ''),
                                         }));
 
                                         // Try to find matching customer/vehicle

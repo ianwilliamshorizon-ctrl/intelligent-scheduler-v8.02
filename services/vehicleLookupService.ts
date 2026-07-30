@@ -1,4 +1,5 @@
 import { Vehicle, MotTest } from '../types';
+import { formatTitleCase } from '../core/utils/formatUtils';
 
 const API_KEY = import.meta.env.VITE_VEHICLE_DATA_GLOBAL_API_KEY;
 const API_BASE_URL = '/api/r2/lookup';
@@ -68,9 +69,9 @@ export const lookupVehicleByVRM = async (vrm: string, includeMotHistory: boolean
   const model = findValue(res, 'DvlaModel') || findValue(res, 'Model') || '';
 
   const mapped: Partial<Vehicle> & { motHistory?: MotTest[] } = {
-    registration: cleanVrm,
-    make: make,
-    model: model,
+    registration: cleanVrm.toUpperCase(),
+    make: formatTitleCase(make),
+    model: formatTitleCase(model),
     year: parseInt(yearValue, 10) || undefined,
     manufactureDate: formattedDate,
     engineNumber: findValue(res, 'EngineNumber') || '',

@@ -4,6 +4,7 @@ import { Customer, Vehicle } from '../types';
 import { User, Car, Save, Search, Loader2 } from 'lucide-react';
 import { formatDate } from '../core/utils/dateUtils';
 import { generateCustomerId } from '../core/utils/customerUtils';
+import { formatTitleCase } from '../core/utils/formatUtils';
 import { lookupVehicleByVRM } from '../services/vehicleLookupService';
 import { lookupAddressByPostcode } from '../services/postcodeLookupService';
 import SearchableSelect from './SearchableSelect';
@@ -164,8 +165,8 @@ const AddNewVehicleForm: React.FC<AddNewVehicleFormProps> = ({
             setVehicleData(prev => ({
                 ...prev,
                 id: existingId || prev.id,
-                make: details.make || prev.make,
-                model: details.model || prev.model,
+                make: formatTitleCase(details.make || prev.make || ''),
+                model: formatTitleCase(details.model || prev.model || ''),
                 colour: details.colour || prev.colour,
                 fuelType: details.fuelType || prev.fuelType,
                 engineCapacity: details.cc ? details.cc.toString() : prev.engineCapacity,
@@ -301,8 +302,8 @@ const AddNewVehicleForm: React.FC<AddNewVehicleFormProps> = ({
             id: vehicleData.id || crypto.randomUUID(), 
             customerId: customerToSave.id, 
             registration: vehicleData.registration.toUpperCase().replace(/\s/g, ''), 
-            make: vehicleData.make, 
-            model: vehicleData.model,
+            make: formatTitleCase(vehicleData.make || ''), 
+            model: formatTitleCase(vehicleData.model || ''),
             type: vehicleData.type,
             vin: vehicleData.vin || undefined,
             nextServiceDate: vehicleData.nextServiceDate || undefined,

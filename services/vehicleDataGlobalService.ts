@@ -1,5 +1,6 @@
 
 import { Vehicle } from '../types';
+import { formatTitleCase } from '../core/utils/formatUtils';
 
 const API_KEY = import.meta.env.VITE_VEHICLE_DATA_GLOBAL_API_KEY;
 const API_BASE_URL = 'https://api.vehicledataglobal.com/v1';
@@ -40,9 +41,9 @@ export const lookupVehicleByVRM = async (vrm: string): Promise<Partial<Vehicle>>
     const data: VehicleDataGlobalResponse = await response.json();
 
     return {
-        registration: data.registration,
-        make: data.make,
-        model: data.model,
+        registration: (data.registration || '').toUpperCase(),
+        make: formatTitleCase(data.make || ''),
+        model: formatTitleCase(data.model || ''),
         year: data.year,
         vin: data.vin,
         colour: data.colour,

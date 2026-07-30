@@ -13,7 +13,7 @@ import AddNewVehicleForm from './AddNewVehicleForm';
 import CustomerFormModal from './CustomerFormModal';
 import { useData } from '../core/state/DataContext';
 import { useApp } from '../core/state/AppContext';
-import { formatCurrency } from '../utils/formatUtils';
+import { formatCurrency, formatTitleCase } from '../utils/formatUtils';
 import SearchableSelect from './SearchableSelect';
 import { generateEstimateNumber, generateJobId } from '../core/utils/numberGenerators';
 import { getCustomerDisplayName } from '../core/utils/customerUtils';
@@ -698,8 +698,8 @@ User Request: ${JSON.stringify(userText)}`;
                 activeVehicle = {
                     id: `veh_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
                     registration: reg,
-                    make: 'Unknown',
-                    model: 'Unknown',
+                    make: formatTitleCase(parsedData?.vehicleMake || 'Unknown'),
+                    model: formatTitleCase(parsedData?.vehicleModel || 'Unknown'),
                     year: new Date().getFullYear(),
                     colour: '',
                     customerId: activeCustomer?.id || ''

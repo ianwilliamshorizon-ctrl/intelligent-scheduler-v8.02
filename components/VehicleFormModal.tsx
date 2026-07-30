@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Vehicle, Customer, Job, Estimate, MotTest } from '../types';
 import FormModal from './FormModal';
+import { formatTitleCase } from '../core/utils/formatUtils';
 import { lookupVehicleByVRM } from '../services/vehicleLookupService';
 import {
     Loader2, Search, Briefcase, History,
@@ -211,8 +212,8 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
 
                 return {
                     ...prev,
-                    make: details.make || prev.make,
-                    model: details.model || prev.model,
+                    make: formatTitleCase(details.make || prev.make || ''),
+                    model: formatTitleCase(details.model || prev.model || ''),
                     colour: details.colour || prev.colour,
                     fuelType: details.fuelType || prev.fuelType,
                     engineCapacityCc: details.cc || details.engineCapacity || prev.engineCapacityCc,
@@ -268,6 +269,9 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
         const finalVehicle = {
             id: vehicleToSave.id || crypto.randomUUID(),
             ...vehicleToSave,
+            registration: (vehicleToSave.registration || '').toUpperCase().trim(),
+            make: formatTitleCase(vehicleToSave.make || ''),
+            model: formatTitleCase(vehicleToSave.model || ''),
         } as Vehicle;
 
         onSave(finalVehicle);
