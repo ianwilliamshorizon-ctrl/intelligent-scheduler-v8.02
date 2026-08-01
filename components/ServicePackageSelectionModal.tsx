@@ -33,12 +33,14 @@ export const ServicePackageSelectionModal: React.FC<ServicePackageSelectionModal
     const [searchTerm, setSearchTerm] = useState('');
     const [filterMode, setFilterMode] = useState<'all' | 'compatible' | 'narrative'>('compatible');
     const [expandedPackageIds, setExpandedPackageIds] = useState<Set<string>>(new Set());
+    const [sortBy, setSortBy] = useState<'likelihood' | 'name' | 'price_asc' | 'price_desc'>('likelihood');
 
     useEffect(() => {
         if (isOpen) {
             setSelectedIds(new Set(initialSelectedPackageIds));
             setSearchTerm('');
             setFilterMode(vehicle ? 'compatible' : 'all');
+            setSortBy('likelihood');
         }
     }, [isOpen, initialSelectedPackageIds, vehicle]);
 
@@ -75,9 +77,9 @@ export const ServicePackageSelectionModal: React.FC<ServicePackageSelectionModal
         return false;
     };
 
-    // Filter and sort display items
+    // Filter and sort display items by LIKELIHOOD (Narrative match + Vehicle compatibility score)
     const filteredPackages = useMemo(() => {
-        return scoredPackages.filter(item => {
+        const filtered = scoredPackages.filter(item => {
             const matchesSearch = !searchTerm.trim() || 
                 (item.pkg.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
                 (item.pkg.description || '').toLowerCase().includes(searchTerm.toLowerCase());
@@ -85,14 +87,48 @@ export const ServicePackageSelectionModal: React.FC<ServicePackageSelectionModal
             if (!matchesSearch) return false;
 
             if (filterMode === 'compatible') {
-                // Compatible means exact match, model match, make match, engine match, or generic (score >= 1)
                 return item.score >= 1;
             } else if (filterMode === 'narrative') {
                 return isNarrativeMatch(item.pkg);
             }
             return true;
         });
-    }, [scoredPackages, searchTerm, filterMode, narrativeKeywords]);
+
+        return filtered.sort((a, b) => {
+            if (sortBy === 'name') {
+                return (a.pkg.name || '').localeCompare(b.pkg.name || '');
+            }
+            if (sortBy === 'price_asc') {
+                const aPrice = calculatePackagePrices(a.pkg, taxRates).net;
+                const bPrice = calculatePackagePrices(b.pkg, taxRates).net;
+                return aPrice - bPrice;
+            }
+            if (sortBy === 'price_desc') {
+                const aPrice = calculatePackagePrices(a.pkg, taxRates).net;
+                const bPrice = calculatePackagePrices(b.pkg, taxRates).net;
+                return bPrice - aPrice;
+            }
+
+            // Default 'likelihood':
+            // 1. Narrative match AND vehicle match gets highest priority (+10 boost)
+            // 2. Add vehicle compatibility score (Exact=5, Model=4, Make=3, Engine=3.5, Name=2, Generic=1, Other=0)
+            const aNarr = isNarrativeMatch(a.pkg);
+            const bNarr = isNarrativeMatch(b.pkg);
+
+            const aLikelihood = (aNarr ? 10 : 0) + a.score;
+            const bLikelihood = (bNarr ? 10 : 0) + b.score;
+
+            if (bLikelihood !== aLikelihood) {
+                return bLikelihood - aLikelihood;
+            }
+
+            if (b.score !== a.score) {
+                return b.score - a.score;
+            }
+
+            return (a.pkg.name || '').localeCompare(b.pkg.name || '');
+        });
+    }, [scoredPackages, searchTerm, filterMode, narrativeKeywords, sortBy, taxRates]);
 
     // Recommend top matches based on vehicle compatibility and narrative
     const recommendedPackageIds = useMemo(() => {
@@ -219,47 +255,79 @@ export const ServicePackageSelectionModal: React.FC<ServicePackageSelectionModal
                             </button>
                         )}
                     </div>
-
-                    <div className="flex items-center gap-1.5 bg-gray-100 p-1 rounded-xl">
-                        <button
-                            type="button"
-                            onClick={() => setFilterMode('compatible')}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-                                filterMode === 'compatible'
-                                    ? 'bg-white text-indigo-700 shadow-xs'
-                                    : 'text-gray-600 hover:text-gray-900'
-                            }`}
-                        >
-                            <ShieldCheck size={14} />
-                            Compatible for Vehicle
-                        </button>
-                        {narrativeKeywords.length > 0 && (
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 bg-gray-100 p-1 rounded-xl">
                             <button
                                 type="button"
-                                onClick={() => setFilterMode('narrative')}
+                                onClick={() => setFilterMode('compatible')}
                                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-                                    filterMode === 'narrative'
-                                        ? 'bg-purple-600 text-white shadow-xs'
-                                        : 'text-purple-700 hover:bg-purple-50'
+                                    filterMode === 'compatible'
+                                        ? 'bg-white text-indigo-700 shadow-xs'
+                                        : 'text-gray-600 hover:text-gray-900'
                                 }`}
                             >
-                                <Sparkles size={14} />
-                                Narrative Matches ({recommendedPackageIds.size})
+                                <ShieldCheck size={14} />
+                                Compatible for Vehicle
                             </button>
-                        )}
-                        <button
-                            type="button"
-                            onClick={() => setFilterMode('all')}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-                                filterMode === 'all'
-                                    ? 'bg-white text-indigo-700 shadow-xs'
-                                    : 'text-gray-600 hover:text-gray-900'
-                            }`}
-                        >
-                            <Filter size={14} />
-                            All ({servicePackages.length})
-                        </button>
+                            {narrativeKeywords.length > 0 && (
+                                <button
+                                    type="button"
+                                    onClick={() => setFilterMode('narrative')}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                                        filterMode === 'narrative'
+                                            ? 'bg-purple-600 text-white shadow-xs'
+                                            : 'text-purple-700 hover:bg-purple-50'
+                                    }`}
+                                >
+                                    <Sparkles size={14} />
+                                    Narrative Matches ({recommendedPackageIds.size})
+                                </button>
+                            )}
+                            <button
+                                type="button"
+                                onClick={() => setFilterMode('all')}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                                    filterMode === 'all'
+                                        ? 'bg-white text-indigo-700 shadow-xs'
+                                        : 'text-gray-600 hover:text-gray-900'
+                                }`}
+                            >
+                                <Filter size={14} />
+                                All ({servicePackages.length})
+                            </button>
+                        </div>
+
+                        {/* Sort Dropdown */}
+                        <div className="flex items-center gap-1.5 text-xs">
+                            <span className="text-gray-500 font-medium">Sort by:</span>
+                            <select
+                                value={sortBy}
+                                onChange={(e) => setSortBy(e.target.value as any)}
+                                className="bg-white border border-gray-200 rounded-lg text-xs font-bold text-gray-700 px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 cursor-pointer"
+                            >
+                                <option value="likelihood">★ Likelihood (Vehicle &amp; Narrative)</option>
+                                <option value="name">Name (A - Z)</option>
+                                <option value="price_asc">Price (Low to High)</option>
+                                <option value="price_desc">Price (High to Low)</option>
+                            </select>
+                        </div>
                     </div>
+                </div>
+
+                {/* Likelihood / Sort Banner */}
+                <div className="flex-shrink-0 bg-slate-50 border-b border-gray-100 px-6 py-1.5 flex items-center justify-between text-[11px] text-gray-500 font-medium">
+                    <div className="flex items-center gap-1.5">
+                        <span className="text-indigo-600 font-bold">
+                            {sortBy === 'likelihood' ? '★ Sorted by Likelihood:' : 'Sorted:'}
+                        </span>
+                        <span>
+                            {sortBy === 'likelihood' && 'Direct Make/Model match & Narrative keywords appear first'}
+                            {sortBy === 'name' && 'Alphabetical by package name'}
+                            {sortBy === 'price_asc' && 'Lowest price to highest price'}
+                            {sortBy === 'price_desc' && 'Highest price to lowest price'}
+                        </span>
+                    </div>
+                    <span>Showing {filteredPackages.length} package(s)</span>
                 </div>
 
                 {/* Recommended action banner if narrative matches are present */}
@@ -362,6 +430,13 @@ export const ServicePackageSelectionModal: React.FC<ServicePackageSelectionModal
                                                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 border border-purple-200 flex items-center gap-1">
                                                         <Sparkles size={11} className="text-purple-600" />
                                                         Narrative Match
+                                                    </span>
+                                                )}
+
+                                                {/* Top Likelihood Badge */}
+                                                {isNarrativeMatched && score >= 3 && (
+                                                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-500 to-amber-600 text-white shadow-xs flex items-center gap-1">
+                                                        ★ Top Likelihood
                                                     </span>
                                                 )}
 
