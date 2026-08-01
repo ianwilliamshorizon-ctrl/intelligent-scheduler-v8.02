@@ -401,7 +401,12 @@ const AuthenticatedApp = () => {
     return (
         <Router>
             <VersionChecker />
-            <MainLayout onOpenManagement={() => setIsManagementOpen(true)} onOpenHelpCentre={() => setIsHelpCentreOpen(true)} onSearchResult={handleSearchResult}>
+            <MainLayout 
+                onOpenManagement={() => setIsManagementOpen(true)} 
+                onOpenHelpCentre={() => setIsHelpCentreOpen(true)} 
+                onSearchResult={handleSearchResult}
+                onOpenAssistant={() => { setters.setAssistantContextJobId(null); setters.setIsAssistantOpen(true); }}
+            >
                 <Suspense fallback={
                     <div className="flex items-center justify-center h-screen bg-slate-50 dark:bg-slate-900">
                         <div className="flex flex-col items-center gap-4">

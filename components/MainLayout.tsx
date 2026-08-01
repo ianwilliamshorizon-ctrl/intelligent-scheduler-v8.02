@@ -4,7 +4,7 @@ import { useData } from '../core/state/DataContext';
 import { 
     Menu, LogOut, Settings, Building2, UserCheck, LayoutDashboard, 
     Calendar, Wrench, Briefcase, FileText, ShoppingCart, Car, 
-    Archive, Truck, MessageSquare, Phone, CalendarDays, GitPullRequest, Search, X, HelpCircle, Building, AlertCircle, BarChart3
+    Archive, Truck, MessageSquare, Phone, CalendarDays, GitPullRequest, Search, X, HelpCircle, Building, AlertCircle, BarChart3, Sparkles
 } from 'lucide-react';
 import * as T from '../types';
 
@@ -12,8 +12,9 @@ const MainLayout: React.FC<{
     children: React.ReactNode, 
     onOpenManagement: () => void, 
     onOpenHelpCentre: () => void, 
-    onSearchResult: (type: string, id: string) => void 
-}> = ({ children, onOpenManagement, onOpenHelpCentre, onSearchResult }) => {
+    onSearchResult: (type: string, id: string) => void,
+    onOpenAssistant?: () => void
+}> = ({ children, onOpenManagement, onOpenHelpCentre, onSearchResult, onOpenAssistant }) => {
     const { 
         currentView, setCurrentView, 
         currentUser, selectedEntityId, setSelectedEntityId, 
@@ -201,6 +202,17 @@ const MainLayout: React.FC<{
                     </div>
 
                     <div className="flex items-center gap-2 lg:gap-4 ml-2">
+                        {onOpenAssistant && (
+                            <button 
+                                onClick={onOpenAssistant} 
+                                title="Open Brookspeed Master Tech AI Assistant"
+                                className="p-2 text-purple-600 hover:text-purple-700 hover:bg-purple-50 rounded-full transition-colors flex items-center gap-1.5 font-bold text-xs"
+                            >
+                                <Sparkles size={20} className="animate-pulse text-purple-600" />
+                                <span className="hidden xl:inline">AI Tech Assistant</span>
+                            </button>
+                        )}
+
                          <button 
                             onClick={onOpenHelpCentre} 
                             data-action="help-centre"
@@ -239,6 +251,18 @@ const MainLayout: React.FC<{
                 <main className="flex-grow overflow-auto relative bg-gray-100 print:bg-white">
                     {children}
                 </main>
+
+                {onOpenAssistant && (
+                    <button
+                        type="button"
+                        onClick={onOpenAssistant}
+                        className="fixed bottom-6 right-6 z-40 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white p-3.5 sm:px-5 sm:py-3.5 rounded-full shadow-2xl hover:shadow-purple-500/30 flex items-center gap-2.5 transition-all transform hover:-translate-y-0.5 active:translate-y-0 font-bold text-sm border-2 border-white/20 print:hidden group"
+                        title="Open Brookspeed Master Tech AI Assistant"
+                    >
+                        <Sparkles size={18} className="animate-pulse text-purple-200 group-hover:text-white" />
+                        <span className="hidden sm:inline font-black tracking-wide">AI Assistant</span>
+                    </button>
+                )}
             </div>
         </div>
     );

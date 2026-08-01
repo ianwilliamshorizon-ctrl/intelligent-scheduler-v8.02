@@ -1,11 +1,11 @@
 import { cloudSpeechSynthesis, CloudSpeechSynthesisUtterance } from '../core/utils/cloudSpeech';
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Send, Loader2, Bot, ClipboardCopy, Expand, Volume2, VolumeX } from 'lucide-react';
+import { X, Send, Loader2, Bot, ClipboardCopy, Expand, Volume2, VolumeX, User, Check } from 'lucide-react';
 import { generateContent } from '../core/services/geminiService';
 import { useApp } from '../core/state/AppContext';
 import SpeechToTextButton from './shared/SpeechToTextButton';
 import { findBestVoice, prepareTextForSpeech } from '../core/utils/speechUtils';
-import { Estimate } from '../types';
+import { Estimate, Customer } from '../types';
 
 interface Message {
     id: string;
@@ -18,10 +18,12 @@ interface LiveAssistantProps {
     onClose: () => void;
     jobId: string | null;
     onAddNote: (note: string) => void;
+    onAddCustomerNote?: (customerId: string, note: string) => void;
+    customers?: Customer[];
     onReviewPackage?: (estimate: Partial<Estimate>) => void;
 }
 
-const LiveAssistant: React.FC<LiveAssistantProps> = ({ isOpen, onClose, jobId, onAddNote, onReviewPackage }) => {
+const LiveAssistant: React.FC<LiveAssistantProps> = ({ isOpen, onClose, jobId, onAddNote, onAddCustomerNote, customers = [], onReviewPackage }) => {
     const { preferredVoiceName } = useApp();
     const [messages, setMessages] = useState<Message[]>([]);
     const activeUtterance = useRef<any>(null);
@@ -31,6 +33,10 @@ const LiveAssistant: React.FC<LiveAssistantProps> = ({ isOpen, onClose, jobId, o
     const [isSpeaking, setIsSpeaking] = useState<string | null>(null);
     const [responseMode, setResponseMode] = useState<'summary' | 'full'>('summary');
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const [noteTargetMsgId, setNoteTargetMsgId] = useState<string | null>(null);
+    const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
+    const [customerSearch, setCustomerSearch] = useState<string>('');
+    const [savedCustomerNoteMsgId, setSavedCustomerNoteMsgId] = useState<string | null>(null);
 
     const [voices, setVoices] = useState<any[]>([]);
 
@@ -267,28 +273,99 @@ const LiveAssistant: React.FC<LiveAssistantProps> = ({ isOpen, onClose, jobId, o
                         </div>
                         
                         {msg.role === 'model' && (
-                            <div className="mt-2 flex items-center gap-2">
-                                <button 
-                                    onClick={() => {
-                                        onAddNote(msg.text);
-                                        onClose();
-                                    }}
-                                    className="flex items-center gap-1.5 text-[11px] font-bold text-indigo-700 hover:text-indigo-900 bg-indigo-50 px-2 py-1 rounded border border-indigo-100 transition-colors uppercase tracking-tight"
-                                >
-                                    <ClipboardCopy size={12} /> Save to Job Note
-                                </button>
-                                <button 
-                                    onClick={() => speak(msg.text, msg.id)}
-                                    className={`flex items-center gap-1.5 text-[11px] font-bold px-2 py-1 rounded border transition-colors uppercase tracking-tight ${
-                                        isSpeaking === msg.id 
-                                            ? 'bg-red-50 text-red-700 border-red-100 hover:bg-red-100' 
-                                            : 'bg-indigo-50 text-indigo-700 border-indigo-100 hover:bg-indigo-200'
-                                    }`}
-                                    title={isSpeaking === msg.id ? "Stop Speaking" : "Read Aloud"}
-                                >
-                                    {isSpeaking === msg.id ? <VolumeX size={12} /> : <Volume2 size={12} />}
-                                    {isSpeaking === msg.id ? "Stop" : "Speak"}
-                                </button>
+                            <div className="mt-2 flex flex-col gap-2">
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <button 
+                                        onClick={() => {
+                                            onAddNote(msg.text);
+                                            onClose();
+                                        }}
+                                        className="flex items-center gap-1.5 text-[11px] font-bold text-indigo-700 hover:text-indigo-900 bg-indigo-50 px-2 py-1 rounded border border-indigo-100 transition-colors uppercase tracking-tight"
+                                    >
+                                        <ClipboardCopy size={12} /> Save to Job Note
+                                    </button>
+
+                                    {onAddCustomerNote && customers && customers.length > 0 && (
+                                        <button 
+                                            onClick={() => {
+                                                setNoteTargetMsgId(noteTargetMsgId === msg.id ? null : msg.id);
+                                                setSelectedCustomerId('');
+                                            }}
+                                            className="flex items-center gap-1.5 text-[11px] font-bold text-purple-700 hover:text-purple-900 bg-purple-50 px-2 py-1 rounded border border-purple-100 transition-colors uppercase tracking-tight"
+                                        >
+                                            <User size={12} /> Save to Customer Record
+                                        </button>
+                                    )}
+
+                                    <button 
+                                        onClick={() => speak(msg.text, msg.id)}
+                                        className={`flex items-center gap-1.5 text-[11px] font-bold px-2 py-1 rounded border transition-colors uppercase tracking-tight ${
+                                            isSpeaking === msg.id 
+                                                ? 'bg-red-50 text-red-700 border-red-100 hover:bg-red-100' 
+                                                : 'bg-indigo-50 text-indigo-700 border-indigo-100 hover:bg-indigo-200'
+                                        }`}
+                                        title={isSpeaking === msg.id ? "Stop Speaking" : "Read Aloud"}
+                                    >
+                                        {isSpeaking === msg.id ? <VolumeX size={12} /> : <Volume2 size={12} />}
+                                        {isSpeaking === msg.id ? "Stop" : "Speak"}
+                                    </button>
+                                </div>
+
+                                {noteTargetMsgId === msg.id && onAddCustomerNote && (
+                                    <div className="p-3 bg-purple-50 border border-purple-200 rounded-lg w-full max-w-sm shadow-xs">
+                                        <div className="text-xs font-bold text-purple-900 mb-1.5 flex items-center justify-between">
+                                            <span>Attach Note to Customer:</span>
+                                            <button 
+                                                onClick={() => setNoteTargetMsgId(null)}
+                                                className="text-gray-400 hover:text-gray-600"
+                                            >
+                                                ✕
+                                            </button>
+                                        </div>
+                                        <input
+                                            type="text"
+                                            placeholder="Search customer by name or company..."
+                                            value={customerSearch}
+                                            onChange={(e) => setCustomerSearch(e.target.value)}
+                                            className="w-full text-xs px-2.5 py-1.5 bg-white border border-purple-200 rounded mb-2 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                        />
+                                        <select
+                                            value={selectedCustomerId}
+                                            onChange={(e) => setSelectedCustomerId(e.target.value)}
+                                            className="w-full text-xs px-2.5 py-1.5 bg-white border border-purple-200 rounded mb-2 font-medium"
+                                        >
+                                            <option value="">-- Choose Customer --</option>
+                                            {customers
+                                                .filter(c => !customerSearch.trim() || `${c.forename} ${c.surname} ${c.companyName || ''}`.toLowerCase().includes(customerSearch.toLowerCase()))
+                                                .slice(0, 20)
+                                                .map(c => (
+                                                    <option key={c.id} value={c.id}>
+                                                        {c.forename} {c.surname} {c.companyName ? `(${c.companyName})` : ''}
+                                                    </option>
+                                                ))}
+                                        </select>
+                                        <button
+                                            disabled={!selectedCustomerId}
+                                            onClick={() => {
+                                                if (selectedCustomerId && onAddCustomerNote) {
+                                                    onAddCustomerNote(selectedCustomerId, msg.text);
+                                                    setSavedCustomerNoteMsgId(msg.id);
+                                                    setNoteTargetMsgId(null);
+                                                    setSelectedCustomerId('');
+                                                }
+                                            }}
+                                            className="w-full py-1.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded font-bold text-xs shadow-xs transition-colors flex items-center justify-center gap-1.5"
+                                        >
+                                            <Check size={14} /> Attach Note to Customer
+                                        </button>
+                                    </div>
+                                )}
+
+                                {savedCustomerNoteMsgId === msg.id && (
+                                    <div className="text-[11px] font-bold text-emerald-700 flex items-center gap-1 bg-emerald-50 px-2.5 py-1 rounded border border-emerald-200 w-fit">
+                                        <Check size={13} /> Saved to Customer Record Note
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>

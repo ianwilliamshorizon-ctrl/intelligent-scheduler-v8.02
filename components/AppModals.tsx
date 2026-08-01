@@ -116,6 +116,48 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
     // Helper for saving
     const handleSaveItem = actions.handleSaveItem;
 
+    const handleAddCustomerNote = async (customerId: string, noteText: string) => {
+        const customer = data.customers.find(c => c.id === customerId);
+        if (!customer) return;
+        const timestamp = new Date().toLocaleDateString();
+        const existingNotes = customer.notes ? `${customer.notes}\n\n` : '';
+        const updatedNotes = `${existingNotes}[AI Tech Note ${timestamp}]: ${noteText}`;
+        const updatedCustomer = { ...customer, notes: updatedNotes };
+        await handleSaveItem(data.setCustomers, updatedCustomer, 'brooks_customers');
+        setConfirmation({
+            isOpen: true,
+            title: 'Note Attached to Customer',
+            message: `The AI note has been added to the customer record for ${customer.forename} ${customer.surname}.`,
+            type: 'success'
+        });
+    };
+
+    const handleAddJobNote = async (noteText: string) => {
+        const jobId = modals.assistantContextJobId;
+        if (!jobId) {
+            setConfirmation({
+                isOpen: true,
+                title: 'No Active Job Context',
+                message: 'No specific job was selected for this note. Please use "Save to Customer Record" or open the assistant from a specific job.',
+                type: 'info'
+            });
+            return;
+        }
+        const job = (data.jobs || []).find(j => j.id === jobId);
+        if (!job) return;
+        const timestamp = new Date().toLocaleDateString();
+        const existingNotes = job.notes ? `${job.notes}\n\n` : '';
+        const updatedNotes = `${existingNotes}[AI Note ${timestamp}]: ${noteText}`;
+        const updatedJob = { ...job, notes: updatedNotes };
+        await handleSaveItem(data.setJobs, updatedJob, 'brooks_jobs');
+        setConfirmation({
+            isOpen: true,
+            title: 'Note Attached to Job',
+            message: `The AI note has been added to Job #${job.jobNumber || job.id}.`,
+            type: 'success'
+        });
+    };
+
     const handleBatchUpdatePoRef = async (updatedPos: T.PurchaseOrder[]) => {
         setters.setBatchUpdatePoRefModalOpen(false);
         
@@ -1043,6 +1085,19 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                         isOpen={modals.vehicleHistoryReportModal.isOpen}
                         onClose={() => setters.setVehicleHistoryReportModal({isOpen: false, vehicleId: null})}
                         vehicleId={modals.vehicleHistoryReportModal.vehicleId}
+                    />
+                </ModalSuspense>
+            )}
+
+            {modals.isAssistantOpen && (
+                <ModalSuspense>
+                    <LiveAssistant 
+                        isOpen={modals.isAssistantOpen}
+                        onClose={() => setters.setIsAssistantOpen(false)}
+                        jobId={modals.assistantContextJobId || null}
+                        onAddNote={handleAddJobNote}
+                        onAddCustomerNote={handleAddCustomerNote}
+                        customers={data.customers}
                     />
                 </ModalSuspense>
             )}
