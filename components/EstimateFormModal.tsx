@@ -13,6 +13,8 @@ import CustomerFormModal from './CustomerFormModal';
 import VehicleFormModal from './VehicleFormModal';
 import SearchableSelect from './SearchableSelect';
 import FormModal from './FormModal';
+import { ServicePackageSelectionModal } from './ServicePackageSelectionModal';
+import { Package } from 'lucide-react';
 import MediaManagerModal from './MediaManagerModal';
 import PartFormModal from './PartFormModal';
 import LiveAssistant from './LiveAssistant';
@@ -42,11 +44,14 @@ interface EditableLineItemRowProps {
     onSetActivePartSearch: (id: string | null) => void;
     onSelectPart: (lineItemId: string, part: Part) => void;
     onAddNewPart: (lineItemId: string, searchTerm: string) => void;
+    isCollapsed?: boolean;
+    onToggleCollapse?: () => void;
 }
 
 const MemoizedEditableLineItemRow = React.memo(({ 
     item, taxRates, onLineItemChange, onRemoveLineItem, filteredParts, 
-    activePartSearch, onPartSearchChange, onSetActivePartSearch, onSelectPart, onAddNewPart, suppliers, onOpenSupplierSelection 
+    activePartSearch, onPartSearchChange, onSetActivePartSearch, onSelectPart, onAddNewPart, suppliers, onOpenSupplierSelection,
+    isCollapsed, onToggleCollapse
 }: EditableLineItemRowProps) => {
     const isPackageComponent = item.isPackageComponent;
     const isPackageHeader = !!item.servicePackageId && !item.isPackageComponent;
@@ -70,6 +75,16 @@ const MemoizedEditableLineItemRow = React.memo(({
         return (
             <div className={`grid grid-cols-12 gap-2 items-center p-2 rounded-lg border bg-indigo-50 border-indigo-200 transition-all hover:shadow-md mb-2`}>
                 <div className="col-span-5 flex items-center gap-2">
+                    {onToggleCollapse && (
+                        <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); onToggleCollapse(); }}
+                            className="text-indigo-600 hover:text-indigo-800 p-0.5 rounded hover:bg-indigo-100 transition-colors flex items-center justify-center flex-shrink-0"
+                            title={isCollapsed ? "Expand Package Details" : "Collapse Package Details"}
+                        >
+                            {isCollapsed ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
+                        </button>
+                    )}
                     <input 
                         type="checkbox" 
                         checked={item.isOptional || false} 
@@ -397,6 +412,17 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
     const [showAllEntities, setShowAllEntities] = useState(false);
     const [packageSearchTerm, setPackageSearchTerm] = useState('');
     const [isAIUpdating, setIsAIUpdating] = useState(false);
+    const [isPackageSelectionModalOpen, setIsPackageSelectionModalOpen] = useState(false);
+    const [collapsedPackageIds, setCollapsedPackageIds] = useState<Set<string>>(new Set());
+
+    const toggleCollapsePackage = (headerId: string) => {
+        setCollapsedPackageIds(prev => {
+            const next = new Set(prev);
+            if (next.has(headerId)) next.delete(headerId);
+            else next.add(headerId);
+            return next;
+        });
+    };
     
     const handleAIUpdate = async () => {
         if (!formData.linkedInquiryId) {
@@ -1300,13 +1326,33 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                             </div>
                             {estimateBreakdown.packages.length > 0 && (
                                 <div>
-                                    <h4 className="font-bold text-gray-800 mb-2 text-sm">Service Packages</h4>
+                                    <div className="flex justify-between items-center mb-2">
+                                        <h4 className="font-bold text-gray-800 text-sm">Service Packages</h4>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                if (collapsedPackageIds.size === estimateBreakdown.packages.length) {
+                                                    setCollapsedPackageIds(new Set());
+                                                } else {
+                                                    setCollapsedPackageIds(new Set(estimateBreakdown.packages.map(p => p.header.id)));
+                                                }
+                                            }}
+                                            className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold"
+                                        >
+                                            {collapsedPackageIds.size === estimateBreakdown.packages.length ? "Expand All" : "Collapse All"}
+                                        </button>
+                                    </div>
                                     <div className="space-y-2">
-                                        {estimateBreakdown.packages.map(({ header, children }) => (
+                                        {estimateBreakdown.packages.map(({ header, children }) => {
+                                            const isCollapsed = collapsedPackageIds.has(header.id);
+                                            return (
                                             <div key={header.id}>
                                                 <MemoizedEditableLineItemRow 
                                                     item={header} taxRates={taxRates} onLineItemChange={handleLineItemChange} onRemoveLineItem={removeLineItem} filteredParts={[]} activePartSearch={null} onPartSearchChange={()=>{}} onSetActivePartSearch={()=>{}} onSelectPart={()=>{}} onAddNewPart={()=>{}} suppliers={suppliers} onOpenSupplierSelection={openSupplierSelection}
+                                                    isCollapsed={isCollapsed}
+                                                    onToggleCollapse={() => toggleCollapsePackage(header.id)}
                                                 />
+                                                {!isCollapsed && (
                                                 <div className="pl-6 border-l-2 ml-2 space-y-1 mt-1">
                                                       {children.map(child => (
                                                          <MemoizedEditableLineItemRow 
@@ -1314,8 +1360,10 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                                                          />
                                                     ))}
                                                 </div>
+                                                )}
                                             </div>
-                                        ))}
+                                            );
+                                        })}
                                     </div>
                                 </div>
                             )}
@@ -1348,6 +1396,15 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                                       )}
                                    </div>
                                  <div className="flex items-center gap-2">
+                                     <button
+                                         type="button"
+                                         onClick={() => setIsPackageSelectionModalOpen(true)}
+                                         className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-bold flex items-center gap-1.5 border border-indigo-200 shadow-sm transition whitespace-nowrap"
+                                         title="Open selectable modal to pick and match service packages"
+                                     >
+                                         <Package size={14} />
+                                         Pick Packages
+                                     </button>
                                      <SearchableSelect 
                                          options={sortedPackages}
                                          onSelect={handlePackageSelect}
@@ -1542,6 +1599,20 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                     onSaveCustomer={onSaveCustomer}
                 />
             )}
+
+            <ServicePackageSelectionModal
+                isOpen={isPackageSelectionModalOpen}
+                onClose={() => setIsPackageSelectionModalOpen(false)}
+                servicePackages={servicePackages}
+                vehicle={currentVehicle}
+                narrative={formData.notes || ''}
+                taxRates={taxRates}
+                onSelectPackages={(selectedPkgs) => {
+                    selectedPkgs.forEach(pkg => {
+                        handlePackageSelect(pkg.id);
+                    });
+                }}
+            />
         </FormModal>
     );
 };

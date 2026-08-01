@@ -1464,6 +1464,8 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                                 `Customer Name: ${formData.fromName || 'Unknown'}`,
                                                 formData.fromEmail ? `Email: ${formData.fromEmail}` : null,
                                                 formData.fromPhone ? `Phone: ${formData.fromPhone}` : null,
+                                                formData.vehicleRegistration ? `Vehicle Registration: ${formData.vehicleRegistration}` : null,
+                                                (formData.vehicleMake || formData.vehicleModel) ? `Vehicle Make & Model: ${formData.vehicleYear || ''} ${formData.vehicleMake || ''} ${formData.vehicleModel || ''}`.trim() : null,
                                                 `Request Details: ${formData.message || ''}`
                                             ].filter(Boolean).join('\n');
                                             onSmartCreateEstimate(formData as Inquiry, fullPrompt);

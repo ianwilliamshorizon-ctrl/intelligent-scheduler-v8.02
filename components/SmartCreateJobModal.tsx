@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { X, Loader2, Wand2, Check, Car, Plus, Trash2, Calendar, AlertTriangle, Calculator, FileText, User, Phone, Mail, Edit, DollarSign, Wallet, TrendingUp, Bot, Sparkles, Info, Volume2, VolumeX } from 'lucide-react';
+import { X, Loader2, Wand2, Check, Car, Plus, Trash2, Calendar, AlertTriangle, Calculator, FileText, User, Phone, Mail, Edit, DollarSign, Wallet, TrendingUp, Bot, Sparkles, Info, Volume2, VolumeX, Package } from 'lucide-react';
 import { parseJobRequest } from '../core/services/geminiService';
 import { toast } from 'react-toastify';
 import SpeechToTextButton from './shared/SpeechToTextButton';
@@ -19,6 +19,8 @@ import { generateEstimateNumber, generateJobId } from '../core/utils/numberGener
 import { getCustomerDisplayName } from '../core/utils/customerUtils';
 import { lookupVehicleByVRM } from '../services/vehicleLookupService';
 import { calculatePackagePrices } from '../core/utils/packageUtils';
+import { getScoredServicePackages } from '../utils/servicePackageScoring';
+import { ServicePackageSelectionModal } from './ServicePackageSelectionModal';
 
 interface SmartCreateJobModalProps {
     isOpen: boolean;
@@ -77,6 +79,7 @@ const SmartCreateJobModal: React.FC<SmartCreateJobModalProps> = ({
     const [lineItems, setLineItems] = useState<EstimateLineItem[]>([]);
     const [notes, setNotes] = useState('');
     const [showAddNewVehicle, setShowAddNewVehicle] = useState(false);
+    const [isPackageSelectionModalOpen, setIsPackageSelectionModalOpen] = useState(false);
 
     const isEstimateMode = creationMode === 'estimate';
     const standardTaxRateId = useMemo(() => taxRates.find(t => t.code === 'T1')?.id, [taxRates]);
@@ -92,9 +95,24 @@ const SmartCreateJobModal: React.FC<SmartCreateJobModalProps> = ({
             setError('');
             setIsSpeaking(false);
             setIsSpeakingExplanation(false);
-            setVehicleExists(null);
-            setFoundVehicle(null);
-            setFoundCustomer(null);
+            let initialVehicle: Vehicle | null = null;
+            let initialCustomer: Customer | null = null;
+            if (linkedInquiry) {
+                if (linkedInquiry.linkedVehicleId) {
+                    initialVehicle = vehicles.find(v => v.id === linkedInquiry.linkedVehicleId) || null;
+                } else if (linkedInquiry.vehicleRegistration) {
+                    const cleanReg = linkedInquiry.vehicleRegistration.toUpperCase().replace(/\s/g, '');
+                    initialVehicle = vehicles.find(v => v.registration.toUpperCase().replace(/\s/g, '') === cleanReg) || null;
+                }
+                if (initialVehicle?.customerId) {
+                    initialCustomer = customers.find(c => c.id === initialVehicle?.customerId) || null;
+                } else if (linkedInquiry.linkedCustomerId) {
+                    initialCustomer = customers.find(c => c.id === linkedInquiry.linkedCustomerId) || null;
+                }
+            }
+            setVehicleExists(initialVehicle ? true : null);
+            setFoundVehicle(initialVehicle);
+            setFoundCustomer(initialCustomer);
             setCustomerCreated(null);
             setIsCustomerModalOpen(false);
             setLineItems([]);
@@ -406,6 +424,14 @@ User Request: ${JSON.stringify(userText)}`;
             // 1. Match Vehicle
             const registration = finalResult.vehicleRegistration?.toUpperCase().replace(/\s/g, '');
             let found = vehicles.find(v => v.registration.toUpperCase().replace(/\s/g, '') === registration);
+            if (!found && linkedInquiry) {
+                if (linkedInquiry.linkedVehicleId) {
+                    found = vehicles.find(v => v.id === linkedInquiry.linkedVehicleId);
+                } else if (linkedInquiry.vehicleRegistration) {
+                    const cleanReg = linkedInquiry.vehicleRegistration.toUpperCase().replace(/\s/g, '');
+                    found = vehicles.find(v => v.registration.toUpperCase().replace(/\s/g, '') === cleanReg);
+                }
+            }
             
             // If found, fetch latest technical data (VIN, MOT) to satisfy "front sheet" update requirement
             if (found) {
@@ -494,58 +520,39 @@ User Request: ${JSON.stringify(userText)}`;
                 return [headerItem, ...childItems];
             };
 
-            // 1. Identify matched/partially matched service packages
+            // 1. Identify matched service packages using scoring and vehicle compatibility
             const matchedPackages: ServicePackage[] = [];
             const activeVehicle = found || foundVehicle;
+            const scoredAll = getScoredServicePackages(servicePackages, activeVehicle);
+            const compatibleScored = scoredAll.filter(item => item.score >= 1);
             
             // Resolve packages explicitly identified by AI
             if (finalResult.servicePackageNames && finalResult.servicePackageNames.length > 0) {
                 finalResult.servicePackageNames.forEach((pkgName: string) => {
-                    const pkg = servicePackages.find(p => p.name?.toLowerCase() === pkgName.toLowerCase());
-                    if (pkg && !matchedPackages.some(m => m.id === pkg.id)) {
-                        matchedPackages.push(pkg);
+                    const matchedItem = compatibleScored.find(item => 
+                        (item.pkg.name || '').toLowerCase() === pkgName.toLowerCase() ||
+                        (item.pkg.name || '').toLowerCase().includes(pkgName.toLowerCase())
+                    );
+                    if (matchedItem && !matchedPackages.some(m => m.id === matchedItem.pkg.id)) {
+                        matchedPackages.push(matchedItem.pkg);
                     }
                 });
             }
 
-            // Perform direct string/partial matching on user prompt as a fallback/verification
+            // Check narrative keywords, but pick ONLY the single highest-scored compatible package per keyword
             const cleanPrompt = currentPrompt.toLowerCase();
-            servicePackages.forEach(pkg => {
-                if (!pkg.name) return;
-                const cleanPkgName = pkg.name.toLowerCase();
-                let isMatch = false;
-
-                if (cleanPkgName.includes('mot')) {
-                    if (/\bmot\b/i.test(cleanPrompt)) {
-                        isMatch = true;
-                    }
-                } else {
-                    const keywords = ['minor service', 'major service', 'brake fluid', 'winter check', 'air con'];
-                    const matchedKeyword = keywords.find(kw => cleanPkgName.includes(kw) && cleanPrompt.includes(kw));
-                    if (matchedKeyword) {
-                        isMatch = true;
-                    } else if (cleanPrompt.includes(cleanPkgName)) {
-                        isMatch = true;
-                    }
-                }
-
-                if (isMatch) {
-                    if (activeVehicle) {
-                        const vMake = (activeVehicle.make || '').toLowerCase().trim();
-                        const vModel = (activeVehicle.model || '').toLowerCase().trim();
-                        const pkgMake = (pkg.applicableMake || '').toLowerCase().trim();
-                        const pkgModel = (pkg.applicableModel || '').toLowerCase().trim();
-
-                        if (pkgMake && !vMake.includes(pkgMake) && !pkgMake.includes(vMake)) {
-                            return; // Skip make mismatch
+            const keywords = ['minor service', 'major service', 'interim service', 'full service', 'mot', 'brake fluid', 'winter check', 'air con'];
+            keywords.forEach(kw => {
+                const isKwInPrompt = kw === 'mot' ? /\bmot\b/i.test(cleanPrompt) : cleanPrompt.includes(kw);
+                if (isKwInPrompt) {
+                    const matchingScored = compatibleScored
+                        .filter(item => (item.pkg.name || '').toLowerCase().includes(kw))
+                        .sort((a, b) => b.score - a.score);
+                    if (matchingScored.length > 0) {
+                        const bestPkg = matchingScored[0].pkg;
+                        if (!matchedPackages.some(m => m.id === bestPkg.id)) {
+                            matchedPackages.push(bestPkg);
                         }
-                        if (pkgModel && !vModel.includes(pkgModel) && !pkgModel.includes(vModel)) {
-                            return; // Skip model mismatch
-                        }
-                    }
-
-                    if (!matchedPackages.some(m => m.id === pkg.id)) {
-                        matchedPackages.push(pkg);
                     }
                 }
             });
@@ -1465,6 +1472,15 @@ User Request: ${JSON.stringify(userText)}`;
                         <div className="p-4 bg-white border-b flex-shrink-0">
                              <h3 className="font-bold text-gray-700 mb-3 flex items-center gap-2"><DollarSign size={18}/> Work Items & Costs</h3>
                              <div className="flex gap-2 mb-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setIsPackageSelectionModalOpen(true)}
+                                    className="px-3 py-2 bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm transition whitespace-nowrap"
+                                    title="Open selectable modal to pick service packages matching this vehicle and narrative"
+                                >
+                                    <Package size={14} />
+                                    Pick Packages
+                                </button>
                                 <div className="flex-grow">
                                 <SearchableSelect 
                                     options={sortedPackages}
@@ -1610,6 +1626,20 @@ User Request: ${JSON.stringify(userText)}`;
                     existingCustomers={customers}
                 />
             )}
+
+            <ServicePackageSelectionModal
+                isOpen={isPackageSelectionModalOpen}
+                onClose={() => setIsPackageSelectionModalOpen(false)}
+                servicePackages={servicePackages}
+                vehicle={foundVehicle}
+                narrative={prompt || notes}
+                taxRates={taxRates}
+                onSelectPackages={(selectedPkgs) => {
+                    selectedPkgs.forEach(pkg => {
+                        handleSelectPackage(pkg.id);
+                    });
+                }}
+            />
         </div>
     );
 };
