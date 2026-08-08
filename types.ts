@@ -685,7 +685,7 @@ export interface Inquiry {
     takenByUserId: string;
     assignedToUserId?: string;
     assignedToEntityId?: string;
-    status: 'Inbox' | 'New Requests' | 'Our Action' | 'Waiting on Customer' | 'Approved and needs scheduling' | 'Scheduled' | 'Closed';
+    status: 'Inbox' | 'New Requests' | 'Our Action' | 'Waiting on Customer' | 'Online Approved' | 'Scheduled' | 'Closed';
     linkedCustomerId?: string;
     linkedVehicleId?: string;
     vehicleRegistration?: string;

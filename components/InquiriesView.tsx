@@ -226,7 +226,7 @@ const InquiryCard: React.FC<{
                     inquiry.status === 'Inbox' ? 'border-gray-400' : 
                     inquiry.status === 'New Requests' ? 'border-blue-400' : 
                     inquiry.status === 'Our Action' ? 'border-amber-400' : 
-                    inquiry.status === 'Approved and needs scheduling' ? 'border-green-400' :
+                    inquiry.status === 'Online Approved' ? 'border-green-400' :
                     inquiry.status === 'Scheduled' ? 'border-indigo-400' : 
                     inquiry.status === 'Waiting on Customer' ? (isStale72h(inquiry) ? 'border-red-500 text-red-800' : 'border-gray-200') : 
                     'border-gray-200'
@@ -420,7 +420,7 @@ const InquiryCard: React.FC<{
                 inquiry.status === 'Inbox' ? 'border-gray-400' : 
                 inquiry.status === 'New Requests' ? 'border-blue-400' : 
                 inquiry.status === 'Our Action' ? 'border-amber-400' : 
-                inquiry.status === 'Approved and needs scheduling' ? 'border-green-400' :
+                inquiry.status === 'Online Approved' ? 'border-green-400' :
                 inquiry.status === 'Scheduled' ? 'border-indigo-400' : 
                 inquiry.status === 'Waiting on Customer' ? (isStale72h(inquiry) ? 'border-red-500 text-red-800 shadow-[0_0_8px_rgba(239,68,68,0.4)]' : 'border-gray-200') : 
                 'border-gray-200'
@@ -670,7 +670,7 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
             if (status === ('New' as any)) status = 'Inbox';
             if (status === ('Immediate Quote' as any)) status = 'New Requests';
             if (status === ('Escalated/Urgent' as any) || status === ('Rejected' as any) || status === ('Customer Responded' as any)) status = 'Our Action';
-            if (status === ('Approved' as any)) status = 'Approved and needs scheduling';
+            if (status === ('Approved' as any)) status = 'Online Approved';
             if (status === ('Quoted or Responded' as any) || status === ('Sent' as any) || status === ('Quoted' as any)) status = 'Waiting on Customer';
             if (status === ('In Progress' as any)) status = 'Scheduled';
             
@@ -1178,7 +1178,7 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
             'New Requests': [],
             'Our Action': [],
             'Waiting on Customer': [],
-            'Approved and needs scheduling': [],
+            'Online Approved': [],
             'Scheduled': []
         };
         filteredInquiries.forEach(i => {
@@ -1678,7 +1678,7 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                                                         i.status === 'Inbox' ? 'bg-gray-50 text-gray-700 border-gray-200' :
                                                         i.status === 'New Requests' ? 'bg-blue-50 text-blue-700 border-blue-200' :
                                                         i.status === 'Our Action' ? 'bg-orange-50 text-orange-700 border-orange-200' :
-                                                        i.status === 'Approved and needs scheduling' ? 'bg-green-50 text-green-700 border-green-200' :
+                                                        i.status === 'Online Approved' ? 'bg-green-50 text-green-700 border-green-200' :
                                                         i.status === 'Scheduled' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' :
                                                         i.status === 'Waiting on Customer' ? (isStale72h(i) ? 'bg-red-50 text-red-800 border-red-500 ring-1 ring-red-400' : 'bg-purple-50 text-purple-700 border-purple-200') :
                                                         'bg-gray-100 text-gray-800 border-gray-300'
@@ -1759,7 +1759,7 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
             ) : activeTab === 'active' ? (
                 <main className="flex-grow overflow-x-auto pb-2" onMouseLeave={() => setHoveredInquiryId(null)}>
                     <div className="flex gap-4 h-full min-w-full font-sans">
-                        {(['Inbox', 'New Requests', 'Our Action', 'Waiting on Customer', 'Approved and needs scheduling', 'Scheduled'] as Inquiry['status'][]).map(status => (
+                        {(['Inbox', 'New Requests', 'Our Action', 'Waiting on Customer', 'Online Approved', 'Scheduled'] as Inquiry['status'][]).map(status => (
                             <div 
                                 key={status} 
                                 className="flex-1 flex flex-col bg-gray-100 rounded-xl min-w-[280px] h-full transition-colors border-2 border-transparent"

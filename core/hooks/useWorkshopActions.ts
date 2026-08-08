@@ -167,7 +167,7 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
 
     const updateLinkedInquiryStatus = async (estimateId: string, newStatus: T.Inquiry['status'] | 'Sent' | 'Approved' | 'Declined', extraUpdates: Partial<T.Inquiry> = {}) => {
         const targetInquiry = inquiries.find(i => i.linkedEstimateId === estimateId && i.status !== 'Closed');
-        const targetStatus = newStatus === 'Sent' ? 'Waiting on Customer' : (newStatus === 'Approved' ? 'Approved and needs scheduling' : (newStatus === 'Declined' ? (targetInquiry?.status || 'Waiting on Customer') : newStatus));
+        const targetStatus = newStatus === 'Sent' ? 'Waiting on Customer' : (newStatus === 'Approved' ? 'Online Approved' : (newStatus === 'Declined' ? (targetInquiry?.status || 'Waiting on Customer') : newStatus));
         
         if (targetInquiry) {
             let updatedLogs = targetInquiry.logs || [];
