@@ -971,6 +971,7 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                         <option value="New Requests">New Requests</option>
                                         <option value="Our Action">Our Action (Priority)</option>
                                         <option value="Waiting on Customer">Waiting on Customer</option>
+                                        <option value="Approved and needs scheduling">Approved and needs scheduling</option>
                                         <option value="Scheduled">Scheduled</option>
                                         <option value="Closed">Closed</option>
                                     </select>
