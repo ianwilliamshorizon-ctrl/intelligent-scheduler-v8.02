@@ -252,17 +252,6 @@ const MainLayout: React.FC<{
                     {children}
                 </main>
 
-                {onOpenAssistant && (
-                    <button
-                        type="button"
-                        onClick={onOpenAssistant}
-                        className="fixed bottom-6 right-6 z-40 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white p-3.5 sm:px-5 sm:py-3.5 rounded-full shadow-2xl hover:shadow-purple-500/30 flex items-center gap-2.5 transition-all transform hover:-translate-y-0.5 active:translate-y-0 font-bold text-sm border-2 border-white/20 print:hidden group"
-                        title="Open Brookspeed Master Tech AI Assistant"
-                    >
-                        <Sparkles size={18} className="animate-pulse text-purple-200 group-hover:text-white" />
-                        <span className="hidden sm:inline font-black tracking-wide">AI Assistant</span>
-                    </button>
-                )}
             </div>
         </div>
     );
