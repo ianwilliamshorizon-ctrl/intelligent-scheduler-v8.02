@@ -31,7 +31,10 @@ const EmailEstimateModal: React.FC<EmailEstimateModalProps> = ({ isOpen, onClose
 
     useEffect(() => {
         if (isOpen) {
-            setCustomMessage(`Dear ${customer?.forename || 'Customer'},\n\nThank you for choosing Brookspeed. Please find below the details of your estimate for the work on your ${vehicle?.make || 'Vehicle'} ${vehicle?.model || ''} (${vehicle?.registration || 'TBA'}).`);
+            const make = vehicle?.make && vehicle.make.toLowerCase() !== 'unknown' ? vehicle.make : 'Vehicle';
+            const model = vehicle?.model && vehicle.model.toLowerCase() !== 'unknown' ? vehicle.model : '';
+            const vehicleDesc = `${make} ${model}`.trim();
+            setCustomMessage(`Dear ${customer?.forename || 'Customer'},\n\nThank you for choosing Brookspeed. Please find below the details of your estimate for the work on your ${vehicleDesc} (${vehicle?.registration || 'TBA'}).`);
         }
     }, [isOpen, customer, vehicle]);
 
