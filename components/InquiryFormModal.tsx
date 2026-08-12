@@ -248,17 +248,17 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                 const linkedVehicle = inquiry.linkedVehicleId ? vehicles.find(v => v.id === inquiry.linkedVehicleId) : null;
                 return { 
                     ...inquiry,
-                    fromEmail: linkedCustomer?.email || inquiry.fromEmail || '',
-                    fromPhone: linkedCustomer?.mobile || linkedCustomer?.phone || inquiry.fromPhone || '',
-                    addressLine1: linkedCustomer?.addressLine1 || inquiry.addressLine1 || '',
-                    addressLine2: linkedCustomer?.addressLine2 || inquiry.addressLine2 || '',
-                    city: linkedCustomer?.city || inquiry.city || '',
-                    county: linkedCustomer?.county || inquiry.county || '',
-                    postcode: linkedCustomer?.postcode || inquiry.postcode || '',
-                    vehicleMake: linkedVehicle?.make || inquiry.vehicleMake || '',
-                    vehicleModel: linkedVehicle?.model || inquiry.vehicleModel || '',
-                    vehicleRegistration: linkedVehicle?.registration || inquiry.vehicleRegistration || '',
-                    vehicleYear: linkedVehicle?.year?.toString() || inquiry.vehicleYear || ''
+                    fromEmail: inquiry.fromEmail || linkedCustomer?.email || '',
+                    fromPhone: inquiry.fromPhone || linkedCustomer?.mobile || linkedCustomer?.phone || '',
+                    addressLine1: inquiry.addressLine1 || linkedCustomer?.addressLine1 || '',
+                    addressLine2: inquiry.addressLine2 || linkedCustomer?.addressLine2 || '',
+                    city: inquiry.city || linkedCustomer?.city || '',
+                    county: inquiry.county || linkedCustomer?.county || '',
+                    postcode: inquiry.postcode || linkedCustomer?.postcode || '',
+                    vehicleMake: inquiry.vehicleMake || linkedVehicle?.make || '',
+                    vehicleModel: inquiry.vehicleModel || linkedVehicle?.model || '',
+                    vehicleRegistration: inquiry.vehicleRegistration || linkedVehicle?.registration || '',
+                    vehicleYear: inquiry.vehicleYear || linkedVehicle?.year?.toString() || ''
                 };
             } else {
                 // Initialize a new inquiry, using any pre-filled data provided.
@@ -675,17 +675,35 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                         const parsed = await parseInquiryMessage(formData.message);
                                         
                                         // Update form data with extracted info
-                                        setFormData(p => ({
-                                            ...p,
-                                            fromName: parsed.fromName || p.fromName || '',
-                                            fromEmail: parsed.fromEmail || p.fromEmail || '',
-                                            fromPhone: parsed.fromPhone || p.fromPhone || '',
-                                            vehicleRegistration: parsed.vehicleRegistration
-                                                ? parsed.vehicleRegistration.toUpperCase().trim()
-                                                : p.vehicleRegistration ? p.vehicleRegistration.toUpperCase().trim() : '',
-                                            vehicleMake: parsed.vehicleMake ? formatTitleCase(parsed.vehicleMake) : (p.vehicleMake ? formatTitleCase(p.vehicleMake) : ''),
-                                            vehicleModel: parsed.vehicleModel ? formatTitleCase(parsed.vehicleModel) : (p.vehicleModel ? formatTitleCase(p.vehicleModel) : ''),
-                                        }));
+                                        setFormData(p => {
+                                            const newName = parsed.fromName || p.fromName || '';
+                                            const newEmail = parsed.fromEmail || p.fromEmail || '';
+                                            let nextLinkedCustomerId = p.linkedCustomerId;
+
+                                            if (nextLinkedCustomerId) {
+                                                const linkedCust = customers.find(c => c.id === nextLinkedCustomerId);
+                                                if (linkedCust) {
+                                                    const linkedName = getCustomerDisplayName(linkedCust).toLowerCase();
+                                                    if ((parsed.fromEmail && linkedCust.email?.toLowerCase() !== parsed.fromEmail.toLowerCase()) || 
+                                                        (parsed.fromName && linkedName !== parsed.fromName.toLowerCase())) {
+                                                        nextLinkedCustomerId = null;
+                                                    }
+                                                }
+                                            }
+
+                                            return {
+                                                ...p,
+                                                linkedCustomerId: nextLinkedCustomerId,
+                                                fromName: newName,
+                                                fromEmail: newEmail,
+                                                fromPhone: parsed.fromPhone || p.fromPhone || '',
+                                                vehicleRegistration: parsed.vehicleRegistration
+                                                    ? parsed.vehicleRegistration.toUpperCase().trim()
+                                                    : p.vehicleRegistration ? p.vehicleRegistration.toUpperCase().trim() : '',
+                                                vehicleMake: parsed.vehicleMake ? formatTitleCase(parsed.vehicleMake) : (p.vehicleMake ? formatTitleCase(p.vehicleMake) : ''),
+                                                vehicleModel: parsed.vehicleModel ? formatTitleCase(parsed.vehicleModel) : (p.vehicleModel ? formatTitleCase(p.vehicleModel) : ''),
+                                            };
+                                        });
 
                                         // Try to find matching customer/vehicle
                                         if (parsed.fromEmail || parsed.fromPhone || parsed.fromName) {
