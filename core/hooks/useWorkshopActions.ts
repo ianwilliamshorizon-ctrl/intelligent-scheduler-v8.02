@@ -6,7 +6,8 @@ import { generateSequenceId, saveDocument, deleteDocument } from '../db';
 import { formatDate, splitJobIntoSegments } from '../utils/dateUtils';
 import { calculateJobStatus, calculateJobPartsStatus } from '../utils/jobUtils';
 import useToaster from '../../hooks/useToaster';
-import { getCustomerDisplayName } from '../utils/customerUtils';
+import { getCustomerDisplayName, generateCustomerId } from '../utils/customerUtils';
+import { formatTitleCase } from '../../utils/formatUtils';
 
 const syncingJobs = new Set<string>();
 
@@ -23,7 +24,7 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
         parts, setParts,
         businessEntities, 
         vehicles, setVehicles,
-        customers, servicePackages
+        customers, setCustomers, servicePackages
     } = data;
 
     const resolveSupplierId = useCallback((li: T.EstimateLineItem) => {
@@ -514,6 +515,83 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
     };
 
     const handleApproveEstimate = async (estimate: T.Estimate, selectedOptionalItemIds: string[], notes?: string, scheduledDate?: string) => {
+        // --- AUTO-CREATE CUSTOMER & VEHICLE FROM INQUIRY DATA ---
+        // If the estimate is missing a customer or vehicle (e.g. created from an inquiry
+        // where the customer hadn't been formally registered), create real records now
+        // so data is permanently retained in the system.
+        let resolvedCustomerId = estimate.customerId;
+        let resolvedVehicleId = estimate.vehicleId;
+
+        const linkedInquiry = estimate.linkedInquiryId
+            ? inquiries.find(i => i.id === estimate.linkedInquiryId)
+            : null;
+
+        if (!resolvedCustomerId && linkedInquiry?.fromName) {
+            const nameParts = (linkedInquiry.fromName || '').trim().split(/\s+/);
+            const forename = nameParts[0] || 'Unknown';
+            const surname = nameParts.slice(1).join(' ') || 'Customer';
+            const newCustomer: T.Customer = {
+                id: generateCustomerId(surname, customers),
+                forename,
+                surname,
+                email: linkedInquiry.fromEmail || '',
+                phone: linkedInquiry.fromPhone || '',
+                mobile: linkedInquiry.fromPhone || '',
+                addressLine1: linkedInquiry.addressLine1 || '',
+                addressLine2: linkedInquiry.addressLine2 || '',
+                city: linkedInquiry.city || '',
+                county: linkedInquiry.county || '',
+                postcode: linkedInquiry.postcode || '',
+                category: 'Retail',
+                isBusinessCustomer: false,
+                createdDate: new Date().toISOString(),
+                marketingConsent: false,
+                serviceReminderConsent: false,
+                declinedCommunication: false,
+                communicationPreference: 'None',
+            };
+            await handleSaveItem(setCustomers, newCustomer, 'brooks_customers');
+            resolvedCustomerId = newCustomer.id;
+            // Also update the inquiry to link the new customer
+            await handleSaveItem(setInquiries, { ...linkedInquiry, linkedCustomerId: newCustomer.id }, 'brooks_inquiries');
+        }
+
+        if (!resolvedVehicleId && (linkedInquiry?.vehicleRegistration || linkedInquiry?.linkedVehicleId)) {
+            if (linkedInquiry?.linkedVehicleId) {
+                resolvedVehicleId = linkedInquiry.linkedVehicleId;
+            } else if (linkedInquiry?.vehicleRegistration) {
+                const cleanReg = linkedInquiry.vehicleRegistration.toUpperCase().replace(/\s/g, '');
+                const existingVehicle = vehicles.find(
+                    v => v.registration?.toUpperCase().replace(/\s/g, '') === cleanReg
+                );
+                if (existingVehicle) {
+                    resolvedVehicleId = existingVehicle.id;
+                } else {
+                    const newVehicle: T.Vehicle = {
+                        id: crypto.randomUUID(),
+                        registration: linkedInquiry.vehicleRegistration.toUpperCase().trim(),
+                        make: formatTitleCase(linkedInquiry.vehicleMake || ''),
+                        model: formatTitleCase(linkedInquiry.vehicleModel || ''),
+                        year: linkedInquiry.vehicleYear ? parseInt(linkedInquiry.vehicleYear) : undefined,
+                        customerId: resolvedCustomerId || '',
+                    };
+                    await handleSaveItem(setVehicles, newVehicle, 'brooks_vehicles');
+                    resolvedVehicleId = newVehicle.id;
+                    // Also update the inquiry to link the new vehicle
+                    await handleSaveItem(setInquiries, {
+                        ...(linkedInquiry),
+                        linkedVehicleId: newVehicle.id,
+                        linkedCustomerId: resolvedCustomerId || linkedInquiry.linkedCustomerId,
+                    }, 'brooks_inquiries');
+                }
+            }
+        }
+
+        // Apply any resolved IDs back onto the estimate before proceeding
+        if (resolvedCustomerId !== estimate.customerId || resolvedVehicleId !== estimate.vehicleId) {
+            estimate = { ...estimate, customerId: resolvedCustomerId, vehicleId: resolvedVehicleId };
+        }
+
         // --- 1. Initialize local state to avoid redeclaration errors ---
         let allGeneratedPOIds: string[] = [];
 

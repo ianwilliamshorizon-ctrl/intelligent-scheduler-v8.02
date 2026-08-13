@@ -116,6 +116,70 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
     // Helper for saving
     const handleSaveItem = actions.handleSaveItem;
 
+    /**
+     * Resolves the vehicle ID from an inquiry, ensuring details (make, model, year) are present.
+     * - If a linked vehicle exists but lacks make/model, updates it from the inquiry's flat fields.
+     * - If no linked vehicle but the inquiry has a registration, finds or creates one.
+     */
+    const resolveVehicleFromInquiry = (inq: T.Inquiry): string => {
+        const inquiryReg = (inq.vehicleRegistration || '').toUpperCase().replace(/\s/g, '');
+
+        // Case 1: Inquiry has a linked vehicle
+        if (inq.linkedVehicleId) {
+            const existingVehicle = data.vehicles.find(v => v.id === inq.linkedVehicleId);
+            // If vehicle exists but is missing make/model, backfill from inquiry flat fields
+            if (existingVehicle && !existingVehicle.make && inq.vehicleMake) {
+                const updatedVehicle: T.Vehicle = {
+                    ...existingVehicle,
+                    make: inq.vehicleMake || existingVehicle.make,
+                    model: inq.vehicleModel || existingVehicle.model,
+                    year: inq.vehicleYear ? parseInt(inq.vehicleYear) : existingVehicle.year,
+                };
+                handleSaveItem(data.setVehicles, updatedVehicle, 'brooks_vehicles');
+            }
+            return inq.linkedVehicleId;
+        }
+
+        // Case 2: No linked vehicle, but inquiry has a registration — try to match existing
+        if (inquiryReg) {
+            const matchedVehicle = data.vehicles.find(
+                v => v.registration?.toUpperCase().replace(/\s/g, '') === inquiryReg
+            );
+            if (matchedVehicle) {
+                // Backfill details if missing
+                if (!matchedVehicle.make && inq.vehicleMake) {
+                    const updatedVehicle: T.Vehicle = {
+                        ...matchedVehicle,
+                        make: inq.vehicleMake || matchedVehicle.make,
+                        model: inq.vehicleModel || matchedVehicle.model,
+                        year: inq.vehicleYear ? parseInt(inq.vehicleYear) : matchedVehicle.year,
+                    };
+                    handleSaveItem(data.setVehicles, updatedVehicle, 'brooks_vehicles');
+                }
+                return matchedVehicle.id;
+            }
+
+            // Case 3: No match at all — auto-create a vehicle record
+            const newVehicleId = crypto.randomUUID();
+            const newVehicle: T.Vehicle = {
+                id: newVehicleId,
+                registration: inq.vehicleRegistration || '',
+                make: inq.vehicleMake || '',
+                model: inq.vehicleModel || '',
+                year: inq.vehicleYear ? parseInt(inq.vehicleYear) : undefined,
+                customerId: inq.linkedCustomerId || '',
+            } as T.Vehicle;
+            handleSaveItem(data.setVehicles, newVehicle, 'brooks_vehicles');
+
+            // Also link the vehicle back to the inquiry
+            handleSaveItem(data.setInquiries, { ...inq, linkedVehicleId: newVehicleId }, 'brooks_inquiries');
+
+            return newVehicleId;
+        }
+
+        return '';
+    };
+
     const handleAddCustomerNote = async (customerId: string, noteText: string) => {
         const customer = data.customers.find(c => c.id === customerId);
         if (!customer) return;
@@ -740,11 +804,14 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                         onCreateNew={() => {
                             const inq = modals.linkEstimateModal.inquiry;
                             if (inq) {
+                                // Save the inquiry first so vehicle/customer details are persisted
+                                handleSaveItem(data.setInquiries, inq, 'brooks_inquiries');
+                                const resolvedVehicleId = resolveVehicleFromInquiry(inq);
                                 setters.setEstimateFormModal({
                                     isOpen: true, 
                                     estimate: { 
                                         customerId: inq.linkedCustomerId || '', 
-                                        vehicleId: inq.linkedVehicleId || '', 
+                                        vehicleId: resolvedVehicleId, 
                                         entityId: inq.entityId || selectedEntityId, 
                                         status: 'Draft', 
                                         linkedInquiryId: inq.id 
@@ -967,12 +1034,16 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                             setters.setVehicleModal({ isOpen: true, vehicleId });
                         }}
                         onCreateNewEstimate={(inq) => {
+                            // Save the inquiry first so vehicle/customer details are persisted
+                            // before we resolve the vehicle and open the estimate form.
+                            handleSaveItem(data.setInquiries, inq, 'brooks_inquiries');
                             setters.setInquiryModal({ isOpen: false, inquiry: null });
+                            const resolvedVehicleId = resolveVehicleFromInquiry(inq);
                             setters.setEstimateFormModal({
                                 isOpen: true, 
                                 estimate: { 
                                     customerId: inq.linkedCustomerId || '', 
-                                    vehicleId: inq.linkedVehicleId || '', 
+                                    vehicleId: resolvedVehicleId, 
                                     entityId: inq.entityId || selectedEntityId, 
                                     status: 'Draft', 
                                     linkedInquiryId: inq.id 
@@ -980,6 +1051,9 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                             });
                         }}
                         onSmartCreateEstimate={(inq, prompt) => {
+                            // Save inquiry first so SmartCreateJobModal can access
+                            // the latest vehicle/customer details via linkedInquiry
+                            handleSaveItem(data.setInquiries, inq, 'brooks_inquiries');
                             setters.setInquiryModal({ isOpen: false, inquiry: null });
                             setters.setSmartCreateInitialPrompt(prompt);
                             setters.setSmartCreateInquiryId(inq.id);

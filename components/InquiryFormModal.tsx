@@ -219,13 +219,33 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
         try {
             const data = await lookupVehicleByVRM(formData.vehicleRegistration);
             if (data && data.make) {
+                const make = formatTitleCase(data.make || '');
+                const model = formatTitleCase(data.model || '');
+                const year = data.year?.toString() || '';
+                const reg = (data.registration || formData.vehicleRegistration || '').toUpperCase().trim();
+
                 setFormData(p => ({
                     ...p,
-                    vehicleMake: formatTitleCase(data.make || p.vehicleMake || ''),
-                    vehicleModel: formatTitleCase(data.model || p.vehicleModel || ''),
-                    vehicleYear: data.year?.toString() || p.vehicleYear,
-                    vehicleRegistration: (data.registration || p.vehicleRegistration || '').toUpperCase().trim(),
+                    vehicleMake: make || p.vehicleMake,
+                    vehicleModel: model || p.vehicleModel,
+                    vehicleYear: year || p.vehicleYear,
+                    vehicleRegistration: reg,
                 }));
+
+                // Also update the linked vehicle record if one exists
+                if (formData.linkedVehicleId) {
+                    const linkedVehicle = vehicles.find(v => v.id === formData.linkedVehicleId);
+                    if (linkedVehicle && !linkedVehicle.make) {
+                        saveRecord('vehicles', {
+                            ...linkedVehicle,
+                            make: make || linkedVehicle.make,
+                            model: model || linkedVehicle.model,
+                            year: year ? parseInt(year) : linkedVehicle.year,
+                            colour: data.colour || linkedVehicle.colour,
+                        });
+                    }
+                }
+
                 toast.success('Vehicle details found via DVLA');
             } else {
                 toast.warn('Vehicle found but no make/model returned.');
