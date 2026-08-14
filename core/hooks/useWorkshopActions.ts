@@ -559,6 +559,20 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
         if (!resolvedVehicleId && (linkedInquiry?.vehicleRegistration || linkedInquiry?.linkedVehicleId)) {
             if (linkedInquiry?.linkedVehicleId) {
                 resolvedVehicleId = linkedInquiry.linkedVehicleId;
+                const existingVeh = vehicles.find(v => v.id === resolvedVehicleId);
+                if (existingVeh) {
+                    const updatedVeh: T.Vehicle = {
+                        ...existingVeh,
+                        make: existingVeh.make || linkedInquiry.vehicleMake || '',
+                        model: existingVeh.model || linkedInquiry.vehicleModel || '',
+                        year: existingVeh.year || (linkedInquiry.vehicleYear ? parseInt(linkedInquiry.vehicleYear) : undefined),
+                        vin: existingVeh.vin || linkedInquiry.vehicleVin,
+                        nextMotDate: existingVeh.nextMotDate || linkedInquiry.vehicleMotExpiry,
+                        motExpiryDate: existingVeh.motExpiryDate || linkedInquiry.vehicleMotExpiry,
+                        manufactureDate: existingVeh.manufactureDate || linkedInquiry.vehicleManufactureDate,
+                    };
+                    await handleSaveItem(setVehicles, updatedVeh, 'brooks_vehicles');
+                }
             } else if (linkedInquiry?.vehicleRegistration) {
                 const cleanReg = linkedInquiry.vehicleRegistration.toUpperCase().replace(/\s/g, '');
                 const existingVehicle = vehicles.find(
@@ -566,13 +580,29 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
                 );
                 if (existingVehicle) {
                     resolvedVehicleId = existingVehicle.id;
+                    const updatedVeh: T.Vehicle = {
+                        ...existingVehicle,
+                        make: existingVehicle.make || linkedInquiry.vehicleMake || '',
+                        model: existingVehicle.model || linkedInquiry.vehicleModel || '',
+                        year: existingVehicle.year || (linkedInquiry.vehicleYear ? parseInt(linkedInquiry.vehicleYear) : undefined),
+                        vin: existingVehicle.vin || linkedInquiry.vehicleVin,
+                        nextMotDate: existingVehicle.nextMotDate || linkedInquiry.vehicleMotExpiry,
+                        motExpiryDate: existingVehicle.motExpiryDate || linkedInquiry.vehicleMotExpiry,
+                        manufactureDate: existingVehicle.manufactureDate || linkedInquiry.vehicleManufactureDate,
+                    };
+                    await handleSaveItem(setVehicles, updatedVeh, 'brooks_vehicles');
                 } else {
+                    const yearNum = linkedInquiry.vehicleYear ? parseInt(linkedInquiry.vehicleYear) : undefined;
                     const newVehicle: T.Vehicle = {
                         id: crypto.randomUUID(),
                         registration: linkedInquiry.vehicleRegistration.toUpperCase().trim(),
                         make: formatTitleCase(linkedInquiry.vehicleMake || ''),
                         model: formatTitleCase(linkedInquiry.vehicleModel || ''),
-                        year: linkedInquiry.vehicleYear ? parseInt(linkedInquiry.vehicleYear) : undefined,
+                        year: yearNum,
+                        vin: linkedInquiry.vehicleVin || undefined,
+                        nextMotDate: linkedInquiry.vehicleMotExpiry || undefined,
+                        motExpiryDate: linkedInquiry.vehicleMotExpiry || undefined,
+                        manufactureDate: linkedInquiry.vehicleManufactureDate || undefined,
                         customerId: resolvedCustomerId || '',
                     };
                     await handleSaveItem(setVehicles, newVehicle, 'brooks_vehicles');

@@ -784,10 +784,8 @@ ${textBody}
     // Default to Porsche if completely unmatched
     entityId = entityId || "ent_porsche";
 
-    let status = "New";
-    if (fromEmail && fromEmail.toLowerCase().includes("info@brookspeed")) {
-      status = "Quoted or Responded";
-    } else if (isEscalated) {
+    let status = "New Requests";
+    if (isEscalated) {
       status = "Escalated/Urgent";
     } else if (isQuoteRequest) {
       status = "Immediate Quote";
@@ -1384,10 +1382,8 @@ ${textBody}
       }
       entityId = entityId || defaultEntity;
 
-      let status = "New";
-      if (fromEmail && fromEmail.toLowerCase().includes("info@brookspeed")) {
-        status = "Quoted or Responded";
-      } else if (isEscalated) {
+      let status = "New Requests";
+      if (isEscalated) {
         status = "Escalated/Urgent";
       } else if (isQuoteRequest) {
         status = "Immediate Quote";

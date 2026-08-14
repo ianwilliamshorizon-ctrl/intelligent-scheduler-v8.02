@@ -439,8 +439,11 @@ User Request: ${JSON.stringify(userText)}`;
                     const latestDetails = await lookupVehicleByVRM(found.registration);
                     found = {
                         ...found,
+                        year: latestDetails.year || found.year,
+                        manufactureDate: latestDetails.manufactureDate || found.manufactureDate,
                         vin: latestDetails.vin || found.vin,
                         nextMotDate: latestDetails.nextMotDate || found.nextMotDate,
+                        motExpiryDate: latestDetails.nextMotDate || found.motExpiryDate || found.nextMotDate,
                     };
                 } catch (apiErr) {
                     console.warn('Vehicle technical data lookup failed during smart create:', apiErr);

@@ -127,15 +127,29 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
         // Case 1: Inquiry has a linked vehicle
         if (inq.linkedVehicleId) {
             const existingVehicle = data.vehicles.find(v => v.id === inq.linkedVehicleId);
-            // If vehicle exists but is missing make/model, backfill from inquiry flat fields
-            if (existingVehicle && !existingVehicle.make && inq.vehicleMake) {
+            if (existingVehicle) {
+                const yearNum = inq.vehicleYear ? parseInt(inq.vehicleYear) : existingVehicle.year;
                 const updatedVehicle: T.Vehicle = {
                     ...existingVehicle,
-                    make: inq.vehicleMake || existingVehicle.make,
-                    model: inq.vehicleModel || existingVehicle.model,
-                    year: inq.vehicleYear ? parseInt(inq.vehicleYear) : existingVehicle.year,
+                    make: existingVehicle.make || inq.vehicleMake || '',
+                    model: existingVehicle.model || inq.vehicleModel || '',
+                    year: yearNum,
+                    vin: existingVehicle.vin || inq.vehicleVin,
+                    nextMotDate: existingVehicle.nextMotDate || inq.vehicleMotExpiry,
+                    motExpiryDate: existingVehicle.motExpiryDate || inq.vehicleMotExpiry,
+                    manufactureDate: existingVehicle.manufactureDate || inq.vehicleManufactureDate,
                 };
-                handleSaveItem(data.setVehicles, updatedVehicle, 'brooks_vehicles');
+                if (
+                    updatedVehicle.make !== existingVehicle.make ||
+                    updatedVehicle.model !== existingVehicle.model ||
+                    updatedVehicle.year !== existingVehicle.year ||
+                    updatedVehicle.vin !== existingVehicle.vin ||
+                    updatedVehicle.nextMotDate !== existingVehicle.nextMotDate ||
+                    updatedVehicle.motExpiryDate !== existingVehicle.motExpiryDate ||
+                    updatedVehicle.manufactureDate !== existingVehicle.manufactureDate
+                ) {
+                    handleSaveItem(data.setVehicles, updatedVehicle, 'brooks_vehicles');
+                }
             }
             return inq.linkedVehicleId;
         }
@@ -147,13 +161,26 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
             );
             if (matchedVehicle) {
                 // Backfill details if missing
-                if (!matchedVehicle.make && inq.vehicleMake) {
-                    const updatedVehicle: T.Vehicle = {
-                        ...matchedVehicle,
-                        make: inq.vehicleMake || matchedVehicle.make,
-                        model: inq.vehicleModel || matchedVehicle.model,
-                        year: inq.vehicleYear ? parseInt(inq.vehicleYear) : matchedVehicle.year,
-                    };
+                const yearNum = inq.vehicleYear ? parseInt(inq.vehicleYear) : matchedVehicle.year;
+                const updatedVehicle: T.Vehicle = {
+                    ...matchedVehicle,
+                    make: matchedVehicle.make || inq.vehicleMake || '',
+                    model: matchedVehicle.model || inq.vehicleModel || '',
+                    year: yearNum,
+                    vin: matchedVehicle.vin || inq.vehicleVin,
+                    nextMotDate: matchedVehicle.nextMotDate || inq.vehicleMotExpiry,
+                    motExpiryDate: matchedVehicle.motExpiryDate || inq.vehicleMotExpiry,
+                    manufactureDate: matchedVehicle.manufactureDate || inq.vehicleManufactureDate,
+                };
+                if (
+                    updatedVehicle.make !== matchedVehicle.make ||
+                    updatedVehicle.model !== matchedVehicle.model ||
+                    updatedVehicle.year !== matchedVehicle.year ||
+                    updatedVehicle.vin !== matchedVehicle.vin ||
+                    updatedVehicle.nextMotDate !== matchedVehicle.nextMotDate ||
+                    updatedVehicle.motExpiryDate !== matchedVehicle.motExpiryDate ||
+                    updatedVehicle.manufactureDate !== matchedVehicle.manufactureDate
+                ) {
                     handleSaveItem(data.setVehicles, updatedVehicle, 'brooks_vehicles');
                 }
                 return matchedVehicle.id;
@@ -161,12 +188,17 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
 
             // Case 3: No match at all — auto-create a vehicle record
             const newVehicleId = crypto.randomUUID();
+            const yearNum = inq.vehicleYear ? parseInt(inq.vehicleYear) : undefined;
             const newVehicle: T.Vehicle = {
                 id: newVehicleId,
                 registration: inq.vehicleRegistration || '',
                 make: inq.vehicleMake || '',
                 model: inq.vehicleModel || '',
-                year: inq.vehicleYear ? parseInt(inq.vehicleYear) : undefined,
+                year: yearNum,
+                vin: inq.vehicleVin || undefined,
+                nextMotDate: inq.vehicleMotExpiry || undefined,
+                motExpiryDate: inq.vehicleMotExpiry || undefined,
+                manufactureDate: inq.vehicleManufactureDate || undefined,
                 customerId: inq.linkedCustomerId || '',
             } as T.Vehicle;
             handleSaveItem(data.setVehicles, newVehicle, 'brooks_vehicles');

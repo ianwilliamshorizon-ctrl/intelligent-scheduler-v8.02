@@ -196,6 +196,10 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                 make: formatTitleCase(formData.vehicleMake || ''),
                 model: formatTitleCase(formData.vehicleModel || ''),
                 year: formData.vehicleYear ? parseInt(formData.vehicleYear) : undefined,
+                manufactureDate: formData.vehicleManufactureDate || undefined,
+                vin: formData.vehicleVin || undefined,
+                nextMotDate: formData.vehicleMotExpiry || undefined,
+                motExpiryDate: formData.vehicleMotExpiry || undefined,
                 customerId: newCustomer.id,
             };
             saveRecord('vehicles', newVehicle);
@@ -223,6 +227,9 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                 const model = formatTitleCase(data.model || '');
                 const year = data.year?.toString() || '';
                 const reg = (data.registration || formData.vehicleRegistration || '').toUpperCase().trim();
+                const vin = data.vin || '';
+                const nextMotDate = data.nextMotDate || '';
+                const manufactureDate = data.manufactureDate || '';
 
                 setFormData(p => ({
                     ...p,
@@ -230,17 +237,24 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                     vehicleModel: model || p.vehicleModel,
                     vehicleYear: year || p.vehicleYear,
                     vehicleRegistration: reg,
+                    vehicleVin: vin || p.vehicleVin,
+                    vehicleMotExpiry: nextMotDate || p.vehicleMotExpiry,
+                    vehicleManufactureDate: manufactureDate || p.vehicleManufactureDate,
                 }));
 
                 // Also update the linked vehicle record if one exists
                 if (formData.linkedVehicleId) {
                     const linkedVehicle = vehicles.find(v => v.id === formData.linkedVehicleId);
-                    if (linkedVehicle && !linkedVehicle.make) {
+                    if (linkedVehicle) {
                         saveRecord('vehicles', {
                             ...linkedVehicle,
                             make: make || linkedVehicle.make,
                             model: model || linkedVehicle.model,
                             year: year ? parseInt(year) : linkedVehicle.year,
+                            manufactureDate: manufactureDate || linkedVehicle.manufactureDate,
+                            vin: vin || linkedVehicle.vin,
+                            nextMotDate: nextMotDate || linkedVehicle.nextMotDate,
+                            motExpiryDate: nextMotDate || linkedVehicle.motExpiryDate || linkedVehicle.nextMotDate,
                             colour: data.colour || linkedVehicle.colour,
                         });
                     }
@@ -278,7 +292,10 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                     vehicleMake: inquiry.vehicleMake || linkedVehicle?.make || '',
                     vehicleModel: inquiry.vehicleModel || linkedVehicle?.model || '',
                     vehicleRegistration: inquiry.vehicleRegistration || linkedVehicle?.registration || '',
-                    vehicleYear: inquiry.vehicleYear || linkedVehicle?.year?.toString() || ''
+                    vehicleYear: inquiry.vehicleYear || linkedVehicle?.year?.toString() || '',
+                    vehicleVin: inquiry.vehicleVin || linkedVehicle?.vin || '',
+                    vehicleMotExpiry: inquiry.vehicleMotExpiry || linkedVehicle?.nextMotDate || linkedVehicle?.motExpiryDate || '',
+                    vehicleManufactureDate: inquiry.vehicleManufactureDate || linkedVehicle?.manufactureDate || ''
                 };
             } else {
                 // Initialize a new inquiry, using any pre-filled data provided.
@@ -503,7 +520,10 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
             vehicleMake: vehicle.make ? formatTitleCase(vehicle.make) : p.vehicleMake,
             vehicleModel: vehicle.model ? formatTitleCase(vehicle.model) : p.vehicleModel,
             vehicleRegistration: (vehicle.registration || p.vehicleRegistration || '').toUpperCase().trim(),
-            vehicleYear: vehicle.year?.toString() || p.vehicleYear
+            vehicleYear: vehicle.year?.toString() || p.vehicleYear,
+            vehicleVin: vehicle.vin || p.vehicleVin,
+            vehicleMotExpiry: vehicle.nextMotDate || vehicle.motExpiryDate || p.vehicleMotExpiry,
+            vehicleManufactureDate: vehicle.manufactureDate || p.vehicleManufactureDate
         }));
         setSuggestedVehicle(null);
     };
@@ -670,7 +690,9 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                 <div>
                                     <span className="font-semibold block mb-1">Vehicle Details:</span>
                                     {formData.vehicleRegistration && <div className="font-bold text-gray-800 uppercase mb-1">{formData.vehicleRegistration}</div>}
-                                    {formData.vehicleMake} {formData.vehicleModel} {formData.vehicleYear}
+                                    <div>{formData.vehicleMake} {formData.vehicleModel} {formData.vehicleYear ? `(${formData.vehicleYear})` : ''}</div>
+                                    {formData.vehicleVin && <div className="text-[11px] text-gray-500">VIN: {formData.vehicleVin}</div>}
+                                    {formData.vehicleMotExpiry && <div className="text-[11px] text-gray-500">MOT Expiry: {formData.vehicleMotExpiry}</div>}
                                 </div>
                                 <div>
                                     <span className="font-semibold block mb-1">Address Details:</span>
@@ -898,7 +920,10 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                                                         vehicleMake: v.make || p.vehicleMake,
                                                                         vehicleModel: v.model || p.vehicleModel,
                                                                         vehicleRegistration: v.registration || p.vehicleRegistration,
-                                                                        vehicleYear: v.year?.toString() || p.vehicleYear
+                                                                        vehicleYear: v.year?.toString() || p.vehicleYear,
+                                                                        vehicleVin: v.vin || p.vehicleVin,
+                                                                        vehicleMotExpiry: v.nextMotDate || v.motExpiryDate || p.vehicleMotExpiry,
+                                                                        vehicleManufactureDate: v.manufactureDate || p.vehicleManufactureDate
                                                                     };
                                                                 });
                                                             }}

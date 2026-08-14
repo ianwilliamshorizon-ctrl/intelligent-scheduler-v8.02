@@ -180,6 +180,7 @@ export type TyreCheckData = {
 };
 export interface Job {
     id: string;
+    jobNumber?: string;
     entityId?: string;
     vehicleId?: string;
     customerId?: string;
@@ -692,6 +693,9 @@ export interface Inquiry {
     vehicleMake?: string;
     vehicleModel?: string;
     vehicleYear?: string;
+    vehicleVin?: string;
+    vehicleMotExpiry?: string;
+    vehicleManufactureDate?: string;
     postcode?: string;
     addressLine1?: string;
     addressLine2?: string;
