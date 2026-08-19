@@ -669,7 +669,8 @@ exports.inboundEmailWebhook = onRequest({
     }
 
     if (matchedInquiryId) {
-      const isOutbound = fromEmail && (fromEmail.toLowerCase().includes("brookspeed") || fromEmail.toLowerCase().includes("info@brookspeed"));
+      // Inbound emails/inquiries received via webhook/sync are customer replies/inquiries, not staff outbound replies
+      const isOutbound = false;
 
       // Update existing inquiry
       const newLog = {
@@ -1210,7 +1211,8 @@ async function performEmailSync(microsoftClientId, microsoftClientSecret, micros
           continue;
         }
 
-        const isOutbound = fromEmail && (fromEmail.toLowerCase().includes("brookspeed") || fromEmail.toLowerCase().includes("info@brookspeed"));
+        // Inbound emails/inquiries received via webhook/sync are customer replies/inquiries, not staff outbound replies
+        const isOutbound = false;
 
         // Update existing inquiry
         const newLog = {
@@ -1430,7 +1432,7 @@ ${textBody}
         message: textBody.trim() || "Received email with empty text body.",
         takenByUserId: "system",
         status: status,
-        actionStatus: (fromEmail && (fromEmail.toLowerCase().includes("brookspeed") || fromEmail.toLowerCase().includes("info@brookspeed"))) ? "Email Sent" : "New Mail",
+        actionStatus: "New Mail",
         linkedCustomerId: matchedCustomerId,
         linkedVehicleId: matchedVehicleId,
         linkedEstimateId: matchedEstimateId,

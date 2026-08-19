@@ -666,6 +666,15 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
     const normalizedInquiries = useMemo(() => {
         return (inquiries || []).map(i => {
             let status = i.status;
+
+            // Check if inquiry or linked customer has "brookspeed" in name or email
+            const linkedCustomer = i.linkedCustomerId ? customers.find(c => c.id === i.linkedCustomerId) : null;
+            const hasBrookspeedName = 
+                (i.fromName || '').toLowerCase().includes('brookspeed') ||
+                (i.fromEmail || '').toLowerCase().includes('brookspeed') ||
+                (linkedCustomer?.forename || '').toLowerCase().includes('brookspeed') ||
+                (linkedCustomer?.surname || '').toLowerCase().includes('brookspeed');
+
             // Map legacy statuses to new 5-stage funnel for safety
             if (status === ('New' as any)) status = 'Inbox';
             if (status === ('Immediate Quote' as any)) status = 'New Requests';
@@ -673,6 +682,11 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
             if (status === ('Approved' as any)) status = 'Online Approved';
             if (status === ('Quoted or Responded' as any) || status === ('Sent' as any) || status === ('Quoted' as any)) status = 'Waiting on Customer';
             if (status === ('In Progress' as any)) status = 'Scheduled';
+
+            // Inbound inquiries with "brookspeed" in forename, surname, fromName, or email belong in New Requests ("New Inquiry")
+            if (hasBrookspeedName && status === 'Waiting on Customer') {
+                status = 'New Requests';
+            }
             
             // Auto-bounce to Our Action if they reply
             if (status === 'Waiting on Customer' && i.hasNewReply) {
@@ -680,7 +694,7 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
             }
             return { ...i, status };
         });
-    }, [inquiries]);
+    }, [inquiries, customers]);
 
     const { selectedEntityId, users, currentUser, businessEntities: entities, setCurrentView } = useApp();
 
@@ -749,6 +763,47 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
 
         runFixes();
     }, [inquiries.length]); // Intentionally using .length to avoid infinite loops if saveDocument triggers a re-fetch
+
+    // Auto-fix inquiries with "brookspeed" in forename/surname/fromName/email that are stuck in 'Waiting on Customer'
+    React.useEffect(() => {
+        if (!inquiries || inquiries.length === 0) return;
+
+        const toFix = inquiries.filter(i => {
+            const rawStatus = (i.status || '').trim();
+            const isWaiting = rawStatus === 'Waiting on Customer' || rawStatus === 'Quoted or Responded' || rawStatus === 'Quoted' || rawStatus === 'Sent';
+            if (!isWaiting) return false;
+
+            const linkedCustomer = i.linkedCustomerId ? customers.find(c => c.id === i.linkedCustomerId) : null;
+            return (
+                (i.fromName || '').toLowerCase().includes('brookspeed') ||
+                (i.fromEmail || '').toLowerCase().includes('brookspeed') ||
+                (linkedCustomer?.forename || '').toLowerCase().includes('brookspeed') ||
+                (linkedCustomer?.surname || '').toLowerCase().includes('brookspeed')
+            );
+        });
+
+        if (toFix.length === 0) return;
+
+        const runBrookspeedFix = async () => {
+            let fixedCount = 0;
+            for (const inq of toFix) {
+                try {
+                    const updated = { ...inq, status: 'New Requests' as Inquiry['status'] };
+                    setInquiries(prev => prev.map(p => p.id === inq.id ? updated : p));
+                    await saveDocument('brooks_inquiries', updated);
+                    console.log(`Auto-fixed Brookspeed inquiry ${inq.id} status to New Requests`);
+                    fixedCount++;
+                } catch (err) {
+                    console.error("Failed to auto-fix Brookspeed inquiry status", err);
+                }
+            }
+            if (fixedCount > 0) {
+                toast.success(`Updated ${fixedCount} Brookspeed inquiries to New Requests!`);
+            }
+        };
+
+        runBrookspeedFix();
+    }, [inquiries.length, customers.length]);
 
     const handleUnarchiveMB = async () => {
         try {
