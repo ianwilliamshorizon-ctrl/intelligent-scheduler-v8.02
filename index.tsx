@@ -7,6 +7,30 @@ import { AppProvider } from './core/state/AppContext';
 import { initializeGenerativeAI } from './core/services/geminiService';
 import { cloudSpeechSynthesis, CloudSpeechSynthesisUtterance } from './core/utils/cloudSpeech';
 
+// Auto-recover from dynamic chunk import failures caused by new deployment releases
+window.addEventListener('vite:preloadError', (event) => {
+    event.preventDefault();
+    const hasReloaded = sessionStorage.getItem('vite_preload_error_reloaded');
+    if (!hasReloaded) {
+        sessionStorage.setItem('vite_preload_error_reloaded', 'true');
+        window.location.reload();
+    }
+});
+
+window.addEventListener('unhandledrejection', (event) => {
+    const reason = event.reason?.message || event.reason?.toString() || '';
+    if (reason.includes('Failed to fetch dynamically imported module') || reason.includes('Importing a module script failed')) {
+        const hasReloaded = sessionStorage.getItem('vite_preload_error_reloaded');
+        if (!hasReloaded) {
+            sessionStorage.setItem('vite_preload_error_reloaded', 'true');
+            window.location.reload();
+        }
+    }
+});
+
+// Clear reload flag upon successful application load
+sessionStorage.removeItem('vite_preload_error_reloaded');
+
 // Initialize the Gemini Service via Firebase Functions (Proxy)
 initializeGenerativeAI();
 
