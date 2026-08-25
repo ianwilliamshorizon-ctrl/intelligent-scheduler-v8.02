@@ -5,11 +5,12 @@ import { Inquiry, Estimate, Customer, Vehicle, User, PurchaseOrder } from '../ty
 import { 
     Search, PlusCircle, Car, FileText, CalendarCheck, UserCheck, 
     Package as PackageIcon, ArrowRightCircle, CheckCircle2, Play, AlertTriangle, Camera,
-    ChevronDown, ChevronUp, RefreshCw, Loader2, Copy, Wand2, MapPin, Calendar, Archive
+    ChevronDown, ChevronUp, RefreshCw, Loader2, Copy, Wand2, MapPin, Calendar, Archive, Printer
 } from 'lucide-react';
 import { getCustomerDisplayName } from '../core/utils/customerUtils';
 import ConfirmationModal from './ConfirmationModal';
 import DuplicateInquiriesModal from './DuplicateInquiriesModal';
+import PrintableInquiryList from './PrintableInquiryList';
 import { saveDocument, deleteDocument } from '../core/db';
 import { getImage } from '../utils/imageStore';
 import { toast } from 'react-toastify';
@@ -111,6 +112,8 @@ const InquiryCard: React.FC<{
     const vehicle = inquiry.linkedVehicleId ? vehicles.find(v => v.id === inquiry.linkedVehicleId) : null;
     const estimate = inquiry.linkedEstimateId ? estimates.find(e => e.id === inquiry.linkedEstimateId) : null;
     const job = estimate?.jobId ? jobs.find(j => j.id === estimate.jobId) : null;
+    const estimateVehicle = estimate?.vehicleId ? vehicles.find(v => v.id === estimate.vehicleId) : null;
+    const effectiveReg = vehicle?.registration || inquiry.vehicleRegistration || estimateVehicle?.registration || (estimate as any)?.vehicleRegistration || '';
     
     const displayName = inquiry.fromName;
     const displayEmail = customer?.email || inquiry.fromEmail;
@@ -236,17 +239,22 @@ const InquiryCard: React.FC<{
             >
                 <div className="flex justify-between items-start gap-1">
                     <div className="min-w-0 flex-grow pr-1">
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-1 flex-wrap">
                             <p className="font-bold text-gray-800 text-[11px] truncate leading-tight" title={displayName}>{displayName}</p>
+                            {effectiveReg && (
+                                <span className="inline-flex items-center gap-0.5 bg-blue-50 text-blue-800 border border-blue-200/80 px-1 py-0.2 rounded text-[9px] font-bold font-mono shrink-0" title={`Vehicle Reg: ${effectiveReg}`}>
+                                    <Car size={8} className="text-blue-600 shrink-0"/>
+                                    <span>{effectiveReg}</span>
+                                </span>
+                            )}
                             {showDaysBadge && (
                                 <span className={`${badgeColorClass} text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-none shadow-sm`} title={`${daysSinceLastActivity} days since last action`}>
                                     {daysSinceLastActivity}d
                                 </span>
                             )}
-                            {(customer || vehicle || estimate || linkedPOs.length > 0) && (
-                                <div className={`flex gap-0.5 ${isExpanded ? 'hidden' : ''}`}>
+                            {(customer || estimate || linkedPOs.length > 0) && (
+                                <div className={`flex gap-0.5 items-center ${isExpanded ? 'hidden' : ''}`}>
                                     {customer && <UserCheck size={8} className="text-green-600"/>}
-                                    {vehicle && <Car size={8} className="text-blue-600"/>}
                                     {estimate && <FileText size={8} className="text-purple-600"/>}
                                     {linkedPOs.length > 0 && <PackageIcon size={8} className="text-amber-600"/>}
                                 </div>
@@ -304,7 +312,7 @@ const InquiryCard: React.FC<{
                 )}
                 
                 {/* Badges Row */}
-                {(customer || vehicle || estimate || linkedPOs.length > 0) && (
+                {(customer || vehicle || effectiveReg || estimate || linkedPOs.length > 0) && (
                     <div className={`${isExpanded ? 'flex' : 'hidden'} flex-wrap gap-1 mt-1 pt-1 border-t border-gray-100/50`}>
                         {customer && (
                             <button
@@ -320,20 +328,28 @@ const InquiryCard: React.FC<{
                                 <span className="truncate">{customer.surname || customer.forename}</span>
                             </button>
                         )}
-                        {vehicle && (
+                        {vehicle ? (
                             <button
                                 type="button"
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     onViewVehicle?.(vehicle.id);
                                 }}
-                                className="flex items-center gap-0.5 bg-blue-50 text-blue-700 px-1 rounded text-[9px] font-bold hover:bg-blue-100 hover:underline cursor-pointer border border-blue-200/30 text-left transition"
+                                className="flex items-center gap-0.5 bg-blue-50 text-blue-700 px-1 rounded text-[9px] font-bold hover:bg-blue-100 hover:underline cursor-pointer border border-blue-200/30 text-left transition font-mono"
                                 title={`${vehicle.registration} - ${vehicle.make} ${vehicle.model}`}
                             >
                                 <Car size={9} className="shrink-0 text-blue-600"/>
                                 <span>{vehicle.registration}</span>
                             </button>
-                        )}
+                        ) : effectiveReg ? (
+                            <span 
+                                className="flex items-center gap-0.5 bg-amber-50 text-amber-800 px-1 rounded text-[9px] font-bold border border-amber-200/50 font-mono"
+                                title={`Vehicle Reg: ${effectiveReg}`}
+                            >
+                                <Car size={9} className="shrink-0 text-amber-600"/>
+                                <span>{effectiveReg}</span>
+                            </span>
+                        ) : null}
                         {estimate && (
                             <div className="flex items-center gap-0.5 bg-purple-50 text-purple-700 px-1 rounded text-[9px] font-bold">
                                 <FileText size={9} className="shrink-0"/>
@@ -509,20 +525,25 @@ const InquiryCard: React.FC<{
                     </button>
                 )}
                 
-                {vehicle && (
+                {vehicle ? (
                     <button
                         type="button"
                         onClick={(e) => {
                             e.stopPropagation();
                             onViewVehicle?.(vehicle.id);
                         }}
-                        className="flex items-center gap-2 text-xs text-blue-700 bg-blue-50 px-2 py-1 rounded hover:bg-blue-100 hover:underline cursor-pointer border border-blue-200/50 w-fit text-left transition font-semibold"
+                        className="flex items-center gap-2 text-xs text-blue-700 bg-blue-50 px-2 py-1 rounded hover:bg-blue-100 hover:underline cursor-pointer border border-blue-200/50 w-fit text-left transition font-semibold font-mono"
                         title={`${vehicle.registration} - ${vehicle.make} ${vehicle.model}`}
                     >
                         <Car size={14} className="text-blue-600 shrink-0"/>
                         <span>{vehicle.registration} {vehicle.make ? `(${vehicle.make} ${vehicle.model})` : ''}</span>
                     </button>
-                )}
+                ) : effectiveReg ? (
+                    <div className="flex items-center gap-2 text-xs text-amber-800 bg-amber-50 px-2 py-1 rounded border border-amber-200/60 w-fit font-semibold font-mono" title={`Vehicle Registration: ${effectiveReg}`}>
+                        <Car size={14} className="text-amber-600 shrink-0"/>
+                        <span>{effectiveReg} {inquiry.vehicleMake ? `(${inquiry.vehicleMake} ${inquiry.vehicleModel || ''})` : ''}</span>
+                    </div>
+                ) : null}
                 
                 {estimate && (
                     <div className="flex flex-col gap-2 p-2 bg-gray-100 rounded">
@@ -1004,6 +1025,7 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
     const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
     const [selectedInquiryIds, setSelectedInquiryIds] = useState<string[]>([]);
     const [isSyncing, setIsSyncing] = useState(false);
+    const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
 
     const handleSyncEmails = async () => {
         setIsSyncing(true);
@@ -1201,10 +1223,21 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
 
         if (searchTerm.trim()) {
             const low = searchTerm.toLowerCase();
-            filtered = filtered.filter(i => 
-                i.fromName.toLowerCase().includes(low) || 
-                i.message.toLowerCase().includes(low)
-            );
+            const cleanLow = low.replace(/\s/g, '');
+            filtered = filtered.filter(i => {
+                const vehicle = i.linkedVehicleId ? vehicles.find(v => v.id === i.linkedVehicleId) : null;
+                const estimate = i.linkedEstimateId ? estimates.find(e => e.id === i.linkedEstimateId) : null;
+                const estimateVehicle = estimate?.vehicleId ? vehicles.find(v => v.id === estimate.vehicleId) : null;
+                const reg = vehicle?.registration || i.vehicleRegistration || estimateVehicle?.registration || (estimate as any)?.vehicleRegistration || '';
+                const cleanReg = reg.toLowerCase().replace(/\s/g, '');
+                
+                return (
+                    i.fromName.toLowerCase().includes(low) || 
+                    i.message.toLowerCase().includes(low) ||
+                    (i.inquiryNumber && i.inquiryNumber.toLowerCase().includes(low)) ||
+                    (cleanReg && cleanReg.includes(cleanLow))
+                );
+            });
         }
 
         if (dateFilter !== 'all') {
@@ -1225,7 +1258,7 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
             const bTime = getLatestActivityTime(b);
             return bTime - aTime;
         });
-    }, [normalizedInquiries, selectedEntityId, searchTerm, dateFilter, assignedUserFilter, healthFilter, currentUser.id]);
+    }, [normalizedInquiries, selectedEntityId, searchTerm, dateFilter, assignedUserFilter, healthFilter, currentUser.id, vehicles, estimates]);
 
     const activeInquiries = useMemo(() => {
         const columns: { [key in Inquiry['status']]?: Inquiry[] } = {
@@ -1296,10 +1329,14 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                 valA = (a.status || '').toLowerCase();
                 valB = (b.status || '').toLowerCase();
             } else if (sortField === 'registration') {
-                const vA = a.linkedVehicleId ? vehicles.find(v => v.id === a.linkedVehicleId) : null;
-                const vB = b.linkedVehicleId ? vehicles.find(v => v.id === b.linkedVehicleId) : null;
-                valA = (vA?.registration || '').toLowerCase();
-                valB = (vB?.registration || '').toLowerCase();
+                const getReg = (inq: Inquiry) => {
+                    const v = inq.linkedVehicleId ? vehicles.find(veh => veh.id === inq.linkedVehicleId) : null;
+                    const est = inq.linkedEstimateId ? estimates.find(e => e.id === inq.linkedEstimateId) : null;
+                    const estVeh = est?.vehicleId ? vehicles.find(veh => veh.id === est.vehicleId) : null;
+                    return (v?.registration || inq.vehicleRegistration || estVeh?.registration || (est as any)?.vehicleRegistration || '').toLowerCase();
+                };
+                valA = getReg(a);
+                valB = getReg(b);
             }
             
             if (valA < valB) return sortOrder === 'asc' ? -1 : 1;
@@ -1539,6 +1576,17 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                                 </button>
                             </div>
                         )}
+
+                        {/* Print List Button */}
+                        <button
+                            type="button"
+                            onClick={() => setIsPrintModalOpen(true)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-gray-50 border border-gray-300 text-gray-700 font-bold text-xs rounded-lg shadow-sm transition-all whitespace-nowrap cursor-pointer"
+                            title="Print currently filtered list of inquiries"
+                        >
+                            <Printer size={15} className="text-gray-600" />
+                            <span>Print List</span>
+                        </button>
                     </div>
                 </div>
             </header>
@@ -1671,10 +1719,12 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                                             </td>
                                         </tr>
                                     ) : (
-                                        displayInquiries.map(i => {
+                                         displayInquiries.map(i => {
                                             const customer = i.linkedCustomerId ? customers.find(c => c.id === i.linkedCustomerId) : null;
                                             const vehicle = i.linkedVehicleId ? vehicles.find(v => v.id === i.linkedVehicleId) : null;
                                             const estimate = i.linkedEstimateId ? estimates.find(e => e.id === i.linkedEstimateId) : null;
+                                            const estVeh = estimate?.vehicleId ? vehicles.find(v => v.id === estimate.vehicleId) : null;
+                                            const effectiveReg = vehicle?.registration || i.vehicleRegistration || estVeh?.registration || (estimate as any)?.vehicleRegistration || '';
                                             const isSelected = selectedInquiryIds.includes(i.id);
                                             
                                             return (
@@ -1719,9 +1769,24 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                                                 {/* Vehicle */}
                                                 <td className="py-1.5 px-3 whitespace-nowrap">
                                                     {vehicle ? (
-                                                        <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded text-[10px] font-bold font-mono">
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => {
+                                                                if (props.onViewVehicle) {
+                                                                    e.stopPropagation();
+                                                                    props.onViewVehicle(vehicle.id);
+                                                                }
+                                                            }}
+                                                            className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 hover:bg-blue-100 px-1.5 py-0.5 rounded text-[10px] font-bold font-mono border border-blue-200/50 cursor-pointer"
+                                                            title={`${vehicle.registration} - ${vehicle.make} ${vehicle.model}`}
+                                                        >
                                                             <Car size={10} className="shrink-0" />
                                                             <span>{vehicle.registration}</span>
+                                                        </button>
+                                                    ) : effectiveReg ? (
+                                                        <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-800 border border-amber-200 px-1.5 py-0.5 rounded text-[10px] font-bold font-mono" title={`Vehicle Registration: ${effectiveReg}`}>
+                                                            <Car size={10} className="shrink-0 text-amber-600" />
+                                                            <span>{effectiveReg}</span>
                                                         </span>
                                                     ) : (
                                                         <span className="text-gray-400 text-xs">-</span>
@@ -1971,6 +2036,20 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {isPrintModalOpen && (
+                <PrintableInquiryList
+                    isOpen={isPrintModalOpen}
+                    onClose={() => setIsPrintModalOpen(false)}
+                    inquiries={displayInquiries}
+                    vehicles={vehicles}
+                    customers={customers}
+                    estimates={estimates}
+                    users={users}
+                    entities={entities}
+                    title={`${activeTab === 'active' ? 'Active' : 'Closed'} Inquiries (${dateFilter === 'today' ? 'Today' : dateFilter === 'all' ? 'All Time' : `${dateFilter} Days`})`}
+                />
             )}
         </div>
     );

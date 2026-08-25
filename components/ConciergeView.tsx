@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useApp } from '../core/state/AppContext';
 import { useData } from '../core/state/DataContext';
 import { Job, PurchaseOrder } from '../types';
-import { Search, X } from 'lucide-react';
+import { Search, X, Car } from 'lucide-react';
 import { getCustomerDisplayName } from '../core/utils/customerUtils';
 import { getRelativeDate, formatDate } from '../core/utils/dateUtils';
 import PauseReasonModal from './PauseReasonModal';
@@ -254,7 +254,10 @@ const ConciergeView: React.FC<ConciergeViewProps> = (props) => {
                         <KanbanColumn title="Action Required" count={actionRequiredInquiries.length} colorClass="border-red-500">
                             {actionRequiredInquiries.map(inq => {
                                 const customer = customersById.get(inq.linkedCustomerId || '');
+                                const vehicle = vehiclesById.get(inq.linkedVehicleId || '');
                                 const estimate = estimates.find(e => e.id === inq.linkedEstimateId);
+                                const estimateVehicle = estimate?.vehicleId ? vehiclesById.get(estimate.vehicleId) : null;
+                                const regNo = vehicle?.registration || inq.vehicleRegistration || estimateVehicle?.registration || (estimate as any)?.vehicleRegistration;
                                 return (
                                     <div 
                                         key={inq.id} 
@@ -269,7 +272,15 @@ const ConciergeView: React.FC<ConciergeViewProps> = (props) => {
                                             <span className="text-xs font-bold text-red-700 bg-red-100 px-2 py-0.5 rounded-full">New Reply</span>
                                             <span className="text-[10px] text-gray-500">{formatDate(new Date(inq.createdAt))}</span>
                                         </div>
-                                        <div className="font-bold text-sm text-gray-800 mb-1">{customer ? getCustomerDisplayName(customer) : inq.fromName}</div>
+                                        <div className="font-bold text-sm text-gray-800 mb-1 flex items-center justify-between gap-1">
+                                            <span className="truncate">{customer ? getCustomerDisplayName(customer) : inq.fromName}</span>
+                                            {regNo && (
+                                                <span className="text-xs font-bold text-blue-800 bg-blue-100 px-1.5 py-0.5 rounded inline-flex items-center gap-1 font-mono shrink-0 border border-blue-200" title={`Vehicle Reg: ${regNo}`}>
+                                                    <Car size={10} className="shrink-0 text-blue-600"/>
+                                                    <span>{regNo}</span>
+                                                </span>
+                                            )}
+                                        </div>
                                         <div className="text-xs text-gray-600 line-clamp-2 italic mb-2">"{inq.message || inq.actionNotes}"</div>
                                         {estimate && (
                                             <div className="text-xs font-medium text-indigo-600 bg-indigo-50 px-2 py-1 rounded inline-block">
