@@ -1089,12 +1089,18 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
     const linkedVehicles = vehicles.filter(v => v.customerId === formData.customerId);
     const recentCustomers = customers.filter(c => recentCustomerIds.includes(c.id));
 
+    const linkedInquiry = formData.linkedInquiryId ? (inquiries || []).find(i => i.id === formData.linkedInquiryId) : null;
+
     const customerInfoData = currentCustomer ? {
-        phone: currentCustomer.phone || currentCustomer.mobile,
-        email: currentCustomer.email,
-        address: `${currentCustomer.addressLine1 || ''}, ${currentCustomer.postcode || ''}`.replace(/^,|,$/g, '').trim(),
+        phone: currentCustomer.phone || currentCustomer.mobile || linkedInquiry?.fromPhone || 'N/A',
+        email: currentCustomer.email || linkedInquiry?.fromEmail || 'N/A',
+        address: `${currentCustomer.addressLine1 || linkedInquiry?.addressLine1 || ''}${currentCustomer.city || linkedInquiry?.city ? `, ${currentCustomer.city || linkedInquiry?.city}` : ''}${currentCustomer.postcode || linkedInquiry?.postcode ? `, ${currentCustomer.postcode || linkedInquiry?.postcode}` : ''}`.replace(/^[\s,]+|[\s,]+$/g, '').trim() || 'N/A',
         company: currentCustomer.companyName,
-    } : {};
+    } : (linkedInquiry ? {
+        phone: linkedInquiry.fromPhone || 'N/A',
+        email: linkedInquiry.fromEmail || 'N/A',
+        address: `${linkedInquiry.addressLine1 || ''}${linkedInquiry.city ? `, ${linkedInquiry.city}` : ''}${linkedInquiry.postcode ? `, ${linkedInquiry.postcode}` : ''}`.replace(/^[\s,]+|[\s,]+$/g, '').trim() || 'N/A',
+    } : {});
 
     const vehicleInfoData = currentVehicle ? {
         type: `${currentVehicle.year || ''} ${currentVehicle.make || ''} ${currentVehicle.model || ''}`.trim(),

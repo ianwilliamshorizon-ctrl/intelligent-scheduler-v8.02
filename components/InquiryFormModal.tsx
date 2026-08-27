@@ -483,6 +483,35 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
             hasNewReply: false
         } as Inquiry;
         
+        if (formData.linkedCustomerId) {
+            const existingCustomer = customers.find(c => c.id === formData.linkedCustomerId);
+            if (existingCustomer) {
+                const updatedCustomer: Customer = {
+                    ...existingCustomer,
+                    addressLine1: existingCustomer.addressLine1 || formData.addressLine1 || '',
+                    addressLine2: existingCustomer.addressLine2 || formData.addressLine2 || '',
+                    city: existingCustomer.city || formData.city || '',
+                    county: existingCustomer.county || formData.county || '',
+                    postcode: existingCustomer.postcode || formData.postcode || '',
+                    email: existingCustomer.email || formData.fromEmail || '',
+                    phone: existingCustomer.phone || formData.fromPhone || '',
+                    mobile: existingCustomer.mobile || formData.fromPhone || '',
+                };
+                if (
+                    updatedCustomer.addressLine1 !== existingCustomer.addressLine1 ||
+                    updatedCustomer.addressLine2 !== existingCustomer.addressLine2 ||
+                    updatedCustomer.city !== existingCustomer.city ||
+                    updatedCustomer.county !== existingCustomer.county ||
+                    updatedCustomer.postcode !== existingCustomer.postcode ||
+                    updatedCustomer.email !== existingCustomer.email ||
+                    updatedCustomer.phone !== existingCustomer.phone ||
+                    updatedCustomer.mobile !== existingCustomer.mobile
+                ) {
+                    saveRecord('customers', updatedCustomer);
+                }
+            }
+        }
+
         onSave(inquiryToSave, true);
 
         // TRIGGER AI NEXT STEP SUGGESTION
@@ -499,16 +528,38 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
 
 
     const handleLinkCustomer = (customer: Customer) => {
+        const updatedCustomer: Customer = {
+            ...customer,
+            addressLine1: customer.addressLine1 || formData.addressLine1 || '',
+            addressLine2: customer.addressLine2 || formData.addressLine2 || '',
+            city: customer.city || formData.city || '',
+            county: customer.county || formData.county || '',
+            postcode: customer.postcode || formData.postcode || '',
+            email: customer.email || formData.fromEmail || '',
+            phone: customer.phone || formData.fromPhone || '',
+        };
+        if (
+            updatedCustomer.addressLine1 !== customer.addressLine1 ||
+            updatedCustomer.addressLine2 !== customer.addressLine2 ||
+            updatedCustomer.city !== customer.city ||
+            updatedCustomer.county !== customer.county ||
+            updatedCustomer.postcode !== customer.postcode ||
+            updatedCustomer.email !== customer.email ||
+            updatedCustomer.phone !== customer.phone
+        ) {
+            saveRecord('customers', updatedCustomer);
+        }
+
         setFormData(p => ({ 
             ...p, 
             linkedCustomerId: customer.id,
-            fromEmail: customer.email || p.fromEmail || '',
-            fromPhone: customer.mobile || customer.phone || p.fromPhone || '',
-            addressLine1: customer.addressLine1 || p.addressLine1 || '',
-            addressLine2: customer.addressLine2 || p.addressLine2 || '',
-            city: customer.city || p.city || '',
-            county: customer.county || p.county || '',
-            postcode: customer.postcode || p.postcode || ''
+            fromEmail: updatedCustomer.email || p.fromEmail || '',
+            fromPhone: updatedCustomer.mobile || updatedCustomer.phone || p.fromPhone || '',
+            addressLine1: updatedCustomer.addressLine1 || p.addressLine1 || '',
+            addressLine2: updatedCustomer.addressLine2 || p.addressLine2 || '',
+            city: updatedCustomer.city || p.city || '',
+            county: updatedCustomer.county || p.county || '',
+            postcode: updatedCustomer.postcode || p.postcode || ''
         }));
         setSuggestedCustomers([]);
     };

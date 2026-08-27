@@ -47,7 +47,7 @@ interface JobDetailsTabProps {
 const JobDetailsTab: React.FC<JobDetailsTabProps> = ({ 
     editableJob, vehicle, customer, isReadOnly, purchaseOrders, onOpenPurchaseOrder, onChange, onViewCustomer, onViewVehicle, allJobs, onUpdateLinkedJob 
 }) => {
-    const { saleVehicles, vehicles: allVehicles } = useData();
+    const { saleVehicles, vehicles: allVehicles, inquiries } = useData();
     const { preferredVoiceName } = useApp();
     const activeUtterance = useRef<SpeechSynthesisUtterance | CloudSpeechSynthesisUtterance | null>(null);
     const [isNotesModalOpen, setIsNotesModalOpen] = useState(false);
@@ -77,12 +77,18 @@ const JobDetailsTab: React.FC<JobDetailsTabProps> = ({
         return purchaseOrders.filter(po => poIds.includes(po.id) || po.jobId === editableJob.id);
     }, [editableJob.purchaseOrderIds, editableJob.id, purchaseOrders]);
     
+    const linkedInquiry = (inquiries || []).find(i => (editableJob.id && i.linkedJobId === editableJob.id) || (customer?.id && i.linkedCustomerId === customer.id));
     const customerInfoData = customer ? {
-        phone: customer.phone || customer.mobile || 'N/A',
-        email: customer.email || 'N/A',
-        address: `${customer.addressLine1 || ''}, ${customer.postcode || ''}`.replace(/^,|,$/g, '').trim() || 'N/A',
+        phone: customer.phone || customer.mobile || linkedInquiry?.fromPhone || 'N/A',
+        email: customer.email || linkedInquiry?.fromEmail || 'N/A',
+        address: `${customer.addressLine1 || linkedInquiry?.addressLine1 || ''}${customer.city || linkedInquiry?.city ? `, ${customer.city || linkedInquiry?.city}` : ''}${customer.postcode || linkedInquiry?.postcode ? `, ${customer.postcode || linkedInquiry?.postcode}` : ''}`.replace(/^[\s,]+|[\s,]+$/g, '').trim() || 'N/A',
         company: customer.companyName || 'N/A',
-    } : {};
+    } : (linkedInquiry ? {
+        phone: linkedInquiry.fromPhone || 'N/A',
+        email: linkedInquiry.fromEmail || 'N/A',
+        address: `${linkedInquiry.addressLine1 || ''}${linkedInquiry.city ? `, ${linkedInquiry.city}` : ''}${linkedInquiry.postcode ? `, ${linkedInquiry.postcode}` : ''}`.replace(/^[\s,]+|[\s,]+$/g, '').trim() || 'N/A',
+        company: 'N/A',
+    } : {});
 
     const vehicleInfoData = vehicle ? {
         type: `${vehicle.year || ''} ${vehicle.make || ''} ${vehicle.model || ''}`.trim() || 'N/A',

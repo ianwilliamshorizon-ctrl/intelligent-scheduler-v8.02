@@ -212,6 +212,115 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
         return '';
     };
 
+    /**
+     * Resolves the customer ID from an inquiry, ensuring details (address, postcode, email, phone) are synced.
+     * - If a linked customer exists, updates any missing address/contact fields from the inquiry.
+     * - If no linked customer, tries to match existing by email, phone, name, or postcode.
+     * - If no match, auto-creates a customer record from inquiry details.
+     */
+    const resolveCustomerFromInquiry = (inq: T.Inquiry): string => {
+        // Case 1: Inquiry has a linked customer
+        if (inq.linkedCustomerId) {
+            const existingCustomer = data.customers.find(c => c.id === inq.linkedCustomerId);
+            if (existingCustomer) {
+                const updatedCustomer: T.Customer = {
+                    ...existingCustomer,
+                    addressLine1: existingCustomer.addressLine1 || inq.addressLine1 || '',
+                    addressLine2: existingCustomer.addressLine2 || inq.addressLine2 || '',
+                    city: existingCustomer.city || inq.city || '',
+                    county: existingCustomer.county || inq.county || '',
+                    postcode: existingCustomer.postcode || inq.postcode || '',
+                    email: existingCustomer.email || inq.fromEmail || '',
+                    phone: existingCustomer.phone || inq.fromPhone || '',
+                    mobile: existingCustomer.mobile || inq.fromPhone || '',
+                };
+                if (
+                    updatedCustomer.addressLine1 !== existingCustomer.addressLine1 ||
+                    updatedCustomer.addressLine2 !== existingCustomer.addressLine2 ||
+                    updatedCustomer.city !== existingCustomer.city ||
+                    updatedCustomer.county !== existingCustomer.county ||
+                    updatedCustomer.postcode !== existingCustomer.postcode ||
+                    updatedCustomer.email !== existingCustomer.email ||
+                    updatedCustomer.phone !== existingCustomer.phone ||
+                    updatedCustomer.mobile !== existingCustomer.mobile
+                ) {
+                    handleSaveItem(data.setCustomers, updatedCustomer, 'brooks_customers');
+                }
+                return existingCustomer.id;
+            }
+        }
+
+        // Case 2: No linked customer, try to match existing customer
+        const inquiryEmail = (inq.fromEmail || '').toLowerCase().trim();
+        const inquiryPhone = (inq.fromPhone || '').replace(/\s/g, '');
+        const inquiryName = (inq.fromName || '').toLowerCase().trim();
+
+        const matchedCustomer = data.customers.find(c => {
+            if (inquiryEmail && c.email?.toLowerCase().trim() === inquiryEmail) return true;
+            if (inquiryPhone && (c.phone?.replace(/\s/g, '') === inquiryPhone || c.mobile?.replace(/\s/g, '') === inquiryPhone)) return true;
+            if (inquiryName && (c.companyName?.toLowerCase().trim() === inquiryName || `${c.forename} ${c.surname}`.toLowerCase().trim() === inquiryName)) return true;
+            return false;
+        });
+
+        if (matchedCustomer) {
+            const updatedCustomer: T.Customer = {
+                ...matchedCustomer,
+                addressLine1: matchedCustomer.addressLine1 || inq.addressLine1 || '',
+                addressLine2: matchedCustomer.addressLine2 || inq.addressLine2 || '',
+                city: matchedCustomer.city || inq.city || '',
+                county: matchedCustomer.county || inq.county || '',
+                postcode: matchedCustomer.postcode || inq.postcode || '',
+                email: matchedCustomer.email || inq.fromEmail || '',
+                phone: matchedCustomer.phone || inq.fromPhone || '',
+                mobile: matchedCustomer.mobile || inq.fromPhone || '',
+            };
+            if (
+                updatedCustomer.addressLine1 !== matchedCustomer.addressLine1 ||
+                updatedCustomer.addressLine2 !== matchedCustomer.addressLine2 ||
+                updatedCustomer.city !== matchedCustomer.city ||
+                updatedCustomer.county !== matchedCustomer.county ||
+                updatedCustomer.postcode !== matchedCustomer.postcode ||
+                updatedCustomer.email !== matchedCustomer.email ||
+                updatedCustomer.phone !== matchedCustomer.phone ||
+                updatedCustomer.mobile !== matchedCustomer.mobile
+            ) {
+                handleSaveItem(data.setCustomers, updatedCustomer, 'brooks_customers');
+            }
+            // Link customer to inquiry
+            handleSaveItem(data.setInquiries, { ...inq, linkedCustomerId: matchedCustomer.id }, 'brooks_inquiries');
+            return matchedCustomer.id;
+        }
+
+        // Case 3: Auto-create customer record if inquiry has contact/address info
+        if (inq.fromName || inq.fromEmail || inq.fromPhone || inq.addressLine1 || inq.postcode) {
+            const nameParts = (inq.fromName || '').trim().split(' ');
+            const forename = nameParts[0] || 'Unknown';
+            const surname = nameParts.slice(1).join(' ') || '';
+            const newCustId = crypto.randomUUID();
+            const newCustomer: T.Customer = {
+                id: newCustId,
+                forename,
+                surname,
+                email: inq.fromEmail || '',
+                phone: inq.fromPhone || '',
+                mobile: inq.fromPhone || '',
+                addressLine1: inq.addressLine1 || '',
+                addressLine2: inq.addressLine2 || '',
+                city: inq.city || '',
+                county: inq.county || '',
+                postcode: inq.postcode || '',
+                category: 'Retail',
+                isBusinessCustomer: false,
+                createdDate: new Date().toISOString(),
+            };
+            handleSaveItem(data.setCustomers, newCustomer, 'brooks_customers');
+            handleSaveItem(data.setInquiries, { ...inq, linkedCustomerId: newCustId }, 'brooks_inquiries');
+            return newCustId;
+        }
+
+        return '';
+    };
+
     const handleAddCustomerNote = async (customerId: string, noteText: string) => {
         const customer = data.customers.find(c => c.id === customerId);
         if (!customer) return;
@@ -838,11 +947,12 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                             if (inq) {
                                 // Save the inquiry first so vehicle/customer details are persisted
                                 handleSaveItem(data.setInquiries, inq, 'brooks_inquiries');
+                                const resolvedCustomerId = resolveCustomerFromInquiry(inq);
                                 const resolvedVehicleId = resolveVehicleFromInquiry(inq);
                                 setters.setEstimateFormModal({
                                     isOpen: true, 
                                     estimate: { 
-                                        customerId: inq.linkedCustomerId || '', 
+                                        customerId: resolvedCustomerId, 
                                         vehicleId: resolvedVehicleId, 
                                         entityId: inq.entityId || selectedEntityId, 
                                         status: 'Draft', 
@@ -1067,14 +1177,15 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                         }}
                         onCreateNewEstimate={(inq) => {
                             // Save the inquiry first so vehicle/customer details are persisted
-                            // before we resolve the vehicle and open the estimate form.
+                            // before we resolve the vehicle and customer, and open the estimate form.
                             handleSaveItem(data.setInquiries, inq, 'brooks_inquiries');
                             setters.setInquiryModal({ isOpen: false, inquiry: null });
+                            const resolvedCustomerId = resolveCustomerFromInquiry(inq);
                             const resolvedVehicleId = resolveVehicleFromInquiry(inq);
                             setters.setEstimateFormModal({
                                 isOpen: true, 
                                 estimate: { 
-                                    customerId: inq.linkedCustomerId || '', 
+                                    customerId: resolvedCustomerId, 
                                     vehicleId: resolvedVehicleId, 
                                     entityId: inq.entityId || selectedEntityId, 
                                     status: 'Draft', 

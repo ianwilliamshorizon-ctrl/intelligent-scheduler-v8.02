@@ -256,6 +256,9 @@ const EstimatesView: React.FC<EstimatesViewProps> = ({ onOpenEstimateModal, onVi
                             {filteredEstimates.map(estimate => {
                                 const customer = customerMap.get(estimate.customerId);
                                 const vehicle = vehicleMap.get(estimate.vehicleId);
+                                const linkedInquiry = estimate.linkedInquiryId ? (inquiries || []).find(i => i.id === estimate.linkedInquiryId) : null;
+                                const displayCustomerName = customer ? `${customer.forename} ${customer.surname}` : (linkedInquiry?.fromName || null);
+                                const custAddress = [customer?.addressLine1 || linkedInquiry?.addressLine1, customer?.city || linkedInquiry?.city, customer?.postcode || linkedInquiry?.postcode].filter(Boolean).join(', ');
                                 return (
                                 <React.Fragment key={estimate.id}>
                                     <tr className="hover:bg-indigo-50 cursor-pointer" onClick={() => setExpandedRowId(expandedRowId === estimate.id ? null : estimate.id)}>
@@ -266,17 +269,17 @@ const EstimatesView: React.FC<EstimatesViewProps> = ({ onOpenEstimateModal, onVi
                                         </td>
                                         <td className="p-3 font-mono">{estimate.estimateNumber}</td>
                                         <td className="p-3">
-                                            {customer && (
+                                            {(customer || linkedInquiry) && (
                                                 <HoverInfo
                                                     title="Customer Details"
                                                     data={{
-                                                        name: `${customer.forename} ${customer.surname}`,
-                                                        email: customer.email,
-                                                        phone: customer.mobile || customer.phone,
-                                                        address: `${customer.addressLine1}, ${customer.city}, ${customer.postcode}`
+                                                        name: displayCustomerName || 'N/A',
+                                                        email: customer?.email || linkedInquiry?.fromEmail || 'N/A',
+                                                        phone: customer?.mobile || customer?.phone || linkedInquiry?.fromPhone || 'N/A',
+                                                        address: custAddress || 'N/A'
                                                     }}
                                                 >
-                                                    {customer.forename} {customer.surname}
+                                                    {displayCustomerName || 'Unnamed Customer'}
                                                 </HoverInfo>
                                             )}
                                         </td>
