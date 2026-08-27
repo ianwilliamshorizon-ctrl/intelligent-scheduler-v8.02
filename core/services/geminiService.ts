@@ -78,24 +78,31 @@ export const generateServicePackageName = async (lineItems: any[], make: string,
  * PARSE INQUIRY MESSAGE
  * Uses the AI to extract structured info from an inquiry message
  */
-export const parseInquiryMessage = async (message: string): Promise<any> => {
-    const prompt = `Analyze this customer inquiry message and extract structured information.
+export const parseInquiryMessage = async (message: string, subject?: string): Promise<any> => {
+    const fullContent = subject ? `Subject: ${subject}\n\nMessage Body:\n${message}` : message;
+    const prompt = `Analyze this customer inquiry (including its Subject title and message body) and extract structured information.
     
-    Note on Forwarded Emails:
-    If this email/message is a forwarded message (e.g. from an internal staff member forwarding a client's email, or has sections like 'From:', 'To:', 'Sent:', 'Subject:' indicating a forwarded thread), you MUST scan past the forwarder's introductory text and analyze all preceding emails (the original client's email history/predecessors) to find the original customer's actual contact information.
+    Note on Email Subjects & Forwarded Emails:
+    - Pay close attention to the Email Subject / Title! Customers and staff often put Customer Names, Vehicle Registration Plates (VRM), Makes, and Models in the subject line (e.g. "Quote for John Smith - AB12 CDE", "Porsche 911 Service - Dave").
+    - If this email/message is a forwarded message (e.g. from an internal staff member forwarding a client's email, or has sections like 'From:', 'To:', 'Sent:', 'Subject:' indicating a forwarded thread), scan past the forwarder's introductory text and analyze all preceding emails to find the original customer's actual contact information.
     
     Extract the following fields if present:
     1. "summary": A brief 1-2 sentence summary of the customer's issue or request.
-    2. "fromName": The customer's full name, if mentioned.
+    2. "fromName": The customer's full name, if mentioned in the subject line or message.
     3. "fromEmail": The FULL, complete email address, exactly as written. Do NOT truncate.
     4. "fromPhone": The FULL, complete phone number, exactly as written. Do NOT truncate.
     5. "fromContact": Any generic contact info that doesn't fit email/phone perfectly.
     6. "vehicleRegistration": Any vehicle registration plate/number mentioned (including UK formats like AB12 CDE, regardless of spacing) found anywhere in the text including the subject/title.
+    7. "vehicleMake": Vehicle make if mentioned (e.g. Porsche, Audi, BMW, Volkswagen, Mercedes-Benz, Ferrari).
+    8. "vehicleModel": Vehicle model if mentioned (e.g. 911, Boxster, M3, Golf, RS6, Cayenne).
+    9. "vehicleYear": Vehicle year if mentioned (e.g. 2018).
+    10. "postcode": Postcode if mentioned (e.g. GU24 9NY).
 
     Format your response as a valid JSON object only. Do not include any conversational text outside the JSON.
-    Example: {"summary": "...", "fromName": "...", "fromEmail": "...", "fromPhone": "...", "fromContact": "...", "vehicleRegistration": "..."}
+    Example: {"summary": "...", "fromName": "...", "fromEmail": "...", "fromPhone": "...", "fromContact": "...", "vehicleRegistration": "...", "vehicleMake": "...", "vehicleModel": "...", "vehicleYear": "...", "postcode": "..."}
     
-    Message: ${JSON.stringify(message)}`;
+    Inquiry Text:
+    ${JSON.stringify(fullContent)}`;
     return parseJobRequest(prompt);
 };
 

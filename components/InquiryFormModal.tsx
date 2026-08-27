@@ -13,6 +13,7 @@ import { generateInquiryNumber } from '../core/utils/numberGenerators';
 import { toast } from 'react-toastify';
 import { lookupVehicleByVRM } from '../services/vehicleLookupService';
 import { lookupAddressByPostcode, AddressDetails } from '../services/postcodeLookupService';
+import { extractInquiryDetailsFromText } from '../core/utils/inquiryUtils';
 
 interface InquiryFormModalProps {
     isOpen: boolean;
@@ -280,18 +281,20 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                 if (prev && prev.id === inquiry.id) return prev;
                 const linkedCustomer = inquiry.linkedCustomerId ? customers.find(c => c.id === inquiry.linkedCustomerId) : null;
                 const linkedVehicle = inquiry.linkedVehicleId ? vehicles.find(v => v.id === inquiry.linkedVehicleId) : null;
+                const extracted = extractInquiryDetailsFromText(inquiry.subject, inquiry.message);
                 return { 
                     ...inquiry,
+                    fromName: inquiry.fromName || extracted.fromName || (linkedCustomer ? getCustomerDisplayName(linkedCustomer) : ''),
                     fromEmail: inquiry.fromEmail || linkedCustomer?.email || '',
                     fromPhone: inquiry.fromPhone || linkedCustomer?.mobile || linkedCustomer?.phone || '',
                     addressLine1: inquiry.addressLine1 || linkedCustomer?.addressLine1 || '',
                     addressLine2: inquiry.addressLine2 || linkedCustomer?.addressLine2 || '',
                     city: inquiry.city || linkedCustomer?.city || '',
                     county: inquiry.county || linkedCustomer?.county || '',
-                    postcode: inquiry.postcode || linkedCustomer?.postcode || '',
-                    vehicleMake: inquiry.vehicleMake || linkedVehicle?.make || '',
-                    vehicleModel: inquiry.vehicleModel || linkedVehicle?.model || '',
-                    vehicleRegistration: inquiry.vehicleRegistration || linkedVehicle?.registration || '',
+                    postcode: inquiry.postcode || extracted.postcode || linkedCustomer?.postcode || '',
+                    vehicleMake: inquiry.vehicleMake || extracted.vehicleMake || linkedVehicle?.make || '',
+                    vehicleModel: inquiry.vehicleModel || extracted.vehicleModel || linkedVehicle?.model || '',
+                    vehicleRegistration: inquiry.vehicleRegistration || extracted.vehicleRegistration || linkedVehicle?.registration || '',
                     vehicleYear: inquiry.vehicleYear || linkedVehicle?.year?.toString() || '',
                     vehicleVin: inquiry.vehicleVin || linkedVehicle?.vin || '',
                     vehicleMotExpiry: inquiry.vehicleMotExpiry || linkedVehicle?.nextMotDate || linkedVehicle?.motExpiryDate || '',
@@ -370,6 +373,26 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
         setFormData(p => {
             const val = name === 'vehicleRegistration' ? value.toUpperCase() : value;
             const nextData = { ...p, [name]: val };
+
+            if (name === 'subject') {
+                const extracted = extractInquiryDetailsFromText(value, p.message);
+                if (extracted.vehicleRegistration && !p.vehicleRegistration) {
+                    nextData.vehicleRegistration = extracted.vehicleRegistration;
+                    checkVehicleMatch(extracted.vehicleRegistration);
+                }
+                if (extracted.fromName && !p.fromName) {
+                    nextData.fromName = extracted.fromName;
+                }
+                if (extracted.vehicleMake && !p.vehicleMake) {
+                    nextData.vehicleMake = extracted.vehicleMake;
+                }
+                if (extracted.vehicleModel && !p.vehicleModel) {
+                    nextData.vehicleModel = extracted.vehicleModel;
+                }
+                if (extracted.postcode && !p.postcode) {
+                    nextData.postcode = extracted.postcode;
+                }
+            }
 
             if (name === 'fromName' && value.length > 2) {
                 const lowerName = value.toLowerCase().trim();
@@ -761,11 +784,11 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                             <button 
                                 type="button" 
                                 onClick={async () => {
-                                    if (!formData.message) return;
+                                    if (!formData.message && !formData.subject) return;
                                     setIsAnalyzing(true);
                                     setAiError('');
                                     try {
-                                        const parsed = await parseInquiryMessage(formData.message);
+                                        const parsed = await parseInquiryMessage(formData.message || '', formData.subject);
                                         
                                         // Update form data with extracted info
                                         setFormData(p => {
@@ -795,6 +818,7 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                                     : p.vehicleRegistration ? p.vehicleRegistration.toUpperCase().trim() : '',
                                                 vehicleMake: parsed.vehicleMake ? formatTitleCase(parsed.vehicleMake) : (p.vehicleMake ? formatTitleCase(p.vehicleMake) : ''),
                                                 vehicleModel: parsed.vehicleModel ? formatTitleCase(parsed.vehicleModel) : (p.vehicleModel ? formatTitleCase(p.vehicleModel) : ''),
+                                                postcode: parsed.postcode ? parsed.postcode.toUpperCase().trim() : (p.postcode || ''),
                                             };
                                         });
 
@@ -847,7 +871,7 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                         setIsAnalyzing(false);
                                     }
                                 }}
-                                disabled={isAnalyzing || !formData.message}
+                                disabled={isAnalyzing || (!formData.message && !formData.subject)}
                                 className="flex items-center gap-1 text-xs font-semibold text-indigo-700 bg-indigo-50 px-2 py-1 rounded hover:bg-indigo-100 border border-indigo-200 transition disabled:opacity-50"
                             >
                                 {isAnalyzing ? <Loader2 size={12} className="animate-spin" /> : <Wand2 size={12} />} 

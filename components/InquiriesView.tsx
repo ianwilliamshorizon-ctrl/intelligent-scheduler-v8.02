@@ -17,6 +17,7 @@ import { toast } from 'react-toastify';
 import { triggerEmailSync } from '../core/services/emailService';
 import { doc, onSnapshot, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../core/services/firebaseServices';
+import { extractUKRegistration } from '../core/utils/inquiryUtils';
 
 interface InquiriesViewProps {
     onOpenInquiryModal: (inquiry: Partial<Inquiry> | null) => void;
@@ -113,7 +114,8 @@ const InquiryCard: React.FC<{
     const estimate = inquiry.linkedEstimateId ? estimates.find(e => e.id === inquiry.linkedEstimateId) : null;
     const job = estimate?.jobId ? jobs.find(j => j.id === estimate.jobId) : null;
     const estimateVehicle = estimate?.vehicleId ? vehicles.find(v => v.id === estimate.vehicleId) : null;
-    const effectiveReg = vehicle?.registration || inquiry.vehicleRegistration || estimateVehicle?.registration || (estimate as any)?.vehicleRegistration || '';
+    const extractedReg = extractUKRegistration(`${inquiry.subject || ''} ${inquiry.message || ''}`);
+    const effectiveReg = vehicle?.registration || inquiry.vehicleRegistration || estimateVehicle?.registration || (estimate as any)?.vehicleRegistration || extractedReg || '';
     
     const displayName = inquiry.fromName;
     const displayEmail = customer?.email || inquiry.fromEmail;
@@ -297,6 +299,11 @@ const InquiryCard: React.FC<{
                     </div>
                 )}
                 
+                {inquiry.subject && (
+                    <p className="text-[10px] font-semibold text-gray-800 my-0.5 truncate" title={`Subject: ${inquiry.subject}`}>
+                        <span className="text-gray-500 font-normal">Subject:</span> {inquiry.subject}
+                    </p>
+                )}
                 <p className={`text-[10px] text-gray-600 my-0.5 whitespace-pre-wrap leading-snug ${isExpanded ? 'line-clamp-none max-h-40 overflow-y-auto' : 'line-clamp-1'}`}>{inquiry.message}</p>
                 
                 {latestLog && (
@@ -1233,6 +1240,7 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                 
                 return (
                     i.fromName.toLowerCase().includes(low) || 
+                    (i.subject && i.subject.toLowerCase().includes(low)) ||
                     i.message.toLowerCase().includes(low) ||
                     (i.inquiryNumber && i.inquiryNumber.toLowerCase().includes(low)) ||
                     (cleanReg && cleanReg.includes(cleanLow))
