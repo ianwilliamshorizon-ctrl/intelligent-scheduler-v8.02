@@ -3,6 +3,7 @@ import * as T from '../types';
 import { useData } from '../core/state/DataContext';
 import { useApp } from '../core/state/AppContext';
 import { formatDate, formatReadableDate } from '../core/utils/dateUtils';
+import { generateCustomerId } from '../core/utils/customerUtils';
 import { ModalState, ModalSetters } from '../core/hooks/useModalState';
 import { useWorkshopActions } from '../core/hooks/useWorkshopActions';
 import { sendOutboundEmail } from '../core/services/emailService';
@@ -293,10 +294,10 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
 
         // Case 3: Auto-create customer record if inquiry has contact/address info
         if (inq.fromName || inq.fromEmail || inq.fromPhone || inq.addressLine1 || inq.postcode) {
-            const nameParts = (inq.fromName || '').trim().split(' ');
+            const nameParts = (inq.fromName || '').trim().split(/\s+/);
             const forename = nameParts[0] || 'Unknown';
-            const surname = nameParts.slice(1).join(' ') || '';
-            const newCustId = crypto.randomUUID();
+            const surname = nameParts.slice(1).join(' ') || forename;
+            const newCustId = generateCustomerId(surname, data.customers);
             const newCustomer: T.Customer = {
                 id: newCustId,
                 forename,

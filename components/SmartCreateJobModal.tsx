@@ -16,7 +16,7 @@ import { useApp } from '../core/state/AppContext';
 import { formatCurrency, formatTitleCase } from '../utils/formatUtils';
 import SearchableSelect from './SearchableSelect';
 import { generateEstimateNumber, generateJobId } from '../core/utils/numberGenerators';
-import { getCustomerDisplayName } from '../core/utils/customerUtils';
+import { getCustomerDisplayName, generateCustomerId } from '../core/utils/customerUtils';
 import { lookupVehicleByVRM } from '../services/vehicleLookupService';
 import { calculatePackagePrices } from '../core/utils/packageUtils';
 import { getScoredServicePackages } from '../utils/servicePackageScoring';
@@ -687,11 +687,13 @@ User Request: ${JSON.stringify(userText)}`;
                 if (matchedCust) {
                     activeCustomer = matchedCust;
                 } else {
-                    const names = nameToCheck.split(' ');
+                    const names = nameToCheck.split(/\s+/);
+                    const forename = names[0] || 'New';
+                    const surname = names.slice(1).join(' ') || forename;
                     activeCustomer = {
-                        id: `cust_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
-                        forename: names[0],
-                        surname: names.slice(1).join(' '),
+                        id: generateCustomerId(surname, customers),
+                        forename: forename,
+                        surname: surname,
                         email: linkedInquiry?.fromEmail || '',
                         phone: linkedInquiry?.fromPhone || '',
                         addressLine1: '',
