@@ -592,7 +592,12 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                             if (finalInvoice.jobId) {
                                 const job = data.jobs.find(j => j.id === finalInvoice.jobId);
                                 if (job) {
-                                    const updatedJob = { ...job, invoiceId: finalInvoice.id, status: 'Invoiced' as const };
+                                    const updatedJob = { 
+                                        ...job, 
+                                        invoiceId: finalInvoice.id, 
+                                        status: 'Invoiced' as const,
+                                        vehicleStatus: 'Awaiting Collection' as const
+                                    };
                                     handleSaveItem(data.setJobs, updatedJob, 'brooks_jobs');
                                 }
                             }

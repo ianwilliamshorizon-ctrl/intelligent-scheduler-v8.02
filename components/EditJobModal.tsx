@@ -900,6 +900,9 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
             await handleSaveEstimate(estimateToSave);
             if (newEstimateId) { jobToSave.estimateId = newEstimateId; }
         }
+        if (jobToSave.status === 'Invoiced' && jobToSave.vehicleStatus !== 'Collected') {
+            jobToSave.vehicleStatus = 'Awaiting Collection';
+        }
         await handleSaveItem(setJobs, jobToSave, 'brooks_jobs');
         onClose();
     };

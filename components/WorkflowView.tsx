@@ -201,7 +201,11 @@ const WorkflowView: React.FC<WorkflowViewProps> = ({ jobs, vehicles, customers, 
     const isEngineerView = currentUser.role === 'Engineer';
 
     const { workflowJobs, today } = useMemo(() => {
-        let filteredJobs = jobs.filter(job => !['Unallocated', 'Invoiced', 'Closed', 'Cancelled'].includes(job.status));
+        let filteredJobs = jobs.filter(job => 
+            !['Unallocated', 'Invoiced', 'Closed', 'Cancelled'].includes(job.status) &&
+            job.vehicleStatus !== 'Awaiting Collection' &&
+            job.vehicleStatus !== 'Collected'
+        );
         
         const engineerFilterId = isEngineerView ? currentUser.engineerId : (selectedEngineerId !== 'all' ? selectedEngineerId : null);
         if (engineerFilterId) {

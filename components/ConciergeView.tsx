@@ -114,7 +114,7 @@ const ConciergeView: React.FC<ConciergeViewProps> = (props) => {
                 return; 
             }
 
-            if (job.vehicleStatus === 'Awaiting Collection' || (job.vehicleStatus === 'On Site' && job.invoiceId)) {
+            if (job.vehicleStatus === 'Awaiting Collection' || job.status === 'Invoiced' || (job.vehicleStatus === 'On Site' && job.invoiceId)) {
                 handover.push(job);
                 return;
             }

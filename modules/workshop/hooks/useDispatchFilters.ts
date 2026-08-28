@@ -61,6 +61,10 @@ export const useDispatchFilters = ({
         // 1. Find all potential unallocated jobs
         const allPotentialUnallocated = jobs.filter(job => 
             job.status !== 'Cancelled' && 
+            job.status !== 'Invoiced' &&
+            job.status !== 'Closed' &&
+            job.vehicleStatus !== 'Awaiting Collection' &&
+            job.vehicleStatus !== 'Collected' &&
             (selectedEntityId === 'all' || job.entityId === selectedEntityId) && 
             (job.segments || []).some(s => s.status === 'Unallocated')
         );
@@ -91,7 +95,7 @@ export const useDispatchFilters = ({
         // 4. Map Allocated Segments for the Timeline
         const allocated = new Map<string, (JobSegment & { parentJobId: string })[]>();
         jobs.forEach(job => {
-            if (job.status === 'Cancelled') return;
+            if (job.status === 'Cancelled' || job.status === 'Invoiced' || job.status === 'Closed' || job.vehicleStatus === 'Awaiting Collection' || job.vehicleStatus === 'Collected') return;
             if (selectedEntityId !== 'all' && job.entityId !== selectedEntityId) return;
 
             (job.segments || []).forEach(segment => {
