@@ -46,6 +46,7 @@ interface TimelineViewProps {
     onSendOffsite: (jobId: string, segmentId: string) => void;
     onPassToSales: (jobId: string) => void;
     onOpenAssistant: (jobId: string) => void;
+    onCreateInvoice?: (job: Job) => void;
 }
 
 export const TimelineView: React.FC<TimelineViewProps> = (props) => {
@@ -55,7 +56,7 @@ export const TimelineView: React.FC<TimelineViewProps> = (props) => {
         unallocatedJobs, allocatedSegmentsByLift, unallocatedDateFilter, setUnallocatedDateFilter, 
         showOnSiteOnly, setShowOnSiteOnly, onEditJob, onCheckIn, onOpenPurchaseOrder, 
         onStartWork, onPause, onRestart, onReassign, onUnscheduleSegment, onSendOffsite, onPassToSales,
-        onOpenAssistant
+        onOpenAssistant, onCreateInvoice
     } = props;
 
     const { jobs, engineers, customers, vehicles, purchaseOrders, saveRecord, storageLocations } = useData();
@@ -160,6 +161,7 @@ export const TimelineView: React.FC<TimelineViewProps> = (props) => {
                             onCheckIn,
                             onPassToSales,
                             onQcApprove: (id: string) => {}, // Not used here
+                            onCreateInvoice,
                         };
 
                         if (viewMode === 'summary') {
@@ -243,6 +245,7 @@ export const TimelineView: React.FC<TimelineViewProps> = (props) => {
                                                 onPassToSales={onPassToSales}
                                                 currentUser={currentUser}
                                                 onOpenAssistant={handleOpenAssistant}
+                                                onCreateInvoice={onCreateInvoice}
                                             />
                                         );
                                     })}

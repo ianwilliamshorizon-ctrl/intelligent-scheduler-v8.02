@@ -35,6 +35,7 @@ interface DispatchViewProps {
     onPassToSales: (jobId: string) => void;
     onStartWork: (jobId: string, segmentId: string) => void;
     setEditJobInitialTab?: (tab: string | null) => void;
+    onCreateInvoice?: (job: Job) => void;
 }
 
 const DispatchView: React.FC<DispatchViewProps> = ({ 
@@ -53,7 +54,8 @@ const DispatchView: React.FC<DispatchViewProps> = ({
     onSendOffsite,
     onPassToSales,
     onStartWork,
-    setEditJobInitialTab
+    setEditJobInitialTab,
+    onCreateInvoice
 }) => {
     const { jobs, setJobs, lifts, engineers, customers, vehicles, purchaseOrders, absenceRequests, businessEntities, estimates, parts, forceRefresh } = useData();
     
@@ -240,6 +242,7 @@ const DispatchView: React.FC<DispatchViewProps> = ({
                     onSendOffsite={onSendOffsite}
                     onPassToSales={onPassToSales}
                     onOpenAssistant={(id) => { setSelectedJobId(id); onOpenAssistant(id); }}
+                    onCreateInvoice={onCreateInvoice}
                 />
             )}
             

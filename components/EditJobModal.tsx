@@ -55,6 +55,7 @@ interface EditJobModalProps {
     onOpenConditionReport?: (booking: T.RentalBooking, mode: 'checkIn' | 'checkOut') => void;
     forceRefresh?: (collectionKey: any) => Promise<void>;
     initialTab?: string;
+    onGenerateInvoice?: (jobId: string) => void;
 }
 
 const EditJobModal: React.FC<EditJobModalProps> = ({ 
@@ -62,7 +63,7 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
     onRaiseSupplementaryEstimate, onViewEstimate, onViewCustomer, onViewVehicle,
     onCheckIn, onCheckOut, onDelete, generatePurchaseOrderId, onOpenPurchaseOrder,
     rentalBookings, onOpenRentalBooking, onOpenConditionReport, forceRefresh,
-    initialTab
+    initialTab, onGenerateInvoice
 }) => {
     
     const data = useData();
@@ -1473,6 +1474,11 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
                             <Printer size={14} /> <span className="hidden sm:inline">{isPrinting ? 'Loading...' : 'Print Card'}</span><span className="sm:hidden">Print</span>
                         </button>
                         <button type="button" onClick={onClose} className="py-2 px-3 sm:px-4 bg-gray-100 rounded-lg font-semibold text-xs sm:text-sm">Close</button>
+                        {onGenerateInvoice && editableJob && (
+                            <button type="button" onClick={() => { handleSaveMain(); onGenerateInvoice(editableJob.id); }} className="flex items-center gap-2 py-2 px-3 sm:px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg text-xs sm:text-sm shadow-sm" title="Convert Job to Invoice">
+                                <FileText size={14} /> <span className="hidden sm:inline">Convert to Invoice</span><span className="sm:hidden">Invoice</span>
+                            </button>
+                        )}
                         <button type="button" onClick={handleSaveMain} className="flex items-center gap-2 py-2 px-3 sm:px-4 bg-indigo-600 text-white font-semibold rounded-lg disabled:opacity-50 text-xs sm:text-sm" disabled={isReadOnly}><Save size={14}/> Save</button>
                     </div>
                 </footer>

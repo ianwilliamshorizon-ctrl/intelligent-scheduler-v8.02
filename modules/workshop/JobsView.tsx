@@ -3,7 +3,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useApp } from '../../core/state/AppContext';
 import { useData } from '../../core/state/DataContext';
 import { Job, Vehicle, Customer, ServicePackage, Estimate, PurchaseOrder } from '../../types';
-import { Eye, Search, PlusCircle, Printer, Briefcase, Wand2, Loader2, CalendarDays, Camera, LayoutList, LayoutGrid, MessageSquare } from 'lucide-react';
+import { Eye, Search, PlusCircle, Printer, Briefcase, Wand2, Loader2, CalendarDays, Camera, LayoutList, LayoutGrid, MessageSquare, FileText } from 'lucide-react';
 import { getCustomerDisplayName } from '../../core/utils/customerUtils';
 import { getRelativeDate, formatDate, dateStringToDate, addDays, formatReadableDate, isWithinDateRange } from '../../core/utils/dateUtils';
 import PrintableJobList from '../../components/PrintableJobList';
@@ -19,6 +19,7 @@ interface JobsViewProps {
     onOpenPurchaseOrder?: (po: PurchaseOrder) => void;
     onSmartCreateClick: () => void;
     onOpenInquiry?: (inquiry: any) => void;
+    onCreateInvoice?: (job: Job) => void;
 }
 
 const statusFilterOptions: readonly Job['status'][] = ['Unallocated', 'Allocated', 'In Progress', 'Pending QC', 'Complete', 'Invoiced', 'Cancelled', 'Closed'];
@@ -33,7 +34,7 @@ const dateFilterOptions = {
 
 type DateFilterOption = keyof typeof dateFilterOptions;
 
-const JobsView: React.FC<JobsViewProps> = ({ onEditJob, onCheckIn, onOpenPurchaseOrder, onSmartCreateClick, onOpenInquiry }) => {
+const JobsView: React.FC<JobsViewProps> = ({ onEditJob, onCheckIn, onOpenPurchaseOrder, onSmartCreateClick, onOpenInquiry, onCreateInvoice }) => {
     const { jobs, customers, vehicles, businessEntities, estimates, taxRates, inspectionTemplates, setServicePackages, parts, purchaseOrders, inquiries } = useData();
     const { selectedEntityId, setConfirmation } = useApp();
     const print = usePrint();
@@ -379,6 +380,9 @@ const JobsView: React.FC<JobsViewProps> = ({ onEditJob, onCheckIn, onOpenPurchas
                                     <td className="p-3">
                                         <div className="flex gap-1" onClick={e => e.stopPropagation()}>
                                             <button onClick={() => onEditJob(job.id)} className="p-1.5 text-gray-600 hover:bg-gray-100 rounded-full" title="View/Edit Job"><Eye size={16} /></button>
+                                            {onCreateInvoice && (
+                                                <button onClick={() => onCreateInvoice(job)} className="p-1.5 text-emerald-600 hover:bg-emerald-100 rounded-full" title="Convert Job to Invoice"><FileText size={16} /></button>
+                                            )}
                                             <button onClick={() => handleCreatePackage(job)} disabled={isCreatingPackage} className="p-1.5 text-teal-600 hover:bg-teal-100 rounded-full disabled:opacity-50" title="Create Service Package">
                                                 {isCreatingPackage ? <Loader2 className="animate-spin" size={16} /> : <Wand2 size={16} />}
                                             </button>
@@ -418,6 +422,7 @@ const JobsView: React.FC<JobsViewProps> = ({ onEditJob, onCheckIn, onOpenPurchas
                         onCheckIn={onCheckIn}
                         onOpenPurchaseOrder={onOpenPurchaseOrder}
                         purchaseOrders={purchaseOrders}
+                        onCreateInvoice={onCreateInvoice}
                         onGoToDispatch={(id) => {
                             // This routes to dispatch view if setCurrentView is available
                             setCurrentView('dispatch');

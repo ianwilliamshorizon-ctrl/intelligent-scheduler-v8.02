@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { Job, Vehicle, Customer, PurchaseOrder, User, VehicleStatus, Engineer } from '../../types';
-import { Package as PackageIcon, PackageCheck, CheckCircle, ArrowRightCircle, Clock, Wrench, Edit, Wand2, LogIn, XCircle, Car } from 'lucide-react';
+import { Package as PackageIcon, PackageCheck, CheckCircle, ArrowRightCircle, Clock, Wrench, Edit, Wand2, LogIn, XCircle, Car, FileText } from 'lucide-react';
 import { getCustomerDisplayName } from '../../core/utils/customerUtils';
 import { getPoStatusColor } from '../../core/utils/statusUtils';
 import { useApp } from '../../core/state/AppContext';
@@ -26,7 +26,8 @@ export const DraggableJobCard: React.FC<{
     onRestart?: (jobId: string, segmentId: string) => void;
     onQcApprove?: (jobId: string) => void;
     onPassToSales?: (jobId: string) => void;
-}> = ({ job, vehicle, customer, purchaseOrders, onDragStart, onDragEnd, onEdit, onCheckIn, onOpenPurchaseOrder, currentUser, onOpenAssistant, engineers = [], onStartWork = () => {}, onPause = () => {}, onRestart = () => {}, onQcApprove = () => {}, onPassToSales = () => {} }) => {
+    onCreateInvoice?: (job: Job) => void;
+}> = ({ job, vehicle, customer, purchaseOrders, onDragStart, onDragEnd, onEdit, onCheckIn, onOpenPurchaseOrder, currentUser, onOpenAssistant, engineers = [], onStartWork = () => {}, onPause = () => {}, onRestart = () => {}, onQcApprove = () => {}, onPassToSales = () => {}, onCreateInvoice }) => {
     const [isActionsMenuOpen, setIsActionsMenuOpen] = React.useState(false);
     const unallocatedSegments = (job.segments || []).filter(s => s.status === 'Unallocated');
 
@@ -103,12 +104,16 @@ export const DraggableJobCard: React.FC<{
             { id: 'pass-to-sales', label: job.saleVehicleId ? 'Linked to Sales' : 'Pass to Sales', icon: PackageIcon, onClick: () => onPassToSales(job.id), group: 'secondary' as const }
         ];
 
+        if (onCreateInvoice) {
+            list.push({ id: 'create-invoice', label: 'Convert to Invoice', icon: FileText, onClick: () => onCreateInvoice(job), group: 'primary' as const });
+        }
+
         if (job.vehicleStatus === 'Awaiting Arrival') {
             list.unshift({ id: 'checkin', label: 'Check Vehicle In', icon: LogIn, onClick: () => onCheckIn(job.id), group: 'primary' as const });
         }
 
         return list;
-    }, [job.id, job.vehicleStatus, onOpenAssistant, onEdit, onCheckIn]);
+    }, [job.id, job.vehicleStatus, onOpenAssistant, onEdit, onCheckIn, onCreateInvoice]);
 
     return (
             <div

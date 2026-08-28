@@ -108,9 +108,8 @@ const AuthenticatedApp = () => {
         const currentPartsStatus = calculateJobPartsStatus(linkedEstimate || null, jobPurchaseOrders);
 
         const isReconciled = currentPartsStatus === 'Fully Received' || currentPartsStatus === 'Not Required';
-        if (!isReconciled) {
-            toast.error(`Cannot generate invoice. All parts for Job #${job.id} must be receipted and reconciled first (Current parts status: ${currentPartsStatus}).`);
-            return;
+        if (!isReconciled && currentPartsStatus !== 'No Parts Required') {
+            toast.info(`Preparing invoice for Job #${job.id} (Parts status: ${currentPartsStatus}).`);
         }
 
         setters.setInvoiceFormModal({ isOpen: true, job });
@@ -347,12 +346,13 @@ const AuthenticatedApp = () => {
                     onUnscheduleSegment={workshopActions.handleUnscheduleSegment} 
                     onSendOffsite={workshopActions.handleSendOffsite}
                     onPassToSales={workshopActions.handlePassToSales}
+                    onCreateInvoice={(job) => handleGenerateInvoice(job.id)}
                 />;
             case 'workflow':
                 const workflowJobs = (jobs || []).filter(j => selectedEntityId === 'all' || j.entityId === selectedEntityId);
                 return <WorkflowView jobs={workflowJobs} vehicles={vehicles || []} customers={customers || []} engineers={engineers || []} currentUser={currentUser} onQcApprove={commonProps.onQcApprove} onGenerateInvoice={handleGenerateInvoice} onEditJob={commonProps.onEditJob} onStartWork={commonProps.onStartWork} onEngineerComplete={commonProps.onEngineerComplete} onPause={(id, segId) => workshopActions.handleUpdateSegmentStatus(id, segId, 'Paused')} onRestart={commonProps.onRestart} onOpenAssistant={commonProps.onOpenAssistant} onOpenPurchaseOrder={(po) => setters.setPoModal({isOpen: true, po})} />;
             case 'jobs':
-                return <JobsView onEditJob={commonProps.onEditJob} onCheckIn={(id) => setters.setCheckInJob((jobs || []).find(j => j.id === id) || null)} onOpenPurchaseOrder={(po) => setters.setPoModal({isOpen: true, po})} onSmartCreateClick={() => { setters.setSmartCreateMode('job'); setters.setIsSmartCreateOpen(true); }} onOpenInquiry={(inq) => setters.setInquiryModal({isOpen: true, inquiry: inq})} />;
+                return <JobsView onEditJob={commonProps.onEditJob} onCheckIn={(id) => setters.setCheckInJob((jobs || []).find(j => j.id === id) || null)} onOpenPurchaseOrder={(po) => setters.setPoModal({isOpen: true, po})} onSmartCreateClick={() => { setters.setSmartCreateMode('job'); setters.setIsSmartCreateOpen(true); }} onOpenInquiry={(inq) => setters.setInquiryModal({isOpen: true, inquiry: inq})} onCreateInvoice={(job) => handleGenerateInvoice(job.id)} />;
             case 'estimates':
                 return <EstimatesView onOpenEstimateModal={(est) => setters.setEstimateFormModal({isOpen: true, estimate: est})} onViewEstimate={(est) => setters.setEstimateViewModal({isOpen: true, estimate: est})} onSmartCreateClick={() => { setters.setSmartCreateMode('estimate'); setters.setIsSmartCreateOpen(true); }} onScheduleEstimate={(est, inquiryId) => setters.setScheduleJobFromEstimateModal({isOpen: true, estimate: est, inquiryId})} onCreateInquiry={(est) => {
                     const existingInquiry = (inquiries || []).find(inq => inq.linkedEstimateId === est.id && !['Closed', 'Rejected'].includes(inq.status || ''));

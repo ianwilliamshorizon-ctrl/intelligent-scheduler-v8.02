@@ -1,6 +1,6 @@
 import React from 'react';
 import { Job, Vehicle, Customer, PurchaseOrder } from '../../../types';
-import { Calendar, User, Truck, Wrench, Package, PackageOpen, Camera, Share, ArrowRightCircle, LogIn, KeyRound } from 'lucide-react';
+import { Calendar, User, Truck, Wrench, Package, PackageOpen, Camera, Share, ArrowRightCircle, LogIn, KeyRound, FileText } from 'lucide-react';
 import { getCustomerDisplayName } from '../../../core/utils/customerUtils';
 import { formatReadableDate } from '../../../core/utils/dateUtils';
 import { getPoStatusColor } from '../../../core/utils/statusUtils';
@@ -14,6 +14,7 @@ interface JobCardProps {
     onCheckIn?: (jobId: string) => void;
     onOpenPurchaseOrder?: (po: PurchaseOrder) => void;
     onGoToDispatch?: (jobId: string) => void;
+    onCreateInvoice?: (job: Job) => void;
 }
 
 export const JobCard: React.FC<JobCardProps> = ({
@@ -24,7 +25,8 @@ export const JobCard: React.FC<JobCardProps> = ({
     onEditJob,
     onCheckIn,
     onOpenPurchaseOrder,
-    onGoToDispatch
+    onGoToDispatch,
+    onCreateInvoice
 }) => {
     // Check parts status (assumes job.partsStatus is calculated somewhere, or we use a heuristic)
     // If not, we can rely on standard status
@@ -213,6 +215,15 @@ export const JobCard: React.FC<JobCardProps> = ({
                     >
                         <Share size={14} /> Allocate
                     </button>
+                    {onCreateInvoice && (
+                        <button
+                            onClick={(e) => { e.stopPropagation(); onCreateInvoice(job); }}
+                            className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 bg-emerald-600 text-white rounded-md text-xs font-bold uppercase tracking-wider hover:bg-emerald-700 transition-all shadow-sm active:scale-95"
+                            title="Convert Job directly to Invoice"
+                        >
+                            <FileText size={14} /> Invoice
+                        </button>
+                    )}
                     {onGoToDispatch && (
                         <button
                             onClick={(e) => { e.stopPropagation(); onGoToDispatch(job.id); }}

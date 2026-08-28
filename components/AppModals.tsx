@@ -441,6 +441,7 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                         onOpenRentalBooking={(booking) => setters.setRentalBookingModal({ isOpen: true, booking })}
                         onOpenConditionReport={(booking, mode) => setters.setRentalConditionModal({ isOpen: true, booking, mode })}
                         forceRefresh={data.forceRefresh}
+                        onGenerateInvoice={(jobId) => setters.setInvoiceFormModal({ isOpen: true, job: data.jobs.find(j => j.id === jobId) || null })}
                     />
                 </ModalSuspense>
             )}

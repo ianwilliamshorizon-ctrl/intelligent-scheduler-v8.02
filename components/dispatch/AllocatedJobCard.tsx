@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Job, JobSegment, Vehicle, Customer, Engineer, PurchaseOrder, User } from '../../types';
-import { Package as PackageIcon, KeyRound, PauseCircle, PlayCircle, UserCog, Trash2, Wand2, Edit, User as UserIcon, UserPlus, CheckCircle, Camera } from 'lucide-react';
+import { Package as PackageIcon, KeyRound, PauseCircle, PlayCircle, UserCog, Trash2, Wand2, Edit, User as UserIcon, UserPlus, CheckCircle, Camera, FileText } from 'lucide-react';
 import { getCustomerDisplayName } from '../../core/utils/customerUtils';
 import { getPoStatusColor } from '../../core/utils/statusUtils';
 import { useApp } from '../../core/state/AppContext';
@@ -33,7 +33,8 @@ export const AllocatedJobCard: React.FC<{
     engineers?: Engineer[];
     onQcApprove?: (jobId: string) => void;
     onEngineerComplete?: (job: Job, segmentId: string) => void;
-}> = ({ job, segment, vehicle, customer, engineer, purchaseOrders, onDragStart, onDragEnd, onEdit, onStartWork, onPause, onRestart, onReassign, onOpenPurchaseOrder, onUnscheduleSegment, onSendOffsite, onPassToSales, currentUser, onOpenAssistant, engineers = [], onQcApprove = () => {}, onEngineerComplete = () => {} }) => {
+    onCreateInvoice?: (job: Job) => void;
+}> = ({ job, segment, vehicle, customer, engineer, purchaseOrders, onDragStart, onDragEnd, onEdit, onStartWork, onPause, onRestart, onReassign, onOpenPurchaseOrder, onUnscheduleSegment, onSendOffsite, onPassToSales, currentUser, onOpenAssistant, engineers = [], onQcApprove = () => {}, onEngineerComplete = () => {}, onCreateInvoice = () => {} }) => {
     
     const segments = segment.duration * (60 / SEGMENT_DURATION_MINUTES);
     const maxSegmentsAvailable = TIME_SEGMENTS.length - (segment.scheduledStartSegment || 0);
@@ -134,6 +135,9 @@ export const AllocatedJobCard: React.FC<{
         if (canPerformActions) {
             list.push({ id: 'assistant', label: 'Technical Assistant', icon: Wand2, onClick: () => onOpenAssistant(job.id), group: 'secondary' });
             list.push({ id: 'edit', label: 'Edit Job', icon: Edit, onClick: () => onEdit(job.id), group: 'secondary' });
+            if (onCreateInvoice) {
+                list.push({ id: 'create-invoice', label: 'Convert to Invoice', icon: FileText, onClick: () => onCreateInvoice(job), group: 'primary', color: 'text-emerald-600' });
+            }
             list.push({ id: 'pass-to-sales', label: job.saleVehicleId ? 'Linked to Sales' : 'Pass to Sales', icon: PackageIcon, onClick: () => onPassToSales(job.id), group: 'secondary', color: job.saleVehicleId ? 'text-indigo-600' : undefined });
             list.push({ id: 'reassign', label: 'Reassign Engineer', icon: UserCog, onClick: () => onReassign(job.id, segment.segmentId), group: 'secondary' });
         }
@@ -144,7 +148,7 @@ export const AllocatedJobCard: React.FC<{
         }
 
         return list;
-    }, [segment.status, job.id, segment.segmentId, canStartOrPause, canPerformActions, canUnschedule, onStartWork, onPause, onRestart, onOpenAssistant, onEdit, onReassign, onUnscheduleSegment, isSmallCard, customer, engineer]);
+    }, [segment.status, job.id, segment.segmentId, canStartOrPause, canPerformActions, canUnschedule, onStartWork, onPause, onRestart, onOpenAssistant, onEdit, onReassign, onUnscheduleSegment, isSmallCard, customer, engineer, onCreateInvoice]);
     return (
             <div
                 draggable={canDrag}

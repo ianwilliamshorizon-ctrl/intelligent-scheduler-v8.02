@@ -11,6 +11,7 @@ interface JobsBoardProps {
     onCheckIn?: (jobId: string) => void;
     onOpenPurchaseOrder?: (po: PurchaseOrder) => void;
     onGoToDispatch?: (jobId: string) => void;
+    onCreateInvoice?: (job: Job) => void;
 }
 
 export const JobsBoard: React.FC<JobsBoardProps> = ({
@@ -21,7 +22,8 @@ export const JobsBoard: React.FC<JobsBoardProps> = ({
     onEditJob,
     onCheckIn,
     onOpenPurchaseOrder,
-    onGoToDispatch
+    onGoToDispatch,
+    onCreateInvoice
 }) => {
     if (jobs.length === 0) {
         return (
@@ -45,6 +47,7 @@ export const JobsBoard: React.FC<JobsBoardProps> = ({
                     onCheckIn={onCheckIn}
                     onOpenPurchaseOrder={onOpenPurchaseOrder}
                     onGoToDispatch={onGoToDispatch}
+                    onCreateInvoice={onCreateInvoice}
                 />
             ))}
         </div>
