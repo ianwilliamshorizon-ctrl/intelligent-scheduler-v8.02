@@ -154,11 +154,11 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
             return inq.linkedVehicleId;
         }
 
-        // Case 2: No linked vehicle, but inquiry has a registration — try to match existing
-        if (inquiryReg) {
-            const matchedVehicle = data.vehicles.find(
+        // Case 2: No linked vehicle, but inquiry has a registration, make, or model — try to match existing
+        if (inquiryReg || inq.vehicleMake || inq.vehicleModel) {
+            const matchedVehicle = inquiryReg ? data.vehicles.find(
                 v => v.registration?.toUpperCase().replace(/\s/g, '') === inquiryReg
-            );
+            ) : null;
             if (matchedVehicle) {
                 // Backfill details if missing
                 const yearNum = inq.vehicleYear ? parseInt(inq.vehicleYear) : matchedVehicle.year;
@@ -191,7 +191,7 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
             const yearNum = inq.vehicleYear ? parseInt(inq.vehicleYear) : undefined;
             const newVehicle: T.Vehicle = {
                 id: newVehicleId,
-                registration: inq.vehicleRegistration || '',
+                registration: inq.vehicleRegistration || 'TBA',
                 make: inq.vehicleMake || '',
                 model: inq.vehicleModel || '',
                 year: yearNum,
@@ -978,8 +978,29 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                 const estimate = modals.scheduleJobFromEstimateModal.estimate;
                 if (!estimate) return null;
 
-                const targetInquiryId = modals.scheduleJobFromEstimateModal.inquiryId || data.inquiries.find(i => i.linkedEstimateId === estimate.id)?.id;
+                const targetInquiryId = modals.scheduleJobFromEstimateModal.inquiryId || estimate.linkedInquiryId || data.inquiries.find(i => i.linkedEstimateId === estimate.id || (estimate.linkedInquiryId && i.id === estimate.linkedInquiryId))?.id;
                 const inquiry = targetInquiryId ? data.inquiries.find(i => i.id === targetInquiryId) : undefined;
+
+                let resolvedCustomerId = estimate.customerId;
+                let resolvedVehicleId = estimate.vehicleId;
+
+                if (inquiry) {
+                    if (!resolvedCustomerId || !data.customers.some(c => c.id === resolvedCustomerId)) {
+                        resolvedCustomerId = resolveCustomerFromInquiry(inquiry);
+                    }
+                    if (!resolvedVehicleId || !data.vehicles.some(v => v.id === resolvedVehicleId)) {
+                        resolvedVehicleId = resolveVehicleFromInquiry(inquiry);
+                    }
+                }
+
+                const effectiveEstimate: T.Estimate = {
+                    ...estimate,
+                    customerId: resolvedCustomerId || estimate.customerId,
+                    vehicleId: resolvedVehicleId || estimate.vehicleId,
+                };
+
+                const activeCustomer = data.customers.find(c => c.id === resolvedCustomerId);
+                const activeVehicle = data.vehicles.find(v => v.id === resolvedVehicleId);
 
                 return (
                     <ModalSuspense>
@@ -990,9 +1011,23 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                                 const originalEstimate = modals.scheduleJobFromEstimateModal.estimate;
                                 if (!originalEstimate) return;
 
-                                const targetInquiryId = modals.scheduleJobFromEstimateModal.inquiryId || data.inquiries.find(i => i.linkedEstimateId === originalEstimate?.id)?.id;
-                                const inquiry = targetInquiryId ? data.inquiries.find(i => i.id === targetInquiryId) : null;
+                                const targetInquiryId = modals.scheduleJobFromEstimateModal.inquiryId || originalEstimate.linkedInquiryId || data.inquiries.find(i => i.linkedEstimateId === originalEstimate?.id || (originalEstimate.linkedInquiryId && i.id === originalEstimate.linkedInquiryId))?.id;
+                                let inquiry = targetInquiryId ? data.inquiries.find(i => i.id === targetInquiryId) : null;
                                 
+                                let finalCustId = est.customerId || resolvedCustomerId || job.customerId;
+                                let finalVehId = est.vehicleId || resolvedVehicleId || job.vehicleId;
+
+                                if (inquiry) {
+                                    if (!finalCustId || !data.customers.some(c => c.id === finalCustId)) {
+                                        finalCustId = resolveCustomerFromInquiry(inquiry);
+                                    }
+                                    if (!finalVehId || !data.vehicles.some(v => v.id === finalVehId)) {
+                                        finalVehId = resolveVehicleFromInquiry(inquiry);
+                                    }
+                                }
+
+                                const finalVehObj = data.vehicles.find(v => v.id === finalVehId);
+
                                 if (originalEstimate.jobId) {
                                     const originJob = data.jobs.find(j => j.id === originalEstimate.jobId);
                                     if (originJob) {
@@ -1008,6 +1043,9 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
 
                                 const jobToSave = {
                                     ...job,
+                                    customerId: finalCustId || job.customerId,
+                                    vehicleId: finalVehId || job.vehicleId,
+                                    vehicleRegistration: finalVehObj?.registration || job.vehicleRegistration || '',
                                     createdByUserId: currentUser.id,
                                     estimateId: est.id,
                                 };
@@ -1016,26 +1054,42 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                                 
                                 if (extraJobs && extraJobs.length > 0) {
                                     for (const extraJob of extraJobs) {
-                                        await handleSaveItem(data.setJobs, { ...extraJob, createdByUserId: currentUser.id }, 'brooks_jobs');
+                                        await handleSaveItem(data.setJobs, { 
+                                            ...extraJob, 
+                                            customerId: finalCustId || extraJob.customerId,
+                                            vehicleId: finalVehId || extraJob.vehicleId,
+                                            vehicleRegistration: finalVehObj?.registration || extraJob.vehicleRegistration || '',
+                                            createdByUserId: currentUser.id 
+                                        }, 'brooks_jobs');
                                     }
                                 }
+
+                                const estToSave: T.Estimate = {
+                                    ...est,
+                                    customerId: finalCustId || est.customerId,
+                                    vehicleId: finalVehId || est.vehicleId,
+                                    status: 'Converted to Job' as const,
+                                    jobId: jobToSave.id,
+                                };
                                 
-                                await handleSaveItem(data.setEstimates, est, 'brooks_estimates');
+                                await handleSaveItem(data.setEstimates, estToSave, 'brooks_estimates');
 
                                 // SYNC PURCHASE ORDERS using the unified rules
-                                await workshopActions.syncPurchaseOrdersFromEstimate(est, { forceNew: true });
+                                await workshopActions.syncPurchaseOrdersFromEstimate(estToSave, { forceNew: true });
                                 
                                 if (inquiry) {
                                     const updatedInquiry = {
                                         ...inquiry, 
                                         status: 'Scheduled' as const,
                                         linkedJobId: jobToSave.id,
+                                        linkedCustomerId: finalCustId || inquiry.linkedCustomerId,
+                                        linkedVehicleId: finalVehId || inquiry.linkedVehicleId,
                                         logs: [...(inquiry.logs || []), {
                                             id: crypto.randomUUID(),
                                             timestamp: new Date().toISOString(),
                                             userId: 'System',
                                             actionType: 'Job Scheduled',
-                                            notes: `Job #${jobToSave.id} scheduled for ${formatReadableDate(jobToSave.scheduledDate)}. Parts synchronized.`
+                                            notes: `Job #${jobToSave.id} scheduled for ${formatReadableDate(jobToSave.scheduledDate)}. Customer & Vehicle records synced.`
                                         }]
                                     };
                                     await handleSaveItem(data.setInquiries, updatedInquiry, 'brooks_inquiries');
@@ -1046,8 +1100,8 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                                 const extraJobMsg = extraJobs && extraJobs.length > 0 ? ` plus ${extraJobs.length} linked job(s)` : '';
                                 
                                 let emailMsg = '';
-                                const customer = data.customers.find(c => c.id === est.customerId);
-                                const vehicle = data.vehicles.find(v => v.id === est.vehicleId);
+                                const customer = data.customers.find(c => c.id === (finalCustId || est.customerId));
+                                const vehicle = data.vehicles.find(v => v.id === (finalVehId || est.vehicleId));
 
                                 if (customer && customer.email) {
                                     const emailAddress = customer.email;
@@ -1082,14 +1136,14 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                                 setConfirmation({
                                     isOpen: true, 
                                     title: 'Job Scheduled', 
-                                    message: `Job #${jobToSave.id} has been scheduled for ${formatReadableDate(jobToSave.scheduledDate)}${extraJobMsg}. Purchase orders have been synchronized according to the latest rules.${emailMsg}`,
+                                    message: `Job #${jobToSave.id} has been scheduled for ${formatReadableDate(jobToSave.scheduledDate)}${extraJobMsg}. Customer & Vehicle records generated/synced. Purchase orders have been synchronized according to the latest rules.${emailMsg}`,
                                     type: 'success'
                                 });
                             }}
-                            estimate={estimate}
+                            estimate={effectiveEstimate}
                             inquiry={inquiry}
-                            customer={data.customers.find(c => c.id === estimate.customerId)}
-                            vehicle={data.vehicles.find(v => v.id === estimate.vehicleId)}
+                            customer={activeCustomer}
+                            vehicle={activeVehicle}
                             jobs={data.jobs}
                             vehicles={data.vehicles}
                             parts={data.parts}

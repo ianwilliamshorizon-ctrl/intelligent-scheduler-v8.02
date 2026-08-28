@@ -8,6 +8,7 @@ import { formatCurrency } from '../../core/utils/formatUtils';
 import { formatDate, getRelativeDate, isWithinDateRange } from '../../core/utils/dateUtils';
 import { getCustomerDisplayName } from '../../core/utils/customerUtils';
 import { StatusFilter } from '../../components/shared/StatusFilter';
+import { HoverInfo } from '../../components/shared/HoverInfo';
 
 interface InvoicesViewProps {
     onViewInvoice: (invoice: Invoice) => void;
@@ -34,7 +35,7 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({
     onCreateAdhocInvoice,
     onViewAgedDebtors
 }) => {
-    const { invoices, customers, vehicles, businessEntities, taxRates } = useData();
+    const { invoices, customers, vehicles, jobs, businessEntities, taxRates } = useData();
     const { selectedEntityId } = useApp();
     const [filter, setFilter] = useState('');
     const [statusFilter, setStatusFilter] = useState<Invoice['status'][]>([]);
@@ -60,6 +61,7 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({
     
     const customerMap = useMemo(() => new Map(customers.map(c => [c.id, c])), [customers]);
     const vehicleMap = useMemo(() => new Map(vehicles.map(v => [v.id, v])), [vehicles]);
+    const jobsMap = useMemo(() => new Map((jobs || []).map(j => [j.id, j])), [jobs]);
     const taxRatesMap = useMemo(() => new Map(taxRates.map(t => [t.id, t.rate])), [taxRates]);
     const standardTaxRate = useMemo(() => taxRates.find(t => t.code === 'T1')?.rate || 0, [taxRates]);
     const standardTaxRateId = useMemo(() => taxRates.find(t => t.code === 'T1')?.id, [taxRates]);
@@ -80,8 +82,9 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({
                 return false;
             }
 
-            const customer = customerMap.get(invoice.customerId);
-            const vehicle = invoice.vehicleId ? vehicleMap.get(invoice.vehicleId) : null;
+            const job = invoice.jobId ? jobsMap.get(invoice.jobId) : null;
+            const customer = customerMap.get(invoice.customerId) || (job?.customerId ? customerMap.get(job.customerId) : null);
+            const vehicle = invoice.vehicleId ? vehicleMap.get(invoice.vehicleId) : (job?.vehicleId ? vehicleMap.get(job.vehicleId) : null);
             const lowerFilter = filter.toLowerCase();
 
             if (!isWithinDateRange(invoice.issueDate, startDate, endDate)) {
@@ -100,7 +103,7 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({
 
             return matchesSearch && matchesStatus;
         }).sort((a,b) => (b.issueDate || '').localeCompare(a.issueDate || '') || (b.id || '').localeCompare(a.id || ''));
-    }, [invoices, filter, statusFilter, customerMap, vehicleMap, selectedEntityId, businessEntities, dateFilter]);
+    }, [invoices, filter, statusFilter, customerMap, vehicleMap, jobsMap, selectedEntityId, businessEntities, dateFilter]);
 
     const handleStatusToggle = (status: Invoice['status']) => {
         setStatusFilter(prev =>
@@ -191,13 +194,50 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({
                         </thead>
                          <tbody className="divide-y divide-gray-200">
                             {filteredInvoices.map(invoice => {
-                                const customer = customerMap.get(invoice.customerId);
-                                const vehicle = invoice.vehicleId ? vehicleMap.get(invoice.vehicleId) : null;
+                                const job = invoice.jobId ? jobsMap.get(invoice.jobId) : null;
+                                const customer = customerMap.get(invoice.customerId) || (job?.customerId ? customerMap.get(job.customerId) : null);
+                                const vehicle = invoice.vehicleId ? vehicleMap.get(invoice.vehicleId) : (job?.vehicleId ? vehicleMap.get(job.vehicleId) : null);
+                                const displayCustomerName = getCustomerDisplayName(customer);
+                                const custAddress = [customer?.addressLine1, customer?.city, customer?.postcode].filter(Boolean).join(', ');
                                 return (
                                 <tr key={invoice.id} className="hover:bg-indigo-50">
                                     <td className="p-3 font-mono">{invoice.id}</td>
-                                    <td className="p-3">{getCustomerDisplayName(customer)}</td>
-                                    <td className="p-3 font-mono">{invoice.vehicleId ? vehicle?.registration : 'N/A'}</td>
+                                    <td className="p-3">
+                                        {customer ? (
+                                            <HoverInfo
+                                                title="Customer Details"
+                                                data={{
+                                                    name: displayCustomerName,
+                                                    email: customer.email || 'N/A',
+                                                    phone: customer.mobile || customer.phone || 'N/A',
+                                                    address: custAddress || 'N/A'
+                                                }}
+                                            >
+                                                {displayCustomerName}
+                                            </HoverInfo>
+                                        ) : (
+                                            <span className="text-gray-400">Unknown Customer</span>
+                                        )}
+                                    </td>
+                                    <td className="p-3 font-mono">
+                                        {vehicle ? (
+                                            <HoverInfo
+                                                title="Vehicle Details"
+                                                data={{ 
+                                                    make: vehicle.make, 
+                                                    model: vehicle.model, 
+                                                    year: vehicle.year, 
+                                                    'Year of Manufacture': vehicle.manufactureDate,
+                                                    vin: vehicle.vin, 
+                                                    motExpiry: vehicle.motExpiryDate 
+                                                }}
+                                            >
+                                                {vehicle.registration}
+                                            </HoverInfo>
+                                        ) : (
+                                            <span className="text-gray-400">{job?.vehicleRegistration || 'N/A'}</span>
+                                        )}
+                                    </td>
                                     <td className="p-3">{invoice.issueDate}</td>
                                     <td className="p-3">
                                         <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${
