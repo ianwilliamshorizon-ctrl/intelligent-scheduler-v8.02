@@ -4,6 +4,7 @@ import { Calendar, User, Truck, Wrench, Package, PackageOpen, Camera, Share, Arr
 import { getCustomerDisplayName } from '../../../core/utils/customerUtils';
 import { formatReadableDate } from '../../../core/utils/dateUtils';
 import { getPoStatusColor } from '../../../core/utils/statusUtils';
+import { HoverInfo } from '../../../components/shared/HoverInfo';
 
 interface JobCardProps {
     job: Job;
@@ -108,9 +109,27 @@ export const JobCard: React.FC<JobCardProps> = ({
                 {/* Vehicle & Customer */}
                 <div className="flex justify-between items-start">
                     <div className="flex flex-col">
-                        <span className="text-lg font-black uppercase text-gray-900 tracking-tight">
-                            {vehicle?.registration || 'NO REG'}
-                        </span>
+                        {vehicle ? (
+                            <HoverInfo
+                                title="Vehicle Details"
+                                data={{
+                                    Make: vehicle.make,
+                                    Model: vehicle.model,
+                                    Year: vehicle.year,
+                                    'Year of Manufacture': vehicle.manufactureDate,
+                                    VIN: vehicle.vin,
+                                    'MOT Expires': vehicle.motExpiryDate
+                                }}
+                            >
+                                <span className="text-lg font-black uppercase text-gray-900 tracking-tight">
+                                    {vehicle.registration || 'NO REG'}
+                                </span>
+                            </HoverInfo>
+                        ) : (
+                            <span className="text-lg font-black uppercase text-gray-900 tracking-tight">
+                                NO REG
+                            </span>
+                        )}
                         <span className="text-sm font-medium text-indigo-600 flex items-center gap-1 mt-0.5">
                             <Truck size={14} />
                             {vehicle ? `${vehicle.make} ${vehicle.model}` : 'Unknown Vehicle'}
@@ -121,7 +140,21 @@ export const JobCard: React.FC<JobCardProps> = ({
 
                 <div className="flex items-center text-sm text-gray-600 font-medium gap-1.5">
                     <User size={14} className="text-gray-400" />
-                    {getCustomerDisplayName(customer) || 'Unknown Customer'}
+                    {customer ? (
+                        <HoverInfo
+                            title="Customer Details"
+                            data={{
+                                Name: getCustomerDisplayName(customer),
+                                Phone: customer.mobile || customer.phone || 'N/A',
+                                Email: customer.email || 'N/A',
+                                Address: [customer.addressLine1, customer.city, customer.postcode].filter(Boolean).join(', ') || 'N/A'
+                            }}
+                        >
+                            {getCustomerDisplayName(customer)}
+                        </HoverInfo>
+                    ) : (
+                        <span>Unknown Customer</span>
+                    )}
                 </div>
 
                 {/* Description */}

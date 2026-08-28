@@ -12,6 +12,7 @@ import { generateServicePackageName } from '../../core/services/geminiService';
 import ServicePackageFormModal from '../../components/ServicePackageFormModal';
 import { useWorkshopActions } from '../../core/hooks/useWorkshopActions';
 import { JobsBoard } from './components/JobsBoard';
+import { HoverInfo } from '../../components/shared/HoverInfo';
 
 interface JobsViewProps {
     onEditJob: (jobId: string, initialTab?: string) => void;
@@ -348,26 +349,63 @@ const JobsView: React.FC<JobsViewProps> = ({ onEditJob, onCheckIn, onOpenPurchas
                             </tr>
                         </thead>
                          <tbody className="divide-y divide-gray-200">
-                            {displayedJobs.map(job => {
-                                const vehicle = vehicleMap.get(job.vehicleId);
-                                const customer = customerMap.get(job.customerId);
-                                return (
-                                <tr key={job.id} className="hover:bg-indigo-50">
-                                    <td className="p-3 font-mono flex items-center gap-2">
-                                        {job.id}
-                                        {job.checkInPhotos && job.checkInPhotos.length > 0 && (
-                                            <button 
-                                                onClick={() => onEditJob(job.id, 'media')}
-                                                className="text-indigo-600 hover:text-indigo-800" 
-                                                title={`${job.checkInPhotos.length} Condition Photos - Click to View`}
-                                            >
-                                                <Camera size={14} />
-                                            </button>
-                                        )}
-                                    </td>
-                                    <td className="p-3">{job.createdAt ? formatReadableDate(job.createdAt) : 'N/A'}</td>
-                                    <td className="p-3">{getCustomerDisplayName(customer)}</td>
-                                    <td className="p-3 font-mono">{vehicle?.registration}</td>
+                             {displayedJobs.map(job => {
+                                 const vehicle = vehicleMap.get(job.vehicleId);
+                                 const customer = customerMap.get(job.customerId);
+                                 const linkedInquiry = (inquiries || []).find(i => i.linkedJobId === job.id);
+                                 const displayCustomerName = getCustomerDisplayName(customer) || linkedInquiry?.fromName || null;
+                                 const custAddress = [customer?.addressLine1 || linkedInquiry?.addressLine1, customer?.city || linkedInquiry?.city, customer?.postcode || linkedInquiry?.postcode].filter(Boolean).join(', ');
+                                 return (
+                                 <tr key={job.id} className="hover:bg-indigo-50">
+                                     <td className="p-3 font-mono flex items-center gap-2">
+                                         {job.id}
+                                         {job.checkInPhotos && job.checkInPhotos.length > 0 && (
+                                             <button 
+                                                 onClick={() => onEditJob(job.id, 'media')}
+                                                 className="text-indigo-600 hover:text-indigo-800" 
+                                                 title={`${job.checkInPhotos.length} Condition Photos - Click to View`}
+                                             >
+                                                 <Camera size={14} />
+                                             </button>
+                                         )}
+                                     </td>
+                                     <td className="p-3">{job.createdAt ? formatReadableDate(job.createdAt) : 'N/A'}</td>
+                                     <td className="p-3">
+                                         {(customer || linkedInquiry) ? (
+                                             <HoverInfo
+                                                 title="Customer Details"
+                                                 data={{
+                                                     name: displayCustomerName || 'N/A',
+                                                     email: customer?.email || linkedInquiry?.fromEmail || 'N/A',
+                                                     phone: customer?.mobile || customer?.phone || linkedInquiry?.fromPhone || 'N/A',
+                                                     address: custAddress || 'N/A'
+                                                 }}
+                                             >
+                                                 {displayCustomerName || 'Unnamed Customer'}
+                                             </HoverInfo>
+                                         ) : (
+                                             <span className="text-gray-400 italic">No Customer</span>
+                                         )}
+                                     </td>
+                                     <td className="p-3 font-mono">
+                                         {vehicle ? (
+                                             <HoverInfo
+                                                 title="Vehicle Details"
+                                                 data={{ 
+                                                     make: vehicle.make, 
+                                                     model: vehicle.model, 
+                                                     year: vehicle.year, 
+                                                     'Year of Manufacture': vehicle.manufactureDate,
+                                                     vin: vehicle.vin, 
+                                                     motExpiry: vehicle.motExpiryDate 
+                                                 }}
+                                             >
+                                                 {vehicle.registration || 'NO REG'}
+                                             </HoverInfo>
+                                         ) : (
+                                             <span className="text-gray-400 italic">No Vehicle</span>
+                                         )}
+                                     </td>
                                     <td className="p-3">{job.description}</td>
                                     <td className="p-3">
                                         <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${
