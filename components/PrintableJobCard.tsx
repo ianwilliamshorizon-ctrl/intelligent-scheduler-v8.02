@@ -269,7 +269,7 @@ const PrintableJobCard: React.FC<PrintableJobCardProps> = ({
                                         <div>
                                             <span className="text-[10px] block uppercase font-semibold" style={cs.subtextStyle}>Date</span>
                                             <span className="font-bold" style={cs.textStyle}>
-                                                {new Date(job.createdDate || job.scheduledDate || Date.now()).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                                {new Date((job as any).createdDate || (job as any).createdAt || job.scheduledDate || Date.now()).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
                                             </span>
                                         </div>
                                         <div>
@@ -325,7 +325,7 @@ const PrintableJobCard: React.FC<PrintableJobCardProps> = ({
                                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs" style={cs.textStyle}>
                                             <div><span className="block text-[10px]" style={cs.subtextStyle}>Make & Model:</span><strong>{vehicle?.make} {vehicle?.model || 'Vehicle'}</strong></div>
                                             <div><span className="block text-[10px]" style={cs.subtextStyle}>Year / Colour:</span><strong>{vehicle?.year || '—'} / {vehicle?.colour || '—'}</strong></div>
-                                            <div><span className="block text-[10px]" style={cs.subtextStyle}>Mileage / Key:</span><strong>{vehicle?.mileage ? `${vehicle.mileage.toLocaleString()} mi` : (job.mileageIn ? `${job.mileageIn} mi` : '—')} • Key #{job.keyNumber || '—'}</strong></div>
+                                            <div><span className="block text-[10px]" style={cs.subtextStyle}>Mileage / Key:</span><strong>{(vehicle as any)?.mileage ? `${(vehicle as any).mileage.toLocaleString()} mi` : (job.mileage || (job as any)?.mileageIn ? `${job.mileage || (job as any)?.mileageIn} mi` : '—')} • Key #{job.keyNumber || '—'}</strong></div>
                                             <div><span className="block text-[10px]" style={cs.subtextStyle}>VIN / Chassis:</span><strong className="font-mono">{vehicle?.vin?.slice(-8) || vehicle?.vin || '—'}</strong></div>
                                         </div>
                                     </div>
@@ -375,8 +375,8 @@ const PrintableJobCard: React.FC<PrintableJobCardProps> = ({
                                                         <tr key={item.id || idx}>
                                                             <td className="p-2 font-medium">
                                                                 <div>{item.description}</div>
-                                                                {block.settings?.showTechnicianNotes !== false && item.notes && (
-                                                                    <div className="text-[10px] italic pt-0.5" style={cs.subtextStyle}>Note: {item.notes}</div>
+                                                                {block.settings?.showTechnicianNotes !== false && (item as any).notes && (
+                                                                    <div className="text-[10px] italic pt-0.5" style={cs.subtextStyle}>Note: {(item as any).notes}</div>
                                                                 )}
                                                             </td>
                                                             <td className="p-2 text-center font-mono">{Number(item.quantity || 1).toFixed(2)}h</td>

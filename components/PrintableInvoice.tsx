@@ -315,7 +315,7 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({
                                             className="text-lg font-black tracking-tight font-mono"
                                             style={cs.textStyle}
                                         >
-                                            {invoice.invoiceNumber || invoice.id}
+                                            {(invoice as any).invoiceNumber || invoice.id}
                                         </span>
                                     </div>
                                     <div className="flex items-center gap-6 text-xs" style={cs.textStyle}>
@@ -337,10 +337,10 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({
                                             <span className="text-[10px] block uppercase font-semibold" style={cs.subtextStyle}>Account Ref</span>
                                             <span className="font-bold font-mono" style={cs.textStyle}>{customer?.id ? `ACC-${customer.id.slice(-6).toUpperCase()}` : 'CASH'}</span>
                                         </div>
-                                        {invoice.poNumber && (
+                                        {(invoice as any).poNumber && (
                                             <div>
                                                 <span className="text-[10px] block uppercase font-semibold" style={cs.subtextStyle}>PO Ref</span>
-                                                <span className="font-bold font-mono" style={cs.textStyle}>{invoice.poNumber}</span>
+                                                <span className="font-bold font-mono" style={cs.textStyle}>{(invoice as any).poNumber}</span>
                                             </div>
                                         )}
                                     </div>
@@ -384,7 +384,7 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({
                                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs" style={cs.textStyle}>
                                             <div><span className="block text-[10px]" style={cs.subtextStyle}>Make & Model:</span><strong>{vehicle?.make} {vehicle?.model || 'Vehicle'}</strong></div>
                                             <div><span className="block text-[10px]" style={cs.subtextStyle}>Year / Colour:</span><strong>{vehicle?.year || '—'} / {vehicle?.colour || '—'}</strong></div>
-                                            <div><span className="block text-[10px]" style={cs.subtextStyle}>Mileage Recorded:</span><strong>{vehicle?.mileage ? `${vehicle.mileage.toLocaleString()} mi` : (job?.mileageIn ? `${job.mileageIn} mi` : '—')}</strong></div>
+                                            <div><span className="block text-[10px]" style={cs.subtextStyle}>Mileage Recorded:</span><strong>{(vehicle as any)?.mileage ? `${(vehicle as any).mileage.toLocaleString()} mi` : (job?.mileage || (job as any)?.mileageIn ? `${job?.mileage || (job as any)?.mileageIn} mi` : '—')}</strong></div>
                                             <div><span className="block text-[10px]" style={cs.subtextStyle}>VIN / Chassis:</span><strong className="font-mono">{vehicle?.vin?.slice(-8) || vehicle?.vin || '—'}</strong></div>
                                         </div>
                                     </div>
@@ -602,7 +602,7 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({
                     <header className="flex justify-between items-center mb-6 border-b pb-2">
                         <h2 className="text-2xl font-bold text-gray-800">{inspectionTemplate.name}</h2>
                         <div className="text-right text-sm">
-                            <p><strong>Invoice:</strong> {invoice.invoiceNumber || invoice.id}</p>
+                            <p><strong>Invoice:</strong> {(invoice as any).invoiceNumber || invoice.id}</p>
                             <p><strong>Vehicle:</strong> {vehicle?.registration}</p>
                         </div>
                     </header>
@@ -621,7 +621,7 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({
                     <header className="flex justify-between items-center mb-6 border-b pb-2">
                         <h2 className="text-2xl font-bold text-gray-800">Tyre Safety Check</h2>
                         <div className="text-right text-sm">
-                            <p><strong>Invoice:</strong> {invoice.invoiceNumber || invoice.id}</p>
+                            <p><strong>Invoice:</strong> {(invoice as any).invoiceNumber || invoice.id}</p>
                             <p><strong>Vehicle:</strong> {vehicle?.registration}</p>
                         </div>
                     </header>
@@ -636,7 +636,7 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({
                     <header className="flex justify-between items-center mb-6 border-b pb-2">
                         <h2 className="text-2xl font-bold text-gray-800">Vehicle Condition Report</h2>
                         <div className="text-right text-sm">
-                            <p><strong>Invoice:</strong> {invoice.invoiceNumber || invoice.id}</p>
+                            <p><strong>Invoice:</strong> {(invoice as any).invoiceNumber || invoice.id}</p>
                             <p><strong>Vehicle:</strong> {vehicle?.registration}</p>
                         </div>
                     </header>
