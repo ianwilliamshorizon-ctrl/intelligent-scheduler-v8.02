@@ -278,6 +278,7 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
 
         onSave(finalVehicle);
         logEvent(isNew ? 'CREATE' : 'UPDATE', 'Vehicle', finalVehicle.id, `${isNew ? 'Created' : 'Updated'} vehicle ${finalVehicle.registration}.`);
+        onClose();
     };
 
     const handleCustomerClick = (e: React.MouseEvent) => {

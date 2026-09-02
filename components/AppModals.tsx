@@ -1321,7 +1321,10 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                     <VehicleFormModal
                         isOpen={modals.vehicleModal.isOpen}
                         onClose={() => setters.setVehicleModal({ isOpen: false, vehicleId: null })}
-                        onSave={(v) => handleSaveItem(actions.setVehicles, v, 'brooks_vehicles')}
+                        onSave={(v) => {
+                            handleSaveItem(actions.setVehicles, v, 'brooks_vehicles');
+                            setters.setVehicleModal({ isOpen: false, vehicleId: null });
+                        }}
                         vehicle={data.vehicles.find(v => v.id === modals.vehicleModal.vehicleId) || null}
                         initialCustomerId={modals.vehicleModal.initialCustomerId || undefined}
                         customers={data.customers}
