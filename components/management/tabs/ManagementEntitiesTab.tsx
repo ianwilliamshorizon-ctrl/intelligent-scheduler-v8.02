@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useData } from '../../../core/state/DataContext';
 import { useApp } from '../../../core/state/AppContext';
 import { BusinessEntity, Job, Invoice } from '../../../types';
-import { PlusCircle, Upload, Building2, MapPin, Briefcase, FileText, Mail, RefreshCw, Trash2, Archive } from 'lucide-react';
+import { PlusCircle, Upload, Building2, MapPin, Briefcase, FileText, Mail, RefreshCw, Trash2, Archive, Layout, Wrench } from 'lucide-react';
 import EntityFormModal from '../../EntityFormModal';
+import { DocumentLayoutDesignerModal } from '../DocumentLayoutDesignerModal';
 import { useManagementTable } from '../hooks/useManagementTable';
 import { parseCsv } from '../../../utils/csvUtils';
 import { generateJobId, generateInvoiceId } from '../../../core/utils/numberGenerators';
@@ -87,6 +88,11 @@ export const ManagementEntitiesTab: React.FC<ManagementEntitiesTabProps> = ({ on
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [importTargetEntityId, setImportTargetEntityId] = useState<string | null>(null);
 
+    // Document Layout Designer State
+    const [designerEntity, setDesignerEntity] = useState<BusinessEntity | null>(null);
+    const [designerDocType, setDesignerDocType] = useState<'job_card' | 'invoice'>('job_card');
+    const [isDesignerOpen, setIsDesignerOpen] = useState(false);
+
     // 3. Bulletproof Save Logic for Entities
     const handleSave = async (entity: BusinessEntity) => {
         try {
@@ -97,6 +103,11 @@ export const ManagementEntitiesTab: React.FC<ManagementEntitiesTabProps> = ({ on
         } catch (error) {
             onShowStatus('Failed to save entity changes.', 'error');
         }
+    };
+
+    const handleSaveFromDesigner = async (updatedEntity: BusinessEntity) => {
+        await saveRecord('businessEntities', updatedEntity);
+        onShowStatus('Document layout saved successfully.', 'success');
     };
 
     const handleImportJobs = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -418,16 +429,54 @@ export const ManagementEntitiesTab: React.FC<ManagementEntitiesTabProps> = ({ on
                                 <span className="text-xs text-indigo-600 font-semibold">{e.email || 'No email configured'}</span>
                             </div>
 
+                            {/* Document Layout Builders */}
+                            <div className="space-y-1.5 mb-4">
+                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1">
+                                    <Layout size={11} className="text-indigo-600" />
+                                    Document Layouts:
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setDesignerEntity(e);
+                                            setDesignerDocType('job_card');
+                                            setIsDesignerOpen(true);
+                                        }}
+                                        className="flex items-center justify-center gap-1.5 p-2.5 bg-indigo-50 hover:bg-indigo-100/80 text-indigo-800 border border-indigo-200/80 rounded-xl text-[10px] font-black uppercase tracking-wider transition shadow-2xs cursor-pointer"
+                                        title="Design custom drag-and-drop Job Card document layout"
+                                    >
+                                        <Wrench size={13} className="text-indigo-600" />
+                                        Job Card
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setDesignerEntity(e);
+                                            setDesignerDocType('invoice');
+                                            setIsDesignerOpen(true);
+                                        }}
+                                        className="flex items-center justify-center gap-1.5 p-2.5 bg-emerald-50 hover:bg-emerald-100/80 text-emerald-800 border border-emerald-200/80 rounded-xl text-[10px] font-black uppercase tracking-wider transition shadow-2xs cursor-pointer"
+                                        title="Design custom drag-and-drop Invoice document layout"
+                                    >
+                                        <FileText size={13} className="text-emerald-600" />
+                                        Invoice
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Data Imports */}
                             <div className="grid grid-cols-2 gap-2">
-                                <label className="flex flex-col items-center justify-center p-3 border border-gray-100 bg-gray-50 rounded-xl cursor-pointer hover:bg-blue-50 hover:border-blue-200 transition-all group">
-                                    <Briefcase size={16} className="text-gray-400 group-hover:text-blue-600 mb-1" />
-                                    <span className="text-[10px] font-black uppercase text-gray-500 group-hover:text-blue-700">Jobs</span>
+                                <label className="flex flex-col items-center justify-center p-2.5 border border-gray-100 bg-gray-50 rounded-xl cursor-pointer hover:bg-blue-50 hover:border-blue-200 transition-all group">
+                                    <Briefcase size={15} className="text-gray-400 group-hover:text-blue-600 mb-0.5" />
+                                    <span className="text-[10px] font-black uppercase text-gray-500 group-hover:text-blue-700">Import Jobs</span>
                                     <input type="file" accept=".csv" className="hidden" onClick={() => setImportTargetEntityId(e.id)} onChange={handleImportJobs} />
                                 </label>
 
-                                <label className="flex flex-col items-center justify-center p-3 border border-gray-100 bg-gray-50 rounded-xl cursor-pointer hover:bg-green-50 hover:border-green-200 transition-all group">
-                                    <FileText size={16} className="text-gray-400 group-hover:text-green-600 mb-1" />
-                                    <span className="text-[10px] font-black uppercase text-gray-500 group-hover:text-green-700">Invoices</span>
+                                <label className="flex flex-col items-center justify-center p-2.5 border border-gray-100 bg-gray-50 rounded-xl cursor-pointer hover:bg-green-50 hover:border-green-200 transition-all group">
+                                    <FileText size={15} className="text-gray-400 group-hover:text-green-600 mb-0.5" />
+                                    <span className="text-[10px] font-black uppercase text-gray-500 group-hover:text-green-700">Import Invoices</span>
                                     <input type="file" accept=".csv" className="hidden" onClick={() => setImportTargetEntityId(e.id)} onChange={handleImportInvoices} />
                                 </label>
                             </div>
@@ -474,6 +523,19 @@ export const ManagementEntitiesTab: React.FC<ManagementEntitiesTabProps> = ({ on
                     onSave={handleSave} 
                     entity={selectedEntity} 
                     isDebugMode={false} 
+                />
+            )}
+
+            {isDesignerOpen && designerEntity && (
+                <DocumentLayoutDesignerModal
+                    isOpen={isDesignerOpen}
+                    onClose={() => {
+                        setIsDesignerOpen(false);
+                        setDesignerEntity(null);
+                    }}
+                    entity={designerEntity}
+                    initialDocType={designerDocType}
+                    onSaveEntity={handleSaveFromDesigner}
                 />
             )}
         </div>

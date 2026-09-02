@@ -95,10 +95,24 @@ export const SummaryJobCard: React.FC<SummaryJobCardProps> = (props) => {
                 </div>
                 
                 <div className="flex flex-col gap-0.5">
-                    <div className="flex items-center justify-between gap-2">
-                        <span className="text-[11px] font-black uppercase text-gray-900 tracking-tighter whitespace-nowrap">
-                            {vehicle?.registration}
-                        </span>
+                    <div className="flex items-center justify-between gap-1.5">
+                        <div className="flex items-center gap-1">
+                            <span className="text-[11px] font-black uppercase text-gray-900 tracking-tighter whitespace-nowrap">
+                                {vehicle?.registration}
+                            </span>
+                            {vehicle?.wheelbaseType && (
+                                <span 
+                                    className={`text-[8px] font-black uppercase px-1 py-0.2 rounded border shadow-2xs ${
+                                        vehicle.wheelbaseType.toUpperCase().includes('LWB') || vehicle.wheelbaseType.toUpperCase().includes('XLWB')
+                                            ? 'bg-amber-100 text-amber-900 border-amber-300'
+                                            : 'bg-slate-100 text-slate-700 border-slate-200'
+                                    }`} 
+                                    title={`Wheelbase: ${vehicle.wheelbaseType} ${vehicle.wheelbaseLengthM ? `(${vehicle.wheelbaseLengthM}m)` : ''}`}
+                                >
+                                    {vehicle.wheelbaseType}
+                                </span>
+                            )}
+                        </div>
                         <span className="text-[10px] text-gray-500 truncate flex-grow text-right" title={`${vehicle?.make} ${vehicle?.model}`}>
                             {vehicle?.make} {vehicle?.model}
                         </span>

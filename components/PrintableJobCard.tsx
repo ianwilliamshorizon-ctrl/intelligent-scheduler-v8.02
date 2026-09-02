@@ -1,5 +1,5 @@
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
     Job,
     Vehicle,
@@ -18,6 +18,7 @@ import {
 import InspectionChecklist from './InspectionChecklist';
 import AsyncMedia from './AsyncMedia';
 import PorscheFrames from './PorscheFrames';
+import { getFile } from '../utils/imageStore';
 
 interface PrintableJobCardProps {
     job: Job;
@@ -45,6 +46,18 @@ const PrintableJobCard: React.FC<PrintableJobCardProps> = ({
     inspectionDiagrams = [],
 }) => {
     if (!job) return null;
+
+    const [resolvedLogoUrl, setResolvedLogoUrl] = useState<string | null>(entity?.logoUrl || null);
+
+    useEffect(() => {
+        if (entity?.logoImageId) {
+            getFile(entity.logoImageId).then(url => {
+                if (url) setResolvedLogoUrl(url);
+            });
+        } else if (entity?.logoUrl) {
+            setResolvedLogoUrl(entity.logoUrl);
+        }
+    }, [entity?.logoImageId, entity?.logoUrl]);
 
     const jobData = job as any;
     const fName = customer?.forename || jobData.customerForename || "";
@@ -145,8 +158,8 @@ const PrintableJobCard: React.FC<PrintableJobCardProps> = ({
         <div className="bg-white font-sans text-sm text-gray-800 printable-page" style={pageStyle}>
             <header className="flex justify-between items-start pb-6 border-b-4 border-gray-900 mb-8">
                 <div className="flex items-center gap-6">
-                    {entity?.logoUrl && (
-                        <img src={entity.logoUrl} alt="Logo" className="h-20 object-contain" />
+                    {(resolvedLogoUrl || entity?.logoUrl) && (
+                        <img src={resolvedLogoUrl || entity?.logoUrl} alt="Logo" className="h-20 object-contain" />
                     )}
                     <div>
                         <h1 className="text-3xl font-black text-gray-900 uppercase tracking-tighter leading-none">

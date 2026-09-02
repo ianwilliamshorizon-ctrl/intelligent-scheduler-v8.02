@@ -219,6 +219,8 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
                     engineCapacityCc: details.cc || details.engineCapacity || prev.engineCapacityCc,
                     engineNumber: details.engineNumber || prev.engineNumber,
                     vin: details.vin || prev.vin,
+                    wheelbaseType: details.wheelbaseType || prev.wheelbaseType,
+                    wheelbaseLengthM: details.wheelbaseLengthM !== undefined ? details.wheelbaseLengthM : prev.wheelbaseLengthM,
                     nextMotDate: details.nextMotDate || prev.nextMotDate,
                     manufactureDate: details.manufactureDate || (details.monthOfFirstRegistration ? `${details.monthOfFirstRegistration}-01` : prev.manufactureDate),
                     motHistory: details.motHistory || [],
@@ -455,6 +457,29 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
                                 </div>
 
                                 <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Wheelbase Type</label>
+                                    <input 
+                                        name="wheelbaseType" 
+                                        value={formData.wheelbaseType || ''} 
+                                        onChange={handleChange} 
+                                        placeholder="e.g. SWB, MWB, LWB, XLWB" 
+                                        className="w-full p-2 border rounded font-semibold text-gray-800" 
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Wheelbase Length (m)</label>
+                                    <input 
+                                        name="wheelbaseLengthM" 
+                                        type="number" 
+                                        step="0.01" 
+                                        value={formData.wheelbaseLengthM !== undefined ? formData.wheelbaseLengthM : ''} 
+                                        onChange={handleChange} 
+                                        placeholder="e.g. 3.45" 
+                                        className="w-full p-2 border rounded font-mono text-gray-800" 
+                                    />
+                                </div>
+
+                                <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Manufacture Date</label>
                                     <input name="manufactureDate" type="date" value={formData.manufactureDate || ''} onChange={handleChange} className="w-full p-2 border rounded" />
                                 </div>
@@ -466,6 +491,29 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
                                     <input type="checkbox" id="covidEx" name="covid19MotExemption" checked={formData.covid19MotExemption || false} onChange={handleChange} className="h-4 w-4 text-indigo-600 rounded border-gray-300" />
                                     <label htmlFor="covidEx" className="ml-2 text-sm text-gray-700 font-medium">COVID Exemption</label>
                                 </div>
+
+                                {/* Wheelbase / Lift Restriction Alert */}
+                                {(formData.wheelbaseType?.toUpperCase().includes('LWB') || 
+                                  formData.wheelbaseType?.toUpperCase().includes('XLWB') || 
+                                  formData.wheelbaseType?.toUpperCase().includes('LONG') ||
+                                  (Number(formData.wheelbaseLengthM) > 3.2)) && (
+                                    <div className="md:col-span-3 p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between text-xs text-amber-900 animate-fade-in">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-base">⚠️</span>
+                                            <div>
+                                                <span className="font-bold uppercase tracking-wider text-amber-950">
+                                                    Extended Wheelbase Vehicle ({formData.wheelbaseType} {formData.wheelbaseLengthM ? `• ${formData.wheelbaseLengthM}m` : ''})
+                                                </span>
+                                                <div className="text-[11px] text-amber-700">
+                                                    Restricted vehicle length. Verify ramp/lift wheelbase capacity before bay allocation.
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <span className="font-mono font-bold bg-amber-200/80 px-2 py-0.5 rounded text-amber-900 text-[10px] uppercase">
+                                            Lift Check Required
+                                        </span>
+                                    </div>
+                                )}
                             </div>
                             {formData.id && <VehicleImageManager vehicle={formData as Vehicle} onUpdateVehicle={(v) => setFormData(v)} />}
                         </div>

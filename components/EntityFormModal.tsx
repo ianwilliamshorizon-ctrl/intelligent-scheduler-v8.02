@@ -586,13 +586,36 @@ const EntityFormModal: React.FC<EntityFormModalProps> = ({ isOpen, onClose, onSa
                                 </div>
                             </div>
                             
-                            <div className="flex gap-4">
-                                <button onClick={() => handlePreview('estimate')} className="flex-1 py-3 bg-white border border-gray-200 text-gray-700 rounded-xl text-xs font-bold hover:border-indigo-300 transition-all flex items-center justify-center gap-2 shadow-sm">
-                                    <Eye size={16}/> Preview Estimate
-                                </button>
-                                <button onClick={() => handlePreview('invoice')} className="flex-1 py-3 bg-white border border-gray-200 text-gray-700 rounded-xl text-xs font-bold hover:border-indigo-300 transition-all flex items-center justify-center gap-2 shadow-sm">
-                                    <Eye size={16}/> Preview Invoice
-                                </button>
+                            <div className="p-5 bg-gradient-to-r from-indigo-50 via-purple-50 to-indigo-50 border border-indigo-200 rounded-2xl space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <h4 className="text-xs font-black uppercase tracking-wider text-indigo-950 flex items-center gap-1.5">
+                                            <Sparkles size={14} className="text-indigo-600" />
+                                            Interactive Drag-and-Drop Document Designer
+                                        </h4>
+                                        <p className="text-[11px] text-indigo-700">
+                                            Customise and reorder block fields for Job Cards and Invoices with live A4 WYSIWYG preview
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            toast.info("Please open the Document Layout Designer from the Business Entities list using the 'Job Card' or 'Invoice' button.");
+                                        }}
+                                        className="py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition shadow-sm flex items-center justify-center gap-2 cursor-pointer"
+                                    >
+                                        <Layout size={14} /> Open Drag & Drop Layout Designer
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => handlePreview('invoice')}
+                                        className="py-2.5 bg-white hover:bg-indigo-50 border border-indigo-200 text-indigo-700 rounded-xl text-xs font-bold transition shadow-sm flex items-center justify-center gap-2 cursor-pointer"
+                                    >
+                                        <Eye size={14} /> Preview Live Sample
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     )}

@@ -70,6 +70,8 @@ const AddNewVehicleForm: React.FC<AddNewVehicleFormProps> = ({
         model: '',
         type: 'Car',
         vin: '',
+        wheelbaseType: '',
+        wheelbaseLengthM: '' as string | number,
         nextServiceDate: '',
         nextMotDate: '',
         winterCheckDate: '',
@@ -170,6 +172,8 @@ const AddNewVehicleForm: React.FC<AddNewVehicleFormProps> = ({
                 colour: details.colour || prev.colour,
                 fuelType: details.fuelType || prev.fuelType,
                 engineCapacity: details.cc ? details.cc.toString() : prev.engineCapacity,
+                wheelbaseType: details.wheelbaseType || prev.wheelbaseType,
+                wheelbaseLengthM: details.wheelbaseLengthM !== undefined ? details.wheelbaseLengthM : prev.wheelbaseLengthM,
                 nextMotDate: details.nextMotDate || prev.nextMotDate,
                 vin: details.vin || prev.vin,
                 manufactureDate: details.manufactureDate || prev.manufactureDate,
@@ -306,6 +310,8 @@ const AddNewVehicleForm: React.FC<AddNewVehicleFormProps> = ({
             model: formatTitleCase(vehicleData.model || ''),
             type: vehicleData.type,
             vin: vehicleData.vin || undefined,
+            wheelbaseType: vehicleData.wheelbaseType || undefined,
+            wheelbaseLengthM: vehicleData.wheelbaseLengthM !== '' && vehicleData.wheelbaseLengthM !== undefined ? parseFloat(vehicleData.wheelbaseLengthM.toString()) : undefined,
             nextServiceDate: vehicleData.nextServiceDate || undefined,
             nextMotDate: vehicleData.nextMotDate || undefined,
             winterCheckDate: vehicleData.winterCheckDate || undefined,
@@ -356,24 +362,28 @@ const AddNewVehicleForm: React.FC<AddNewVehicleFormProps> = ({
             )}
 
             <div className="p-4 border rounded-lg bg-gray-50">
-                <h3 className="font-semibold text-lg text-gray-800 flex items-center mb-4"><Car size={20} className="mr-2 text-indigo-600"/> Vehicle Details</h3>
+                <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-semibold text-lg text-gray-800 flex items-center"><Car size={20} className="mr-2 text-indigo-600"/> Vehicle Details</h3>
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Registration (VRM Lookup)*</label>
+                    <div className="relative">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Registration / VRM*</label>
                         <div className="relative">
                             <input 
                                 name="registration" 
                                 value={vehicleData.registration} 
                                 onChange={handleVehicleChange} 
-                                className="w-full p-2 border border-gray-300 rounded-lg bg-white pr-10 font-bold uppercase tracking-widest"
-                                required
+                                placeholder="e.g. AB12 CDE"
+                                className="w-full p-2 border border-gray-300 rounded-lg font-bold uppercase tracking-wider pr-10"
+                                required 
                             />
                             <button
                                 type="button"
                                 onClick={() => handleLookup(vehicleData.registration)}
                                 className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-gray-200 text-gray-600 rounded-full hover:bg-gray-300 transition-colors disabled:opacity-50"
                                 disabled={isLookingUp || !vehicleData.registration}
-                                title="VRM Lookup"
+                                title="Look up vehicle specifications by VRM"
                             >
                                 {isLookingUp ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
                             </button>
@@ -394,6 +404,9 @@ const AddNewVehicleForm: React.FC<AddNewVehicleFormProps> = ({
                         <option>Other</option>
                     </FormSelect>
                     
+                    <FormInput label="Wheelbase Type" name="wheelbaseType" value={vehicleData.wheelbaseType} onChange={handleVehicleChange} placeholder="e.g. SWB, MWB, LWB, XLWB" />
+                    <FormInput label="Wheelbase (m)" name="wheelbaseLengthM" value={vehicleData.wheelbaseLengthM} onChange={handleVehicleChange} placeholder="e.g. 3.45" type="number" step="0.01" />
+                    
                      <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Next Service Due</label>
                         <input type="date" name="nextServiceDate" value={vehicleData.nextServiceDate} onChange={handleVehicleChange} className="w-full p-2 border border-gray-300 rounded-lg" />
@@ -411,6 +424,29 @@ const AddNewVehicleForm: React.FC<AddNewVehicleFormProps> = ({
                         <label className="block text-sm font-medium text-gray-700 mb-1">Manufacture Date</label>
                         <input type="date" name="manufactureDate" value={vehicleData.manufactureDate} onChange={handleVehicleChange} className="w-full p-2 border border-gray-300 rounded-lg" />
                     </div>
+
+                    {/* Wheelbase / Lift Restriction Alert */}
+                    {(vehicleData.wheelbaseType?.toUpperCase().includes('LWB') || 
+                      vehicleData.wheelbaseType?.toUpperCase().includes('XLWB') || 
+                      vehicleData.wheelbaseType?.toUpperCase().includes('LONG') ||
+                      (Number(vehicleData.wheelbaseLengthM) > 3.2)) && (
+                        <div className="md:col-span-3 p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between text-xs text-amber-900">
+                            <div className="flex items-center gap-2">
+                                <span className="text-base">⚠️</span>
+                                <div>
+                                    <span className="font-bold uppercase tracking-wider text-amber-950">
+                                        Extended Wheelbase ({vehicleData.wheelbaseType} {vehicleData.wheelbaseLengthM ? `• ${vehicleData.wheelbaseLengthM}m` : ''})
+                                    </span>
+                                    <div className="text-[11px] text-amber-700">
+                                        Restricted vehicle length. Verify lift/ramp wheelbase capacity before bay allocation.
+                                    </div>
+                                </div>
+                            </div>
+                            <span className="font-mono font-bold bg-amber-200/80 px-2 py-0.5 rounded text-amber-900 text-[10px] uppercase">
+                                Lift Check
+                            </span>
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -451,6 +487,8 @@ const AddNewVehicleForm: React.FC<AddNewVehicleFormProps> = ({
                                             model: v.model,
                                             type: v.type || 'Car',
                                             vin: v.vin || '',
+                                            wheelbaseType: v.wheelbaseType || '',
+                                            wheelbaseLengthM: v.wheelbaseLengthM !== undefined ? v.wheelbaseLengthM : '',
                                             nextServiceDate: v.nextServiceDate || '',
                                             nextMotDate: v.nextMotDate || '',
                                             winterCheckDate: v.winterCheckDate || '',

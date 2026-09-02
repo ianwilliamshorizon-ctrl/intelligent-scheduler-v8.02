@@ -243,6 +243,8 @@ export interface Vehicle {
     fleetNumber?: string;
     manufactureDate?: string; 
     covid19MotExemption?: boolean;
+    wheelbaseType?: string;
+    wheelbaseLengthM?: number;
     customerId: string;
     customer?: Customer; 
     notes?: string;
@@ -524,6 +526,58 @@ export interface WorkingHoursConfig {
     region: 'england-and-wales' | 'scotland' | 'northern-ireland';
 }
 
+export type DocumentBlockType = 
+    | 'header_logo'
+    | 'document_meta'
+    | 'customer_details'
+    | 'vehicle_details'
+    | 'narrative_description'
+    | 'tasks_packages'
+    | 'parts_items'
+    | 'labour_summary'
+    | 'financial_totals'
+    | 'bank_details'
+    | 'terms_signoff'
+    | 'footer_legal'
+    | 'inspection_summary';
+
+export interface DocumentBlockConfig {
+    id: string;
+    type: DocumentBlockType;
+    title?: string;
+    visible: boolean;
+    order: number;
+    settings?: {
+        logoPosition?: 'left' | 'center' | 'right';
+        logoHeight?: number;
+        showPrices?: boolean;
+        showPartNumbers?: boolean;
+        showTechnicianNotes?: boolean;
+        showSignatureBox?: boolean;
+        showCustomerSignature?: boolean;
+        showTechnicianSignature?: boolean;
+        showBankDetails?: boolean;
+        showVatBreakdown?: boolean;
+        showVehicleDiagram?: boolean;
+        columns?: 1 | 2 | 3;
+        style?: 'standard' | 'boxed' | 'highlight' | 'minimal';
+        customNarrative?: string;
+        fontSize?: 'small' | 'medium' | 'large';
+    };
+}
+
+export interface DocumentTemplateConfig {
+    id?: string;
+    name?: string;
+    documentType: 'job_card' | 'invoice' | 'estimate';
+    blocks: DocumentBlockConfig[];
+    accentColor?: string;
+    fontFamily?: string;
+    fontSize?: 'small' | 'medium' | 'large';
+    headerStyle?: 'modern' | 'classic' | 'compact';
+    updatedAt?: string;
+}
+
 export interface DocumentLayoutSettings {
     logoPosition?: 'left' | 'right' | 'center' | 'none';
     brandingPosition?: 'left' | 'right' | 'center' | 'none';
@@ -589,6 +643,9 @@ export interface BusinessEntity {
     
     workingHours?: WorkingHoursConfig;
     layoutSettings?: DocumentLayoutSettings;
+    jobCardLayout?: DocumentTemplateConfig;
+    invoiceLayout?: DocumentTemplateConfig;
+    estimateLayout?: DocumentTemplateConfig;
 }
 
 export interface Engineer { 

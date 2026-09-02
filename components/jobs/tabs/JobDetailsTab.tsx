@@ -93,6 +93,7 @@ const JobDetailsTab: React.FC<JobDetailsTabProps> = ({
     const vehicleInfoData = vehicle ? {
         type: `${vehicle.year || ''} ${vehicle.make || ''} ${vehicle.model || ''}`.trim() || 'N/A',
         colour: vehicle.colour || 'N/A',
+        wheelbase: vehicle.wheelbaseType ? `${vehicle.wheelbaseType} ${vehicle.wheelbaseLengthM ? `(${vehicle.wheelbaseLengthM}m)` : ''}` : 'N/A',
         'Year of Manufacture': vehicle.manufactureDate || 'N/A',
         vin: vehicle.vin || 'N/A',
         motDue: vehicle.nextMotDate || 'N/A',
@@ -195,16 +196,40 @@ const JobDetailsTab: React.FC<JobDetailsTabProps> = ({
                         </HoverInfo>
                     }
                 >
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <div className="mb-1">
-                                <span className="bg-yellow-400 text-black px-2 py-0.5 rounded font-mono font-bold text-sm border border-black inline-block uppercase tracking-wide">
-                                    {vehicle.registration}
-                                </span>
+                    <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <div className="mb-1 flex items-center gap-1.5 flex-wrap">
+                                    <span className="bg-yellow-400 text-black px-2 py-0.5 rounded font-mono font-bold text-sm border border-black inline-block uppercase tracking-wide">
+                                        {vehicle.registration}
+                                    </span>
+                                    {vehicle.wheelbaseType && (
+                                        <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded border ${
+                                            vehicle.wheelbaseType.toUpperCase().includes('LWB') || vehicle.wheelbaseType.toUpperCase().includes('XLWB')
+                                                ? 'bg-amber-100 text-amber-900 border-amber-300'
+                                                : 'bg-slate-100 text-slate-700 border-slate-300'
+                                        }`}>
+                                            {vehicle.wheelbaseType} {vehicle.wheelbaseLengthM ? `• ${vehicle.wheelbaseLengthM}m` : ''}
+                                        </span>
+                                    )}
+                                </div>
+                                <p className="text-gray-600 text-xs font-semibold">{vehicle.make} {vehicle.model}</p>
                             </div>
-                            <p className="text-gray-600 text-xs font-semibold">{vehicle.make} {vehicle.model}</p>
+                            <button type="button" onClick={() => onViewVehicle(vehicle.id)} className="text-xs bg-white border border-gray-300 px-2 py-1 rounded hover:bg-gray-100 font-semibold shadow-sm">View Specs</button>
                         </div>
-                        <button type="button" onClick={() => onViewVehicle(vehicle.id)} className="text-xs bg-white border border-gray-300 px-2 py-1 rounded hover:bg-gray-100 font-semibold shadow-sm">View Specs</button>
+
+                        {/* Lift Restriction Warning */}
+                        {(vehicle.wheelbaseType?.toUpperCase().includes('LWB') || 
+                          vehicle.wheelbaseType?.toUpperCase().includes('XLWB') || 
+                          vehicle.wheelbaseType?.toUpperCase().includes('LONG') ||
+                          (Number(vehicle.wheelbaseLengthM) > 3.2)) && (
+                            <div className="p-2 bg-amber-50 border border-amber-200 rounded-lg flex items-center gap-2 text-[11px] text-amber-900 font-medium">
+                                <span>⚠️</span>
+                                <div>
+                                    <strong className="text-amber-950 uppercase tracking-wide">Extended Wheelbase:</strong> Check lift capacity before assigning to standard bays.
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </TabSection>
             )}
