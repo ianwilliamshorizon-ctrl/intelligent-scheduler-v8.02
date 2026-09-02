@@ -2,11 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { BusinessEntity, WorkingHoursConfig } from '../types';
 import FormModal from './FormModal';
 import { saveFile, getFile } from '../utils/imageStore';
-import { Clock, Layout, FileText, Settings, Briefcase, Building2, Upload, FileCheck, Trash2, Camera, Eye, Sparkles } from 'lucide-react';
+import { Clock, Layout, FileText, Settings, Briefcase, Building2, Upload, FileCheck, Trash2, Camera, Eye, Sparkles, Wrench } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { useReactToPrint } from 'react-to-print';
 import PrintableInvoice from './PrintableInvoice';
-import { PrintableEstimate } from './estimates/PrintableEstimate';
+import PrintableJobCard from './PrintableJobCard';
 import * as T from '../types';
 import { useData } from '../core/state/DataContext';
 import DocumentLayoutDesignerModal from './management/DocumentLayoutDesignerModal';
@@ -59,7 +59,7 @@ const EntityFormModal: React.FC<EntityFormModalProps> = ({ isOpen, onClose, onSa
     const { taxRates, servicePackages, inspectionTemplates, inspectionDiagrams } = useData();
     const [activeTab, setActiveTab] = useState<'core' | 'workshop' | 'terms' | 'documents'>('core');
     const [formData, setFormData] = useState<Partial<BusinessEntity> & { tempLogoUrl?: string }>({});
-    const [previewType, setPreviewType] = useState<'estimate' | 'invoice' | null>(null);
+    const [previewType, setPreviewType] = useState<'job_card' | 'invoice' | null>(null);
     const [isSubDesignerOpen, setIsSubDesignerOpen] = useState(false);
     const [subDesignerDocType, setSubDesignerDocType] = useState<'job_card' | 'invoice'>('job_card');
 
@@ -69,7 +69,7 @@ const EntityFormModal: React.FC<EntityFormModalProps> = ({ isOpen, onClose, onSa
         documentTitle: `Sample_${previewType}`,
     });
 
-    const handlePreview = (type: 'estimate' | 'invoice') => {
+    const handlePreview = (type: 'job_card' | 'invoice') => {
         setPreviewType(type);
         setTimeout(() => {
             handlePrint();
@@ -404,23 +404,23 @@ const EntityFormModal: React.FC<EntityFormModalProps> = ({ isOpen, onClose, onSa
                             </div>
 
                             {/* Sample Document Previews */}
-                            <div className="p-5 border border-slate-200 rounded-2xl bg-slate-50 flex items-center justify-between gap-4">
+                            <div className="p-5 border border-slate-200 rounded-2xl bg-slate-50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                                 <div>
                                     <h4 className="text-xs font-black uppercase tracking-wider text-slate-800">Live Sample Print Previews</h4>
-                                    <p className="text-[11px] text-slate-500">Test how your layout and branding look when printed or exported to PDF.</p>
+                                    <p className="text-[11px] text-slate-500">Preview the new modular document engines and print or export to PDF.</p>
                                 </div>
                                 <div className="flex gap-2">
                                     <button
                                         type="button"
-                                        onClick={() => handlePreview('estimate')}
-                                        className="py-2 px-4 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 rounded-xl text-xs font-bold transition shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                                        onClick={() => handlePreview('job_card')}
+                                        className="py-2 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition shadow-xs flex items-center gap-1.5 cursor-pointer"
                                     >
-                                        <Eye size={13} /> Preview Estimate
+                                        <Eye size={13} /> Preview Job Card
                                     </button>
                                     <button
                                         type="button"
                                         onClick={() => handlePreview('invoice')}
-                                        className="py-2 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition shadow-xs flex items-center gap-1.5 cursor-pointer"
+                                        className="py-2 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-xs flex items-center gap-1.5 cursor-pointer"
                                     >
                                         <Eye size={13} /> Preview Invoice
                                     </button>
@@ -446,28 +446,30 @@ const EntityFormModal: React.FC<EntityFormModalProps> = ({ isOpen, onClose, onSa
             {/* Hidden Printing Area */}
             <div className="hidden">
                 <div ref={printRef}>
+                    {previewType === 'job_card' && (
+                        <PrintableJobCard 
+                            job={SAMPLE_JOB}
+                            customer={SAMPLE_CUSTOMER}
+                            vehicle={SAMPLE_VEHICLE}
+                            estimates={[SAMPLE_ESTIMATE]}
+                            entity={formData as BusinessEntity}
+                            taxRates={taxRates}
+                            engineers={[]}
+                            inspectionTemplates={inspectionTemplates}
+                            inspectionDiagrams={inspectionDiagrams}
+                        />
+                    )}
                     {previewType === 'invoice' && (
                         <PrintableInvoice 
                             invoice={SAMPLE_INVOICE}
                             customer={SAMPLE_CUSTOMER}
                             vehicle={SAMPLE_VEHICLE}
                             entity={formData as BusinessEntity}
+                            job={SAMPLE_JOB}
                             taxRates={taxRates}
                             servicePackages={servicePackages}
                             inspectionTemplates={inspectionTemplates}
                             inspectionDiagrams={inspectionDiagrams}
-                        />
-                    )}
-                    {previewType === 'estimate' && (
-                        <PrintableEstimate 
-                            estimate={SAMPLE_ESTIMATE}
-                            customer={SAMPLE_CUSTOMER}
-                            vehicle={SAMPLE_VEHICLE}
-                            entityDetails={formData as BusinessEntity}
-                            taxRates={taxRates}
-                            parts={[]}
-                            canViewPricing={true}
-                            totals={{ totalNet: 450, grandTotal: 540, vatBreakdown: [{ name: 'VAT', rate: 20, vat: 90 }] }}
                         />
                     )}
                 </div>
@@ -481,7 +483,37 @@ const SAMPLE_CUSTOMER: T.Customer = {
 };
 
 const SAMPLE_VEHICLE: T.Vehicle = {
-    id: 'sample', registration: 'AB12 CDE', make: 'PORSCHE', model: '911 GT3', year: 2023, colour: 'Guards Red', customerId: 'sample'
+    id: 'sample', registration: 'AB12 CDE', make: 'PORSCHE', model: '911 GT3 RS', year: 2024, colour: 'Guards Red', customerId: 'sample', vin: 'WP0ZZZ99ZNS123456', mileage: 12450
+};
+
+const SAMPLE_JOB: T.Job = {
+    id: 'JOB-SAMPLE',
+    jobNumber: '10842',
+    entityId: 'sample',
+    customerId: 'sample',
+    vehicleId: 'sample',
+    description: 'Annual Major Service, Brake Fluid Flush & Diagnostic Health Check',
+    status: 'In Progress',
+    scheduledDate: '2026-04-22',
+    notes: 'Customer reported slight pedal play. Check front/rear brake pads, discs, and fluid lines. Valet upon completion.',
+    keyNumber: '42',
+    mileage: 12450,
+    lineItems: [
+        { id: '1', description: 'Major Service Inspection & Diagnostic Scan', quantity: 2.0, unitPrice: 110, unitCost: 0, isLabor: true, taxCodeId: 'T1' },
+        { id: '2', description: 'Mobil 1 ESP 0W-40 Synthetic Engine Oil', quantity: 8.5, unitPrice: 18.5, unitCost: 10, isPackageComponent: true, taxCodeId: 'T1' },
+        { id: '3', description: 'OEM Oil Filter Insert & O-Ring', quantity: 1, unitPrice: 28, unitCost: 14, isPackageComponent: true, taxCodeId: 'T1' },
+        { id: '4', description: 'NGK Iridium Spark Plugs (Set of 6)', quantity: 6, unitPrice: 22, unitCost: 11, taxCodeId: 'T1' },
+        { id: '5', description: 'Brake Fluid System Flush & Bleed (DOT 4)', quantity: 1, unitPrice: 75, unitCost: 20, isLabor: true, taxCodeId: 'T1' }
+    ],
+    segments: [
+        { id: 'seg1', engineerId: 'eng1', startTime: '09:00', endTime: '11:00', date: '2026-04-22', duration: 120 },
+        { id: 'seg2', engineerId: 'eng1', startTime: '11:30', endTime: '13:00', date: '2026-04-22', duration: 90 }
+    ],
+    technicianObservations: [
+        'Front brake discs at 31.8mm (minimum thickness 30.0mm) - serviceable.',
+        'Front brake pads at 75% remaining.',
+        'Vehicle health check completed. All electronic fault codes cleared.'
+    ]
 };
 
 const SAMPLE_INVOICE: T.Invoice = {
