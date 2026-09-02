@@ -1930,125 +1930,182 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                         </div>
                     </div>
                     </div>
-                        <div className="space-y-4">
-                            <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">CRM Logs & Notes</label>
-                        <div className="border rounded bg-gray-50 p-2 space-y-2 mb-2 h-96 overflow-y-auto">
-                            {(!formData.logs || formData.logs.length === 0) && !formData.actionNotes && (
-                                <p className="text-xs text-gray-500 italic">No logs recorded yet.</p>
-                            )}
-                            {[...(formData.logs || [])]
-                                .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-                                .map(log => (
-                                <div key={log.id} className="text-xs bg-white p-2 border rounded shadow-sm">
-                                    <div className="flex justify-between text-gray-500 mb-1">
-                                        <span className="font-semibold">{log.userId === 'System' ? 'System' : users.find(u => u.id === log.userId)?.name || 'User'}</span>
-                                        <span>{new Date(log.timestamp).toLocaleString()}</span>
+                        {/* CRM Activity Logs & Internal Notes Card (Matching Customer Message Style) */}
+                        <div className="bg-white rounded-xl border border-indigo-100 shadow-xs overflow-hidden">
+                            <div className="bg-gradient-to-r from-indigo-50/90 to-white px-4 py-2.5 border-b border-indigo-100 flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <span className="w-2.5 h-2.5 rounded-full bg-indigo-600 animate-pulse"></span>
+                                    <h4 className="text-xs font-bold text-indigo-900 uppercase tracking-wider flex items-center gap-1.5">
+                                        <MessageSquare size={15} className="text-indigo-600" />
+                                        CRM Activity & Internal Notes
+                                    </h4>
+                                </div>
+                                <span className="text-[10px] font-bold text-indigo-700 bg-indigo-100/70 px-2 py-0.5 rounded-full border border-indigo-200">
+                                    {(formData.logs || []).length} {(formData.logs || []).length === 1 ? 'Entry' : 'Entries'}
+                                </span>
+                            </div>
+
+                            <div className="p-4 sm:p-5 space-y-3">
+                                {/* Scrollable Logs Feed */}
+                                <div className="space-y-2.5 max-h-[380px] overflow-y-auto pr-1">
+                                    {(!formData.logs || formData.logs.length === 0) && !formData.actionNotes && (
+                                        <div className="text-center py-8 text-slate-400 text-xs italic bg-slate-50/60 rounded-xl border border-dashed border-slate-200">
+                                            No CRM notes or activity logged yet. Type a note below to record an update.
+                                        </div>
+                                    )}
+
+                                    {[...(formData.logs || [])]
+                                        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+                                        .map((log) => {
+                                            const userName = log.userId === 'System' ? 'System Auto-Log' : users.find(u => u.id === log.userId)?.name || 'Team Member';
+                                            const isSystem = log.userId === 'System' || log.actionType === 'AI Scan';
+                                            const isEmail = log.actionType === 'Email Sent';
+
+                                            return (
+                                                <div 
+                                                    key={log.id} 
+                                                    className={`p-3 rounded-xl border transition text-xs shadow-2xs ${
+                                                        isEmail ? 'bg-indigo-50/40 border-indigo-200' :
+                                                        isSystem ? 'bg-purple-50/40 border-purple-200' :
+                                                        'bg-white border-slate-200 hover:border-indigo-300'
+                                                    }`}
+                                                >
+                                                    <div className="flex items-center justify-between gap-2 mb-1.5 flex-wrap">
+                                                        <div className="flex items-center gap-1.5">
+                                                            <span className="font-bold text-slate-900 flex items-center gap-1">
+                                                                <span className="w-2 h-2 rounded-full bg-slate-400"></span>
+                                                                {userName}
+                                                            </span>
+                                                            {log.actionType && (
+                                                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider ${
+                                                                    isEmail ? 'bg-indigo-100 text-indigo-800' :
+                                                                    isSystem ? 'bg-purple-100 text-purple-800' :
+                                                                    'bg-slate-100 text-slate-700'
+                                                                }`}>
+                                                                    {log.actionType}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <span className="text-[10px] font-medium text-slate-400">
+                                                            {new Date(log.timestamp).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                                        </span>
+                                                    </div>
+                                                    <div className="text-slate-800 whitespace-pre-wrap leading-relaxed font-sans selection:bg-indigo-100 pl-3.5 border-l-2 border-indigo-200">
+                                                        {log.notes}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+
+                                    {formData.actionNotes && (
+                                        <div className="p-3 rounded-xl border border-purple-200 bg-purple-50/50 text-xs shadow-2xs">
+                                            <div className="flex items-center justify-between mb-1">
+                                                <span className="font-bold text-purple-900 uppercase tracking-wider text-[10px]">Legacy / Action Notes</span>
+                                            </div>
+                                            <div className="text-purple-950 whitespace-pre-wrap leading-relaxed pl-3.5 border-l-2 border-purple-300">
+                                                {formData.actionNotes}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Note Composer Bar */}
+                                <div className="pt-2 border-t border-slate-100">
+                                    <div className="flex gap-2 items-center">
+                                        <input 
+                                            type="text" 
+                                            placeholder="Type an internal CRM note and press Enter to save..." 
+                                            className="flex-1 p-2.5 bg-slate-50 hover:bg-white focus:bg-white border border-slate-200 focus:border-indigo-500 rounded-xl text-xs sm:text-sm text-slate-800 focus:ring-2 focus:ring-indigo-100 transition shadow-2xs"
+                                            id="newLogInput"
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    const val = e.currentTarget.value.trim();
+                                                    if (val) {
+                                                        const newLog = {
+                                                            id: crypto.randomUUID(),
+                                                            timestamp: new Date().toISOString(),
+                                                            userId: currentUser.id,
+                                                            notes: val
+                                                        };
+                                                        const updatedLogs = [...(formData.logs || []), newLog];
+                                                        
+                                                        let nextFollowUp = formData.followUpDate;
+                                                        if (formData.status === 'Waiting on Customer') {
+                                                            const fDate = new Date();
+                                                            fDate.setDate(fDate.getDate() + 3);
+                                                            nextFollowUp = fDate.toISOString().split('T')[0];
+                                                        } else if (formData.followUpDate && new Date(formData.followUpDate) <= new Date()) {
+                                                            nextFollowUp = null;
+                                                        }
+
+                                                        setFormData(p => ({ ...p, logs: updatedLogs, followUpDate: nextFollowUp }));
+                                                        
+                                                        if (formData.fromName && formData.message) {
+                                                            const inquiryToSave: Inquiry = {
+                                                                id: formData.id || crypto.randomUUID(),
+                                                                createdAt: formData.createdAt || new Date().toISOString(),
+                                                                takenByUserId: formData.takenByUserId || currentUser.id,
+                                                                ...formData,
+                                                                followUpDate: nextFollowUp,
+                                                                logs: updatedLogs
+                                                            } as Inquiry;
+                                                            onSave(inquiryToSave, false);
+                                                        }
+
+                                                        e.currentTarget.value = '';
+                                                    }
+                                                }
+                                            }}
+                                        />
+                                        <button 
+                                            type="button"
+                                            className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-sm hover:shadow transition flex items-center gap-1.5 cursor-pointer shrink-0"
+                                            onClick={() => {
+                                                const input = document.getElementById('newLogInput') as HTMLInputElement;
+                                                const val = input?.value.trim();
+                                                if (val) {
+                                                    const newLog = {
+                                                        id: crypto.randomUUID(),
+                                                        timestamp: new Date().toISOString(),
+                                                        userId: currentUser.id,
+                                                        notes: val
+                                                    };
+                                                    const updatedLogs = [...(formData.logs || []), newLog];
+                                                    
+                                                    let nextFollowUp = formData.followUpDate;
+                                                    if (formData.status === 'Waiting on Customer') {
+                                                        const fDate = new Date();
+                                                        fDate.setDate(fDate.getDate() + 3);
+                                                        nextFollowUp = fDate.toISOString().split('T')[0];
+                                                    } else if (formData.followUpDate && new Date(formData.followUpDate) <= new Date()) {
+                                                        nextFollowUp = null;
+                                                    }
+
+                                                    setFormData(p => ({ ...p, logs: updatedLogs, followUpDate: nextFollowUp }));
+
+                                                    if (formData.fromName && formData.message) {
+                                                        const inquiryToSave: Inquiry = {
+                                                            id: formData.id || crypto.randomUUID(),
+                                                            createdAt: formData.createdAt || new Date().toISOString(),
+                                                            takenByUserId: formData.takenByUserId || currentUser.id,
+                                                            ...formData,
+                                                            followUpDate: nextFollowUp,
+                                                            logs: updatedLogs
+                                                        } as Inquiry;
+                                                        onSave(inquiryToSave, false);
+                                                    }
+
+                                                    input.value = '';
+                                                }
+                                            }}
+                                        >
+                                            <PlusCircle size={14} />
+                                            <span>Add Note</span>
+                                        </button>
                                     </div>
-                                    {log.actionType && <span className="inline-block bg-indigo-100 text-indigo-800 text-[10px] font-bold px-1.5 py-0.5 rounded mb-1">{log.actionType}</span>}
-                                    <p className="text-gray-800 whitespace-pre-wrap">{log.notes}</p>
                                 </div>
-                            ))}
-                            {formData.actionNotes && (
-                                <div className="text-xs bg-white p-2 border rounded shadow-sm">
-                                    <p className="font-semibold text-gray-600 mb-1">Legacy Notes</p>
-                                    <p className="text-gray-800 whitespace-pre-wrap">{formData.actionNotes}</p>
-                                </div>
-                            )}
-                        </div>
-                        <div className="flex gap-2">
-                            <input 
-                                type="text" 
-                                placeholder="Type a note and press enter..." 
-                                className="flex-1 p-2 border rounded text-sm"
-                                id="newLogInput"
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                        e.preventDefault();
-                                        const val = e.currentTarget.value.trim();
-                                        if (val) {
-                                            const newLog = {
-                                                id: crypto.randomUUID(),
-                                                timestamp: new Date().toISOString(),
-                                                userId: currentUser.id,
-                                                notes: val
-                                            };
-                                            const updatedLogs = [...(formData.logs || []), newLog];
-                                            
-                                            let nextFollowUp = formData.followUpDate;
-                                            if (formData.status === 'Waiting on Customer') {
-                                                const fDate = new Date();
-                                                fDate.setDate(fDate.getDate() + 3);
-                                                nextFollowUp = fDate.toISOString().split('T')[0];
-                                            } else if (formData.followUpDate && new Date(formData.followUpDate) <= new Date()) {
-                                                nextFollowUp = null;
-                                            }
-
-                                            setFormData(p => ({ ...p, logs: updatedLogs, followUpDate: nextFollowUp }));
-                                            
-                                            if (formData.fromName && formData.message) {
-                                                const inquiryToSave: Inquiry = {
-                                                    id: formData.id || crypto.randomUUID(),
-                                                    createdAt: formData.createdAt || new Date().toISOString(),
-                                                    takenByUserId: formData.takenByUserId || currentUser.id,
-                                                    ...formData,
-                                                    followUpDate: nextFollowUp,
-                                                    logs: updatedLogs
-                                                } as Inquiry;
-                                                onSave(inquiryToSave, false);
-                                            }
-
-                                            e.currentTarget.value = '';
-                                        }
-                                    }
-                                }}
-                            />
-                            <button 
-                                type="button"
-                                className="px-3 py-1 bg-indigo-600 text-white rounded text-sm hover:bg-indigo-700"
-                                onClick={() => {
-                                    const input = document.getElementById('newLogInput') as HTMLInputElement;
-                                    const val = input?.value.trim();
-                                    if (val) {
-                                        const newLog = {
-                                            id: crypto.randomUUID(),
-                                            timestamp: new Date().toISOString(),
-                                            userId: currentUser.id,
-                                            notes: val
-                                        };
-                                        const updatedLogs = [...(formData.logs || []), newLog];
-                                        
-                                        let nextFollowUp = formData.followUpDate;
-                                        if (formData.status === 'Waiting on Customer') {
-                                            const fDate = new Date();
-                                            fDate.setDate(fDate.getDate() + 3);
-                                            nextFollowUp = fDate.toISOString().split('T')[0];
-                                        } else if (formData.followUpDate && new Date(formData.followUpDate) <= new Date()) {
-                                            nextFollowUp = null;
-                                        }
-
-                                        setFormData(p => ({ ...p, logs: updatedLogs, followUpDate: nextFollowUp }));
-
-                                        if (formData.fromName && formData.message) {
-                                            const inquiryToSave: Inquiry = {
-                                                id: formData.id || crypto.randomUUID(),
-                                                createdAt: formData.createdAt || new Date().toISOString(),
-                                                takenByUserId: formData.takenByUserId || currentUser.id,
-                                                ...formData,
-                                                followUpDate: nextFollowUp,
-                                                logs: updatedLogs
-                                            } as Inquiry;
-                                            onSave(inquiryToSave, false);
-                                        }
-
-                                        input.value = '';
-                                    }
-                                }}
-                            >
-                                Add
-                            </button>
-                        </div>
-                    </div>
+                            </div>
                         </div>
                     </div>
                 )}
