@@ -17,7 +17,7 @@ import { toast } from 'react-toastify';
 import { triggerEmailSync } from '../core/services/emailService';
 import { doc, onSnapshot, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../core/services/firebaseServices';
-import { extractUKRegistration } from '../core/utils/inquiryUtils';
+import { extractUKRegistration, getCleanInquirySnippet } from '../core/utils/inquiryUtils';
 
 interface InquiriesViewProps {
     onOpenInquiryModal: (inquiry: Partial<Inquiry> | null) => void;
@@ -304,7 +304,7 @@ const InquiryCard: React.FC<{
                         <span className="text-gray-500 font-normal">Subject:</span> {inquiry.subject}
                     </p>
                 )}
-                <p className={`text-[10px] text-gray-600 my-0.5 whitespace-pre-wrap leading-snug ${isExpanded ? 'line-clamp-none max-h-40 overflow-y-auto' : 'line-clamp-1'}`}>{inquiry.message}</p>
+                <p className={`text-[10px] text-gray-600 my-0.5 whitespace-pre-wrap leading-snug ${isExpanded ? 'line-clamp-none max-h-40 overflow-y-auto' : 'line-clamp-2'}`}>{isExpanded ? inquiry.message : getCleanInquirySnippet(inquiry.message, 120)}</p>
                 
                 {latestLog && (
                     <div className={`${isExpanded ? 'block' : 'hidden'} bg-gray-50 border rounded p-1 mb-1 mt-1 text-[9px] text-gray-600`}>
@@ -358,17 +358,37 @@ const InquiryCard: React.FC<{
                             </span>
                         ) : null}
                         {estimate && (
-                            <div className="flex items-center gap-0.5 bg-purple-50 text-purple-700 px-1 rounded text-[9px] font-bold">
-                                <FileText size={9} className="shrink-0"/>
-                                <span>Est #{estimate.estimateNumber}</span>
-                            </div>
+                            <button
+                                type="button"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onViewEstimate?.(estimate);
+                                }}
+                                className="flex items-center gap-0.5 bg-purple-50 text-purple-700 px-1 rounded text-[9px] font-bold hover:bg-purple-100 hover:underline cursor-pointer border border-purple-200/30 text-left transition"
+                                title={`Estimate #${estimate.estimateNumber} - ${estimate.status}`}
+                            >
+                                <FileText size={9} className="shrink-0 text-purple-600"/>
+                                <span>#{estimate.estimateNumber}</span>
+                            </button>
                         )}
-                        {linkedPOs.length > 0 && (
-                            <div className="flex items-center gap-0.5 bg-amber-50 text-amber-700 px-1 rounded text-[9px] font-bold">
-                                <PackageIcon size={9} className="shrink-0"/>
-                                <span>{linkedPOs.length} PO{linkedPOs.length > 1 ? 's' : ''}</span>
-                            </div>
-                        )}
+                        {linkedPOs.map(po => {
+                            const poStyles = getPoStatusStyles(po.status);
+                            return (
+                                <button
+                                    key={po.id}
+                                    type="button"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        onOpenPurchaseOrder?.(po);
+                                    }}
+                                    className={`flex items-center gap-0.5 ${poStyles.container} ${poStyles.text} px-1 rounded text-[9px] font-bold hover:opacity-80 hover:underline cursor-pointer border text-left transition`}
+                                    title={`PO #${po.poNumber || po.id} - ${po.status}`}
+                                >
+                                    <PackageIcon size={9} className={`shrink-0 ${poStyles.icon}`}/>
+                                    <span>{po.poNumber || 'PO'}</span>
+                                </button>
+                            );
+                        })}
                     </div>
                 )}
 
@@ -438,44 +458,59 @@ const InquiryCard: React.FC<{
                     e.dataTransfer.effectAllowed = 'move';
                 }
             }}
-            className={`${healthBgClass} rounded-lg shadow p-3 border-l-4 ${
+            className={`${healthBgClass} rounded-lg shadow-sm p-4 border-l-4 ${
                 inquiry.isUrgent ? 'border-red-600' :
                 inquiry.status === 'Inbox' ? 'border-gray-400' : 
                 inquiry.status === 'New Requests' ? 'border-blue-400' : 
                 inquiry.status === 'Our Action' ? 'border-amber-400' : 
                 inquiry.status === 'Online Approved' ? 'border-green-400' :
                 inquiry.status === 'Scheduled' ? 'border-indigo-400' : 
-                inquiry.status === 'Waiting on Customer' ? (isStale72h(inquiry) ? 'border-red-500 text-red-800 shadow-[0_0_8px_rgba(239,68,68,0.4)]' : 'border-gray-200') : 
+                inquiry.status === 'Waiting on Customer' ? (isStale72h(inquiry) ? 'border-red-500 text-red-800' : 'border-gray-200') : 
                 'border-gray-200'
-            } ${ringClass} cursor-pointer hover:shadow-md transition-shadow mb-3`}
+            } ${ringClass} cursor-pointer transition-all mb-3 relative`}
             onClick={() => onOpenInquiryModal(inquiry)}
             title={cardExplanation}
         >
             <div className="flex justify-between items-start">
                 <div>
-                    <div className="flex items-center gap-2 mb-0.5">
-                        <p className="font-bold text-gray-800 text-sm">{displayName}</p>
-                        {showDaysBadge && (
-                            <span className={`${badgeColorClass} text-[10px] font-bold px-2 py-0.5 rounded-full leading-none shadow-sm`} title={`${daysSinceLastActivity} days since last action`}>
-                                {daysSinceLastActivity}d
-                            </span>
-                        )}
-                    </div>
-                    <p className="text-xs text-gray-500">
-                        {contactInfoString}
-                    </p>
-                </div>
-                <div className="text-right text-xs text-gray-500 flex flex-col items-end gap-1">
-                    <p>{new Date(inquiry.createdAt).toLocaleDateString()}</p>
-                    {inquiry.inquiryNumber && <p className="font-semibold text-gray-400">{inquiry.inquiryNumber}</p>}
-                    {inquiry.followUpDate && (
-                        <p className={`font-semibold ${(isOverdue || isToday) ? 'text-red-500' : 'text-blue-500'}`}>
-                            Follow Up: {new Date(inquiry.followUpDate).toLocaleDateString()}
+                    <h3 className="font-bold text-gray-800 text-base" title={displayName}>{displayName}</h3>
+                    {contactInfoString && (
+                        <p className="text-xs text-gray-500">{contactInfoString}</p>
+                    )}
+                    {displayAddress && (
+                        <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
+                            <MapPin size={10} className="shrink-0"/> {displayAddress}
                         </p>
                     )}
                 </div>
+                <div className="text-right">
+                    <span className="text-xs text-gray-400 font-medium block">{new Date(inquiry.createdAt).toLocaleDateString()}</span>
+                    {inquiry.inquiryNumber && (
+                        <span className="text-xs text-gray-600 font-bold block mt-0.5">{inquiry.inquiryNumber}</span>
+                    )}
+                    {showDaysBadge && (
+                        <span className={`inline-block ${badgeColorClass} text-[10px] font-bold px-2 py-0.5 rounded-full mt-1 leading-none shadow-sm`} title={`${daysSinceLastActivity} days since last action`}>
+                            {daysSinceLastActivity}d
+                        </span>
+                    )}
+                </div>
             </div>
-            
+
+            {inquiry.followUpDate && (
+                <div className={`mt-2 flex items-center gap-1 text-xs ${(isOverdue || isToday) ? 'text-red-600 font-bold' : 'text-blue-600'}`}>
+                    <Calendar size={12} />
+                    <span>Follow-up: {new Date(inquiry.followUpDate).toLocaleDateString()}</span>
+                    {isOverdue && <span className="text-[10px] bg-red-100 text-red-800 px-1.5 py-0.2 rounded font-bold uppercase">Overdue</span>}
+                    {isToday && <span className="text-[10px] bg-red-100 text-red-800 px-1.5 py-0.2 rounded font-bold uppercase">Today</span>}
+                </div>
+            )}
+
+            {inquiry.subject && (
+                <p className="text-xs font-semibold text-gray-800 mt-2">
+                    <span className="text-gray-500 font-normal">Subject:</span> {inquiry.subject}
+                </p>
+            )}
+
             {inquiry.actionStatus && (
                 <div className="mt-2 mb-1">
                     <span className={`inline-block px-2 py-1 rounded text-xs font-bold border ${getActionStatusStyles(inquiry.actionStatus)}`}>
@@ -491,7 +526,7 @@ const InquiryCard: React.FC<{
                 </div>
             )}
             
-            <p className="text-sm text-gray-700 my-2 line-clamp-3 whitespace-pre-wrap">{inquiry.message}</p>
+            <p className="text-sm text-gray-700 my-2 line-clamp-3 whitespace-pre-wrap leading-relaxed">{getCleanInquirySnippet(inquiry.message, 240)}</p>
             {latestLog && (
                 <div className="bg-gray-50 border rounded p-2 mb-2 mt-2 text-xs text-gray-600 shadow-sm">
                     <span className="font-semibold text-gray-700">{latestLog.userId === 'System' ? 'System' : users.find(u => u.id === latestLog.userId)?.name || 'User'}:</span> <span className="line-clamp-2">{latestLog.notes}</span>

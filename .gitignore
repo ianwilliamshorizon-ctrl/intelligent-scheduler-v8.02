@@ -26,6 +26,8 @@ dist-ssr
 # Build and Temporary files
 build_*.txt
 scratch/
+scratch_*
+backups/
 .gemini/
 .agents/
 .firebase/

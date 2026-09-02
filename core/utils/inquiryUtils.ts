@@ -144,3 +144,124 @@ export const extractInquiryDetailsFromText = (subject?: string, message?: string
 
     return result;
 };
+
+export interface ThreadMessage {
+    header?: string;
+    body: string;
+}
+
+export interface ParsedEmailThread {
+    latestMessage: string;
+    threadHistory: ThreadMessage[];
+    hasThread: boolean;
+}
+
+/**
+ * Parses a raw email body into the latest message and an array of historical thread messages.
+ * Detects common delimiters like 'On ... wrote:', 'From: ... Sent: ...', etc.
+ */
+export const parseEmailThread = (rawText?: string): ParsedEmailThread => {
+    if (!rawText || !rawText.trim()) {
+        return { latestMessage: '', threadHistory: [], hasThread: false };
+    }
+
+    const text = rawText.trim();
+
+    // Regex pattern matching thread boundaries
+    const splitRegex = /(?:\r?\n)(?:(?:On\s+(?:[A-Za-z]{3},\s+)?\d{1,2}\s+[A-Za-z]{3,9}\s+\d{2,4}[^:\n]*wrote:)|(?:-{3,}\s*(?:Original Message|Attached Email Details|Forwarded message)[^-]*\s*-{3,})|(?:(?:Sent from (?:Outlook for iOS|my iPhone|my iPad|Android)\s*\n+)?From:\s*[^\n]+\nSent:\s*[^\n]+)|(?:_{10,}))/i;
+
+    const match = text.match(splitRegex);
+    if (!match || match.index === undefined) {
+        // No thread splits found, single message
+        const cleaned = cleanMessageBody(text);
+        return {
+            latestMessage: cleaned,
+            threadHistory: [],
+            hasThread: false
+        };
+    }
+
+    const latestPart = text.substring(0, match.index);
+    const historyPart = text.substring(match.index);
+
+    const cleanedLatest = cleanMessageBody(latestPart);
+
+    // Parse individual previous messages from historyPart
+    const threadHistory: ThreadMessage[] = [];
+    const threadBlocks = historyPart.split(/(?=(?:\r?\n)(?:(?:On\s+(?:[A-Za-z]{3},\s+)?\d{1,2}\s+[A-Za-z]{3,9}\s+\d{2,4}[^:\n]*wrote:)|(?:-{3,}\s*(?:Original Message|Attached Email Details|Forwarded message)[^-]*\s*-{3,})|(?:(?:Sent from (?:Outlook for iOS|my iPhone|my iPad|Android)\s*\n+)?From:\s*[^\n]+\nSent:\s*[^\n]+)|(?:_{10,})))/i);
+
+    for (const block of threadBlocks) {
+        const trimmedBlock = block.trim();
+        if (!trimmedBlock) continue;
+
+        const lines = trimmedBlock.split('\n');
+        const headerLines: string[] = [];
+        const bodyLines: string[] = [];
+        let inHeader = true;
+
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (inHeader && (
+                line.startsWith('On ') || 
+                line.startsWith('From:') || 
+                line.startsWith('Sent:') || 
+                line.startsWith('To:') || 
+                line.startsWith('Cc:') || 
+                line.startsWith('Subject:') ||
+                line.startsWith('---') ||
+                line.startsWith('___') ||
+                line.startsWith('Sent from ')
+            )) {
+                headerLines.push(line);
+            } else {
+                inHeader = false;
+                bodyLines.push(lines[i]);
+            }
+        }
+
+        threadHistory.push({
+            header: headerLines.join('\n'),
+            body: bodyLines.join('\n').trim()
+        });
+    }
+
+    return {
+        latestMessage: cleanedLatest || text,
+        threadHistory,
+        hasThread: threadHistory.length > 0
+    };
+};
+
+/**
+ * Removes mobile signature boilerplate from message body
+ */
+const cleanMessageBody = (text: string): string => {
+    return text
+        .replace(/(?:Sent from (?:Outlook for iOS|my iPhone|my iPad|Android|Mail for Windows))\s*$/i, '')
+        .trim();
+};
+
+/**
+ * Extracts a clean, high-signal single-line snippet for cards/lists
+ */
+export const getCleanInquirySnippet = (message?: string, maxLength: number = 140): string => {
+    if (!message) return '';
+    
+    // Parse out just the latest message
+    const parsed = parseEmailThread(message);
+    let clean = parsed.latestMessage || message;
+
+    // Remove email tags, image tags, placeholders
+    clean = clean
+        .replace(/\[Embedded Image:[^\]]+\]/gi, '')
+        .replace(/<IMG_[^>]+>/gi, '')
+        .replace(/Sent from Outlook for iOS/gi, '')
+        .replace(/Sent from my iPhone/gi, '')
+        .replace(/--- Merged from Duplicate [^-\n]* ---/gi, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    if (clean.length <= maxLength) return clean;
+    return clean.substring(0, maxLength).trim() + '...';
+};
+

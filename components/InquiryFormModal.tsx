@@ -5,7 +5,12 @@ import SearchableSelect from './SearchableSelect';
 import { useApp } from '../core/state/AppContext';
 import { getCustomerDisplayName, generateCustomerId } from '../core/utils/customerUtils';
 import { formatTitleCase } from '../core/utils/formatUtils';
-import { Wand2, Loader2, Link as LinkIcon, UserCheck, Car, XCircle, User as UserIcon, FileText, CalendarCheck, Edit, Camera, PlusCircle, Search } from 'lucide-react';
+import { 
+    Wand2, Loader2, Link as LinkIcon, UserCheck, Car, XCircle, User as UserIcon, 
+    FileText, CalendarCheck, Edit, Camera, PlusCircle, Search, ChevronDown, ChevronUp, 
+    Copy, Eye, Edit3, Mail, Sparkles, Check, Paperclip, MessageSquare, Phone, MapPin, ExternalLink,
+    Clock, Shield, AlertCircle
+} from 'lucide-react';
 import { parseInquiryMessage, generateEmailReply, updateEstimateWithAI } from '../core/services/geminiService';
 import { sendOutboundEmail } from '../core/services/emailService';
 import { useData } from '../core/state/DataContext';
@@ -13,7 +18,8 @@ import { generateInquiryNumber } from '../core/utils/numberGenerators';
 import { toast } from 'react-toastify';
 import { lookupVehicleByVRM } from '../services/vehicleLookupService';
 import { lookupAddressByPostcode, AddressDetails } from '../services/postcodeLookupService';
-import { extractInquiryDetailsFromText } from '../core/utils/inquiryUtils';
+import { extractInquiryDetailsFromText, parseEmailThread } from '../core/utils/inquiryUtils';
+import { getImage, saveImage } from '../utils/imageStore';
 
 interface InquiryFormModalProps {
     isOpen: boolean;
@@ -68,6 +74,11 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
     const [addressList, setAddressList] = useState<AddressDetails[]>([]);
     const [isLookingUpVehicle, setIsLookingUpVehicle] = useState(false);
 
+    // Email Reader state
+    const [isFormattedView, setIsFormattedView] = useState(true);
+    const [isHistoryExpanded, setIsHistoryExpanded] = useState(false);
+    const [copiedField, setCopiedField] = useState<string | null>(null);
+
     // Reply state
     const [replyText, setReplyText] = useState('');
     const [isDraftingReply, setIsDraftingReply] = useState(false);
@@ -78,6 +89,83 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
     // Split Name states
     const [firstNameInput, setFirstNameInput] = useState('');
     const [surnameInput, setSurnameInput] = useState('');
+
+    const parsedThread = React.useMemo(() => parseEmailThread(formData.message || ''), [formData.message]);
+
+    const copyToClipboard = (text: string, fieldName: string) => {
+        if (!text) return;
+        navigator.clipboard.writeText(text);
+        setCopiedField(fieldName);
+        setTimeout(() => setCopiedField(null), 2000);
+        toast.success(`Copied ${fieldName} to clipboard`);
+    };
+
+    const handleQuickReply = async () => {
+        setActiveTab('communication');
+        if (!replyText && formData.message) {
+            setIsDraftingReply(true);
+            try {
+                const draft = await generateEmailReply(formData.message, 'Brookspeed', formData.actionNotes, formData.logs);
+                setReplyText(draft);
+            } catch (e) {
+                console.error(e);
+            } finally {
+                setIsDraftingReply(false);
+            }
+        }
+    };
+
+    const handleQuickEstimate = () => {
+        if (onSmartCreateEstimate) {
+            const fullPrompt = [
+                `Customer Name: ${formData.fromName || 'Unknown'}`,
+                formData.fromEmail ? `Email: ${formData.fromEmail}` : null,
+                formData.fromPhone ? `Phone: ${formData.fromPhone}` : null,
+                formData.vehicleRegistration ? `Vehicle Registration: ${formData.vehicleRegistration}` : null,
+                (formData.vehicleMake || formData.vehicleModel) ? `Vehicle Make & Model: ${formData.vehicleYear || ''} ${formData.vehicleMake || ''} ${formData.vehicleModel || ''}`.trim() : null,
+                `Request Details: ${parsedThread.latestMessage || formData.message || ''}`
+            ].filter(Boolean).join('\n');
+            onSmartCreateEstimate(formData as Inquiry, fullPrompt);
+        } else if (onCreateNewEstimate) {
+            onCreateNewEstimate(formData as Inquiry);
+        }
+    };
+
+    const handleDownloadMedia = async (item: any) => {
+        try {
+            const win = window.open('about:blank', '_blank');
+            const dataUrl = await getImage(item.id);
+            if (dataUrl && win) {
+                const isPhoto = item.type === 'Photo';
+                win.document.write(`
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <title>Attachment: ${item.name || 'File'}</title>
+                        <style>
+                            body { margin: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; background: #0f172a; min-height: 100vh; font-family: system-ui, sans-serif; }
+                            .download-btn { padding: 12px 24px; background: #4f46e5; color: white; text-decoration: none; border-radius: 8px; margin-bottom: 24px; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.2); }
+                            .download-btn:hover { background: #4338ca; }
+                            img { max-width: 90vw; max-height: 80vh; object-fit: contain; box-shadow: 0 10px 25px rgba(0,0,0,0.5); border-radius: 8px; }
+                            p { color: white; font-size: 1.2rem; }
+                        </style>
+                    </head>
+                    <body>
+                        <a href="${dataUrl}" download="${item.name || 'attachment'}" class="download-btn">Download ${item.name || 'File'}</a>
+                        ${isPhoto ? `<img src="${dataUrl}" alt="Attachment preview" />` : `<p>This file type cannot be previewed in the browser.</p>`}
+                    </body>
+                    </html>
+                `);
+                win.document.close();
+            } else {
+                win?.close();
+                if (!dataUrl) toast.error('Could not retrieve file data.');
+            }
+        } catch (err) {
+            console.error("Error opening media:", err);
+        }
+    };
+
 
     useEffect(() => {
         const parts = (formData.fromName || '').split(' ');
@@ -650,348 +738,726 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
             </div>
             <div className="min-h-[500px]">
                 {activeTab === 'details' && (
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <div className="space-y-4">
-                            <div className="space-y-3">
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">First Name*</label>
-                                <input value={firstNameInput} onChange={handleFirstNameChange} className="w-full p-2 border rounded" required />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Surname</label>
-                                <input value={surnameInput} onChange={handleSurnameChange} className="w-full p-2 border rounded" />
-                            </div>
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                            <input type="email" name="fromEmail" value={formData.fromEmail || ''} onChange={handleChange} className="w-full p-2 border rounded" />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
-                            <input type="tel" name="fromPhone" value={formData.fromPhone || ''} onChange={handleChange} className="w-full p-2 border rounded" />
-                        </div>
-
-
-
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Vehicle Reg.</label>
-                                <div className="flex gap-2">
-                                    <input type="text" name="vehicleRegistration" value={formData.vehicleRegistration || ''} onChange={handleChange} className="w-full p-2 border rounded uppercase" placeholder="e.g. AB12 CDE" />
-                                    <button
-                                        type="button"
-                                        onClick={handleLookupVehicle}
-                                        disabled={!formData.vehicleRegistration || isLookingUpVehicle || !!formData.linkedVehicleId}
-                                        className="bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded px-3 flex items-center justify-center disabled:opacity-50"
-                                        title="Lookup DVLA"
-                                    >
-                                        {isLookingUpVehicle ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
-                                    </button>
-                                </div>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Postcode</label>
-                                <div className="flex gap-2">
-                                    <input type="text" name="postcode" value={formData.postcode || ''} onChange={handleChange} className="w-full p-2 border rounded uppercase" placeholder="e.g. GU24 9NY" />
-                                    <button
-                                        type="button"
-                                        onClick={handleLookupAddress}
-                                        disabled={!formData.postcode || isLookingUpAddress}
-                                        className="bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded px-3 flex items-center justify-center disabled:opacity-50"
-                                        title="Lookup Address"
-                                    >
-                                        {isLookingUpAddress ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-
-                        {suggestedVehicle && !formData.linkedVehicleId && (
-                            <div className="bg-amber-50 border border-amber-200 text-amber-800 p-2 rounded text-sm flex justify-between items-center mt-2">
-                                <span>Found existing vehicle: <strong>{suggestedVehicle.make} {suggestedVehicle.model}</strong></span>
-                                <button 
-                                    type="button" 
-                                    onClick={() => {
-                                        setFormData(p => ({
-                                            ...p,
-                                            linkedVehicleId: suggestedVehicle.id,
-                                            vehicleMake: suggestedVehicle.make,
-                                            vehicleModel: suggestedVehicle.model,
-                                        }));
-                                        setSuggestedVehicle(null);
-                                    }}
-                                    className="bg-amber-600 text-white px-2 py-1 rounded text-xs hover:bg-amber-700"
-                                >
-                                    Link Vehicle
-                                </button>
-                            </div>
-                        )}
-
-                        {addressList.length > 0 && (
-                            <div className="bg-white border rounded shadow-sm mt-2">
-                                <div className="bg-gray-50 p-2 text-xs font-semibold border-b text-gray-500">
-                                    Select an Address
-                                </div>
-                                <ul className="max-h-48 overflow-y-auto">
-                                    {addressList.map((addr, idx) => (
-                                        <li key={idx}>
+                    <div className="space-y-4">
+                        {/* Email Header Card */}
+                        <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-xl p-4 shadow-md border border-slate-800">
+                            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                                <div className="space-y-1.5 min-w-0">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <span className="text-xs font-mono font-bold bg-indigo-500/30 text-indigo-200 border border-indigo-400/30 px-2.5 py-0.5 rounded-md flex items-center gap-1">
+                                            <Mail size={12} /> {formData.inquiryNumber || 'NEW INQUIRY'}
+                                        </span>
+                                        {formData.isUrgent && (
+                                            <span className="text-xs font-bold bg-red-500 text-white px-2 py-0.5 rounded-md animate-pulse flex items-center gap-1">
+                                                <AlertCircle size={12} /> Urgent
+                                            </span>
+                                        )}
+                                        <span className="text-xs font-semibold bg-white/10 text-white/90 px-2 py-0.5 rounded-md">
+                                            {entities?.find(e => e.id === formData.entityId)?.name || 'All Entities'}
+                                        </span>
+                                        <span className="text-xs font-semibold bg-indigo-600/60 text-white px-2 py-0.5 rounded-md">
+                                            {formData.status || 'Inbox'}
+                                        </span>
+                                        {formData.actionStatus && (
+                                            <span className="text-xs font-semibold bg-sky-500/30 text-sky-200 border border-sky-400/30 px-2 py-0.5 rounded-md">
+                                                {formData.actionStatus}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <h3 className="text-base sm:text-lg font-bold text-white truncate pt-1">
+                                        {formData.subject || 'Customer Inquiry (No Subject)'}
+                                    </h3>
+                                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-slate-300">
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="text-slate-400">From:</span>
+                                            <span className="font-semibold text-white">{formData.fromName || 'Unknown Sender'}</span>
+                                        </div>
+                                        {formData.fromEmail && (
                                             <button
                                                 type="button"
-                                                className="w-full text-left px-3 py-2 text-sm hover:bg-indigo-50 border-b last:border-0"
-                                                onClick={() => {
-                                                    setFormData(prev => ({
-                                                        ...prev,
-                                                        addressLine1: addr.street || '',
-                                                        addressLine2: addr.locality || '',
-                                                        city: addr.postTown || '',
-                                                        county: addr.county || '',
-                                                        postcode: addr.postcode || prev.postcode
-                                                    }));
-                                                    setAddressList([]);
-                                                }}
+                                                onClick={() => copyToClipboard(formData.fromEmail!, 'email')}
+                                                className="flex items-center gap-1 text-indigo-300 hover:text-white transition group cursor-pointer"
+                                                title="Click to copy email address"
                                             >
-                                                {addr.summaryAddress || `${addr.street || ''} ${addr.locality || ''} ${addr.postTown || ''}`}
+                                                <span>&lt;{formData.fromEmail}&gt;</span>
+                                                {copiedField === 'email' ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} className="opacity-60 group-hover:opacity-100" />}
                                             </button>
-                                        </li>
-                                    ))}
-                                </ul>
-                            </div>
-                        )}
-
-                        {(formData.vehicleRegistration || formData.vehicleMake || formData.vehicleModel || formData.addressLine1) && (
-                            <div className="grid grid-cols-2 gap-4 text-xs text-gray-600 bg-gray-50 p-3 rounded border border-gray-100 mt-2">
-                                <div>
-                                    <span className="font-semibold block mb-1">Vehicle Details:</span>
-                                    {formData.vehicleRegistration && <div className="font-bold text-gray-800 uppercase mb-1">{formData.vehicleRegistration}</div>}
-                                    <div>{formData.vehicleMake} {formData.vehicleModel} {formData.vehicleYear ? `(${formData.vehicleYear})` : ''}</div>
-                                    {formData.vehicleVin && <div className="text-[11px] text-gray-500">VIN: {formData.vehicleVin}</div>}
-                                    {formData.vehicleMotExpiry && <div className="text-[11px] text-gray-500">MOT Expiry: {formData.vehicleMotExpiry}</div>}
+                                        )}
+                                        {formData.fromPhone && (
+                                            <button
+                                                type="button"
+                                                onClick={() => copyToClipboard(formData.fromPhone!, 'phone')}
+                                                className="flex items-center gap-1 text-slate-300 hover:text-white transition group cursor-pointer"
+                                                title="Click to copy phone number"
+                                            >
+                                                <Phone size={11} className="text-indigo-400" />
+                                                <span className="font-medium">{formData.fromPhone}</span>
+                                                {copiedField === 'phone' ? <Check size={11} className="text-emerald-400" /> : <Copy size={11} className="opacity-50 group-hover:opacity-100" />}
+                                            </button>
+                                        )}
+                                        {formData.createdAt && (
+                                            <div className="flex items-center gap-1 text-slate-400">
+                                                <Clock size={11} />
+                                                <span>Received: {new Date(formData.createdAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</span>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
-                                <div>
-                                    <span className="font-semibold block mb-1">Address Details:</span>
-                                    {formData.addressLine1}<br/>
-                                    {formData.addressLine2 && <>{formData.addressLine2}<br/></>}
-                                    {formData.city} {formData.county} {formData.postcode}
-                                </div>
-                            </div>
-                        )}
-                    </div>
 
-                    <div>
-                        <div className="flex justify-between items-end mb-1">
-                            <label className="block text-sm font-medium text-gray-700">Message*</label>
-                            <button 
-                                type="button" 
-                                onClick={async () => {
-                                    if (!formData.message && !formData.subject) return;
-                                    setIsAnalyzing(true);
-                                    setAiError('');
-                                    try {
-                                        const parsed = await parseInquiryMessage(formData.message || '', formData.subject);
-                                        
-                                        // Update form data with extracted info
-                                        setFormData(p => {
-                                            const newName = parsed.fromName || p.fromName || '';
-                                            const newEmail = parsed.fromEmail || p.fromEmail || '';
-                                            let nextLinkedCustomerId = p.linkedCustomerId;
-
-                                            if (nextLinkedCustomerId) {
-                                                const linkedCust = customers.find(c => c.id === nextLinkedCustomerId);
-                                                if (linkedCust) {
-                                                    const linkedName = getCustomerDisplayName(linkedCust).toLowerCase();
-                                                    if ((parsed.fromEmail && linkedCust.email?.toLowerCase() !== parsed.fromEmail.toLowerCase()) || 
-                                                        (parsed.fromName && linkedName !== parsed.fromName.toLowerCase())) {
-                                                        nextLinkedCustomerId = null;
-                                                    }
-                                                }
-                                            }
-
-                                            return {
-                                                ...p,
-                                                linkedCustomerId: nextLinkedCustomerId,
-                                                fromName: newName,
-                                                fromEmail: newEmail,
-                                                fromPhone: parsed.fromPhone || p.fromPhone || '',
-                                                vehicleRegistration: parsed.vehicleRegistration
-                                                    ? parsed.vehicleRegistration.toUpperCase().trim()
-                                                    : p.vehicleRegistration ? p.vehicleRegistration.toUpperCase().trim() : '',
-                                                vehicleMake: parsed.vehicleMake ? formatTitleCase(parsed.vehicleMake) : (p.vehicleMake ? formatTitleCase(p.vehicleMake) : ''),
-                                                vehicleModel: parsed.vehicleModel ? formatTitleCase(parsed.vehicleModel) : (p.vehicleModel ? formatTitleCase(p.vehicleModel) : ''),
-                                                postcode: parsed.postcode ? parsed.postcode.toUpperCase().trim() : (p.postcode || ''),
-                                            };
-                                        });
-
-                                        // Try to find matching customer/vehicle
-                                        if (parsed.fromEmail || parsed.fromPhone || parsed.fromName) {
-                                            const lowerEmail = (parsed.fromEmail || '').toLowerCase();
-                                            const lowerPhone = (parsed.fromPhone || '').replace(/\D/g,'');
-                                            const lowerName = (parsed.fromName || '').toLowerCase();
-                                            const searchWords = lowerName.split(/\s+/).filter(w => w.length > 1);
-                                            
-                                            const matches = customers.filter(c => {
-                                                if (lowerEmail && c.email?.toLowerCase() === lowerEmail) return true;
-                                                if (lowerPhone && (c.phone?.replace(/\D/g,'') === lowerPhone || c.mobile?.replace(/\D/g,'') === lowerPhone)) return true;
-                                                
-                                                if (lowerName) {
-                                                    const fullName = `${c.title || ''} ${c.forename || ''} ${c.surname || ''}`.toLowerCase();
-                                                    const company = (c.companyName || '').toLowerCase();
-                                                    if (fullName.includes(lowerName) || company.includes(lowerName)) return true;
-                                                    if (lowerName.includes(fullName.trim()) && fullName.trim().length > 3) return true;
-                                                    if (searchWords.length > 0 && searchWords.every(w => fullName.includes(w))) return true;
-                                                }
-                                                return false;
-                                            });
-                                            if (matches.length > 0) setSuggestedCustomers(matches);
-                                        }
-
-                                        if (parsed.vehicleRegistration) {
-                                            const lowerReg = parsed.vehicleRegistration.toLowerCase().replace(/\s/g, '');
-                                            const foundVeh = vehicles.find(v => v.registration?.toLowerCase().replace(/\s/g, '') === lowerReg);
-                                            if (foundVeh) setSuggestedVehicle(foundVeh);
-                                        }
-
-                                        const aiLogNotes = parsed.summary 
-                                            ? `AI Summary: ${parsed.summary}` 
-                                            : `AI Scan Completed (No summary provided). Data: ${JSON.stringify(parsed)}`;
-                                        
-                                        const newLog = {
-                                            id: crypto.randomUUID(),
-                                            timestamp: new Date().toISOString(),
-                                            userId: currentUser.id,
-                                            actionType: 'AI Scan',
-                                            notes: aiLogNotes
-                                        };
-                                        setFormData(p => ({ ...p, logs: [...(p.logs || []), newLog] }));
-
-                                    } catch (e) {
-                                        console.error(e);
-                                        setAiError('Failed to parse message with AI.');
-                                    } finally {
-                                        setIsAnalyzing(false);
-                                    }
-                                }}
-                                disabled={isAnalyzing || (!formData.message && !formData.subject)}
-                                className="flex items-center gap-1 text-xs font-semibold text-indigo-700 bg-indigo-50 px-2 py-1 rounded hover:bg-indigo-100 border border-indigo-200 transition disabled:opacity-50"
-                            >
-                                {isAnalyzing ? <Loader2 size={12} className="animate-spin" /> : <Wand2 size={12} />} 
-                                Scan with AI
-                            </button>
-                        </div>
-                        <div className="relative">
-                            <textarea name="message" value={formData.message || ''} onChange={handleChange} rows={18} className="w-full p-2 border rounded text-sm" required />
-                        </div>
-                    </div>
-                        </div>
-                        <div className="space-y-4">
-                            { (suggestedCustomers.length > 0 || suggestedVehicle || aiError) && (
-                                <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-lg space-y-2 animate-fade-in mb-4">
-                                    <h4 className="font-semibold text-indigo-800 text-sm flex items-center gap-1"><Wand2 size={16}/> AI Suggestions</h4>
-                                    {aiError && <p className="text-red-600 text-xs">{aiError}</p>}
-                                    
-                                    {suggestedCustomers.length > 0 && !formData.linkedCustomerId && (
-                                        <div className="flex flex-col gap-2">
-                                            {suggestedCustomers.map(cust => (
-                                                <div key={cust.id} className="flex justify-between items-center text-sm p-2 bg-white rounded-md border shadow-sm">
-                                                    <div className="flex items-center gap-2">
-                                                        <UserIcon size={14} className="text-blue-500" />
-                                                        <p>Found Customer: <span className="font-semibold">{getCustomerDisplayName(cust)}</span></p>
-                                                    </div>
-                                                    <button type="button" onClick={() => handleLinkCustomer(cust)} className="flex items-center gap-1 text-sm py-1.5 px-3 bg-green-600 text-white font-bold rounded shadow hover:bg-green-700 transition">
-                                                    <LinkIcon size={14}/> Link
-                                                    </button>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-                                    
-                                    {suggestedVehicle && !formData.linkedVehicleId && (
-                                    <div className="flex justify-between items-center text-sm p-2 bg-white rounded-md border shadow-sm">
-                                        <div className="flex items-center gap-2">
-                                            <Car size={14} className="text-green-500" />
-                                            <p>Found Vehicle: <span className="font-semibold">{suggestedVehicle.registration}</span> ({suggestedVehicle.make} {suggestedVehicle.model})</p>
-                                        </div>
-                                        <button type="button" onClick={() => handleLinkVehicle(suggestedVehicle)} className="flex items-center gap-1 text-sm py-1.5 px-3 bg-green-600 text-white font-bold rounded shadow hover:bg-green-700 transition">
-                                        <LinkIcon size={14}/> Link
+                                {/* View Mode Toggle */}
+                                <div className="flex items-center gap-2 self-start md:self-center shrink-0">
+                                    <div className="bg-slate-800/90 p-1 rounded-lg border border-slate-700 flex items-center shadow-inner">
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsFormattedView(true)}
+                                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition ${isFormattedView ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+                                        >
+                                            <Eye size={13} /> Reader View
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsFormattedView(false)}
+                                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition ${!isFormattedView ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+                                        >
+                                            <Edit3 size={13} /> Raw Edit
                                         </button>
                                     </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Main 2-Column Dossier */}
+                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                            {/* Left 7 Columns: The Smart Email Pane */}
+                            <div className="lg:col-span-7 space-y-4">
+                                {isFormattedView ? (
+                                    <div className="space-y-4">
+                                        {/* Latest Customer Message Card */}
+                                        <div className="bg-white rounded-xl border border-indigo-100 shadow-sm overflow-hidden">
+                                            <div className="bg-gradient-to-r from-indigo-50/80 to-white px-4 py-2.5 border-b border-indigo-100 flex items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="w-2 h-2 rounded-full bg-indigo-600 animate-pulse"></span>
+                                                    <h4 className="text-xs font-bold text-indigo-900 uppercase tracking-wider flex items-center gap-1.5">
+                                                        <MessageSquare size={14} className="text-indigo-600" />
+                                                        Latest Customer Message
+                                                    </h4>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <button 
+                                                        type="button" 
+                                                        onClick={async () => {
+                                                            if (!formData.message && !formData.subject) return;
+                                                            setIsAnalyzing(true);
+                                                            setAiError('');
+                                                            try {
+                                                                const parsed = await parseInquiryMessage(formData.message || '', formData.subject);
+                                                                
+                                                                setFormData(p => {
+                                                                    const newName = parsed.fromName || p.fromName || '';
+                                                                    const newEmail = parsed.fromEmail || p.fromEmail || '';
+                                                                    let nextLinkedCustomerId = p.linkedCustomerId;
+
+                                                                    if (nextLinkedCustomerId) {
+                                                                        const linkedCust = customers.find(c => c.id === nextLinkedCustomerId);
+                                                                        if (linkedCust) {
+                                                                            const linkedName = getCustomerDisplayName(linkedCust).toLowerCase();
+                                                                            if ((parsed.fromEmail && linkedCust.email?.toLowerCase() !== parsed.fromEmail.toLowerCase()) || 
+                                                                                (parsed.fromName && linkedName !== parsed.fromName.toLowerCase())) {
+                                                                                nextLinkedCustomerId = null;
+                                                                            }
+                                                                        }
+                                                                    }
+
+                                                                    return {
+                                                                        ...p,
+                                                                        linkedCustomerId: nextLinkedCustomerId,
+                                                                        fromName: newName,
+                                                                        fromEmail: newEmail,
+                                                                        fromPhone: parsed.fromPhone || p.fromPhone || '',
+                                                                        vehicleRegistration: parsed.vehicleRegistration
+                                                                            ? parsed.vehicleRegistration.toUpperCase().trim()
+                                                                            : p.vehicleRegistration ? p.vehicleRegistration.toUpperCase().trim() : '',
+                                                                        vehicleMake: parsed.vehicleMake ? formatTitleCase(parsed.vehicleMake) : (p.vehicleMake ? formatTitleCase(p.vehicleMake) : ''),
+                                                                        vehicleModel: parsed.vehicleModel ? formatTitleCase(parsed.vehicleModel) : (p.vehicleModel ? formatTitleCase(p.vehicleModel) : ''),
+                                                                        postcode: parsed.postcode ? parsed.postcode.toUpperCase().trim() : (p.postcode || ''),
+                                                                    };
+                                                                });
+
+                                                                if (parsed.fromEmail || parsed.fromPhone || parsed.fromName) {
+                                                                    const lowerEmail = (parsed.fromEmail || '').toLowerCase();
+                                                                    const lowerPhone = (parsed.fromPhone || '').replace(/\D/g,'');
+                                                                    const lowerName = (parsed.fromName || '').toLowerCase();
+                                                                    const searchWords = lowerName.split(/\s+/).filter(w => w.length > 1);
+                                                                    
+                                                                    const matches = customers.filter(c => {
+                                                                        if (lowerEmail && c.email?.toLowerCase() === lowerEmail) return true;
+                                                                        if (lowerPhone && (c.phone?.replace(/\D/g,'') === lowerPhone || c.mobile?.replace(/\D/g,'') === lowerPhone)) return true;
+                                                                        
+                                                                        if (lowerName) {
+                                                                            const fullName = `${c.title || ''} ${c.forename || ''} ${c.surname || ''}`.toLowerCase();
+                                                                            const company = (c.companyName || '').toLowerCase();
+                                                                            if (fullName.includes(lowerName) || company.includes(lowerName)) return true;
+                                                                            if (lowerName.includes(fullName.trim()) && fullName.trim().length > 3) return true;
+                                                                            if (searchWords.length > 0 && searchWords.every(w => fullName.includes(w))) return true;
+                                                                        }
+                                                                        return false;
+                                                                    });
+                                                                    if (matches.length > 0) setSuggestedCustomers(matches);
+                                                                }
+
+                                                                if (parsed.vehicleRegistration) {
+                                                                    const lowerReg = parsed.vehicleRegistration.toLowerCase().replace(/\s/g, '');
+                                                                    const foundVeh = vehicles.find(v => v.registration?.toLowerCase().replace(/\s/g, '') === lowerReg);
+                                                                    if (foundVeh) setSuggestedVehicle(foundVeh);
+                                                                }
+
+                                                                const aiLogNotes = parsed.summary 
+                                                                    ? `AI Summary: ${parsed.summary}` 
+                                                                    : `AI Scan Completed (No summary provided). Data: ${JSON.stringify(parsed)}`;
+                                                                
+                                                                const newLog = {
+                                                                    id: crypto.randomUUID(),
+                                                                    timestamp: new Date().toISOString(),
+                                                                    userId: currentUser.id,
+                                                                    actionType: 'AI Scan',
+                                                                    notes: aiLogNotes
+                                                                };
+                                                                setFormData(p => ({ ...p, logs: [...(p.logs || []), newLog] }));
+                                                                toast.success('Inquiry scanned with AI');
+                                                            } catch (e) {
+                                                                console.error(e);
+                                                                setAiError('Failed to parse message with AI.');
+                                                                toast.error('Failed to parse message with AI.');
+                                                            } finally {
+                                                                setIsAnalyzing(false);
+                                                            }
+                                                        }}
+                                                        disabled={isAnalyzing || (!formData.message && !formData.subject)}
+                                                        className="flex items-center gap-1 text-[11px] font-bold text-indigo-700 bg-white hover:bg-indigo-100 border border-indigo-200 px-2.5 py-1 rounded-md shadow-2xs transition disabled:opacity-50 cursor-pointer"
+                                                        title="Scan with AI to extract VRM, Customer and Summary"
+                                                    >
+                                                        {isAnalyzing ? <Loader2 size={12} className="animate-spin text-indigo-600" /> : <Wand2 size={12} className="text-indigo-600" />} 
+                                                        Scan with AI
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            <div className="p-5">
+                                                {parsedThread.latestMessage ? (
+                                                    <div className="text-sm text-slate-800 leading-relaxed whitespace-pre-wrap font-sans selection:bg-indigo-100">
+                                                        {parsedThread.latestMessage}
+                                                    </div>
+                                                ) : (
+                                                    <div className="text-sm text-slate-400 italic">
+                                                        No message body captured.
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* AI Summary / Insights Banner if present */}
+                                        {formData.actionNotes && (
+                                            <div className="bg-gradient-to-r from-purple-50 via-indigo-50/50 to-purple-50 border border-purple-200 rounded-xl p-3.5 text-xs text-purple-900 shadow-2xs space-y-1">
+                                                <div className="flex items-center gap-1.5 font-bold text-purple-800 uppercase tracking-wider text-[11px]">
+                                                    <Sparkles size={13} className="text-purple-600" />
+                                                    AI Insights & Classification
+                                                </div>
+                                                <div className="whitespace-pre-wrap leading-relaxed text-purple-950 font-medium">
+                                                    {formData.actionNotes}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Attachments Strip */}
+                                        <div className="bg-white rounded-xl border border-gray-200 shadow-xs p-4 space-y-3">
+                                            <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+                                                <div className="flex items-center gap-2">
+                                                    <Paperclip size={14} className="text-gray-500" />
+                                                    <span className="text-xs font-bold text-gray-800 uppercase tracking-wider">
+                                                        Attachments & Media ({formData.media ? formData.media.length : 0})
+                                                    </span>
+                                                </div>
+                                                <label className="cursor-pointer text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1 rounded-md transition flex items-center gap-1 border border-indigo-200 shadow-2xs">
+                                                    <PlusCircle size={13} /> Add Attachment
+                                                    <input 
+                                                        type="file" 
+                                                        multiple 
+                                                        className="hidden" 
+                                                        onChange={async (e) => {
+                                                            if (e.target.files && e.target.files.length > 0) {
+                                                                const newMedia = [];
+                                                                for (const file of e.target.files) {
+                                                                    const isImage = file.type.startsWith('image/');
+                                                                    const mediaItem = {
+                                                                        id: crypto.randomUUID(),
+                                                                        type: isImage ? 'Photo' : 'Document',
+                                                                        name: file.name,
+                                                                        uploadedAt: new Date().toISOString()
+                                                                    };
+                                                                    await saveImage(mediaItem.id, file);
+                                                                    newMedia.push(mediaItem);
+                                                                }
+                                                                setFormData(p => ({ ...p, media: [...(p.media || []), ...newMedia] }));
+                                                                toast.success(`Added ${newMedia.length} attachment(s)`);
+                                                            }
+                                                            e.target.value = '';
+                                                        }} 
+                                                    />
+                                                </label>
+                                            </div>
+
+                                            {formData.media && formData.media.length > 0 ? (
+                                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                                                    {formData.media.map((item: any) => {
+                                                        const isPhoto = item.type === 'Photo' || (item.name && /\.(jpg|jpeg|png|webp|gif)$/i.test(item.name));
+                                                        return (
+                                                            <div 
+                                                                key={item.id} 
+                                                                onClick={() => handleDownloadMedia(item)}
+                                                                className="group relative flex items-center gap-2 p-2.5 border border-gray-200 hover:border-indigo-300 rounded-lg bg-gray-50 hover:bg-indigo-50/50 cursor-pointer transition shadow-2xs"
+                                                                title={`Click to view/download ${item.name}`}
+                                                            >
+                                                                <div className="p-1.5 bg-white rounded-md border border-gray-200 text-indigo-600 shrink-0 group-hover:scale-105 transition">
+                                                                    {isPhoto ? <Camera size={16} /> : <FileText size={16} />}
+                                                                </div>
+                                                                <div className="min-w-0 flex-1">
+                                                                    <div className="truncate text-xs font-semibold text-gray-800 group-hover:text-indigo-700">
+                                                                        {item.name}
+                                                                    </div>
+                                                                    <div className="text-[10px] text-gray-400 uppercase">
+                                                                        {isPhoto ? 'Photo' : 'Document'}
+                                                                    </div>
+                                                                </div>
+                                                                <ExternalLink size={12} className="text-gray-400 group-hover:text-indigo-600 opacity-0 group-hover:opacity-100 transition shrink-0" />
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            ) : (
+                                                <div className="text-gray-400 text-xs py-3 text-center border border-dashed border-gray-200 rounded-lg">
+                                                    No attachments attached to this inquiry.
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Historical Thread Accordion (Collapsible) */}
+                                        {parsedThread.hasThread && (
+                                            <div className="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setIsHistoryExpanded(prev => !prev)}
+                                                    className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100/80 transition text-left cursor-pointer border-b border-gray-200/60"
+                                                >
+                                                    <div className="flex items-center gap-2 text-xs font-bold text-gray-700">
+                                                        <Clock size={14} className="text-gray-500" />
+                                                        <span>Email History & Preceding Thread ({parsedThread.threadHistory.length} earlier {parsedThread.threadHistory.length === 1 ? 'message' : 'messages'})</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-1.5 text-xs text-indigo-600 font-semibold">
+                                                        <span>{isHistoryExpanded ? 'Collapse Thread' : 'Expand Thread'}</span>
+                                                        {isHistoryExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                                                    </div>
+                                                </button>
+
+                                                {isHistoryExpanded && (
+                                                    <div className="p-4 space-y-4 bg-gray-50/50">
+                                                        {parsedThread.threadHistory.map((threadMsg, idx) => (
+                                                            <div key={idx} className="bg-white p-3.5 rounded-lg border border-gray-200 shadow-2xs space-y-2">
+                                                                {threadMsg.header && (
+                                                                    <div className="text-[11px] font-mono text-gray-500 bg-gray-100 p-2 rounded border border-gray-200/80 whitespace-pre-wrap leading-tight">
+                                                                        {threadMsg.header}
+                                                                    </div>
+                                                                )}
+                                                                <div className="text-xs text-gray-700 whitespace-pre-wrap leading-relaxed">
+                                                                    {threadMsg.body}
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                ) : (
+                                    /* Raw Edit Mode */
+                                    <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 space-y-3">
+                                        <div className="flex items-center justify-between border-b pb-2">
+                                            <label className="block text-xs font-bold text-gray-800 uppercase tracking-wider">
+                                                Raw Email Subject & Message Body
+                                            </label>
+                                            <button 
+                                                type="button" 
+                                                onClick={async () => {
+                                                    if (!formData.message && !formData.subject) return;
+                                                    setIsAnalyzing(true);
+                                                    try {
+                                                        const parsed = await parseInquiryMessage(formData.message || '', formData.subject);
+                                                        toast.success('Inquiry scanned with AI');
+                                                    } catch (e) {
+                                                        toast.error('Failed to parse message with AI.');
+                                                    } finally {
+                                                        setIsAnalyzing(false);
+                                                    }
+                                                }}
+                                                disabled={isAnalyzing}
+                                                className="flex items-center gap-1 text-xs font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded hover:bg-indigo-100 border border-indigo-200 transition"
+                                            >
+                                                {isAnalyzing ? <Loader2 size={12} className="animate-spin" /> : <Wand2 size={12} />} 
+                                                Scan with AI
+                                            </button>
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-semibold text-gray-600 mb-1">Email Subject Line</label>
+                                            <input 
+                                                type="text" 
+                                                name="subject" 
+                                                value={formData.subject || ''} 
+                                                onChange={handleChange} 
+                                                className="w-full p-2 border rounded-md text-sm font-medium" 
+                                                placeholder="e.g. Service Inquiry for Porsche 911"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-semibold text-gray-600 mb-1">Full Message Content*</label>
+                                            <textarea 
+                                                name="message" 
+                                                value={formData.message || ''} 
+                                                onChange={handleChange} 
+                                                rows={18} 
+                                                className="w-full p-3 border rounded-md text-sm font-mono leading-relaxed" 
+                                                required 
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Right 5 Columns: Joined-Up Client, Vehicle & Operations Sidebar */}
+                            <div className="lg:col-span-5 space-y-4">
+                                {/* Quick Actions Hub */}
+                                <div className="bg-gradient-to-r from-indigo-50 via-purple-50 to-indigo-50 p-3.5 border border-indigo-200 rounded-xl shadow-xs space-y-2">
+                                    <div className="text-xs font-bold text-indigo-900 uppercase tracking-wider flex items-center gap-1.5">
+                                        <Sparkles size={14} className="text-indigo-600" />
+                                        Joined-Up Actions
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={handleQuickEstimate}
+                                            className="flex items-center justify-center gap-1.5 px-3 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-lg font-bold text-xs shadow-sm transition cursor-pointer"
+                                            title="Smart create estimate directly from customer inquiry details"
+                                        >
+                                            <Wand2 size={13} /> Smart Estimate
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={handleQuickReply}
+                                            className="flex items-center justify-center gap-1.5 px-3 py-2 bg-white hover:bg-indigo-50 text-indigo-700 border border-indigo-300 rounded-lg font-bold text-xs shadow-sm transition cursor-pointer"
+                                            title="Jump to reply and draft response with AI"
+                                        >
+                                            <Mail size={13} /> Draft Reply
+                                        </button>
+                                    </div>
+                                    {linkedEstimate && (
+                                        <div className="pt-1.5 border-t border-indigo-200/60 flex items-center justify-between text-xs">
+                                            <span className="text-indigo-800 font-semibold flex items-center gap-1">
+                                                <FileText size={12} /> Estimate #{linkedEstimate.estimateNumber}
+                                            </span>
+                                            {onViewEstimate && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        onViewEstimate(linkedEstimate);
+                                                        onClose();
+                                                    }}
+                                                    className="font-bold text-indigo-600 hover:text-indigo-800 hover:underline"
+                                                >
+                                                    Review &rarr;
+                                                </button>
+                                            )}
+                                        </div>
                                     )}
                                 </div>
-                            )}
 
-                            <div className="bg-white p-4 border border-gray-200 rounded-lg shadow-sm space-y-4">
-                                <h4 className="text-sm font-bold text-gray-800 border-b pb-2">Links & Assignments</h4>
-                                <div className="space-y-3">
-                                    <div>
-                                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Customer Connection</label>
-                                        {linkedCustomer ? (
-                                            <div className="p-2 bg-green-50 border border-green-200 rounded-lg flex justify-between items-center text-sm shadow-xs">
+                                {/* AI Suggestions Popup Banner */}
+                                {(suggestedCustomers.length > 0 || suggestedVehicle || aiError) && (
+                                    <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-xl space-y-2 animate-fade-in shadow-2xs">
+                                        <h4 className="font-bold text-indigo-900 text-xs flex items-center gap-1.5">
+                                            <Wand2 size={14} className="text-indigo-600"/> AI Auto-Match Suggestions
+                                        </h4>
+                                        {aiError && <p className="text-red-600 text-xs">{aiError}</p>}
+                                        
+                                        {suggestedCustomers.length > 0 && !formData.linkedCustomerId && (
+                                            <div className="flex flex-col gap-1.5">
+                                                {suggestedCustomers.map(cust => (
+                                                    <div key={cust.id} className="flex justify-between items-center text-xs p-2 bg-white rounded-lg border border-indigo-100 shadow-2xs">
+                                                        <div className="flex items-center gap-1.5 truncate">
+                                                            <UserIcon size={13} className="text-blue-500 shrink-0" />
+                                                            <span className="font-semibold text-gray-800 truncate">{getCustomerDisplayName(cust)}</span>
+                                                        </div>
+                                                        <button 
+                                                            type="button" 
+                                                            onClick={() => handleLinkCustomer(cust)} 
+                                                            className="flex items-center gap-1 py-1 px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-md shadow-2xs transition shrink-0 cursor-pointer"
+                                                        >
+                                                            <LinkIcon size={12}/> Link
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                        
+                                        {suggestedVehicle && !formData.linkedVehicleId && (
+                                            <div className="flex justify-between items-center text-xs p-2 bg-white rounded-lg border border-indigo-100 shadow-2xs">
+                                                <div className="flex items-center gap-1.5 truncate">
+                                                    <Car size={13} className="text-emerald-500 shrink-0" />
+                                                    <span className="font-bold text-gray-900">{suggestedVehicle.registration}</span>
+                                                    <span className="text-gray-500 truncate">({suggestedVehicle.make} {suggestedVehicle.model})</span>
+                                                </div>
+                                                <button 
+                                                    type="button" 
+                                                    onClick={() => handleLinkVehicle(suggestedVehicle)} 
+                                                    className="flex items-center gap-1 py-1 px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-md shadow-2xs transition shrink-0 cursor-pointer"
+                                                >
+                                                    <LinkIcon size={12}/> Link
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Client Connection Dossier Card */}
+                                <div className="bg-white p-4 border border-gray-200 rounded-xl shadow-xs space-y-3">
+                                    <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+                                        <label className="block text-xs font-bold text-gray-800 uppercase tracking-wider flex items-center gap-1.5">
+                                            <UserCheck size={14} className="text-indigo-600" /> Customer Connection
+                                        </label>
+                                        {linkedCustomer && (
+                                            <button 
+                                                type="button" 
+                                                onClick={handleUnlinkCustomer} 
+                                                title="Unlink Customer" 
+                                                className="text-xs text-red-500 hover:text-red-700 flex items-center gap-1 font-medium transition cursor-pointer"
+                                            >
+                                                <XCircle size={13} /> Unlink
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    {linkedCustomer ? (
+                                        <div className="p-3 bg-emerald-50/70 border border-emerald-200 rounded-lg text-xs space-y-1.5">
+                                            <div className="flex items-center justify-between">
                                                 <button 
                                                     type="button" 
                                                     onClick={() => onViewCustomer?.(linkedCustomer.id)}
-                                                    className="flex items-center gap-2 text-green-800 hover:text-green-600 hover:underline text-left cursor-pointer transition font-semibold"
-                                                    title={getCustomerDisplayName(linkedCustomer)}
+                                                    className="font-bold text-emerald-900 hover:underline text-left flex items-center gap-1.5 text-sm cursor-pointer"
                                                 >
-                                                    <UserCheck size={16} className="text-green-700 shrink-0"/>
-                                                    <span className="truncate max-w-[200px]">{getCustomerDisplayName(linkedCustomer)}</span>
+                                                    <UserCheck size={15} className="text-emerald-700 shrink-0" />
+                                                    {getCustomerDisplayName(linkedCustomer)}
                                                 </button>
-                                                <button type="button" onClick={handleUnlinkCustomer} title="Unlink Customer" className="text-gray-400 hover:text-red-500 transition">
-                                                    <XCircle size={16}/>
-                                                </button>
+                                                <span className="text-[10px] font-bold bg-emerald-200 text-emerald-900 px-2 py-0.5 rounded-full">
+                                                    Linked Client
+                                                </span>
                                             </div>
-                                        ) : (
-                                            <SearchableSelect
-                                                options={customers.map(c => ({ id: c.id, label: getCustomerDisplayName(c), value: c.id }))}
-                                                defaultValue={formData.linkedCustomerId || null}
-                                                onSelect={(value) => {
-                                                    const cust = customers.find(c => c.id === value);
-                                                    setFormData(p => {
-                                                        const customersCars = vehicles.filter(v => v.customerId === value);
-                                                        let newVehicleId = p.linkedVehicleId;
-                                                        if (!newVehicleId || !customersCars.some(car => car.id === newVehicleId)) {
-                                                            newVehicleId = customersCars.length === 1 ? customersCars[0].id : null;
-                                                        }
-                                                        return { 
-                                                            ...p, 
-                                                            linkedCustomerId: value,
-                                                            linkedVehicleId: newVehicleId,
-                                                            fromEmail: cust?.email || p.fromEmail || '',
-                                                            fromPhone: cust?.mobile || cust?.phone || p.fromPhone || '',
-                                                            addressLine1: cust?.addressLine1 || p.addressLine1 || '',
-                                                            addressLine2: cust?.addressLine2 || p.addressLine2 || '',
-                                                            city: cust?.city || p.city || '',
-                                                            county: cust?.county || p.county || '',
-                                                            postcode: cust?.postcode || p.postcode || ''
-                                                        };
-                                                    });
-                                                    setSuggestedCustomers([]);
-                                                }}
-                                                placeholder="Link to an existing customer..."
-                                            />
+                                            <div className="text-emerald-800 space-y-0.5 pt-1">
+                                                {linkedCustomer.email && <div>Email: <span className="font-semibold">{linkedCustomer.email}</span></div>}
+                                                {(linkedCustomer.mobile || linkedCustomer.phone) && <div>Phone: <span className="font-semibold">{linkedCustomer.mobile || linkedCustomer.phone}</span></div>}
+                                                {linkedCustomer.postcode && <div>Postcode: <span className="font-semibold uppercase">{linkedCustomer.postcode}</span></div>}
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-3">
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <div>
+                                                    <label className="block text-[11px] font-semibold text-gray-600 mb-1">First Name*</label>
+                                                    <input value={firstNameInput} onChange={handleFirstNameChange} className="w-full p-1.5 border rounded text-xs" required placeholder="First name" />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-[11px] font-semibold text-gray-600 mb-1">Surname</label>
+                                                    <input value={surnameInput} onChange={handleSurnameChange} className="w-full p-1.5 border rounded text-xs" placeholder="Surname" />
+                                                </div>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <div>
+                                                    <label className="block text-[11px] font-semibold text-gray-600 mb-1">Email</label>
+                                                    <input type="email" name="fromEmail" value={formData.fromEmail || ''} onChange={handleChange} className="w-full p-1.5 border rounded text-xs" placeholder="email@example.com" />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-[11px] font-semibold text-gray-600 mb-1">Phone</label>
+                                                    <input type="tel" name="fromPhone" value={formData.fromPhone || ''} onChange={handleChange} className="w-full p-1.5 border rounded text-xs" placeholder="07123456789" />
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label className="block text-[11px] font-semibold text-gray-600 mb-1">Postcode & Address</label>
+                                                <div className="flex gap-1.5">
+                                                    <input type="text" name="postcode" value={formData.postcode || ''} onChange={handleChange} className="w-full p-1.5 border rounded text-xs uppercase" placeholder="e.g. GU24 9NY" />
+                                                    <button
+                                                        type="button"
+                                                        onClick={handleLookupAddress}
+                                                        disabled={!formData.postcode || isLookingUpAddress}
+                                                        className="bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded px-2.5 flex items-center justify-center disabled:opacity-50 text-xs shrink-0 cursor-pointer"
+                                                        title="Lookup Address"
+                                                    >
+                                                        {isLookingUpAddress ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            {addressList.length > 0 && (
+                                                <div className="bg-white border rounded shadow-sm">
+                                                    <div className="bg-gray-50 p-1.5 text-[10px] font-semibold border-b text-gray-500">
+                                                        Select Address
+                                                    </div>
+                                                    <ul className="max-h-36 overflow-y-auto">
+                                                        {addressList.map((addr, idx) => (
+                                                            <li key={idx}>
+                                                                <button
+                                                                    type="button"
+                                                                    className="w-full text-left px-2.5 py-1.5 text-xs hover:bg-indigo-50 border-b last:border-0"
+                                                                    onClick={() => {
+                                                                        setFormData(prev => ({
+                                                                            ...prev,
+                                                                            addressLine1: addr.street || '',
+                                                                            addressLine2: addr.locality || '',
+                                                                            city: addr.postTown || '',
+                                                                            county: addr.county || '',
+                                                                            postcode: addr.postcode || prev.postcode
+                                                                        }));
+                                                                        setAddressList([]);
+                                                                    }}
+                                                                >
+                                                                    {addr.summaryAddress || `${addr.street || ''} ${addr.locality || ''} ${addr.postTown || ''}`}
+                                                                </button>
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                </div>
+                                            )}
+
+                                            <div className="pt-2 border-t flex flex-col gap-1.5">
+                                                <button 
+                                                    type="button" 
+                                                    onClick={handleAutoCreateCustomer}
+                                                    className="w-full py-1.5 flex justify-center items-center gap-1.5 text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition cursor-pointer"
+                                                >
+                                                    <Wand2 size={13} /> Auto-Create Customer & Vehicle
+                                                </button>
+                                                <SearchableSelect
+                                                    options={customers.map(c => ({ id: c.id, label: getCustomerDisplayName(c), value: c.id }))}
+                                                    defaultValue={formData.linkedCustomerId || null}
+                                                    onSelect={(value) => {
+                                                        const cust = customers.find(c => c.id === value);
+                                                        setFormData(p => {
+                                                            const customersCars = vehicles.filter(v => v.customerId === value);
+                                                            let newVehicleId = p.linkedVehicleId;
+                                                            if (!newVehicleId || !customersCars.some(car => car.id === newVehicleId)) {
+                                                                newVehicleId = customersCars.length === 1 ? customersCars[0].id : null;
+                                                            }
+                                                            return { 
+                                                                ...p, 
+                                                                linkedCustomerId: value,
+                                                                linkedVehicleId: newVehicleId,
+                                                                fromEmail: cust?.email || p.fromEmail || '',
+                                                                fromPhone: cust?.mobile || cust?.phone || p.fromPhone || '',
+                                                                addressLine1: cust?.addressLine1 || p.addressLine1 || '',
+                                                                addressLine2: cust?.addressLine2 || p.addressLine2 || '',
+                                                                city: cust?.city || p.city || '',
+                                                                county: cust?.county || p.county || '',
+                                                                postcode: cust?.postcode || p.postcode || ''
+                                                            };
+                                                        });
+                                                        setSuggestedCustomers([]);
+                                                    }}
+                                                    placeholder="Or link to existing customer..."
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Vehicle Connection Dossier Card */}
+                                <div className="bg-white p-4 border border-gray-200 rounded-xl shadow-xs space-y-3">
+                                    <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+                                        <label className="block text-xs font-bold text-gray-800 uppercase tracking-wider flex items-center gap-1.5">
+                                            <Car size={14} className="text-indigo-600" /> Vehicle Connection
+                                        </label>
+                                        {linkedVehicle && (
+                                            <button 
+                                                type="button" 
+                                                onClick={handleUnlinkVehicle} 
+                                                title="Unlink Vehicle" 
+                                                className="text-xs text-red-500 hover:text-red-700 flex items-center gap-1 font-medium transition cursor-pointer"
+                                            >
+                                                <XCircle size={13} /> Unlink
+                                            </button>
                                         )}
                                     </div>
-                                    
-                                    <div>
-                                        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Vehicle Connection</label>
-                                        {!linkedVehicle && customerVehicles.length > 0 && (
-                                            <div className="mb-3 space-y-2">
-                                                <div className="text-xs font-semibold text-indigo-700 bg-indigo-50 px-2 py-1 rounded inline-block border border-indigo-100">
-                                                    Client's Vehicles
+
+                                    {linkedVehicle ? (
+                                        <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs space-y-2">
+                                            <div className="flex items-center justify-between">
+                                                {/* UK License Plate Style */}
+                                                <div className="inline-block bg-yellow-400 text-black font-mono font-black text-sm px-2.5 py-0.5 rounded border border-yellow-500 shadow-2xs tracking-wider uppercase">
+                                                    {linkedVehicle.registration}
                                                 </div>
-                                                <div className="flex flex-col gap-2">
-                                                    {customerVehicles.map(v => (
-                                                        <button
-                                                            key={v.id}
-                                                            type="button"
-                                                            onClick={() => {
-                                                                setFormData(p => {
-                                                                    const cust = customers.find(c => c.id === (v.customerId || p.linkedCustomerId));
-                                                                    return { 
-                                                                        ...p, 
+                                                <span className="text-[10px] font-bold bg-slate-200 text-slate-800 px-2 py-0.5 rounded-full">
+                                                    Linked Vehicle
+                                                </span>
+                                            </div>
+                                            <div className="text-slate-800 font-medium">
+                                                {linkedVehicle.make} {linkedVehicle.model} {linkedVehicle.year ? `(${linkedVehicle.year})` : ''}
+                                            </div>
+                                            <div className="text-[11px] text-slate-500 space-y-0.5 pt-1 border-t border-slate-200/60">
+                                                {linkedVehicle.vin && <div>VIN: <span className="font-mono text-slate-700">{linkedVehicle.vin}</span></div>}
+                                                {(linkedVehicle.nextMotDate || linkedVehicle.motExpiryDate) && (
+                                                    <div>MOT Expiry: <span className="font-semibold text-slate-700">{linkedVehicle.nextMotDate || linkedVehicle.motExpiryDate}</span></div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-3">
+                                            <div>
+                                                <label className="block text-[11px] font-semibold text-gray-600 mb-1">Vehicle Registration (VRM)</label>
+                                                <div className="flex gap-1.5">
+                                                    <input 
+                                                        type="text" 
+                                                        name="vehicleRegistration" 
+                                                        value={formData.vehicleRegistration || ''} 
+                                                        onChange={handleChange} 
+                                                        className="w-full p-1.5 border rounded text-xs uppercase font-mono font-bold tracking-wider" 
+                                                        placeholder="e.g. AB12 CDE" 
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={handleLookupVehicle}
+                                                        disabled={!formData.vehicleRegistration || isLookingUpVehicle || !!formData.linkedVehicleId}
+                                                        className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded px-2.5 flex items-center justify-center disabled:opacity-50 text-xs shrink-0 cursor-pointer shadow-2xs transition"
+                                                        title="Search DVLA by registration"
+                                                    >
+                                                        {isLookingUpVehicle ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            {(formData.vehicleMake || formData.vehicleModel) && (
+                                                <div className="text-xs bg-gray-50 p-2 rounded border border-gray-200 text-gray-700">
+                                                    <span className="font-bold">{formData.vehicleMake} {formData.vehicleModel}</span> {formData.vehicleYear ? `(${formData.vehicleYear})` : ''}
+                                                </div>
+                                            )}
+
+                                            {!linkedVehicle && customerVehicles.length > 0 && (
+                                                <div className="space-y-1.5">
+                                                    <div className="text-[10px] font-bold text-indigo-800 uppercase tracking-wider">
+                                                        Client's Registered Vehicles
+                                                    </div>
+                                                    <div className="flex flex-col gap-1.5">
+                                                        {customerVehicles.map(v => (
+                                                            <button
+                                                                key={v.id}
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setFormData(p => ({
+                                                                        ...p,
                                                                         linkedVehicleId: v.id,
-                                                                        linkedCustomerId: v.customerId || p.linkedCustomerId,
-                                                                        fromEmail: cust?.email || p.fromEmail || '',
-                                                                        fromPhone: cust?.mobile || cust?.phone || p.fromPhone || '',
                                                                         vehicleMake: v.make || p.vehicleMake,
                                                                         vehicleModel: v.model || p.vehicleModel,
                                                                         vehicleRegistration: v.registration || p.vehicleRegistration,
@@ -999,237 +1465,197 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                                                         vehicleVin: v.vin || p.vehicleVin,
                                                                         vehicleMotExpiry: v.nextMotDate || v.motExpiryDate || p.vehicleMotExpiry,
                                                                         vehicleManufactureDate: v.manufactureDate || p.vehicleManufactureDate
-                                                                    };
-                                                                });
-                                                            }}
-                                                            className="flex items-center justify-between p-2 text-sm bg-white border border-indigo-200 rounded-lg shadow-sm hover:bg-indigo-50 hover:border-indigo-300 transition text-left"
-                                                        >
-                                                            <div>
-                                                                <div className="font-bold text-gray-800">{v.registration || 'No Reg'}</div>
-                                                                <div className="text-xs text-gray-500">{v.make} {v.model} {v.year || ''}</div>
-                                                            </div>
-                                                            <div className="text-xs font-semibold bg-indigo-600 text-white px-2 py-1 rounded shadow-sm hover:bg-indigo-700 transition">
-                                                                Use Vehicle
-                                                            </div>
-                                                        </button>
-                                                    ))}
+                                                                    }));
+                                                                }}
+                                                                className="flex items-center justify-between p-2 text-xs bg-indigo-50/50 hover:bg-indigo-100/70 border border-indigo-100 rounded-lg transition text-left cursor-pointer"
+                                                            >
+                                                                <div className="font-bold text-slate-800 uppercase font-mono">{v.registration}</div>
+                                                                <div className="text-slate-600 text-[11px]">{v.make} {v.model}</div>
+                                                                <span className="text-[10px] font-bold text-indigo-700">Select</span>
+                                                            </button>
+                                                        ))}
+                                                    </div>
                                                 </div>
-                                                <div className="text-xs text-gray-500 text-center py-1">or search for a different vehicle below</div>
-                                            </div>
-                                        )}
-                                        {linkedVehicle ? (
-                                             <div className="p-2 bg-green-50 border border-green-200 rounded-lg flex justify-between items-center text-sm shadow-xs">
-                                                <button 
-                                                    type="button" 
-                                                    onClick={() => onViewVehicle?.(linkedVehicle.id)}
-                                                    className="flex items-center gap-2 text-green-800 hover:text-green-600 hover:underline text-left cursor-pointer transition font-semibold"
-                                                    title={`${linkedVehicle.registration} - ${linkedVehicle.make} ${linkedVehicle.model}`}
-                                                >
-                                                    <Car size={16} className="text-green-700 shrink-0"/>
-                                                    <span className="font-semibold truncate max-w-[200px]">{linkedVehicle.registration} {linkedVehicle.make ? `(${linkedVehicle.make} ${linkedVehicle.model})` : ''}</span>
-                                                </button>
-                                                <button type="button" onClick={handleUnlinkVehicle} title="Unlink Vehicle" className="text-gray-400 hover:text-red-500 transition">
-                                                    <XCircle size={16}/>
-                                                </button>
-                                            </div>
-                                        ) : (
-                                            <SearchableSelect
-                                                options={vehicles
-                                                    .map(v => {
-                                                        const isCust = v.customerId === formData.linkedCustomerId;
-                                                        return { 
-                                                            id: v.id, 
-                                                            label: `${v.registration} - ${v.make} ${v.model}`, 
-                                                            value: v.id,
-                                                            badge: isCust ? { text: "Client's", className: "bg-indigo-100 text-indigo-800" } : undefined,
-                                                            isCust
-                                                        };
-                                                    })
-                                                    .sort((a, b) => (b.isCust ? 1 : 0) - (a.isCust ? 1 : 0))
-                                                }
-                                                defaultValue={formData.linkedVehicleId || null}
-                                                onSelect={(value) => {
-                                                    const vehicle = vehicles.find(v => v.id === value);
-                                                    const ownerId = vehicle?.customerId;
-                                                    setFormData(p => {
-                                                        const cust = customers.find(c => c.id === (ownerId || p.linkedCustomerId));
-                                                        return { 
-                                                            ...p, 
-                                                            linkedVehicleId: value,
-                                                            linkedCustomerId: ownerId || p.linkedCustomerId,
-                                                            fromEmail: p.fromEmail || cust?.email || '',
-                                                            fromPhone: p.fromPhone || cust?.phone || cust?.mobile || ''
-                                                        };
-                                                    });
-                                                }}
-                                                placeholder="Link to an existing vehicle..."
-                                            />
-                                        )}
-                                    </div>
-
-                                    {(!linkedCustomer || !linkedVehicle) && (
-                                        <div className="pt-2 border-t mt-2 flex flex-col gap-2">
-                                            <button 
-                                                type="button" 
-                                                onClick={handleAutoCreateCustomer}
-                                                className="w-full py-1.5 flex justify-center items-center gap-1.5 text-xs font-bold text-green-700 bg-green-50 hover:bg-green-100 border border-green-200 rounded transition"
-                                                title="Instantly create Customer/Vehicle from captured details"
-                                            >
-                                                <Wand2 size={14} /> Auto-Create from Details
-                                            </button>
-                                            {onAddNewCustomer && (
-                                                <button 
-                                                    type="button" 
-                                                    onClick={onAddNewCustomer}
-                                                    className="w-full py-1.5 flex justify-center items-center gap-1.5 text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded transition"
-                                                >
-                                                    <UserCheck size={14} /> Open Full Creation Form
-                                                </button>
                                             )}
+
+                                            <div className="pt-1.5 border-t">
+                                                <SearchableSelect
+                                                    options={vehicles
+                                                        .map(v => {
+                                                            const isCust = v.customerId === formData.linkedCustomerId;
+                                                            return { 
+                                                                id: v.id, 
+                                                                label: `${v.registration} - ${v.make} ${v.model}`, 
+                                                                value: v.id,
+                                                                badge: isCust ? { text: "Client's", className: "bg-indigo-100 text-indigo-800" } : undefined,
+                                                                isCust
+                                                            };
+                                                        })
+                                                        .sort((a, b) => (b.isCust ? 1 : 0) - (a.isCust ? 1 : 0))
+                                                    }
+                                                    defaultValue={formData.linkedVehicleId || null}
+                                                    onSelect={(value) => {
+                                                        const vehicle = vehicles.find(v => v.id === value);
+                                                        const ownerId = vehicle?.customerId;
+                                                        setFormData(p => {
+                                                            const cust = customers.find(c => c.id === (ownerId || p.linkedCustomerId));
+                                                            return { 
+                                                                ...p, 
+                                                                linkedVehicleId: value,
+                                                                linkedCustomerId: ownerId || p.linkedCustomerId,
+                                                                fromEmail: p.fromEmail || cust?.email || '',
+                                                                fromPhone: p.fromPhone || cust?.phone || cust?.mobile || ''
+                                                            };
+                                                        });
+                                                    }}
+                                                    placeholder="Or link any vehicle..."
+                                                />
+                                            </div>
                                         </div>
                                     )}
                                 </div>
-                            </div>
 
-                            <div className="bg-white p-4 border border-gray-200 rounded-lg shadow-sm space-y-4">
-                        <h4 className="text-sm font-bold text-gray-800 border-b pb-2">Status & Ownership</h4>
-                        
-                        <div className="grid grid-cols-1 gap-4">
-                            <div>
-                                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Branch / Entity</label>
-                                <select name="entityId" value={formData.entityId || ''} onChange={handleChange} className="w-full p-2 border rounded text-sm bg-gray-50">
-                                    {entities?.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
-                                </select>
-                            </div>
-                            <div className="flex gap-4">
-                                <div className="flex-1">
-                                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Status</label>
-                                    <select name="status" value={formData.status || 'Inbox'} onChange={handleChange} className="w-full p-2 border rounded text-sm bg-gray-50">
-                                        <option value="Inbox">Inbox</option>
-                                        <option value="New Requests">New Requests</option>
-                                        <option value="Our Action">Our Action (Priority)</option>
-                                        <option value="Waiting on Customer">Waiting on Customer</option>
-                                        <option value="Online Approved">Online Approved</option>
-                                        <option value="Scheduled">Scheduled</option>
-                                        <option value="Closed">Closed</option>
-                                    </select>
+                                {/* Status, Ownership & Follow Up Card */}
+                                <div className="bg-white p-4 border border-gray-200 rounded-xl shadow-xs space-y-3">
+                                    <h4 className="text-xs font-bold text-gray-800 uppercase tracking-wider border-b border-gray-100 pb-2">
+                                        Status & Ownership
+                                    </h4>
+                                    
+                                    <div className="grid grid-cols-1 gap-2.5">
+                                        <div>
+                                            <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Branch / Entity</label>
+                                            <select name="entityId" value={formData.entityId || ''} onChange={handleChange} className="w-full p-2 border rounded-md text-xs bg-gray-50 font-medium">
+                                                {entities?.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                                            </select>
+                                        </div>
+                                        <div className="flex gap-3">
+                                            <div className="flex-1">
+                                                <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Status</label>
+                                                <select name="status" value={formData.status || 'Inbox'} onChange={handleChange} className="w-full p-2 border rounded-md text-xs bg-gray-50 font-medium">
+                                                    <option value="Inbox">Inbox</option>
+                                                    <option value="New Requests">New Requests</option>
+                                                    <option value="Our Action">Our Action (Priority)</option>
+                                                    <option value="Waiting on Customer">Waiting on Customer</option>
+                                                    <option value="Online Approved">Online Approved</option>
+                                                    <option value="Scheduled">Scheduled</option>
+                                                    <option value="Closed">Closed</option>
+                                                </select>
+                                            </div>
+                                            <div className="w-20">
+                                                <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Urgent</label>
+                                                <label className="relative inline-flex items-center cursor-pointer mt-0.5">
+                                                    <input type="checkbox" className="sr-only peer" checked={!!formData.isUrgent} onChange={e => setFormData(p => ({ ...p, isUrgent: e.target.checked }))} />
+                                                    <div className="w-10 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-red-500"></div>
+                                                </label>
+                                            </div>
+                                        </div>
+                                        
+                                        <div>
+                                            <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Action Status (Optional)</label>
+                                            <select name="actionStatus" value={formData.actionStatus || ''} onChange={handleChange} className="w-full p-2 border rounded-md text-xs bg-gray-50 font-medium">
+                                                <option value="">-- None --</option>
+                                                <optgroup label="Communication">
+                                                    <option value="New Mail">New Mail</option>
+                                                    <option value="Email Sent">Email Sent</option>
+                                                    <option value="Email Responded">Email Responded</option>
+                                                    <option value="Call Required">Call Required</option>
+                                                    <option value="Voicemail Left">Voicemail Left</option>
+                                                </optgroup>
+                                                <optgroup label="Estimates">
+                                                    <option value="Estimate Required">Estimate Required</option>
+                                                    <option value="Estimate Sent">Estimate Sent</option>
+                                                    <option value="Estimate Approved">Estimate Approved</option>
+                                                    <option value="Estimate Rejected">Estimate Rejected</option>
+                                                </optgroup>
+                                                <optgroup label="Operations">
+                                                    <option value="Internal Review">Internal Review</option>
+                                                </optgroup>
+                                            </select>
+                                        </div>
+                                        {formData.status === 'Closed' && (
+                                            <div>
+                                                <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1 text-red-600">Reason for Closing</label>
+                                                <select name="closedReason" value={formData.closedReason || ''} onChange={handleChange} className="w-full p-2 border border-red-200 rounded-md text-xs bg-red-50">
+                                                    <option value="">Select a reason...</option>
+                                                    <option value="Lost to Competitor">Lost to Competitor</option>
+                                                    <option value="Too Expensive">Too Expensive</option>
+                                                    <option value="No Response / Ghosted">No Response / Ghosted</option>
+                                                    <option value="Project Cancelled / Changed Mind">Project Cancelled / Changed Mind</option>
+                                                    <option value="Duplicate Inquiry">Duplicate Inquiry</option>
+                                                    <option value="Spam / Invalid">Spam / Invalid</option>
+                                                    <option value="Other">Other</option>
+                                                </select>
+                                            </div>
+                                        )}
+                                        <div>
+                                            <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Follow Up Date</label>
+                                            <input type="date" name="followUpDate" value={formData.followUpDate || ''} onChange={handleChange} className="w-full p-2 border rounded-md text-xs bg-gray-50" />
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <div>
+                                                <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Taken By</label>
+                                                <SearchableSelect
+                                                    options={users.map(u => ({ id: u.id, label: u.name, value: u.id }))}
+                                                    defaultValue={formData.takenByUserId || null}
+                                                    onSelect={(value) => {
+                                                        if (value !== formData.takenByUserId) {
+                                                            const userName = users.find(u => u.id === value)?.name || value;
+                                                            const newLog = {
+                                                                id: crypto.randomUUID(),
+                                                                timestamp: new Date().toISOString(),
+                                                                userId: currentUser.id,
+                                                                actionType: 'Reassigned',
+                                                                notes: `Taken By changed to: ${userName}`
+                                                            };
+                                                            setFormData(p => ({ ...p, takenByUserId: value, logs: [...(p.logs || []), newLog] }));
+                                                        }
+                                                    }}
+                                                    placeholder="Taken by..."
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Assigned To</label>
+                                                <SearchableSelect
+                                                    options={[
+                                                        ...users.map(u => ({ id: u.id, label: `👤 ${u.name}`, value: `user_${u.id}` })),
+                                                        ...(entities || []).map(e => ({ id: e.id, label: `🏢 ${e.name} (Team)`, value: `entity_${e.id}` }))
+                                                    ]}
+                                                    defaultValue={
+                                                        formData.assignedToUserId ? `user_${formData.assignedToUserId}` : 
+                                                        formData.assignedToEntityId ? `entity_${formData.assignedToEntityId}` : null
+                                                    }
+                                                    onSelect={(value) => {
+                                                        if (!value) return;
+                                                        const isUser = value.startsWith('user_');
+                                                        const id = value.replace(/^(user_|entity_)/, '');
+                                                        
+                                                        const prevId = formData.assignedToUserId || formData.assignedToEntityId;
+                                                        if (id !== prevId) {
+                                                            const assignName = isUser 
+                                                                ? users.find(u => u.id === id)?.name || id
+                                                                : entities?.find(e => e.id === id)?.name || id;
+                                                            const newLog = {
+                                                                id: crypto.randomUUID(),
+                                                                timestamp: new Date().toISOString(),
+                                                                userId: currentUser.id,
+                                                                actionType: 'Assigned',
+                                                                notes: `Assigned To changed to: ${assignName}`
+                                                            };
+                                                            setFormData(p => ({ 
+                                                                ...p, 
+                                                                assignedToUserId: isUser ? id : undefined,
+                                                                assignedToEntityId: !isUser ? id : undefined,
+                                                                logs: [...(p.logs || []), newLog] 
+                                                            }));
+                                                        }
+                                                    }}
+                                                    placeholder="Assign to user or team..."
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div className="w-24">
-                                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Urgent</label>
-                                    <label className="relative inline-flex items-center cursor-pointer mt-1">
-                                        <input type="checkbox" className="sr-only peer" checked={!!formData.isUrgent} onChange={e => setFormData(p => ({ ...p, isUrgent: e.target.checked }))} />
-                                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-500"></div>
-                                    </label>
-                                </div>
                             </div>
-                            
-                            <div>
-                                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Action Status (Optional)</label>
-                                <select name="actionStatus" value={formData.actionStatus || ''} onChange={handleChange} className="w-full p-2 border rounded text-sm bg-gray-50">
-                                    <option value="">-- None --</option>
-                                    <optgroup label="Communication">
-                                        <option value="New Mail">New Mail</option>
-                                        <option value="Email Sent">Email Sent</option>
-                                        <option value="Email Responded">Email Responded</option>
-                                        <option value="Call Required">Call Required</option>
-                                        <option value="Voicemail Left">Voicemail Left</option>
-                                    </optgroup>
-                                    <optgroup label="Estimates">
-                                        <option value="Estimate Required">Estimate Required</option>
-                                        <option value="Estimate Sent">Estimate Sent</option>
-                                        <option value="Estimate Approved">Estimate Approved</option>
-                                        <option value="Estimate Rejected">Estimate Rejected</option>
-                                    </optgroup>
-                                    <optgroup label="Operations">
-                                        <option value="Internal Review">Internal Review</option>
-                                    </optgroup>
-                                </select>
-                            </div>
-                            {formData.status === 'Closed' && (
-                                <div>
-                                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1 text-red-600">Reason for Closing</label>
-                                    <select name="closedReason" value={formData.closedReason || ''} onChange={handleChange} className="w-full p-2 border border-red-200 rounded text-sm bg-red-50">
-                                        <option value="">Select a reason...</option>
-                                        <option value="Lost to Competitor">Lost to Competitor</option>
-                                        <option value="Too Expensive">Too Expensive</option>
-                                        <option value="No Response / Ghosted">No Response / Ghosted</option>
-                                        <option value="Project Cancelled / Changed Mind">Project Cancelled / Changed Mind</option>
-                                        <option value="Duplicate Inquiry">Duplicate Inquiry</option>
-                                        <option value="Spam / Invalid">Spam / Invalid</option>
-                                        <option value="Other">Other</option>
-                                    </select>
-                                </div>
-                            )}
-                            <div>
-                                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Follow Up Date</label>
-                                <input type="date" name="followUpDate" value={formData.followUpDate || ''} onChange={handleChange} className="w-full p-2 border rounded text-sm bg-gray-50" />
-                            </div>
-                            <div className="grid grid-cols-2 gap-2">
-                                <div>
-                                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Taken By</label>
-                                    <SearchableSelect
-                                        options={users.map(u => ({ id: u.id, label: u.name, value: u.id }))}
-                                        defaultValue={formData.takenByUserId || null}
-                                        onSelect={(value) => {
-                                            if (value !== formData.takenByUserId) {
-                                                const userName = users.find(u => u.id === value)?.name || value;
-                                                const newLog = {
-                                                    id: crypto.randomUUID(),
-                                                    timestamp: new Date().toISOString(),
-                                                    userId: currentUser.id,
-                                                    actionType: 'Reassigned',
-                                                    notes: `Taken By changed to: ${userName}`
-                                                };
-                                                setFormData(p => ({ ...p, takenByUserId: value, logs: [...(p.logs || []), newLog] }));
-                                            }
-                                        }}
-                                        placeholder="Taken by..."
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Assigned To</label>
-                                    <SearchableSelect
-                                        options={[
-                                            ...users.map(u => ({ id: u.id, label: `👤 ${u.name}`, value: `user_${u.id}` })),
-                                            ...(entities || []).map(e => ({ id: e.id, label: `🏢 ${e.name} (Team)`, value: `entity_${e.id}` }))
-                                        ]}
-                                        defaultValue={
-                                            formData.assignedToUserId ? `user_${formData.assignedToUserId}` : 
-                                            formData.assignedToEntityId ? `entity_${formData.assignedToEntityId}` : null
-                                        }
-                                        onSelect={(value) => {
-                                            if (!value) return;
-                                            const isUser = value.startsWith('user_');
-                                            const id = value.replace(/^(user_|entity_)/, '');
-                                            
-                                            const prevId = formData.assignedToUserId || formData.assignedToEntityId;
-                                            if (id !== prevId) {
-                                                const assignName = isUser 
-                                                    ? users.find(u => u.id === id)?.name || id
-                                                    : entities?.find(e => e.id === id)?.name || id;
-                                                const newLog = {
-                                                    id: crypto.randomUUID(),
-                                                    timestamp: new Date().toISOString(),
-                                                    userId: currentUser.id,
-                                                    actionType: 'Assigned',
-                                                    notes: `Assigned To changed to: ${assignName}`
-                                                };
-                                                setFormData(p => ({ 
-                                                    ...p, 
-                                                    assignedToUserId: isUser ? id : undefined,
-                                                    assignedToEntityId: !isUser ? id : undefined,
-                                                    logs: [...(p.logs || []), newLog] 
-                                                }));
-                                            }
-                                        }}
-                                        placeholder="Assign to user or team..."
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* End of swapped blocks */}
                         </div>
                     </div>
                 )}
