@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useApp } from '../core/state/AppContext';
 import { useData } from '../core/state/DataContext';
 import { Job, PurchaseOrder } from '../types';
-import { Search, X, Car } from 'lucide-react';
+import { Search, X, Car, AlertOctagon } from 'lucide-react';
 import { getCustomerDisplayName } from '../core/utils/customerUtils';
 import { getRelativeDate, formatDate } from '../core/utils/dateUtils';
 import PauseReasonModal from './PauseReasonModal';
@@ -10,6 +10,7 @@ import { ConciergeJobCard } from './concierge/ConciergeJobCard';
 import { SummaryJobCard } from './shared/SummaryJobCard';
 import { KanbanColumn } from './concierge/KanbanColumn';
 import LiveAssistant from './LiveAssistant';
+import FindingReviewModal from './jobs/FindingReviewModal';
 
 interface ConciergeViewProps {
     onEditJob: (jobId: string, initialTab?: string) => void;
@@ -25,6 +26,8 @@ interface ConciergeViewProps {
     onRestart: (jobId: string, segmentId: string) => void;
     onEditEstimate?: (estimate: any) => void;
     onOpenInquiry?: (inquiry: any) => void;
+    onRaiseEstimateForFinding?: (finding: any, job: Job) => void;
+    onRaiseEstimateFromAllFindings?: (findings: any[], job: Job) => void;
 }
 
 const ConciergeView: React.FC<ConciergeViewProps> = (props) => {
@@ -46,6 +49,7 @@ const ConciergeView: React.FC<ConciergeViewProps> = (props) => {
     const [arrivalFilter, setArrivalFilter] = useState<'today' | '7days' | '14days' | 'all'>('today');
     const [assistantJobId, setAssistantJobId] = useState<string | null>(null);
     const [viewMode, setViewMode] = useState<'standard' | 'summary'>('summary');
+    const [selectedJobForReview, setSelectedJobForReview] = useState<Job | null>(null);
 
     const vehiclesById = useMemo(() => new Map(vehicles.map(v => [v.id, v])), [vehicles]);
     const customersById = useMemo(() => new Map(customers.map(c => [c.id, c])), [customers]);
@@ -90,6 +94,12 @@ const ConciergeView: React.FC<ConciergeViewProps> = (props) => {
         }
         return relevantJobs.sort((a, b) => (a.scheduledDate || '').localeCompare(b.scheduledDate || ''));
     }, [jobs, selectedEntityId, searchTerm, vehiclesById, customersById, currentUser]);
+
+    const rampAlertJobs = useMemo(() => {
+        return filteredJobs.filter(job => 
+            (job.inspectionFindings || []).some(f => f.status === 'Pending Review' || f.status === 'Estimate Created')
+        );
+    }, [filteredJobs]);
 
     const { arrivals, allocated, inProgress, pendingQC, invoicing, handover } = useMemo(() => {
         const arrivals: Job[] = [];
@@ -248,8 +258,98 @@ const ConciergeView: React.FC<ConciergeViewProps> = (props) => {
                 </div>
             </header>
             
+            {/* Sticky Action-Forcing Ramp Findings Alert Banner */}
+            {rampAlertJobs.length > 0 && (
+                <div className="bg-gradient-to-r from-rose-600 via-rose-700 to-rose-900 text-white px-4 py-3 rounded-xl shadow-lg border border-rose-500 mb-3 flex flex-wrap items-center justify-between gap-3 animate-pulse shrink-0">
+                    <div className="flex items-center gap-2.5">
+                        <span className="p-2 bg-white text-rose-700 rounded-lg shadow-sm font-black text-sm flex items-center gap-1">
+                            <AlertOctagon size={18} />
+                            <span>URGENT LIFT FINDING</span>
+                        </span>
+                        <div>
+                            <div className="font-black text-sm sm:text-base tracking-tight">
+                                {rampAlertJobs.length} Vehicle{rampAlertJobs.length > 1 ? 's' : ''} on Lift Awaiting Action & Quote!
+                            </div>
+                            <p className="text-xs text-rose-100">
+                                Engineers have reported safety recommendations that require immediate customer authorization while on the ramp.
+                            </p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setSelectedJobForReview(rampAlertJobs[0])}
+                            className="px-4 py-2 bg-white text-rose-800 hover:bg-rose-50 font-black text-xs uppercase tracking-wider rounded-lg shadow-md transition cursor-pointer active:scale-95"
+                        >
+                            Review & Quote Now
+                        </button>
+                    </div>
+                </div>
+            )}
+
             <main className="flex-grow overflow-x-auto pb-2">
                 <div className="flex gap-3 h-full min-w-full">
+                    {/* Dedicated Ramp Alerts Column */}
+                    {rampAlertJobs.length > 0 && (
+                        <KanbanColumn title="🚨 Ramp Alerts (On Lift)" count={rampAlertJobs.length} colorClass="border-rose-600">
+                            {rampAlertJobs.map(job => {
+                                const vehicle = vehiclesById.get(job.vehicleId);
+                                const customer = customersById.get(job.customerId);
+                                const pendingFindings = (job.inspectionFindings || []).filter(f => f.status !== 'Completed');
+                                return (
+                                    <div 
+                                        key={job.id}
+                                        onClick={() => setSelectedJobForReview(job)}
+                                        className="bg-rose-50/90 border-2 border-rose-300 rounded-xl p-3 shadow-md hover:shadow-lg transition cursor-pointer flex flex-col gap-2"
+                                    >
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-rose-600 text-white animate-pulse">
+                                                On Lift • {pendingFindings.length} Finding{pendingFindings.length > 1 ? 's' : ''}
+                                            </span>
+                                            <span className="font-mono text-xs font-bold text-gray-500">#{job.id}</span>
+                                        </div>
+
+                                        <div className="flex items-center justify-between">
+                                            <span className="font-mono bg-yellow-400 text-black px-2 py-0.5 rounded font-black text-xs tracking-wider">
+                                                {vehicle?.registration || 'NO REG'}
+                                            </span>
+                                            <span className="text-xs font-bold text-gray-700 truncate max-w-[120px]">
+                                                {vehicle?.make} {vehicle?.model}
+                                            </span>
+                                        </div>
+
+                                        <div className="space-y-1 bg-white p-2 rounded-lg border border-rose-200">
+                                            {pendingFindings.slice(0, 2).map((f) => (
+                                                <div key={f.id} className="text-xs font-semibold text-gray-800 flex items-center gap-1.5 truncate">
+                                                    <span>{f.severity === 'urgent' ? '🔴' : '🟡'}</span>
+                                                    <span className="font-bold">{f.category}:</span>
+                                                    <span className="truncate text-gray-600">{f.itemLabel}</span>
+                                                </div>
+                                            ))}
+                                            {pendingFindings.length > 2 && (
+                                                <div className="text-[10px] text-rose-600 font-bold">
+                                                    + {pendingFindings.length - 2} more finding(s)
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div className="flex items-center justify-between pt-1 text-xs">
+                                            <span className="text-[11px] text-gray-500 font-medium">
+                                                {customer ? getCustomerDisplayName(customer) : 'Customer'}
+                                            </span>
+                                            <button
+                                                type="button"
+                                                onClick={(e) => { e.stopPropagation(); setSelectedJobForReview(job); }}
+                                                className="px-2.5 py-1 bg-rose-600 text-white rounded-md text-[11px] font-bold uppercase hover:bg-rose-700 transition"
+                                            >
+                                                Review & Quote
+                                            </button>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </KanbanColumn>
+                    )}
+
                     {actionRequiredInquiries.length > 0 && (
                         <KanbanColumn title="Action Required" count={actionRequiredInquiries.length} colorClass="border-red-500">
                             {actionRequiredInquiries.map(inq => {
@@ -325,6 +425,18 @@ const ConciergeView: React.FC<ConciergeViewProps> = (props) => {
                 jobId={assistantJobId} 
                 onAddNote={handleAddNoteFromAssistant} 
             />
+            {selectedJobForReview && (
+                <FindingReviewModal
+                    isOpen={!!selectedJobForReview}
+                    onClose={() => setSelectedJobForReview(null)}
+                    job={selectedJobForReview}
+                    vehicle={vehiclesById.get(selectedJobForReview.vehicleId)}
+                    customer={customersById.get(selectedJobForReview.customerId)}
+                    onSaveJob={(updatedJob) => saveRecord('jobs', updatedJob)}
+                    onCreateEstimateFromFinding={props.onRaiseEstimateForFinding}
+                    onCreateEstimateFromAllFindings={props.onRaiseEstimateFromAllFindings}
+                />
+            )}
         </div>
     );
 };

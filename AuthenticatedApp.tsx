@@ -373,7 +373,92 @@ const AuthenticatedApp = () => {
             case 'rentals':
                 return <RentalsView entity={businessEntities.find(e => e.id === selectedEntityId)!} onOpenRentalBooking={(b) => setters.setRentalBookingModal({isOpen: true, booking: b})} />;
             case 'concierge':
-                return <ConciergeView onEditJob={commonProps.onEditJob} onCheckIn={(id) => setters.setCheckInJob((jobs || []).find(j => j.id === id) || null)} onOpenPurchaseOrder={(po) => setters.setPoModal({isOpen: true, po})} onOpenAssistant={commonProps.onOpenAssistant} onGenerateInvoice={handleGenerateInvoice} onCollect={(id) => setters.setCheckOutJob((jobs || []).find(j => j.id === id) || null)} onQcApprove={commonProps.onQcApprove} onStartWork={commonProps.onStartWork} onEngineerComplete={commonProps.onEngineerComplete} onPause={(id, segId) => workshopActions.handleUpdateSegmentStatus(id, segId, 'Paused')} onRestart={commonProps.onRestart} onEditEstimate={(est) => setters.setEstimateFormModal({isOpen: true, estimate: est})} onOpenInquiry={(inq) => setters.setInquiryModal({isOpen: true, inquiry: inq})} />;
+                return <ConciergeView 
+                    onEditJob={commonProps.onEditJob} 
+                    onCheckIn={(id) => setters.setCheckInJob((jobs || []).find(j => j.id === id) || null)} 
+                    onOpenPurchaseOrder={(po) => setters.setPoModal({isOpen: true, po})} 
+                    onOpenAssistant={commonProps.onOpenAssistant} 
+                    onGenerateInvoice={handleGenerateInvoice} 
+                    onCollect={(id) => setters.setCheckOutJob((jobs || []).find(j => j.id === id) || null)} 
+                    onQcApprove={commonProps.onQcApprove} 
+                    onStartWork={commonProps.onStartWork} 
+                    onEngineerComplete={commonProps.onEngineerComplete} 
+                    onPause={(id, segId) => workshopActions.handleUpdateSegmentStatus(id, segId, 'Paused')} 
+                    onRestart={commonProps.onRestart} 
+                    onEditEstimate={(est) => setters.setEstimateFormModal({isOpen: true, estimate: est})} 
+                    onOpenInquiry={(inq) => setters.setInquiryModal({isOpen: true, inquiry: inq})} 
+                    onRaiseEstimateForFinding={(finding, job) => {
+                        setters.setEstimateFormModal({
+                            isOpen: true,
+                            estimate: {
+                                jobId: job.id,
+                                customerId: job.customerId,
+                                vehicleId: job.vehicleId,
+                                entityId: job.entityId,
+                                status: 'Draft',
+                                description: `Lift Finding: ${finding.category} - ${finding.itemLabel}`,
+                                notes: `Urgent recommendation identified during vehicle lift inspection: ${finding.notes || ''}`,
+                                lineItems: [
+                                    {
+                                        id: `item_${Date.now()}`,
+                                        description: `${finding.category}: ${finding.itemLabel} - ${finding.notes || ''}`,
+                                        quantity: finding.suggestedLabourHours || 1,
+                                        unitPrice: 85,
+                                        isLabor: true,
+                                        partNumber: 'LABOUR'
+                                    },
+                                    ...(finding.suggestedParts ? [{
+                                        id: `part_${Date.now()}`,
+                                        description: finding.suggestedParts,
+                                        quantity: 1,
+                                        unitPrice: 0,
+                                        isLabor: false,
+                                        partNumber: 'PARTS'
+                                    }] : [])
+                                ]
+                            }
+                        });
+                    }}
+                    onRaiseEstimateFromAllFindings={(findings, job) => {
+                        const lineItems: any[] = [];
+                        findings.forEach((f, idx) => {
+                            lineItems.push({
+                                id: `item_labour_${Date.now()}_${idx}`,
+                                description: `${f.category}: ${f.itemLabel} - ${f.notes || ''}`,
+                                quantity: f.suggestedLabourHours || 1,
+                                unitPrice: 85,
+                                isLabor: true,
+                                partNumber: 'LABOUR'
+                            });
+                            if (f.suggestedParts) {
+                                lineItems.push({
+                                    id: `item_part_${Date.now()}_${idx}`,
+                                    description: `${f.category} Parts: ${f.suggestedParts}`,
+                                    quantity: 1,
+                                    unitPrice: 0,
+                                    isLabor: false,
+                                    partNumber: 'PARTS'
+                                });
+                            }
+                        });
+
+                        const summary = findings.map(f => `${f.category} (${f.severity === 'urgent' ? '🔴' : '🟡'})`).join(', ');
+
+                        setters.setEstimateFormModal({
+                            isOpen: true,
+                            estimate: {
+                                jobId: job.id,
+                                customerId: job.customerId,
+                                vehicleId: job.vehicleId,
+                                entityId: job.entityId,
+                                status: 'Draft',
+                                description: `Lift Inspection Findings: ${summary}`,
+                                notes: `Urgent safety & maintenance items identified during vehicle lift inspection:\n${findings.map(f => `• [${f.severity.toUpperCase()}] ${f.category} - ${f.itemLabel}: ${f.notes || ''}`).join('\n')}`,
+                                lineItems
+                            }
+                        });
+                    }}
+                />;
             case 'communications':
                 return <CommunicationsView />;
             case 'aged-debtors':

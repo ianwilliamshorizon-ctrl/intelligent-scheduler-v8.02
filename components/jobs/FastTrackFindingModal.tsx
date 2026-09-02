@@ -21,12 +21,14 @@ import {
     Send, 
     Loader2, 
     Car,
-    Plus
+    Plus,
+    Check,
+    Layers
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { saveFile } from '../../utils/imageStore';
 import { useApp } from '../../core/state/AppContext';
-import { COMMON_FINDING_SUGGESTIONS, syncFindingToJob } from '../../core/utils/inspectionFindingUtils';
+import { COMMON_FINDING_SUGGESTIONS, syncFindingsToJob } from '../../core/utils/inspectionFindingUtils';
 import SpeechToTextButton from '../shared/SpeechToTextButton';
 
 interface FastTrackFindingModalProps {
@@ -36,6 +38,17 @@ interface FastTrackFindingModalProps {
     vehicle?: Vehicle;
     customer?: Customer;
     onSaveJob: (updatedJob: Job) => Promise<void> | void;
+}
+
+interface DraftFindingItem {
+    id: string;
+    category: FindingCategory;
+    severity: FindingSeverity;
+    itemLabel: string;
+    notes: string;
+    suggestedHours: number | '';
+    suggestedParts: string;
+    photos: { id: string; name: string; file: File; previewUrl: string }[];
 }
 
 const CATEGORIES: { id: FindingCategory; label: string; icon: string }[] = [
@@ -62,6 +75,10 @@ export const FastTrackFindingModal: React.FC<FastTrackFindingModalProps> = ({
     const fileInputRef = useRef<HTMLInputElement>(null);
     const cameraInputRef = useRef<HTMLInputElement>(null);
 
+    // List of already staged findings in this session
+    const [stagedFindings, setStagedFindings] = useState<DraftFindingItem[]>([]);
+
+    // Active item being edited in the form
     const [category, setCategory] = useState<FindingCategory>('Brakes');
     const [severity, setSeverity] = useState<FindingSeverity>('urgent');
     const [itemLabel, setItemLabel] = useState('Discs Worn Below Minimum Thickness');
@@ -97,58 +114,116 @@ export const FastTrackFindingModal: React.FC<FastTrackFindingModalProps> = ({
         }
     };
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
+    // Stage the current form item into the batch list
+    const handleStageCurrentItem = () => {
         if (!itemLabel.trim()) {
-            toast.error('Please enter or select a component / finding name.');
+            toast.error('Please enter a finding name or select a suggestion first.');
+            return false;
+        }
+
+        const newItem: DraftFindingItem = {
+            id: `draft_${crypto.randomUUID()}`,
+            category,
+            severity,
+            itemLabel: itemLabel.trim(),
+            notes: notes.trim(),
+            suggestedHours,
+            suggestedParts: suggestedParts.trim(),
+            photos
+        };
+
+        setStagedFindings(prev => [...prev, newItem]);
+
+        // Reset form for next item
+        setCategory('Leaks & Fluids');
+        setSeverity('attention');
+        setItemLabel('Coolant Leak from Radiator / Hose Junction');
+        setNotes('');
+        setSuggestedHours('');
+        setSuggestedParts('');
+        setPhotos([]);
+        toast.info(`Item staged (${newItem.category}: ${newItem.itemLabel})`);
+        return true;
+    };
+
+    const handleRemoveStagedItem = (id: string) => {
+        setStagedFindings(prev => prev.filter(item => item.id !== id));
+    };
+
+    const handleSubmitAll = async (e: React.FormEvent) => {
+        e.preventDefault();
+
+        // If current form has an item filled, automatically stage it
+        let itemsToSubmit = [...stagedFindings];
+        if (itemLabel.trim()) {
+            itemsToSubmit.push({
+                id: `draft_${crypto.randomUUID()}`,
+                category,
+                severity,
+                itemLabel: itemLabel.trim(),
+                notes: notes.trim(),
+                suggestedHours,
+                suggestedParts: suggestedParts.trim(),
+                photos
+            });
+        }
+
+        if (itemsToSubmit.length === 0) {
+            toast.error('Please enter at least one finding before submitting.');
             return;
         }
 
         setIsSubmitting(true);
         try {
-            // 1. Save all captured photos to IndexedDB and Firebase Storage
-            const savedPhotosMeta: { id: string; name?: string; uploadedAt: string }[] = [];
-            for (const photo of photos) {
-                await saveFile(photo.id, photo.file);
-                savedPhotosMeta.push({
-                    id: photo.id,
-                    name: photo.name,
-                    uploadedAt: new Date().toISOString()
+            const finalFindings: InspectionFinding[] = [];
+
+            for (const item of itemsToSubmit) {
+                // 1. Upload photos
+                const savedPhotosMeta: { id: string; name?: string; uploadedAt: string }[] = [];
+                for (const photo of item.photos) {
+                    await saveFile(photo.id, photo.file);
+                    savedPhotosMeta.push({
+                        id: photo.id,
+                        name: photo.name,
+                        uploadedAt: new Date().toISOString()
+                    });
+                }
+
+                // 2. Create InspectionFinding
+                finalFindings.push({
+                    id: `finding_${crypto.randomUUID()}`,
+                    jobId: job.id,
+                    category: item.category,
+                    itemLabel: item.itemLabel,
+                    severity: item.severity,
+                    notes: item.notes,
+                    photos: savedPhotosMeta,
+                    suggestedLabourHours: item.suggestedHours !== '' ? Number(item.suggestedHours) : undefined,
+                    suggestedParts: item.suggestedParts || undefined,
+                    status: 'Pending Review',
+                    createdAt: new Date().toISOString(),
+                    createdByUserId: currentUser?.id || 'unknown_technician',
+                    createdByName: currentUser?.name || 'Technician'
                 });
             }
 
-            // 2. Create structured InspectionFinding
-            const newFinding: InspectionFinding = {
-                id: `finding_${crypto.randomUUID()}`,
-                jobId: job.id,
-                category,
-                itemLabel: itemLabel.trim(),
-                severity,
-                notes: notes.trim(),
-                photos: savedPhotosMeta,
-                suggestedLabourHours: suggestedHours !== '' ? Number(suggestedHours) : undefined,
-                suggestedParts: suggestedParts.trim() || undefined,
-                status: 'Pending Review',
-                createdAt: new Date().toISOString(),
-                createdByUserId: currentUser?.id || 'unknown_technician',
-                createdByName: currentUser?.name || 'Technician'
-            };
-
-            // 3. Automatically sync directly into job.inspectionChecklist and job.technicianObservations
-            const updatedJob = syncFindingToJob(job, newFinding);
+            // 3. Automatically sync all findings into job.inspectionChecklist and job.technicianObservations
+            const updatedJob = syncFindingsToJob(job, finalFindings);
 
             // 4. Commit updated job to database
             await onSaveJob(updatedJob);
 
-            toast.success('🚨 Ramp finding sent to Service Desk & synced to Inspection Sheet!');
+            toast.success(`🚨 ${finalFindings.length} Ramp finding(s) sent to Service Desk & synced to Inspection Sheet!`);
             onClose();
         } catch (error) {
-            console.error('Failed to submit inspection finding:', error);
-            toast.error('Failed to save inspection finding.');
+            console.error('Failed to submit inspection findings:', error);
+            toast.error('Failed to save inspection findings.');
         } finally {
             setIsSubmitting(false);
         }
     };
+
+    const totalItemCount = stagedFindings.length + (itemLabel.trim() ? 1 : 0);
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto">
@@ -163,10 +238,10 @@ export const FastTrackFindingModal: React.FC<FastTrackFindingModalProps> = ({
                         <div>
                             <div className="flex items-center gap-2">
                                 <h3 className="text-base sm:text-lg font-black uppercase tracking-tight text-white">
-                                    Ramp Inspection Finding
+                                    Ramp Inspection Findings
                                 </h3>
                                 <span className="bg-rose-500/30 text-rose-200 border border-rose-400/30 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">
-                                    On-Lift Alert
+                                    Multi-Select Alert
                                 </span>
                             </div>
                             <p className="text-xs text-slate-300 flex items-center gap-2">
@@ -184,9 +259,59 @@ export const FastTrackFindingModal: React.FC<FastTrackFindingModalProps> = ({
                     </button>
                 </div>
 
-                {/* Main Scrollable Form */}
-                <form onSubmit={handleSubmit} className="p-5 overflow-y-auto space-y-4 text-slate-800 flex-1">
+                {/* Staged Items Banner (if any) */}
+                {stagedFindings.length > 0 && (
+                    <div className="bg-slate-100 px-5 py-2.5 border-b border-slate-200 flex flex-col gap-1.5 shrink-0">
+                        <div className="flex items-center justify-between text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                            <span className="flex items-center gap-1.5 text-indigo-700">
+                                <Layers size={13} />
+                                Staged Findings in this Batch ({stagedFindings.length})
+                            </span>
+                            <span className="text-slate-500 text-[10px]">Will be submitted together</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                            {stagedFindings.map((item, idx) => (
+                                <div 
+                                    key={item.id}
+                                    className={`text-xs px-2.5 py-1 rounded-lg border flex items-center gap-2 shadow-2xs ${
+                                        item.severity === 'urgent'
+                                            ? 'bg-rose-50 border-rose-300 text-rose-900'
+                                            : 'bg-amber-50 border-amber-300 text-amber-900'
+                                    }`}
+                                >
+                                    <span>{item.severity === 'urgent' ? '🔴' : '🟡'}</span>
+                                    <span className="font-bold">{item.category}:</span>
+                                    <span className="truncate max-w-[140px]">{item.itemLabel}</span>
+                                    {item.photos.length > 0 && (
+                                        <span className="text-[10px] text-slate-500">📸{item.photos.length}</span>
+                                    )}
+                                    <button 
+                                        type="button" 
+                                        onClick={() => handleRemoveStagedItem(item.id)}
+                                        className="text-slate-400 hover:text-rose-600 p-0.5 rounded cursor-pointer"
+                                        title="Remove from batch"
+                                    >
+                                        <X size={13} />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Main Scrollable Form for Current Item */}
+                <form onSubmit={handleSubmitAll} className="p-5 overflow-y-auto space-y-4 text-slate-800 flex-1">
                     
+                    {/* Item Progress Bar */}
+                    <div className="flex items-center justify-between border-b pb-2">
+                        <span className="text-xs font-bold uppercase tracking-wider text-slate-600">
+                            {stagedFindings.length > 0 ? `Item #${stagedFindings.length + 1} Details` : 'Item Details'}
+                        </span>
+                        <span className="text-xs font-semibold text-indigo-600">
+                            Add multiple items before submitting
+                        </span>
+                    </div>
+
                     {/* Urgency / Severity Traffic Lights */}
                     <div>
                         <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
@@ -321,10 +446,10 @@ export const FastTrackFindingModal: React.FC<FastTrackFindingModalProps> = ({
                             />
                         </div>
                         <textarea
-                            rows={3}
+                            rows={2}
                             value={notes}
                             onChange={(e) => setNotes(e.target.value)}
-                            placeholder="Enter exact measurements or observations (e.g. Disc measured 30.1mm, min 30.5mm. Pads worn to 1.5mm. Heavy lip on outer edge)."
+                            placeholder="Enter measurements or observations (e.g. Discs measured 30.1mm, min 30.5mm. Heavy outer lip)."
                             className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs sm:text-sm text-slate-800 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none leading-relaxed"
                         />
                     </div>
@@ -394,7 +519,7 @@ export const FastTrackFindingModal: React.FC<FastTrackFindingModalProps> = ({
                             </div>
                         ) : (
                             <p className="text-xs text-slate-400 italic text-center py-2">
-                                No photos attached. Tap &quot;Snap Photo&quot; to take photos of the problem at the lift.
+                                No photos attached for this item.
                             </p>
                         )}
                     </div>
@@ -425,22 +550,26 @@ export const FastTrackFindingModal: React.FC<FastTrackFindingModalProps> = ({
                                 type="text" 
                                 value={suggestedParts}
                                 onChange={(e) => setSuggestedParts(e.target.value)}
-                                placeholder="e.g. Front discs (pair) + pad set + sensor"
+                                placeholder="e.g. Front discs + pad set"
                                 className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold"
                             />
                         </div>
                     </div>
 
-                    {/* Automatic Synchronization Notice */}
-                    <div className="p-3 bg-indigo-50/70 border border-indigo-200 rounded-xl text-xs text-indigo-900 flex items-start gap-2">
-                        <Sparkles size={16} className="text-indigo-600 shrink-0 mt-0.5" />
-                        <div className="leading-relaxed">
-                            <span className="font-bold">Auto-Sync Enabled:</span> Submitting this alert will automatically record the finding in the vehicle&apos;s <strong>Inspection Sheet Checklist</strong> and append it to <strong>Technician Observations</strong>, alerting the Service Desk in real time.
-                        </div>
+                    {/* Button to Stage Another Item */}
+                    <div className="pt-2 flex justify-center">
+                        <button
+                            type="button"
+                            onClick={handleStageCurrentItem}
+                            className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold flex items-center gap-2 transition cursor-pointer shadow-2xs active:scale-95"
+                        >
+                            <Plus size={15} />
+                            <span>+ Stage Item & Add Another Finding</span>
+                        </button>
                     </div>
 
                     {/* Action Buttons */}
-                    <div className="pt-2 border-t border-slate-100 flex items-center justify-end gap-2.5">
+                    <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2.5">
                         <button
                             type="button"
                             onClick={onClose}
@@ -451,18 +580,18 @@ export const FastTrackFindingModal: React.FC<FastTrackFindingModalProps> = ({
                         </button>
                         <button
                             type="submit"
-                            disabled={isSubmitting}
-                            className="px-5 py-2.5 text-xs sm:text-sm font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-xl shadow-lg transition flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                            disabled={isSubmitting || totalItemCount === 0}
+                            className="px-5 py-2.5 text-xs sm:text-sm font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-xl shadow-lg transition flex items-center gap-2 cursor-pointer disabled:opacity-50 active:scale-95"
                         >
                             {isSubmitting ? (
                                 <>
                                     <Loader2 size={16} className="animate-spin" />
-                                    <span>Syncing & Alerting Service Desk...</span>
+                                    <span>Syncing {totalItemCount} Finding(s)...</span>
                                 </>
                             ) : (
                                 <>
                                     <Send size={15} />
-                                    <span>Submit Alert to Service Desk</span>
+                                    <span>Submit {totalItemCount > 1 ? `All (${totalItemCount} Findings)` : 'Alert'} to Service Desk</span>
                                 </>
                             )}
                         </button>

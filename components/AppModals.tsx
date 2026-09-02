@@ -474,6 +474,45 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                                 }
                             });
                         }}
+                        onRaiseEstimateFromAllFindings={(findings, job) => {
+                            const lineItems: any[] = [];
+                            findings.forEach((f, idx) => {
+                                lineItems.push({
+                                    id: `item_labour_${Date.now()}_${idx}`,
+                                    description: `${f.category}: ${f.itemLabel} - ${f.notes || ''}`,
+                                    quantity: f.suggestedLabourHours || 1,
+                                    unitPrice: 85,
+                                    isLabor: true,
+                                    partNumber: 'LABOUR'
+                                });
+                                if (f.suggestedParts) {
+                                    lineItems.push({
+                                        id: `item_part_${Date.now()}_${idx}`,
+                                        description: `${f.category} Parts: ${f.suggestedParts}`,
+                                        quantity: 1,
+                                        unitPrice: 0,
+                                        isLabor: false,
+                                        partNumber: 'PARTS'
+                                    });
+                                }
+                            });
+
+                            const summary = findings.map(f => `${f.category} (${f.severity === 'urgent' ? '🔴' : '🟡'})`).join(', ');
+
+                            setters.setEstimateFormModal({
+                                isOpen: true,
+                                estimate: {
+                                    jobId: job.id,
+                                    customerId: job.customerId,
+                                    vehicleId: job.vehicleId,
+                                    entityId: job.entityId,
+                                    status: 'Draft',
+                                    description: `Lift Inspection Findings: ${summary}`,
+                                    notes: `Urgent safety & maintenance items identified during vehicle lift inspection:\n${findings.map(f => `• [${f.severity.toUpperCase()}] ${f.category} - ${f.itemLabel}: ${f.notes || ''}`).join('\n')}`,
+                                    lineItems
+                                }
+                            });
+                        }}
                     />
                 </ModalSuspense>
             )}

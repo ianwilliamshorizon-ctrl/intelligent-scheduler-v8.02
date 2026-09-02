@@ -167,3 +167,16 @@ export const syncFindingToJob = (job: Job, finding: InspectionFinding): Job => {
         technicianObservations: updatedObservations
     };
 };
+
+/**
+ * Synchronizes multiple inspection findings in batch to the job's
+ * inspectionChecklist and technicianObservations.
+ */
+export const syncFindingsToJob = (job: Job, findings: InspectionFinding[]): Job => {
+    let currentJob = job;
+    for (const finding of findings) {
+        currentJob = syncFindingToJob(currentJob, finding);
+    }
+    return currentJob;
+};
+

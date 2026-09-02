@@ -60,6 +60,7 @@ interface EditJobModalProps {
     initialTab?: string;
     onGenerateInvoice?: (jobId: string) => void;
     onRaiseEstimateForFinding?: (finding: T.InspectionFinding, job: T.Job) => void;
+    onRaiseEstimateFromAllFindings?: (findings: T.InspectionFinding[], job: T.Job) => void;
 }
 
 const EditJobModal: React.FC<EditJobModalProps> = ({ 
@@ -67,7 +68,7 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
     onRaiseSupplementaryEstimate, onViewEstimate, onViewCustomer, onViewVehicle,
     onCheckIn, onCheckOut, onDelete, generatePurchaseOrderId, onOpenPurchaseOrder,
     rentalBookings, onOpenRentalBooking, onOpenConditionReport, forceRefresh,
-    initialTab, onGenerateInvoice, onRaiseEstimateForFinding
+    initialTab, onGenerateInvoice, onRaiseEstimateForFinding, onRaiseEstimateFromAllFindings
 }) => {
     
     const data = useData();
@@ -1654,6 +1655,7 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
                         await handleSaveItem(setJobs, updatedJob, 'brooks_jobs');
                     }}
                     onCreateEstimateFromFinding={onRaiseEstimateForFinding}
+                    onCreateEstimateFromAllFindings={onRaiseEstimateFromAllFindings}
                 />
             )}
         </div>
