@@ -1,11 +1,30 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { Invoice, Customer, Vehicle, BusinessEntity, Job, TaxRate, EstimateLineItem, ChecklistSection, ServicePackage, InspectionTemplate, InspectionDiagram, DocumentLayoutSettings, PrintOptions } from '../types';
+import { 
+    Invoice, 
+    Customer, 
+    Vehicle, 
+    BusinessEntity, 
+    Job, 
+    TaxRate, 
+    EstimateLineItem, 
+    ChecklistSection, 
+    ServicePackage, 
+    InspectionTemplate, 
+    InspectionDiagram, 
+    PrintOptions,
+    DocumentBlockConfig
+} from '../types';
 import { formatCurrency } from '../core/utils/formatUtils';
 import InspectionChecklist from './InspectionChecklist';
 import VehicleDamageReport from './VehicleDamageReport';
 import TyreCheck from './TyreCheck';
 import { getImage } from '../utils/imageStore';
 import { useData } from '../core/state/DataContext';
+import { 
+    COLOR_PALETTES, 
+    DEFAULT_INVOICE_BLOCKS, 
+    getContainerStyleClasses 
+} from '../core/utils/documentTemplateDefaults';
 
 interface PrintableInvoiceProps {
     invoice: Invoice;
@@ -20,7 +39,18 @@ interface PrintableInvoiceProps {
     printOptions?: PrintOptions;
 }
 
-const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, customer, vehicle, entity, job, taxRates, servicePackages, inspectionTemplates, inspectionDiagrams, printOptions = { showInvoice: true, showTechNotes: true, showInspections: true, showMedia: true } }) => {
+const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ 
+    invoice, 
+    customer, 
+    vehicle, 
+    entity, 
+    job, 
+    taxRates = [], 
+    servicePackages = [], 
+    inspectionTemplates = [], 
+    inspectionDiagrams = [], 
+    printOptions = { showInvoice: true, showTechNotes: true, showInspections: true, showMedia: true } 
+}) => {
     const data = useData();
     const resolvedEntity = useMemo(() => {
         if (entity) return entity;
@@ -54,7 +84,6 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, customer, 
 
     useEffect(() => {
         const loadLogo = async () => {
-            // Check for temp preview URL from the designer first
             const anyEntity = resolvedEntity as any;
             if (anyEntity?.tempLogoUrl) {
                 setLogoUrl(anyEntity.tempLogoUrl);
@@ -71,7 +100,7 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, customer, 
             if (resolvedEntity?.logoUrl) {
                 setLogoUrl(resolvedEntity.logoUrl);
             } else {
-                setLogoUrl('/logo.png'); // Global system fallback
+                setLogoUrl(null);
             }
         };
         loadLogo();
@@ -82,16 +111,28 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, customer, 
         return inspectionTemplates.find(t => t.id === job.inspectionTemplateId);
     }, [job?.inspectionTemplateId, inspectionTemplates]);
 
+    // Financial Calculation
     const totals = useMemo(() => {
-        if (!invoice) return { subtotal: 0, grandTotal: 0, vatBreakdown: [] };
+        if (!invoice) return { labourSubtotal: 0, partsSubtotal: 0, netSubtotal: 0, vatTotal: 0, grandTotal: 0, vatBreakdown: [] };
         const safeTaxRates = Array.isArray(taxRates) ? taxRates : [];
         const taxRatesMap = new Map(safeTaxRates.map(t => [t.id, t]));
         const vatBreakdown: { [key: string]: { net: number; vat: number; rate: number | string; name: string; } } = {};
-        let subtotal = 0;
+        
+        let labourSubtotal = 0;
+        let partsSubtotal = 0;
+        let netSubtotal = 0;
+
         (invoice.lineItems || []).forEach(item => {
             if (item.isPackageComponent) return;
-            const itemNet = (item.quantity || 0) * (item.unitPrice || 0);
-            subtotal += itemNet;
+            const itemNet = (item.quantity || 1) * (item.unitPrice || 0);
+            netSubtotal += itemNet;
+
+            if (item.isLabor || item.type === 'labor' || item.partNumber === 'LABOUR' || item.partNumber === 'MOT') {
+                labourSubtotal += itemNet;
+            } else {
+                partsSubtotal += itemNet;
+            }
+
             const taxCodeId = item.taxCodeId;
             if (!taxCodeId) return;
             const taxRate = taxRatesMap.get(taxCodeId);
@@ -106,9 +147,18 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, customer, 
                 vatBreakdown[taxCodeId].vat += itemNet * (taxRate.rate / 100);
             }
         });
+
         const finalVatBreakdown = Object.values(vatBreakdown).filter(b => b.net > 0 || b.vat > 0);
-        const totalVat = finalVatBreakdown.reduce((sum, b) => sum + b.vat, 0);
-        return { subtotal, grandTotal: subtotal + totalVat, vatBreakdown: finalVatBreakdown };
+        const vatTotal = finalVatBreakdown.reduce((sum, b) => sum + b.vat, 0);
+
+        return {
+            labourSubtotal,
+            partsSubtotal,
+            netSubtotal,
+            vatTotal,
+            grandTotal: netSubtotal + vatTotal,
+            vatBreakdown: finalVatBreakdown
+        };
     }, [invoice, taxRates]);
 
     const groupedItems = useMemo(() => {
@@ -118,6 +168,7 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, customer, 
         const allItems = invoice?.lineItems || [];
         const topLevelItems = allItems.filter(i => !i.isPackageComponent);
         const allChildren = allItems.filter(i => i.isPackageComponent);
+
         topLevelItems.forEach(item => {
             if (item.servicePackageId) {
                 packages.push({ header: item, children: allChildren.filter(c => c.servicePackageId === item.servicePackageId) });
@@ -130,230 +181,40 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, customer, 
         return { labor, parts: partsItems, packages };
     }, [invoice?.lineItems]);
 
-    const inspectionPages = useMemo(() => {
-        if (!job?.inspectionChecklist) return [];
-        const templateSections = inspectionTemplate?.sections || [];
-        const pages: { sections: ChecklistSection[] }[] = [];
-        let currentPage: { sections: ChecklistSection[] } = { sections: [] };
-        job.inspectionChecklist.forEach(section => {
-            const templateSection = templateSections.find(t => t.id === section.id);
-            if (templateSection?.pageBreakBefore && currentPage.sections.length > 0) {
-                pages.push(currentPage);
-                currentPage = { sections: [section] };
-            } else {
-                currentPage.sections.push(section);
-            }
-        });
-        if (currentPage.sections.length > 0) pages.push(currentPage);
-        return pages;
-    }, [job?.inspectionChecklist, inspectionTemplate]);
+    // Active Layout Configuration
+    const layoutConfig = resolvedEntity?.invoiceLayout;
+    const blocks: DocumentBlockConfig[] = useMemo(() => {
+        if (layoutConfig?.blocks && Array.isArray(layoutConfig.blocks) && layoutConfig.blocks.length > 0) {
+            return [...layoutConfig.blocks].sort((a, b) => (a.order || 0) - (b.order || 0));
+        }
+        return DEFAULT_INVOICE_BLOCKS;
+    }, [layoutConfig]);
 
-    const hasTechnicianNotes = job && Array.isArray(job.technicianObservations) && job.technicianObservations.length > 0;
+    const accentColor = layoutConfig?.accentColor || resolvedEntity?.color || '#4f46e5';
 
-    // Improved checks for sub-reports
-    const hasTyreData = useMemo(() => {
-        if (!job?.tyreCheck) return false;
-        return Object.values(job.tyreCheck).some(t => t && (t.indicator !== 'na' || t.pressure || t.comments || t.outer || t.middle || t.inner));
-    }, [job?.tyreCheck]);
-
-    const hasDamageReport = useMemo(() => {
-        return job && Array.isArray(job.damagePoints) && job.damagePoints.length > 0;
-    }, [job?.damagePoints]);
-
-    // --- Styling Consts (EXACTLY AS ESTIMATE) ---
-    const pageStyle = {
+    const pageStyle: React.CSSProperties = {
         width: '210mm',
-        boxSizing: 'border-box' as const,
-        backgroundColor: '#ffffff !important',
-        margin: '0 auto',
-        display: 'block' as const,
-        color: '#000000 !important'
+        minHeight: '297mm',
+        padding: '16mm',
+        boxSizing: 'border-box',
+        display: 'flex',
+        flexDirection: 'column',
+        backgroundColor: '#ffffff'
     };
 
-    const renderLine = (item: EstimateLineItem, isChild = false) => {
-        const net = (item.quantity || 0) * (item.unitPrice || 0);
-        const isPackage = item.servicePackageId && !item.isPackageComponent;
-
-        const rowStyle: React.CSSProperties = {
-            borderBottom: '1px solid #f1f5f9',
-            backgroundColor: isPackage ? '#f1f5f9' : (isChild ? '#fafafa' : 'transparent'),
-            breakInside: 'avoid'
-        };
-
-        return (
-            <tr key={item.id} style={rowStyle}>
-                <td style={{ padding: isPackage ? '12px 10px' : '10px 10px', fontSize: isChild ? '11px' : '12px' }}>
-                    <div style={{ fontWeight: isPackage ? '800' : '500', color: isPackage ? '#000' : '#334155' }}>
-                        {isChild ? <span style={{ color: '#ccc', marginRight: '8px' }}>—</span> : null}
-                        {item.description}
-                        {item.partNumber && item.partNumber.toUpperCase().trim() !== 'LABOUR' && item.partNumber.toUpperCase().trim() !== 'MOT' && (
-                            <span style={{ marginLeft: '8px', fontSize: '9px', color: '#94a3b8', fontFamily: 'monospace', textTransform: 'uppercase' }}>
-                                [{item.partNumber}]
-                            </span>
-                        )}
-                    </div>
-                </td>
-                <td style={{ padding: '10px 4px', textAlign: 'center', fontSize: '11px', color: '#64748b' }}>{item.quantity}</td>
-                <td style={{ padding: '10px 4px', textAlign: 'right', fontSize: '11px', color: '#64748b' }}>{formatCurrency(item.unitPrice)}</td>
-                <td style={{ padding: '10px 4px', textAlign: 'right', fontWeight: '700', fontSize: '12px', color: '#000' }}>{formatCurrency(net)}</td>
-            </tr>
-        );
-    };
-
-    const renderSectionHeader = (title: string) => (
-        <tr style={{ backgroundColor: '#f9fafb' }}>
-            <td colSpan={4} style={{ padding: '8px 10px', borderBottom: '2px solid #e2e8f0' }}>
-                <span style={{ fontSize: '10px', fontWeight: '900', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{title}</span>
-            </td>
-        </tr>
-    );
-
-    const renderLogo = (layout: DocumentLayoutSettings, alignment: 'left' | 'right' | 'center') => (
-        <div style={{ display: 'flex', justifyContent: alignment === 'right' ? 'flex-end' : (alignment === 'center' ? 'center' : 'flex-start'), marginBottom: '10px' }}>
-            {logoUrl ? (
-                <img src={logoUrl} alt="Logo" style={{ maxHeight: `${layout.logoHeight || 120}px`, maxWidth: '280px', width: 'auto', display: 'block' }} />
-            ) : (
-                <div style={{ textAlign: alignment }}>
-                    <div style={{ fontSize: '24px', fontWeight: '900', color: '#000' }}>{resolvedEntity?.name || 'BROOKSPEED'}</div>
-                    <div style={{ fontSize: '10px', color: '#64748b', marginTop: '4px' }}>Automotive Excellence</div>
-                </div>
-            )}
-        </div>
-    );
-
-    const renderBranding = (alignment: 'left' | 'right' | 'center') => (
-        <div style={{ textAlign: alignment, marginBottom: '10px' }}>
-            <div style={{ fontSize: '18px', fontWeight: '900', color: '#000', marginBottom: '8px' }}>{resolvedEntity?.name || 'BROOKSPEED'}</div>
-            <div style={{ fontSize: '10px', color: '#000', fontWeight: '500', lineHeight: '1.4' }}>
-                <p>{resolvedEntity?.addressLine1}, {resolvedEntity?.city}, {resolvedEntity?.postcode}</p>
-                <div style={{ marginTop: '5px', display: 'flex', gap: '15px', justifyContent: alignment === 'right' ? 'flex-end' : (alignment === 'center' ? 'center' : 'flex-start') }}>
-                    {resolvedEntity?.vatNumber && <p>VAT: {resolvedEntity.vatNumber}</p>}
-                    {resolvedEntity?.email && <p>{resolvedEntity.email}</p>}
-                </div>
-            </div>
-        </div>
-    );
-
-    const renderDetailsBlock = (alignment: 'left' | 'right' | 'center') => (
-        <div style={{ 
-            textAlign: alignment,
-            marginTop: '12px', 
-            paddingLeft: alignment === 'left' ? '12px' : '0',
-            paddingRight: alignment === 'right' ? '12px' : '0',
-            marginBottom: '10px'
-        }}>
-            <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#000' }}>Invoice: #{invoice?.id}</div>
-            <div style={{ fontSize: '12px', color: '#444' }}>Date: {invoice?.issueDate}</div>
-        </div>
-    );
-
-    const renderVehicleBlock = (alignment: 'left' | 'right' | 'center') => {
-        if (!vehicle) return null;
-        return (
-            <div style={{ 
-                textAlign: alignment,
-                marginTop: '12px', 
-                paddingLeft: alignment === 'left' ? '12px' : '0',
-                paddingRight: alignment === 'right' ? '12px' : '0',
-                marginBottom: '10px'
-            }}>
-                <h3 style={{ fontSize: '8px', fontWeight: 'bold', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '4px' }}>Vehicle</h3>
-                <p style={{ display: 'inline-block', fontSize: '14px', fontWeight: '900', backgroundColor: '#FFD700', color: '#000', padding: '1px 6px', borderRadius: '3px', border: '1px solid rgba(0,0,0,0.1)' }}>{vehicle?.registration}</p>
-                <p style={{ fontSize: '10px', fontWeight: 'bold', color: '#64748b', marginTop: '2px' }}>
-                    {vehicle?.make} {vehicle?.model}
-                    {job?.mileage ? ` | ${job.mileage.toLocaleString()} miles` : ''}
-                </p>
-            </div>
-        );
-    };
-
-    const renderCustomerBlock = (alignment: 'left' | 'right' | 'center') => (
-        <div style={{ 
-            textAlign: alignment,
-            marginTop: '12px', 
-            paddingLeft: alignment === 'left' ? '12px' : '0',
-            paddingRight: alignment === 'right' ? '12px' : '0',
-            marginBottom: '10px'
-        }}>
-            <h3 style={{ fontSize: '8px', fontWeight: 'bold', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '4px' }}>Customer</h3>
-            <p style={{ fontSize: '14px', fontWeight: 'bold', color: '#000' }}>{customer?.forename} {customer?.surname}</p>
-            <p style={{ fontSize: '11px', color: '#64748b' }}>
-                {[customer?.addressLine1, customer?.addressLine2, customer?.city, customer?.county, customer?.postcode].filter(Boolean).join(', ')}
-            </p>
-        </div>
-    );
-
-    const renderHeader = () => {
-        const layout = resolvedEntity?.layoutSettings || {};
-        const logoPos = layout.logoPosition || 'center';
-        const brandingPos = layout.brandingPosition || 'left';
-        const detailsPos = layout.detailsPosition || 'right';
-        const vehiclePos = layout.vehiclePosition || 'left';
-        const customerPos = layout.customerPosition || 'none';
-
-        const renderSlot = (pos: 'left' | 'right' | 'center') => (
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: pos === 'right' ? 'flex-end' : (pos === 'center' ? 'center' : 'flex-start') }}>
-                {logoPos === pos && renderLogo(layout, pos)}
-                {brandingPos === pos && renderBranding(pos)}
-                {vehiclePos === pos && renderVehicleBlock(pos)}
-                {customerPos === pos && renderCustomerBlock(pos)}
-                {detailsPos === pos && renderDetailsBlock(pos)}
-            </div>
-        );
-
-        return (
-            <thead>
-                <tr>
-                    <td>
-                        <div style={{ height: '10mm' }}></div>
-                        <div style={{ margin: '0 15mm 20px 15mm', paddingBottom: '20px', borderBottom: '2px solid #000' }}>
-                            <div style={{ 
-                                display: 'flex', 
-                                justifyContent: 'space-between', 
-                                alignItems: 'flex-start', 
-                                gap: '20px'
-                            }}>
-                                {renderSlot('left')}
-                                {renderSlot('center')}
-                                {renderSlot('right')}
-                            </div>
-                        </div>
-                    </td>
-                </tr>
-            </thead>
-        );
-    };
-
-    const renderFooter = () => (
-        <tfoot>
-            <tr>
-                <td>
-                    <div style={{ height: '10mm' }}></div>
-                    <footer style={{ margin: '0 15mm 10mm 15mm', paddingBottom: '10mm' }}>
-                        <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '9px', color: '#94a3b8' }}>
-                            <div style={{ fontStyle: 'italic' }}>
-                                <p>Thank you for choosing {resolvedEntity?.name}. Business Registered: {resolvedEntity?.name} - {resolvedEntity?.vatNumber}</p>
-                            </div>
-                            <div style={{ fontStyle: 'normal', fontWeight: 'bold' }}>
-                                Page <span className="page-counter"></span>
-                            </div>
-                        </div>
-                    </footer>
-                </td>
-            </tr>
-        </tfoot>
-    );
+    const hasTyreData = Boolean(job?.tyreCheck && Object.values(job.tyreCheck).some(t => t?.outer || t?.pressure));
+    const hasDamageReport = Boolean(job?.damagePoints && job.damagePoints.length > 0);
 
     return (
-        <div style={{ backgroundColor: '#ffffff', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
+        <div className="rebuild-print-container" style={{ backgroundColor: '#ffffff', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
             <style dangerouslySetInnerHTML={{
                 __html: `
                 @media print {
                     @page { 
                         size: A4 portrait;
-                        margin: 0mm; 
+                        margin: 0; 
                     }
-                    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; counter-reset: page; }
+                    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
                     body * { 
                         visibility: hidden; 
                     }
@@ -364,232 +225,413 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({ invoice, customer, 
                         position: absolute !important; 
                         left: 0 !important; 
                         top: 0 !important; 
-                        width: 210mm !important;
-                        padding: 0 !important;
-                        margin: 0 !important;
+                        width: 100% !important;
                     }
-                    
-                    thead { display: table-header-group; }
-                    tfoot { display: table-footer-group; }
-                    
-                    .page-counter:after {
-                        counter-increment: page;
-                        content: counter(page);
+                    .printable-page {
+                        page-break-after: always !important;
+                        break-after: page !important;
                     }
-                    
-                    /* Force fixed width of 210mm for print accuracy */
-                    .printable-page-wrapper { width: 210mm !important; }
                 }
-                * { -webkit-print-color-adjust: exact !important; color-adjust: exact !important; }
             ` }} />
 
-            <div className="rebuild-print-container" style={{ width: '100%', maxWidth: '210mm', margin: '0 auto', backgroundColor: '#ffffff', minHeight: '100%' }}>
-                {/* 1. Main Invoice Table */}
-                {printOptions.showInvoice && (
-                    <table className="printable-page-wrapper" style={{ width: '100%', borderCollapse: 'collapse' }}>
-                    {renderHeader()}
-                    <tbody>
-                        <tr>
-                            <td style={{ padding: '0 15mm' }}>
-                                <main style={{ paddingBottom: '30px' }}>
-                                    <div style={{ display: 'flex', gap: '40px', marginBottom: '30px', paddingBottom: '20px', borderBottom: '1px solid #f1f5f9' }}>
-                                        {(!resolvedEntity?.layoutSettings?.customerPosition || resolvedEntity.layoutSettings.customerPosition === 'none') && (
-                                            <div style={{ flex: 1 }}>
-                                                <h3 style={{ fontSize: '8px', fontWeight: 'bold', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '4px' }}>Customer</h3>
-                                                <p style={{ fontSize: '14px', fontWeight: 'bold', color: '#000' }}>{customer?.forename} {customer?.surname}</p>
-                                                <p style={{ fontSize: '11px', color: '#64748b' }}>
-                                                    {[customer?.addressLine1, customer?.addressLine2, customer?.city, customer?.county, customer?.postcode].filter(Boolean).join(', ')}
-                                                </p>
+            {/* Main Invoice Page dynamically built from configured blocks */}
+            <div className="bg-white font-sans text-xs text-slate-800 printable-page space-y-4" style={pageStyle}>
+                {blocks.filter(b => b.visible !== false).map((block) => {
+                    const cs = getContainerStyleClasses(
+                        block.settings?.style,
+                        block.settings?.containerColor,
+                        accentColor,
+                        block.settings?.textColor
+                    );
+
+                    return (
+                        <div key={block.id} className="transition-all">
+                            {/* Block 1: Header Logo */}
+                            {block.type === 'header_logo' && (
+                                <div className={`flex items-start justify-between pb-3 border-b border-slate-200 gap-4 ${
+                                    block.settings?.logoPosition === 'center' ? 'flex-col items-center text-center' :
+                                    block.settings?.logoPosition === 'left' ? 'flex-row-reverse' : 'flex-row'
+                                }`}>
+                                    <div className="space-y-1">
+                                        <h1 className="text-xl font-black text-slate-900 uppercase tracking-tight">
+                                            {resolvedEntity?.name || 'BROOKSPEED AUTOMOTIVE'}
+                                        </h1>
+                                        <div className="text-[11px] text-slate-600 space-y-0.5">
+                                            <div>{resolvedEntity?.addressLine1 || 'Unit 4, Speedwell Industrial Estate'}{resolvedEntity?.addressLine2 ? `, ${resolvedEntity.addressLine2}` : ''}</div>
+                                            <div>{resolvedEntity?.city || 'Eastleigh'}, {resolvedEntity?.postcode || 'SO53 4NF'}</div>
+                                            <div>
+                                                Tel: <span className="font-semibold">{resolvedEntity?.phone || '02380 641672'}</span> | Email: <span className="font-semibold">{resolvedEntity?.email || 'accounts@brookspeed.com'}</span>
+                                                {resolvedEntity?.vatNumber && <span> | VAT: <span className="font-semibold">{resolvedEntity.vatNumber}</span></span>}
+                                                {resolvedEntity?.companyNumber && <span> | Reg: <span className="font-semibold">{resolvedEntity.companyNumber}</span></span>}
                                             </div>
-                                        )}
-                                    </div>
-
-                                <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '30px' }}>
-                                    <thead style={{ backgroundColor: '#f9fafb', borderBottom: '2px solid #e5e7eb', borderTop: '2px solid #e5e7eb' }}>
-                                        <tr>
-                                            <th style={{ padding: '10px', textAlign: 'left', fontSize: '9px', fontWeight: 'bold', color: '#6b7280', textTransform: 'uppercase' }}>Description of Work</th>
-                                            <th style={{ padding: '10px', textAlign: 'center', fontSize: '9px', fontWeight: 'bold', color: '#6b7280', textTransform: 'uppercase', width: '60px' }}>Qty</th>
-                                            <th style={{ padding: '10px', textAlign: 'right', fontSize: '9px', fontWeight: 'bold', color: '#6b7280', textTransform: 'uppercase', width: '100px' }}>Unit</th>
-                                            <th style={{ padding: '10px', textAlign: 'right', fontSize: '9px', fontWeight: 'bold', color: '#6b7280', textTransform: 'uppercase', width: '100px' }}>Total</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {groupedItems.packages.map(pkg => (
-                                            <React.Fragment key={pkg.header.id}>
-                                                {renderSectionHeader(pkg.header.description)}
-                                                {renderLine(pkg.header)}
-                                                {pkg.children.map(child => renderLine(child, true))}
-                                            </React.Fragment>
-                                        ))}
-
-                                        {groupedItems.labor.length > 0 && (
-                                            <React.Fragment>
-                                                {renderSectionHeader("Labour")}
-                                                {groupedItems.labor.map(item => renderLine(item))}
-                                            </React.Fragment>
-                                        )}
-
-                                        {groupedItems.parts.length > 0 && (
-                                            <React.Fragment>
-                                                {renderSectionHeader("Parts & Materials")}
-                                                {groupedItems.parts.map(item => renderLine(item))}
-                                            </React.Fragment>
-                                        )}
-                                    </tbody>
-                                </table>
-
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: '20px', breakInside: 'avoid', pageBreakInside: 'avoid' }}>
-                                    <div style={{ flex: 1, paddingRight: '40px' }}>
-                                        {printOptions.invoiceNotes && (
-                                            <div style={{ backgroundColor: '#f9fafb', padding: '15px', borderRadius: '12px', border: '1px solid #f3f4f6' }}>
-                                                <h4 style={{ fontSize: '10px', fontWeight: 'bold', textTransform: 'uppercase', color: '#6b7280', marginBottom: '8px', marginTop: 0 }}>Notes</h4>
-                                                <p style={{ fontSize: '11px', color: '#374151', whiteSpace: 'pre-wrap', margin: 0 }}>{printOptions.invoiceNotes}</p>
-                                            </div>
-                                        )}
-                                    </div>
-                                    <div style={{ width: '288px', backgroundColor: '#f9fafb', padding: '20px', borderRadius: '12px', border: '1px solid #f3f4f6', breakInside: 'avoid', pageBreakInside: 'avoid', flexShrink: 0 }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#9ca3af', marginBottom: '8px' }}>
-                                            <span style={{ fontWeight: 'bold', textTransform: 'uppercase', fontSize: '9px' }}>Subtotal Net</span>
-                                            <span style={{ color: '#111827', fontWeight: 'bold' }}>{formatCurrency(totals.subtotal)}</span>
                                         </div>
-                                        {totals.vatBreakdown.map(b => (
-                                            <div key={b.name} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: '#9ca3af', marginBottom: '4px' }}>
-                                                <span>{b.name} ({b.rate}%)</span>
-                                                <span>{formatCurrency(b.vat)}</span>
+                                    </div>
+                                    {logoUrl && (
+                                        <img 
+                                            src={logoUrl} 
+                                            alt="Logo" 
+                                            style={{ height: `${block.settings?.logoHeight || 65}px` }} 
+                                            className="object-contain max-w-[200px]" 
+                                        />
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Block 2: Document Meta Details */}
+                            {block.type === 'document_meta' && (
+                                <div 
+                                    className={`${cs.wrapperClass} flex flex-wrap items-center justify-between gap-3`}
+                                    style={cs.wrapperStyle}
+                                >
+                                    <div>
+                                        <span 
+                                            className="text-[10px] font-black uppercase tracking-wider block"
+                                            style={cs.titleStyle}
+                                        >
+                                            {block.title || 'INVOICE NUMBER'}
+                                        </span>
+                                        <span 
+                                            className="text-lg font-black tracking-tight font-mono"
+                                            style={cs.textStyle}
+                                        >
+                                            {invoice.invoiceNumber || invoice.id}
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center gap-6 text-xs" style={cs.textStyle}>
+                                        <div>
+                                            <span className="text-[10px] block uppercase font-semibold" style={cs.subtextStyle}>Invoice Date</span>
+                                            <span className="font-bold" style={cs.textStyle}>
+                                                {invoice.issueDate ? new Date(invoice.issueDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                            </span>
+                                        </div>
+                                        {invoice.dueDate && (
+                                            <div>
+                                                <span className="text-[10px] block uppercase font-semibold" style={cs.subtextStyle}>Due Date</span>
+                                                <span className="font-bold" style={cs.textStyle}>
+                                                    {new Date(invoice.dueDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                                </span>
                                             </div>
-                                        ))}
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '20px', fontWeight: '900', color: '#000', marginTop: '15px', paddingTop: '15px', borderTop: '2px solid #e5e7eb' }}>
-                                            <span style={{ fontSize: '12px', textTransform: 'uppercase' }}>TOTAL</span>
-                                            <span>{formatCurrency(totals.grandTotal)}</span>
+                                        )}
+                                        <div>
+                                            <span className="text-[10px] block uppercase font-semibold" style={cs.subtextStyle}>Account Ref</span>
+                                            <span className="font-bold font-mono" style={cs.textStyle}>{customer?.id ? `ACC-${customer.id.slice(-6).toUpperCase()}` : 'CASH'}</span>
+                                        </div>
+                                        {invoice.poNumber && (
+                                            <div>
+                                                <span className="text-[10px] block uppercase font-semibold" style={cs.subtextStyle}>PO Ref</span>
+                                                <span className="font-bold font-mono" style={cs.textStyle}>{invoice.poNumber}</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Block 3: Customer Details */}
+                            {block.type === 'customer_details' && (
+                                <div className={cs.wrapperClass} style={cs.wrapperStyle}>
+                                    <div className={cs.headerClass} style={cs.headerStyle}>
+                                        <h4 className={cs.titleClass} style={cs.titleStyle}>
+                                            {block.title || 'Invoiced To'}
+                                        </h4>
+                                    </div>
+                                    <div className={cs.bodyClass}>
+                                        <div className="text-xs space-y-0.5" style={cs.textStyle}>
+                                            <div className="font-bold text-sm">{customer ? `${customer.forename || ''} ${customer.surname || ''}`.trim() : 'Customer Cash Sale'}</div>
+                                            {customer?.addressLine1 && <div>{customer.addressLine1}{customer.addressLine2 ? `, ${customer.addressLine2}` : ''}</div>}
+                                            {(customer?.city || customer?.postcode) && <div>{customer.city || ''} {customer.postcode ? <span className="font-semibold uppercase">{customer.postcode}</span> : ''}</div>}
+                                            <div style={cs.subtextStyle}>
+                                                Phone: <span className="font-semibold">{customer?.mobile || customer?.phone || '—'}</span>
+                                                {customer?.email && <span> | Email: <span className="font-semibold">{customer.email}</span></span>}
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
-                            </main>
-                        </td>
-                    </tr>
-                </tbody>
-                {renderFooter()}
-            </table>
-            )}
+                            )}
 
-            {/* 2. Technician Notes Table */}
-            {printOptions.showTechNotes && hasTechnicianNotes && (
-                <table className="printable-page-wrapper" style={{ width: '100%', borderCollapse: 'collapse', breakBefore: 'page' }}>
-                    {renderHeader()}
-                    <tbody>
-                        <tr>
-                            <td style={{ padding: '0 15mm' }}>
-                                <main style={{ paddingBottom: '30px' }}>
-                                    <div style={{ breakInside: 'avoid' }}>
-                                        <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '15px', borderBottom: '2px solid #000', paddingBottom: '8px' }}>Technician Observations</h3>
-                                        <div style={{ fontSize: '12px', lineHeight: '1.6', color: '#334155' }}>
-                                            {job.technicianObservations?.map((obs, i) => (
-                                                <div key={i} style={{ marginBottom: '10px', paddingLeft: '15px', position: 'relative' }}>
-                                                    <span style={{ position: 'absolute', left: 0, color: '#94a3b8' }}>•</span> {obs}
-                                                </div>
-                                            ))}
+                            {/* Block 4: Vehicle Details */}
+                            {block.type === 'vehicle_details' && (
+                                <div className={cs.wrapperClass} style={cs.wrapperStyle}>
+                                    <div className={cs.headerClass} style={cs.headerStyle}>
+                                        <h4 className={cs.titleClass} style={cs.titleStyle}>
+                                            {block.title || 'Vehicle Information'}
+                                        </h4>
+                                        <span className="inline-block bg-yellow-400 text-black font-mono font-black text-xs px-2.5 py-0.5 rounded border border-yellow-500 shadow-2xs tracking-wider uppercase">
+                                            {vehicle?.registration || 'NO REG'}
+                                        </span>
+                                    </div>
+                                    <div className={cs.bodyClass}>
+                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs" style={cs.textStyle}>
+                                            <div><span className="block text-[10px]" style={cs.subtextStyle}>Make & Model:</span><strong>{vehicle?.make} {vehicle?.model || 'Vehicle'}</strong></div>
+                                            <div><span className="block text-[10px]" style={cs.subtextStyle}>Year / Colour:</span><strong>{vehicle?.year || '—'} / {vehicle?.colour || '—'}</strong></div>
+                                            <div><span className="block text-[10px]" style={cs.subtextStyle}>Mileage Recorded:</span><strong>{vehicle?.mileage ? `${vehicle.mileage.toLocaleString()} mi` : (job?.mileageIn ? `${job.mileageIn} mi` : '—')}</strong></div>
+                                            <div><span className="block text-[10px]" style={cs.subtextStyle}>VIN / Chassis:</span><strong className="font-mono">{vehicle?.vin?.slice(-8) || vehicle?.vin || '—'}</strong></div>
                                         </div>
                                     </div>
-                                </main>
-                            </td>
-                        </tr>
-                    </tbody>
-                    {renderFooter()}
-                </table>
-            )}
+                                </div>
+                            )}
 
-            {/* 3. Inspection Report Tables */}
-            {printOptions.showInspections && inspectionPages.map((page, idx) => (
-                <table key={idx} className="printable-page-wrapper" style={{ width: '100%', borderCollapse: 'collapse', breakBefore: 'page' }}>
-                    {renderHeader()}
-                    <tbody>
-                        <tr>
-                            <td style={{ padding: '0 15mm' }}>
-                                <main style={{ paddingBottom: '30px' }}>
-                                    <div style={{ breakInside: 'avoid' }}>
-                                        <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '15px', borderBottom: '2px solid #000', paddingBottom: '8px' }}>Inspection Report</h3>
-                                        <InspectionChecklist checklistData={page.sections} onUpdate={() => { }} isReadOnly={true} />
+                            {/* Block 5: Narrative Description */}
+                            {block.type === 'narrative_description' && (
+                                <div className={cs.wrapperClass} style={cs.wrapperStyle}>
+                                    <div className={cs.headerClass} style={cs.headerStyle}>
+                                        <h4 className={cs.titleClass} style={cs.titleStyle}>
+                                            {block.title || 'Summary of Work Carried Out'}
+                                        </h4>
                                     </div>
-                                </main>
-                            </td>
-                        </tr>
-                    </tbody>
-                    {renderFooter()}
-                </table>
-            ))}
+                                    <div className={cs.bodyClass}>
+                                        <p className="text-xs leading-relaxed italic whitespace-pre-wrap" style={cs.textStyle}>
+                                            {invoice.notes || job?.description || block.settings?.customNarrativeText || "All requested workshop operations and scheduled maintenance carried out in full accordance with manufacturer specifications."}
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
 
-            {/* 4. Tyre Check Table */}
-            {printOptions.showInspections && hasTyreData && (
-                <table className="printable-page-wrapper" style={{ width: '100%', borderCollapse: 'collapse', breakBefore: 'page' }}>
-                    {renderHeader()}
-                    <tbody>
-                        <tr>
-                            <td style={{ padding: '0 15mm' }}>
-                                <main style={{ paddingBottom: '30px' }}>
-                                    <div style={{ breakInside: 'avoid' }}>
-                                        <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '15px', borderBottom: '2px solid #000', paddingBottom: '8px' }}>Tyre Safety Check</h3>
-                                        <TyreCheck tyreData={job.tyreCheck!} onUpdate={() => { }} isReadOnly={true} />
+                            {/* Block 6: Tasks & Labour Packages */}
+                            {block.type === 'tasks_packages' && (
+                                <div className={cs.wrapperClass} style={cs.wrapperStyle}>
+                                    <div className={cs.headerClass} style={cs.headerStyle}>
+                                        <div className={cs.titleClass} style={cs.titleStyle}>
+                                            {block.title || 'Labour & Services Completed'}
+                                        </div>
                                     </div>
-                                </main>
-                            </td>
-                        </tr>
-                    </tbody>
-                    {renderFooter()}
-                </table>
-            )}
+                                    <div className="p-0 overflow-x-auto">
+                                        <table className="w-full text-xs text-left" style={cs.textStyle}>
+                                            <thead className="bg-slate-50/60 border-b text-[10px] uppercase" style={cs.subtextStyle}>
+                                                <tr>
+                                                    <th className="p-2">Description</th>
+                                                    <th className="p-2 text-center">Hours</th>
+                                                    {block.settings?.showPrices !== false && <th className="p-2 text-right">Net Price</th>}
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100/60">
+                                                {groupedItems.labor.length > 0 || groupedItems.packages.length > 0 ? (
+                                                    <>
+                                                        {groupedItems.packages.map(pkg => (
+                                                            <tr key={pkg.header.id} className="bg-slate-50/40">
+                                                                <td className="p-2 font-bold">
+                                                                    <div>{pkg.header.description}</div>
+                                                                    <div className="text-[10px] font-normal pl-2 space-y-0.5 pt-0.5" style={cs.subtextStyle}>
+                                                                        {pkg.children.map(c => <div key={c.id}>• {c.description}</div>)}
+                                                                    </div>
+                                                                </td>
+                                                                <td className="p-2 text-center font-mono">1.00</td>
+                                                                {block.settings?.showPrices !== false && (
+                                                                    <td className="p-2 text-right font-semibold font-mono">£{((pkg.header.quantity || 1) * (pkg.header.unitPrice || 0)).toFixed(2)}</td>
+                                                                )}
+                                                            </tr>
+                                                        ))}
+                                                        {groupedItems.labor.map(item => (
+                                                            <tr key={item.id}>
+                                                                <td className="p-2 font-medium">{item.description}</td>
+                                                                <td className="p-2 text-center font-mono">{Number(item.quantity || 1).toFixed(2)}</td>
+                                                                {block.settings?.showPrices !== false && (
+                                                                    <td className="p-2 text-right font-semibold font-mono">£{((item.quantity || 1) * (item.unitPrice || 0)).toFixed(2)}</td>
+                                                                )}
+                                                            </tr>
+                                                        ))}
+                                                    </>
+                                                ) : (
+                                                    <tr>
+                                                        <td colSpan={3} className="p-3 text-center italic" style={cs.subtextStyle}>
+                                                            No discrete labour items recorded.
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            )}
 
-            {/* 5. Damage Report Table */}
-            {printOptions.showInspections && hasDamageReport && (
-                <table className="printable-page-wrapper" style={{ width: '100%', borderCollapse: 'collapse', breakBefore: 'page' }}>
-                    {renderHeader()}
-                    <tbody>
-                        <tr>
-                            <td style={{ padding: '0 15mm' }}>
-                                <main style={{ paddingBottom: '30px' }}>
-                                    <div style={{ breakInside: 'avoid' }}>
-                                        <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '15px', borderBottom: '2px solid #000', paddingBottom: '8px' }}>Vehicle Condition Report</h3>
-                                        <VehicleDamageReport 
-                                            activePoints={job.damagePoints || []} 
-                                            onUpdate={() => { }} 
-                                            isReadOnly={true} 
-                                            vehicleModel={vehicle?.model} 
-                                            vehicleColor={vehicle?.colour} 
-                                            imageId={vehicle?.inspectionDiagramId || vehicleImage?.id || matchedLibraryDiagram?.imageId || null} 
-                                            imageUrl={vehicleImage?.dataUrl || null} 
-                                        />
+                            {/* Block 7: Parts & Materials */}
+                            {block.type === 'parts_items' && (
+                                <div className={cs.wrapperClass} style={cs.wrapperStyle}>
+                                    <div className={cs.headerClass} style={cs.headerStyle}>
+                                        <div className={cs.titleClass} style={cs.titleStyle}>
+                                            {block.title || 'Parts & Consumables'}
+                                        </div>
                                     </div>
-                                </main>
-                            </td>
-                        </tr>
-                    </tbody>
-                    {renderFooter()}
-                </table>
-            )}
-            {/* 6. Media Gallery Table */}
-            {printOptions.showMedia && job?.checkInPhotos && job.checkInPhotos.length > 0 && (
-                <table className="printable-page-wrapper" style={{ width: '100%', borderCollapse: 'collapse', breakBefore: 'page' }}>
-                    {renderHeader()}
-                    <tbody>
-                        <tr>
-                            <td style={{ padding: '0 15mm' }}>
-                                <main style={{ paddingBottom: '30px' }}>
-                                    <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '15px', borderBottom: '2px solid #000', paddingBottom: '8px' }}>Media Gallery</h3>
-                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
-                                        {job.checkInPhotos.map((item, i) => (
-                                            <div key={i} style={{ border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden', breakInside: 'avoid' }}>
-                                                {item.dataUrl && <img src={item.dataUrl} alt={`Media ${i}`} style={{ width: '100%', height: '180px', objectFit: 'cover' }} />}
-                                                {item.notes && <p style={{ padding: '8px', fontSize: '10px', color: '#64748b', borderTop: '1px solid #e2e8f0' }}>{item.notes}</p>}
+                                    <div className="p-0 overflow-x-auto">
+                                        <table className="w-full text-xs text-left" style={cs.textStyle}>
+                                            <thead className="bg-slate-50/60 border-b text-[10px] uppercase" style={cs.subtextStyle}>
+                                                <tr>
+                                                    {block.settings?.showPartNumbers !== false && <th className="p-2">Part No.</th>}
+                                                    <th className="p-2">Description</th>
+                                                    <th className="p-2 text-center">Qty</th>
+                                                    {block.settings?.showPrices !== false && <th className="p-2 text-right">Unit Net</th>}
+                                                    {block.settings?.showPrices !== false && <th className="p-2 text-right">Total Net</th>}
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100/60">
+                                                {groupedItems.parts.length > 0 ? (
+                                                    groupedItems.parts.map(item => (
+                                                        <tr key={item.id}>
+                                                            {block.settings?.showPartNumbers !== false && (
+                                                                <td className="p-2 font-mono text-[10px]" style={cs.subtextStyle}>{item.partNumber || '—'}</td>
+                                                            )}
+                                                            <td className="p-2 font-medium">{item.description}</td>
+                                                            <td className="p-2 text-center">{item.quantity || 1}</td>
+                                                            {block.settings?.showPrices !== false && <td className="p-2 text-right font-mono">£{Number(item.unitPrice || 0).toFixed(2)}</td>}
+                                                            {block.settings?.showPrices !== false && <td className="p-2 text-right font-semibold font-mono">£{((item.quantity || 1) * (item.unitPrice || 0)).toFixed(2)}</td>}
+                                                        </tr>
+                                                    ))
+                                                ) : (
+                                                    <tr>
+                                                        <td colSpan={5} className="p-3 text-center italic" style={cs.subtextStyle}>
+                                                            No parts items included on invoice.
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Block 9: Financial Totals */}
+                            {block.type === 'financial_totals' && (
+                                <div className="flex justify-end pt-1">
+                                    <div className={`w-72 ${cs.wrapperClass} p-3.5 space-y-1.5 text-xs`} style={cs.wrapperStyle}>
+                                        <div className="flex justify-between" style={cs.subtextStyle}>
+                                            <span>Labour Subtotal:</span>
+                                            <span className="font-mono font-semibold" style={cs.textStyle}>£{totals.labourSubtotal.toFixed(2)}</span>
+                                        </div>
+                                        <div className="flex justify-between" style={cs.subtextStyle}>
+                                            <span>Parts & Materials:</span>
+                                            <span className="font-mono font-semibold" style={cs.textStyle}>£{totals.partsSubtotal.toFixed(2)}</span>
+                                        </div>
+                                        <div className="flex justify-between" style={cs.subtextStyle}>
+                                            <span>Net Amount:</span>
+                                            <span className="font-mono font-bold" style={cs.textStyle}>£{totals.netSubtotal.toFixed(2)}</span>
+                                        </div>
+                                        {totals.vatBreakdown.map((vat, idx) => (
+                                            <div key={idx} className="flex justify-between" style={cs.subtextStyle}>
+                                                <span>{vat.name} ({vat.rate}%):</span>
+                                                <span className="font-mono font-semibold" style={cs.textStyle}>£{vat.vat.toFixed(2)}</span>
                                             </div>
                                         ))}
+                                        {totals.vatBreakdown.length === 0 && (
+                                            <div className="flex justify-between" style={cs.subtextStyle}>
+                                                <span>VAT:</span>
+                                                <span className="font-mono font-semibold" style={cs.textStyle}>£0.00</span>
+                                            </div>
+                                        )}
+                                        <div className="flex justify-between text-base font-black border-t border-slate-300 pt-1.5" style={cs.textStyle}>
+                                            <span>TOTAL DUE:</span>
+                                            <span className="font-mono" style={{ color: cs.titleStyle?.color || accentColor }}>£{totals.grandTotal.toFixed(2)}</span>
+                                        </div>
                                     </div>
-                                </main>
-                            </td>
-                        </tr>
-                    </tbody>
-                    {renderFooter()}
-                </table>
-            )}
+                                </div>
+                            )}
+
+                            {/* Block 10: Bank Remittance Details */}
+                            {block.type === 'bank_details' && (
+                                <div className={`${cs.wrapperClass} p-3.5 flex flex-wrap items-center justify-between gap-3 text-xs`} style={cs.wrapperStyle}>
+                                    <div>
+                                        <h4 className={cs.titleClass} style={cs.titleStyle}>
+                                            {block.title || 'Bank Remittance Details'}
+                                        </h4>
+                                        <div className="text-[11px] pt-0.5" style={cs.subtextStyle}>
+                                            {block.settings?.customBankNarrative || 'Please quote invoice reference on electronic BACS transfers.'}
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-4 text-xs font-mono" style={cs.textStyle}>
+                                        <div><span className="text-[10px] block" style={cs.subtextStyle}>Bank</span><strong>{block.settings?.customBankName || resolvedEntity?.bankAccountName || 'Barclays Bank UK'}</strong></div>
+                                        <div><span className="text-[10px] block" style={cs.subtextStyle}>Sort Code</span><strong>{block.settings?.customSortCode || resolvedEntity?.bankSortCode || '20-45-78'}</strong></div>
+                                        <div><span className="text-[10px] block" style={cs.subtextStyle}>Account No.</span><strong>{block.settings?.customAccountNumber || resolvedEntity?.bankAccountNumber || '83920194'}</strong></div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Block 11: Terms of Business Sign-Off */}
+                            {block.type === 'terms_signoff' && (
+                                <div className={cs.wrapperClass} style={cs.wrapperStyle}>
+                                    <div className={cs.headerClass} style={cs.headerStyle}>
+                                        <h4 className={cs.titleClass} style={cs.titleStyle}>
+                                            {block.title || 'Terms of Business'}
+                                        </h4>
+                                    </div>
+                                    <div className={cs.bodyClass}>
+                                        <div className="text-[10px] leading-tight" style={cs.subtextStyle}>
+                                            {block.settings?.customTermsText || resolvedEntity?.termsAndConditions || resolvedEntity?.storageTermsAndConditions || "Payment is strictly due upon invoice date unless formal 30-day trade account credit facility is in place. Title to all goods and parts supplied remains with the workshop until paid in full."}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Block 12: Legal Footer */}
+                            {block.type === 'footer_legal' && (
+                                <div className="pt-3 border-t border-slate-200 text-center text-[10px] text-slate-400 space-y-0.5">
+                                    <div>
+                                        {resolvedEntity?.name || 'Brookspeed Automotive Ltd'}
+                                        {resolvedEntity?.companyNumber && <span> | Company Reg No: {resolvedEntity.companyNumber}</span>}
+                                        {resolvedEntity?.vatNumber && <span> | VAT Reg: {resolvedEntity.vatNumber}</span>}
+                                    </div>
+                                    <div>{block.settings?.customFooterText || resolvedEntity?.invoiceFooterText || 'Registered in England & Wales. Thank you for your business.'}</div>
+                                </div>
+                            )}
+                        </div>
+                    );
+                })}
             </div>
+
+            {/* Optional Additional Pages for Inspection, Tyre & Damage Reports if requested */}
+            {printOptions.showInspections && inspectionTemplate && job?.inspectionChecklist && job.inspectionChecklist.length > 0 && (
+                <div className="bg-white font-sans text-sm text-gray-800 printable-page" style={pageStyle}>
+                    <header className="flex justify-between items-center mb-6 border-b pb-2">
+                        <h2 className="text-2xl font-bold text-gray-800">{inspectionTemplate.name}</h2>
+                        <div className="text-right text-sm">
+                            <p><strong>Invoice:</strong> {invoice.invoiceNumber || invoice.id}</p>
+                            <p><strong>Vehicle:</strong> {vehicle?.registration}</p>
+                        </div>
+                    </header>
+                    <main>
+                        <InspectionChecklist
+                            checklistData={job.inspectionChecklist}
+                            onUpdate={() => { }}
+                            isReadOnly={true}
+                        />
+                    </main>
+                </div>
+            )}
+
+            {printOptions.showInspections && hasTyreData && (
+                <div className="bg-white font-sans text-sm text-gray-800 printable-page" style={pageStyle}>
+                    <header className="flex justify-between items-center mb-6 border-b pb-2">
+                        <h2 className="text-2xl font-bold text-gray-800">Tyre Safety Check</h2>
+                        <div className="text-right text-sm">
+                            <p><strong>Invoice:</strong> {invoice.invoiceNumber || invoice.id}</p>
+                            <p><strong>Vehicle:</strong> {vehicle?.registration}</p>
+                        </div>
+                    </header>
+                    <main>
+                        <TyreCheck tyreData={job!.tyreCheck!} onUpdate={() => { }} isReadOnly={true} />
+                    </main>
+                </div>
+            )}
+
+            {printOptions.showInspections && hasDamageReport && (
+                <div className="bg-white font-sans text-sm text-gray-800 printable-page" style={pageStyle}>
+                    <header className="flex justify-between items-center mb-6 border-b pb-2">
+                        <h2 className="text-2xl font-bold text-gray-800">Vehicle Condition Report</h2>
+                        <div className="text-right text-sm">
+                            <p><strong>Invoice:</strong> {invoice.invoiceNumber || invoice.id}</p>
+                            <p><strong>Vehicle:</strong> {vehicle?.registration}</p>
+                        </div>
+                    </header>
+                    <main>
+                        <VehicleDamageReport 
+                            activePoints={job!.damagePoints || []} 
+                            onUpdate={() => { }} 
+                            isReadOnly={true} 
+                            vehicleModel={vehicle?.model} 
+                            vehicleColor={vehicle?.colour} 
+                            imageId={vehicle?.inspectionDiagramId || vehicleImage?.id || matchedLibraryDiagram?.imageId || null} 
+                            imageUrl={vehicleImage?.dataUrl || null} 
+                        />
+                    </main>
+                </div>
+            )}
         </div>
     );
 };

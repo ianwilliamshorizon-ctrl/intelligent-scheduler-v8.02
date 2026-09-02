@@ -1,4 +1,3 @@
-
 import React, { useMemo, useState, useEffect } from 'react';
 import {
     Job,
@@ -11,15 +10,17 @@ import {
     EstimateLineItem,
     InspectionTemplate,
     ChecklistSection,
-    TyreLocation,
-    ChecklistItemStatus,
-    InspectionDiagram
+    InspectionDiagram,
+    DocumentBlockConfig
 } from '../types';
 import InspectionChecklist from './InspectionChecklist';
 import AsyncMedia from './AsyncMedia';
-import PorscheFrames from './PorscheFrames';
 import { getFile } from '../utils/imageStore';
-import { COLOR_PALETTES } from '../core/utils/documentTemplateDefaults';
+import { 
+    COLOR_PALETTES, 
+    DEFAULT_JOB_CARD_BLOCKS, 
+    getContainerStyleClasses 
+} from '../core/utils/documentTemplateDefaults';
 
 interface PrintableJobCardProps {
     job: Job;
@@ -64,47 +65,61 @@ const PrintableJobCard: React.FC<PrintableJobCardProps> = ({
     const fName = customer?.forename || jobData.customerForename || "";
     const sName = customer?.surname || jobData.customerSurname || "";
     const customerFullName = `${fName} ${sName}`.trim();
-    const displayName = customerFullName || (job.customerId ? `ACCOUNT: ${job.customerId}` : "DATA MISSING");
+    const displayName = customerFullName || (job.customerId ? `ACCOUNT: ${job.customerId}` : "CUSTOMER NOT SPECIFIED");
 
     const segments = Array.isArray(job.segments) ? job.segments : (Array.isArray(jobData.tasks) ? jobData.tasks : []);
-
     const technicianIds = new Set(segments.map((s: any) => s?.engineerId).filter(Boolean));
-
     const safeEngineers = Array.isArray(engineers) ? engineers : [];
     const technicianNames = Array.from(technicianIds)
         .map(id => safeEngineers.find(e => e.id === id)?.name)
         .filter(Boolean)
         .join(', ');
 
+    const lineItems: EstimateLineItem[] = useMemo(() => {
+        const estItems = (estimates || []).flatMap(e => e.lineItems || []);
+        if (estItems.length > 0) return estItems;
+        // Fallback to job segments if no estimates attached
+        return segments.map((s: any, idx: number) => ({
+            id: s.id || `seg_${idx}`,
+            description: s.description || s.name || `Workshop Operation #${idx + 1}`,
+            quantity: s.duration || s.allocatedHours || 1,
+            unitPrice: s.price || 0,
+            isLabor: true,
+            partNumber: 'LABOUR'
+        }));
+    }, [estimates, segments]);
+
+    const tasksList = useMemo(() => {
+        return lineItems.filter(li => li.isLabor || li.type === 'labor' || li.partNumber === 'LABOUR' || li.partNumber === 'MOT' || li.servicePackageId);
+    }, [lineItems]);
+
+    const partsList = useMemo(() => {
+        return lineItems.filter(li => !li.isLabor && li.type !== 'labor' && li.partNumber !== 'LABOUR' && li.partNumber !== 'MOT' && !li.servicePackageId);
+    }, [lineItems]);
+
+    const totalCalculatedHours = useMemo(() => {
+        const hourTotal = tasksList.reduce((sum, li) => sum + Number(li.quantity || 0), 0);
+        return hourTotal > 0 ? hourTotal : (job.estimatedHours || 0);
+    }, [tasksList, job.estimatedHours]);
+
+    // Active Layout Configuration
+    const layoutConfig = entity?.jobCardLayout;
+    const blocks: DocumentBlockConfig[] = useMemo(() => {
+        if (layoutConfig?.blocks && Array.isArray(layoutConfig.blocks) && layoutConfig.blocks.length > 0) {
+            return [...layoutConfig.blocks].sort((a, b) => (a.order || 0) - (b.order || 0));
+        }
+        return DEFAULT_JOB_CARD_BLOCKS;
+    }, [layoutConfig]);
+
+    const accentColor = layoutConfig?.accentColor || entity?.color || '#4f46e5';
+    const entityThemeKey = (layoutConfig?.accentColor || entity?.color || 'indigo').toLowerCase();
+    const themeColorDef = COLOR_PALETTES[entityThemeKey] || COLOR_PALETTES['indigo'];
+
     const inspectionTemplate = useMemo(() => {
         if (!job?.inspectionTemplateId) return null;
         const safeTemplates = Array.isArray(inspectionTemplates) ? inspectionTemplates : [];
-        const found = safeTemplates.find(t => t.id === job.inspectionTemplateId);
-        if (!found) {
-            console.warn(`Inspection template ${job.inspectionTemplateId} not found in safeTemplates`);
-        }
-        return found;
+        return safeTemplates.find(t => t.id === job.inspectionTemplateId) || null;
     }, [job?.inspectionTemplateId, inspectionTemplates]);
-
-    const vehicleImage = useMemo(() => {
-        if (vehicle && Array.isArray(vehicle.images)) {
-            return vehicle.images.find(img => img.isPrimaryDiagram) || vehicle.images[0];
-        }
-        return null;
-    }, [vehicle]);
-
-    const matchedLibraryDiagram = useMemo(() => {
-        if (!vehicle || !inspectionDiagrams || vehicleImage) return null;
-        return inspectionDiagrams.find(d => 
-            d.make?.toLowerCase() === vehicle.make?.toLowerCase() && 
-            d.model?.toLowerCase() === vehicle.model?.toLowerCase()
-        ) || inspectionDiagrams.find(d => 
-            d.make?.toLowerCase() === vehicle.make?.toLowerCase()
-        ) || null;
-    }, [vehicle, inspectionDiagrams, vehicleImage]);
-
-    const resolvedImageId = vehicle?.inspectionDiagramId || vehicleImage?.id || matchedLibraryDiagram?.imageId || null;
-    const resolvedImageUrl = vehicleImage?.dataUrl || null;
 
     const hasFilledChecklist = useMemo(() => {
         if (!job?.inspectionChecklist) return false;
@@ -130,317 +145,21 @@ const PrintableJobCard: React.FC<PrintableJobCardProps> = ({
     const pageStyle: React.CSSProperties = {
         width: '210mm',
         minHeight: '297mm',
-        padding: '20mm',
+        padding: '16mm',
         boxSizing: 'border-box',
         display: 'flex',
-        flexDirection: 'column'
+        flexDirection: 'column',
+        backgroundColor: '#ffffff'
     };
 
-    const tyreLocations: TyreLocation[] = ['frontLeft', 'frontRight', 'rearLeft', 'rearRight', 'spare'];
-    const tyreLocationLabels: Record<TyreLocation, string> = { frontLeft: 'F/L', frontRight: 'F/R', rearLeft: 'R/L', rearRight: 'R/R', spare: 'Spare' };
-    const statusLabels: Record<ChecklistItemStatus, string> = { ok: 'OK', attention: 'ATTN', urgent: 'URGENT', na: 'N/A' };
-    const totalCalculatedHours = useMemo(() => {
-        const estItems = (estimates || []).flatMap(e => e.lineItems || []);
-        const hourTotal = estItems
-            .filter(li => {
-                const isLabor = li.isLabor ||
-                    li.type === 'labor' ||
-                    li.partNumber === 'LABOUR' ||
-                    li.partNumber === 'MOT' ||
-                    li.description?.toLowerCase().includes('labour');
-                return isLabor;
-            })
-            .reduce((sum, li) => sum + Number(li.quantity || 0), 0);
-
-        return hourTotal > 0 ? hourTotal : (job.estimatedHours || 0);
-    }, [estimates, job.estimatedHours]);
-
-    const entityThemeKey = (entity?.jobCardLayout?.accentColor || entity?.color || 'indigo').toLowerCase();
-    const themeColorDef = COLOR_PALETTES[entityThemeKey] || COLOR_PALETTES['indigo'];
-
-    const mainContent = (
-        <div className="bg-white font-sans text-sm text-gray-800 printable-page" style={pageStyle}>
-            <header className="flex justify-between items-start pb-6 border-b-4 mb-8" style={{ borderBottomColor: themeColorDef.primary }}>
-                <div className="flex items-center gap-6">
-                    {(resolvedLogoUrl || entity?.logoUrl) && (
-                        <img src={resolvedLogoUrl || entity?.logoUrl} alt="Logo" className="h-20 object-contain" />
-                    )}
-                    <div>
-                        <h1 className="text-3xl font-black text-gray-900 uppercase tracking-tighter leading-none">
-                            {entity?.name || 'WORKSHOP JOB CARD'}
-                        </h1>
-                        <div className="flex items-center gap-2 mt-2">
-                            <span className="text-white px-2 py-0.5 text-[10px] font-bold rounded uppercase tracking-widest" style={{ backgroundColor: themeColorDef.headerBg }}>
-                                Technician Copy
-                            </span>
-                            <h2 className="text-xl font-bold uppercase tracking-tight" style={{ color: themeColorDef.primary }}>
-                                Job Sheet #{job.id}
-                            </h2>
-                        </div>
-                    </div>
-                </div>
-                <div className="text-right flex flex-col items-end">
-                    <div className="mb-4">
-                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Job Status</p>
-                        <p className="font-black text-lg uppercase" style={{ color: themeColorDef.primary }}>{job.status}</p>
-                    </div>
-                    <div>
-                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Key Number</p>
-                        <p className="font-black text-2xl text-gray-900">{job.keyNumber || 'N/A'}</p>
-                    </div>
-                </div>
-            </header>
-
-            <main className="flex-grow space-y-8">
-                <section className="grid grid-cols-2 gap-8">
-                    <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                        <h3 className="text-[10px] font-black uppercase mb-2 tracking-widest" style={{ color: themeColorDef.primary }}>Customer Information</h3>
-                        <p className="text-lg font-black text-gray-900 uppercase">{displayName}</p>
-                        <div className="mt-2 text-xs space-y-1 text-gray-600">
-                            <p>{customer?.addressLine1 || "Address not provided"}</p>
-                            <p>{customer?.city} {customer?.postcode}</p>
-                            <div className="pt-2 mt-2 border-t border-gray-200 flex flex-col font-bold text-gray-900">
-                                <span>Tel: {customer?.mobile || customer?.phone || 'No Contact Number'}</span>
-                                <span className="font-normal" style={{ color: themeColorDef.primary }}>{customer?.email || 'No Email Recorded'}</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                        <h3 className="text-[10px] font-black uppercase mb-2 tracking-widest" style={{ color: themeColorDef.primary }}>Vehicle Details</h3>
-                        <p className="text-lg font-black text-gray-900 uppercase">{vehicle?.make} {vehicle?.model || 'Unknown Vehicle'}</p>
-                        <div className="mt-2">
-                            <span className="bg-yellow-400 text-black px-4 py-1.5 rounded font-mono font-bold text-xl border-2 border-black shadow-sm inline-block">
-                                {vehicle?.registration || 'NO REG'}
-                            </span>
-                        </div>
-                        <div className="mt-4 grid grid-cols-2 text-[10px] font-mono text-gray-500 uppercase">
-                            <span>VIN: {vehicle?.vin?.slice(-8) || 'N/A'}</span>
-                            <span className="text-right">Colour: {vehicle?.colour || 'N/A'}</span>
-                        </div>
-                    </div>
-                </section>
-
-                <section className="border-2 rounded-lg overflow-hidden" style={{ borderColor: themeColorDef.primary }}>
-                    <div className="text-white px-4 py-2 flex justify-between items-center" style={{ backgroundColor: themeColorDef.primary }}>
-                        <h3 className="text-xs font-bold uppercase tracking-widest">Primary Work Description</h3>
-                        <span className="text-[10px] uppercase font-bold text-white/80">Hours: {totalCalculatedHours}h</span>
-                    </div>
-                    <div className="p-4 bg-white">
-                        <p className="text-lg font-bold text-gray-900 mb-2 underline underline-offset-4" style={{ textDecorationColor: themeColorDef.primary }}>
-                            {job.description}
-                        </p>
-                        <div className="p-3 bg-gray-50 rounded text-gray-800 whitespace-pre-wrap min-h-[60px] border border-gray-100 italic">
-                            {job.notes || "No booking notes provided."}
-                        </div>
-                    </div>
-                </section>
-
-                <section>
-                    <h3 className="text-xs font-bold text-gray-400 uppercase mb-2 ml-1">Required Parts & Labour Items</h3>
-                    <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
-                        <table className="w-full text-left border-collapse">
-                            <thead className="bg-gray-50 text-[10px] uppercase text-gray-500 border-b">
-                                <tr>
-                                    <th className="px-4 py-2 w-1/4">Ref / Part No.</th>
-                                    <th className="px-4 py-2 w-1/2">Description</th>
-                                    <th className="px-4 py-2 text-right">Qty</th>
-                                    <th className="px-4 py-2 text-center w-16">Done</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-100">
-                                {(estimates || []).length > 0 ? (
-                                    (estimates || []).flatMap(est => (est.lineItems || []).map((item: EstimateLineItem) => {
-                                        const isPackageHeader = item.servicePackageId && !item.isPackageComponent;
-                                        const rowClass = isPackageHeader ? "bg-gray-100 font-black text-gray-950" : "text-sm";
-
-                                        return (
-                                            <tr key={item.id} className={rowClass}>
-                                                <td className="px-4 py-3 font-mono text-[10px] text-gray-400 uppercase">
-                                                    {isPackageHeader ? 'PACKAGE' : (item.partNumber || (item.isLabor ? 'LABOUR' : 'PART'))}
-                                                </td>
-                                                <td className="px-4 py-3">
-                                                    <span className={isPackageHeader ? "text-lg uppercase tracking-tight" : "text-gray-900 font-semibold"}>
-                                                        {item.description}
-                                                    </span>
-                                                </td>
-                                                <td className="px-4 py-3 text-right font-bold">
-                                                    {!isPackageHeader && item.quantity}
-                                                </td>
-                                                <td className="px-4 py-3">
-                                                    {!isPackageHeader && <div className="w-5 h-5 border-2 border-gray-300 rounded mx-auto bg-white"></div>}
-                                                </td>
-                                            </tr>
-                                        );
-                                    }))
-                                ) : (
-                                    <tr><td colSpan={4} className="px-4 py-10 text-center text-gray-400 italic">No line items linked to this job card.</td></tr>
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                </section>
-
-                <div style={{ pageBreakBefore: 'always' }} />
-
-                <section className="flex-grow flex flex-col">
-                    <h3 className="text-xs font-bold text-gray-400 uppercase mb-2 ml-1">Technician Findings / Required Repairs</h3>
-                    <div className="flex-grow border-2 border-dashed border-gray-200 rounded-lg p-4 bg-gray-50/30 min-h-[200px]">
-                        <div className="space-y-4">
-                            {(job.technicianObservations && job.technicianObservations.length > 0) ? (
-                                job.technicianObservations.map((note, index) => (
-                                    <p key={index} className="text-sm border-b border-gray-200 pb-2">{note}</p>
-                                ))
-                            ) : (
-                                <p className="text-sm text-gray-400 italic">No notes recorded.</p>
-                            )}
-                            {[...Array(Math.max(0, 10 - (job.technicianObservations || []).length))].map((_, i) => (
-                                <div key={i} className="border-b-2 border-dotted border-gray-300 h-8"></div>
-                            ))}
-                        </div>
-                    </div>
-                </section>
-
-                <section className="mt-6">
-                    <h3 className="text-xs font-bold text-gray-400 uppercase mb-2 ml-1">Vehicle Damage & Tyre Report</h3>
-                    <div className="grid grid-cols-2 gap-6">
-                        <div className="relative w-full mx-auto rounded-lg overflow-hidden shadow-md bg-gray-200 border border-gray-300">
-                            {resolvedImageId ? (
-                                <AsyncMedia imageId={resolvedImageId} alt="Vehicle Diagram" className="w-full h-auto mix-blend-multiply" />
-                            ) : resolvedImageUrl ? (
-                                <img src={resolvedImageUrl} alt="Vehicle Diagram" className="w-full h-auto mix-blend-multiply" />
-                            ) : (
-                                <div className="p-4 bg-white flex items-center justify-center w-full">
-                                    <PorscheFrames view="top" vehicleModel={`${vehicle?.make} ${vehicle?.model}`} />
-                                </div>
-                            )}
-                            {(job.damagePoints || []).map(point => (
-                                <div key={point.id} className="absolute w-5 h-5 rounded-full bg-red-500 bg-opacity-75 border-2 border-white shadow-lg" style={{ top: `${point.y}%`, left: `${point.x}%`, transform: 'translate(-50%, -50%)' }} title={point.notes}></div>
-                            ))}
-                        </div>
-                        <div className="border border-gray-200 rounded-lg overflow-hidden bg-white text-[10px]">
-                            <table className="w-full text-left border-collapse">
-                                <thead className="bg-gray-50 uppercase text-gray-500 border-b">
-                                    <tr>
-                                        <th className="px-3 py-1.5">Tyre</th>
-                                        <th className="px-2 py-1.5">Outer</th>
-                                        <th className="px-2 py-1.5">Mid</th>
-                                        <th className="px-2 py-1.5">Inner</th>
-                                        <th className="px-2 py-1.5">PSI</th>
-                                        <th className="px-3 py-1.5">Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-100 font-mono">
-                                    {tyreLocations.map(location => {
-                                        const tyreData = job.tyreCheck?.[location];
-                                        return (
-                                            <tr key={location} className="text-xs">
-                                                <th className="px-3 py-2 font-bold uppercase">{tyreLocationLabels[location]}</th>
-                                                <td className="px-2 py-2">{tyreData?.outer || '-'}</td>
-                                                <td className="px-2 py-2">{tyreData?.middle || '-'}</td>
-                                                <td className="px-2 py-2">{tyreData?.inner || '-'}</td>
-                                                <td className="px-2 py-2">{tyreData?.pressure || '-'}</td>
-                                                <td className="px-3 py-2 font-bold">{statusLabels[tyreData?.indicator || 'na']}</td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </section>
-                
-                {job.checkInPhotos && job.checkInPhotos.some(p => p.status === 'attention' || p.status === 'urgent') && (
-                    <section className="avoid-break">
-                        <h3 className="text-xs font-bold text-gray-400 uppercase mb-2 ml-1">Important Photos & Documents</h3>
-                        <div className="grid grid-cols-2 gap-4">
-                            {job.checkInPhotos.filter(p => p.status === 'attention' || p.status === 'urgent').map((photo) => (
-                                <div key={photo.id} className={`border-4 rounded-lg overflow-hidden bg-gray-50 flex flex-col ${photo.status === 'attention' ? 'border-indigo-500' : 'border-red-500'}`}>
-                                    <div className="relative aspect-video">
-                                        <AsyncMedia imageId={photo.id} alt="Attention Media" className="w-full h-full object-contain" />
-                                        <div className={`absolute top-0 right-0 px-2 py-1 text-[10px] font-bold uppercase text-white ${photo.status === 'attention' ? 'bg-indigo-600' : 'bg-red-600'}`}>
-                                            {photo.status === 'attention' ? 'Needs Attention' : 'Urgent'}
-                                        </div>
-                                    </div>
-                                    {photo.notes && (
-                                        <div className="p-2 text-xs text-gray-800 italic bg-white border-t border-gray-100">
-                                            {photo.notes}
-                                        </div>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-                    </section>
-                )}
-            </main>
-
-            <footer className="mt-8 pt-6 border-t-2 border-gray-900 text-[11px]">
-                <div className="grid grid-cols-2 gap-16">
-                    <div>
-                        <p className="mb-8 uppercase font-bold text-gray-400 tracking-widest">Lead Technician</p>
-                        <p className="mb-1 text-sm text-black font-black">{technicianNames || '__________________________'}</p>
-                        <div className="border-t border-black pt-1">Sign-off Signature</div>
-                    </div>
-                    <div className="text-right">
-                        <p className="mb-8 uppercase font-bold text-gray-400 tracking-widest">Quality Assurance / Date</p>
-                        <p className="mb-1 text-black font-bold text-sm">___ / ___ / 202___</p>
-                        <div className="border-t border-black pt-1 w-48 ml-auto text-right">Manager Signature</div>
-                    </div>
-                </div>
-                <div className="mt-6 text-center text-[9px] text-gray-400 uppercase tracking-widest">
-                    Generated via Workshop Management System
-                </div>
-            </footer>
-        </div>
-    );
-
-    const blankInspectionSheet = printBlankInspectionSheet && inspectionTemplate && blankChecklistData.length > 0 && (
-        <div className="bg-white font-sans text-sm text-gray-800 printable-page" style={pageStyle}>
-            <header className="flex justify-between items-center mb-6 border-b pb-2">
-                <h2 className="text-2xl font-bold text-gray-800">{inspectionTemplate.name}</h2>
-                <div className="text-right text-sm">
-                    <p><strong>Vehicle:</strong> {vehicle?.registration}</p>
-                    <p><strong>Job:</strong> {job?.id}</p>
-                </div>
-            </header>
-            <main>
-                <InspectionChecklist
-                    checklistData={blankChecklistData}
-                    onUpdate={() => { }}
-                    isReadOnly={true}
-                />
-            </main>
-        </div>
-    );
-
-    const filledInspectionSheet = hasFilledChecklist && (
-        <div className="bg-white font-sans text-sm text-gray-800 printable-page" style={pageStyle}>
-            <header className="flex justify-between items-center mb-6 border-b pb-2">
-                <h2 className="text-2xl font-bold text-gray-800">{inspectionTemplate?.name || 'Inspection Report'}</h2>
-                <div className="text-right text-sm">
-                    <p><strong>Vehicle:</strong> {vehicle?.registration}</p>
-                    <p><strong>Job:</strong> {job?.id}</p>
-                </div>
-            </header>
-            <main>
-                <InspectionChecklist
-                    checklistData={job.inspectionChecklist || []}
-                    onUpdate={() => { }}
-                    isReadOnly={true}
-                />
-            </main>
-        </div>
-    );
-
-
     return (
-        <div style={{ backgroundColor: '#ffffff', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
+        <div className="rebuild-print-container" style={{ backgroundColor: '#ffffff', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
             <style dangerouslySetInnerHTML={{
                 __html: `
                 @media print {
                     @page { 
                         size: A4 portrait;
-                        margin: 15mm; 
+                        margin: 0; 
                     }
                     body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
                     body * { 
@@ -455,93 +174,361 @@ const PrintableJobCard: React.FC<PrintableJobCardProps> = ({
                         top: 0 !important; 
                         width: 100% !important;
                     }
-                    .printable-page { page-break-after: auto; }
-                    .printable-page:not(:last-child) { page-break-after: always; }
-
-                    /* Repeating Header/Footer Logic */
-                    .page-header-space { height: 15mm; }
-                    .page-footer-space { height: 10mm; }
-
-                    .page-header {
-                        position: fixed;
-                        top: 0;
-                        width: 100%;
-                        height: 15mm;
-                        display: none; /* Only show on subsequent pages */
-                        border-bottom: 1px solid #e5e7eb;
-                        align-items: center;
-                        justify-content: space-between;
-                        font-size: 10px;
-                        font-weight: bold;
-                        color: #6b7280;
+                    .printable-page {
+                        page-break-after: always !important;
+                        break-after: page !important;
                     }
-
-                    .page-footer {
-                        position: fixed;
-                        bottom: 0px;
-                        width: 100%;
-                        height: 10mm;
-                        display: flex;
-                        align-items: center;
-                        border-top: 1px solid #e5e7eb;
-                        font-size: 9px;
-                        text-transform: uppercase;
-                        letter-spacing: 0.1em;
-                        color: #9ca3af;
-                    }
-
-                    /* Only show header from page 2 onwards by using a simple trick with first-page detection */
-                    .page-header { display: flex !important; visibility: hidden !important; }
-                    
                 }
+            ` }} />
 
-                @media print {
-                    .first-page-hide { display: none !important; }
-                }
-            `}} />
+            {/* Main Job Card Page dynamically built from configured blocks */}
+            <div className="bg-white font-sans text-xs text-slate-800 printable-page space-y-4" style={pageStyle}>
+                {blocks.filter(b => b.visible !== false).map((block) => {
+                    const cs = getContainerStyleClasses(
+                        block.settings?.style,
+                        block.settings?.containerColor,
+                        accentColor,
+                        block.settings?.textColor
+                    );
 
-            <div className="rebuild-print-container font-sans">
-                {/* Fixed Repeating Footer */}
-                <div className="page-footer hidden print:flex items-center justify-between">
-                    <span>{entity?.name || 'Workshop Job Card'} - Job #{job.id}</span>
-                    <div className="flex gap-2">
-                        <span>Printed: {new Date().toLocaleDateString('en-GB')}</span>
-                    </div>
-                </div>
-
-                {/* Main Print Table to force margins and header/footer space */}
-                <table className="w-full">
-                    <thead className="hidden print:table-header-group">
-                        <tr>
-                            <td>
-                                <div className="h-[15mm] flex items-center justify-between border-b mb-4 opacity-0 print:opacity-100">
-                                    <div className="flex gap-4">
-                                        <span className="text-xs font-black text-gray-900">JOB SHEET #{job.id}</span>
-                                        <span className="bg-yellow-400 text-black px-2 py-0.5 rounded font-mono font-bold text-xs border border-black">{vehicle?.registration}</span>
+                    return (
+                        <div key={block.id} className="transition-all">
+                            {/* Block 1: Header Logo */}
+                            {block.type === 'header_logo' && (
+                                <div className={`flex items-start justify-between pb-3 border-b border-slate-200 gap-4 ${
+                                    block.settings?.logoPosition === 'center' ? 'flex-col items-center text-center' :
+                                    block.settings?.logoPosition === 'left' ? 'flex-row-reverse' : 'flex-row'
+                                }`}>
+                                    <div className="space-y-1">
+                                        <h1 className="text-xl font-black text-slate-900 uppercase tracking-tight">
+                                            {entity?.name || 'BROOKSPEED AUTOMOTIVE'}
+                                        </h1>
+                                        <div className="text-[11px] text-slate-600 space-y-0.5">
+                                            <div>{entity?.addressLine1 || 'Unit 4, Speedwell Industrial Estate'}{entity?.addressLine2 ? `, ${entity.addressLine2}` : ''}</div>
+                                            <div>{entity?.city || 'Eastleigh'}, {entity?.postcode || 'SO53 4NF'}</div>
+                                            <div>
+                                                Tel: <span className="font-semibold">{entity?.phone || '02380 641672'}</span> | Email: <span className="font-semibold">{entity?.email || 'service@brookspeed.com'}</span>
+                                                {entity?.vatNumber && <span> | VAT: <span className="font-semibold">{entity.vatNumber}</span></span>}
+                                                {entity?.companyNumber && <span> | Reg: <span className="font-semibold">{entity.companyNumber}</span></span>}
+                                            </div>
+                                        </div>
                                     </div>
-                                    <span className="text-[10px] text-gray-400 uppercase font-bold">{displayName}</span>
+                                    {(resolvedLogoUrl || entity?.logoUrl) && (
+                                        <img 
+                                            src={resolvedLogoUrl || entity?.logoUrl || ''} 
+                                            alt="Logo" 
+                                            style={{ height: `${block.settings?.logoHeight || 65}px` }} 
+                                            className="object-contain max-w-[200px]" 
+                                        />
+                                    )}
                                 </div>
-                            </td>
-                        </tr>
-                    </thead>
+                            )}
 
-                    <tbody>
-                        <tr>
-                            <td>
-                                <div className="rebuild-print-content">
-                                    {mainContent}
-                                    {filledInspectionSheet}
-                                    {blankInspectionSheet}
+                            {/* Block 2: Document Meta Details */}
+                            {block.type === 'document_meta' && (
+                                <div 
+                                    className={`${cs.wrapperClass} flex flex-wrap items-center justify-between gap-3`}
+                                    style={cs.wrapperStyle}
+                                >
+                                    <div>
+                                        <span 
+                                            className="text-[10px] font-black uppercase tracking-wider block"
+                                            style={cs.titleStyle}
+                                        >
+                                            {block.title || 'JOB CARD NUMBER'}
+                                        </span>
+                                        <span 
+                                            className="text-lg font-black tracking-tight font-mono"
+                                            style={cs.textStyle}
+                                        >
+                                            {job.id || 'JOB-ACTIVE'}
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center gap-6 text-xs" style={cs.textStyle}>
+                                        <div>
+                                            <span className="text-[10px] block uppercase font-semibold" style={cs.subtextStyle}>Date</span>
+                                            <span className="font-bold" style={cs.textStyle}>
+                                                {new Date(job.createdDate || job.scheduledDate || Date.now()).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                            </span>
+                                        </div>
+                                        <div>
+                                            <span className="text-[10px] block uppercase font-semibold" style={cs.subtextStyle}>Status</span>
+                                            <span className="font-bold uppercase font-mono" style={cs.textStyle}>{job.status}</span>
+                                        </div>
+                                        <div>
+                                            <span className="text-[10px] block uppercase font-semibold" style={cs.subtextStyle}>Key Slot / Tag</span>
+                                            <span className="font-bold font-mono" style={cs.textStyle}>{job.keyNumber || 'N/A'}</span>
+                                        </div>
+                                        <div>
+                                            <span className="text-[10px] block uppercase font-semibold" style={cs.subtextStyle}>Technician</span>
+                                            <span className="font-bold" style={cs.textStyle}>{technicianNames || 'Workshop Pool'}</span>
+                                        </div>
+                                    </div>
                                 </div>
-                            </td>
-                        </tr>
-                    </tbody>
+                            )}
 
-                    <tfoot className="hidden print:table-footer-group">
-                        <tr><td><div className="h-[10mm]"></div></td></tr>
-                    </tfoot>
-                </table>
+                            {/* Block 3: Customer Details */}
+                            {block.type === 'customer_details' && (
+                                <div className={cs.wrapperClass} style={cs.wrapperStyle}>
+                                    <div className={cs.headerClass} style={cs.headerStyle}>
+                                        <h4 className={cs.titleClass} style={cs.titleStyle}>
+                                            {block.title || 'Customer Details'}
+                                        </h4>
+                                    </div>
+                                    <div className={cs.bodyClass}>
+                                        <div className="text-xs space-y-0.5" style={cs.textStyle}>
+                                            <div className="font-bold text-sm">{displayName}</div>
+                                            {customer?.addressLine1 && <div>{customer.addressLine1}{customer.addressLine2 ? `, ${customer.addressLine2}` : ''}</div>}
+                                            {(customer?.city || customer?.postcode) && <div>{customer.city || ''} {customer.postcode ? <span className="font-semibold uppercase">{customer.postcode}</span> : ''}</div>}
+                                            <div style={cs.subtextStyle}>
+                                                Phone: <span className="font-semibold">{customer?.mobile || customer?.phone || 'No Contact Number'}</span>
+                                                {customer?.email && <span> | Email: <span className="font-semibold">{customer.email}</span></span>}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Block 4: Vehicle Details */}
+                            {block.type === 'vehicle_details' && (
+                                <div className={cs.wrapperClass} style={cs.wrapperStyle}>
+                                    <div className={cs.headerClass} style={cs.headerStyle}>
+                                        <h4 className={cs.titleClass} style={cs.titleStyle}>
+                                            {block.title || 'Vehicle Details'}
+                                        </h4>
+                                        <span className="inline-block bg-yellow-400 text-black font-mono font-black text-xs px-2.5 py-0.5 rounded border border-yellow-500 shadow-2xs tracking-wider uppercase">
+                                            {vehicle?.registration || 'NO REG'}
+                                        </span>
+                                    </div>
+                                    <div className={cs.bodyClass}>
+                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs" style={cs.textStyle}>
+                                            <div><span className="block text-[10px]" style={cs.subtextStyle}>Make & Model:</span><strong>{vehicle?.make} {vehicle?.model || 'Vehicle'}</strong></div>
+                                            <div><span className="block text-[10px]" style={cs.subtextStyle}>Year / Colour:</span><strong>{vehicle?.year || '—'} / {vehicle?.colour || '—'}</strong></div>
+                                            <div><span className="block text-[10px]" style={cs.subtextStyle}>Mileage / Key:</span><strong>{vehicle?.mileage ? `${vehicle.mileage.toLocaleString()} mi` : (job.mileageIn ? `${job.mileageIn} mi` : '—')} • Key #{job.keyNumber || '—'}</strong></div>
+                                            <div><span className="block text-[10px]" style={cs.subtextStyle}>VIN / Chassis:</span><strong className="font-mono">{vehicle?.vin?.slice(-8) || vehicle?.vin || '—'}</strong></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Block 5: Narrative Description / Work Requested */}
+                            {block.type === 'narrative_description' && (
+                                <div className={cs.wrapperClass} style={cs.wrapperStyle}>
+                                    <div className={cs.headerClass} style={cs.headerStyle}>
+                                        <h4 className={cs.titleClass} style={cs.titleStyle}>
+                                            {block.title || 'Work Requested & Customer Narrative'}
+                                        </h4>
+                                    </div>
+                                    <div className={cs.bodyClass}>
+                                        <p className="text-xs leading-relaxed italic whitespace-pre-wrap" style={cs.textStyle}>
+                                            {job.description || job.notes || block.settings?.customNarrativeText || "Customer vehicle booked in for workshop inspection and scheduled maintenance."}
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Block 6: Tasks & Packages */}
+                            {block.type === 'tasks_packages' && (
+                                <div className={cs.wrapperClass} style={cs.wrapperStyle}>
+                                    <div className={cs.headerClass} style={cs.headerStyle}>
+                                        <div className={cs.titleClass} style={cs.titleStyle}>
+                                            {block.title || 'Workshop Operations & Labour Tasks'}
+                                        </div>
+                                        <span className="text-[10px] uppercase font-bold" style={cs.subtextStyle}>
+                                            Total: {totalCalculatedHours}h
+                                        </span>
+                                    </div>
+                                    <div className="p-0 overflow-x-auto">
+                                        <table className="w-full text-xs text-left" style={cs.textStyle}>
+                                            <thead className="bg-slate-50/60 border-b text-[10px] uppercase" style={cs.subtextStyle}>
+                                                <tr>
+                                                    <th className="p-2">Description</th>
+                                                    <th className="p-2 text-center">Hours</th>
+                                                    {block.settings?.showPrices !== false && <th className="p-2 text-right">Net Price</th>}
+                                                    <th className="p-2 text-center w-12">Done</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100/60">
+                                                {tasksList.length > 0 ? (
+                                                    tasksList.map((item, idx) => (
+                                                        <tr key={item.id || idx}>
+                                                            <td className="p-2 font-medium">
+                                                                <div>{item.description}</div>
+                                                                {block.settings?.showTechnicianNotes !== false && item.notes && (
+                                                                    <div className="text-[10px] italic pt-0.5" style={cs.subtextStyle}>Note: {item.notes}</div>
+                                                                )}
+                                                            </td>
+                                                            <td className="p-2 text-center font-mono">{Number(item.quantity || 1).toFixed(2)}h</td>
+                                                            {block.settings?.showPrices !== false && (
+                                                                <td className="p-2 text-right font-semibold">£{((item.quantity || 1) * (item.unitPrice || 0)).toFixed(2)}</td>
+                                                            )}
+                                                            <td className="p-2 text-center">
+                                                                <div className="w-4 h-4 border border-slate-400 rounded mx-auto bg-white/80"></div>
+                                                            </td>
+                                                        </tr>
+                                                    ))
+                                                ) : (
+                                                    <tr>
+                                                        <td colSpan={4} className="p-3 text-center italic" style={cs.subtextStyle}>
+                                                            No discrete operations specified. Perform primary work description.
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Block 7: Parts Items */}
+                            {block.type === 'parts_items' && (
+                                <div className={cs.wrapperClass} style={cs.wrapperStyle}>
+                                    <div className={cs.headerClass} style={cs.headerStyle}>
+                                        <div className={cs.titleClass} style={cs.titleStyle}>
+                                            {block.title || 'Parts & Materials'}
+                                        </div>
+                                    </div>
+                                    <div className="p-0 overflow-x-auto">
+                                        <table className="w-full text-xs text-left" style={cs.textStyle}>
+                                            <thead className="bg-slate-50/60 border-b text-[10px] uppercase" style={cs.subtextStyle}>
+                                                <tr>
+                                                    {block.settings?.showPartNumbers !== false && <th className="p-2">Part No.</th>}
+                                                    <th className="p-2">Description</th>
+                                                    <th className="p-2 text-center">Qty</th>
+                                                    {block.settings?.showPrices !== false && <th className="p-2 text-right">Unit Net</th>}
+                                                    {block.settings?.showPrices !== false && <th className="p-2 text-right">Total Net</th>}
+                                                    <th className="p-2 text-center w-12">Picked</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100/60">
+                                                {partsList.length > 0 ? (
+                                                    partsList.map((item, idx) => (
+                                                        <tr key={item.id || idx}>
+                                                            {block.settings?.showPartNumbers !== false && (
+                                                                <td className="p-2 font-mono text-[10px]" style={cs.subtextStyle}>{item.partNumber || '—'}</td>
+                                                            )}
+                                                            <td className="p-2 font-medium">{item.description}</td>
+                                                            <td className="p-2 text-center">{item.quantity || 1}</td>
+                                                            {block.settings?.showPrices !== false && <td className="p-2 text-right font-mono">£{Number(item.unitPrice || 0).toFixed(2)}</td>}
+                                                            {block.settings?.showPrices !== false && <td className="p-2 text-right font-semibold font-mono">£{((item.quantity || 1) * (item.unitPrice || 0)).toFixed(2)}</td>}
+                                                            <td className="p-2 text-center">
+                                                                <div className="w-4 h-4 border border-slate-400 rounded mx-auto bg-white/80"></div>
+                                                            </td>
+                                                        </tr>
+                                                    ))
+                                                ) : (
+                                                    <tr>
+                                                        <td colSpan={6} className="p-3 text-center italic" style={cs.subtextStyle}>
+                                                            No parts or consumables allocated.
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Block 8: Labour Summary */}
+                            {block.type === 'labour_summary' && (
+                                <div className={`${cs.wrapperClass} flex items-center justify-between`} style={cs.wrapperStyle}>
+                                    <div className="p-3.5" style={cs.textStyle}>
+                                        <span className="font-bold">Technician Time Allocation</span>
+                                        <div className="text-[11px]" style={cs.subtextStyle}>
+                                            Allocated: {totalCalculatedHours.toFixed(2)} hrs | Lead Tech: {technicianNames || 'Unassigned'}
+                                        </div>
+                                    </div>
+                                    <div className="p-3.5 flex items-center gap-4 text-xs font-mono font-bold" style={cs.textStyle}>
+                                        <span className="bg-white/80 px-2 py-1 rounded border border-slate-200">Start: ___:___</span>
+                                        <span className="bg-white/80 px-2 py-1 rounded border border-slate-200">Finish: ___:___</span>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Block 11: Authorisation & Sign-Off */}
+                            {block.type === 'terms_signoff' && (
+                                <div className={cs.wrapperClass} style={cs.wrapperStyle}>
+                                    <div className={cs.headerClass} style={cs.headerStyle}>
+                                        <h4 className={cs.titleClass} style={cs.titleStyle}>
+                                            {block.title || 'Terms & Authorisation'}
+                                        </h4>
+                                    </div>
+                                    <div className={cs.bodyClass}>
+                                        <div className="text-[10px] leading-tight" style={cs.subtextStyle}>
+                                            {block.settings?.customTermsText || entity?.termsAndConditions || entity?.storageTermsAndConditions || "I hereby authorize the repair work and acknowledge receipt of vehicle in satisfactory condition. All parts replaced remain the property of the workshop until invoice is paid in full."}
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-4 pt-1">
+                                            {block.settings?.showCustomerSignature !== false && (
+                                                <div className="border-t border-slate-400 pt-1 flex justify-between text-[10px]" style={cs.subtextStyle}>
+                                                    <span>Customer Signature</span>
+                                                    <span>Date: ____________</span>
+                                                </div>
+                                            )}
+                                            {block.settings?.showTechnicianSignature !== false && (
+                                                <div className="border-t border-slate-400 pt-1 flex justify-between text-[10px]" style={cs.subtextStyle}>
+                                                    <span>Technician Signature</span>
+                                                    <span>Date: ____________</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Block 12: Legal Footer */}
+                            {block.type === 'footer_legal' && (
+                                <div className="pt-3 border-t border-slate-200 text-center text-[10px] text-slate-400 space-y-0.5">
+                                    <div>
+                                        {entity?.name || 'Brookspeed Automotive Ltd'}
+                                        {entity?.companyNumber && <span> | Company Reg No: {entity.companyNumber}</span>}
+                                        {entity?.vatNumber && <span> | VAT Reg: {entity.vatNumber}</span>}
+                                    </div>
+                                    <div>{block.settings?.customFooterText || entity?.invoiceFooterText || 'Registered in England & Wales. Thank you for your business.'}</div>
+                                </div>
+                            )}
+                        </div>
+                    );
+                })}
             </div>
+
+            {/* Optional Additional Pages for Inspection Sheets if requested */}
+            {printBlankInspectionSheet && inspectionTemplate && blankChecklistData.length > 0 && (
+                <div className="bg-white font-sans text-sm text-gray-800 printable-page" style={pageStyle}>
+                    <header className="flex justify-between items-center mb-6 border-b pb-2">
+                        <h2 className="text-2xl font-bold text-gray-800">{inspectionTemplate.name}</h2>
+                        <div className="text-right text-sm">
+                            <p><strong>Vehicle:</strong> {vehicle?.registration}</p>
+                            <p><strong>Job:</strong> {job?.id}</p>
+                        </div>
+                    </header>
+                    <main>
+                        <InspectionChecklist
+                            checklistData={blankChecklistData}
+                            onUpdate={() => { }}
+                            isReadOnly={true}
+                        />
+                    </main>
+                </div>
+            )}
+
+            {hasFilledChecklist && (
+                <div className="bg-white font-sans text-sm text-gray-800 printable-page" style={pageStyle}>
+                    <header className="flex justify-between items-center mb-6 border-b pb-2">
+                        <h2 className="text-2xl font-bold text-gray-800">{inspectionTemplate?.name || 'Inspection Report'}</h2>
+                        <div className="text-right text-sm">
+                            <p><strong>Vehicle:</strong> {vehicle?.registration}</p>
+                            <p><strong>Job:</strong> {job?.id}</p>
+                        </div>
+                    </header>
+                    <main>
+                        <InspectionChecklist
+                            checklistData={job.inspectionChecklist || []}
+                            onUpdate={() => { }}
+                            isReadOnly={true}
+                        />
+                    </main>
+                </div>
+            )}
         </div>
     );
 };
