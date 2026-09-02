@@ -709,28 +709,28 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
             onClose={onClose}
             onSave={handleSave}
             title={formData.inquiryNumber ? `Edit Inquiry / Message [${formData.inquiryNumber}]` : inquiry?.id ? 'Edit Inquiry / Message' : 'Log New Inquiry / Message'}
-            maxWidth="max-w-[90vw] lg:max-w-7xl"
+            maxWidth="max-w-[95vw] lg:max-w-[96vw] xl:max-w-[1550px]"
         >
             <div className="border-b border-gray-200 mb-4">
                 <nav className="-mb-px flex space-x-8" aria-label="Tabs">
                     <button
                         type="button"
                         onClick={() => setActiveTab('details')}
-                        className={`${activeTab === 'details' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition flex items-center gap-2`}
+                        className={`${activeTab === 'details' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition flex items-center gap-2`}
                     >
                         Initial Email & Details
                     </button>
                     <button
                         type="button"
                         onClick={() => setActiveTab('estimates')}
-                        className={`${activeTab === 'estimates' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition flex items-center gap-2`}
+                        className={`${activeTab === 'estimates' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition flex items-center gap-2`}
                     >
                         Estimates
                     </button>
                     <button
                         type="button"
                         onClick={() => setActiveTab('communication')}
-                        className={`${activeTab === 'communication' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition flex items-center gap-2`}
+                        className={`${activeTab === 'communication' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition flex items-center gap-2`}
                     >
                         Communication, Notes & Logs
                     </button>
@@ -738,53 +738,53 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
             </div>
             <div className="min-h-[500px]">
                 {activeTab === 'details' && (
-                    <div className="space-y-5">
-                        {/* High-Visibility Header Banner */}
-                        <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-xl p-5 shadow-md border border-slate-800">
-                            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                                <div className="space-y-2 min-w-0">
+                    <div className="space-y-4">
+                        {/* High-Visibility Pale Blue Header Banner */}
+                        <div className="bg-gradient-to-r from-blue-50 via-sky-50 to-indigo-50 border border-blue-200 rounded-xl p-4 sm:p-5 shadow-xs">
+                            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+                                <div className="space-y-1.5 min-w-0">
                                     <div className="flex flex-wrap items-center gap-2">
-                                        <span className="text-xs font-mono font-bold bg-indigo-500/30 text-indigo-200 border border-indigo-400/30 px-3 py-1 rounded-md flex items-center gap-1.5">
-                                            <Mail size={13} /> {formData.inquiryNumber || 'NEW INQUIRY'}
+                                        <span className="text-xs font-mono font-bold bg-white text-indigo-900 border border-indigo-200 px-2.5 py-0.5 rounded-md flex items-center gap-1.5 shadow-2xs">
+                                            <Mail size={13} className="text-indigo-600" /> {formData.inquiryNumber || 'NEW INQUIRY'}
                                         </span>
                                         {formData.isUrgent && (
-                                            <span className="text-xs font-bold bg-red-500 text-white px-3 py-1 rounded-md animate-pulse flex items-center gap-1">
+                                            <span className="text-xs font-bold bg-red-600 text-white px-2.5 py-0.5 rounded-md animate-pulse flex items-center gap-1">
                                                 <AlertCircle size={13} /> URGENT
                                             </span>
                                         )}
-                                        <span className="text-xs font-semibold bg-white/10 text-white/90 px-3 py-1 rounded-md">
+                                        <span className="text-xs font-semibold bg-white text-slate-800 border border-slate-200 px-2.5 py-0.5 rounded-md shadow-2xs">
                                             {entities?.find(e => e.id === formData.entityId)?.name || 'All Entities'}
                                         </span>
-                                        <span className="text-xs font-semibold bg-indigo-600 text-white px-3 py-1 rounded-md">
+                                        <span className="text-xs font-semibold bg-indigo-600 text-white px-2.5 py-0.5 rounded-md shadow-2xs">
                                             {formData.status || 'Inbox'}
                                         </span>
                                         {formData.actionStatus && (
-                                            <span className="text-xs font-semibold bg-sky-500/30 text-sky-200 border border-sky-400/30 px-3 py-1 rounded-md">
+                                            <span className="text-xs font-semibold bg-sky-100 text-sky-800 border border-sky-300 px-2.5 py-0.5 rounded-md">
                                                 {formData.actionStatus}
                                             </span>
                                         )}
                                     </div>
                                     
                                     {/* Prominent Customer Name */}
-                                    <div className="flex flex-wrap items-baseline gap-3 pt-1">
-                                        <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                                    <div className="flex flex-wrap items-baseline gap-3 pt-0.5">
+                                        <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
                                             {formData.fromName || 'Unknown Customer'}
                                         </h2>
                                         {formData.vehicleRegistration && (
-                                            <span className="inline-block bg-yellow-400 text-black font-mono font-black text-xs px-2.5 py-0.5 rounded border border-yellow-500 shadow-sm tracking-wider uppercase">
+                                            <span className="inline-block bg-yellow-400 text-black font-mono font-black text-xs px-2.5 py-0.5 rounded border border-yellow-500 shadow-2xs tracking-wider uppercase">
                                                 {formData.vehicleRegistration}
                                             </span>
                                         )}
                                     </div>
 
                                     {/* Large, Clear Phone and Email Information */}
-                                    <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-slate-200 pt-0.5">
+                                    <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm pt-0.5">
                                         {formData.fromPhone ? (
-                                            <div className="flex items-center gap-2 bg-slate-800/80 px-3 py-1.5 rounded-lg border border-slate-700">
-                                                <Phone size={15} className="text-indigo-400 shrink-0" />
+                                            <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-blue-200 shadow-2xs">
+                                                <Phone size={15} className="text-indigo-600 shrink-0" />
                                                 <a 
                                                     href={`tel:${formData.fromPhone}`} 
-                                                    className="font-bold text-base text-white hover:text-indigo-300 transition tracking-wide"
+                                                    className="font-bold text-sm sm:text-base text-slate-900 hover:text-indigo-600 transition tracking-wide"
                                                     title="Click to call"
                                                 >
                                                     {formData.fromPhone}
@@ -792,24 +792,24 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                                 <button
                                                     type="button"
                                                     onClick={() => copyToClipboard(formData.fromPhone!, 'phone number')}
-                                                    className="text-slate-400 hover:text-white p-1 rounded transition cursor-pointer"
+                                                    className="text-slate-400 hover:text-slate-700 p-1 rounded transition cursor-pointer"
                                                     title="Copy phone number"
                                                 >
-                                                    {copiedField === 'phone number' ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
+                                                    {copiedField === 'phone number' ? <Check size={14} className="text-emerald-600" /> : <Copy size={14} />}
                                                 </button>
                                             </div>
                                         ) : (
-                                            <div className="flex items-center gap-1.5 text-slate-400 text-xs italic">
+                                            <div className="flex items-center gap-1.5 text-slate-500 text-xs italic">
                                                 <Phone size={13} /> No phone provided
                                             </div>
                                         )}
 
                                         {formData.fromEmail ? (
-                                            <div className="flex items-center gap-2 bg-slate-800/80 px-3 py-1.5 rounded-lg border border-slate-700">
-                                                <Mail size={15} className="text-indigo-400 shrink-0" />
+                                            <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-blue-200 shadow-2xs">
+                                                <Mail size={15} className="text-indigo-600 shrink-0" />
                                                 <a 
                                                     href={`mailto:${formData.fromEmail}`} 
-                                                    className="font-semibold text-sm text-indigo-200 hover:text-white transition underline"
+                                                    className="font-semibold text-sm text-indigo-700 hover:text-indigo-900 transition underline"
                                                     title="Click to email"
                                                 >
                                                     {formData.fromEmail}
@@ -817,20 +817,20 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                                 <button
                                                     type="button"
                                                     onClick={() => copyToClipboard(formData.fromEmail!, 'email address')}
-                                                    className="text-slate-400 hover:text-white p-1 rounded transition cursor-pointer"
+                                                    className="text-slate-400 hover:text-slate-700 p-1 rounded transition cursor-pointer"
                                                     title="Copy email address"
                                                 >
-                                                    {copiedField === 'email address' ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
+                                                    {copiedField === 'email address' ? <Check size={14} className="text-emerald-600" /> : <Copy size={14} />}
                                                 </button>
                                             </div>
                                         ) : (
-                                            <div className="flex items-center gap-1.5 text-slate-400 text-xs italic">
+                                            <div className="flex items-center gap-1.5 text-slate-500 text-xs italic">
                                                 <Mail size={13} /> No email provided
                                             </div>
                                         )}
 
                                         {formData.createdAt && (
-                                            <div className="flex items-center gap-1.5 text-xs text-slate-400">
+                                            <div className="flex items-center gap-1.5 text-xs text-slate-500">
                                                 <Clock size={13} />
                                                 <span>{new Date(formData.createdAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</span>
                                             </div>
@@ -838,26 +838,26 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                     </div>
 
                                     {formData.subject && (
-                                        <p className="text-xs sm:text-sm text-slate-300 font-medium pt-1">
-                                            <span className="text-slate-400 font-normal">Subject:</span> {formData.subject}
+                                        <p className="text-xs sm:text-sm text-slate-700 font-medium pt-0.5">
+                                            <span className="text-slate-500 font-normal">Subject:</span> {formData.subject}
                                         </p>
                                     )}
                                 </div>
 
                                 {/* View Mode Toggle */}
                                 <div className="flex items-center gap-2 self-start lg:self-center shrink-0">
-                                    <div className="bg-slate-800 p-1.5 rounded-lg border border-slate-700 flex items-center shadow-inner">
+                                    <div className="bg-white p-1 rounded-lg border border-blue-200 flex items-center shadow-2xs">
                                         <button
                                             type="button"
                                             onClick={() => setIsFormattedView(true)}
-                                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition ${isFormattedView ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+                                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition ${isFormattedView ? 'bg-indigo-600 text-white shadow' : 'text-slate-600 hover:text-slate-900'}`}
                                         >
                                             <Eye size={14} /> Reader View
                                         </button>
                                         <button
                                             type="button"
                                             onClick={() => setIsFormattedView(false)}
-                                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition ${!isFormattedView ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+                                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition ${!isFormattedView ? 'bg-indigo-600 text-white shadow' : 'text-slate-600 hover:text-slate-900'}`}
                                         >
                                             <Edit3 size={14} /> Raw Edit
                                         </button>
@@ -866,20 +866,20 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                             </div>
                         </div>
 
-                        {/* 2-Column Main Layout: Email Pane (Left) & Contact/Vehicle Intelligence Dossier (Right) */}
-                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-                            {/* Left 6 Columns: The Email Body & Thread Viewer */}
-                            <div className="lg:col-span-6 space-y-4">
+                        {/* 3-Column Wide Layout: (1) Email Reader (5 cols) | (2) Contact & Vehicle Intelligence (4 cols) | (3) Fast Actions & Operations (3 cols) */}
+                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+                            {/* Column 1 (5 cols): The Email Body & Thread Viewer */}
+                            <div className="lg:col-span-5 space-y-4">
                                 {isFormattedView ? (
                                     <div className="space-y-4">
                                         {/* Latest Customer Message Card */}
-                                        <div className="bg-white rounded-xl border border-indigo-100 shadow-sm overflow-hidden">
-                                            <div className="bg-gradient-to-r from-indigo-50/80 to-white px-4 py-3 border-b border-indigo-100 flex items-center justify-between">
+                                        <div className="bg-white rounded-xl border border-indigo-100 shadow-xs overflow-hidden">
+                                            <div className="bg-gradient-to-r from-indigo-50/90 to-white px-4 py-2.5 border-b border-indigo-100 flex items-center justify-between">
                                                 <div className="flex items-center gap-2">
                                                     <span className="w-2.5 h-2.5 rounded-full bg-indigo-600 animate-pulse"></span>
                                                     <h4 className="text-xs font-bold text-indigo-900 uppercase tracking-wider flex items-center gap-1.5">
                                                         <MessageSquare size={15} className="text-indigo-600" />
-                                                        Latest Customer Message
+                                                        Customer Message
                                                     </h4>
                                                 </div>
                                                 <button 
@@ -972,17 +972,17 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                                         }
                                                     }}
                                                     disabled={isAnalyzing || (!formData.message && !formData.subject)}
-                                                    className="flex items-center gap-1 text-xs font-bold text-indigo-700 bg-white hover:bg-indigo-100 border border-indigo-200 px-3 py-1.5 rounded-md shadow-sm transition disabled:opacity-50 cursor-pointer"
+                                                    className="flex items-center gap-1 text-xs font-bold text-indigo-700 bg-white hover:bg-indigo-100 border border-indigo-200 px-2.5 py-1 rounded-md shadow-2xs transition disabled:opacity-50 cursor-pointer"
                                                     title="Scan with AI to extract VRM, Customer and Summary"
                                                 >
                                                     {isAnalyzing ? <Loader2 size={13} className="animate-spin text-indigo-600" /> : <Wand2 size={13} className="text-indigo-600" />} 
-                                                    Scan with AI
+                                                    Scan AI
                                                 </button>
                                             </div>
 
-                                            <div className="p-5">
+                                            <div className="p-4 sm:p-5">
                                                 {parsedThread.latestMessage ? (
-                                                    <div className="text-sm sm:text-base text-slate-800 leading-relaxed whitespace-pre-wrap font-sans selection:bg-indigo-100">
+                                                    <div className="text-sm sm:text-base text-slate-800 leading-relaxed whitespace-pre-wrap font-sans selection:bg-indigo-100 max-h-[380px] overflow-y-auto pr-1">
                                                         {parsedThread.latestMessage}
                                                     </div>
                                                 ) : (
@@ -995,28 +995,28 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
 
                                         {/* AI Summary / Insights Banner if present */}
                                         {formData.actionNotes && (
-                                            <div className="bg-gradient-to-r from-purple-50 via-indigo-50/50 to-purple-50 border border-purple-200 rounded-xl p-4 text-xs sm:text-sm text-purple-900 shadow-sm space-y-1.5">
+                                            <div className="bg-gradient-to-r from-purple-50 via-indigo-50/50 to-purple-50 border border-purple-200 rounded-xl p-3.5 text-xs sm:text-sm text-purple-900 shadow-2xs space-y-1">
                                                 <div className="flex items-center gap-1.5 font-bold text-purple-800 uppercase tracking-wider text-xs">
                                                     <Sparkles size={14} className="text-purple-600" />
                                                     AI Insights & Classification
                                                 </div>
-                                                <div className="whitespace-pre-wrap leading-relaxed text-purple-950 font-medium">
+                                                <div className="whitespace-pre-wrap leading-relaxed text-purple-950 font-medium text-xs">
                                                     {formData.actionNotes}
                                                 </div>
                                             </div>
                                         )}
 
                                         {/* Attachments Strip */}
-                                        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 space-y-3">
+                                        <div className="bg-white rounded-xl border border-gray-200 shadow-2xs p-3.5 space-y-2.5">
                                             <div className="flex items-center justify-between border-b border-gray-100 pb-2">
                                                 <div className="flex items-center gap-2">
-                                                    <Paperclip size={15} className="text-gray-600" />
+                                                    <Paperclip size={14} className="text-gray-600" />
                                                     <span className="text-xs font-bold text-gray-800 uppercase tracking-wider">
-                                                        Attachments & Media ({formData.media ? formData.media.length : 0})
+                                                        Attachments ({formData.media ? formData.media.length : 0})
                                                     </span>
                                                 </div>
-                                                <label className="cursor-pointer text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-md transition flex items-center gap-1.5 border border-indigo-200 shadow-sm">
-                                                    <PlusCircle size={14} /> Add Attachment
+                                                <label className="cursor-pointer text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1 rounded-md transition flex items-center gap-1 border border-indigo-200 shadow-2xs">
+                                                    <PlusCircle size={13} /> Add
                                                     <input 
                                                         type="file" 
                                                         multiple 
@@ -1045,67 +1045,67 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                             </div>
 
                                             {formData.media && formData.media.length > 0 ? (
-                                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                                                <div className="grid grid-cols-2 gap-2">
                                                     {formData.media.map((item: any) => {
                                                         const isPhoto = item.type === 'Photo' || (item.name && /\.(jpg|jpeg|png|webp|gif)$/i.test(item.name));
                                                         return (
                                                             <div 
                                                                 key={item.id} 
                                                                 onClick={() => handleDownloadMedia(item)}
-                                                                className="group relative flex items-center gap-2.5 p-3 border border-gray-200 hover:border-indigo-300 rounded-lg bg-gray-50 hover:bg-indigo-50/50 cursor-pointer transition shadow-sm"
+                                                                className="group relative flex items-center gap-2 p-2 border border-gray-200 hover:border-indigo-300 rounded-lg bg-gray-50 hover:bg-indigo-50/50 cursor-pointer transition shadow-2xs"
                                                                 title={`Click to view/download ${item.name}`}
                                                             >
-                                                                <div className="p-2 bg-white rounded-md border border-gray-200 text-indigo-600 shrink-0 group-hover:scale-105 transition">
-                                                                    {isPhoto ? <Camera size={18} /> : <FileText size={18} />}
+                                                                <div className="p-1.5 bg-white rounded-md border border-gray-200 text-indigo-600 shrink-0 group-hover:scale-105 transition">
+                                                                    {isPhoto ? <Camera size={16} /> : <FileText size={16} />}
                                                                 </div>
                                                                 <div className="min-w-0 flex-1">
                                                                     <div className="truncate text-xs font-bold text-gray-800 group-hover:text-indigo-700">
                                                                         {item.name}
                                                                     </div>
                                                                     <div className="text-[10px] text-gray-500 uppercase font-semibold">
-                                                                        {isPhoto ? 'Photo' : 'Document'}
+                                                                        {isPhoto ? 'Photo' : 'Doc'}
                                                                     </div>
                                                                 </div>
-                                                                <ExternalLink size={13} className="text-gray-400 group-hover:text-indigo-600 opacity-0 group-hover:opacity-100 transition shrink-0" />
+                                                                <ExternalLink size={12} className="text-gray-400 group-hover:text-indigo-600 opacity-0 group-hover:opacity-100 transition shrink-0" />
                                                             </div>
                                                         );
                                                     })}
                                                 </div>
                                             ) : (
-                                                <div className="text-gray-400 text-xs py-3 text-center border border-dashed border-gray-200 rounded-lg">
-                                                    No attachments attached to this inquiry.
+                                                <div className="text-gray-400 text-xs py-2 text-center border border-dashed border-gray-200 rounded-lg">
+                                                    No attachments attached.
                                                 </div>
                                             )}
                                         </div>
 
                                         {/* Historical Thread Accordion (Collapsible) */}
                                         {parsedThread.hasThread && (
-                                            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                                            <div className="bg-white rounded-xl border border-gray-200 shadow-2xs overflow-hidden">
                                                 <button
                                                     type="button"
                                                     onClick={() => setIsHistoryExpanded(prev => !prev)}
-                                                    className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100/80 transition text-left cursor-pointer border-b border-gray-200/60"
+                                                    className="w-full flex items-center justify-between px-3.5 py-2.5 bg-gray-50 hover:bg-gray-100 transition text-left cursor-pointer border-b border-gray-200/60"
                                                 >
                                                     <div className="flex items-center gap-2 text-xs font-bold text-gray-700">
-                                                        <Clock size={15} className="text-gray-500" />
-                                                        <span>Email History & Preceding Thread ({parsedThread.threadHistory.length} earlier {parsedThread.threadHistory.length === 1 ? 'message' : 'messages'})</span>
+                                                        <Clock size={14} className="text-gray-500" />
+                                                        <span>Email History ({parsedThread.threadHistory.length} earlier {parsedThread.threadHistory.length === 1 ? 'message' : 'messages'})</span>
                                                     </div>
-                                                    <div className="flex items-center gap-1.5 text-xs text-indigo-600 font-bold">
-                                                        <span>{isHistoryExpanded ? 'Collapse Thread' : 'Expand Thread'}</span>
-                                                        {isHistoryExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                                                    <div className="flex items-center gap-1 text-xs text-indigo-600 font-bold">
+                                                        <span>{isHistoryExpanded ? 'Collapse' : 'Expand'}</span>
+                                                        {isHistoryExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
                                                     </div>
                                                 </button>
 
                                                 {isHistoryExpanded && (
-                                                    <div className="p-4 space-y-4 bg-gray-50/50">
+                                                    <div className="p-3 space-y-3 bg-gray-50/50 max-h-[300px] overflow-y-auto">
                                                         {parsedThread.threadHistory.map((threadMsg, idx) => (
-                                                            <div key={idx} className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm space-y-2">
+                                                            <div key={idx} className="bg-white p-3 rounded-lg border border-gray-200 shadow-2xs space-y-1.5">
                                                                 {threadMsg.header && (
-                                                                    <div className="text-xs font-mono text-gray-600 bg-gray-100 p-2 rounded border border-gray-200 whitespace-pre-wrap leading-tight">
+                                                                    <div className="text-[11px] font-mono text-gray-600 bg-gray-100 p-1.5 rounded border border-gray-200 whitespace-pre-wrap leading-tight">
                                                                         {threadMsg.header}
                                                                     </div>
                                                                 )}
-                                                                <div className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+                                                                <div className="text-xs text-gray-700 whitespace-pre-wrap leading-relaxed">
                                                                     {threadMsg.body}
                                                                 </div>
                                                             </div>
@@ -1150,7 +1150,7 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                                 name="subject" 
                                                 value={formData.subject || ''} 
                                                 onChange={handleChange} 
-                                                className="w-full p-2.5 border rounded-md text-sm font-medium" 
+                                                className="w-full p-2 border rounded-md text-sm font-medium" 
                                                 placeholder="e.g. Service Inquiry for Porsche 911"
                                             />
                                         </div>
@@ -1169,75 +1169,30 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                 )}
                             </div>
 
-                            {/* Right 6 Columns: Contact Details, Address Lookup, Vehicle DVLA Lookup & Actions */}
-                            <div className="lg:col-span-6 space-y-4">
-                                {/* Quick Actions Hub */}
-                                <div className="bg-gradient-to-r from-indigo-50 via-purple-50 to-indigo-50 p-4 border border-indigo-200 rounded-xl shadow-sm space-y-2.5">
-                                    <div className="text-xs font-bold text-indigo-900 uppercase tracking-wider flex items-center gap-1.5">
-                                        <Sparkles size={15} className="text-indigo-600" />
-                                        Joined-Up Actions
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <button
-                                            type="button"
-                                            onClick={handleQuickEstimate}
-                                            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-lg font-bold text-xs sm:text-sm shadow-sm transition cursor-pointer"
-                                            title="Smart create estimate directly from customer inquiry details"
-                                        >
-                                            <Wand2 size={15} /> Smart Estimate
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={handleQuickReply}
-                                            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-white hover:bg-indigo-50 text-indigo-700 border border-indigo-300 rounded-lg font-bold text-xs sm:text-sm shadow-sm transition cursor-pointer"
-                                            title="Jump to reply and draft response with AI"
-                                        >
-                                            <Mail size={15} /> Draft AI Reply
-                                        </button>
-                                    </div>
-                                    {linkedEstimate && (
-                                        <div className="pt-2 border-t border-indigo-200 flex items-center justify-between text-xs sm:text-sm">
-                                            <span className="text-indigo-900 font-bold flex items-center gap-1.5">
-                                                <FileText size={14} /> Linked Estimate #{linkedEstimate.estimateNumber}
-                                            </span>
-                                            {onViewEstimate && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => {
-                                                        onViewEstimate(linkedEstimate);
-                                                        onClose();
-                                                    }}
-                                                    className="font-bold text-indigo-600 hover:text-indigo-800 hover:underline"
-                                                >
-                                                    Review Estimate &rarr;
-                                                </button>
-                                            )}
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* AI Suggestions Banner */}
+                            {/* Column 2 (4 cols): Customer Contact & Vehicle Dossier with DVLA and Address Search */}
+                            <div className="lg:col-span-4 space-y-4">
+                                {/* AI Suggestions Banner if matches found */}
                                 {(suggestedCustomers.length > 0 || suggestedVehicle || aiError) && (
-                                    <div className="p-3.5 bg-indigo-50 border border-indigo-200 rounded-xl space-y-2 animate-fade-in shadow-sm">
-                                        <h4 className="font-bold text-indigo-900 text-xs sm:text-sm flex items-center gap-1.5">
-                                            <Wand2 size={15} className="text-indigo-600"/> AI Auto-Match Suggestions
+                                    <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-xl space-y-2 animate-fade-in shadow-2xs">
+                                        <h4 className="font-bold text-indigo-900 text-xs flex items-center gap-1.5">
+                                            <Wand2 size={14} className="text-indigo-600"/> Auto-Match Suggestions
                                         </h4>
                                         {aiError && <p className="text-red-600 text-xs">{aiError}</p>}
                                         
                                         {suggestedCustomers.length > 0 && !formData.linkedCustomerId && (
-                                            <div className="flex flex-col gap-2">
+                                            <div className="flex flex-col gap-1.5">
                                                 {suggestedCustomers.map(cust => (
-                                                    <div key={cust.id} className="flex justify-between items-center text-xs sm:text-sm p-2.5 bg-white rounded-lg border border-indigo-100 shadow-sm">
-                                                        <div className="flex items-center gap-2 truncate">
-                                                            <UserIcon size={15} className="text-blue-500 shrink-0" />
+                                                    <div key={cust.id} className="flex justify-between items-center text-xs p-2 bg-white rounded-lg border border-indigo-100 shadow-2xs">
+                                                        <div className="flex items-center gap-1.5 truncate">
+                                                            <UserIcon size={14} className="text-blue-500 shrink-0" />
                                                             <span className="font-bold text-gray-800 truncate">{getCustomerDisplayName(cust)}</span>
                                                         </div>
                                                         <button 
                                                             type="button" 
                                                             onClick={() => handleLinkCustomer(cust)} 
-                                                            className="flex items-center gap-1.5 py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-md shadow-sm transition shrink-0 cursor-pointer text-xs"
+                                                            className="flex items-center gap-1 py-1 px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-md shadow-2xs transition shrink-0 cursor-pointer text-xs"
                                                         >
-                                                            <LinkIcon size={13}/> Link Client
+                                                            <LinkIcon size={12}/> Link
                                                         </button>
                                                     </div>
                                                 ))}
@@ -1245,18 +1200,18 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                         )}
                                         
                                         {suggestedVehicle && !formData.linkedVehicleId && (
-                                            <div className="flex justify-between items-center text-xs sm:text-sm p-2.5 bg-white rounded-lg border border-indigo-100 shadow-sm">
-                                                <div className="flex items-center gap-2 truncate">
-                                                    <Car size={15} className="text-emerald-500 shrink-0" />
+                                            <div className="flex justify-between items-center text-xs p-2 bg-white rounded-lg border border-indigo-100 shadow-2xs">
+                                                <div className="flex items-center gap-1.5 truncate">
+                                                    <Car size={14} className="text-emerald-500 shrink-0" />
                                                     <span className="font-black text-gray-900 uppercase font-mono">{suggestedVehicle.registration}</span>
                                                     <span className="text-gray-600 truncate">({suggestedVehicle.make} {suggestedVehicle.model})</span>
                                                 </div>
                                                 <button 
                                                     type="button" 
                                                     onClick={() => handleLinkVehicle(suggestedVehicle)} 
-                                                    className="flex items-center gap-1.5 py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-md shadow-sm transition shrink-0 cursor-pointer text-xs"
+                                                    className="flex items-center gap-1 py-1 px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-md shadow-2xs transition shrink-0 cursor-pointer text-xs"
                                                 >
-                                                    <LinkIcon size={13}/> Link Vehicle
+                                                    <LinkIcon size={12}/> Link
                                                 </button>
                                             </div>
                                         )}
@@ -1264,17 +1219,17 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                 )}
 
                                 {/* Customer Connection & Contact Card */}
-                                <div className="bg-white p-4 sm:p-5 border border-gray-200 rounded-xl shadow-sm space-y-4">
-                                    <div className="flex items-center justify-between border-b border-gray-100 pb-2.5">
-                                        <div className="flex items-center gap-2">
-                                            <UserCheck size={18} className="text-indigo-600" />
-                                            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">
-                                                Customer & Contact Details
+                                <div className="bg-white p-4 border border-gray-200 rounded-xl shadow-xs space-y-3.5">
+                                    <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+                                        <div className="flex items-center gap-1.5">
+                                            <UserCheck size={16} className="text-indigo-600" />
+                                            <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider">
+                                                Customer Contact
                                             </h3>
                                         </div>
                                         {linkedCustomer && (
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-xs font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">
+                                            <div className="flex items-center gap-1.5">
+                                                <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">
                                                     Linked
                                                 </span>
                                                 <button 
@@ -1283,99 +1238,98 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                                     title="Unlink Customer" 
                                                     className="text-xs text-red-500 hover:text-red-700 flex items-center gap-1 font-semibold transition cursor-pointer"
                                                 >
-                                                    <XCircle size={14} /> Unlink
+                                                    <XCircle size={13} /> Unlink
                                                 </button>
                                             </div>
                                         )}
                                     </div>
 
-                                    {/* Editable Contact Fields (Always Visible) */}
-                                    <div className="space-y-3">
-                                        <div className="grid grid-cols-2 gap-3">
+                                    {/* Contact Fields */}
+                                    <div className="space-y-2.5">
+                                        <div className="grid grid-cols-2 gap-2">
                                             <div>
-                                                <label className="block text-xs font-bold text-gray-700 mb-1">First Name*</label>
+                                                <label className="block text-[11px] font-bold text-gray-700 mb-1">First Name*</label>
                                                 <input 
                                                     value={firstNameInput} 
                                                     onChange={handleFirstNameChange} 
-                                                    className="w-full p-2.5 border border-gray-300 rounded-lg text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition" 
+                                                    className="w-full p-2 border border-gray-300 rounded-lg text-xs sm:text-sm font-medium focus:ring-2 focus:ring-indigo-500 transition" 
                                                     required 
-                                                    placeholder="e.g. John" 
+                                                    placeholder="First name" 
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-xs font-bold text-gray-700 mb-1">Surname</label>
+                                                <label className="block text-[11px] font-bold text-gray-700 mb-1">Surname</label>
                                                 <input 
                                                     value={surnameInput} 
                                                     onChange={handleSurnameChange} 
-                                                    className="w-full p-2.5 border border-gray-300 rounded-lg text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition" 
-                                                    placeholder="e.g. Smith" 
+                                                    className="w-full p-2 border border-gray-300 rounded-lg text-xs sm:text-sm font-medium focus:ring-2 focus:ring-indigo-500 transition" 
+                                                    placeholder="Surname" 
                                                 />
                                             </div>
                                         </div>
 
-                                        <div className="grid grid-cols-2 gap-3">
+                                        <div className="grid grid-cols-2 gap-2">
                                             <div>
-                                                <label className="block text-xs font-bold text-gray-700 mb-1">Email Address</label>
+                                                <label className="block text-[11px] font-bold text-gray-700 mb-1">Email</label>
                                                 <input 
                                                     type="email" 
                                                     name="fromEmail" 
                                                     value={formData.fromEmail || ''} 
                                                     onChange={handleChange} 
-                                                    className="w-full p-2.5 border border-gray-300 rounded-lg text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition" 
-                                                    placeholder="customer@example.com" 
+                                                    className="w-full p-2 border border-gray-300 rounded-lg text-xs sm:text-sm font-medium focus:ring-2 focus:ring-indigo-500 transition" 
+                                                    placeholder="email@example.com" 
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-xs font-bold text-gray-700 mb-1">Phone Number</label>
+                                                <label className="block text-[11px] font-bold text-gray-700 mb-1">Phone</label>
                                                 <input 
                                                     type="tel" 
                                                     name="fromPhone" 
                                                     value={formData.fromPhone || ''} 
                                                     onChange={handleChange} 
-                                                    className="w-full p-2.5 border border-gray-300 rounded-lg text-sm font-bold focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition" 
+                                                    className="w-full p-2 border border-gray-300 rounded-lg text-xs sm:text-sm font-bold focus:ring-2 focus:ring-indigo-500 transition" 
                                                     placeholder="07123456789" 
                                                 />
                                             </div>
                                         </div>
 
-                                        {/* Postcode & Address Lookup (Always Visible) */}
+                                        {/* Postcode & Address Lookup */}
                                         <div>
-                                            <label className="block text-xs font-bold text-gray-700 mb-1">Postcode & Address</label>
-                                            <div className="flex gap-2">
+                                            <label className="block text-[11px] font-bold text-gray-700 mb-1">Postcode & Address</label>
+                                            <div className="flex gap-1.5">
                                                 <input 
                                                     type="text" 
                                                     name="postcode" 
                                                     value={formData.postcode || ''} 
                                                     onChange={handleChange} 
-                                                    className="w-full p-2.5 border border-gray-300 rounded-lg text-sm uppercase font-bold tracking-wider focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition" 
+                                                    className="w-full p-2 border border-gray-300 rounded-lg text-xs sm:text-sm uppercase font-bold tracking-wider focus:ring-2 focus:ring-indigo-500 transition" 
                                                     placeholder="e.g. GU24 9NY" 
                                                 />
                                                 <button
                                                     type="button"
                                                     onClick={handleLookupAddress}
                                                     disabled={!formData.postcode || isLookingUpAddress}
-                                                    className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 text-white font-bold rounded-lg px-4 py-2.5 flex items-center gap-1.5 transition text-xs sm:text-sm shrink-0 cursor-pointer shadow-sm"
+                                                    className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 text-white font-bold rounded-lg px-3 py-2 flex items-center gap-1 transition text-xs shrink-0 cursor-pointer shadow-2xs"
                                                     title="Lookup address by UK postcode"
                                                 >
-                                                    {isLookingUpAddress ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
-                                                    <span>Lookup Address</span>
+                                                    {isLookingUpAddress ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
+                                                    <span>Lookup</span>
                                                 </button>
                                             </div>
                                         </div>
 
-                                        {/* Address Lookup Dropdown Selection */}
+                                        {/* Address Lookup Dropdown */}
                                         {addressList.length > 0 && (
                                             <div className="bg-white border-2 border-indigo-300 rounded-lg shadow-md overflow-hidden">
-                                                <div className="bg-indigo-50 px-3 py-2 text-xs font-bold text-indigo-900 border-b border-indigo-200 flex items-center justify-between">
-                                                    <span>Select Address for {formData.postcode}</span>
-                                                    <span className="text-indigo-600">({addressList.length} results)</span>
+                                                <div className="bg-indigo-50 px-2.5 py-1.5 text-[11px] font-bold text-indigo-900 border-b border-indigo-200 flex items-center justify-between">
+                                                    <span>Select Address ({addressList.length})</span>
                                                 </div>
-                                                <ul className="max-h-44 overflow-y-auto divide-y divide-gray-100">
+                                                <ul className="max-h-36 overflow-y-auto divide-y divide-gray-100">
                                                     {addressList.map((addr, idx) => (
                                                         <li key={idx}>
                                                             <button
                                                                 type="button"
-                                                                className="w-full text-left px-3 py-2 text-xs sm:text-sm hover:bg-indigo-50 transition cursor-pointer text-gray-800"
+                                                                className="w-full text-left px-2.5 py-1.5 text-xs hover:bg-indigo-50 transition cursor-pointer text-gray-800"
                                                                 onClick={() => {
                                                                     setFormData(prev => ({
                                                                         ...prev,
@@ -1396,80 +1350,62 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                             </div>
                                         )}
 
-                                        {/* Display Address Breakdown if populated */}
                                         {(formData.addressLine1 || formData.city) && (
-                                            <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg text-xs sm:text-sm text-gray-800 flex items-start gap-2">
-                                                <MapPin size={16} className="text-indigo-600 shrink-0 mt-0.5" />
-                                                <div className="font-medium">
-                                                    <div>{formData.addressLine1}</div>
-                                                    {formData.addressLine2 && <div>{formData.addressLine2}</div>}
+                                            <div className="p-2 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-800 flex items-start gap-1.5">
+                                                <MapPin size={14} className="text-indigo-600 shrink-0 mt-0.5" />
+                                                <div className="font-medium text-[11px]">
+                                                    <div>{formData.addressLine1} {formData.addressLine2 ? `, ${formData.addressLine2}` : ''}</div>
                                                     <div>{formData.city} {formData.county} <strong className="uppercase">{formData.postcode}</strong></div>
                                                 </div>
                                             </div>
                                         )}
 
-                                        {/* Customer Link and Auto-Create controls */}
-                                        <div className="pt-2 border-t border-gray-100 space-y-2">
-                                            {!linkedCustomer && (
-                                                <button 
-                                                    type="button" 
-                                                    onClick={handleAutoCreateCustomer}
-                                                    className="w-full py-2 flex justify-center items-center gap-2 text-xs sm:text-sm font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-lg transition cursor-pointer shadow-xs"
-                                                    title="Instantly create customer & vehicle records from these details"
-                                                >
-                                                    <Wand2 size={15} /> Auto-Create Customer & Vehicle Record
-                                                </button>
-                                            )}
-
-                                            <div>
-                                                <label className="block text-xs font-semibold text-gray-500 mb-1">
-                                                    {linkedCustomer ? 'Linked Customer Record:' : 'Or link to existing customer in database:'}
-                                                </label>
-                                                <SearchableSelect
-                                                    options={customers.map(c => ({ id: c.id, label: getCustomerDisplayName(c), value: c.id }))}
-                                                    defaultValue={formData.linkedCustomerId || null}
-                                                    onSelect={(value) => {
-                                                        const cust = customers.find(c => c.id === value);
-                                                        setFormData(p => {
-                                                            const customersCars = vehicles.filter(v => v.customerId === value);
-                                                            let newVehicleId = p.linkedVehicleId;
-                                                            if (!newVehicleId || !customersCars.some(car => car.id === newVehicleId)) {
-                                                                newVehicleId = customersCars.length === 1 ? customersCars[0].id : null;
-                                                            }
-                                                            return { 
-                                                                ...p, 
-                                                                linkedCustomerId: value,
-                                                                linkedVehicleId: newVehicleId,
-                                                                fromEmail: cust?.email || p.fromEmail || '',
-                                                                fromPhone: cust?.mobile || cust?.phone || p.fromPhone || '',
-                                                                addressLine1: cust?.addressLine1 || p.addressLine1 || '',
-                                                                addressLine2: cust?.addressLine2 || p.addressLine2 || '',
-                                                                city: cust?.city || p.city || '',
-                                                                county: cust?.county || p.county || '',
-                                                                postcode: cust?.postcode || p.postcode || ''
-                                                            };
-                                                        });
-                                                        setSuggestedCustomers([]);
-                                                    }}
-                                                    placeholder="Search and select existing customer..."
-                                                />
-                                            </div>
+                                        {/* Customer Link / Auto-Create */}
+                                        <div className="pt-1.5 border-t border-gray-100 space-y-1.5">
+                                            <SearchableSelect
+                                                options={customers.map(c => ({ id: c.id, label: getCustomerDisplayName(c), value: c.id }))}
+                                                defaultValue={formData.linkedCustomerId || null}
+                                                onSelect={(value) => {
+                                                    const cust = customers.find(c => c.id === value);
+                                                    setFormData(p => {
+                                                        const customersCars = vehicles.filter(v => v.customerId === value);
+                                                        let newVehicleId = p.linkedVehicleId;
+                                                        if (!newVehicleId || !customersCars.some(car => car.id === newVehicleId)) {
+                                                            newVehicleId = customersCars.length === 1 ? customersCars[0].id : null;
+                                                        }
+                                                        return { 
+                                                            ...p, 
+                                                            linkedCustomerId: value,
+                                                            linkedVehicleId: newVehicleId,
+                                                            fromEmail: cust?.email || p.fromEmail || '',
+                                                            fromPhone: cust?.mobile || cust?.phone || p.fromPhone || '',
+                                                            addressLine1: cust?.addressLine1 || p.addressLine1 || '',
+                                                            addressLine2: cust?.addressLine2 || p.addressLine2 || '',
+                                                            city: cust?.city || p.city || '',
+                                                            county: cust?.county || p.county || '',
+                                                            postcode: cust?.postcode || p.postcode || ''
+                                                        };
+                                                    });
+                                                    setSuggestedCustomers([]);
+                                                }}
+                                                placeholder={linkedCustomer ? "Change linked customer..." : "Link existing customer..."}
+                                            />
                                         </div>
                                     </div>
                                 </div>
 
                                 {/* Vehicle Connection & DVLA Lookup Card */}
-                                <div className="bg-white p-4 sm:p-5 border border-gray-200 rounded-xl shadow-sm space-y-4">
-                                    <div className="flex items-center justify-between border-b border-gray-100 pb-2.5">
-                                        <div className="flex items-center gap-2">
-                                            <Car size={18} className="text-indigo-600" />
-                                            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">
-                                                Vehicle Details & DVLA Search
+                                <div className="bg-white p-4 border border-gray-200 rounded-xl shadow-xs space-y-3.5">
+                                    <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+                                        <div className="flex items-center gap-1.5">
+                                            <Car size={16} className="text-indigo-600" />
+                                            <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider">
+                                                Vehicle & DVLA
                                             </h3>
                                         </div>
                                         {linkedVehicle && (
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-xs font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">
+                                            <div className="flex items-center gap-1.5">
+                                                <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">
                                                     Linked
                                                 </span>
                                                 <button 
@@ -1478,65 +1414,60 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                                     title="Unlink Vehicle" 
                                                     className="text-xs text-red-500 hover:text-red-700 flex items-center gap-1 font-semibold transition cursor-pointer"
                                                 >
-                                                    <XCircle size={14} /> Unlink
+                                                    <XCircle size={13} /> Unlink
                                                 </button>
                                             </div>
                                         )}
                                     </div>
 
-                                    {/* Editable Vehicle Registration & DVLA Lookup (Always Visible) */}
-                                    <div className="space-y-3">
+                                    {/* Vehicle Registration & DVLA Lookup */}
+                                    <div className="space-y-2.5">
                                         <div>
-                                            <label className="block text-xs font-bold text-gray-700 mb-1">Vehicle Registration (VRM)</label>
-                                            <div className="flex gap-2">
+                                            <label className="block text-[11px] font-bold text-gray-700 mb-1">Registration (VRM)</label>
+                                            <div className="flex gap-1.5">
                                                 <input 
                                                     type="text" 
                                                     name="vehicleRegistration" 
                                                     value={formData.vehicleRegistration || ''} 
                                                     onChange={handleChange} 
-                                                    className="w-full p-2.5 border-2 border-yellow-400 bg-yellow-50/50 rounded-lg text-sm sm:text-base font-black font-mono uppercase tracking-widest text-black focus:ring-2 focus:ring-indigo-500 transition" 
+                                                    className="w-full p-2 border-2 border-yellow-400 bg-yellow-50/50 rounded-lg text-xs sm:text-sm font-black font-mono uppercase tracking-widest text-black focus:ring-2 focus:ring-indigo-500 transition" 
                                                     placeholder="e.g. AB12 CDE" 
                                                 />
                                                 <button
                                                     type="button"
                                                     onClick={handleLookupVehicle}
                                                     disabled={!formData.vehicleRegistration || isLookingUpVehicle}
-                                                    className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 text-white font-bold rounded-lg px-4 py-2.5 flex items-center gap-1.5 transition text-xs sm:text-sm shrink-0 cursor-pointer shadow-sm"
+                                                    className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 text-white font-bold rounded-lg px-3 py-2 flex items-center gap-1 transition text-xs shrink-0 cursor-pointer shadow-2xs"
                                                     title="Search DVLA records by registration number"
                                                 >
-                                                    {isLookingUpVehicle ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
-                                                    <span>Lookup DVLA</span>
+                                                    {isLookingUpVehicle ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
+                                                    <span>DVLA</span>
                                                 </button>
                                             </div>
                                         </div>
 
-                                        {/* Vehicle Specs Display Card */}
+                                        {/* Vehicle Specs Display */}
                                         {(formData.vehicleMake || formData.vehicleModel || formData.vehicleYear || formData.vehicleVin || formData.vehicleMotExpiry) && (
-                                            <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-lg text-xs sm:text-sm text-slate-800 space-y-1.5">
+                                            <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 space-y-1">
                                                 <div className="flex items-center justify-between">
-                                                    <div className="font-extrabold text-base text-slate-900">
+                                                    <div className="font-extrabold text-xs sm:text-sm text-slate-900 truncate">
                                                         {formData.vehicleMake} {formData.vehicleModel} {formData.vehicleYear ? `(${formData.vehicleYear})` : ''}
                                                     </div>
-                                                    {formData.vehicleRegistration && (
-                                                        <span className="inline-block bg-yellow-400 text-black font-mono font-black text-xs px-2 py-0.5 rounded border border-yellow-500 uppercase">
-                                                            {formData.vehicleRegistration}
-                                                        </span>
-                                                    )}
                                                 </div>
-                                                <div className="grid grid-cols-2 gap-2 text-xs text-slate-600 pt-1 border-t border-slate-200/80">
-                                                    {formData.vehicleVin && <div>VIN: <span className="font-mono font-bold text-slate-800">{formData.vehicleVin}</span></div>}
-                                                    {formData.vehicleMotExpiry && <div>MOT Expiry: <span className="font-bold text-slate-800">{formData.vehicleMotExpiry}</span></div>}
+                                                <div className="grid grid-cols-2 gap-1.5 text-[11px] text-slate-600 pt-1 border-t border-slate-200">
+                                                    {formData.vehicleVin && <div className="truncate">VIN: <span className="font-mono font-bold text-slate-800">{formData.vehicleVin}</span></div>}
+                                                    {formData.vehicleMotExpiry && <div className="truncate">MOT: <span className="font-bold text-slate-800">{formData.vehicleMotExpiry}</span></div>}
                                                 </div>
                                             </div>
                                         )}
 
                                         {/* Client's Registered Vehicles Quick-Picker */}
                                         {!linkedVehicle && customerVehicles.length > 0 && (
-                                            <div className="space-y-1.5 pt-1">
-                                                <label className="block text-xs font-bold text-indigo-900 uppercase tracking-wider">
-                                                    Client's Saved Vehicles ({customerVehicles.length})
+                                            <div className="space-y-1 pt-1">
+                                                <label className="block text-[10px] font-bold text-indigo-900 uppercase tracking-wider">
+                                                    Saved Vehicles ({customerVehicles.length})
                                                 </label>
-                                                <div className="flex flex-col gap-1.5">
+                                                <div className="flex flex-col gap-1">
                                                     {customerVehicles.map(v => (
                                                         <button
                                                             key={v.id}
@@ -1554,24 +1485,21 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                                                     vehicleManufactureDate: v.manufactureDate || p.vehicleManufactureDate
                                                                 }));
                                                             }}
-                                                            className="flex items-center justify-between p-2.5 text-xs sm:text-sm bg-indigo-50/70 hover:bg-indigo-100 border border-indigo-200 rounded-lg transition text-left cursor-pointer"
+                                                            className="flex items-center justify-between p-2 text-xs bg-indigo-50/70 hover:bg-indigo-100 border border-indigo-200 rounded-lg transition text-left cursor-pointer"
                                                         >
-                                                            <div className="flex items-center gap-2">
-                                                                <span className="font-black text-black font-mono bg-yellow-400 px-2 py-0.5 rounded border border-yellow-500 uppercase text-xs">{v.registration}</span>
-                                                                <span className="font-semibold text-slate-800">{v.make} {v.model} {v.year ? `(${v.year})` : ''}</span>
+                                                            <div className="flex items-center gap-1.5">
+                                                                <span className="font-black text-black font-mono bg-yellow-400 px-1.5 py-0.2 rounded border border-yellow-500 uppercase text-[10px]">{v.registration}</span>
+                                                                <span className="font-medium text-slate-800 truncate">{v.make} {v.model}</span>
                                                             </div>
-                                                            <span className="text-xs font-bold text-indigo-700">Select &rarr;</span>
+                                                            <span className="text-[10px] font-bold text-indigo-700">Select</span>
                                                         </button>
                                                     ))}
                                                 </div>
                                             </div>
                                         )}
 
-                                        {/* Search/Link any vehicle in database */}
-                                        <div className="pt-2 border-t border-gray-100">
-                                            <label className="block text-xs font-semibold text-gray-500 mb-1">
-                                                {linkedVehicle ? 'Linked Vehicle Record:' : 'Or link to existing vehicle in database:'}
-                                            </label>
+                                        {/* Link Any Existing Vehicle */}
+                                        <div className="pt-1.5 border-t border-gray-100">
                                             <SearchableSelect
                                                 options={vehicles
                                                     .map(v => {
@@ -1601,29 +1529,87 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                                         };
                                                     });
                                                 }}
-                                                placeholder="Search and select existing vehicle..."
+                                                placeholder={linkedVehicle ? "Change linked vehicle..." : "Link existing vehicle..."}
                                             />
                                         </div>
                                     </div>
                                 </div>
+                            </div>
 
-                                {/* Status, Ownership & Follow Up Card */}
-                                <div className="bg-white p-4 sm:p-5 border border-gray-200 rounded-xl shadow-sm space-y-3.5">
+                            {/* Column 3 (3 cols): Fast Actions Hub & Operations Status */}
+                            <div className="lg:col-span-3 space-y-4">
+                                {/* Fast Actions Card */}
+                                <div className="bg-gradient-to-b from-indigo-50 via-purple-50/60 to-white p-4 border border-indigo-200 rounded-xl shadow-xs space-y-3">
+                                    <div className="text-xs font-bold text-indigo-900 uppercase tracking-wider flex items-center gap-1.5 border-b border-indigo-100 pb-2">
+                                        <Sparkles size={15} className="text-indigo-600" />
+                                        Fast Actions
+                                    </div>
+                                    <div className="space-y-2">
+                                        <button
+                                            type="button"
+                                            onClick={handleQuickEstimate}
+                                            className="w-full flex items-center justify-center gap-2 px-3.5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-lg font-bold text-xs sm:text-sm shadow-sm transition cursor-pointer"
+                                            title="Smart create estimate directly from customer inquiry details"
+                                        >
+                                            <Wand2 size={15} /> Smart Create Estimate
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={handleQuickReply}
+                                            className="w-full flex items-center justify-center gap-2 px-3.5 py-2.5 bg-white hover:bg-indigo-50 text-indigo-700 border border-indigo-300 rounded-lg font-bold text-xs sm:text-sm shadow-2xs transition cursor-pointer"
+                                            title="Jump to reply and draft response with AI"
+                                        >
+                                            <Mail size={15} /> Draft AI Reply
+                                        </button>
+                                        {!linkedCustomer && (
+                                            <button 
+                                                type="button" 
+                                                onClick={handleAutoCreateCustomer}
+                                                className="w-full py-2 flex justify-center items-center gap-1.5 text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-lg transition cursor-pointer"
+                                                title="Create Customer and Vehicle records in 1 click"
+                                            >
+                                                <Wand2 size={13} /> Auto-Create Records
+                                            </button>
+                                        )}
+                                    </div>
+                                    {linkedEstimate && (
+                                        <div className="pt-2 border-t border-indigo-100 space-y-1">
+                                            <div className="text-xs font-bold text-indigo-950 flex items-center gap-1">
+                                                <FileText size={13} className="text-purple-600" /> Est #{linkedEstimate.estimateNumber}
+                                            </div>
+                                            {onViewEstimate && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        onViewEstimate(linkedEstimate);
+                                                        onClose();
+                                                    }}
+                                                    className="w-full py-1.5 text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded border border-indigo-200 transition"
+                                                >
+                                                    Review Estimate &rarr;
+                                                </button>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Status, Assignment & Operations */}
+                                <div className="bg-white p-4 border border-gray-200 rounded-xl shadow-xs space-y-3">
                                     <h4 className="text-xs font-bold text-gray-800 uppercase tracking-wider border-b border-gray-100 pb-2">
-                                        Status & Ownership
+                                        Status & Assignment
                                     </h4>
                                     
-                                    <div className="grid grid-cols-1 gap-3">
+                                    <div className="space-y-2.5">
                                         <div>
-                                            <label className="block text-xs font-bold text-gray-700 mb-1">Branch / Entity</label>
-                                            <select name="entityId" value={formData.entityId || ''} onChange={handleChange} className="w-full p-2.5 border border-gray-300 rounded-lg text-sm bg-gray-50 font-medium">
+                                            <label className="block text-[11px] font-bold text-gray-700 mb-1">Branch / Entity</label>
+                                            <select name="entityId" value={formData.entityId || ''} onChange={handleChange} className="w-full p-2 border border-gray-300 rounded-lg text-xs bg-gray-50 font-medium">
                                                 {entities?.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
                                             </select>
                                         </div>
-                                        <div className="flex gap-3">
+                                        <div className="flex gap-2">
                                             <div className="flex-1">
-                                                <label className="block text-xs font-bold text-gray-700 mb-1">Status</label>
-                                                <select name="status" value={formData.status || 'Inbox'} onChange={handleChange} className="w-full p-2.5 border border-gray-300 rounded-lg text-sm bg-gray-50 font-medium">
+                                                <label className="block text-[11px] font-bold text-gray-700 mb-1">Status</label>
+                                                <select name="status" value={formData.status || 'Inbox'} onChange={handleChange} className="w-full p-2 border border-gray-300 rounded-lg text-xs bg-gray-50 font-medium">
                                                     <option value="Inbox">Inbox</option>
                                                     <option value="New Requests">New Requests</option>
                                                     <option value="Our Action">Our Action (Priority)</option>
@@ -1633,18 +1619,18 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                                     <option value="Closed">Closed</option>
                                                 </select>
                                             </div>
-                                            <div className="w-24">
-                                                <label className="block text-xs font-bold text-gray-700 mb-1">Urgent</label>
-                                                <label className="relative inline-flex items-center cursor-pointer mt-1">
+                                            <div className="w-16">
+                                                <label className="block text-[11px] font-bold text-gray-700 mb-1">Urgent</label>
+                                                <label className="relative inline-flex items-center cursor-pointer mt-0.5">
                                                     <input type="checkbox" className="sr-only peer" checked={!!formData.isUrgent} onChange={e => setFormData(p => ({ ...p, isUrgent: e.target.checked }))} />
-                                                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-500"></div>
+                                                    <div className="w-10 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-red-500"></div>
                                                 </label>
                                             </div>
                                         </div>
                                         
                                         <div>
-                                            <label className="block text-xs font-bold text-gray-700 mb-1">Action Status (Optional)</label>
-                                            <select name="actionStatus" value={formData.actionStatus || ''} onChange={handleChange} className="w-full p-2.5 border border-gray-300 rounded-lg text-sm bg-gray-50 font-medium">
+                                            <label className="block text-[11px] font-bold text-gray-700 mb-1">Action Status</label>
+                                            <select name="actionStatus" value={formData.actionStatus || ''} onChange={handleChange} className="w-full p-2 border border-gray-300 rounded-lg text-xs bg-gray-50 font-medium">
                                                 <option value="">-- None --</option>
                                                 <optgroup label="Communication">
                                                     <option value="New Mail">New Mail</option>
@@ -1664,10 +1650,78 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                                 </optgroup>
                                             </select>
                                         </div>
+
+                                        <div>
+                                            <label className="block text-[11px] font-bold text-gray-700 mb-1">Follow Up Date</label>
+                                            <input type="date" name="followUpDate" value={formData.followUpDate || ''} onChange={handleChange} className="w-full p-2 border border-gray-300 rounded-lg text-xs bg-gray-50 font-medium" />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-[11px] font-bold text-gray-700 mb-1">Taken By</label>
+                                            <SearchableSelect
+                                                options={users.map(u => ({ id: u.id, label: u.name, value: u.id }))}
+                                                defaultValue={formData.takenByUserId || null}
+                                                onSelect={(value) => {
+                                                    if (value !== formData.takenByUserId) {
+                                                        const userName = users.find(u => u.id === value)?.name || value;
+                                                        const newLog = {
+                                                            id: crypto.randomUUID(),
+                                                            timestamp: new Date().toISOString(),
+                                                            userId: currentUser.id,
+                                                            actionType: 'Reassigned',
+                                                            notes: `Taken By changed to: ${userName}`
+                                                        };
+                                                        setFormData(p => ({ ...p, takenByUserId: value, logs: [...(p.logs || []), newLog] }));
+                                                    }
+                                                }}
+                                                placeholder="Taken by..."
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-[11px] font-bold text-gray-700 mb-1">Assigned To</label>
+                                            <SearchableSelect
+                                                options={[
+                                                    ...users.map(u => ({ id: u.id, label: `👤 ${u.name}`, value: `user_${u.id}` })),
+                                                    ...(entities || []).map(e => ({ id: e.id, label: `🏢 ${e.name} (Team)`, value: `entity_${e.id}` }))
+                                                ]}
+                                                defaultValue={
+                                                    formData.assignedToUserId ? `user_${formData.assignedToUserId}` : 
+                                                    formData.assignedToEntityId ? `entity_${formData.assignedToEntityId}` : null
+                                                }
+                                                onSelect={(value) => {
+                                                    if (!value) return;
+                                                    const isUser = value.startsWith('user_');
+                                                    const id = value.replace(/^(user_|entity_)/, '');
+                                                    
+                                                    const prevId = formData.assignedToUserId || formData.assignedToEntityId;
+                                                    if (id !== prevId) {
+                                                        const assignName = isUser 
+                                                            ? users.find(u => u.id === id)?.name || id
+                                                            : entities?.find(e => e.id === id)?.name || id;
+                                                        const newLog = {
+                                                            id: crypto.randomUUID(),
+                                                            timestamp: new Date().toISOString(),
+                                                            userId: currentUser.id,
+                                                            actionType: 'Assigned',
+                                                            notes: `Assigned To changed to: ${assignName}`
+                                                        };
+                                                        setFormData(p => ({ 
+                                                            ...p, 
+                                                            assignedToUserId: isUser ? id : undefined,
+                                                            assignedToEntityId: !isUser ? id : undefined,
+                                                            logs: [...(p.logs || []), newLog] 
+                                                        }));
+                                                    }
+                                                }}
+                                                placeholder="Assign to user/team..."
+                                            />
+                                        </div>
+
                                         {formData.status === 'Closed' && (
                                             <div>
-                                                <label className="block text-xs font-bold text-red-600 mb-1">Reason for Closing</label>
-                                                <select name="closedReason" value={formData.closedReason || ''} onChange={handleChange} className="w-full p-2.5 border border-red-200 rounded-lg text-sm bg-red-50 font-medium">
+                                                <label className="block text-[11px] font-bold text-red-600 mb-1">Reason for Closing</label>
+                                                <select name="closedReason" value={formData.closedReason || ''} onChange={handleChange} className="w-full p-2 border border-red-200 rounded-lg text-xs bg-red-50 font-medium">
                                                     <option value="">Select a reason...</option>
                                                     <option value="Lost to Competitor">Lost to Competitor</option>
                                                     <option value="Too Expensive">Too Expensive</option>
@@ -1679,72 +1733,6 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                                 </select>
                                             </div>
                                         )}
-                                        <div>
-                                            <label className="block text-xs font-bold text-gray-700 mb-1">Follow Up Date</label>
-                                            <input type="date" name="followUpDate" value={formData.followUpDate || ''} onChange={handleChange} className="w-full p-2.5 border border-gray-300 rounded-lg text-sm bg-gray-50 font-medium" />
-                                        </div>
-                                        <div className="grid grid-cols-2 gap-3">
-                                            <div>
-                                                <label className="block text-xs font-bold text-gray-700 mb-1">Taken By</label>
-                                                <SearchableSelect
-                                                    options={users.map(u => ({ id: u.id, label: u.name, value: u.id }))}
-                                                    defaultValue={formData.takenByUserId || null}
-                                                    onSelect={(value) => {
-                                                        if (value !== formData.takenByUserId) {
-                                                            const userName = users.find(u => u.id === value)?.name || value;
-                                                            const newLog = {
-                                                                id: crypto.randomUUID(),
-                                                                timestamp: new Date().toISOString(),
-                                                                userId: currentUser.id,
-                                                                actionType: 'Reassigned',
-                                                                notes: `Taken By changed to: ${userName}`
-                                                            };
-                                                            setFormData(p => ({ ...p, takenByUserId: value, logs: [...(p.logs || []), newLog] }));
-                                                        }
-                                                    }}
-                                                    placeholder="Taken by..."
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="block text-xs font-bold text-gray-700 mb-1">Assigned To</label>
-                                                <SearchableSelect
-                                                    options={[
-                                                        ...users.map(u => ({ id: u.id, label: `👤 ${u.name}`, value: `user_${u.id}` })),
-                                                        ...(entities || []).map(e => ({ id: e.id, label: `🏢 ${e.name} (Team)`, value: `entity_${e.id}` }))
-                                                    ]}
-                                                    defaultValue={
-                                                        formData.assignedToUserId ? `user_${formData.assignedToUserId}` : 
-                                                        formData.assignedToEntityId ? `entity_${formData.assignedToEntityId}` : null
-                                                    }
-                                                    onSelect={(value) => {
-                                                        if (!value) return;
-                                                        const isUser = value.startsWith('user_');
-                                                        const id = value.replace(/^(user_|entity_)/, '');
-                                                        
-                                                        const prevId = formData.assignedToUserId || formData.assignedToEntityId;
-                                                        if (id !== prevId) {
-                                                            const assignName = isUser 
-                                                                ? users.find(u => u.id === id)?.name || id
-                                                                : entities?.find(e => e.id === id)?.name || id;
-                                                            const newLog = {
-                                                                id: crypto.randomUUID(),
-                                                                timestamp: new Date().toISOString(),
-                                                                userId: currentUser.id,
-                                                                actionType: 'Assigned',
-                                                                notes: `Assigned To changed to: ${assignName}`
-                                                            };
-                                                            setFormData(p => ({ 
-                                                                ...p, 
-                                                                assignedToUserId: isUser ? id : undefined,
-                                                                assignedToEntityId: !isUser ? id : undefined,
-                                                                logs: [...(p.logs || []), newLog] 
-                                                            }));
-                                                        }
-                                                    }}
-                                                    placeholder="Assign to user or team..."
-                                                />
-                                            </div>
-                                        </div>
                                     </div>
                                 </div>
                             </div>
