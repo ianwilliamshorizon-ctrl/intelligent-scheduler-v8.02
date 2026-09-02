@@ -18,6 +18,8 @@ const getCapacityInfo = (totalHours: number, maxHours: number) => {
     return { status: 'AVAILABLE', classes: 'bg-emerald-100 text-emerald-800 font-bold border border-emerald-300 shadow-sm' };
 };
 
+import { getWheelbaseAlertInfo } from '../core/utils/vehicleUtils';
+
 interface DraggableJobItemProps {
     job: Job;
     segment: JobSegment;
@@ -30,6 +32,8 @@ const DraggableJobItem: React.FC<DraggableJobItemProps> = ({ job, segment, vehic
     const isAllocated = segment.status !== 'Unallocated';
     const cursorClass = isAllocated ? 'cursor-pointer' : 'cursor-grab';
     const baseClasses = `p-1.5 rounded-md ${cursorClass} text-xs transition-colors`;
+    const wbInfo = getWheelbaseAlertInfo(vehicle?.wheelbaseType);
+
     const colorClasses = isAllocated 
         ? "bg-indigo-200 text-indigo-800"
         : "bg-gray-200 text-gray-800 hover:bg-gray-300";
@@ -39,12 +43,19 @@ const DraggableJobItem: React.FC<DraggableJobItemProps> = ({ job, segment, vehic
             draggable={!isAllocated}
             onDragStart={(e) => onDragStart(e, job.id, segment.segmentId)}
             onClick={(e) => { e.stopPropagation(); onEditJob(job.id); }}
-            className={`${baseClasses} ${colorClasses}`}
-            title={isAllocated ? `View job details: ${job.description}` : `Drag to schedule: ${job.description} for ${vehicle?.registration}`}
+            className={`${baseClasses} ${colorClasses} ${wbInfo?.severity === 'high' || wbInfo?.severity === 'critical' ? 'border-l-4 border-l-amber-500' : ''}`}
+            title={isAllocated ? `View job details: ${job.description}` : `Drag to schedule: ${job.description} for ${vehicle?.registration} ${wbInfo ? `(${wbInfo.fullLabel})` : ''}`}
         >
-            <p className="font-semibold truncate flex items-center gap-1.5">
-                <Car size={12} /> {vehicle?.registration}
-            </p>
+            <div className="font-semibold truncate flex items-center justify-between gap-1">
+                <span className="flex items-center gap-1 truncate">
+                    <Car size={12} /> {vehicle?.registration}
+                </span>
+                {wbInfo && (
+                    <span className={`text-[8px] font-black uppercase px-1 py-0.2 rounded border ${wbInfo.badgeClass}`}>
+                        {wbInfo.label}
+                    </span>
+                )}
+            </div>
             <p className="truncate">{job.description}</p>
         </div>
     );

@@ -12,6 +12,7 @@ import { findBestVoice, prepareTextForSpeech } from '../../../core/utils/speechU
 import { useApp } from '../../../core/state/AppContext';
 import { useData } from '../../../core/state/DataContext';
 import SearchableSelect from '../../SearchableSelect';
+import { getWheelbaseAlertInfo } from '../../../core/utils/vehicleUtils';
 
 interface TabSectionProps {
     title: string;
@@ -93,7 +94,7 @@ const JobDetailsTab: React.FC<JobDetailsTabProps> = ({
     const vehicleInfoData = vehicle ? {
         type: `${vehicle.year || ''} ${vehicle.make || ''} ${vehicle.model || ''}`.trim() || 'N/A',
         colour: vehicle.colour || 'N/A',
-        wheelbase: vehicle.wheelbaseType ? `${vehicle.wheelbaseType} ${vehicle.wheelbaseLengthM ? `(${vehicle.wheelbaseLengthM}m)` : ''}` : 'N/A',
+        wheelbase: vehicle.wheelbaseType || 'N/A',
         'Year of Manufacture': vehicle.manufactureDate || 'N/A',
         vin: vehicle.vin || 'N/A',
         motDue: vehicle.nextMotDate || 'N/A',
@@ -203,15 +204,15 @@ const JobDetailsTab: React.FC<JobDetailsTabProps> = ({
                                     <span className="bg-yellow-400 text-black px-2 py-0.5 rounded font-mono font-bold text-sm border border-black inline-block uppercase tracking-wide">
                                         {vehicle.registration}
                                     </span>
-                                    {vehicle.wheelbaseType && (
-                                        <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded border ${
-                                            vehicle.wheelbaseType.toUpperCase().includes('LWB') || vehicle.wheelbaseType.toUpperCase().includes('XLWB')
-                                                ? 'bg-amber-100 text-amber-900 border-amber-300'
-                                                : 'bg-slate-100 text-slate-700 border-slate-300'
-                                        }`}>
-                                            {vehicle.wheelbaseType} {vehicle.wheelbaseLengthM ? `• ${vehicle.wheelbaseLengthM}m` : ''}
-                                        </span>
-                                    )}
+                                    {(() => {
+                                        const wb = getWheelbaseAlertInfo(vehicle.wheelbaseType);
+                                        if (!wb) return null;
+                                        return (
+                                            <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded border ${wb.badgeClass}`}>
+                                                {wb.label}
+                                            </span>
+                                        );
+                                    })()}
                                 </div>
                                 <p className="text-gray-600 text-xs font-semibold">{vehicle.make} {vehicle.model}</p>
                             </div>
@@ -219,17 +220,18 @@ const JobDetailsTab: React.FC<JobDetailsTabProps> = ({
                         </div>
 
                         {/* Lift Restriction Warning */}
-                        {(vehicle.wheelbaseType?.toUpperCase().includes('LWB') || 
-                          vehicle.wheelbaseType?.toUpperCase().includes('XLWB') || 
-                          vehicle.wheelbaseType?.toUpperCase().includes('LONG') ||
-                          (Number(vehicle.wheelbaseLengthM) > 3.2)) && (
-                            <div className="p-2 bg-amber-50 border border-amber-200 rounded-lg flex items-center gap-2 text-[11px] text-amber-900 font-medium">
-                                <span>⚠️</span>
-                                <div>
-                                    <strong className="text-amber-950 uppercase tracking-wide">Extended Wheelbase:</strong> Check lift capacity before assigning to standard bays.
+                        {(() => {
+                            const wb = getWheelbaseAlertInfo(vehicle.wheelbaseType);
+                            if (!wb || !wb.isAlert) return null;
+                            return (
+                                <div className={`p-2.5 rounded-lg border flex items-center gap-2 text-xs ${wb.bannerClass}`}>
+                                    <span className="text-base">⚠️</span>
+                                    <div>
+                                        <strong className="uppercase tracking-wide">{wb.fullLabel}:</strong> {wb.warningMessage}
+                                    </div>
                                 </div>
-                            </div>
-                        )}
+                            );
+                        })()}
                     </div>
                 </TabSection>
             )}

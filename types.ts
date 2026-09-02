@@ -244,7 +244,6 @@ export interface Vehicle {
     manufactureDate?: string; 
     covid19MotExemption?: boolean;
     wheelbaseType?: string;
-    wheelbaseLengthM?: number;
     customerId: string;
     customer?: Customer; 
     notes?: string;

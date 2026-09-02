@@ -52,42 +52,29 @@ export const lookupMotHistory = async (vrm: string): Promise<MotTest[]> => {
   }));
 };
 
-// Wheelbase extractor from BodyDetails, Dimensions, and Model text
-const extractWheelbaseInfo = (res: any, modelText: string = ''): { wheelbaseType?: string; wheelbaseLengthM?: number } => {
+// Wheelbase extractor from BodyDetails and Model text (SWB, MWB, LWB, XLWB)
+const extractWheelbaseType = (res: any, modelText: string = ''): string | undefined => {
   const rawType = findValue(res, 'WheelbaseType') || findValue(res, 'WheelBaseType') || findValue(res, 'Wheelbase') || '';
-  const rawLength = findValue(res, 'WheelbaseLengthM') || findValue(res, 'WheelBaseLengthM') || findValue(res, 'WheelbaseLength') || findValue(res, 'WheelbaseMm') || findValue(res, 'WheelBaseMm');
-
-  let wheelbaseLengthM: number | undefined = undefined;
-  if (rawLength !== null && rawLength !== undefined && rawLength !== '') {
-    const num = parseFloat(rawLength);
-    if (!isNaN(num) && num > 0) {
-      // If value is in mm (e.g. 3450 or 3000), convert to metres
-      wheelbaseLengthM = num > 50 ? parseFloat((num / 1000).toFixed(2)) : parseFloat(num.toFixed(2));
-    }
-  }
 
   let wheelbaseType: string = '';
   if (typeof rawType === 'string' && rawType.trim()) {
     wheelbaseType = rawType.trim();
   }
 
-  // Infer/standardize from model / description text (common in LCVs)
+  // Infer/standardize from model / description text (common in LCVs: Transit, Sprinter, Crafter, Vivaro, etc.)
   const combinedText = `${modelText} ${wheelbaseType}`.trim();
 
-  if (/\b(XXLWB|XLWB|EXTRA LONG WHEEL\s*BASE|L4H2|L4H3|L4)\b/i.test(combinedText)) {
-    wheelbaseType = wheelbaseType && !['SWB', 'MWB', 'LWB'].includes(wheelbaseType.toUpperCase()) ? `${wheelbaseType} (XLWB)` : 'XLWB';
+  if (/\b(XXLWB|XLWB|EXTRA LONG WHEEL\s*BASE|EXTENDED WHEEL\s*BASE|MAXI|L4H2|L4H3|L4)\b/i.test(combinedText)) {
+    return 'XLWB';
   } else if (/\b(LWB|LONG WHEEL\s*BASE|L3H2|L3H3|L3)\b/i.test(combinedText)) {
-    wheelbaseType = wheelbaseType && !['SWB', 'MWB', 'XLWB'].includes(wheelbaseType.toUpperCase()) ? `${wheelbaseType} (LWB)` : 'LWB';
-  } else if (/\b(MWB|MEDIUM WHEEL\s*BASE|MED WHEEL\s*BASE|L2H1|L2H2|L2)\b/i.test(combinedText)) {
-    wheelbaseType = wheelbaseType && !['SWB', 'LWB', 'XLWB'].includes(wheelbaseType.toUpperCase()) ? `${wheelbaseType} (MWB)` : 'MWB';
-  } else if (/\b(SWB|SHORT WHEEL\s*BASE|L1H1|L1H2|L1)\b/i.test(combinedText)) {
-    wheelbaseType = wheelbaseType && !['MWB', 'LWB', 'XLWB'].includes(wheelbaseType.toUpperCase()) ? `${wheelbaseType} (SWB)` : 'SWB';
+    return 'LWB';
+  } else if (/\b(MWB|MEDIUM WHEEL\s*BASE|MED WHEEL\s*BASE|MID WHEEL\s*BASE|L2H1|L2H2|L2)\b/i.test(combinedText)) {
+    return 'MWB';
+  } else if (/\b(SWB|SHORT WHEEL\s*BASE|COMPACT|L1H1|L1H2|L1)\b/i.test(combinedText)) {
+    return 'SWB';
   }
 
-  return {
-    wheelbaseType: wheelbaseType || (typeof rawType === 'string' && rawType.trim() ? rawType.trim() : undefined),
-    wheelbaseLengthM
-  };
+  return wheelbaseType || undefined;
 };
 
 export const lookupVehicleByVRM = async (vrm: string, includeMotHistory: boolean = false): Promise<Partial<Vehicle>> => {
@@ -106,7 +93,7 @@ export const lookupVehicleByVRM = async (vrm: string, includeMotHistory: boolean
   const make = findValue(res, 'DvlaMake') || findValue(res, 'Make') || '';
   const model = findValue(res, 'DvlaModel') || findValue(res, 'Model') || '';
 
-  const { wheelbaseType, wheelbaseLengthM } = extractWheelbaseInfo(res, model);
+  const wheelbaseType = extractWheelbaseType(res, model);
 
   const mapped: Partial<Vehicle> & { motHistory?: MotTest[] } = {
     registration: cleanVrm.toUpperCase(),
@@ -121,7 +108,6 @@ export const lookupVehicleByVRM = async (vrm: string, includeMotHistory: boolean
     cc: findValue(res, 'EngineCapacityCc') || undefined,
     transmissionType: findValue(res, 'TransmissionType') || 'Other',
     wheelbaseType: wheelbaseType || undefined,
-    wheelbaseLengthM: wheelbaseLengthM || undefined,
     nextMotDate: '',
   };
 

@@ -5,6 +5,7 @@ import { StorageLocation } from '../../types';
 import { JobHoverPopout } from './JobHoverPopout';
 import { useData } from '../../core/state/DataContext';
 import { getRelativeDate } from '../../core/utils/dateUtils';
+import { getWheelbaseAlertInfo } from '../../core/utils/vehicleUtils';
 
 interface SummaryJobCardProps {
     job: Job;
@@ -100,18 +101,18 @@ export const SummaryJobCard: React.FC<SummaryJobCardProps> = (props) => {
                             <span className="text-[11px] font-black uppercase text-gray-900 tracking-tighter whitespace-nowrap">
                                 {vehicle?.registration}
                             </span>
-                            {vehicle?.wheelbaseType && (
-                                <span 
-                                    className={`text-[8px] font-black uppercase px-1 py-0.2 rounded border shadow-2xs ${
-                                        vehicle.wheelbaseType.toUpperCase().includes('LWB') || vehicle.wheelbaseType.toUpperCase().includes('XLWB')
-                                            ? 'bg-amber-100 text-amber-900 border-amber-300'
-                                            : 'bg-slate-100 text-slate-700 border-slate-200'
-                                    }`} 
-                                    title={`Wheelbase: ${vehicle.wheelbaseType} ${vehicle.wheelbaseLengthM ? `(${vehicle.wheelbaseLengthM}m)` : ''}`}
-                                >
-                                    {vehicle.wheelbaseType}
-                                </span>
-                            )}
+                            {(() => {
+                                const wbInfo = getWheelbaseAlertInfo(vehicle?.wheelbaseType);
+                                if (!wbInfo) return null;
+                                return (
+                                    <span 
+                                        className={`text-[8px] font-black uppercase px-1 py-0.2 rounded border shadow-2xs ${wbInfo.badgeClass}`} 
+                                        title={`${wbInfo.fullLabel}: ${wbInfo.warningMessage}`}
+                                    >
+                                        {wbInfo.label}
+                                    </span>
+                                );
+                            })()}
                         </div>
                         <span className="text-[10px] text-gray-500 truncate flex-grow text-right" title={`${vehicle?.make} ${vehicle?.model}`}>
                             {vehicle?.make} {vehicle?.model}

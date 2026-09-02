@@ -19,6 +19,7 @@ import { toast } from 'react-toastify';
 import { lookupVehicleByVRM } from '../services/vehicleLookupService';
 import { lookupAddressByPostcode, AddressDetails } from '../services/postcodeLookupService';
 import { extractInquiryDetailsFromText, parseEmailThread } from '../core/utils/inquiryUtils';
+import { getWheelbaseAlertInfo } from '../core/utils/vehicleUtils';
 import { getImage, saveImage } from '../utils/imageStore';
 
 interface InquiryFormModalProps {
@@ -343,7 +344,6 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                             manufactureDate: manufactureDate || linkedVehicle.manufactureDate,
                             vin: vin || linkedVehicle.vin,
                             wheelbaseType: data.wheelbaseType || linkedVehicle.wheelbaseType,
-                            wheelbaseLengthM: data.wheelbaseLengthM !== undefined ? data.wheelbaseLengthM : linkedVehicle.wheelbaseLengthM,
                             nextMotDate: nextMotDate || linkedVehicle.nextMotDate,
                             motExpiryDate: nextMotDate || linkedVehicle.motExpiryDate || linkedVehicle.nextMotDate,
                             colour: data.colour || linkedVehicle.colour,
@@ -1455,27 +1455,33 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                                     <div className="font-extrabold text-xs sm:text-sm text-slate-900 truncate">
                                                         {formData.vehicleMake} {formData.vehicleModel} {formData.vehicleYear ? `(${formData.vehicleYear})` : ''}
                                                     </div>
-                                                    {linkedVehicle?.wheelbaseType && (
-                                                        <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded border ${
-                                                            linkedVehicle.wheelbaseType.toUpperCase().includes('LWB') || linkedVehicle.wheelbaseType.toUpperCase().includes('XLWB')
-                                                                ? 'bg-amber-100 text-amber-900 border-amber-300'
-                                                                : 'bg-slate-200 text-slate-800 border-slate-300'
-                                                        }`}>
-                                                            {linkedVehicle.wheelbaseType} {linkedVehicle.wheelbaseLengthM ? `• ${linkedVehicle.wheelbaseLengthM}m` : ''}
-                                                        </span>
-                                                    )}
+                                                    {(() => {
+                                                        const wb = getWheelbaseAlertInfo(linkedVehicle?.wheelbaseType);
+                                                        if (!wb) return null;
+                                                        return (
+                                                            <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded border ${wb.badgeClass}`}>
+                                                                {wb.label}
+                                                            </span>
+                                                        );
+                                                    })()}
                                                 </div>
                                                 <div className="grid grid-cols-2 gap-1.5 text-[11px] text-slate-600 pt-1 border-t border-slate-200">
                                                     {formData.vehicleVin && <div className="truncate">VIN: <span className="font-mono font-bold text-slate-800">{formData.vehicleVin}</span></div>}
                                                     {formData.vehicleMotExpiry && <div className="truncate">MOT: <span className="font-bold text-slate-800">{formData.vehicleMotExpiry}</span></div>}
                                                 </div>
                                                 {/* Lift Alert */}
-                                                {linkedVehicle?.wheelbaseType && (linkedVehicle.wheelbaseType.toUpperCase().includes('LWB') || linkedVehicle.wheelbaseType.toUpperCase().includes('XLWB') || (linkedVehicle.wheelbaseLengthM && linkedVehicle.wheelbaseLengthM > 3.2)) && (
-                                                    <div className="p-1.5 bg-amber-50 border border-amber-200 rounded text-[10px] text-amber-900 font-semibold flex items-center gap-1.5">
-                                                        <span>⚠️</span>
-                                                        <span>Extended Wheelbase: Verify ramp/lift compatibility before workshop booking.</span>
-                                                    </div>
-                                                )}
+                                                {(() => {
+                                                    const wb = getWheelbaseAlertInfo(linkedVehicle?.wheelbaseType);
+                                                    if (!wb || !wb.isAlert) return null;
+                                                    return (
+                                                        <div className={`p-2 rounded border flex items-center gap-1.5 text-[11px] font-medium ${wb.bannerClass}`}>
+                                                            <span>⚠️</span>
+                                                            <div>
+                                                                <strong className="uppercase">{wb.fullLabel}:</strong> {wb.warningMessage}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })()}
                                             </div>
                                         )}
 

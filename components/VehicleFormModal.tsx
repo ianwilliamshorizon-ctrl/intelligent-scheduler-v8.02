@@ -17,6 +17,7 @@ import { useData } from '../core/state/DataContext';
 import * as T from '../types';
 import { formatCurrency } from '../utils/formatUtils';
 import { formatDate, dateStringToDate } from '../core/utils/dateUtils';
+import { getWheelbaseAlertInfo } from '../core/utils/vehicleUtils';
 import AddNewVehicleForm from './AddNewVehicleForm';
 import CustomerFormModal from './CustomerFormModal';
 
@@ -220,7 +221,6 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
                     engineNumber: details.engineNumber || prev.engineNumber,
                     vin: details.vin || prev.vin,
                     wheelbaseType: details.wheelbaseType || prev.wheelbaseType,
-                    wheelbaseLengthM: details.wheelbaseLengthM !== undefined ? details.wheelbaseLengthM : prev.wheelbaseLengthM,
                     nextMotDate: details.nextMotDate || prev.nextMotDate,
                     manufactureDate: details.manufactureDate || (details.monthOfFirstRegistration ? `${details.monthOfFirstRegistration}-01` : prev.manufactureDate),
                     motHistory: details.motHistory || [],
@@ -456,26 +456,32 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
                                     <input name="nextServiceDate" type="date" value={formData.nextServiceDate || ''} onChange={handleChange} className="w-full p-2 border rounded" />
                                 </div>
 
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Wheelbase Type</label>
+                                <div className="md:col-span-2">
+                                    <div className="flex items-center justify-between mb-1">
+                                        <label className="block text-sm font-medium text-gray-700">Wheelbase Type</label>
+                                        <div className="flex gap-1">
+                                            {['SWB', 'MWB', 'LWB', 'XLWB'].map((type) => (
+                                                <button
+                                                    key={type}
+                                                    type="button"
+                                                    onClick={() => setFormData(p => ({ ...p, wheelbaseType: type }))}
+                                                    className={`px-2 py-0.5 rounded text-[11px] font-bold transition-colors ${
+                                                        formData.wheelbaseType?.toUpperCase() === type
+                                                            ? type === 'LWB' ? 'bg-amber-500 text-white shadow-xs' : type === 'XLWB' ? 'bg-rose-600 text-white shadow-xs' : type === 'MWB' ? 'bg-sky-600 text-white shadow-xs' : 'bg-slate-700 text-white shadow-xs'
+                                                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-200'
+                                                    }`}
+                                                >
+                                                    {type}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
                                     <input 
                                         name="wheelbaseType" 
                                         value={formData.wheelbaseType || ''} 
                                         onChange={handleChange} 
                                         placeholder="e.g. SWB, MWB, LWB, XLWB" 
                                         className="w-full p-2 border rounded font-semibold text-gray-800" 
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Wheelbase Length (m)</label>
-                                    <input 
-                                        name="wheelbaseLengthM" 
-                                        type="number" 
-                                        step="0.01" 
-                                        value={formData.wheelbaseLengthM !== undefined ? formData.wheelbaseLengthM : ''} 
-                                        onChange={handleChange} 
-                                        placeholder="e.g. 3.45" 
-                                        className="w-full p-2 border rounded font-mono text-gray-800" 
                                     />
                                 </div>
 
@@ -493,27 +499,28 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
                                 </div>
 
                                 {/* Wheelbase / Lift Restriction Alert */}
-                                {(formData.wheelbaseType?.toUpperCase().includes('LWB') || 
-                                  formData.wheelbaseType?.toUpperCase().includes('XLWB') || 
-                                  formData.wheelbaseType?.toUpperCase().includes('LONG') ||
-                                  (Number(formData.wheelbaseLengthM) > 3.2)) && (
-                                    <div className="md:col-span-3 p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between text-xs text-amber-900 animate-fade-in">
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-base">⚠️</span>
-                                            <div>
-                                                <span className="font-bold uppercase tracking-wider text-amber-950">
-                                                    Extended Wheelbase Vehicle ({formData.wheelbaseType} {formData.wheelbaseLengthM ? `• ${formData.wheelbaseLengthM}m` : ''})
-                                                </span>
-                                                <div className="text-[11px] text-amber-700">
-                                                    Restricted vehicle length. Verify ramp/lift wheelbase capacity before bay allocation.
+                                {(() => {
+                                    const wb = getWheelbaseAlertInfo(formData.wheelbaseType);
+                                    if (!wb || !wb.isAlert) return null;
+                                    return (
+                                        <div className={`md:col-span-3 p-3 rounded-xl border flex items-center justify-between text-xs animate-fade-in ${wb.bannerClass}`}>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-lg">⚠️</span>
+                                                <div>
+                                                    <span className="font-bold uppercase tracking-wider">
+                                                        {wb.fullLabel} Alert
+                                                    </span>
+                                                    <div className="text-[11px] font-medium opacity-90">
+                                                        {wb.warningMessage}
+                                                    </div>
                                                 </div>
                                             </div>
+                                            <span className={`font-mono font-bold px-2.5 py-1 rounded text-[11px] uppercase tracking-wider ${wb.badgeClass}`}>
+                                                {wb.label}
+                                            </span>
                                         </div>
-                                        <span className="font-mono font-bold bg-amber-200/80 px-2 py-0.5 rounded text-amber-900 text-[10px] uppercase">
-                                            Lift Check Required
-                                        </span>
-                                    </div>
-                                )}
+                                    );
+                                })()}
                             </div>
                             {formData.id && <VehicleImageManager vehicle={formData as Vehicle} onUpdateVehicle={(v) => setFormData(v)} />}
                         </div>

@@ -8,6 +8,8 @@ import { useApp } from '../../core/state/AppContext';
 import { JobHoverPopout } from '../shared/JobHoverPopout';
 import { JobActionsMenu } from '../shared/JobActionsMenu';
 
+import { getWheelbaseAlertInfo } from '../../core/utils/vehicleUtils';
+
 export const DraggableJobCard: React.FC<{
     job: Job;
     vehicle?: Vehicle;
@@ -38,6 +40,7 @@ export const DraggableJobCard: React.FC<{
     const canDrag = baseRole === 'Admin' || baseRole === 'Dispatcher';
     const segmentToDrag = unallocatedSegments[0];
     const { partsStatus, vehicleStatus } = job;
+    const wheelbaseInfo = getWheelbaseAlertInfo(vehicle?.wheelbaseType);
 
     const partsStatusInfo = {
         'Awaiting Order': { title: 'Awaiting Parts Order', color: 'text-red-600', icon: PackageIcon },
@@ -67,15 +70,29 @@ export const DraggableJobCard: React.FC<{
         const arePartsReady = job.partsStatus === 'Fully Received' || job.partsStatus === 'Not Required';
         const isReadyForWorkshop = isVehicleOnSite && arePartsReady;
         
-        if (isReadyForWorkshop) return 'bg-emerald-50 border-emerald-200 text-emerald-900 shadow-emerald-100';
-        
-        switch (job.partsStatus) {
-            case 'Awaiting Order': return 'bg-rose-50 border-rose-200 text-rose-900 shadow-rose-100';
-            case 'Ordered': return 'bg-sky-50 border-sky-200 text-sky-900 shadow-sky-100';
-            case 'Partially Received': return 'bg-amber-50 border-amber-200 text-amber-900 shadow-amber-100';
-            case 'Fully Received': case 'Not Required': return 'bg-indigo-50 border-indigo-200 text-indigo-900 shadow-indigo-100';
-            default: return 'bg-white border-gray-100 text-gray-800';
+        let baseClass = '';
+        if (isReadyForWorkshop) baseClass = 'bg-emerald-50 border-emerald-200 text-emerald-900 shadow-emerald-100';
+        else {
+            switch (job.partsStatus) {
+                case 'Awaiting Order': baseClass = 'bg-rose-50 border-rose-200 text-rose-900 shadow-rose-100'; break;
+                case 'Ordered': baseClass = 'bg-sky-50 border-sky-200 text-sky-900 shadow-sky-100'; break;
+                case 'Partially Received': baseClass = 'bg-amber-50 border-amber-200 text-amber-900 shadow-amber-100'; break;
+                case 'Fully Received': case 'Not Required': baseClass = 'bg-indigo-50 border-indigo-200 text-indigo-900 shadow-indigo-100'; break;
+                default: baseClass = 'bg-white border-gray-100 text-gray-800'; break;
+            }
         }
+
+        if (wheelbaseInfo?.severity === 'critical') {
+            return `${baseClass} border-l-4 border-l-rose-600 ring-1 ring-rose-300`;
+        }
+        if (wheelbaseInfo?.severity === 'high') {
+            return `${baseClass} border-l-4 border-l-amber-500 ring-1 ring-amber-300`;
+        }
+        if (wheelbaseInfo?.severity === 'medium') {
+            return `${baseClass} border-l-4 border-l-sky-500`;
+        }
+
+        return baseClass;
     };
     
     const isVibrant = getCardColorClasses().includes('text-white');
@@ -141,8 +158,24 @@ export const DraggableJobCard: React.FC<{
                     </div>
                 </div>
                 
-                <div className={`text-xs space-y-1.5 mb-3 text-gray-600`}>
-                    <p className="flex items-center gap-2 font-bold text-gray-800"><Car size={13} className="opacity-70 text-gray-400"/> {vehicle?.registration} • {vehicle?.make} {vehicle?.model}</p>
+                <div className={`text-xs space-y-1.5 mb-2 text-gray-600`}>
+                    <div className="flex items-center justify-between gap-1 flex-wrap font-bold text-gray-800">
+                        <span className="flex items-center gap-1.5">
+                            <Car size={13} className="opacity-70 text-gray-400"/> 
+                            <span className="font-mono bg-yellow-300 text-black px-1.5 py-0.2 rounded text-[11px] border border-black/20">
+                                {vehicle?.registration}
+                            </span>
+                            <span className="text-gray-700">{vehicle?.make} {vehicle?.model}</span>
+                        </span>
+                        {wheelbaseInfo && (
+                            <span 
+                                className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md border tracking-wider flex items-center gap-1 ${wheelbaseInfo.badgeClass}`}
+                                title={wheelbaseInfo.warningMessage}
+                            >
+                                {wheelbaseInfo.label}
+                            </span>
+                        )}
+                    </div>
                     <p title={getCustomerDisplayName(customer)} className="truncate font-semibold flex items-center gap-2">
                         <LogIn size={13} className="opacity-70 text-gray-400"/> {getCustomerDisplayName(customer)}
                     </p>
@@ -151,6 +184,19 @@ export const DraggableJobCard: React.FC<{
                         <span>{job.estimatedHours}h ({unallocatedSegments.length} segs)</span>
                     </div>
                 </div>
+
+                {/* Dispatcher Wheelbase Alert Banner for LWB / MWB / XLWB */}
+                {wheelbaseInfo?.isAlert && (
+                    <div className={`my-2 p-1.5 rounded-md border flex items-center justify-between text-[10px] font-bold ${wheelbaseInfo.bannerClass}`}>
+                        <div className="flex items-center gap-1.5">
+                            <span className="text-xs">⚠️</span>
+                            <span>{wheelbaseInfo.fullLabel}</span>
+                        </div>
+                        <span className="uppercase text-[9px] font-extrabold tracking-tighter opacity-90">
+                            Check Lift
+                        </span>
+                    </div>
+                )}
 
                 {associatedPOs && associatedPOs.length > 0 && (
                     <div className={`flex flex-wrap gap-1.5 my-2 py-2 border-t border-gray-100`}>

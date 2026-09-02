@@ -1,9 +1,9 @@
-
 import React, { useState, useEffect } from 'react';
 import { Customer, Vehicle } from '../types';
 import { User, Car, Save, Search, Loader2 } from 'lucide-react';
 import { formatDate } from '../core/utils/dateUtils';
 import { generateCustomerId } from '../core/utils/customerUtils';
+import { getWheelbaseAlertInfo } from '../core/utils/vehicleUtils';
 import { formatTitleCase } from '../core/utils/formatUtils';
 import { lookupVehicleByVRM } from '../services/vehicleLookupService';
 import { lookupAddressByPostcode } from '../services/postcodeLookupService';
@@ -71,7 +71,6 @@ const AddNewVehicleForm: React.FC<AddNewVehicleFormProps> = ({
         type: 'Car',
         vin: '',
         wheelbaseType: '',
-        wheelbaseLengthM: '' as string | number,
         nextServiceDate: '',
         nextMotDate: '',
         winterCheckDate: '',
@@ -173,7 +172,6 @@ const AddNewVehicleForm: React.FC<AddNewVehicleFormProps> = ({
                 fuelType: details.fuelType || prev.fuelType,
                 engineCapacity: details.cc ? details.cc.toString() : prev.engineCapacity,
                 wheelbaseType: details.wheelbaseType || prev.wheelbaseType,
-                wheelbaseLengthM: details.wheelbaseLengthM !== undefined ? details.wheelbaseLengthM : prev.wheelbaseLengthM,
                 nextMotDate: details.nextMotDate || prev.nextMotDate,
                 vin: details.vin || prev.vin,
                 manufactureDate: details.manufactureDate || prev.manufactureDate,
@@ -311,7 +309,6 @@ const AddNewVehicleForm: React.FC<AddNewVehicleFormProps> = ({
             type: vehicleData.type,
             vin: vehicleData.vin || undefined,
             wheelbaseType: vehicleData.wheelbaseType || undefined,
-            wheelbaseLengthM: vehicleData.wheelbaseLengthM !== '' && vehicleData.wheelbaseLengthM !== undefined ? parseFloat(vehicleData.wheelbaseLengthM.toString()) : undefined,
             nextServiceDate: vehicleData.nextServiceDate || undefined,
             nextMotDate: vehicleData.nextMotDate || undefined,
             winterCheckDate: vehicleData.winterCheckDate || undefined,
@@ -404,8 +401,34 @@ const AddNewVehicleForm: React.FC<AddNewVehicleFormProps> = ({
                         <option>Other</option>
                     </FormSelect>
                     
-                    <FormInput label="Wheelbase Type" name="wheelbaseType" value={vehicleData.wheelbaseType} onChange={handleVehicleChange} placeholder="e.g. SWB, MWB, LWB, XLWB" />
-                    <FormInput label="Wheelbase (m)" name="wheelbaseLengthM" value={vehicleData.wheelbaseLengthM} onChange={handleVehicleChange} placeholder="e.g. 3.45" type="number" step="0.01" />
+                    <div className="md:col-span-1">
+                        <div className="flex items-center justify-between mb-1">
+                            <label className="block text-sm font-medium text-gray-700">Wheelbase Type</label>
+                            <div className="flex gap-1">
+                                {['SWB', 'MWB', 'LWB', 'XLWB'].map((type) => (
+                                    <button
+                                        key={type}
+                                        type="button"
+                                        onClick={() => setVehicleData(p => ({ ...p, wheelbaseType: type }))}
+                                        className={`px-1.5 py-0.2 rounded text-[10px] font-bold transition-colors ${
+                                            vehicleData.wheelbaseType?.toUpperCase() === type
+                                                ? type === 'LWB' ? 'bg-amber-500 text-white' : type === 'XLWB' ? 'bg-rose-600 text-white' : type === 'MWB' ? 'bg-sky-600 text-white' : 'bg-slate-700 text-white'
+                                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-200'
+                                        }`}
+                                    >
+                                        {type}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                        <input 
+                            name="wheelbaseType" 
+                            value={vehicleData.wheelbaseType} 
+                            onChange={handleVehicleChange} 
+                            placeholder="e.g. SWB, MWB, LWB, XLWB" 
+                            className="w-full p-2 border border-gray-300 rounded-lg text-sm font-semibold"
+                        />
+                    </div>
                     
                      <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Next Service Due</label>
@@ -426,27 +449,28 @@ const AddNewVehicleForm: React.FC<AddNewVehicleFormProps> = ({
                     </div>
 
                     {/* Wheelbase / Lift Restriction Alert */}
-                    {(vehicleData.wheelbaseType?.toUpperCase().includes('LWB') || 
-                      vehicleData.wheelbaseType?.toUpperCase().includes('XLWB') || 
-                      vehicleData.wheelbaseType?.toUpperCase().includes('LONG') ||
-                      (Number(vehicleData.wheelbaseLengthM) > 3.2)) && (
-                        <div className="md:col-span-3 p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between text-xs text-amber-900">
-                            <div className="flex items-center gap-2">
-                                <span className="text-base">⚠️</span>
-                                <div>
-                                    <span className="font-bold uppercase tracking-wider text-amber-950">
-                                        Extended Wheelbase ({vehicleData.wheelbaseType} {vehicleData.wheelbaseLengthM ? `• ${vehicleData.wheelbaseLengthM}m` : ''})
-                                    </span>
-                                    <div className="text-[11px] text-amber-700">
-                                        Restricted vehicle length. Verify lift/ramp wheelbase capacity before bay allocation.
+                    {(() => {
+                        const wb = getWheelbaseAlertInfo(vehicleData.wheelbaseType);
+                        if (!wb || !wb.isAlert) return null;
+                        return (
+                            <div className={`md:col-span-3 p-3 rounded-xl border flex items-center justify-between text-xs animate-fade-in ${wb.bannerClass}`}>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-base">⚠️</span>
+                                    <div>
+                                        <span className="font-bold uppercase tracking-wider">
+                                            {wb.fullLabel} Alert
+                                        </span>
+                                        <div className="text-[11px] font-medium opacity-90">
+                                            {wb.warningMessage}
+                                        </div>
                                     </div>
                                 </div>
+                                <span className={`font-mono font-bold px-2.5 py-1 rounded text-[10px] uppercase tracking-wider ${wb.badgeClass}`}>
+                                    {wb.label}
+                                </span>
                             </div>
-                            <span className="font-mono font-bold bg-amber-200/80 px-2 py-0.5 rounded text-amber-900 text-[10px] uppercase">
-                                Lift Check
-                            </span>
-                        </div>
-                    )}
+                        );
+                    })()}
                 </div>
             </div>
 
@@ -460,12 +484,57 @@ const AddNewVehicleForm: React.FC<AddNewVehicleFormProps> = ({
                         onSelect={(value) => {
                             if (value === 'CREATE_NEW') {
                                 setSelectedCustomerId(null);
+                                setCustomerData({
+                                    id: generateCustomerId(),
+                                    title: '',
+                                    forename: '',
+                                    surname: '',
+                                    email: '',
+                                    phone: '',
+                                    mobile: '',
+                                    addressLine1: '',
+                                    addressLine2: '',
+                                    city: '',
+                                    county: '',
+                                    postcode: '',
+                                    category: 'Retail',
+                                    isCashCustomer: true,
+                                    marketingConsent: false,
+                                    isBusinessCustomer: false,
+                                    companyName: '',
+                                    serviceReminderConsent: true,
+                                    communicationPreference: 'Email',
+                                });
                             } else {
                                 setSelectedCustomerId(value);
+                                const existingCustomer = customers.find(c => c.id === value);
+                                if (existingCustomer) {
+                                    setCustomerData({
+                                        id: existingCustomer.id,
+                                        title: existingCustomer.title || '',
+                                        forename: existingCustomer.forename || '',
+                                        surname: existingCustomer.surname || '',
+                                        email: existingCustomer.email || '',
+                                        phone: existingCustomer.phone || '',
+                                        mobile: existingCustomer.mobile || '',
+                                        addressLine1: existingCustomer.addressLine1 || '',
+                                        addressLine2: existingCustomer.addressLine2 || '',
+                                        city: existingCustomer.city || '',
+                                        county: existingCustomer.county || '',
+                                        postcode: existingCustomer.postcode || '',
+                                        category: existingCustomer.category || 'Retail',
+                                        isCashCustomer: existingCustomer.isCashCustomer ?? true,
+                                        marketingConsent: existingCustomer.marketingConsent || false,
+                                        isBusinessCustomer: !!existingCustomer.companyName,
+                                        companyName: existingCustomer.companyName || '',
+                                        serviceReminderConsent: existingCustomer.serviceReminderConsent ?? true,
+                                        communicationPreference: existingCustomer.communicationPreference || 'Email',
+                                    });
+                                }
                             }
                         }}
-                        defaultValue={selectedCustomerId || 'CREATE_NEW'}
-                        placeholder="Search for customer or create new..."
+                        defaultValue={selectedCustomerId || "CREATE_NEW"}
+                        placeholder="Search for an existing customer..."
                     />
                 </div>
 
@@ -488,7 +557,6 @@ const AddNewVehicleForm: React.FC<AddNewVehicleFormProps> = ({
                                             type: v.type || 'Car',
                                             vin: v.vin || '',
                                             wheelbaseType: v.wheelbaseType || '',
-                                            wheelbaseLengthM: v.wheelbaseLengthM !== undefined ? v.wheelbaseLengthM : '',
                                             nextServiceDate: v.nextServiceDate || '',
                                             nextMotDate: v.nextMotDate || '',
                                             winterCheckDate: v.winterCheckDate || '',
