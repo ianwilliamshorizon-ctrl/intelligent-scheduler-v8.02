@@ -21,6 +21,7 @@ import {
     DEFAULT_JOB_CARD_BLOCKS, 
     getContainerStyleClasses 
 } from '../core/utils/documentTemplateDefaults';
+import { getWheelbaseAlertInfo } from '../core/utils/vehicleUtils';
 
 interface PrintableJobCardProps {
     job: Job;
@@ -317,9 +318,20 @@ const PrintableJobCard: React.FC<PrintableJobCardProps> = ({
                                         <h4 className={cs.titleClass} style={cs.titleStyle}>
                                             {block.title || 'Vehicle Details'}
                                         </h4>
-                                        <span className="inline-block bg-yellow-400 text-black font-mono font-black text-xs px-2.5 py-0.5 rounded border border-yellow-500 shadow-2xs tracking-wider uppercase">
-                                            {vehicle?.registration || 'NO REG'}
-                                        </span>
+                                        <div className="flex items-center gap-2">
+                                            {(() => {
+                                                const wb = getWheelbaseAlertInfo(vehicle?.wheelbaseType);
+                                                if (!wb) return null;
+                                                return (
+                                                    <span className={`font-mono font-black text-[10px] px-2 py-0.5 rounded border shadow-2xs uppercase ${wb.badgeClass}`}>
+                                                        {wb.label}
+                                                    </span>
+                                                );
+                                            })()}
+                                            <span className="inline-block bg-yellow-400 text-black font-mono font-black text-xs px-2.5 py-0.5 rounded border border-yellow-500 shadow-2xs tracking-wider uppercase">
+                                                {vehicle?.registration || 'NO REG'}
+                                            </span>
+                                        </div>
                                     </div>
                                     <div className={cs.bodyClass}>
                                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs" style={cs.textStyle}>
@@ -328,6 +340,23 @@ const PrintableJobCard: React.FC<PrintableJobCardProps> = ({
                                             <div><span className="block text-[10px]" style={cs.subtextStyle}>Mileage / Key:</span><strong>{(vehicle as any)?.mileage ? `${(vehicle as any).mileage.toLocaleString()} mi` : (job.mileage || (job as any)?.mileageIn ? `${job.mileage || (job as any)?.mileageIn} mi` : '—')} • Key #{job.keyNumber || '—'}</strong></div>
                                             <div><span className="block text-[10px]" style={cs.subtextStyle}>VIN / Chassis:</span><strong className="font-mono">{vehicle?.vin?.slice(-8) || vehicle?.vin || '—'}</strong></div>
                                         </div>
+
+                                        {/* LWB Ramp / Lift Capacity Alert on Printed Job Card */}
+                                        {(() => {
+                                            const wb = getWheelbaseAlertInfo(vehicle?.wheelbaseType);
+                                            if (!wb || !wb.isAlert) return null;
+                                            return (
+                                                <div className={`mt-2.5 p-2 rounded-lg border flex items-center justify-between text-xs font-bold ${wb.bannerClass}`}>
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span>⚠️</span>
+                                                        <span><strong>{wb.fullLabel}:</strong> {wb.warningMessage}</span>
+                                                    </div>
+                                                    <span className="uppercase text-[9px] font-black tracking-wider bg-white/80 px-2 py-0.5 rounded border">
+                                                        Check Lift Capacity & Clearance
+                                                    </span>
+                                                </div>
+                                            );
+                                        })()}
                                     </div>
                                 </div>
                             )}

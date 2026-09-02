@@ -5,6 +5,7 @@ import { getCustomerDisplayName } from '../../../core/utils/customerUtils';
 import { formatReadableDate } from '../../../core/utils/dateUtils';
 import { getPoStatusColor } from '../../../core/utils/statusUtils';
 import { HoverInfo } from '../../../components/shared/HoverInfo';
+import { getWheelbaseAlertInfo } from '../../../core/utils/vehicleUtils';
 
 interface JobCardProps {
     job: Job;
@@ -109,27 +110,42 @@ export const JobCard: React.FC<JobCardProps> = ({
                 {/* Vehicle & Customer */}
                 <div className="flex justify-between items-start">
                     <div className="flex flex-col">
-                        {vehicle ? (
-                            <HoverInfo
-                                title="Vehicle Details"
-                                data={{
-                                    Make: vehicle.make,
-                                    Model: vehicle.model,
-                                    Year: vehicle.year,
-                                    'Year of Manufacture': vehicle.manufactureDate,
-                                    VIN: vehicle.vin,
-                                    'MOT Expires': vehicle.motExpiryDate
-                                }}
-                            >
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                            {vehicle ? (
+                                <HoverInfo
+                                    title="Vehicle Details"
+                                    data={{
+                                        Make: vehicle.make,
+                                        Model: vehicle.model,
+                                        Year: vehicle.year,
+                                        'Year of Manufacture': vehicle.manufactureDate,
+                                        VIN: vehicle.vin,
+                                        'Wheelbase Type': vehicle.wheelbaseType || 'Standard',
+                                        'MOT Expires': vehicle.motExpiryDate
+                                    }}
+                                >
+                                    <span className="text-lg font-black uppercase text-gray-900 tracking-tight">
+                                        {vehicle.registration || 'NO REG'}
+                                    </span>
+                                </HoverInfo>
+                            ) : (
                                 <span className="text-lg font-black uppercase text-gray-900 tracking-tight">
-                                    {vehicle.registration || 'NO REG'}
+                                    NO REG
                                 </span>
-                            </HoverInfo>
-                        ) : (
-                            <span className="text-lg font-black uppercase text-gray-900 tracking-tight">
-                                NO REG
-                            </span>
-                        )}
+                            )}
+                            {(() => {
+                                const wb = getWheelbaseAlertInfo(vehicle?.wheelbaseType);
+                                if (!wb) return null;
+                                return (
+                                    <span 
+                                        className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded border shadow-2xs ${wb.badgeClass}`}
+                                        title={`${wb.fullLabel}: ${wb.warningMessage}`}
+                                    >
+                                        {wb.label}
+                                    </span>
+                                );
+                            })()}
+                        </div>
                         <span className="text-sm font-medium text-indigo-600 flex items-center gap-1 mt-0.5">
                             <Truck size={14} />
                             {vehicle ? `${vehicle.make} ${vehicle.model}` : 'Unknown Vehicle'}
@@ -137,6 +153,23 @@ export const JobCard: React.FC<JobCardProps> = ({
                     </div>
                     {renderStatusBadge()}
                 </div>
+
+                {/* LWB Lift Warning Banner for Workshop Board */}
+                {(() => {
+                    const wb = getWheelbaseAlertInfo(vehicle?.wheelbaseType);
+                    if (!wb || !wb.isAlert) return null;
+                    return (
+                        <div className={`p-2 rounded-lg border flex items-center justify-between text-xs font-bold ${wb.bannerClass}`}>
+                            <div className="flex items-center gap-1.5">
+                                <span>⚠️</span>
+                                <span>{wb.fullLabel}</span>
+                            </div>
+                            <span className="text-[10px] uppercase font-black tracking-wider bg-white/60 px-1.5 py-0.5 rounded">
+                                Check Lift Capacity
+                            </span>
+                        </div>
+                    );
+                })()}
 
                 <div className="flex items-center text-sm text-gray-600 font-medium gap-1.5">
                     <User size={14} className="text-gray-400" />
