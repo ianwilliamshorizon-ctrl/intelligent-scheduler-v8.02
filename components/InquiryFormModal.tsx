@@ -738,213 +738,251 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
             </div>
             <div className="min-h-[500px]">
                 {activeTab === 'details' && (
-                    <div className="space-y-4">
-                        {/* Email Header Card */}
-                        <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-xl p-4 shadow-md border border-slate-800">
-                            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                                <div className="space-y-1.5 min-w-0">
+                    <div className="space-y-5">
+                        {/* High-Visibility Header Banner */}
+                        <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-xl p-5 shadow-md border border-slate-800">
+                            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                                <div className="space-y-2 min-w-0">
                                     <div className="flex flex-wrap items-center gap-2">
-                                        <span className="text-xs font-mono font-bold bg-indigo-500/30 text-indigo-200 border border-indigo-400/30 px-2.5 py-0.5 rounded-md flex items-center gap-1">
-                                            <Mail size={12} /> {formData.inquiryNumber || 'NEW INQUIRY'}
+                                        <span className="text-xs font-mono font-bold bg-indigo-500/30 text-indigo-200 border border-indigo-400/30 px-3 py-1 rounded-md flex items-center gap-1.5">
+                                            <Mail size={13} /> {formData.inquiryNumber || 'NEW INQUIRY'}
                                         </span>
                                         {formData.isUrgent && (
-                                            <span className="text-xs font-bold bg-red-500 text-white px-2 py-0.5 rounded-md animate-pulse flex items-center gap-1">
-                                                <AlertCircle size={12} /> Urgent
+                                            <span className="text-xs font-bold bg-red-500 text-white px-3 py-1 rounded-md animate-pulse flex items-center gap-1">
+                                                <AlertCircle size={13} /> URGENT
                                             </span>
                                         )}
-                                        <span className="text-xs font-semibold bg-white/10 text-white/90 px-2 py-0.5 rounded-md">
+                                        <span className="text-xs font-semibold bg-white/10 text-white/90 px-3 py-1 rounded-md">
                                             {entities?.find(e => e.id === formData.entityId)?.name || 'All Entities'}
                                         </span>
-                                        <span className="text-xs font-semibold bg-indigo-600/60 text-white px-2 py-0.5 rounded-md">
+                                        <span className="text-xs font-semibold bg-indigo-600 text-white px-3 py-1 rounded-md">
                                             {formData.status || 'Inbox'}
                                         </span>
                                         {formData.actionStatus && (
-                                            <span className="text-xs font-semibold bg-sky-500/30 text-sky-200 border border-sky-400/30 px-2 py-0.5 rounded-md">
+                                            <span className="text-xs font-semibold bg-sky-500/30 text-sky-200 border border-sky-400/30 px-3 py-1 rounded-md">
                                                 {formData.actionStatus}
                                             </span>
                                         )}
                                     </div>
-                                    <h3 className="text-base sm:text-lg font-bold text-white truncate pt-1">
-                                        {formData.subject || 'Customer Inquiry (No Subject)'}
-                                    </h3>
-                                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-slate-300">
-                                        <div className="flex items-center gap-1.5">
-                                            <span className="text-slate-400">From:</span>
-                                            <span className="font-semibold text-white">{formData.fromName || 'Unknown Sender'}</span>
-                                        </div>
-                                        {formData.fromEmail && (
-                                            <button
-                                                type="button"
-                                                onClick={() => copyToClipboard(formData.fromEmail!, 'email')}
-                                                className="flex items-center gap-1 text-indigo-300 hover:text-white transition group cursor-pointer"
-                                                title="Click to copy email address"
-                                            >
-                                                <span>&lt;{formData.fromEmail}&gt;</span>
-                                                {copiedField === 'email' ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} className="opacity-60 group-hover:opacity-100" />}
-                                            </button>
+                                    
+                                    {/* Prominent Customer Name */}
+                                    <div className="flex flex-wrap items-baseline gap-3 pt-1">
+                                        <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                                            {formData.fromName || 'Unknown Customer'}
+                                        </h2>
+                                        {formData.vehicleRegistration && (
+                                            <span className="inline-block bg-yellow-400 text-black font-mono font-black text-xs px-2.5 py-0.5 rounded border border-yellow-500 shadow-sm tracking-wider uppercase">
+                                                {formData.vehicleRegistration}
+                                            </span>
                                         )}
-                                        {formData.fromPhone && (
-                                            <button
-                                                type="button"
-                                                onClick={() => copyToClipboard(formData.fromPhone!, 'phone')}
-                                                className="flex items-center gap-1 text-slate-300 hover:text-white transition group cursor-pointer"
-                                                title="Click to copy phone number"
-                                            >
-                                                <Phone size={11} className="text-indigo-400" />
-                                                <span className="font-medium">{formData.fromPhone}</span>
-                                                {copiedField === 'phone' ? <Check size={11} className="text-emerald-400" /> : <Copy size={11} className="opacity-50 group-hover:opacity-100" />}
-                                            </button>
+                                    </div>
+
+                                    {/* Large, Clear Phone and Email Information */}
+                                    <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-slate-200 pt-0.5">
+                                        {formData.fromPhone ? (
+                                            <div className="flex items-center gap-2 bg-slate-800/80 px-3 py-1.5 rounded-lg border border-slate-700">
+                                                <Phone size={15} className="text-indigo-400 shrink-0" />
+                                                <a 
+                                                    href={`tel:${formData.fromPhone}`} 
+                                                    className="font-bold text-base text-white hover:text-indigo-300 transition tracking-wide"
+                                                    title="Click to call"
+                                                >
+                                                    {formData.fromPhone}
+                                                </a>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => copyToClipboard(formData.fromPhone!, 'phone number')}
+                                                    className="text-slate-400 hover:text-white p-1 rounded transition cursor-pointer"
+                                                    title="Copy phone number"
+                                                >
+                                                    {copiedField === 'phone number' ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <div className="flex items-center gap-1.5 text-slate-400 text-xs italic">
+                                                <Phone size={13} /> No phone provided
+                                            </div>
                                         )}
+
+                                        {formData.fromEmail ? (
+                                            <div className="flex items-center gap-2 bg-slate-800/80 px-3 py-1.5 rounded-lg border border-slate-700">
+                                                <Mail size={15} className="text-indigo-400 shrink-0" />
+                                                <a 
+                                                    href={`mailto:${formData.fromEmail}`} 
+                                                    className="font-semibold text-sm text-indigo-200 hover:text-white transition underline"
+                                                    title="Click to email"
+                                                >
+                                                    {formData.fromEmail}
+                                                </a>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => copyToClipboard(formData.fromEmail!, 'email address')}
+                                                    className="text-slate-400 hover:text-white p-1 rounded transition cursor-pointer"
+                                                    title="Copy email address"
+                                                >
+                                                    {copiedField === 'email address' ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <div className="flex items-center gap-1.5 text-slate-400 text-xs italic">
+                                                <Mail size={13} /> No email provided
+                                            </div>
+                                        )}
+
                                         {formData.createdAt && (
-                                            <div className="flex items-center gap-1 text-slate-400">
-                                                <Clock size={11} />
-                                                <span>Received: {new Date(formData.createdAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</span>
+                                            <div className="flex items-center gap-1.5 text-xs text-slate-400">
+                                                <Clock size={13} />
+                                                <span>{new Date(formData.createdAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</span>
                                             </div>
                                         )}
                                     </div>
+
+                                    {formData.subject && (
+                                        <p className="text-xs sm:text-sm text-slate-300 font-medium pt-1">
+                                            <span className="text-slate-400 font-normal">Subject:</span> {formData.subject}
+                                        </p>
+                                    )}
                                 </div>
 
                                 {/* View Mode Toggle */}
-                                <div className="flex items-center gap-2 self-start md:self-center shrink-0">
-                                    <div className="bg-slate-800/90 p-1 rounded-lg border border-slate-700 flex items-center shadow-inner">
+                                <div className="flex items-center gap-2 self-start lg:self-center shrink-0">
+                                    <div className="bg-slate-800 p-1.5 rounded-lg border border-slate-700 flex items-center shadow-inner">
                                         <button
                                             type="button"
                                             onClick={() => setIsFormattedView(true)}
-                                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition ${isFormattedView ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+                                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition ${isFormattedView ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
                                         >
-                                            <Eye size={13} /> Reader View
+                                            <Eye size={14} /> Reader View
                                         </button>
                                         <button
                                             type="button"
                                             onClick={() => setIsFormattedView(false)}
-                                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition ${!isFormattedView ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+                                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition ${!isFormattedView ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
                                         >
-                                            <Edit3 size={13} /> Raw Edit
+                                            <Edit3 size={14} /> Raw Edit
                                         </button>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
-                        {/* Main 2-Column Dossier */}
+                        {/* 2-Column Main Layout: Email Pane (Left) & Contact/Vehicle Intelligence Dossier (Right) */}
                         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-                            {/* Left 7 Columns: The Smart Email Pane */}
-                            <div className="lg:col-span-7 space-y-4">
+                            {/* Left 6 Columns: The Email Body & Thread Viewer */}
+                            <div className="lg:col-span-6 space-y-4">
                                 {isFormattedView ? (
                                     <div className="space-y-4">
                                         {/* Latest Customer Message Card */}
                                         <div className="bg-white rounded-xl border border-indigo-100 shadow-sm overflow-hidden">
-                                            <div className="bg-gradient-to-r from-indigo-50/80 to-white px-4 py-2.5 border-b border-indigo-100 flex items-center justify-between">
+                                            <div className="bg-gradient-to-r from-indigo-50/80 to-white px-4 py-3 border-b border-indigo-100 flex items-center justify-between">
                                                 <div className="flex items-center gap-2">
-                                                    <span className="w-2 h-2 rounded-full bg-indigo-600 animate-pulse"></span>
+                                                    <span className="w-2.5 h-2.5 rounded-full bg-indigo-600 animate-pulse"></span>
                                                     <h4 className="text-xs font-bold text-indigo-900 uppercase tracking-wider flex items-center gap-1.5">
-                                                        <MessageSquare size={14} className="text-indigo-600" />
+                                                        <MessageSquare size={15} className="text-indigo-600" />
                                                         Latest Customer Message
                                                     </h4>
                                                 </div>
-                                                <div className="flex items-center gap-2">
-                                                    <button 
-                                                        type="button" 
-                                                        onClick={async () => {
-                                                            if (!formData.message && !formData.subject) return;
-                                                            setIsAnalyzing(true);
-                                                            setAiError('');
-                                                            try {
-                                                                const parsed = await parseInquiryMessage(formData.message || '', formData.subject);
-                                                                
-                                                                setFormData(p => {
-                                                                    const newName = parsed.fromName || p.fromName || '';
-                                                                    const newEmail = parsed.fromEmail || p.fromEmail || '';
-                                                                    let nextLinkedCustomerId = p.linkedCustomerId;
+                                                <button 
+                                                    type="button" 
+                                                    onClick={async () => {
+                                                        if (!formData.message && !formData.subject) return;
+                                                        setIsAnalyzing(true);
+                                                        setAiError('');
+                                                        try {
+                                                            const parsed = await parseInquiryMessage(formData.message || '', formData.subject);
+                                                            
+                                                            setFormData(p => {
+                                                                const newName = parsed.fromName || p.fromName || '';
+                                                                const newEmail = parsed.fromEmail || p.fromEmail || '';
+                                                                let nextLinkedCustomerId = p.linkedCustomerId;
 
-                                                                    if (nextLinkedCustomerId) {
-                                                                        const linkedCust = customers.find(c => c.id === nextLinkedCustomerId);
-                                                                        if (linkedCust) {
-                                                                            const linkedName = getCustomerDisplayName(linkedCust).toLowerCase();
-                                                                            if ((parsed.fromEmail && linkedCust.email?.toLowerCase() !== parsed.fromEmail.toLowerCase()) || 
-                                                                                (parsed.fromName && linkedName !== parsed.fromName.toLowerCase())) {
-                                                                                nextLinkedCustomerId = null;
-                                                                            }
+                                                                if (nextLinkedCustomerId) {
+                                                                    const linkedCust = customers.find(c => c.id === nextLinkedCustomerId);
+                                                                    if (linkedCust) {
+                                                                        const linkedName = getCustomerDisplayName(linkedCust).toLowerCase();
+                                                                        if ((parsed.fromEmail && linkedCust.email?.toLowerCase() !== parsed.fromEmail.toLowerCase()) || 
+                                                                            (parsed.fromName && linkedName !== parsed.fromName.toLowerCase())) {
+                                                                            nextLinkedCustomerId = null;
                                                                         }
                                                                     }
-
-                                                                    return {
-                                                                        ...p,
-                                                                        linkedCustomerId: nextLinkedCustomerId,
-                                                                        fromName: newName,
-                                                                        fromEmail: newEmail,
-                                                                        fromPhone: parsed.fromPhone || p.fromPhone || '',
-                                                                        vehicleRegistration: parsed.vehicleRegistration
-                                                                            ? parsed.vehicleRegistration.toUpperCase().trim()
-                                                                            : p.vehicleRegistration ? p.vehicleRegistration.toUpperCase().trim() : '',
-                                                                        vehicleMake: parsed.vehicleMake ? formatTitleCase(parsed.vehicleMake) : (p.vehicleMake ? formatTitleCase(p.vehicleMake) : ''),
-                                                                        vehicleModel: parsed.vehicleModel ? formatTitleCase(parsed.vehicleModel) : (p.vehicleModel ? formatTitleCase(p.vehicleModel) : ''),
-                                                                        postcode: parsed.postcode ? parsed.postcode.toUpperCase().trim() : (p.postcode || ''),
-                                                                    };
-                                                                });
-
-                                                                if (parsed.fromEmail || parsed.fromPhone || parsed.fromName) {
-                                                                    const lowerEmail = (parsed.fromEmail || '').toLowerCase();
-                                                                    const lowerPhone = (parsed.fromPhone || '').replace(/\D/g,'');
-                                                                    const lowerName = (parsed.fromName || '').toLowerCase();
-                                                                    const searchWords = lowerName.split(/\s+/).filter(w => w.length > 1);
-                                                                    
-                                                                    const matches = customers.filter(c => {
-                                                                        if (lowerEmail && c.email?.toLowerCase() === lowerEmail) return true;
-                                                                        if (lowerPhone && (c.phone?.replace(/\D/g,'') === lowerPhone || c.mobile?.replace(/\D/g,'') === lowerPhone)) return true;
-                                                                        
-                                                                        if (lowerName) {
-                                                                            const fullName = `${c.title || ''} ${c.forename || ''} ${c.surname || ''}`.toLowerCase();
-                                                                            const company = (c.companyName || '').toLowerCase();
-                                                                            if (fullName.includes(lowerName) || company.includes(lowerName)) return true;
-                                                                            if (lowerName.includes(fullName.trim()) && fullName.trim().length > 3) return true;
-                                                                            if (searchWords.length > 0 && searchWords.every(w => fullName.includes(w))) return true;
-                                                                        }
-                                                                        return false;
-                                                                    });
-                                                                    if (matches.length > 0) setSuggestedCustomers(matches);
                                                                 }
 
-                                                                if (parsed.vehicleRegistration) {
-                                                                    const lowerReg = parsed.vehicleRegistration.toLowerCase().replace(/\s/g, '');
-                                                                    const foundVeh = vehicles.find(v => v.registration?.toLowerCase().replace(/\s/g, '') === lowerReg);
-                                                                    if (foundVeh) setSuggestedVehicle(foundVeh);
-                                                                }
-
-                                                                const aiLogNotes = parsed.summary 
-                                                                    ? `AI Summary: ${parsed.summary}` 
-                                                                    : `AI Scan Completed (No summary provided). Data: ${JSON.stringify(parsed)}`;
-                                                                
-                                                                const newLog = {
-                                                                    id: crypto.randomUUID(),
-                                                                    timestamp: new Date().toISOString(),
-                                                                    userId: currentUser.id,
-                                                                    actionType: 'AI Scan',
-                                                                    notes: aiLogNotes
+                                                                return {
+                                                                    ...p,
+                                                                    linkedCustomerId: nextLinkedCustomerId,
+                                                                    fromName: newName,
+                                                                    fromEmail: newEmail,
+                                                                    fromPhone: parsed.fromPhone || p.fromPhone || '',
+                                                                    vehicleRegistration: parsed.vehicleRegistration
+                                                                        ? parsed.vehicleRegistration.toUpperCase().trim()
+                                                                        : p.vehicleRegistration ? p.vehicleRegistration.toUpperCase().trim() : '',
+                                                                    vehicleMake: parsed.vehicleMake ? formatTitleCase(parsed.vehicleMake) : (p.vehicleMake ? formatTitleCase(p.vehicleMake) : ''),
+                                                                    vehicleModel: parsed.vehicleModel ? formatTitleCase(parsed.vehicleModel) : (p.vehicleModel ? formatTitleCase(p.vehicleModel) : ''),
+                                                                    postcode: parsed.postcode ? parsed.postcode.toUpperCase().trim() : (p.postcode || ''),
                                                                 };
-                                                                setFormData(p => ({ ...p, logs: [...(p.logs || []), newLog] }));
-                                                                toast.success('Inquiry scanned with AI');
-                                                            } catch (e) {
-                                                                console.error(e);
-                                                                setAiError('Failed to parse message with AI.');
-                                                                toast.error('Failed to parse message with AI.');
-                                                            } finally {
-                                                                setIsAnalyzing(false);
+                                                            });
+
+                                                            if (parsed.fromEmail || parsed.fromPhone || parsed.fromName) {
+                                                                const lowerEmail = (parsed.fromEmail || '').toLowerCase();
+                                                                const lowerPhone = (parsed.fromPhone || '').replace(/\D/g,'');
+                                                                const lowerName = (parsed.fromName || '').toLowerCase();
+                                                                const searchWords = lowerName.split(/\s+/).filter(w => w.length > 1);
+                                                                
+                                                                const matches = customers.filter(c => {
+                                                                    if (lowerEmail && c.email?.toLowerCase() === lowerEmail) return true;
+                                                                    if (lowerPhone && (c.phone?.replace(/\D/g,'') === lowerPhone || c.mobile?.replace(/\D/g,'') === lowerPhone)) return true;
+                                                                    
+                                                                    if (lowerName) {
+                                                                        const fullName = `${c.title || ''} ${c.forename || ''} ${c.surname || ''}`.toLowerCase();
+                                                                        const company = (c.companyName || '').toLowerCase();
+                                                                        if (fullName.includes(lowerName) || company.includes(lowerName)) return true;
+                                                                        if (lowerName.includes(fullName.trim()) && fullName.trim().length > 3) return true;
+                                                                        if (searchWords.length > 0 && searchWords.every(w => fullName.includes(w))) return true;
+                                                                    }
+                                                                    return false;
+                                                                });
+                                                                if (matches.length > 0) setSuggestedCustomers(matches);
                                                             }
-                                                        }}
-                                                        disabled={isAnalyzing || (!formData.message && !formData.subject)}
-                                                        className="flex items-center gap-1 text-[11px] font-bold text-indigo-700 bg-white hover:bg-indigo-100 border border-indigo-200 px-2.5 py-1 rounded-md shadow-2xs transition disabled:opacity-50 cursor-pointer"
-                                                        title="Scan with AI to extract VRM, Customer and Summary"
-                                                    >
-                                                        {isAnalyzing ? <Loader2 size={12} className="animate-spin text-indigo-600" /> : <Wand2 size={12} className="text-indigo-600" />} 
-                                                        Scan with AI
-                                                    </button>
-                                                </div>
+
+                                                            if (parsed.vehicleRegistration) {
+                                                                const lowerReg = parsed.vehicleRegistration.toLowerCase().replace(/\s/g, '');
+                                                                const foundVeh = vehicles.find(v => v.registration?.toLowerCase().replace(/\s/g, '') === lowerReg);
+                                                                if (foundVeh) setSuggestedVehicle(foundVeh);
+                                                            }
+
+                                                            const aiLogNotes = parsed.summary 
+                                                                ? `AI Summary: ${parsed.summary}` 
+                                                                : `AI Scan Completed (No summary provided). Data: ${JSON.stringify(parsed)}`;
+                                                            
+                                                            const newLog = {
+                                                                id: crypto.randomUUID(),
+                                                                timestamp: new Date().toISOString(),
+                                                                userId: currentUser.id,
+                                                                actionType: 'AI Scan',
+                                                                notes: aiLogNotes
+                                                            };
+                                                            setFormData(p => ({ ...p, logs: [...(p.logs || []), newLog] }));
+                                                            toast.success('Inquiry scanned with AI');
+                                                        } catch (e) {
+                                                            console.error(e);
+                                                            setAiError('Failed to parse message with AI.');
+                                                            toast.error('Failed to parse message with AI.');
+                                                        } finally {
+                                                            setIsAnalyzing(false);
+                                                        }
+                                                    }}
+                                                    disabled={isAnalyzing || (!formData.message && !formData.subject)}
+                                                    className="flex items-center gap-1 text-xs font-bold text-indigo-700 bg-white hover:bg-indigo-100 border border-indigo-200 px-3 py-1.5 rounded-md shadow-sm transition disabled:opacity-50 cursor-pointer"
+                                                    title="Scan with AI to extract VRM, Customer and Summary"
+                                                >
+                                                    {isAnalyzing ? <Loader2 size={13} className="animate-spin text-indigo-600" /> : <Wand2 size={13} className="text-indigo-600" />} 
+                                                    Scan with AI
+                                                </button>
                                             </div>
 
                                             <div className="p-5">
                                                 {parsedThread.latestMessage ? (
-                                                    <div className="text-sm text-slate-800 leading-relaxed whitespace-pre-wrap font-sans selection:bg-indigo-100">
+                                                    <div className="text-sm sm:text-base text-slate-800 leading-relaxed whitespace-pre-wrap font-sans selection:bg-indigo-100">
                                                         {parsedThread.latestMessage}
                                                     </div>
                                                 ) : (
@@ -957,9 +995,9 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
 
                                         {/* AI Summary / Insights Banner if present */}
                                         {formData.actionNotes && (
-                                            <div className="bg-gradient-to-r from-purple-50 via-indigo-50/50 to-purple-50 border border-purple-200 rounded-xl p-3.5 text-xs text-purple-900 shadow-2xs space-y-1">
-                                                <div className="flex items-center gap-1.5 font-bold text-purple-800 uppercase tracking-wider text-[11px]">
-                                                    <Sparkles size={13} className="text-purple-600" />
+                                            <div className="bg-gradient-to-r from-purple-50 via-indigo-50/50 to-purple-50 border border-purple-200 rounded-xl p-4 text-xs sm:text-sm text-purple-900 shadow-sm space-y-1.5">
+                                                <div className="flex items-center gap-1.5 font-bold text-purple-800 uppercase tracking-wider text-xs">
+                                                    <Sparkles size={14} className="text-purple-600" />
                                                     AI Insights & Classification
                                                 </div>
                                                 <div className="whitespace-pre-wrap leading-relaxed text-purple-950 font-medium">
@@ -969,16 +1007,16 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                         )}
 
                                         {/* Attachments Strip */}
-                                        <div className="bg-white rounded-xl border border-gray-200 shadow-xs p-4 space-y-3">
+                                        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 space-y-3">
                                             <div className="flex items-center justify-between border-b border-gray-100 pb-2">
                                                 <div className="flex items-center gap-2">
-                                                    <Paperclip size={14} className="text-gray-500" />
+                                                    <Paperclip size={15} className="text-gray-600" />
                                                     <span className="text-xs font-bold text-gray-800 uppercase tracking-wider">
                                                         Attachments & Media ({formData.media ? formData.media.length : 0})
                                                     </span>
                                                 </div>
-                                                <label className="cursor-pointer text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1 rounded-md transition flex items-center gap-1 border border-indigo-200 shadow-2xs">
-                                                    <PlusCircle size={13} /> Add Attachment
+                                                <label className="cursor-pointer text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-md transition flex items-center gap-1.5 border border-indigo-200 shadow-sm">
+                                                    <PlusCircle size={14} /> Add Attachment
                                                     <input 
                                                         type="file" 
                                                         multiple 
@@ -1014,21 +1052,21 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                                             <div 
                                                                 key={item.id} 
                                                                 onClick={() => handleDownloadMedia(item)}
-                                                                className="group relative flex items-center gap-2 p-2.5 border border-gray-200 hover:border-indigo-300 rounded-lg bg-gray-50 hover:bg-indigo-50/50 cursor-pointer transition shadow-2xs"
+                                                                className="group relative flex items-center gap-2.5 p-3 border border-gray-200 hover:border-indigo-300 rounded-lg bg-gray-50 hover:bg-indigo-50/50 cursor-pointer transition shadow-sm"
                                                                 title={`Click to view/download ${item.name}`}
                                                             >
-                                                                <div className="p-1.5 bg-white rounded-md border border-gray-200 text-indigo-600 shrink-0 group-hover:scale-105 transition">
-                                                                    {isPhoto ? <Camera size={16} /> : <FileText size={16} />}
+                                                                <div className="p-2 bg-white rounded-md border border-gray-200 text-indigo-600 shrink-0 group-hover:scale-105 transition">
+                                                                    {isPhoto ? <Camera size={18} /> : <FileText size={18} />}
                                                                 </div>
                                                                 <div className="min-w-0 flex-1">
-                                                                    <div className="truncate text-xs font-semibold text-gray-800 group-hover:text-indigo-700">
+                                                                    <div className="truncate text-xs font-bold text-gray-800 group-hover:text-indigo-700">
                                                                         {item.name}
                                                                     </div>
-                                                                    <div className="text-[10px] text-gray-400 uppercase">
+                                                                    <div className="text-[10px] text-gray-500 uppercase font-semibold">
                                                                         {isPhoto ? 'Photo' : 'Document'}
                                                                     </div>
                                                                 </div>
-                                                                <ExternalLink size={12} className="text-gray-400 group-hover:text-indigo-600 opacity-0 group-hover:opacity-100 transition shrink-0" />
+                                                                <ExternalLink size={13} className="text-gray-400 group-hover:text-indigo-600 opacity-0 group-hover:opacity-100 transition shrink-0" />
                                                             </div>
                                                         );
                                                     })}
@@ -1042,17 +1080,17 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
 
                                         {/* Historical Thread Accordion (Collapsible) */}
                                         {parsedThread.hasThread && (
-                                            <div className="bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
+                                            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
                                                 <button
                                                     type="button"
                                                     onClick={() => setIsHistoryExpanded(prev => !prev)}
                                                     className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100/80 transition text-left cursor-pointer border-b border-gray-200/60"
                                                 >
                                                     <div className="flex items-center gap-2 text-xs font-bold text-gray-700">
-                                                        <Clock size={14} className="text-gray-500" />
+                                                        <Clock size={15} className="text-gray-500" />
                                                         <span>Email History & Preceding Thread ({parsedThread.threadHistory.length} earlier {parsedThread.threadHistory.length === 1 ? 'message' : 'messages'})</span>
                                                     </div>
-                                                    <div className="flex items-center gap-1.5 text-xs text-indigo-600 font-semibold">
+                                                    <div className="flex items-center gap-1.5 text-xs text-indigo-600 font-bold">
                                                         <span>{isHistoryExpanded ? 'Collapse Thread' : 'Expand Thread'}</span>
                                                         {isHistoryExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                                                     </div>
@@ -1061,13 +1099,13 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                                 {isHistoryExpanded && (
                                                     <div className="p-4 space-y-4 bg-gray-50/50">
                                                         {parsedThread.threadHistory.map((threadMsg, idx) => (
-                                                            <div key={idx} className="bg-white p-3.5 rounded-lg border border-gray-200 shadow-2xs space-y-2">
+                                                            <div key={idx} className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm space-y-2">
                                                                 {threadMsg.header && (
-                                                                    <div className="text-[11px] font-mono text-gray-500 bg-gray-100 p-2 rounded border border-gray-200/80 whitespace-pre-wrap leading-tight">
+                                                                    <div className="text-xs font-mono text-gray-600 bg-gray-100 p-2 rounded border border-gray-200 whitespace-pre-wrap leading-tight">
                                                                         {threadMsg.header}
                                                                     </div>
                                                                 )}
-                                                                <div className="text-xs text-gray-700 whitespace-pre-wrap leading-relaxed">
+                                                                <div className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
                                                                     {threadMsg.body}
                                                                 </div>
                                                             </div>
@@ -1112,7 +1150,7 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                                 name="subject" 
                                                 value={formData.subject || ''} 
                                                 onChange={handleChange} 
-                                                className="w-full p-2 border rounded-md text-sm font-medium" 
+                                                className="w-full p-2.5 border rounded-md text-sm font-medium" 
                                                 placeholder="e.g. Service Inquiry for Porsche 911"
                                             />
                                         </div>
@@ -1131,36 +1169,36 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                 )}
                             </div>
 
-                            {/* Right 5 Columns: Joined-Up Client, Vehicle & Operations Sidebar */}
-                            <div className="lg:col-span-5 space-y-4">
+                            {/* Right 6 Columns: Contact Details, Address Lookup, Vehicle DVLA Lookup & Actions */}
+                            <div className="lg:col-span-6 space-y-4">
                                 {/* Quick Actions Hub */}
-                                <div className="bg-gradient-to-r from-indigo-50 via-purple-50 to-indigo-50 p-3.5 border border-indigo-200 rounded-xl shadow-xs space-y-2">
+                                <div className="bg-gradient-to-r from-indigo-50 via-purple-50 to-indigo-50 p-4 border border-indigo-200 rounded-xl shadow-sm space-y-2.5">
                                     <div className="text-xs font-bold text-indigo-900 uppercase tracking-wider flex items-center gap-1.5">
-                                        <Sparkles size={14} className="text-indigo-600" />
+                                        <Sparkles size={15} className="text-indigo-600" />
                                         Joined-Up Actions
                                     </div>
-                                    <div className="grid grid-cols-2 gap-2">
+                                    <div className="grid grid-cols-2 gap-3">
                                         <button
                                             type="button"
                                             onClick={handleQuickEstimate}
-                                            className="flex items-center justify-center gap-1.5 px-3 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-lg font-bold text-xs shadow-sm transition cursor-pointer"
+                                            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-lg font-bold text-xs sm:text-sm shadow-sm transition cursor-pointer"
                                             title="Smart create estimate directly from customer inquiry details"
                                         >
-                                            <Wand2 size={13} /> Smart Estimate
+                                            <Wand2 size={15} /> Smart Estimate
                                         </button>
                                         <button
                                             type="button"
                                             onClick={handleQuickReply}
-                                            className="flex items-center justify-center gap-1.5 px-3 py-2 bg-white hover:bg-indigo-50 text-indigo-700 border border-indigo-300 rounded-lg font-bold text-xs shadow-sm transition cursor-pointer"
+                                            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-white hover:bg-indigo-50 text-indigo-700 border border-indigo-300 rounded-lg font-bold text-xs sm:text-sm shadow-sm transition cursor-pointer"
                                             title="Jump to reply and draft response with AI"
                                         >
-                                            <Mail size={13} /> Draft Reply
+                                            <Mail size={15} /> Draft AI Reply
                                         </button>
                                     </div>
                                     {linkedEstimate && (
-                                        <div className="pt-1.5 border-t border-indigo-200/60 flex items-center justify-between text-xs">
-                                            <span className="text-indigo-800 font-semibold flex items-center gap-1">
-                                                <FileText size={12} /> Estimate #{linkedEstimate.estimateNumber}
+                                        <div className="pt-2 border-t border-indigo-200 flex items-center justify-between text-xs sm:text-sm">
+                                            <span className="text-indigo-900 font-bold flex items-center gap-1.5">
+                                                <FileText size={14} /> Linked Estimate #{linkedEstimate.estimateNumber}
                                             </span>
                                             {onViewEstimate && (
                                                 <button
@@ -1171,35 +1209,35 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                                     }}
                                                     className="font-bold text-indigo-600 hover:text-indigo-800 hover:underline"
                                                 >
-                                                    Review &rarr;
+                                                    Review Estimate &rarr;
                                                 </button>
                                             )}
                                         </div>
                                     )}
                                 </div>
 
-                                {/* AI Suggestions Popup Banner */}
+                                {/* AI Suggestions Banner */}
                                 {(suggestedCustomers.length > 0 || suggestedVehicle || aiError) && (
-                                    <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-xl space-y-2 animate-fade-in shadow-2xs">
-                                        <h4 className="font-bold text-indigo-900 text-xs flex items-center gap-1.5">
-                                            <Wand2 size={14} className="text-indigo-600"/> AI Auto-Match Suggestions
+                                    <div className="p-3.5 bg-indigo-50 border border-indigo-200 rounded-xl space-y-2 animate-fade-in shadow-sm">
+                                        <h4 className="font-bold text-indigo-900 text-xs sm:text-sm flex items-center gap-1.5">
+                                            <Wand2 size={15} className="text-indigo-600"/> AI Auto-Match Suggestions
                                         </h4>
                                         {aiError && <p className="text-red-600 text-xs">{aiError}</p>}
                                         
                                         {suggestedCustomers.length > 0 && !formData.linkedCustomerId && (
-                                            <div className="flex flex-col gap-1.5">
+                                            <div className="flex flex-col gap-2">
                                                 {suggestedCustomers.map(cust => (
-                                                    <div key={cust.id} className="flex justify-between items-center text-xs p-2 bg-white rounded-lg border border-indigo-100 shadow-2xs">
-                                                        <div className="flex items-center gap-1.5 truncate">
-                                                            <UserIcon size={13} className="text-blue-500 shrink-0" />
-                                                            <span className="font-semibold text-gray-800 truncate">{getCustomerDisplayName(cust)}</span>
+                                                    <div key={cust.id} className="flex justify-between items-center text-xs sm:text-sm p-2.5 bg-white rounded-lg border border-indigo-100 shadow-sm">
+                                                        <div className="flex items-center gap-2 truncate">
+                                                            <UserIcon size={15} className="text-blue-500 shrink-0" />
+                                                            <span className="font-bold text-gray-800 truncate">{getCustomerDisplayName(cust)}</span>
                                                         </div>
                                                         <button 
                                                             type="button" 
                                                             onClick={() => handleLinkCustomer(cust)} 
-                                                            className="flex items-center gap-1 py-1 px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-md shadow-2xs transition shrink-0 cursor-pointer"
+                                                            className="flex items-center gap-1.5 py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-md shadow-sm transition shrink-0 cursor-pointer text-xs"
                                                         >
-                                                            <LinkIcon size={12}/> Link
+                                                            <LinkIcon size={13}/> Link Client
                                                         </button>
                                                     </div>
                                                 ))}
@@ -1207,140 +1245,186 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                         )}
                                         
                                         {suggestedVehicle && !formData.linkedVehicleId && (
-                                            <div className="flex justify-between items-center text-xs p-2 bg-white rounded-lg border border-indigo-100 shadow-2xs">
-                                                <div className="flex items-center gap-1.5 truncate">
-                                                    <Car size={13} className="text-emerald-500 shrink-0" />
-                                                    <span className="font-bold text-gray-900">{suggestedVehicle.registration}</span>
-                                                    <span className="text-gray-500 truncate">({suggestedVehicle.make} {suggestedVehicle.model})</span>
+                                            <div className="flex justify-between items-center text-xs sm:text-sm p-2.5 bg-white rounded-lg border border-indigo-100 shadow-sm">
+                                                <div className="flex items-center gap-2 truncate">
+                                                    <Car size={15} className="text-emerald-500 shrink-0" />
+                                                    <span className="font-black text-gray-900 uppercase font-mono">{suggestedVehicle.registration}</span>
+                                                    <span className="text-gray-600 truncate">({suggestedVehicle.make} {suggestedVehicle.model})</span>
                                                 </div>
                                                 <button 
                                                     type="button" 
                                                     onClick={() => handleLinkVehicle(suggestedVehicle)} 
-                                                    className="flex items-center gap-1 py-1 px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-md shadow-2xs transition shrink-0 cursor-pointer"
+                                                    className="flex items-center gap-1.5 py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-md shadow-sm transition shrink-0 cursor-pointer text-xs"
                                                 >
-                                                    <LinkIcon size={12}/> Link
+                                                    <LinkIcon size={13}/> Link Vehicle
                                                 </button>
                                             </div>
                                         )}
                                     </div>
                                 )}
 
-                                {/* Client Connection Dossier Card */}
-                                <div className="bg-white p-4 border border-gray-200 rounded-xl shadow-xs space-y-3">
-                                    <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-                                        <label className="block text-xs font-bold text-gray-800 uppercase tracking-wider flex items-center gap-1.5">
-                                            <UserCheck size={14} className="text-indigo-600" /> Customer Connection
-                                        </label>
+                                {/* Customer Connection & Contact Card */}
+                                <div className="bg-white p-4 sm:p-5 border border-gray-200 rounded-xl shadow-sm space-y-4">
+                                    <div className="flex items-center justify-between border-b border-gray-100 pb-2.5">
+                                        <div className="flex items-center gap-2">
+                                            <UserCheck size={18} className="text-indigo-600" />
+                                            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">
+                                                Customer & Contact Details
+                                            </h3>
+                                        </div>
                                         {linkedCustomer && (
-                                            <button 
-                                                type="button" 
-                                                onClick={handleUnlinkCustomer} 
-                                                title="Unlink Customer" 
-                                                className="text-xs text-red-500 hover:text-red-700 flex items-center gap-1 font-medium transition cursor-pointer"
-                                            >
-                                                <XCircle size={13} /> Unlink
-                                            </button>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-xs font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">
+                                                    Linked
+                                                </span>
+                                                <button 
+                                                    type="button" 
+                                                    onClick={handleUnlinkCustomer} 
+                                                    title="Unlink Customer" 
+                                                    className="text-xs text-red-500 hover:text-red-700 flex items-center gap-1 font-semibold transition cursor-pointer"
+                                                >
+                                                    <XCircle size={14} /> Unlink
+                                                </button>
+                                            </div>
                                         )}
                                     </div>
 
-                                    {linkedCustomer ? (
-                                        <div className="p-3 bg-emerald-50/70 border border-emerald-200 rounded-lg text-xs space-y-1.5">
-                                            <div className="flex items-center justify-between">
-                                                <button 
-                                                    type="button" 
-                                                    onClick={() => onViewCustomer?.(linkedCustomer.id)}
-                                                    className="font-bold text-emerald-900 hover:underline text-left flex items-center gap-1.5 text-sm cursor-pointer"
-                                                >
-                                                    <UserCheck size={15} className="text-emerald-700 shrink-0" />
-                                                    {getCustomerDisplayName(linkedCustomer)}
-                                                </button>
-                                                <span className="text-[10px] font-bold bg-emerald-200 text-emerald-900 px-2 py-0.5 rounded-full">
-                                                    Linked Client
-                                                </span>
-                                            </div>
-                                            <div className="text-emerald-800 space-y-0.5 pt-1">
-                                                {linkedCustomer.email && <div>Email: <span className="font-semibold">{linkedCustomer.email}</span></div>}
-                                                {(linkedCustomer.mobile || linkedCustomer.phone) && <div>Phone: <span className="font-semibold">{linkedCustomer.mobile || linkedCustomer.phone}</span></div>}
-                                                {linkedCustomer.postcode && <div>Postcode: <span className="font-semibold uppercase">{linkedCustomer.postcode}</span></div>}
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <div className="space-y-3">
-                                            <div className="grid grid-cols-2 gap-2">
-                                                <div>
-                                                    <label className="block text-[11px] font-semibold text-gray-600 mb-1">First Name*</label>
-                                                    <input value={firstNameInput} onChange={handleFirstNameChange} className="w-full p-1.5 border rounded text-xs" required placeholder="First name" />
-                                                </div>
-                                                <div>
-                                                    <label className="block text-[11px] font-semibold text-gray-600 mb-1">Surname</label>
-                                                    <input value={surnameInput} onChange={handleSurnameChange} className="w-full p-1.5 border rounded text-xs" placeholder="Surname" />
-                                                </div>
-                                            </div>
-                                            <div className="grid grid-cols-2 gap-2">
-                                                <div>
-                                                    <label className="block text-[11px] font-semibold text-gray-600 mb-1">Email</label>
-                                                    <input type="email" name="fromEmail" value={formData.fromEmail || ''} onChange={handleChange} className="w-full p-1.5 border rounded text-xs" placeholder="email@example.com" />
-                                                </div>
-                                                <div>
-                                                    <label className="block text-[11px] font-semibold text-gray-600 mb-1">Phone</label>
-                                                    <input type="tel" name="fromPhone" value={formData.fromPhone || ''} onChange={handleChange} className="w-full p-1.5 border rounded text-xs" placeholder="07123456789" />
-                                                </div>
+                                    {/* Editable Contact Fields (Always Visible) */}
+                                    <div className="space-y-3">
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div>
+                                                <label className="block text-xs font-bold text-gray-700 mb-1">First Name*</label>
+                                                <input 
+                                                    value={firstNameInput} 
+                                                    onChange={handleFirstNameChange} 
+                                                    className="w-full p-2.5 border border-gray-300 rounded-lg text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition" 
+                                                    required 
+                                                    placeholder="e.g. John" 
+                                                />
                                             </div>
                                             <div>
-                                                <label className="block text-[11px] font-semibold text-gray-600 mb-1">Postcode & Address</label>
-                                                <div className="flex gap-1.5">
-                                                    <input type="text" name="postcode" value={formData.postcode || ''} onChange={handleChange} className="w-full p-1.5 border rounded text-xs uppercase" placeholder="e.g. GU24 9NY" />
-                                                    <button
-                                                        type="button"
-                                                        onClick={handleLookupAddress}
-                                                        disabled={!formData.postcode || isLookingUpAddress}
-                                                        className="bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded px-2.5 flex items-center justify-center disabled:opacity-50 text-xs shrink-0 cursor-pointer"
-                                                        title="Lookup Address"
-                                                    >
-                                                        {isLookingUpAddress ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
-                                                    </button>
+                                                <label className="block text-xs font-bold text-gray-700 mb-1">Surname</label>
+                                                <input 
+                                                    value={surnameInput} 
+                                                    onChange={handleSurnameChange} 
+                                                    className="w-full p-2.5 border border-gray-300 rounded-lg text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition" 
+                                                    placeholder="e.g. Smith" 
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div>
+                                                <label className="block text-xs font-bold text-gray-700 mb-1">Email Address</label>
+                                                <input 
+                                                    type="email" 
+                                                    name="fromEmail" 
+                                                    value={formData.fromEmail || ''} 
+                                                    onChange={handleChange} 
+                                                    className="w-full p-2.5 border border-gray-300 rounded-lg text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition" 
+                                                    placeholder="customer@example.com" 
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-bold text-gray-700 mb-1">Phone Number</label>
+                                                <input 
+                                                    type="tel" 
+                                                    name="fromPhone" 
+                                                    value={formData.fromPhone || ''} 
+                                                    onChange={handleChange} 
+                                                    className="w-full p-2.5 border border-gray-300 rounded-lg text-sm font-bold focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition" 
+                                                    placeholder="07123456789" 
+                                                />
+                                            </div>
+                                        </div>
+
+                                        {/* Postcode & Address Lookup (Always Visible) */}
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-700 mb-1">Postcode & Address</label>
+                                            <div className="flex gap-2">
+                                                <input 
+                                                    type="text" 
+                                                    name="postcode" 
+                                                    value={formData.postcode || ''} 
+                                                    onChange={handleChange} 
+                                                    className="w-full p-2.5 border border-gray-300 rounded-lg text-sm uppercase font-bold tracking-wider focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition" 
+                                                    placeholder="e.g. GU24 9NY" 
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={handleLookupAddress}
+                                                    disabled={!formData.postcode || isLookingUpAddress}
+                                                    className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 text-white font-bold rounded-lg px-4 py-2.5 flex items-center gap-1.5 transition text-xs sm:text-sm shrink-0 cursor-pointer shadow-sm"
+                                                    title="Lookup address by UK postcode"
+                                                >
+                                                    {isLookingUpAddress ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
+                                                    <span>Lookup Address</span>
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {/* Address Lookup Dropdown Selection */}
+                                        {addressList.length > 0 && (
+                                            <div className="bg-white border-2 border-indigo-300 rounded-lg shadow-md overflow-hidden">
+                                                <div className="bg-indigo-50 px-3 py-2 text-xs font-bold text-indigo-900 border-b border-indigo-200 flex items-center justify-between">
+                                                    <span>Select Address for {formData.postcode}</span>
+                                                    <span className="text-indigo-600">({addressList.length} results)</span>
+                                                </div>
+                                                <ul className="max-h-44 overflow-y-auto divide-y divide-gray-100">
+                                                    {addressList.map((addr, idx) => (
+                                                        <li key={idx}>
+                                                            <button
+                                                                type="button"
+                                                                className="w-full text-left px-3 py-2 text-xs sm:text-sm hover:bg-indigo-50 transition cursor-pointer text-gray-800"
+                                                                onClick={() => {
+                                                                    setFormData(prev => ({
+                                                                        ...prev,
+                                                                        addressLine1: addr.street || '',
+                                                                        addressLine2: addr.locality || '',
+                                                                        city: addr.postTown || '',
+                                                                        county: addr.county || '',
+                                                                        postcode: addr.postcode || prev.postcode
+                                                                    }));
+                                                                    setAddressList([]);
+                                                                }}
+                                                            >
+                                                                {addr.summaryAddress || `${addr.street || ''} ${addr.locality || ''} ${addr.postTown || ''}`}
+                                                            </button>
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        )}
+
+                                        {/* Display Address Breakdown if populated */}
+                                        {(formData.addressLine1 || formData.city) && (
+                                            <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg text-xs sm:text-sm text-gray-800 flex items-start gap-2">
+                                                <MapPin size={16} className="text-indigo-600 shrink-0 mt-0.5" />
+                                                <div className="font-medium">
+                                                    <div>{formData.addressLine1}</div>
+                                                    {formData.addressLine2 && <div>{formData.addressLine2}</div>}
+                                                    <div>{formData.city} {formData.county} <strong className="uppercase">{formData.postcode}</strong></div>
                                                 </div>
                                             </div>
+                                        )}
 
-                                            {addressList.length > 0 && (
-                                                <div className="bg-white border rounded shadow-sm">
-                                                    <div className="bg-gray-50 p-1.5 text-[10px] font-semibold border-b text-gray-500">
-                                                        Select Address
-                                                    </div>
-                                                    <ul className="max-h-36 overflow-y-auto">
-                                                        {addressList.map((addr, idx) => (
-                                                            <li key={idx}>
-                                                                <button
-                                                                    type="button"
-                                                                    className="w-full text-left px-2.5 py-1.5 text-xs hover:bg-indigo-50 border-b last:border-0"
-                                                                    onClick={() => {
-                                                                        setFormData(prev => ({
-                                                                            ...prev,
-                                                                            addressLine1: addr.street || '',
-                                                                            addressLine2: addr.locality || '',
-                                                                            city: addr.postTown || '',
-                                                                            county: addr.county || '',
-                                                                            postcode: addr.postcode || prev.postcode
-                                                                        }));
-                                                                        setAddressList([]);
-                                                                    }}
-                                                                >
-                                                                    {addr.summaryAddress || `${addr.street || ''} ${addr.locality || ''} ${addr.postTown || ''}`}
-                                                                </button>
-                                                            </li>
-                                                        ))}
-                                                    </ul>
-                                                </div>
-                                            )}
-
-                                            <div className="pt-2 border-t flex flex-col gap-1.5">
+                                        {/* Customer Link and Auto-Create controls */}
+                                        <div className="pt-2 border-t border-gray-100 space-y-2">
+                                            {!linkedCustomer && (
                                                 <button 
                                                     type="button" 
                                                     onClick={handleAutoCreateCustomer}
-                                                    className="w-full py-1.5 flex justify-center items-center gap-1.5 text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition cursor-pointer"
+                                                    className="w-full py-2 flex justify-center items-center gap-2 text-xs sm:text-sm font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-lg transition cursor-pointer shadow-xs"
+                                                    title="Instantly create customer & vehicle records from these details"
                                                 >
-                                                    <Wand2 size={13} /> Auto-Create Customer & Vehicle
+                                                    <Wand2 size={15} /> Auto-Create Customer & Vehicle Record
                                                 </button>
+                                            )}
+
+                                            <div>
+                                                <label className="block text-xs font-semibold text-gray-500 mb-1">
+                                                    {linkedCustomer ? 'Linked Customer Record:' : 'Or link to existing customer in database:'}
+                                                </label>
                                                 <SearchableSelect
                                                     options={customers.map(c => ({ id: c.id, label: getCustomerDisplayName(c), value: c.id }))}
                                                     defaultValue={formData.linkedCustomerId || null}
@@ -1367,171 +1451,179 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                                         });
                                                         setSuggestedCustomers([]);
                                                     }}
-                                                    placeholder="Or link to existing customer..."
+                                                    placeholder="Search and select existing customer..."
                                                 />
                                             </div>
                                         </div>
-                                    )}
+                                    </div>
                                 </div>
 
-                                {/* Vehicle Connection Dossier Card */}
-                                <div className="bg-white p-4 border border-gray-200 rounded-xl shadow-xs space-y-3">
-                                    <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-                                        <label className="block text-xs font-bold text-gray-800 uppercase tracking-wider flex items-center gap-1.5">
-                                            <Car size={14} className="text-indigo-600" /> Vehicle Connection
-                                        </label>
+                                {/* Vehicle Connection & DVLA Lookup Card */}
+                                <div className="bg-white p-4 sm:p-5 border border-gray-200 rounded-xl shadow-sm space-y-4">
+                                    <div className="flex items-center justify-between border-b border-gray-100 pb-2.5">
+                                        <div className="flex items-center gap-2">
+                                            <Car size={18} className="text-indigo-600" />
+                                            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">
+                                                Vehicle Details & DVLA Search
+                                            </h3>
+                                        </div>
                                         {linkedVehicle && (
-                                            <button 
-                                                type="button" 
-                                                onClick={handleUnlinkVehicle} 
-                                                title="Unlink Vehicle" 
-                                                className="text-xs text-red-500 hover:text-red-700 flex items-center gap-1 font-medium transition cursor-pointer"
-                                            >
-                                                <XCircle size={13} /> Unlink
-                                            </button>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-xs font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">
+                                                    Linked
+                                                </span>
+                                                <button 
+                                                    type="button" 
+                                                    onClick={handleUnlinkVehicle} 
+                                                    title="Unlink Vehicle" 
+                                                    className="text-xs text-red-500 hover:text-red-700 flex items-center gap-1 font-semibold transition cursor-pointer"
+                                                >
+                                                    <XCircle size={14} /> Unlink
+                                                </button>
+                                            </div>
                                         )}
                                     </div>
 
-                                    {linkedVehicle ? (
-                                        <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs space-y-2">
-                                            <div className="flex items-center justify-between">
-                                                {/* UK License Plate Style */}
-                                                <div className="inline-block bg-yellow-400 text-black font-mono font-black text-sm px-2.5 py-0.5 rounded border border-yellow-500 shadow-2xs tracking-wider uppercase">
-                                                    {linkedVehicle.registration}
-                                                </div>
-                                                <span className="text-[10px] font-bold bg-slate-200 text-slate-800 px-2 py-0.5 rounded-full">
-                                                    Linked Vehicle
-                                                </span>
-                                            </div>
-                                            <div className="text-slate-800 font-medium">
-                                                {linkedVehicle.make} {linkedVehicle.model} {linkedVehicle.year ? `(${linkedVehicle.year})` : ''}
-                                            </div>
-                                            <div className="text-[11px] text-slate-500 space-y-0.5 pt-1 border-t border-slate-200/60">
-                                                {linkedVehicle.vin && <div>VIN: <span className="font-mono text-slate-700">{linkedVehicle.vin}</span></div>}
-                                                {(linkedVehicle.nextMotDate || linkedVehicle.motExpiryDate) && (
-                                                    <div>MOT Expiry: <span className="font-semibold text-slate-700">{linkedVehicle.nextMotDate || linkedVehicle.motExpiryDate}</span></div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <div className="space-y-3">
-                                            <div>
-                                                <label className="block text-[11px] font-semibold text-gray-600 mb-1">Vehicle Registration (VRM)</label>
-                                                <div className="flex gap-1.5">
-                                                    <input 
-                                                        type="text" 
-                                                        name="vehicleRegistration" 
-                                                        value={formData.vehicleRegistration || ''} 
-                                                        onChange={handleChange} 
-                                                        className="w-full p-1.5 border rounded text-xs uppercase font-mono font-bold tracking-wider" 
-                                                        placeholder="e.g. AB12 CDE" 
-                                                    />
-                                                    <button
-                                                        type="button"
-                                                        onClick={handleLookupVehicle}
-                                                        disabled={!formData.vehicleRegistration || isLookingUpVehicle || !!formData.linkedVehicleId}
-                                                        className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded px-2.5 flex items-center justify-center disabled:opacity-50 text-xs shrink-0 cursor-pointer shadow-2xs transition"
-                                                        title="Search DVLA by registration"
-                                                    >
-                                                        {isLookingUpVehicle ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
-                                                    </button>
-                                                </div>
-                                            </div>
-
-                                            {(formData.vehicleMake || formData.vehicleModel) && (
-                                                <div className="text-xs bg-gray-50 p-2 rounded border border-gray-200 text-gray-700">
-                                                    <span className="font-bold">{formData.vehicleMake} {formData.vehicleModel}</span> {formData.vehicleYear ? `(${formData.vehicleYear})` : ''}
-                                                </div>
-                                            )}
-
-                                            {!linkedVehicle && customerVehicles.length > 0 && (
-                                                <div className="space-y-1.5">
-                                                    <div className="text-[10px] font-bold text-indigo-800 uppercase tracking-wider">
-                                                        Client's Registered Vehicles
-                                                    </div>
-                                                    <div className="flex flex-col gap-1.5">
-                                                        {customerVehicles.map(v => (
-                                                            <button
-                                                                key={v.id}
-                                                                type="button"
-                                                                onClick={() => {
-                                                                    setFormData(p => ({
-                                                                        ...p,
-                                                                        linkedVehicleId: v.id,
-                                                                        vehicleMake: v.make || p.vehicleMake,
-                                                                        vehicleModel: v.model || p.vehicleModel,
-                                                                        vehicleRegistration: v.registration || p.vehicleRegistration,
-                                                                        vehicleYear: v.year?.toString() || p.vehicleYear,
-                                                                        vehicleVin: v.vin || p.vehicleVin,
-                                                                        vehicleMotExpiry: v.nextMotDate || v.motExpiryDate || p.vehicleMotExpiry,
-                                                                        vehicleManufactureDate: v.manufactureDate || p.vehicleManufactureDate
-                                                                    }));
-                                                                }}
-                                                                className="flex items-center justify-between p-2 text-xs bg-indigo-50/50 hover:bg-indigo-100/70 border border-indigo-100 rounded-lg transition text-left cursor-pointer"
-                                                            >
-                                                                <div className="font-bold text-slate-800 uppercase font-mono">{v.registration}</div>
-                                                                <div className="text-slate-600 text-[11px]">{v.make} {v.model}</div>
-                                                                <span className="text-[10px] font-bold text-indigo-700">Select</span>
-                                                            </button>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            <div className="pt-1.5 border-t">
-                                                <SearchableSelect
-                                                    options={vehicles
-                                                        .map(v => {
-                                                            const isCust = v.customerId === formData.linkedCustomerId;
-                                                            return { 
-                                                                id: v.id, 
-                                                                label: `${v.registration} - ${v.make} ${v.model}`, 
-                                                                value: v.id,
-                                                                badge: isCust ? { text: "Client's", className: "bg-indigo-100 text-indigo-800" } : undefined,
-                                                                isCust
-                                                            };
-                                                        })
-                                                        .sort((a, b) => (b.isCust ? 1 : 0) - (a.isCust ? 1 : 0))
-                                                    }
-                                                    defaultValue={formData.linkedVehicleId || null}
-                                                    onSelect={(value) => {
-                                                        const vehicle = vehicles.find(v => v.id === value);
-                                                        const ownerId = vehicle?.customerId;
-                                                        setFormData(p => {
-                                                            const cust = customers.find(c => c.id === (ownerId || p.linkedCustomerId));
-                                                            return { 
-                                                                ...p, 
-                                                                linkedVehicleId: value,
-                                                                linkedCustomerId: ownerId || p.linkedCustomerId,
-                                                                fromEmail: p.fromEmail || cust?.email || '',
-                                                                fromPhone: p.fromPhone || cust?.phone || cust?.mobile || ''
-                                                            };
-                                                        });
-                                                    }}
-                                                    placeholder="Or link any vehicle..."
+                                    {/* Editable Vehicle Registration & DVLA Lookup (Always Visible) */}
+                                    <div className="space-y-3">
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-700 mb-1">Vehicle Registration (VRM)</label>
+                                            <div className="flex gap-2">
+                                                <input 
+                                                    type="text" 
+                                                    name="vehicleRegistration" 
+                                                    value={formData.vehicleRegistration || ''} 
+                                                    onChange={handleChange} 
+                                                    className="w-full p-2.5 border-2 border-yellow-400 bg-yellow-50/50 rounded-lg text-sm sm:text-base font-black font-mono uppercase tracking-widest text-black focus:ring-2 focus:ring-indigo-500 transition" 
+                                                    placeholder="e.g. AB12 CDE" 
                                                 />
+                                                <button
+                                                    type="button"
+                                                    onClick={handleLookupVehicle}
+                                                    disabled={!formData.vehicleRegistration || isLookingUpVehicle}
+                                                    className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 text-white font-bold rounded-lg px-4 py-2.5 flex items-center gap-1.5 transition text-xs sm:text-sm shrink-0 cursor-pointer shadow-sm"
+                                                    title="Search DVLA records by registration number"
+                                                >
+                                                    {isLookingUpVehicle ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
+                                                    <span>Lookup DVLA</span>
+                                                </button>
                                             </div>
                                         </div>
-                                    )}
+
+                                        {/* Vehicle Specs Display Card */}
+                                        {(formData.vehicleMake || formData.vehicleModel || formData.vehicleYear || formData.vehicleVin || formData.vehicleMotExpiry) && (
+                                            <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-lg text-xs sm:text-sm text-slate-800 space-y-1.5">
+                                                <div className="flex items-center justify-between">
+                                                    <div className="font-extrabold text-base text-slate-900">
+                                                        {formData.vehicleMake} {formData.vehicleModel} {formData.vehicleYear ? `(${formData.vehicleYear})` : ''}
+                                                    </div>
+                                                    {formData.vehicleRegistration && (
+                                                        <span className="inline-block bg-yellow-400 text-black font-mono font-black text-xs px-2 py-0.5 rounded border border-yellow-500 uppercase">
+                                                            {formData.vehicleRegistration}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-2 text-xs text-slate-600 pt-1 border-t border-slate-200/80">
+                                                    {formData.vehicleVin && <div>VIN: <span className="font-mono font-bold text-slate-800">{formData.vehicleVin}</span></div>}
+                                                    {formData.vehicleMotExpiry && <div>MOT Expiry: <span className="font-bold text-slate-800">{formData.vehicleMotExpiry}</span></div>}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Client's Registered Vehicles Quick-Picker */}
+                                        {!linkedVehicle && customerVehicles.length > 0 && (
+                                            <div className="space-y-1.5 pt-1">
+                                                <label className="block text-xs font-bold text-indigo-900 uppercase tracking-wider">
+                                                    Client's Saved Vehicles ({customerVehicles.length})
+                                                </label>
+                                                <div className="flex flex-col gap-1.5">
+                                                    {customerVehicles.map(v => (
+                                                        <button
+                                                            key={v.id}
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setFormData(p => ({
+                                                                    ...p,
+                                                                    linkedVehicleId: v.id,
+                                                                    vehicleMake: v.make || p.vehicleMake,
+                                                                    vehicleModel: v.model || p.vehicleModel,
+                                                                    vehicleRegistration: v.registration || p.vehicleRegistration,
+                                                                    vehicleYear: v.year?.toString() || p.vehicleYear,
+                                                                    vehicleVin: v.vin || p.vehicleVin,
+                                                                    vehicleMotExpiry: v.nextMotDate || v.motExpiryDate || p.vehicleMotExpiry,
+                                                                    vehicleManufactureDate: v.manufactureDate || p.vehicleManufactureDate
+                                                                }));
+                                                            }}
+                                                            className="flex items-center justify-between p-2.5 text-xs sm:text-sm bg-indigo-50/70 hover:bg-indigo-100 border border-indigo-200 rounded-lg transition text-left cursor-pointer"
+                                                        >
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="font-black text-black font-mono bg-yellow-400 px-2 py-0.5 rounded border border-yellow-500 uppercase text-xs">{v.registration}</span>
+                                                                <span className="font-semibold text-slate-800">{v.make} {v.model} {v.year ? `(${v.year})` : ''}</span>
+                                                            </div>
+                                                            <span className="text-xs font-bold text-indigo-700">Select &rarr;</span>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Search/Link any vehicle in database */}
+                                        <div className="pt-2 border-t border-gray-100">
+                                            <label className="block text-xs font-semibold text-gray-500 mb-1">
+                                                {linkedVehicle ? 'Linked Vehicle Record:' : 'Or link to existing vehicle in database:'}
+                                            </label>
+                                            <SearchableSelect
+                                                options={vehicles
+                                                    .map(v => {
+                                                        const isCust = v.customerId === formData.linkedCustomerId;
+                                                        return { 
+                                                            id: v.id, 
+                                                            label: `${v.registration} - ${v.make} ${v.model}`, 
+                                                            value: v.id,
+                                                            badge: isCust ? { text: "Client's", className: "bg-indigo-100 text-indigo-800" } : undefined,
+                                                            isCust
+                                                        };
+                                                    })
+                                                    .sort((a, b) => (b.isCust ? 1 : 0) - (a.isCust ? 1 : 0))
+                                                }
+                                                defaultValue={formData.linkedVehicleId || null}
+                                                onSelect={(value) => {
+                                                    const vehicle = vehicles.find(v => v.id === value);
+                                                    const ownerId = vehicle?.customerId;
+                                                    setFormData(p => {
+                                                        const cust = customers.find(c => c.id === (ownerId || p.linkedCustomerId));
+                                                        return { 
+                                                            ...p, 
+                                                            linkedVehicleId: value,
+                                                            linkedCustomerId: ownerId || p.linkedCustomerId,
+                                                            fromEmail: p.fromEmail || cust?.email || '',
+                                                            fromPhone: p.fromPhone || cust?.phone || cust?.mobile || ''
+                                                        };
+                                                    });
+                                                }}
+                                                placeholder="Search and select existing vehicle..."
+                                            />
+                                        </div>
+                                    </div>
                                 </div>
 
                                 {/* Status, Ownership & Follow Up Card */}
-                                <div className="bg-white p-4 border border-gray-200 rounded-xl shadow-xs space-y-3">
+                                <div className="bg-white p-4 sm:p-5 border border-gray-200 rounded-xl shadow-sm space-y-3.5">
                                     <h4 className="text-xs font-bold text-gray-800 uppercase tracking-wider border-b border-gray-100 pb-2">
                                         Status & Ownership
                                     </h4>
                                     
-                                    <div className="grid grid-cols-1 gap-2.5">
+                                    <div className="grid grid-cols-1 gap-3">
                                         <div>
-                                            <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Branch / Entity</label>
-                                            <select name="entityId" value={formData.entityId || ''} onChange={handleChange} className="w-full p-2 border rounded-md text-xs bg-gray-50 font-medium">
+                                            <label className="block text-xs font-bold text-gray-700 mb-1">Branch / Entity</label>
+                                            <select name="entityId" value={formData.entityId || ''} onChange={handleChange} className="w-full p-2.5 border border-gray-300 rounded-lg text-sm bg-gray-50 font-medium">
                                                 {entities?.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
                                             </select>
                                         </div>
                                         <div className="flex gap-3">
                                             <div className="flex-1">
-                                                <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Status</label>
-                                                <select name="status" value={formData.status || 'Inbox'} onChange={handleChange} className="w-full p-2 border rounded-md text-xs bg-gray-50 font-medium">
+                                                <label className="block text-xs font-bold text-gray-700 mb-1">Status</label>
+                                                <select name="status" value={formData.status || 'Inbox'} onChange={handleChange} className="w-full p-2.5 border border-gray-300 rounded-lg text-sm bg-gray-50 font-medium">
                                                     <option value="Inbox">Inbox</option>
                                                     <option value="New Requests">New Requests</option>
                                                     <option value="Our Action">Our Action (Priority)</option>
@@ -1541,18 +1633,18 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                                     <option value="Closed">Closed</option>
                                                 </select>
                                             </div>
-                                            <div className="w-20">
-                                                <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Urgent</label>
-                                                <label className="relative inline-flex items-center cursor-pointer mt-0.5">
+                                            <div className="w-24">
+                                                <label className="block text-xs font-bold text-gray-700 mb-1">Urgent</label>
+                                                <label className="relative inline-flex items-center cursor-pointer mt-1">
                                                     <input type="checkbox" className="sr-only peer" checked={!!formData.isUrgent} onChange={e => setFormData(p => ({ ...p, isUrgent: e.target.checked }))} />
-                                                    <div className="w-10 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-red-500"></div>
+                                                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-500"></div>
                                                 </label>
                                             </div>
                                         </div>
                                         
                                         <div>
-                                            <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Action Status (Optional)</label>
-                                            <select name="actionStatus" value={formData.actionStatus || ''} onChange={handleChange} className="w-full p-2 border rounded-md text-xs bg-gray-50 font-medium">
+                                            <label className="block text-xs font-bold text-gray-700 mb-1">Action Status (Optional)</label>
+                                            <select name="actionStatus" value={formData.actionStatus || ''} onChange={handleChange} className="w-full p-2.5 border border-gray-300 rounded-lg text-sm bg-gray-50 font-medium">
                                                 <option value="">-- None --</option>
                                                 <optgroup label="Communication">
                                                     <option value="New Mail">New Mail</option>
@@ -1574,8 +1666,8 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                         </div>
                                         {formData.status === 'Closed' && (
                                             <div>
-                                                <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1 text-red-600">Reason for Closing</label>
-                                                <select name="closedReason" value={formData.closedReason || ''} onChange={handleChange} className="w-full p-2 border border-red-200 rounded-md text-xs bg-red-50">
+                                                <label className="block text-xs font-bold text-red-600 mb-1">Reason for Closing</label>
+                                                <select name="closedReason" value={formData.closedReason || ''} onChange={handleChange} className="w-full p-2.5 border border-red-200 rounded-lg text-sm bg-red-50 font-medium">
                                                     <option value="">Select a reason...</option>
                                                     <option value="Lost to Competitor">Lost to Competitor</option>
                                                     <option value="Too Expensive">Too Expensive</option>
@@ -1588,12 +1680,12 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                             </div>
                                         )}
                                         <div>
-                                            <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Follow Up Date</label>
-                                            <input type="date" name="followUpDate" value={formData.followUpDate || ''} onChange={handleChange} className="w-full p-2 border rounded-md text-xs bg-gray-50" />
+                                            <label className="block text-xs font-bold text-gray-700 mb-1">Follow Up Date</label>
+                                            <input type="date" name="followUpDate" value={formData.followUpDate || ''} onChange={handleChange} className="w-full p-2.5 border border-gray-300 rounded-lg text-sm bg-gray-50 font-medium" />
                                         </div>
-                                        <div className="grid grid-cols-2 gap-2">
+                                        <div className="grid grid-cols-2 gap-3">
                                             <div>
-                                                <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Taken By</label>
+                                                <label className="block text-xs font-bold text-gray-700 mb-1">Taken By</label>
                                                 <SearchableSelect
                                                     options={users.map(u => ({ id: u.id, label: u.name, value: u.id }))}
                                                     defaultValue={formData.takenByUserId || null}
@@ -1614,7 +1706,7 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Assigned To</label>
+                                                <label className="block text-xs font-bold text-gray-700 mb-1">Assigned To</label>
                                                 <SearchableSelect
                                                     options={[
                                                         ...users.map(u => ({ id: u.id, label: `👤 ${u.name}`, value: `user_${u.id}` })),
