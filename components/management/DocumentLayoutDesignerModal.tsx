@@ -32,8 +32,21 @@ import {
     ChevronUp
 } from 'lucide-react';
 import { toast } from 'react-toastify';
-import { BLOCK_DEFINITIONS, getDefaultJobCardBlocks, getDefaultInvoiceBlocks, PRESET_TEMPLATES } from '../../core/utils/documentTemplateDefaults';
+import { BLOCK_DEFINITIONS, getDefaultJobCardBlocks, getDefaultInvoiceBlocks, PRESET_TEMPLATES, getContainerStyleClasses } from '../../core/utils/documentTemplateDefaults';
 import { getFile } from '../../utils/imageStore';
+
+const CONTAINER_COLORS = [
+    { key: 'default', label: 'Theme', bg: 'bg-indigo-600' },
+    { key: 'slate', label: 'Slate', bg: 'bg-slate-600' },
+    { key: 'blue', label: 'Blue', bg: 'bg-blue-600' },
+    { key: 'indigo', label: 'Indigo', bg: 'bg-indigo-600' },
+    { key: 'sky', label: 'Sky', bg: 'bg-sky-500' },
+    { key: 'emerald', label: 'Emerald', bg: 'bg-emerald-600' },
+    { key: 'amber', label: 'Amber', bg: 'bg-amber-500' },
+    { key: 'rose', label: 'Rose', bg: 'bg-rose-600' },
+    { key: 'purple', label: 'Purple', bg: 'bg-purple-600' },
+    { key: 'dark', label: 'Dark', bg: 'bg-slate-900' },
+];
 
 interface DocumentLayoutDesignerModalProps {
     isOpen: boolean;
@@ -553,21 +566,61 @@ export const DocumentLayoutDesignerModal: React.FC<DocumentLayoutDesignerModalPr
                                                     <label className="block text-[11px] font-bold text-slate-700 mb-1">
                                                         Container Card Style
                                                     </label>
-                                                    <div className="grid grid-cols-4 gap-1">
-                                                        {['standard', 'boxed', 'highlight', 'minimal'].map((st) => (
+                                                    <div className="grid grid-cols-3 gap-1.5">
+                                                        {[
+                                                            { id: 'standard', label: 'Standard', desc: 'Clean default' },
+                                                            { id: 'boxed', label: 'Boxed', desc: 'Outlined border' },
+                                                            { id: 'highlight', label: 'Tinted', desc: 'Pastel highlight' },
+                                                            { id: 'card', label: 'Accent Bar', desc: 'Left accent stripe' },
+                                                            { id: 'banner', label: 'Banner', desc: 'Solid title bar' },
+                                                            { id: 'minimal', label: 'Minimal', desc: 'Flush divider' }
+                                                        ].map((st) => (
                                                             <button
-                                                                key={st}
+                                                                key={st.id}
                                                                 type="button"
-                                                                onClick={() => handleUpdateBlockSetting(block.id, 'style', st)}
-                                                                className={`py-1 text-[10px] font-bold uppercase rounded border transition cursor-pointer ${
-                                                                    (block.settings?.style || 'standard') === st
-                                                                        ? 'bg-indigo-600 text-white border-indigo-600'
-                                                                        : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'
+                                                                onClick={() => handleUpdateBlockSetting(block.id, 'style', st.id)}
+                                                                className={`p-1.5 text-left rounded-lg border transition cursor-pointer ${
+                                                                    (block.settings?.style || 'standard') === st.id
+                                                                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                                                                        : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
                                                                 }`}
                                                             >
-                                                                {st}
+                                                                <div className="text-[10px] font-bold uppercase tracking-wider">{st.label}</div>
+                                                                <div className={`text-[9px] ${ (block.settings?.style || 'standard') === st.id ? 'text-indigo-100' : 'text-slate-400' }`}>{st.desc}</div>
                                                             </button>
                                                         ))}
+                                                    </div>
+                                                </div>
+
+                                                {/* Container Color Setting */}
+                                                <div>
+                                                    <div className="flex items-center justify-between mb-1">
+                                                        <label className="block text-[11px] font-bold text-slate-700">
+                                                            Container Accent & Border Color
+                                                        </label>
+                                                        <span className="text-[10px] font-semibold text-slate-500 capitalize">
+                                                            {block.settings?.containerColor || 'Theme Default'}
+                                                        </span>
+                                                    </div>
+                                                    <div className="grid grid-cols-5 gap-1.5">
+                                                        {CONTAINER_COLORS.map((c) => {
+                                                            const isSelected = (block.settings?.containerColor || 'default') === c.key;
+                                                            return (
+                                                                <button
+                                                                    key={c.key}
+                                                                    type="button"
+                                                                    onClick={() => handleUpdateBlockSetting(block.id, 'containerColor', c.key)}
+                                                                    className={`flex items-center gap-1.5 p-1 rounded-lg border text-[10px] font-bold transition cursor-pointer ${
+                                                                        isSelected 
+                                                                            ? 'bg-slate-900 text-white border-slate-900 ring-2 ring-indigo-400 shadow-xs' 
+                                                                            : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                                                                    }`}
+                                                                >
+                                                                    <span className={`w-3 h-3 rounded-full shrink-0 ${c.bg}`} />
+                                                                    <span className="truncate">{c.label}</span>
+                                                                </button>
+                                                            );
+                                                        })}
                                                     </div>
                                                 </div>
                                             </div>
@@ -593,6 +646,8 @@ export const DocumentLayoutDesignerModal: React.FC<DocumentLayoutDesignerModalPr
                         >
                             {/* Render Visible Blocks dynamically in sequence */}
                             {blocks.filter(b => b.visible).map((block) => {
+                                const cs = getContainerStyleClasses(block.settings?.style, block.settings?.containerColor, accentColor);
+
                                 return (
                                     <div key={block.id} className="transition-all">
                                         {/* Block 1: Header Logo */}
@@ -659,137 +714,155 @@ export const DocumentLayoutDesignerModal: React.FC<DocumentLayoutDesignerModalPr
 
                                         {/* Block 3: Customer Details */}
                                         {block.type === 'customer_details' && (
-                                            <div className="border border-slate-200 rounded-lg p-3.5 bg-slate-50/70">
-                                                <h4 className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1 border-b pb-1">
-                                                    {block.title || 'Customer Details'}
-                                                </h4>
-                                                <div className="text-xs text-slate-800 space-y-0.5">
-                                                    <div className="font-bold text-sm text-slate-900">Dr. Anthony Harrington</div>
-                                                    <div>42 Manor House Gardens, Sunningdale</div>
-                                                    <div>Ascot, Berkshire, <span className="font-semibold uppercase">SL5 9PQ</span></div>
-                                                    <div>Phone: <span className="font-semibold">07891 234567</span> | Email: <span className="font-semibold">anthony.h@example.com</span></div>
+                                            <div className={cs.wrapperClass}>
+                                                <div className={cs.headerClass}>
+                                                    <h4 className={cs.titleClass}>
+                                                        {block.title || 'Customer Details'}
+                                                    </h4>
+                                                </div>
+                                                <div className={cs.bodyClass}>
+                                                    <div className="text-xs text-slate-800 space-y-0.5">
+                                                        <div className="font-bold text-sm text-slate-900">Dr. Anthony Harrington</div>
+                                                        <div>42 Manor House Gardens, Sunningdale</div>
+                                                        <div>Ascot, Berkshire, <span className="font-semibold uppercase">SL5 9PQ</span></div>
+                                                        <div>Phone: <span className="font-semibold">07891 234567</span> | Email: <span className="font-semibold">anthony.h@example.com</span></div>
+                                                    </div>
                                                 </div>
                                             </div>
                                         )}
 
                                         {/* Block 4: Vehicle Details */}
                                         {block.type === 'vehicle_details' && (
-                                            <div className="border border-slate-200 rounded-lg p-3.5 bg-slate-50/70 space-y-2">
-                                                <div className="flex items-center justify-between border-b pb-1">
-                                                    <h4 className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                                            <div className={cs.wrapperClass}>
+                                                <div className={cs.headerClass}>
+                                                    <h4 className={cs.titleClass}>
                                                         {block.title || 'Vehicle Details'}
                                                     </h4>
                                                     <span className="inline-block bg-yellow-400 text-black font-mono font-black text-xs px-2.5 py-0.5 rounded border border-yellow-500 shadow-2xs tracking-wider uppercase">
                                                         GU24 9NY
                                                     </span>
                                                 </div>
-                                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs text-slate-800">
-                                                    <div><span className="text-slate-400 block text-[10px]">Make & Model:</span><strong>Porsche 911 (992) GT3 RS</strong></div>
-                                                    <div><span className="text-slate-400 block text-[10px]">Year / Color:</span><strong>2023 / Guards Red</strong></div>
-                                                    <div><span className="text-slate-400 block text-[10px]">Recorded Mileage:</span><strong>14,820 miles</strong></div>
-                                                    <div><span className="text-slate-400 block text-[10px]">Key Tag / Slot:</span><strong>Key #12 (Slot 4)</strong></div>
+                                                <div className={cs.bodyClass}>
+                                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs text-slate-800">
+                                                        <div><span className="text-slate-400 block text-[10px]">Make & Model:</span><strong>Porsche 911 (992) GT3 RS</strong></div>
+                                                        <div><span className="text-slate-400 block text-[10px]">Year / Color:</span><strong>2023 / Guards Red</strong></div>
+                                                        <div><span className="text-slate-400 block text-[10px]">Recorded Mileage:</span><strong>14,820 miles</strong></div>
+                                                        <div><span className="text-slate-400 block text-[10px]">Key Tag / Slot:</span><strong>Key #12 (Slot 4)</strong></div>
+                                                    </div>
                                                 </div>
                                             </div>
                                         )}
 
                                         {/* Block 5: Narrative Description */}
                                         {block.type === 'narrative_description' && (
-                                            <div className="border border-slate-200 rounded-lg p-3.5 bg-white space-y-1">
-                                                <h4 className="text-[10px] font-bold uppercase tracking-wider text-slate-500 border-b pb-1">
-                                                    {block.title || 'Work Requested & Customer Narrative'}
-                                                </h4>
-                                                <p className="text-xs text-slate-700 leading-relaxed italic">
-                                                    "Customer booked in for Major 24k Service inspection, brake fluid flush, and investigating a slight squeal from front left ceramic brake discs when cold. Check tyre wear and track day alignment."
-                                                </p>
+                                            <div className={cs.wrapperClass}>
+                                                <div className={cs.headerClass}>
+                                                    <h4 className={cs.titleClass}>
+                                                        {block.title || 'Work Requested & Customer Narrative'}
+                                                    </h4>
+                                                </div>
+                                                <div className={cs.bodyClass}>
+                                                    <p className="text-xs text-slate-700 leading-relaxed italic">
+                                                        "Customer booked in for Major 24k Service inspection, brake fluid flush, and investigating a slight squeal from front left ceramic brake discs when cold. Check tyre wear and track day alignment."
+                                                    </p>
+                                                </div>
                                             </div>
                                         )}
 
                                         {/* Block 6: Tasks & Packages */}
                                         {block.type === 'tasks_packages' && (
-                                            <div className="border border-slate-200 rounded-lg overflow-hidden">
-                                                <div className="bg-slate-100 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-700 border-b">
-                                                    {block.title || 'Workshop Operations & Labour Tasks'}
+                                            <div className={cs.wrapperClass}>
+                                                <div className={cs.headerClass}>
+                                                    <div className={cs.titleClass}>
+                                                        {block.title || 'Workshop Operations & Labour Tasks'}
+                                                    </div>
                                                 </div>
-                                                <table className="w-full text-xs text-left">
-                                                    <thead className="bg-slate-50 border-b text-[10px] text-slate-500 uppercase">
-                                                        <tr>
-                                                            <th className="p-2">Description</th>
-                                                            <th className="p-2 text-center">Hours</th>
-                                                            {block.settings?.showPrices !== false && <th className="p-2 text-right">Net Price</th>}
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody className="divide-y divide-slate-100">
-                                                        <tr>
-                                                            <td className="p-2 font-medium">Major 24,000 Mile Service Package (Engine Oil, Filters, Spark Plugs)</td>
-                                                            <td className="p-2 text-center font-mono">3.50 hrs</td>
-                                                            {block.settings?.showPrices !== false && <td className="p-2 text-right font-semibold">£385.00</td>}
-                                                        </tr>
-                                                        <tr>
-                                                            <td className="p-2 font-medium">Brake Fluid System Flush & Bleed (Racing DOT 4)</td>
-                                                            <td className="p-2 text-center font-mono">1.00 hr</td>
-                                                            {block.settings?.showPrices !== false && <td className="p-2 text-right font-semibold">£110.00</td>}
-                                                        </tr>
-                                                        <tr>
-                                                            <td className="p-2 font-medium">Investigate Brake Squeal & Clean Calipers</td>
-                                                            <td className="p-2 text-center font-mono">0.50 hr</td>
-                                                            {block.settings?.showPrices !== false && <td className="p-2 text-right font-semibold">£55.00</td>}
-                                                        </tr>
-                                                    </tbody>
-                                                </table>
+                                                <div className="p-0 overflow-x-auto">
+                                                    <table className="w-full text-xs text-left">
+                                                        <thead className="bg-slate-50 border-b text-[10px] text-slate-500 uppercase">
+                                                            <tr>
+                                                                <th className="p-2">Description</th>
+                                                                <th className="p-2 text-center">Hours</th>
+                                                                {block.settings?.showPrices !== false && <th className="p-2 text-right">Net Price</th>}
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody className="divide-y divide-slate-100">
+                                                            <tr>
+                                                                <td className="p-2 font-medium">Major 24,000 Mile Service Package (Engine Oil, Filters, Spark Plugs)</td>
+                                                                <td className="p-2 text-center font-mono">3.50 hrs</td>
+                                                                {block.settings?.showPrices !== false && <td className="p-2 text-right font-semibold">£385.00</td>}
+                                                            </tr>
+                                                            <tr>
+                                                                <td className="p-2 font-medium">Brake Fluid System Flush & Bleed (Racing DOT 4)</td>
+                                                                <td className="p-2 text-center font-mono">1.00 hr</td>
+                                                                {block.settings?.showPrices !== false && <td className="p-2 text-right font-semibold">£110.00</td>}
+                                                            </tr>
+                                                            <tr>
+                                                                <td className="p-2 font-medium">Investigate Brake Squeal & Clean Calipers</td>
+                                                                <td className="p-2 text-center font-mono">0.50 hr</td>
+                                                                {block.settings?.showPrices !== false && <td className="p-2 text-right font-semibold">£55.00</td>}
+                                                            </tr>
+                                                        </tbody>
+                                                    </table>
+                                                </div>
                                             </div>
                                         )}
 
                                         {/* Block 7: Parts Items */}
                                         {block.type === 'parts_items' && (
-                                            <div className="border border-slate-200 rounded-lg overflow-hidden">
-                                                <div className="bg-slate-100 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-700 border-b">
-                                                    {block.title || 'Parts & Materials'}
+                                            <div className={cs.wrapperClass}>
+                                                <div className={cs.headerClass}>
+                                                    <div className={cs.titleClass}>
+                                                        {block.title || 'Parts & Materials'}
+                                                    </div>
                                                 </div>
-                                                <table className="w-full text-xs text-left">
-                                                    <thead className="bg-slate-50 border-b text-[10px] text-slate-500 uppercase">
-                                                        <tr>
-                                                            {block.settings?.showPartNumbers !== false && <th className="p-2">Part No.</th>}
-                                                            <th className="p-2">Description</th>
-                                                            <th className="p-2 text-center">Qty</th>
-                                                            {block.settings?.showPrices !== false && <th className="p-2 text-right">Unit Net</th>}
-                                                            {block.settings?.showPrices !== false && <th className="p-2 text-right">Total Net</th>}
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody className="divide-y divide-slate-100">
-                                                        <tr>
-                                                            {block.settings?.showPartNumbers !== false && <td className="p-2 font-mono text-[10px]">0PB-115-561</td>}
-                                                            <td className="p-2 font-medium">Genuine Porsche Oil Filter Element</td>
-                                                            <td className="p-2 text-center">1</td>
-                                                            {block.settings?.showPrices !== false && <td className="p-2 text-right font-mono">£34.50</td>}
-                                                            {block.settings?.showPrices !== false && <td className="p-2 text-right font-semibold font-mono">£34.50</td>}
-                                                        </tr>
-                                                        <tr>
-                                                            {block.settings?.showPartNumbers !== false && <td className="p-2 font-mono text-[10px]">MOB-1-0W40</td>}
-                                                            <td className="p-2 font-medium">Mobil 1 ESP X3 0W-40 Synthetic (Litres)</td>
-                                                            <td className="p-2 text-center">8</td>
-                                                            {block.settings?.showPrices !== false && <td className="p-2 text-right font-mono">£16.50</td>}
-                                                            {block.settings?.showPrices !== false && <td className="p-2 text-right font-semibold font-mono">£132.00</td>}
-                                                        </tr>
-                                                        <tr>
-                                                            {block.settings?.showPartNumbers !== false && <td className="p-2 font-mono text-[10px]">MOTUL-RBF660</td>}
-                                                            <td className="p-2 font-medium">Motul RBF660 Factory Line High Temp Brake Fluid (500ml)</td>
-                                                            <td className="p-2 text-center">2</td>
-                                                            {block.settings?.showPrices !== false && <td className="p-2 text-right font-mono">£19.00</td>}
-                                                            {block.settings?.showPrices !== false && <td className="p-2 text-right font-semibold font-mono">£38.00</td>}
-                                                        </tr>
-                                                    </tbody>
-                                                </table>
+                                                <div className="p-0 overflow-x-auto">
+                                                    <table className="w-full text-xs text-left">
+                                                        <thead className="bg-slate-50 border-b text-[10px] text-slate-500 uppercase">
+                                                            <tr>
+                                                                {block.settings?.showPartNumbers !== false && <th className="p-2">Part No.</th>}
+                                                                <th className="p-2">Description</th>
+                                                                <th className="p-2 text-center">Qty</th>
+                                                                {block.settings?.showPrices !== false && <th className="p-2 text-right">Unit Net</th>}
+                                                                {block.settings?.showPrices !== false && <th className="p-2 text-right">Total Net</th>}
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody className="divide-y divide-slate-100">
+                                                            <tr>
+                                                                {block.settings?.showPartNumbers !== false && <td className="p-2 font-mono text-[10px]">0PB-115-561</td>}
+                                                                <td className="p-2 font-medium">Genuine Porsche Oil Filter Element</td>
+                                                                <td className="p-2 text-center">1</td>
+                                                                {block.settings?.showPrices !== false && <td className="p-2 text-right font-mono">£34.50</td>}
+                                                                {block.settings?.showPrices !== false && <td className="p-2 text-right font-semibold font-mono">£34.50</td>}
+                                                            </tr>
+                                                            <tr>
+                                                                {block.settings?.showPartNumbers !== false && <td className="p-2 font-mono text-[10px]">MOB-1-0W40</td>}
+                                                                <td className="p-2 font-medium">Mobil 1 ESP X3 0W-40 Synthetic (Litres)</td>
+                                                                <td className="p-2 text-center">8</td>
+                                                                {block.settings?.showPrices !== false && <td className="p-2 text-right font-mono">£16.50</td>}
+                                                                {block.settings?.showPrices !== false && <td className="p-2 text-right font-semibold font-mono">£132.00</td>}
+                                                            </tr>
+                                                            <tr>
+                                                                {block.settings?.showPartNumbers !== false && <td className="p-2 font-mono text-[10px]">MOTUL-RBF660</td>}
+                                                                <td className="p-2 font-medium">Motul RBF660 Factory Line High Temp Brake Fluid (500ml)</td>
+                                                                <td className="p-2 text-center">2</td>
+                                                                {block.settings?.showPrices !== false && <td className="p-2 text-right font-mono">£19.00</td>}
+                                                                {block.settings?.showPrices !== false && <td className="p-2 text-right font-semibold font-mono">£38.00</td>}
+                                                            </tr>
+                                                        </tbody>
+                                                    </table>
+                                                </div>
                                             </div>
                                         )}
 
                                         {/* Block 8: Labour Summary (Job Card specific) */}
                                         {block.type === 'labour_summary' && (
-                                            <div className="border border-slate-200 rounded-lg p-3 bg-slate-50 flex items-center justify-between text-xs">
-                                                <div>
+                                            <div className={`${cs.wrapperClass} flex items-center justify-between`}>
+                                                <div className="p-3.5">
                                                     <span className="font-bold text-slate-800">Technician Time Allocation</span>
                                                     <div className="text-[11px] text-slate-500">Allocated: 5.00 hrs | Booked Time: 4.75 hrs</div>
                                                 </div>
-                                                <div className="flex items-center gap-4 text-xs font-mono font-bold">
+                                                <div className="p-3.5 flex items-center gap-4 text-xs font-mono font-bold">
                                                     <span className="bg-white px-2 py-1 rounded border border-slate-200">Start: 08:30</span>
                                                     <span className="bg-white px-2 py-1 rounded border border-slate-200">Finish: 13:15</span>
                                                 </div>
@@ -799,7 +872,7 @@ export const DocumentLayoutDesignerModal: React.FC<DocumentLayoutDesignerModalPr
                                         {/* Block 9: Financial Totals */}
                                         {block.type === 'financial_totals' && (
                                             <div className="flex justify-end pt-2">
-                                                <div className="w-72 border border-slate-200 rounded-lg p-3 bg-slate-50 space-y-1.5 text-xs">
+                                                <div className={`w-72 ${cs.wrapperClass} p-3.5 space-y-1.5 text-xs`}>
                                                     <div className="flex justify-between text-slate-600">
                                                         <span>Labour Subtotal:</span>
                                                         <span className="font-mono font-semibold">£550.00</span>
@@ -826,9 +899,9 @@ export const DocumentLayoutDesignerModal: React.FC<DocumentLayoutDesignerModalPr
 
                                         {/* Block 10: Bank Details */}
                                         {block.type === 'bank_details' && (
-                                            <div className="border border-indigo-200 rounded-lg p-3 bg-indigo-50/50 flex flex-wrap items-center justify-between gap-3 text-xs">
+                                            <div className={`${cs.wrapperClass} p-3.5 flex flex-wrap items-center justify-between gap-3 text-xs`}>
                                                 <div>
-                                                    <h4 className="font-bold text-indigo-950 uppercase text-[10px]">
+                                                    <h4 className={cs.titleClass}>
                                                         {block.title || 'Bank Remittance Details'}
                                                     </h4>
                                                     <div className="text-slate-700 text-[11px] pt-0.5">
@@ -845,23 +918,30 @@ export const DocumentLayoutDesignerModal: React.FC<DocumentLayoutDesignerModalPr
 
                                         {/* Block 11: Authorisation & Signatures */}
                                         {block.type === 'terms_signoff' && (
-                                            <div className="border border-slate-200 rounded-lg p-3.5 bg-slate-50/70 space-y-3">
-                                                <div className="text-[10px] text-slate-500 leading-tight">
-                                                    I hereby authorize the repair work and acknowledge receipt of vehicle in satisfactory condition. All parts replaced remain the property of the workshop until invoice is paid in full.
+                                            <div className={cs.wrapperClass}>
+                                                <div className={cs.headerClass}>
+                                                    <h4 className={cs.titleClass}>
+                                                        {block.title || 'Terms & Authorisation'}
+                                                    </h4>
                                                 </div>
-                                                <div className="grid grid-cols-2 gap-4 pt-1">
-                                                    {block.settings?.showCustomerSignature !== false && (
-                                                        <div className="border-t border-slate-400 pt-1 flex justify-between text-[10px] text-slate-600">
-                                                            <span>Customer Signature</span>
-                                                            <span>Date: ____________</span>
-                                                        </div>
-                                                    )}
-                                                    {block.settings?.showTechnicianSignature !== false && (
-                                                        <div className="border-t border-slate-400 pt-1 flex justify-between text-[10px] text-slate-600">
-                                                            <span>Technician Signature</span>
-                                                            <span>Date: ____________</span>
-                                                        </div>
-                                                    )}
+                                                <div className={cs.bodyClass}>
+                                                    <div className="text-[10px] text-slate-500 leading-tight">
+                                                        I hereby authorize the repair work and acknowledge receipt of vehicle in satisfactory condition. All parts replaced remain the property of the workshop until invoice is paid in full.
+                                                    </div>
+                                                    <div className="grid grid-cols-2 gap-4 pt-1">
+                                                        {block.settings?.showCustomerSignature !== false && (
+                                                            <div className="border-t border-slate-400 pt-1 flex justify-between text-[10px] text-slate-600">
+                                                                <span>Customer Signature</span>
+                                                                <span>Date: ____________</span>
+                                                            </div>
+                                                        )}
+                                                        {block.settings?.showTechnicianSignature !== false && (
+                                                            <div className="border-t border-slate-400 pt-1 flex justify-between text-[10px] text-slate-600">
+                                                                <span>Technician Signature</span>
+                                                                <span>Date: ____________</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </div>
                                         )}

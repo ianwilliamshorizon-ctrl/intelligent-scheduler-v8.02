@@ -404,3 +404,167 @@ export const PRESET_TEMPLATES: Record<string, { name: string; documentType: 'job
         })
     }
 };
+
+export interface ContainerStyleResult {
+    wrapperClass: string;
+    headerClass: string;
+    titleClass: string;
+    bodyClass: string;
+    accentClass: string;
+}
+
+export const getContainerStyleClasses = (
+    style: string = 'standard',
+    color: string = 'default',
+    entityAccent: string = 'indigo'
+): ContainerStyleResult => {
+    // Map color to palette
+    const colorKey = (!color || color === 'default') ? (entityAccent || 'indigo') : color;
+    
+    // Color map definitions
+    const colorMaps: Record<string, {
+        border: string;
+        bgTint: string;
+        headerBg: string;
+        headerText: string;
+        titleText: string;
+        borderAccent: string;
+        badge: string;
+    }> = {
+        indigo: {
+            border: 'border-indigo-200',
+            bgTint: 'bg-indigo-50/70',
+            headerBg: 'bg-indigo-700',
+            headerText: 'text-white',
+            titleText: 'text-indigo-900',
+            borderAccent: 'border-l-indigo-600',
+            badge: 'bg-indigo-100 text-indigo-800'
+        },
+        blue: {
+            border: 'border-blue-200',
+            bgTint: 'bg-blue-50/70',
+            headerBg: 'bg-blue-700',
+            headerText: 'text-white',
+            titleText: 'text-blue-900',
+            borderAccent: 'border-l-blue-600',
+            badge: 'bg-blue-100 text-blue-800'
+        },
+        sky: {
+            border: 'border-sky-200',
+            bgTint: 'bg-sky-50/70',
+            headerBg: 'bg-sky-600',
+            headerText: 'text-white',
+            titleText: 'text-sky-900',
+            borderAccent: 'border-l-sky-500',
+            badge: 'bg-sky-100 text-sky-800'
+        },
+        slate: {
+            border: 'border-slate-300',
+            bgTint: 'bg-slate-50/80',
+            headerBg: 'bg-slate-700',
+            headerText: 'text-white',
+            titleText: 'text-slate-900',
+            borderAccent: 'border-l-slate-600',
+            badge: 'bg-slate-100 text-slate-800'
+        },
+        dark: {
+            border: 'border-slate-800',
+            bgTint: 'bg-slate-900 text-white',
+            headerBg: 'bg-black',
+            headerText: 'text-white',
+            titleText: 'text-white',
+            borderAccent: 'border-l-black',
+            badge: 'bg-slate-800 text-slate-200'
+        },
+        emerald: {
+            border: 'border-emerald-200',
+            bgTint: 'bg-emerald-50/70',
+            headerBg: 'bg-emerald-700',
+            headerText: 'text-white',
+            titleText: 'text-emerald-900',
+            borderAccent: 'border-l-emerald-600',
+            badge: 'bg-emerald-100 text-emerald-800'
+        },
+        amber: {
+            border: 'border-amber-200',
+            bgTint: 'bg-amber-50/70',
+            headerBg: 'bg-amber-600',
+            headerText: 'text-white',
+            titleText: 'text-amber-950',
+            borderAccent: 'border-l-amber-500',
+            badge: 'bg-amber-100 text-amber-900'
+        },
+        rose: {
+            border: 'border-rose-200',
+            bgTint: 'bg-rose-50/70',
+            headerBg: 'bg-rose-700',
+            headerText: 'text-white',
+            titleText: 'text-rose-950',
+            borderAccent: 'border-l-rose-600',
+            badge: 'bg-rose-100 text-rose-800'
+        },
+        purple: {
+            border: 'border-purple-200',
+            bgTint: 'bg-purple-50/70',
+            headerBg: 'bg-purple-700',
+            headerText: 'text-white',
+            titleText: 'text-purple-900',
+            borderAccent: 'border-l-purple-600',
+            badge: 'bg-purple-100 text-purple-800'
+        },
+    };
+
+    const c = colorMaps[colorKey] || colorMaps['indigo'];
+
+    switch (style) {
+        case 'boxed':
+            return {
+                wrapperClass: `border ${c.border} rounded-lg bg-white overflow-hidden shadow-2xs`,
+                headerClass: `px-3.5 py-2 border-b ${c.border} bg-slate-50/60 flex items-center justify-between`,
+                titleClass: `text-[10px] font-bold uppercase tracking-wider ${c.titleText}`,
+                bodyClass: `p-3.5 space-y-2`,
+                accentClass: c.border
+            };
+        case 'highlight':
+            return {
+                wrapperClass: `border ${c.border} ${c.bgTint} rounded-lg overflow-hidden shadow-2xs`,
+                headerClass: `px-3.5 py-2 border-b ${c.border} bg-white/50 flex items-center justify-between`,
+                titleClass: `text-[10px] font-extrabold uppercase tracking-wider ${c.titleText}`,
+                bodyClass: `p-3.5 space-y-2`,
+                accentClass: c.border
+            };
+        case 'card':
+            return {
+                wrapperClass: `border border-slate-200 border-l-4 ${c.borderAccent} rounded-lg bg-white overflow-hidden shadow-xs`,
+                headerClass: `px-3.5 py-2 border-b border-slate-100 bg-white flex items-center justify-between`,
+                titleClass: `text-[10px] font-bold uppercase tracking-wider ${c.titleText}`,
+                bodyClass: `p-3.5 space-y-2`,
+                accentClass: c.borderAccent
+            };
+        case 'banner':
+            return {
+                wrapperClass: `border ${c.border} rounded-lg overflow-hidden shadow-xs`,
+                headerClass: `${c.headerBg} ${c.headerText} px-3.5 py-2 flex items-center justify-between`,
+                titleClass: `text-[11px] font-black uppercase tracking-wider ${c.headerText}`,
+                bodyClass: `p-3.5 bg-white space-y-2`,
+                accentClass: c.headerBg
+            };
+        case 'minimal':
+            return {
+                wrapperClass: `border-b ${c.border} py-2 bg-transparent space-y-1.5`,
+                headerClass: `pb-1 flex items-center justify-between`,
+                titleClass: `text-[10px] font-bold uppercase tracking-wider ${c.titleText}`,
+                bodyClass: `space-y-1`,
+                accentClass: c.border
+            };
+        case 'standard':
+        default:
+            return {
+                wrapperClass: `border border-slate-200 rounded-lg p-3.5 bg-slate-50/60 space-y-2`,
+                headerClass: `border-b border-slate-200 pb-1.5 flex items-center justify-between`,
+                titleClass: `text-[10px] font-bold uppercase tracking-wider text-slate-600`,
+                bodyClass: `space-y-1.5`,
+                accentClass: `border-slate-200`
+            };
+    }
+};

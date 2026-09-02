@@ -540,6 +540,9 @@ export type DocumentBlockType =
     | 'footer_legal'
     | 'inspection_summary';
 
+export type DocumentContainerStyle = 'standard' | 'boxed' | 'highlight' | 'card' | 'banner' | 'minimal';
+export type DocumentContainerColor = 'default' | 'slate' | 'indigo' | 'blue' | 'sky' | 'emerald' | 'amber' | 'rose' | 'purple' | 'dark';
+
 export interface DocumentBlockConfig {
     id: string;
     type: DocumentBlockType;
@@ -559,7 +562,8 @@ export interface DocumentBlockConfig {
         showVatBreakdown?: boolean;
         showVehicleDiagram?: boolean;
         columns?: 1 | 2 | 3;
-        style?: 'standard' | 'boxed' | 'highlight' | 'minimal';
+        style?: DocumentContainerStyle;
+        containerColor?: DocumentContainerColor;
         customNarrative?: string;
         fontSize?: 'small' | 'medium' | 'large';
     };
