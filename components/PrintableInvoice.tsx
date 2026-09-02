@@ -212,11 +212,12 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({
                 @media print {
                     @page { 
                         size: A4 portrait;
-                        margin: 0; 
+                        margin: 12mm; 
                     }
                     body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-                    body * { 
-                        visibility: hidden; 
+                    * {
+                        -webkit-print-color-adjust: exact !important;
+                        print-color-adjust: exact !important;
                     }
                     .rebuild-print-container, .rebuild-print-container * { 
                         visibility: visible !important; 
@@ -226,6 +227,18 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({
                         left: 0 !important; 
                         top: 0 !important; 
                         width: 100% !important;
+                    }
+                    .printable-page > div, .transition-all {
+                        break-inside: avoid !important;
+                        page-break-inside: avoid !important;
+                    }
+                    table, tr, td, th {
+                        break-inside: avoid !important;
+                        page-break-inside: avoid !important;
+                    }
+                    .page-break-before {
+                        break-before: page !important;
+                        page-break-before: always !important;
                     }
                     .printable-page {
                         page-break-after: always !important;
@@ -245,7 +258,15 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({
                     );
 
                     return (
-                        <div key={block.id} className="transition-all">
+                        <div 
+                            key={block.id} 
+                            className={`transition-all ${block.settings?.pageBreakBefore ? 'page-break-before' : ''}`}
+                            style={{ 
+                                breakInside: 'avoid', 
+                                pageBreakInside: 'avoid',
+                                ...(block.settings?.pageBreakBefore ? { breakBefore: 'page', pageBreakBefore: 'always' } : {})
+                            }}
+                        >
                             {/* Block 1: Header Logo */}
                             {block.type === 'header_logo' && (
                                 <div className={`flex items-start justify-between pb-3 border-b border-slate-200 gap-4 ${

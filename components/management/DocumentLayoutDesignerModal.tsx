@@ -731,6 +731,23 @@ export const DocumentLayoutDesignerModal: React.FC<DocumentLayoutDesignerModalPr
                                                     </div>
                                                 )}
 
+                                                {/* Page Break Control */}
+                                                <div className="flex items-center justify-between p-2.5 bg-indigo-50/60 rounded-lg border border-indigo-200">
+                                                    <div>
+                                                        <div className="font-bold text-slate-800 text-[11px] flex items-center gap-1.5">
+                                                            <span>Start on New Page</span>
+                                                            <span className="bg-indigo-100 text-indigo-700 text-[9px] px-1.5 py-0.5 rounded font-bold uppercase">Page Break</span>
+                                                        </div>
+                                                        <div className="text-[10px] text-slate-500">Forces this entire block to cleanly begin at the top of the next sheet</div>
+                                                    </div>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={block.settings?.pageBreakBefore === true}
+                                                        onChange={(e) => handleUpdateBlockSetting(block.id, 'pageBreakBefore', e.target.checked)}
+                                                        className="h-4 w-4 text-indigo-600 rounded cursor-pointer accent-indigo-600"
+                                                    />
+                                                </div>
+
                                                 {/* Style Mode */}
                                                 <div>
                                                     <div className="flex items-center justify-between mb-1">
@@ -864,7 +881,16 @@ export const DocumentLayoutDesignerModal: React.FC<DocumentLayoutDesignerModalPr
                     </div>
 
                     {/* Right Panel (7 cols): Live WYSIWYG A4 Document Sheet Canvas */}
-                    <div className="lg:col-span-7 bg-slate-200/90 p-4 sm:p-8 flex flex-col items-center justify-start overflow-y-auto">
+                    <div className="lg:col-span-7 bg-slate-200/90 p-4 sm:p-8 flex flex-col items-center justify-start overflow-y-auto space-y-3">
+                        <div className="flex items-center justify-between w-full max-w-[210mm] text-[11px] font-bold text-slate-600 px-2">
+                            <span className="flex items-center gap-1.5">
+                                <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block animate-pulse"></span>
+                                A4 Portrait Standard (210mm × 297mm)
+                            </span>
+                            <span className="text-[10px] text-slate-500 font-medium bg-white/80 px-2 py-0.5 rounded border border-slate-300">
+                                Blocks are indivisible & avoid page splits
+                            </span>
+                        </div>
                         
                         {/* A4 Sheet Container */}
                         <div 
@@ -874,10 +900,10 @@ export const DocumentLayoutDesignerModal: React.FC<DocumentLayoutDesignerModalPr
                                 width: '210mm',
                                 minHeight: '297mm'
                             }}
-                            className="bg-white rounded shadow-2xl p-8 sm:p-10 space-y-4 text-slate-900 border border-slate-300 font-sans transition-all shrink-0"
+                            className="bg-white rounded-lg shadow-2xl p-8 sm:p-10 space-y-4 text-slate-900 border border-slate-300 font-sans transition-all shrink-0 relative"
                         >
                             {/* Render Visible Blocks dynamically in sequence */}
-                            {blocks.filter(b => b.visible).map((block) => {
+                            {blocks.filter(b => b.visible).map((block, idx) => {
                                 const cs = getContainerStyleClasses(
                                     block.settings?.style, 
                                     block.settings?.containerColor, 
@@ -886,9 +912,23 @@ export const DocumentLayoutDesignerModal: React.FC<DocumentLayoutDesignerModalPr
                                 );
 
                                 return (
-                                    <div key={block.id} className="transition-all">
-                                        {/* Block 1: Header Logo */}
-                                        {block.type === 'header_logo' && (
+                                    <React.Fragment key={block.id}>
+                                        {/* Visual Page Break Indicator if enabled */}
+                                        {block.settings?.pageBreakBefore && idx > 0 && (
+                                            <div className="py-2.5 my-3 border-y-2 border-dashed border-indigo-400 bg-indigo-50/90 rounded-lg flex items-center justify-between px-4 text-[10px] font-black uppercase text-indigo-700 tracking-wider">
+                                                <span className="flex items-center gap-1.5">
+                                                    <span>✂</span> Page Break (Block Starts at Top of Next Page)
+                                                </span>
+                                                <span className="text-[9px] bg-white px-2 py-0.5 rounded border border-indigo-200 font-bold">New Page</span>
+                                            </div>
+                                        )}
+
+                                        <div 
+                                            className="transition-all break-inside-avoid"
+                                            style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}
+                                        >
+                                            {/* Block 1: Header Logo */}
+                                            {block.type === 'header_logo' && (
                                             <div className={`flex items-start justify-between pb-4 border-b border-slate-200 gap-4 ${
                                                 block.settings?.logoPosition === 'center' ? 'flex-col items-center text-center' :
                                                 block.settings?.logoPosition === 'left' ? 'flex-row-reverse' : 'flex-row'
@@ -1208,8 +1248,9 @@ export const DocumentLayoutDesignerModal: React.FC<DocumentLayoutDesignerModalPr
                                             </div>
                                         )}
                                     </div>
-                                );
-                            })}
+                                </React.Fragment>
+                            );
+                        })}
                         </div>
                     </div>
                 </div>

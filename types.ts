@@ -576,6 +576,7 @@ export interface DocumentBlockConfig {
         customAccountNumber?: string;
         showVatNumber?: boolean;
         showCompanyNumber?: boolean;
+        pageBreakBefore?: boolean;
         fontSize?: 'small' | 'medium' | 'large';
     };
 }
