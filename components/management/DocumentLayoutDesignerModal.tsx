@@ -167,6 +167,45 @@ export const DocumentLayoutDesignerModal: React.FC<DocumentLayoutDesignerModalPr
         toast.info(`Applied preset: ${preset.name}`);
     };
 
+    // Apply Global Theme across all blocks
+    const handleApplyGlobalTheme = (themeColor: string, containerStyle?: string) => {
+        setAccentColor(themeColor);
+        setBlocks(prev => prev.map(b => ({
+            ...b,
+            settings: {
+                ...(b.settings || {}),
+                containerColor: themeColor as any,
+                ...(containerStyle ? { style: containerStyle as any } : {})
+            }
+        })));
+        toast.success(`Applied ${themeColor.toUpperCase()} theme across all blocks!`);
+    };
+
+    // Apply current block's style to all blocks
+    const handleApplyStyleToAll = (style: string) => {
+        setBlocks(prev => prev.map(b => ({
+            ...b,
+            settings: {
+                ...(b.settings || {}),
+                style: style as any
+            }
+        })));
+        toast.success(`Applied '${style}' container style to all blocks!`);
+    };
+
+    // Apply current block's color to all blocks
+    const handleApplyColorToAll = (color: string) => {
+        setAccentColor(color);
+        setBlocks(prev => prev.map(b => ({
+            ...b,
+            settings: {
+                ...(b.settings || {}),
+                containerColor: color as any
+            }
+        })));
+        toast.success(`Applied '${color}' color accent to all blocks!`);
+    };
+
     // Reset to defaults
     const handleResetDefaults = () => {
         if (!confirm(`Reset ${docType === 'job_card' ? 'Job Card' : 'Invoice'} layout to system defaults?`)) return;
@@ -283,45 +322,35 @@ export const DocumentLayoutDesignerModal: React.FC<DocumentLayoutDesignerModalPr
 
                 {/* Sub-Header: Presets & Controls */}
                 <div className="bg-slate-50 px-6 py-2.5 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs shrink-0">
-                    <div className="flex items-center gap-2">
-                        <span className="font-bold text-slate-600 flex items-center gap-1">
-                            <Sparkles size={14} className="text-amber-500" /> Quick Presets:
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-bold text-slate-700 flex items-center gap-1">
+                            <Sparkles size={14} className="text-amber-500" /> Complete Theme:
                         </span>
-                        {docType === 'job_card' ? (
-                            <>
+                        {[
+                            { id: 'indigo', label: 'Royal Indigo', style: 'boxed', dot: 'bg-indigo-500' },
+                            { id: 'blue', label: 'Executive Blue', style: 'banner', dot: 'bg-blue-500' },
+                            { id: 'rose', label: 'Brookspeed Red', style: 'card', dot: 'bg-rose-500' },
+                            { id: 'emerald', label: 'Emerald Pro', style: 'highlight', dot: 'bg-emerald-500' },
+                            { id: 'slate', label: 'Slate Minimal', style: 'minimal', dot: 'bg-slate-500' },
+                            { id: 'dark', label: 'Midnight Dark', style: 'banner', dot: 'bg-slate-900' },
+                        ].map((theme) => {
+                            const isCurrent = accentColor === theme.id;
+                            return (
                                 <button
+                                    key={theme.id}
                                     type="button"
-                                    onClick={() => handleApplyPreset('workshop_standard_job')}
-                                    className="px-2.5 py-1 bg-white hover:bg-indigo-50 border border-slate-200 hover:border-indigo-300 rounded-md font-medium text-slate-700 hover:text-indigo-700 transition cursor-pointer"
+                                    onClick={() => handleApplyGlobalTheme(theme.id, theme.style)}
+                                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 shadow-2xs ${
+                                        isCurrent 
+                                            ? 'bg-slate-900 text-white ring-2 ring-indigo-400 shadow-sm' 
+                                            : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-100'
+                                    }`}
                                 >
-                                    Modern Workshop
+                                    <span className={`w-2.5 h-2.5 rounded-full ${theme.dot}`} />
+                                    {theme.label}
                                 </button>
-                                <button
-                                    type="button"
-                                    onClick={() => handleApplyPreset('technician_focused_job')}
-                                    className="px-2.5 py-1 bg-white hover:bg-indigo-50 border border-slate-200 hover:border-indigo-300 rounded-md font-medium text-slate-700 hover:text-indigo-700 transition cursor-pointer"
-                                >
-                                    Tech Work Order
-                                </button>
-                            </>
-                        ) : (
-                            <>
-                                <button
-                                    type="button"
-                                    onClick={() => handleApplyPreset('invoice_standard')}
-                                    className="px-2.5 py-1 bg-white hover:bg-indigo-50 border border-slate-200 hover:border-indigo-300 rounded-md font-medium text-slate-700 hover:text-indigo-700 transition cursor-pointer"
-                                >
-                                    Itemized Standard
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => handleApplyPreset('invoice_executive')}
-                                    className="px-2.5 py-1 bg-white hover:bg-indigo-50 border border-slate-200 hover:border-indigo-300 rounded-md font-medium text-slate-700 hover:text-indigo-700 transition cursor-pointer"
-                                >
-                                    Executive Clean
-                                </button>
-                            </>
-                        )}
+                            );
+                        })}
                     </div>
 
                     {/* Canvas Zoom Controls */}
@@ -563,9 +592,19 @@ export const DocumentLayoutDesignerModal: React.FC<DocumentLayoutDesignerModalPr
 
                                                 {/* Style Mode */}
                                                 <div>
-                                                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                                                        Container Card Style
-                                                    </label>
+                                                    <div className="flex items-center justify-between mb-1">
+                                                        <label className="block text-[11px] font-bold text-slate-700">
+                                                            Container Card Style
+                                                        </label>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleApplyStyleToAll(block.settings?.style || 'standard')}
+                                                            className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 hover:underline cursor-pointer"
+                                                            title="Apply this container style to all blocks in the document"
+                                                        >
+                                                            Apply to All Blocks
+                                                        </button>
+                                                    </div>
                                                     <div className="grid grid-cols-3 gap-1.5">
                                                         {[
                                                             { id: 'standard', label: 'Standard', desc: 'Clean default' },
@@ -595,12 +634,22 @@ export const DocumentLayoutDesignerModal: React.FC<DocumentLayoutDesignerModalPr
                                                 {/* Container Color Setting */}
                                                 <div>
                                                     <div className="flex items-center justify-between mb-1">
-                                                        <label className="block text-[11px] font-bold text-slate-700">
-                                                            Container Accent & Border Color
-                                                        </label>
-                                                        <span className="text-[10px] font-semibold text-slate-500 capitalize">
-                                                            {block.settings?.containerColor || 'Theme Default'}
-                                                        </span>
+                                                        <div className="flex items-center gap-1.5">
+                                                            <label className="block text-[11px] font-bold text-slate-700">
+                                                                Container Color
+                                                            </label>
+                                                            <span className="text-[10px] font-bold text-slate-500 capitalize">
+                                                                ({block.settings?.containerColor || 'Theme Default'})
+                                                            </span>
+                                                        </div>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleApplyColorToAll(block.settings?.containerColor || 'default')}
+                                                            className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 hover:underline cursor-pointer"
+                                                            title="Apply this color to all blocks in the document"
+                                                        >
+                                                            Apply to All Blocks
+                                                        </button>
                                                     </div>
                                                     <div className="grid grid-cols-5 gap-1.5">
                                                         {CONTAINER_COLORS.map((c) => {
@@ -686,7 +735,13 @@ export const DocumentLayoutDesignerModal: React.FC<DocumentLayoutDesignerModalPr
 
                                         {/* Block 2: Document Meta Details */}
                                         {block.type === 'document_meta' && (
-                                            <div className="bg-slate-900 text-white rounded-lg p-3.5 flex flex-wrap items-center justify-between gap-3 shadow-xs">
+                                            <div 
+                                                style={{ 
+                                                    backgroundColor: cs.titleStyle?.color ? (cs.wrapperStyle?.backgroundColor === '#ffffff' ? '#0f172a' : cs.wrapperStyle?.backgroundColor) : '#0f172a',
+                                                    border: `1.5px solid ${cs.wrapperStyle?.borderColor || '#334155'}` 
+                                                }} 
+                                                className="text-white rounded-lg p-3.5 flex flex-wrap items-center justify-between gap-3 shadow-xs"
+                                            >
                                                 <div>
                                                     <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-300 block">
                                                         {docType === 'job_card' ? 'JOB CARD NUMBER' : 'INVOICE NUMBER'}
@@ -714,9 +769,9 @@ export const DocumentLayoutDesignerModal: React.FC<DocumentLayoutDesignerModalPr
 
                                         {/* Block 3: Customer Details */}
                                         {block.type === 'customer_details' && (
-                                            <div className={cs.wrapperClass}>
-                                                <div className={cs.headerClass}>
-                                                    <h4 className={cs.titleClass}>
+                                            <div className={cs.wrapperClass} style={cs.wrapperStyle}>
+                                                <div className={cs.headerClass} style={cs.headerStyle}>
+                                                    <h4 className={cs.titleClass} style={cs.titleStyle}>
                                                         {block.title || 'Customer Details'}
                                                     </h4>
                                                 </div>
@@ -733,9 +788,9 @@ export const DocumentLayoutDesignerModal: React.FC<DocumentLayoutDesignerModalPr
 
                                         {/* Block 4: Vehicle Details */}
                                         {block.type === 'vehicle_details' && (
-                                            <div className={cs.wrapperClass}>
-                                                <div className={cs.headerClass}>
-                                                    <h4 className={cs.titleClass}>
+                                            <div className={cs.wrapperClass} style={cs.wrapperStyle}>
+                                                <div className={cs.headerClass} style={cs.headerStyle}>
+                                                    <h4 className={cs.titleClass} style={cs.titleStyle}>
                                                         {block.title || 'Vehicle Details'}
                                                     </h4>
                                                     <span className="inline-block bg-yellow-400 text-black font-mono font-black text-xs px-2.5 py-0.5 rounded border border-yellow-500 shadow-2xs tracking-wider uppercase">
@@ -755,9 +810,9 @@ export const DocumentLayoutDesignerModal: React.FC<DocumentLayoutDesignerModalPr
 
                                         {/* Block 5: Narrative Description */}
                                         {block.type === 'narrative_description' && (
-                                            <div className={cs.wrapperClass}>
-                                                <div className={cs.headerClass}>
-                                                    <h4 className={cs.titleClass}>
+                                            <div className={cs.wrapperClass} style={cs.wrapperStyle}>
+                                                <div className={cs.headerClass} style={cs.headerStyle}>
+                                                    <h4 className={cs.titleClass} style={cs.titleStyle}>
                                                         {block.title || 'Work Requested & Customer Narrative'}
                                                     </h4>
                                                 </div>
@@ -771,9 +826,9 @@ export const DocumentLayoutDesignerModal: React.FC<DocumentLayoutDesignerModalPr
 
                                         {/* Block 6: Tasks & Packages */}
                                         {block.type === 'tasks_packages' && (
-                                            <div className={cs.wrapperClass}>
-                                                <div className={cs.headerClass}>
-                                                    <div className={cs.titleClass}>
+                                            <div className={cs.wrapperClass} style={cs.wrapperStyle}>
+                                                <div className={cs.headerClass} style={cs.headerStyle}>
+                                                    <div className={cs.titleClass} style={cs.titleStyle}>
                                                         {block.title || 'Workshop Operations & Labour Tasks'}
                                                     </div>
                                                 </div>
@@ -810,9 +865,9 @@ export const DocumentLayoutDesignerModal: React.FC<DocumentLayoutDesignerModalPr
 
                                         {/* Block 7: Parts Items */}
                                         {block.type === 'parts_items' && (
-                                            <div className={cs.wrapperClass}>
-                                                <div className={cs.headerClass}>
-                                                    <div className={cs.titleClass}>
+                                            <div className={cs.wrapperClass} style={cs.wrapperStyle}>
+                                                <div className={cs.headerClass} style={cs.headerStyle}>
+                                                    <div className={cs.titleClass} style={cs.titleStyle}>
                                                         {block.title || 'Parts & Materials'}
                                                     </div>
                                                 </div>
@@ -857,7 +912,7 @@ export const DocumentLayoutDesignerModal: React.FC<DocumentLayoutDesignerModalPr
 
                                         {/* Block 8: Labour Summary (Job Card specific) */}
                                         {block.type === 'labour_summary' && (
-                                            <div className={`${cs.wrapperClass} flex items-center justify-between`}>
+                                            <div className={`${cs.wrapperClass} flex items-center justify-between`} style={cs.wrapperStyle}>
                                                 <div className="p-3.5">
                                                     <span className="font-bold text-slate-800">Technician Time Allocation</span>
                                                     <div className="text-[11px] text-slate-500">Allocated: 5.00 hrs | Booked Time: 4.75 hrs</div>
@@ -872,7 +927,7 @@ export const DocumentLayoutDesignerModal: React.FC<DocumentLayoutDesignerModalPr
                                         {/* Block 9: Financial Totals */}
                                         {block.type === 'financial_totals' && (
                                             <div className="flex justify-end pt-2">
-                                                <div className={`w-72 ${cs.wrapperClass} p-3.5 space-y-1.5 text-xs`}>
+                                                <div className={`w-72 ${cs.wrapperClass} p-3.5 space-y-1.5 text-xs`} style={cs.wrapperStyle}>
                                                     <div className="flex justify-between text-slate-600">
                                                         <span>Labour Subtotal:</span>
                                                         <span className="font-mono font-semibold">£550.00</span>
@@ -891,7 +946,7 @@ export const DocumentLayoutDesignerModal: React.FC<DocumentLayoutDesignerModalPr
                                                     </div>
                                                     <div className="flex justify-between text-base font-black text-slate-900 border-t border-slate-300 pt-1.5">
                                                         <span>TOTAL DUE:</span>
-                                                        <span className="font-mono text-indigo-700">£905.40</span>
+                                                        <span className="font-mono" style={{ color: cs.titleStyle?.color || '#4f46e5' }}>£905.40</span>
                                                     </div>
                                                 </div>
                                             </div>
@@ -899,9 +954,9 @@ export const DocumentLayoutDesignerModal: React.FC<DocumentLayoutDesignerModalPr
 
                                         {/* Block 10: Bank Details */}
                                         {block.type === 'bank_details' && (
-                                            <div className={`${cs.wrapperClass} p-3.5 flex flex-wrap items-center justify-between gap-3 text-xs`}>
+                                            <div className={`${cs.wrapperClass} p-3.5 flex flex-wrap items-center justify-between gap-3 text-xs`} style={cs.wrapperStyle}>
                                                 <div>
-                                                    <h4 className={cs.titleClass}>
+                                                    <h4 className={cs.titleClass} style={cs.titleStyle}>
                                                         {block.title || 'Bank Remittance Details'}
                                                     </h4>
                                                     <div className="text-slate-700 text-[11px] pt-0.5">
@@ -918,9 +973,9 @@ export const DocumentLayoutDesignerModal: React.FC<DocumentLayoutDesignerModalPr
 
                                         {/* Block 11: Authorisation & Signatures */}
                                         {block.type === 'terms_signoff' && (
-                                            <div className={cs.wrapperClass}>
-                                                <div className={cs.headerClass}>
-                                                    <h4 className={cs.titleClass}>
+                                            <div className={cs.wrapperClass} style={cs.wrapperStyle}>
+                                                <div className={cs.headerClass} style={cs.headerStyle}>
+                                                    <h4 className={cs.titleClass} style={cs.titleStyle}>
                                                         {block.title || 'Terms & Authorisation'}
                                                     </h4>
                                                 </div>
