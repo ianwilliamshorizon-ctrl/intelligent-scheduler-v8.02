@@ -15,9 +15,13 @@ export interface BlockDefinition {
         hasTechNotesToggle?: boolean;
         hasSignatureControls?: boolean;
         hasBankToggle?: boolean;
+        hasBankControls?: boolean;
         hasVatToggle?: boolean;
+        hasCompanyRegToggle?: boolean;
         hasColumnsControl?: boolean;
         hasCustomNarrative?: boolean;
+        hasCustomTerms?: boolean;
+        hasCustomFooter?: boolean;
         hasStyleControl?: boolean;
     };
 }
@@ -32,6 +36,8 @@ export const BLOCK_DEFINITIONS: Record<DocumentBlockType, BlockDefinition> = {
         defaultTitle: 'Company Header',
         supportedSettings: {
             hasLogoControls: true,
+            hasVatToggle: true,
+            hasCompanyRegToggle: true,
             hasStyleControl: true,
         }
     },
@@ -159,6 +165,7 @@ export const BLOCK_DEFINITIONS: Record<DocumentBlockType, BlockDefinition> = {
         supportedSettings: {
             canChangeTitle: true,
             hasBankToggle: true,
+            hasBankControls: true,
             hasStyleControl: true,
         }
     },
@@ -172,6 +179,7 @@ export const BLOCK_DEFINITIONS: Record<DocumentBlockType, BlockDefinition> = {
         supportedSettings: {
             canChangeTitle: true,
             hasSignatureControls: true,
+            hasCustomTerms: true,
             hasStyleControl: true,
         }
     },
@@ -184,12 +192,15 @@ export const BLOCK_DEFINITIONS: Record<DocumentBlockType, BlockDefinition> = {
         defaultTitle: 'Legal Footer',
         supportedSettings: {
             canChangeTitle: true,
+            hasCustomFooter: true,
+            hasVatToggle: true,
+            hasCompanyRegToggle: true,
             hasStyleControl: true,
         }
     }
 };
 
-export const getDefaultJobCardBlocks = (): DocumentBlockConfig[] => [
+export const DEFAULT_JOB_CARD_BLOCKS: DocumentBlockConfig[] = [
     {
         id: 'block_header',
         type: 'header_logo',
@@ -236,7 +247,7 @@ export const getDefaultJobCardBlocks = (): DocumentBlockConfig[] => [
         title: 'Workshop Operations & Tasks',
         visible: true,
         order: 6,
-        settings: { showPrices: false, showTechNotes: true, style: 'standard' }
+        settings: { showPrices: false, showTechnicianNotes: true, style: 'standard' }
     },
     {
         id: 'block_parts',
@@ -247,71 +258,55 @@ export const getDefaultJobCardBlocks = (): DocumentBlockConfig[] => [
         settings: { showPrices: false, showPartNumbers: true, style: 'standard' }
     },
     {
-        id: 'block_labour',
+        id: 'block_labour_summary',
         type: 'labour_summary',
-        title: 'Technician Time Log & Notes',
+        title: 'Technician Time Allocation',
         visible: true,
         order: 8,
-        settings: { showPrices: false, style: 'boxed' }
+        settings: { style: 'standard' }
     },
     {
-        id: 'block_inspection',
-        type: 'inspection_summary',
-        title: 'Vehicle Inspection Checklist',
+        id: 'block_terms_signoff',
+        type: 'terms_signoff',
+        title: 'Authorisation & Sign-Off',
         visible: true,
         order: 9,
-        settings: { showVehicleDiagram: true, style: 'standard' }
-    },
-    {
-        id: 'block_signoff',
-        type: 'terms_signoff',
-        title: 'Workshop Sign-Off & Customer Handover',
-        visible: true,
-        order: 10,
-        settings: { showCustomerSignature: true, showTechnicianSignature: true, style: 'boxed' }
-    },
-    {
-        id: 'block_footer',
-        type: 'footer_legal',
-        title: 'Company Footer',
-        visible: true,
-        order: 11,
-        settings: { style: 'minimal' }
+        settings: { showCustomerSignature: true, showTechnicianSignature: true, style: 'standard' }
     }
 ];
 
-export const getDefaultInvoiceBlocks = (): DocumentBlockConfig[] => [
+export const DEFAULT_INVOICE_BLOCKS: DocumentBlockConfig[] = [
     {
-        id: 'inv_header',
+        id: 'inv_header_logo',
         type: 'header_logo',
-        title: 'Company Header',
+        title: 'Company Letterhead',
         visible: true,
         order: 1,
-        settings: { logoPosition: 'right', logoHeight: 70, style: 'standard' }
+        settings: { logoPosition: 'right', logoHeight: 70, style: 'clean' }
     },
     {
-        id: 'inv_meta',
+        id: 'inv_doc_meta',
         type: 'document_meta',
         title: 'Invoice Details',
         visible: true,
         order: 2,
-        settings: { style: 'highlight' }
+        settings: { style: 'filled', containerColor: '#4338ca', textColor: '#ffffff' }
     },
     {
         id: 'inv_customer',
         type: 'customer_details',
-        title: 'Billed To',
+        title: 'Invoiced To',
         visible: true,
         order: 3,
-        settings: { columns: 2, style: 'boxed' }
+        settings: { style: 'standard' }
     },
     {
         id: 'inv_vehicle',
         type: 'vehicle_details',
-        title: 'Vehicle Reference',
+        title: 'Vehicle Information',
         visible: true,
         order: 4,
-        settings: { style: 'boxed' }
+        settings: { style: 'standard' }
     },
     {
         id: 'inv_narrative',
@@ -327,7 +322,7 @@ export const getDefaultInvoiceBlocks = (): DocumentBlockConfig[] => [
         title: 'Labour & Services Completed',
         visible: true,
         order: 6,
-        settings: { showPrices: true, showTechNotes: false, style: 'standard' }
+        settings: { showPrices: true, showTechnicianNotes: false, style: 'standard' }
     },
     {
         id: 'inv_parts',
@@ -370,6 +365,9 @@ export const getDefaultInvoiceBlocks = (): DocumentBlockConfig[] => [
         settings: { style: 'minimal' }
     }
 ];
+
+export const getDefaultJobCardBlocks = (): DocumentBlockConfig[] => JSON.parse(JSON.stringify(DEFAULT_JOB_CARD_BLOCKS));
+export const getDefaultInvoiceBlocks = (): DocumentBlockConfig[] => JSON.parse(JSON.stringify(DEFAULT_INVOICE_BLOCKS));
 
 export const PRESET_TEMPLATES: Record<string, { name: string; documentType: 'job_card' | 'invoice'; description: string; blocks: DocumentBlockConfig[] }> = {
     'workshop_standard_job': {

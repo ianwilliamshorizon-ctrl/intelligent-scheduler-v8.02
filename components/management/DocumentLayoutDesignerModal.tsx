@@ -598,6 +598,115 @@ export const DocumentLayoutDesignerModal: React.FC<DocumentLayoutDesignerModalPr
                                                     </div>
                                                 )}
 
+                                                {/* Narrative Text Customizer */}
+                                                {def.supportedSettings.hasCustomNarrative && (
+                                                    <div>
+                                                        <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                                                            Default Narrative / Scope of Work Text
+                                                        </label>
+                                                        <textarea
+                                                            rows={3}
+                                                            value={block.settings?.customNarrativeText || ''}
+                                                            onChange={(e) => handleUpdateBlockSetting(block.id, 'customNarrativeText', e.target.value)}
+                                                            className="w-full p-2 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500"
+                                                            placeholder="e.g. Customer booked in for Major 24k Service inspection..."
+                                                        />
+                                                    </div>
+                                                )}
+
+                                                {/* Terms of Business & Authorisation Customizer */}
+                                                {def.supportedSettings.hasCustomTerms && (
+                                                    <div>
+                                                        <div className="flex items-center justify-between mb-1">
+                                                            <label className="block text-[11px] font-bold text-slate-700">
+                                                                Terms of Business / Authorisation Text
+                                                            </label>
+                                                            {entity.termsAndConditions && !block.settings?.customTermsText && (
+                                                                <span className="text-[10px] text-indigo-600 font-medium">Using Entity Terms</span>
+                                                            )}
+                                                        </div>
+                                                        <textarea
+                                                            rows={3}
+                                                            value={block.settings?.customTermsText ?? (entity.termsAndConditions || entity.storageTermsAndConditions || '')}
+                                                            onChange={(e) => handleUpdateBlockSetting(block.id, 'customTermsText', e.target.value)}
+                                                            className="w-full p-2 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500"
+                                                            placeholder="I hereby authorize the repair work and acknowledge receipt of vehicle..."
+                                                        />
+                                                    </div>
+                                                )}
+
+                                                {/* Bank Details Customizer */}
+                                                {def.supportedSettings.hasBankControls && (
+                                                    <div className="space-y-2 p-2.5 bg-slate-50 rounded-lg border border-slate-200">
+                                                        <div className="text-[11px] font-bold text-slate-800">Bank Remittance Information</div>
+                                                        <div className="grid grid-cols-3 gap-2">
+                                                            <div>
+                                                                <label className="block text-[10px] text-slate-500 font-medium">Bank Name</label>
+                                                                <input
+                                                                    type="text"
+                                                                    value={block.settings?.customBankName ?? (entity.bankAccountName || '')}
+                                                                    onChange={(e) => handleUpdateBlockSetting(block.id, 'customBankName', e.target.value)}
+                                                                    className="w-full p-1.5 border border-slate-300 rounded text-xs bg-white"
+                                                                    placeholder="e.g. Barclays Bank"
+                                                                />
+                                                            </div>
+                                                            <div>
+                                                                <label className="block text-[10px] text-slate-500 font-medium">Sort Code</label>
+                                                                <input
+                                                                    type="text"
+                                                                    value={block.settings?.customSortCode ?? (entity.bankSortCode || '')}
+                                                                    onChange={(e) => handleUpdateBlockSetting(block.id, 'customSortCode', e.target.value)}
+                                                                    className="w-full p-1.5 border border-slate-300 rounded text-xs bg-white font-mono"
+                                                                    placeholder="20-45-78"
+                                                                />
+                                                            </div>
+                                                            <div>
+                                                                <label className="block text-[10px] text-slate-500 font-medium">Account No.</label>
+                                                                <input
+                                                                    type="text"
+                                                                    value={block.settings?.customAccountNumber ?? (entity.bankAccountNumber || '')}
+                                                                    onChange={(e) => handleUpdateBlockSetting(block.id, 'customAccountNumber', e.target.value)}
+                                                                    className="w-full p-1.5 border border-slate-300 rounded text-xs bg-white font-mono"
+                                                                    placeholder="83920194"
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-[10px] text-slate-500 font-medium">Payment Note / Reference Prompt</label>
+                                                            <input
+                                                                type="text"
+                                                                value={block.settings?.customBankNarrative || ''}
+                                                                onChange={(e) => handleUpdateBlockSetting(block.id, 'customBankNarrative', e.target.value)}
+                                                                className="w-full p-1.5 border border-slate-300 rounded text-xs bg-white"
+                                                                placeholder="e.g. Please quote invoice number on BACS transfers."
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* Legal Footer Customizer */}
+                                                {def.supportedSettings.hasCustomFooter && (
+                                                    <div className="space-y-2">
+                                                        <div>
+                                                            <div className="flex items-center justify-between mb-1">
+                                                                <label className="block text-[11px] font-bold text-slate-700">
+                                                                    Footer Legal / Thank You Text
+                                                                </label>
+                                                                {entity.invoiceFooterText && !block.settings?.customFooterText && (
+                                                                    <span className="text-[10px] text-indigo-600 font-medium">Using Entity Footer</span>
+                                                                )}
+                                                            </div>
+                                                            <textarea
+                                                                rows={2}
+                                                                value={block.settings?.customFooterText ?? (entity.invoiceFooterText || '')}
+                                                                onChange={(e) => handleUpdateBlockSetting(block.id, 'customFooterText', e.target.value)}
+                                                                className="w-full p-2 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500"
+                                                                placeholder="Registered in England & Wales. Thank you for your business."
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                )}
+
                                                 {/* Signature Boxes */}
                                                 {def.supportedSettings.hasSignatureControls && (
                                                     <div className="space-y-1.5 pt-1">
@@ -789,9 +898,13 @@ export const DocumentLayoutDesignerModal: React.FC<DocumentLayoutDesignerModalPr
                                                         {entity.name || 'BROOKSPEED AUTOMOTIVE'}
                                                     </h1>
                                                     <div className="text-xs text-slate-600 space-y-0.5">
-                                                        <div>{entity.addressLine1 || 'Unit 4, Speedwell Industrial Estate'}</div>
+                                                        <div>{entity.addressLine1 || 'Unit 4, Speedwell Industrial Estate'}{entity.addressLine2 ? `, ${entity.addressLine2}` : ''}</div>
                                                         <div>{entity.city || 'Eastleigh'}, {entity.postcode || 'SO53 4NF'}</div>
-                                                        <div>Tel: <span className="font-semibold">{entity.phone || '02380 641672'}</span> | Email: <span className="font-semibold">{entity.email || 'service@brookspeed.com'}</span></div>
+                                                        <div>
+                                                            Tel: <span className="font-semibold">{entity.phone || '02380 641672'}</span> | Email: <span className="font-semibold">{entity.email || 'service@brookspeed.com'}</span>
+                                                            {entity.vatNumber && <span> | VAT: <span className="font-semibold">{entity.vatNumber}</span></span>}
+                                                            {entity.companyNumber && <span> | Reg: <span className="font-semibold">{entity.companyNumber}</span></span>}
+                                                        </div>
                                                     </div>
                                                 </div>
                                                 {logoUrl ? (
@@ -900,7 +1013,7 @@ export const DocumentLayoutDesignerModal: React.FC<DocumentLayoutDesignerModalPr
                                                 </div>
                                                 <div className={cs.bodyClass}>
                                                     <p className="text-xs leading-relaxed italic" style={cs.textStyle}>
-                                                        "Customer booked in for Major 24k Service inspection, brake fluid flush, and investigating a slight squeal from front left ceramic brake discs when cold. Check tyre wear and track day alignment."
+                                                        "{block.settings?.customNarrativeText || "Customer booked in for Major 24k Service inspection, brake fluid flush, and investigating a slight squeal from front left ceramic brake discs when cold. Check tyre wear and track day alignment."}"
                                                     </p>
                                                 </div>
                                             </div>
@@ -1042,13 +1155,13 @@ export const DocumentLayoutDesignerModal: React.FC<DocumentLayoutDesignerModalPr
                                                         {block.title || 'Bank Remittance Details'}
                                                     </h4>
                                                     <div className="text-[11px] pt-0.5" style={cs.subtextStyle}>
-                                                        Please quote invoice reference on electronic transfers.
+                                                        {block.settings?.customBankNarrative || 'Please quote invoice reference on electronic transfers.'}
                                                     </div>
                                                 </div>
                                                 <div className="flex items-center gap-4 text-xs font-mono" style={cs.textStyle}>
-                                                    <div><span className="text-[10px] block" style={cs.subtextStyle}>Bank</span><strong>Barclays Bank UK</strong></div>
-                                                    <div><span className="text-[10px] block" style={cs.subtextStyle}>Sort Code</span><strong>20-45-78</strong></div>
-                                                    <div><span className="text-[10px] block" style={cs.subtextStyle}>Account No.</span><strong>83920194</strong></div>
+                                                    <div><span className="text-[10px] block" style={cs.subtextStyle}>Bank</span><strong>{block.settings?.customBankName || entity.bankAccountName || 'Barclays Bank UK'}</strong></div>
+                                                    <div><span className="text-[10px] block" style={cs.subtextStyle}>Sort Code</span><strong>{block.settings?.customSortCode || entity.bankSortCode || '20-45-78'}</strong></div>
+                                                    <div><span className="text-[10px] block" style={cs.subtextStyle}>Account No.</span><strong>{block.settings?.customAccountNumber || entity.bankAccountNumber || '83920194'}</strong></div>
                                                 </div>
                                             </div>
                                         )}
@@ -1063,7 +1176,7 @@ export const DocumentLayoutDesignerModal: React.FC<DocumentLayoutDesignerModalPr
                                                 </div>
                                                 <div className={cs.bodyClass}>
                                                     <div className="text-[10px] leading-tight" style={cs.subtextStyle}>
-                                                        I hereby authorize the repair work and acknowledge receipt of vehicle in satisfactory condition. All parts replaced remain the property of the workshop until invoice is paid in full.
+                                                        {block.settings?.customTermsText || entity.termsAndConditions || entity.storageTermsAndConditions || "I hereby authorize the repair work and acknowledge receipt of vehicle in satisfactory condition. All parts replaced remain the property of the workshop until invoice is paid in full."}
                                                     </div>
                                                     <div className="grid grid-cols-2 gap-4 pt-1">
                                                         {block.settings?.showCustomerSignature !== false && (
@@ -1086,8 +1199,12 @@ export const DocumentLayoutDesignerModal: React.FC<DocumentLayoutDesignerModalPr
                                         {/* Block 12: Legal Footer */}
                                         {block.type === 'footer_legal' && (
                                             <div className="pt-3 border-t border-slate-200 text-center text-[10px] text-slate-400 space-y-0.5">
-                                                <div>{entity.name || 'Brookspeed Automotive Ltd'} | Company Reg No: {entity.companyNumber || '04829104'} | VAT Reg: {entity.vatNumber || 'GB 829 4019 32'}</div>
-                                                <div>Registered in England & Wales. {entity.invoiceFooterText || 'Thank you for your business.'}</div>
+                                                <div>
+                                                    {entity.name || 'Brookspeed Automotive Ltd'}
+                                                    {entity.companyNumber && <span> | Company Reg No: {entity.companyNumber}</span>}
+                                                    {entity.vatNumber && <span> | VAT Reg: {entity.vatNumber}</span>}
+                                                </div>
+                                                <div>{block.settings?.customFooterText || entity.invoiceFooterText || 'Registered in England & Wales. Thank you for your business.'}</div>
                                             </div>
                                         )}
                                     </div>

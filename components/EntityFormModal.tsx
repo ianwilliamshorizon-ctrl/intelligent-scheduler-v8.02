@@ -9,6 +9,7 @@ import PrintableInvoice from './PrintableInvoice';
 import { PrintableEstimate } from './estimates/PrintableEstimate';
 import * as T from '../types';
 import { useData } from '../core/state/DataContext';
+import DocumentLayoutDesignerModal from './management/DocumentLayoutDesignerModal';
 
 const EntityFormInput = ({ label, ...props }: any) => (
     <div>
@@ -56,9 +57,11 @@ interface EntityFormModalProps {
 
 const EntityFormModal: React.FC<EntityFormModalProps> = ({ isOpen, onClose, onSave, entity, isDebugMode }) => {
     const { taxRates, servicePackages, inspectionTemplates, inspectionDiagrams } = useData();
-    const [activeTab, setActiveTab] = useState<'core' | 'workshop' | 'templates' | 'terms' | 'layout'>('core');
+    const [activeTab, setActiveTab] = useState<'core' | 'workshop' | 'terms' | 'documents'>('core');
     const [formData, setFormData] = useState<Partial<BusinessEntity> & { tempLogoUrl?: string }>({});
     const [previewType, setPreviewType] = useState<'estimate' | 'invoice' | null>(null);
+    const [isSubDesignerOpen, setIsSubDesignerOpen] = useState(false);
+    const [subDesignerDocType, setSubDesignerDocType] = useState<'job_card' | 'invoice'>('job_card');
 
     const printRef = React.useRef<HTMLDivElement>(null);
     const handlePrint = useReactToPrint({
@@ -103,16 +106,6 @@ const EntityFormModal: React.FC<EntityFormModalProps> = ({ isOpen, onClose, onSa
         setFormData(prev => ({ ...prev, [name]: numValue }));
     };
 
-    const handleLayoutChange = (field: keyof T.DocumentLayoutSettings, value: any) => {
-        setFormData(prev => ({
-            ...prev,
-            layoutSettings: {
-                ...(prev.layoutSettings || {}),
-                [field]: value
-            }
-        }));
-    };
-
     const handleWorkingHoursChange = (field: keyof WorkingHoursConfig, value: any) => {
         setFormData(prev => ({
             ...prev,
@@ -138,41 +131,35 @@ const EntityFormModal: React.FC<EntityFormModalProps> = ({ isOpen, onClose, onSa
         }
     };
 
-    const handleTemplateUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'estimate' | 'invoice') => {
-        const file = e.target.files?.[0];
-        if (file) {
-            const templateId = `template_${type}_${formData.id || crypto.randomUUID()}`;
-            try {
-                await saveFile(templateId, file);
-                setFormData(prev => ({
-                    ...prev,
-                    [type === 'estimate' ? 'estimateTemplateId' : 'invoiceTemplateId']: templateId,
-                    [type === 'estimate' ? 'estimateTemplateName' : 'invoiceTemplateName']: file.name
-                }));
-            } catch (err) {
-                console.error("Failed to save template", err);
-                alert("Could not save template file.");
-            }
-        }
-    };
-
     const handleSave = () => {
         const { tempLogoUrl, ...dataToSave } = formData;
         onSave(dataToSave as BusinessEntity);
         onClose();
     };
 
+    const handleOpenDesigner = (docType: 'job_card' | 'invoice') => {
+        setSubDesignerDocType(docType);
+        setIsSubDesignerOpen(true);
+    };
+
+    const handleSaveFromSubDesigner = async (updatedEntity: BusinessEntity) => {
+        setFormData(prev => ({
+            ...prev,
+            ...updatedEntity
+        }));
+    };
+
     const tabs = [
-        { id: 'core', label: 'Core Details', icon: Building2 },
-        { id: 'workshop', label: 'Workshop', icon: Clock },
-        { id: 'templates', label: 'Doc Templates', icon: FileText },
-        { id: 'layout', label: 'Layout Designer', icon: Layout },
-        { id: 'terms', label: 'Terms & Conditions', icon: Settings },
+        { id: 'core', label: 'Entity & Finance', icon: Building2 },
+        { id: 'workshop', label: 'Workshop Operations', icon: Clock },
+        { id: 'terms', label: 'Terms of Business', icon: Settings },
+        { id: 'documents', label: 'Document Layouts', icon: Layout },
     ];
 
     return (
-        <FormModal isOpen={isOpen} onClose={onClose} onSave={handleSave} title={`Manage Entity: ${formData.name || 'New'}`} maxWidth="max-w-5xl">
-            <div className="flex flex-col h-[70vh]">
+        <>
+            <FormModal isOpen={isOpen} onClose={onClose} onSave={handleSave} title={`Manage Entity: ${formData.name || 'New'}`} maxWidth="max-w-5xl">
+                <div className="flex flex-col h-[70vh]">
                 {/* Internal Tabs */}
                 <div className="flex border-b mb-6 overflow-x-auto no-scrollbar">
                     {tabs.map(tab => (
@@ -188,6 +175,7 @@ const EntityFormModal: React.FC<EntityFormModalProps> = ({ isOpen, onClose, onSa
                 </div>
 
                 <div className="flex-grow overflow-y-auto pr-2">
+                    {/* Tab 1: Core Details & Finance */}
                     {activeTab === 'core' && (
                         <div className="space-y-6">
                             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -216,31 +204,54 @@ const EntityFormModal: React.FC<EntityFormModalProps> = ({ isOpen, onClose, onSa
                                         </div>
                                         <div className="flex-grow">
                                             <input type="file" accept="image/*" onChange={handleImageChange} className="block w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer" />
-                                            <p className="mt-1 text-[10px] text-gray-400">Recommended: Square PNG/JPG with transparent background</p>
+                                            <p className="mt-1 text-[10px] text-gray-400">Recommended: PNG/JPG with transparent background</p>
                                         </div>
                                     </div>
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t">
-                                <EntityFormInput label="Address Line 1" name="addressLine1" value={formData.addressLine1 || ''} onChange={handleChange} />
-                                <EntityFormInput label="Address Line 2" name="addressLine2" value={formData.addressLine2 || ''} onChange={handleChange} />
-                                <EntityFormInput label="City" name="city" value={formData.city || ''} onChange={handleChange} />
-                                <EntityFormInput label="Postcode" name="postcode" value={formData.postcode || ''} onChange={handleChange} />
-                                <EntityFormInput label="Company Phone" name="phone" value={formData.phone || ''} onChange={handleChange} />
-                                <EntityFormInput label="Company Number" name="companyNumber" value={formData.companyNumber || ''} onChange={handleChange} />
-                                <EntityFormInput label="VAT Number" name="vatNumber" value={formData.vatNumber || ''} onChange={handleChange} />
+                            {/* Registered Address & Identifiers */}
+                            <div className="pt-4 border-t space-y-4">
+                                <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider">Registered Address & Company Numbers</h4>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <EntityFormInput label="Address Line 1" name="addressLine1" value={formData.addressLine1 || ''} onChange={handleChange} />
+                                    <EntityFormInput label="Address Line 2" name="addressLine2" value={formData.addressLine2 || ''} onChange={handleChange} />
+                                    <EntityFormInput label="City" name="city" value={formData.city || ''} onChange={handleChange} />
+                                    <EntityFormInput label="Postcode" name="postcode" value={formData.postcode || ''} onChange={handleChange} />
+                                    <EntityFormInput label="Company Phone" name="phone" value={formData.phone || ''} onChange={handleChange} />
+                                    <EntityFormInput label="Company Registration Number" name="companyNumber" value={formData.companyNumber || ''} onChange={handleChange} placeholder="e.g. 04829104" />
+                                    <EntityFormInput label="VAT Registration Number" name="vatNumber" value={formData.vatNumber || ''} onChange={handleChange} placeholder="e.g. GB 829 4019 32" />
+                                </div>
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t">
-                                <EntityFormInput label="Bank Account Name" name="bankAccountName" value={formData.bankAccountName || ''} onChange={handleChange} />
-                                <EntityFormInput label="Bank Sort Code" name="bankSortCode" value={formData.bankSortCode || ''} onChange={handleChange} />
-                                <EntityFormInput label="Bank Account Number" name="bankAccountNumber" value={formData.bankAccountNumber || ''} onChange={handleChange} />
+                            {/* Bank Details */}
+                            <div className="pt-4 border-t space-y-4">
+                                <div>
+                                    <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider">Bank Remittance Information</h4>
+                                    <p className="text-[11px] text-slate-500">Appears on invoices and estimates for customer BACS electronic payments.</p>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <EntityFormInput label="Bank Account / Bank Name" name="bankAccountName" value={formData.bankAccountName || ''} onChange={handleChange} placeholder="e.g. Barclays Bank UK" />
+                                    <EntityFormInput label="Bank Sort Code" name="bankSortCode" value={formData.bankSortCode || ''} onChange={handleChange} placeholder="e.g. 20-45-78" />
+                                    <EntityFormInput label="Bank Account Number" name="bankAccountNumber" value={formData.bankAccountNumber || ''} onChange={handleChange} placeholder="e.g. 83920194" />
+                                </div>
                             </div>
-                            <EntityFormTextarea label="Invoice Footer / Legal Text" name="invoiceFooterText" value={formData.invoiceFooterText || ''} onChange={handleChange} rows={2} />
+
+                            {/* Footer Text */}
+                            <div className="pt-4 border-t">
+                                <EntityFormTextarea 
+                                    label="Invoice Footer / Legal Registration Text" 
+                                    name="invoiceFooterText" 
+                                    value={formData.invoiceFooterText || ''} 
+                                    onChange={handleChange} 
+                                    rows={2} 
+                                    placeholder="e.g. Registered in England & Wales. Thank you for your business." 
+                                />
+                            </div>
                         </div>
                     )}
 
+                    {/* Tab 2: Workshop Operations */}
                     {activeTab === 'workshop' && (
                         <div className="space-y-6 animate-fade-in">
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -301,337 +312,136 @@ const EntityFormModal: React.FC<EntityFormModalProps> = ({ isOpen, onClose, onSa
                         </div>
                     )}
 
-                    {activeTab === 'templates' && (
-                        <div className="space-y-8 animate-fade-in">
-                            <div className="bg-amber-50 border border-amber-200 p-4 rounded-2xl flex gap-3">
-                                <Layout size={24} className="text-amber-600 flex-shrink-0" />
-                                <div>
-                                    <h4 className="font-bold text-amber-900 text-sm">Smart Document Templates</h4>
-                                    <p className="text-xs text-amber-700 leading-relaxed mt-1">
-                                        Upload a Word document (.docx) to define the layout of your printed Estimates and Invoices. 
-                                        The AI will interpret your template and adapt the system's output to match your brand's look and feel.
-                                    </p>
-                                </div>
+                    {/* Tab 3: Terms of Business & Contracts */}
+                    {activeTab === 'terms' && (
+                        <div className="space-y-6 animate-fade-in">
+                            <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-xl">
+                                <h4 className="text-xs font-black uppercase tracking-wider text-indigo-950">Terms of Business & Handover Disclaimers</h4>
+                                <p className="text-[11px] text-indigo-700 mt-0.5">
+                                    These terms automatically populate the Authorisation & Signatures block on your Job Cards, Invoices, and Agreements.
+                                </p>
                             </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                {/* Estimate Template */}
-                                <div className="p-6 bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow-md transition-all">
-                                    <div className="flex items-center gap-3 mb-4">
-                                        <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
-                                            <Briefcase size={20} />
-                                        </div>
-                                        <div>
-                                            <h4 className="font-black text-gray-900 uppercase text-xs tracking-tight">Estimate Template</h4>
-                                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Printed Estimate Layout</p>
-                                        </div>
-                                    </div>
-
-                                    {formData.estimateTemplateId ? (
-                                        <div className="flex flex-col gap-3">
-                                            <div className="flex items-center gap-3 p-3 bg-blue-50/50 rounded-xl border border-blue-100">
-                                                <FileCheck size={20} className="text-blue-600" />
-                                                <div className="flex-grow min-w-0">
-                                                    <p className="text-xs font-bold text-blue-900 truncate">{formData.estimateTemplateName || 'Template Loaded'}</p>
-                                                    <p className="text-[10px] text-blue-500 font-medium">Ready for AI Interpretation</p>
-                                                </div>
-                                                <button onClick={() => setFormData(p => ({ ...p, estimateTemplateId: undefined, estimateTemplateName: undefined }))} className="p-1.5 hover:bg-red-50 text-gray-400 hover:text-red-600 transition-colors rounded-lg">
-                                                    <Trash2 size={16} />
-                                                </button>
-                                            </div>
-                                            <label className="w-full py-2.5 bg-gray-50 text-[10px] font-black uppercase tracking-widest text-gray-500 hover:bg-blue-600 hover:text-white transition-all text-center rounded-xl cursor-pointer border-2 border-dashed border-gray-200 hover:border-blue-600">
-                                                Replace Template
-                                                <input type="file" accept=".docx" onChange={(e) => handleTemplateUpload(e, 'estimate')} className="hidden" />
-                                            </label>
-                                        </div>
-                                    ) : (
-                                        <label className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-gray-200 bg-gray-50 rounded-2xl cursor-pointer hover:bg-blue-50 hover:border-blue-400 transition-all group h-40">
-                                            <Upload size={32} className="text-gray-300 group-hover:text-blue-500 mb-3 transition-colors" />
-                                            <span className="text-xs font-black uppercase tracking-widest text-gray-400 group-hover:text-blue-700">Upload .DOCX</span>
-                                            <span className="text-[9px] text-gray-400 mt-1 uppercase font-bold">Max size 5MB</span>
-                                            <input type="file" accept=".docx" onChange={(e) => handleTemplateUpload(e, 'estimate')} className="hidden" />
-                                        </label>
-                                    )}
-                                </div>
-
-                                {/* Invoice Template */}
-                                <div className="p-6 bg-white border border-gray-200 rounded-2xl shadow-sm hover:shadow-md transition-all">
-                                    <div className="flex items-center gap-3 mb-4">
-                                        <div className="p-2 bg-green-50 text-green-600 rounded-xl">
-                                            <FileText size={20} />
-                                        </div>
-                                        <div>
-                                            <h4 className="font-black text-gray-900 uppercase text-xs tracking-tight">Invoice Template</h4>
-                                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Printed Invoice Layout</p>
-                                        </div>
-                                    </div>
-
-                                    {formData.invoiceTemplateId ? (
-                                        <div className="flex flex-col gap-3">
-                                            <div className="flex items-center gap-3 p-3 bg-green-50/50 rounded-xl border border-green-100">
-                                                <FileCheck size={20} className="text-green-600" />
-                                                <div className="flex-grow min-w-0">
-                                                    <p className="text-xs font-bold text-green-900 truncate">{formData.invoiceTemplateName || 'Template Loaded'}</p>
-                                                    <p className="text-[10px] text-green-500 font-medium">Ready for AI Interpretation</p>
-                                                </div>
-                                                <button onClick={() => setFormData(p => ({ ...p, invoiceTemplateId: undefined, invoiceTemplateName: undefined }))} className="p-1.5 hover:bg-red-50 text-gray-400 hover:text-red-600 transition-colors rounded-lg">
-                                                    <Trash2 size={16} />
-                                                </button>
-                                            </div>
-                                            <label className="w-full py-2.5 bg-gray-50 text-[10px] font-black uppercase tracking-widest text-gray-500 hover:bg-green-600 hover:text-white transition-all text-center rounded-xl cursor-pointer border-2 border-dashed border-gray-200 hover:border-green-600">
-                                                Replace Template
-                                                <input type="file" accept=".docx" onChange={(e) => handleTemplateUpload(e, 'invoice')} className="hidden" />
-                                            </label>
-                                        </div>
-                                    ) : (
-                                        <label className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-gray-200 bg-gray-50 rounded-2xl cursor-pointer hover:bg-green-50 hover:border-green-400 transition-all group h-40">
-                                            <Upload size={32} className="text-gray-300 group-hover:text-green-500 mb-3 transition-colors" />
-                                            <span className="text-xs font-black uppercase tracking-widest text-gray-400 group-hover:text-green-700">Upload .DOCX</span>
-                                            <span className="text-[9px] text-gray-400 mt-1 uppercase font-bold">Max size 5MB</span>
-                                            <input type="file" accept=".docx" onChange={(e) => handleTemplateUpload(e, 'invoice')} className="hidden" />
-                                        </label>
-                                    )}
-                                </div>
-                            </div>
-
-                            <div className="p-6 bg-white border border-gray-200 rounded-2xl shadow-sm space-y-4">
-                                <div className="flex items-center gap-2 mb-2">
-                                    <FileText size={18} className="text-indigo-600" />
-                                    <h4 className="font-black text-gray-900 uppercase text-xs tracking-tight">Template Content Editor</h4>
-                                </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <EntityFormTextarea label="Invoice/Estimate Footer Text" name="invoiceFooterText" value={formData.invoiceFooterText || ''} onChange={handleChange} rows={3} placeholder="Legal registration, payment terms, etc." />
-                                    <EntityFormTextarea label="Standard Terms & Conditions" name="storageTermsAndConditions" value={formData.storageTermsAndConditions || ''} onChange={handleChange} rows={3} placeholder="General terms for all documents." />
-                                </div>
-                            </div>
-
-                            <div className="p-5 border border-indigo-100 rounded-2xl bg-indigo-50/20">
-                                <div className="flex justify-between items-center mb-4">
-                                    <h4 className="text-xs font-black uppercase tracking-widest text-indigo-900">Starter Guide & Placeholders</h4>
-                                    <button 
-                                        onClick={() => {
-                                            const tags = "[CustomerName], [CustomerAddress], [VehicleRegistration], [VehicleMake], [VehicleModel], [InvoiceNumber], [EstimateNumber], [Date], [LineItems], [Subtotal], [VATTotal], [GrandTotal], [TermsAndConditions], [BankDetails]";
-                                            navigator.clipboard.writeText(tags);
-                                            alert("Placeholders copied to clipboard!");
-                                        }}
-                                        className="text-[10px] font-black uppercase text-indigo-600 hover:text-indigo-800 transition-colors"
-                                    >
-                                        Copy All Tags
-                                    </button>
-                                </div>
-                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-4">
-                                    {["CustomerName", "VehicleRegistration", "InvoiceNumber", "LineItems", "GrandTotal", "BankDetails"].map(tag => (
-                                        <div key={tag} className="bg-white px-2 py-1.5 rounded border border-indigo-100 text-[10px] font-mono text-indigo-700 flex items-center justify-between group">
-                                            [{tag}]
-                                        </div>
-                                    ))}
-                                </div>
-                                <ul className="text-xs text-gray-600 space-y-2 list-disc pl-4 font-medium">
-                                    <li>Create a Word doc with your branding and letterhead.</li>
-                                    <li>Insert the tags above where you want the system data to appear.</li>
-                                    <li>The <strong>[LineItems]</strong> tag will be replaced by the structured table of work (Packages, Parts, Labour).</li>
-                                    <li>Once uploaded, you can click "Preview" below to see how it looks with sample data.</li>
-                                </ul>
-                                <div className="mt-6 pt-4 border-t border-indigo-100 flex gap-3">
-                                    <button 
-                                        onClick={() => handlePreview('estimate')}
-                                        className="flex-grow py-2.5 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all active:scale-95 flex items-center justify-center gap-2"
-                                    >
-                                        <Eye size={12}/> Preview Estimate Sample
-                                    </button>
-                                    <button 
-                                        onClick={() => handlePreview('invoice')}
-                                        className="flex-grow py-2.5 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all active:scale-95 flex items-center justify-center gap-2"
-                                    >
-                                        <Eye size={12}/> Preview Invoice Sample
-                                    </button>
-                                </div>
+                            <div className="grid grid-cols-1 gap-6">
+                                <EntityFormTextarea 
+                                    label="Workshop Job Card & Invoice Terms of Business" 
+                                    name="termsAndConditions" 
+                                    value={formData.termsAndConditions || ''} 
+                                    onChange={handleChange} 
+                                    rows={4} 
+                                    placeholder="I hereby authorize the repair work and acknowledge receipt of vehicle in satisfactory condition. All parts replaced remain the property of the workshop until invoice is paid in full."
+                                />
+                                <EntityFormTextarea label="Storage Terms & Conditions" name="storageTermsAndConditions" value={formData.storageTermsAndConditions || ''} onChange={handleChange} rows={4} />
+                                <EntityFormTextarea label="Courtesy Car Agreement Terms" name="courtesyCarTermsAndConditions" value={formData.courtesyCarTermsAndConditions || ''} onChange={handleChange} rows={4} />
+                                <EntityFormTextarea label="Rental Vehicle Agreement Terms" name="rentalTermsAndConditions" value={formData.rentalTermsAndConditions || ''} onChange={handleChange} rows={4} />
+                                <EntityFormTextarea label="Sale or Return (SOR) Contract Terms" name="sorTermsAndConditions" value={formData.sorTermsAndConditions || ''} onChange={handleChange} rows={4} />
                             </div>
                         </div>
                     )}
 
-                    {activeTab === 'layout' && (
+                    {/* Tab 4: Document Layout Form Builder */}
+                    {activeTab === 'documents' && (
                         <div className="space-y-6 animate-fade-in">
-                            <div className="bg-indigo-50/30 p-6 rounded-2xl border border-indigo-100/50">
-                                <h3 className="text-sm font-black text-indigo-900 uppercase tracking-widest mb-4 flex items-center gap-2">
-                                    <Layout size={16}/> Visual Layout Designer
-                                </h3>
-                                
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <div className="space-y-4">
-                                        <div>
-                                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Logo Position</label>
-                                            <div className="flex gap-1">
-                                                {['left', 'center', 'right', 'none'].map(pos => (
-                                                    <button 
-                                                        key={pos}
-                                                        onClick={() => handleLayoutChange('logoPosition', pos)}
-                                                        className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold uppercase border transition-all ${(formData.layoutSettings?.logoPosition || 'center') === pos ? 'bg-indigo-600 border-indigo-600 text-white shadow-md' : 'bg-white border-gray-200 text-gray-500 hover:border-indigo-300'}`}
-                                                    >
-                                                        {pos === 'none' ? 'Hidden' : pos}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        </div>
+                            <div className="p-5 bg-gradient-to-r from-indigo-50 via-purple-50 to-indigo-50 border border-indigo-200 rounded-2xl space-y-2">
+                                <h4 className="text-sm font-black uppercase tracking-wider text-indigo-950 flex items-center gap-1.5">
+                                    <Sparkles size={16} className="text-indigo-600" />
+                                    Modular Drag-and-Drop Document Form Builder
+                                </h4>
+                                <p className="text-xs text-indigo-700 leading-relaxed">
+                                    Customize block layouts, box styles, container colors, and typography for Job Cards, Invoices, and Estimates with live WYSIWYG A4 sheet preview.
+                                </p>
+                            </div>
 
-                                        <div>
-                                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Company Branding Position</label>
-                                            <div className="flex gap-1">
-                                                {['left', 'center', 'right', 'none'].map(pos => (
-                                                    <button 
-                                                        key={pos}
-                                                        onClick={() => handleLayoutChange('brandingPosition', pos)}
-                                                        className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold uppercase border transition-all ${(formData.layoutSettings?.brandingPosition || 'left') === pos ? 'bg-indigo-600 border-indigo-600 text-white shadow-md' : 'bg-white border-gray-200 text-gray-500 hover:border-indigo-300'}`}
-                                                    >
-                                                        {pos === 'none' ? 'Hidden' : pos}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        </div>
-
-                                        <div>
-                                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Invoice/Est Numbers Position</label>
-                                            <div className="flex gap-1">
-                                                {['left', 'center', 'right', 'none'].map(pos => (
-                                                    <button 
-                                                        key={pos}
-                                                        onClick={() => {
-                                                            handleLayoutChange('detailsPosition', pos);
-                                                            handleLayoutChange('estimateNumberPosition', pos); // Keep legacy in sync
-                                                        }}
-                                                        className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold uppercase border transition-all ${(formData.layoutSettings?.detailsPosition || 'right') === pos ? 'bg-indigo-600 border-indigo-600 text-white shadow-md' : 'bg-white border-gray-200 text-gray-500 hover:border-indigo-300'}`}
-                                                    >
-                                                        {pos === 'none' ? 'Hidden' : pos}
-                                                    </button>
-                                                ))}
-                                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                {/* Job Card Layout Card */}
+                                <div className="p-6 bg-white border border-slate-200 rounded-2xl shadow-xs hover:shadow-md transition-all space-y-4">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl">
+                                            <FileText size={22} />
                                         </div>
                                         <div>
-                                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Vehicle Details Position</label>
-                                            <div className="flex gap-1">
-                                                {['left', 'center', 'right', 'none'].map(pos => (
-                                                    <button 
-                                                        key={pos}
-                                                        onClick={() => handleLayoutChange('vehiclePosition', pos)}
-                                                        className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold uppercase border transition-all ${(formData.layoutSettings?.vehiclePosition || 'left') === pos ? 'bg-indigo-600 border-indigo-600 text-white shadow-md' : 'bg-white border-gray-200 text-gray-500 hover:border-indigo-300'}`}
-                                                    >
-                                                        {pos === 'none' ? 'Hidden' : pos}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Customer Details Position</label>
-                                            <div className="flex gap-1">
-                                                {['left', 'center', 'right', 'none'].map(pos => (
-                                                    <button 
-                                                        key={pos}
-                                                        onClick={() => handleLayoutChange('customerPosition', pos)}
-                                                        className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold uppercase border transition-all ${(formData.layoutSettings?.customerPosition || 'none') === pos ? 'bg-indigo-600 border-indigo-600 text-white shadow-md' : 'bg-white border-gray-200 text-gray-500 hover:border-indigo-300'}`}
-                                                    >
-                                                        {pos === 'none' ? 'Hidden' : pos}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        </div>
-
-                                        <div>
-                                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Logo Height (px)</label>
-                                            <input 
-                                                type="range" min="30" max="150" step="5"
-                                                value={formData.layoutSettings?.logoHeight || 120}
-                                                onChange={(e) => handleLayoutChange('logoHeight', parseInt(e.target.value))}
-                                                className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
-                                            />
-                                            <div className="flex justify-between text-[10px] font-bold text-gray-400 mt-1">
-                                                <span>30px</span>
-                                                <span>{formData.layoutSettings?.logoHeight || 120}px</span>
-                                                <span>150px</span>
-                                            </div>
+                                            <h4 className="font-black text-slate-900 uppercase text-xs tracking-tight">Workshop Job Card Layout</h4>
+                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Technician Work Sheet & Signoff</p>
                                         </div>
                                     </div>
-
-                                    <div className="bg-white p-4 rounded-xl border border-indigo-100 shadow-sm space-y-4">
-                                        <h4 className="text-[10px] font-black text-indigo-900 uppercase tracking-widest flex items-center gap-2">
-                                            <Settings size={12}/> AI Layout Assistant
-                                        </h4>
-                                        <p className="text-[11px] text-gray-500 leading-relaxed">
-                                            Want to move something specific or change colors? Just tell me below and I'll adjust the code for you.
-                                        </p>
-                                        <textarea 
-                                            placeholder="e.g. 'Move the estimate number to the top right and make the logo larger'"
-                                            className="w-full h-24 p-3 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none shadow-inner resize-none bg-gray-50/50"
-                                        />
-                                        <button 
-                                            onClick={() => {
-                                                const message = (document.querySelector('textarea[placeholder*="e.g."]') as HTMLTextAreaElement)?.value;
-                                                if (!message) {
-                                                    toast.info("Please describe the changes you'd like the AI to make.");
-                                                    return;
-                                                }
-                                                toast.success("Request sent to AI! I've received your layout instructions and will begin processing the design changes shortly.", {
-                                                    icon: <Sparkles className="text-amber-500" />,
-                                                    position: "bottom-right",
-                                                    autoClose: 5000
-                                                });
-                                                // Optional: Clear the textarea
-                                                const textarea = document.querySelector('textarea[placeholder*="e.g."]') as HTMLTextAreaElement;
-                                                if (textarea) textarea.value = '';
-                                            }}
-                                            className="w-full py-2 bg-indigo-600 text-white rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-colors border border-indigo-500 shadow-lg flex items-center justify-center gap-2"
+                                    <p className="text-xs text-slate-600">
+                                        Configure vehicle details, technician instructions, parts & labour lists, labour tracking, and customer signature sign-off.
+                                    </p>
+                                    <div className="pt-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => handleOpenDesigner('job_card')}
+                                            className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition shadow-xs flex items-center justify-center gap-2 cursor-pointer"
                                         >
-                                            <Sparkles size={14}/> Send Request to AI
+                                            <Layout size={14} /> Open Job Card Form Builder
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Invoice Layout Card */}
+                                <div className="p-6 bg-white border border-slate-200 rounded-2xl shadow-xs hover:shadow-md transition-all space-y-4">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl">
+                                            <Building2 size={22} />
+                                        </div>
+                                        <div>
+                                            <h4 className="font-black text-slate-900 uppercase text-xs tracking-tight">Customer Invoice Layout</h4>
+                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Billing & Remittance Statement</p>
+                                        </div>
+                                    </div>
+                                    <p className="text-xs text-slate-600">
+                                        Configure billing details, line items table, financial VAT totals, bank remittance information, and legal footers.
+                                    </p>
+                                    <div className="pt-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => handleOpenDesigner('invoice')}
+                                            className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-xs flex items-center justify-center gap-2 cursor-pointer"
+                                        >
+                                            <Layout size={14} /> Open Invoice Form Builder
                                         </button>
                                     </div>
                                 </div>
                             </div>
-                            
-                            <div className="p-5 bg-gradient-to-r from-indigo-50 via-purple-50 to-indigo-50 border border-indigo-200 rounded-2xl space-y-3">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <h4 className="text-xs font-black uppercase tracking-wider text-indigo-950 flex items-center gap-1.5">
-                                            <Sparkles size={14} className="text-indigo-600" />
-                                            Interactive Drag-and-Drop Document Designer
-                                        </h4>
-                                        <p className="text-[11px] text-indigo-700">
-                                            Customise and reorder block fields for Job Cards and Invoices with live A4 WYSIWYG preview
-                                        </p>
-                                    </div>
+
+                            {/* Sample Document Previews */}
+                            <div className="p-5 border border-slate-200 rounded-2xl bg-slate-50 flex items-center justify-between gap-4">
+                                <div>
+                                    <h4 className="text-xs font-black uppercase tracking-wider text-slate-800">Live Sample Print Previews</h4>
+                                    <p className="text-[11px] text-slate-500">Test how your layout and branding look when printed or exported to PDF.</p>
                                 </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div className="flex gap-2">
                                     <button
                                         type="button"
-                                        onClick={() => {
-                                            toast.info("Please open the Document Layout Designer from the Business Entities list using the 'Job Card' or 'Invoice' button.");
-                                        }}
-                                        className="py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition shadow-sm flex items-center justify-center gap-2 cursor-pointer"
+                                        onClick={() => handlePreview('estimate')}
+                                        className="py-2 px-4 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 rounded-xl text-xs font-bold transition shadow-2xs flex items-center gap-1.5 cursor-pointer"
                                     >
-                                        <Layout size={14} /> Open Drag & Drop Layout Designer
+                                        <Eye size={13} /> Preview Estimate
                                     </button>
                                     <button
                                         type="button"
                                         onClick={() => handlePreview('invoice')}
-                                        className="py-2.5 bg-white hover:bg-indigo-50 border border-indigo-200 text-indigo-700 rounded-xl text-xs font-bold transition shadow-sm flex items-center justify-center gap-2 cursor-pointer"
+                                        className="py-2 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition shadow-xs flex items-center gap-1.5 cursor-pointer"
                                     >
-                                        <Eye size={14} /> Preview Live Sample
+                                        <Eye size={13} /> Preview Invoice
                                     </button>
                                 </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {activeTab === 'terms' && (
-                        <div className="space-y-6 animate-fade-in">
-                            <div className="grid grid-cols-1 gap-6">
-                                <EntityFormTextarea label="Courtesy Car T&Cs" name="courtesyCarTermsAndConditions" value={formData.courtesyCarTermsAndConditions || ''} onChange={handleChange} rows={5} />
-                                <EntityFormTextarea label="Rental T&Cs" name="rentalTermsAndConditions" value={formData.rentalTermsAndConditions || ''} onChange={handleChange} rows={5} />
-                                <EntityFormTextarea label="Sale or Return (SOR) T&Cs" name="sorTermsAndConditions" value={formData.sorTermsAndConditions || ''} onChange={handleChange} rows={5} />
-                                <EntityFormTextarea label="Storage T&Cs" name="storageTermsAndConditions" value={formData.storageTermsAndConditions || ''} onChange={handleChange} rows={5} />
                             </div>
                         </div>
                     )}
                 </div>
             </div>
+
+            {/* Sub-Modal: Document Layout Designer when launched from inside EntityFormModal */}
+            {isSubDesignerOpen && (
+                <DocumentLayoutDesignerModal
+                    isOpen={isSubDesignerOpen}
+                    onClose={() => setIsSubDesignerOpen(false)}
+                    entity={formData as BusinessEntity}
+                    initialDocType={subDesignerDocType}
+                    onSaveEntity={handleSaveFromSubDesigner}
+                />
+            )}
+        </FormModal>
 
             {/* Hidden Printing Area */}
             <div className="hidden">
@@ -662,7 +472,7 @@ const EntityFormModal: React.FC<EntityFormModalProps> = ({ isOpen, onClose, onSa
                     )}
                 </div>
             </div>
-        </FormModal>
+        </>
     );
 };
 

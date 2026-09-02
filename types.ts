@@ -567,6 +567,15 @@ export interface DocumentBlockConfig {
         containerColor?: DocumentContainerColor;
         textColor?: DocumentTextColor;
         customNarrative?: string;
+        customNarrativeText?: string;
+        customTermsText?: string;
+        customFooterText?: string;
+        customBankNarrative?: string;
+        customBankName?: string;
+        customSortCode?: string;
+        customAccountNumber?: string;
+        showVatNumber?: boolean;
+        showCompanyNumber?: boolean;
         fontSize?: 'small' | 'medium' | 'large';
     };
 }
@@ -620,6 +629,7 @@ export interface BusinessEntity {
     bankSortCode?: string;
     bankAccountNumber?: string;
     invoiceFooterText?: string;
+    termsAndConditions?: string;
     logoImageId?: string;
     defaultWeeklyStorageRate?: number;
     color?: string;
