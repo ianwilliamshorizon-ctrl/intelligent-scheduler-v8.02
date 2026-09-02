@@ -808,32 +808,35 @@ export const DocumentLayoutDesignerModal: React.FC<DocumentLayoutDesignerModalPr
                                         {/* Block 2: Document Meta Details */}
                                         {block.type === 'document_meta' && (
                                             <div 
-                                                style={{ 
-                                                    backgroundColor: cs.titleStyle?.color ? (cs.wrapperStyle?.backgroundColor === '#ffffff' ? '#0f172a' : cs.wrapperStyle?.backgroundColor) : '#0f172a',
-                                                    border: `1.5px solid ${cs.wrapperStyle?.borderColor || '#334155'}` 
-                                                }} 
-                                                className="text-white rounded-lg p-3.5 flex flex-wrap items-center justify-between gap-3 shadow-xs"
+                                                className={`${cs.wrapperClass} flex flex-wrap items-center justify-between gap-3`}
+                                                style={cs.wrapperStyle}
                                             >
                                                 <div>
-                                                    <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-300 block">
+                                                    <span 
+                                                        className="text-[10px] font-black uppercase tracking-wider block"
+                                                        style={cs.titleStyle}
+                                                    >
                                                         {docType === 'job_card' ? 'JOB CARD NUMBER' : 'INVOICE NUMBER'}
                                                     </span>
-                                                    <span className="text-lg font-black tracking-tight font-mono">
+                                                    <span 
+                                                        className="text-lg font-black tracking-tight font-mono"
+                                                        style={cs.textStyle}
+                                                    >
                                                         {docType === 'job_card' ? 'JOB-2026-0842' : 'INV-2026-1194'}
                                                     </span>
                                                 </div>
-                                                <div className="flex items-center gap-6 text-xs">
+                                                <div className="flex items-center gap-6 text-xs" style={cs.textStyle}>
                                                     <div>
-                                                        <span className="text-[10px] text-slate-400 block uppercase">Date</span>
-                                                        <span className="font-bold">{new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                                                        <span className="text-[10px] block uppercase font-semibold" style={cs.subtextStyle}>Date</span>
+                                                        <span className="font-bold" style={cs.textStyle}>{new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
                                                     </div>
                                                     <div>
-                                                        <span className="text-[10px] text-slate-400 block uppercase">Account</span>
-                                                        <span className="font-bold font-mono">ACC-BRK-092</span>
+                                                        <span className="text-[10px] block uppercase font-semibold" style={cs.subtextStyle}>Account</span>
+                                                        <span className="font-bold font-mono" style={cs.textStyle}>ACC-BRK-092</span>
                                                     </div>
                                                     <div>
-                                                        <span className="text-[10px] text-slate-400 block uppercase">Technician</span>
-                                                        <span className="font-bold">Ian Williams</span>
+                                                        <span className="text-[10px] block uppercase font-semibold" style={cs.subtextStyle}>Technician</span>
+                                                        <span className="font-bold" style={cs.textStyle}>Ian Williams</span>
                                                     </div>
                                                 </div>
                                             </div>
