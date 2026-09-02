@@ -19,6 +19,7 @@ import InspectionChecklist from './InspectionChecklist';
 import AsyncMedia from './AsyncMedia';
 import PorscheFrames from './PorscheFrames';
 import { getFile } from '../utils/imageStore';
+import { COLOR_PALETTES } from '../core/utils/documentTemplateDefaults';
 
 interface PrintableJobCardProps {
     job: Job;
@@ -154,9 +155,12 @@ const PrintableJobCard: React.FC<PrintableJobCardProps> = ({
         return hourTotal > 0 ? hourTotal : (job.estimatedHours || 0);
     }, [estimates, job.estimatedHours]);
 
+    const entityThemeKey = (entity?.jobCardLayout?.accentColor || entity?.color || 'indigo').toLowerCase();
+    const themeColorDef = COLOR_PALETTES[entityThemeKey] || COLOR_PALETTES['indigo'];
+
     const mainContent = (
         <div className="bg-white font-sans text-sm text-gray-800 printable-page" style={pageStyle}>
-            <header className="flex justify-between items-start pb-6 border-b-4 border-gray-900 mb-8">
+            <header className="flex justify-between items-start pb-6 border-b-4 mb-8" style={{ borderBottomColor: themeColorDef.primary }}>
                 <div className="flex items-center gap-6">
                     {(resolvedLogoUrl || entity?.logoUrl) && (
                         <img src={resolvedLogoUrl || entity?.logoUrl} alt="Logo" className="h-20 object-contain" />
@@ -166,10 +170,10 @@ const PrintableJobCard: React.FC<PrintableJobCardProps> = ({
                             {entity?.name || 'WORKSHOP JOB CARD'}
                         </h1>
                         <div className="flex items-center gap-2 mt-2">
-                            <span className="bg-gray-900 text-white px-2 py-0.5 text-[10px] font-bold rounded uppercase tracking-widest">
+                            <span className="text-white px-2 py-0.5 text-[10px] font-bold rounded uppercase tracking-widest" style={{ backgroundColor: themeColorDef.headerBg }}>
                                 Technician Copy
                             </span>
-                            <h2 className="text-xl font-bold text-indigo-700 uppercase tracking-tight">
+                            <h2 className="text-xl font-bold uppercase tracking-tight" style={{ color: themeColorDef.primary }}>
                                 Job Sheet #{job.id}
                             </h2>
                         </div>
@@ -178,7 +182,7 @@ const PrintableJobCard: React.FC<PrintableJobCardProps> = ({
                 <div className="text-right flex flex-col items-end">
                     <div className="mb-4">
                         <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Job Status</p>
-                        <p className="font-black text-lg text-indigo-600 uppercase">{job.status}</p>
+                        <p className="font-black text-lg uppercase" style={{ color: themeColorDef.primary }}>{job.status}</p>
                     </div>
                     <div>
                         <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Key Number</p>
@@ -190,20 +194,20 @@ const PrintableJobCard: React.FC<PrintableJobCardProps> = ({
             <main className="flex-grow space-y-8">
                 <section className="grid grid-cols-2 gap-8">
                     <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                        <h3 className="text-[10px] font-black text-gray-400 uppercase mb-2 tracking-widest">Customer Information</h3>
+                        <h3 className="text-[10px] font-black uppercase mb-2 tracking-widest" style={{ color: themeColorDef.primary }}>Customer Information</h3>
                         <p className="text-lg font-black text-gray-900 uppercase">{displayName}</p>
                         <div className="mt-2 text-xs space-y-1 text-gray-600">
                             <p>{customer?.addressLine1 || "Address not provided"}</p>
                             <p>{customer?.city} {customer?.postcode}</p>
                             <div className="pt-2 mt-2 border-t border-gray-200 flex flex-col font-bold text-gray-900">
                                 <span>Tel: {customer?.mobile || customer?.phone || 'No Contact Number'}</span>
-                                <span className="text-indigo-600 font-normal">{customer?.email || 'No Email Recorded'}</span>
+                                <span className="font-normal" style={{ color: themeColorDef.primary }}>{customer?.email || 'No Email Recorded'}</span>
                             </div>
                         </div>
                     </div>
 
                     <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                        <h3 className="text-[10px] font-black text-gray-400 uppercase mb-2 tracking-widest">Vehicle Details</h3>
+                        <h3 className="text-[10px] font-black uppercase mb-2 tracking-widest" style={{ color: themeColorDef.primary }}>Vehicle Details</h3>
                         <p className="text-lg font-black text-gray-900 uppercase">{vehicle?.make} {vehicle?.model || 'Unknown Vehicle'}</p>
                         <div className="mt-2">
                             <span className="bg-yellow-400 text-black px-4 py-1.5 rounded font-mono font-bold text-xl border-2 border-black shadow-sm inline-block">
@@ -217,13 +221,13 @@ const PrintableJobCard: React.FC<PrintableJobCardProps> = ({
                     </div>
                 </section>
 
-                <section className="border-2 border-gray-900 rounded-lg overflow-hidden">
-                    <div className="bg-gray-900 text-white px-4 py-2 flex justify-between items-center">
+                <section className="border-2 rounded-lg overflow-hidden" style={{ borderColor: themeColorDef.primary }}>
+                    <div className="text-white px-4 py-2 flex justify-between items-center" style={{ backgroundColor: themeColorDef.primary }}>
                         <h3 className="text-xs font-bold uppercase tracking-widest">Primary Work Description</h3>
-                        <span className="text-[10px] uppercase font-bold text-gray-400">Hours: {totalCalculatedHours}h</span>
+                        <span className="text-[10px] uppercase font-bold text-white/80">Hours: {totalCalculatedHours}h</span>
                     </div>
                     <div className="p-4 bg-white">
-                        <p className="text-lg font-bold text-gray-900 mb-2 underline decoration-indigo-500 underline-offset-4">
+                        <p className="text-lg font-bold text-gray-900 mb-2 underline underline-offset-4" style={{ textDecorationColor: themeColorDef.primary }}>
                             {job.description}
                         </p>
                         <div className="p-3 bg-gray-50 rounded text-gray-800 whitespace-pre-wrap min-h-[60px] border border-gray-100 italic">

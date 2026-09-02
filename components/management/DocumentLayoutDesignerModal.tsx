@@ -426,9 +426,16 @@ export const DocumentLayoutDesignerModal: React.FC<DocumentLayoutDesignerModalPr
                         <div className="flex-1 overflow-y-auto p-4 space-y-2.5">
                             {blocks.map((block, idx) => {
                                 const def = BLOCK_DEFINITIONS[block.type] || {
+                                    type: block.type,
                                     label: block.type,
                                     icon: 'FileText',
-                                    description: ''
+                                    description: '',
+                                    applicableTo: ['job_card', 'invoice'] as ('job_card' | 'invoice')[],
+                                    defaultTitle: block.type,
+                                    supportedSettings: {
+                                        canChangeTitle: true,
+                                        hasStyleControl: true
+                                    }
                                 };
                                 const isSelected = selectedBlockId === block.id;
 
