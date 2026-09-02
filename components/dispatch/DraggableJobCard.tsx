@@ -198,6 +198,28 @@ export const DraggableJobCard: React.FC<{
                     </div>
                 )}
 
+                {/* Active Lift Findings Banner for Dispatchers */}
+                {(() => {
+                    const findings = job.inspectionFindings || [];
+                    if (findings.length === 0) return null;
+                    const latest = findings[0];
+                    return (
+                        <div 
+                            onClick={(e) => { e.stopPropagation(); onEdit(job.id); }}
+                            className="my-1.5 p-1.5 rounded-md border bg-rose-50 border-rose-300 text-rose-950 flex items-center justify-between text-[10px] font-bold cursor-pointer hover:bg-rose-100 transition shadow-2xs"
+                            title="Click to view inspection findings and customer authorization"
+                        >
+                            <div className="flex items-center gap-1.5 truncate">
+                                <span className="text-xs animate-pulse">🚨</span>
+                                <span className="truncate"><strong>Lift Finding:</strong> {latest.itemLabel}</span>
+                            </div>
+                            <span className="uppercase text-[8px] font-black bg-rose-600 text-white px-1.5 py-0.5 rounded shrink-0">
+                                {latest.status}
+                            </span>
+                        </div>
+                    );
+                })()}
+
                 {associatedPOs && associatedPOs.length > 0 && (
                     <div className={`flex flex-wrap gap-1.5 my-2 py-2 border-t border-gray-100`}>
                         {associatedPOs.map(po => (

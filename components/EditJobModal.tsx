@@ -33,6 +33,9 @@ import { getHexFromColorName } from '../utils/colorUtils';
 import { usePrint } from '../core/hooks/usePrint';
 import { PrintableEstimate } from './estimates/PrintableEstimate';
 import AsyncMedia from './AsyncMedia';
+import FastTrackFindingModal from './jobs/FastTrackFindingModal';
+import FindingReviewModal from './jobs/FindingReviewModal';
+import { AlertOctagon } from 'lucide-react';
 import MediaLightbox from './MediaLightbox';
 import SpeechToTextButton from './shared/SpeechToTextButton';
 
@@ -56,6 +59,7 @@ interface EditJobModalProps {
     forceRefresh?: (collectionKey: any) => Promise<void>;
     initialTab?: string;
     onGenerateInvoice?: (jobId: string) => void;
+    onRaiseEstimateForFinding?: (finding: T.InspectionFinding, job: T.Job) => void;
 }
 
 const EditJobModal: React.FC<EditJobModalProps> = ({ 
@@ -63,7 +67,7 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
     onRaiseSupplementaryEstimate, onViewEstimate, onViewCustomer, onViewVehicle,
     onCheckIn, onCheckOut, onDelete, generatePurchaseOrderId, onOpenPurchaseOrder,
     rentalBookings, onOpenRentalBooking, onOpenConditionReport, forceRefresh,
-    initialTab, onGenerateInvoice
+    initialTab, onGenerateInvoice, onRaiseEstimateForFinding
 }) => {
     
     const data = useData();
@@ -182,6 +186,8 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
     const [isMotBookingOpen, setIsMotBookingOpen] = useState(false);
     const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
     const [activeSegmentForAssignment, setActiveSegmentForAssignment] = useState<T.JobSegment | null>(null);
+    const [isFindingModalOpen, setIsFindingModalOpen] = useState(false);
+    const [isFindingReviewModalOpen, setIsFindingReviewModalOpen] = useState(false);
 
     const job = useMemo(() => (Array.isArray(jobs) ? jobs : []).find(j => j.id === selectedJobId), [jobs, selectedJobId]);
     const vehicle = useMemo(() => job ? (Array.isArray(vehicles) ? vehicles : []).find(v => v.id === job.vehicleId) : undefined, [job, vehicles]);
@@ -1027,6 +1033,78 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
                             )}
                              {activeTab === 'inspection' && (
                                 <div className="space-y-8">
+                                    {/* Ramp Findings & Immediate Action Recommendations Banner */}
+                                    <div className="bg-gradient-to-r from-rose-900/10 via-slate-50 to-indigo-50/50 p-4 rounded-xl border border-rose-200/80 shadow-xs">
+                                        <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+                                            <div className="flex items-center gap-2">
+                                                <span className="p-2 bg-rose-600 text-white rounded-lg shadow-xs">
+                                                    <AlertOctagon size={18} />
+                                                </span>
+                                                <div>
+                                                    <h4 className="text-sm font-black uppercase tracking-tight text-gray-900 flex items-center gap-2">
+                                                        Ramp Findings & Immediate Actions (eVHC)
+                                                        {(editableJob.inspectionFindings || []).length > 0 && (
+                                                            <span className="bg-rose-100 text-rose-800 text-[10px] font-bold px-2 py-0.5 rounded-full border border-rose-200">
+                                                                {(editableJob.inspectionFindings || []).length} logged
+                                                            </span>
+                                                        )}
+                                                    </h4>
+                                                    <p className="text-xs text-gray-500">
+                                                        Capture lift observations with photos; findings automatically sync to the inspection checklist and observations.
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                {(editableJob.inspectionFindings || []).length > 0 && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setIsFindingReviewModalOpen(true)}
+                                                        className="px-3 py-1.5 bg-white hover:bg-gray-100 text-gray-700 border border-gray-300 rounded-lg text-xs font-bold transition flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                                                    >
+                                                        <FileText size={13} />
+                                                        <span>Review All ({(editableJob.inspectionFindings || []).length})</span>
+                                                    </button>
+                                                )}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setIsFindingModalOpen(true)}
+                                                    className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer active:scale-95"
+                                                >
+                                                    <Camera size={14} />
+                                                    <span>Report Lift Finding</span>
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {/* Recent Findings Preview Strip */}
+                                        {(editableJob.inspectionFindings || []).length > 0 && (
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-rose-100">
+                                                {editableJob.inspectionFindings!.map((f) => (
+                                                    <div 
+                                                        key={f.id}
+                                                        onClick={() => setIsFindingReviewModalOpen(true)}
+                                                        className="p-2.5 bg-white rounded-lg border border-gray-200 hover:border-indigo-300 hover:shadow-xs transition cursor-pointer flex items-center justify-between gap-2"
+                                                    >
+                                                        <div className="flex items-center gap-2 truncate">
+                                                            <span className={`text-[10px] font-black uppercase px-1.5 py-0.5 rounded border ${
+                                                                f.severity === 'urgent' ? 'bg-rose-100 text-rose-800 border-rose-300' : 'bg-amber-100 text-amber-800 border-amber-300'
+                                                            }`}>
+                                                                {f.severity === 'urgent' ? '🔴 RED' : '🟡 AMBER'}
+                                                            </span>
+                                                            <div className="truncate">
+                                                                <span className="font-bold text-xs text-gray-900 block truncate">{f.itemLabel}</span>
+                                                                <span className="text-[11px] text-gray-500 truncate block">{f.notes || f.category}</span>
+                                                            </div>
+                                                        </div>
+                                                        <span className="text-[10px] uppercase font-bold text-gray-600 bg-gray-100 px-2 py-0.5 rounded shrink-0">
+                                                            {f.status}
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+
                                     <div>
                                         <div className="flex justify-between items-center mb-4">
                                             <h3 className="text-lg font-bold text-gray-800">Inspection Checklist</h3>
@@ -1547,6 +1625,35 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
                             setActiveSegmentForAssignment(null);
                         }
                     }}
+                />
+            )}
+
+            {isFindingModalOpen && editableJob && (
+                <FastTrackFindingModal
+                    isOpen={isFindingModalOpen}
+                    onClose={() => setIsFindingModalOpen(false)}
+                    job={editableJob}
+                    vehicle={vehicle}
+                    customer={customer}
+                    onSaveJob={async (updatedJob) => {
+                        setEditableJob(updatedJob);
+                        await handleSaveItem(setJobs, updatedJob, 'brooks_jobs');
+                    }}
+                />
+            )}
+
+            {isFindingReviewModalOpen && editableJob && (
+                <FindingReviewModal
+                    isOpen={isFindingReviewModalOpen}
+                    onClose={() => setIsFindingReviewModalOpen(false)}
+                    job={editableJob}
+                    vehicle={vehicle}
+                    customer={customer}
+                    onSaveJob={async (updatedJob) => {
+                        setEditableJob(updatedJob);
+                        await handleSaveItem(setJobs, updatedJob, 'brooks_jobs');
+                    }}
+                    onCreateEstimateFromFinding={onRaiseEstimateForFinding}
                 />
             )}
         </div>

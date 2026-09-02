@@ -171,6 +171,42 @@ export const JobCard: React.FC<JobCardProps> = ({
                     );
                 })()}
 
+                {/* Ramp Findings Alert Banner */}
+                {(() => {
+                    const findings = job.inspectionFindings || [];
+                    if (findings.length === 0) return null;
+                    const pendingFindings = findings.filter(f => f.status !== 'Completed');
+                    const latest = pendingFindings[0] || findings[0];
+                    const isUrgent = latest.severity === 'urgent';
+                    return (
+                        <div 
+                            onClick={(e) => { e.stopPropagation(); onEditJob(job.id, 'inspection'); }}
+                            className={`p-2 rounded-lg border flex items-center justify-between text-xs font-bold transition cursor-pointer shadow-2xs ${
+                                isUrgent 
+                                    ? 'bg-rose-50 border-rose-300 text-rose-950 hover:bg-rose-100 ring-1 ring-rose-300/60' 
+                                    : 'bg-amber-50 border-amber-300 text-amber-950 hover:bg-amber-100'
+                            }`}
+                            title="Click to view inspection findings and customer authorization"
+                        >
+                            <div className="flex items-center gap-1.5 truncate">
+                                <span className="animate-pulse text-sm">🚨</span>
+                                <span className="truncate">
+                                    <strong>{findings.length} Ramp Finding(s):</strong> {latest.itemLabel}
+                                </span>
+                            </div>
+                            <span className={`text-[9px] uppercase font-black px-1.5 py-0.5 rounded shrink-0 shadow-2xs ${
+                                latest.status === 'Authorised' 
+                                    ? 'bg-emerald-600 text-white' 
+                                    : latest.status === 'Declined'
+                                    ? 'bg-slate-400 text-white'
+                                    : 'bg-rose-600 text-white'
+                            }`}>
+                                {latest.status}
+                            </span>
+                        </div>
+                    );
+                })()}
+
                 <div className="flex items-center text-sm text-gray-600 font-medium gap-1.5">
                     <User size={14} className="text-gray-400" />
                     {customer ? (
@@ -280,6 +316,13 @@ export const JobCard: React.FC<JobCardProps> = ({
                         title="Allocate to Lift & Individual"
                     >
                         <Share size={14} /> Allocate
+                    </button>
+                    <button
+                        onClick={(e) => { e.stopPropagation(); onEditJob(job.id, 'inspection'); }}
+                        className="flex items-center justify-center gap-1 px-2 py-1.5 bg-rose-50 text-rose-700 border border-rose-200 rounded-md text-xs font-bold uppercase tracking-wider hover:bg-rose-100 transition-all shadow-2xs active:scale-95"
+                        title="Report finding at vehicle lift with photos"
+                    >
+                        <Camera size={13} /> Finding
                     </button>
                     {onCreateInvoice && (
                         <button

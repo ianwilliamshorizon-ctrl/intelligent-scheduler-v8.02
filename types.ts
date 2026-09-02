@@ -220,6 +220,7 @@ export interface Job {
     saleVehicleId?: string;
     isSalesPrep?: boolean;
     tyreDepths?: any;
+    inspectionFindings?: InspectionFinding[];
 }
 export type VehicleStatus = 'On Site' | 'Off-Site (Partner)' | 'Awaiting Arrival' | 'Awaiting Collection' | 'Collected' | 'Cancelled';
 
@@ -720,6 +721,44 @@ export interface InspectionTemplate {
     sections: ChecklistSection[];
     isDefault?: boolean;
     description?: string;
+}
+
+export type FindingCategory = 
+    | 'Brakes' 
+    | 'Tyres' 
+    | 'Leaks & Fluids' 
+    | 'Suspension & Steering' 
+    | 'Exhaust' 
+    | 'Engine & Drivetrain' 
+    | 'Electrical' 
+    | 'Body & Glass' 
+    | 'Other';
+
+export type FindingSeverity = 'urgent' | 'attention' | 'ok';
+
+export type FindingStatus = 
+    | 'Pending Review' 
+    | 'Estimate Created' 
+    | 'Sent to Customer' 
+    | 'Authorised' 
+    | 'Declined' 
+    | 'Completed';
+
+export interface InspectionFinding {
+    id: string;
+    jobId: string;
+    category: FindingCategory;
+    itemLabel: string;
+    severity: FindingSeverity; // 'urgent' (🔴 Red / Immediate), 'attention' (🟡 Amber / Advisory), 'ok' (🟢 Green)
+    notes: string;
+    photos?: { id: string; name?: string; uploadedAt: string }[];
+    suggestedLabourHours?: number;
+    suggestedParts?: string;
+    status: FindingStatus;
+    createdAt: string;
+    createdByUserId: string;
+    createdByName?: string;
+    estimateId?: string;
 }
 
 /**

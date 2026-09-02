@@ -495,6 +495,39 @@ const PrintableJobCard: React.FC<PrintableJobCardProps> = ({
                                 </div>
                             )}
 
+                            {/* Lift Inspection Findings / Additional Work Recommendations */}
+                            {block.type === 'terms_signoff' && job.inspectionFindings && job.inspectionFindings.length > 0 && (
+                                <div className="rounded-xl border border-rose-300 bg-rose-50/40 p-3 break-inside-avoid space-y-2 mb-4" style={{ breakInside: 'avoid' }}>
+                                    <div className="flex items-center justify-between border-b border-rose-200 pb-1.5">
+                                        <h4 className="font-bold text-xs uppercase text-rose-950 flex items-center gap-1.5">
+                                            <span>🚨</span>
+                                            <span>Ramp Inspection Findings & Recommendations (eVHC)</span>
+                                        </h4>
+                                        <span className="text-[10px] font-bold uppercase tracking-wider text-rose-800">
+                                            {job.inspectionFindings.length} Item(s) Logged
+                                        </span>
+                                    </div>
+                                    <div className="space-y-1.5 text-xs text-slate-800">
+                                        {job.inspectionFindings.map((f) => (
+                                            <div key={f.id} className="p-2 bg-white rounded border border-rose-200 flex items-start justify-between gap-2">
+                                                <div>
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span className={`text-[9px] font-black uppercase px-1.5 py-0.2 rounded border ${f.severity === 'urgent' ? 'bg-rose-100 text-rose-800 border-rose-300' : 'bg-amber-100 text-amber-800 border-amber-300'}`}>
+                                                            {f.severity === 'urgent' ? '🔴 RED' : '🟡 AMBER'}
+                                                        </span>
+                                                        <strong>{f.category}: {f.itemLabel}</strong>
+                                                    </div>
+                                                    {f.notes && <p className="text-[11px] text-slate-600 mt-0.5">{f.notes}</p>}
+                                                </div>
+                                                <span className="text-[9px] uppercase font-bold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded shrink-0">
+                                                    {f.status}
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
                             {/* Block 11: Authorisation & Sign-Off */}
                             {block.type === 'terms_signoff' && (
                                 <div className={cs.wrapperClass} style={cs.wrapperStyle}>

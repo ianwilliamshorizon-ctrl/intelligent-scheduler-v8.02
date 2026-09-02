@@ -442,6 +442,38 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                         onOpenConditionReport={(booking, mode) => setters.setRentalConditionModal({ isOpen: true, booking, mode })}
                         forceRefresh={data.forceRefresh}
                         onGenerateInvoice={(jobId) => setters.setInvoiceFormModal({ isOpen: true, job: data.jobs.find(j => j.id === jobId) || null })}
+                        onRaiseEstimateForFinding={(finding, job) => {
+                            setters.setEstimateFormModal({
+                                isOpen: true,
+                                estimate: {
+                                    jobId: job.id,
+                                    customerId: job.customerId,
+                                    vehicleId: job.vehicleId,
+                                    entityId: job.entityId,
+                                    status: 'Draft',
+                                    description: `Lift Finding: ${finding.category} - ${finding.itemLabel}`,
+                                    notes: `Urgent recommendation identified during vehicle lift inspection: ${finding.notes}`,
+                                    lineItems: [
+                                        {
+                                            id: `item_${Date.now()}`,
+                                            description: `${finding.category}: ${finding.itemLabel} - ${finding.notes}`,
+                                            quantity: finding.suggestedLabourHours || 1,
+                                            unitPrice: 85,
+                                            isLabor: true,
+                                            partNumber: 'LABOUR'
+                                        },
+                                        ...(finding.suggestedParts ? [{
+                                            id: `part_${Date.now()}`,
+                                            description: finding.suggestedParts,
+                                            quantity: 1,
+                                            unitPrice: 0,
+                                            isLabor: false,
+                                            partNumber: 'PARTS'
+                                        }] : [])
+                                    ]
+                                }
+                            });
+                        }}
                     />
                 </ModalSuspense>
             )}
