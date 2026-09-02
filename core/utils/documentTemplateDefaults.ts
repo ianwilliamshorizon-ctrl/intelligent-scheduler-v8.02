@@ -560,6 +560,19 @@ export const COLOR_PALETTES: Record<string, ColorThemeDefinition> = {
     },
 };
 
+export const TEXT_COLOR_PALETTES: Record<string, { id: string; label: string; text: string; subtext: string; bg: string }> = {
+    default: { id: 'default', label: 'Theme / Auto', text: '#0f172a', subtext: '#64748b', bg: 'bg-slate-900 text-white' },
+    dark: { id: 'dark', label: 'Dark Charcoal', text: '#020617', subtext: '#475569', bg: 'bg-black text-white' },
+    white: { id: 'white', label: 'Pure White', text: '#ffffff', subtext: '#e2e8f0', bg: 'bg-white text-black border border-slate-300' },
+    slate: { id: 'slate', label: 'Slate Gray', text: '#334155', subtext: '#64748b', bg: 'bg-slate-600 text-white' },
+    indigo: { id: 'indigo', label: 'Royal Indigo', text: '#312e81', subtext: '#4338ca', bg: 'bg-indigo-700 text-white' },
+    blue: { id: 'blue', label: 'Classic Blue', text: '#1e3a8a', subtext: '#1d4ed8', bg: 'bg-blue-700 text-white' },
+    emerald: { id: 'emerald', label: 'Emerald Green', text: '#064e3b', subtext: '#047857', bg: 'bg-emerald-700 text-white' },
+    amber: { id: 'amber', label: 'Amber Gold', text: '#78350f', subtext: '#b45309', bg: 'bg-amber-700 text-white' },
+    rose: { id: 'rose', label: 'Crimson Rose', text: '#881337', subtext: '#be123c', bg: 'bg-rose-700 text-white' },
+    purple: { id: 'purple', label: 'Deep Purple', text: '#4c1d95', subtext: '#6d28d9', bg: 'bg-purple-700 text-white' },
+};
+
 export interface ContainerStyleResult {
     wrapperClass: string;
     headerClass: string;
@@ -569,17 +582,38 @@ export interface ContainerStyleResult {
     wrapperStyle: React.CSSProperties;
     headerStyle: React.CSSProperties;
     titleStyle: React.CSSProperties;
+    textStyle: React.CSSProperties;
+    subtextStyle: React.CSSProperties;
     borderStyle?: React.CSSProperties;
 }
 
 export const getContainerStyleClasses = (
     style: string = 'standard',
     color: string = 'default',
-    entityAccent: string = 'indigo'
+    entityAccent: string = 'indigo',
+    textColor: string = 'default'
 ): ContainerStyleResult => {
     // Map color to palette
     const cleanColor = (color && color !== 'default') ? color.toLowerCase() : (entityAccent || 'indigo').toLowerCase();
     const c = COLOR_PALETTES[cleanColor] || COLOR_PALETTES['indigo'];
+
+    // Determine text and subtext colors
+    let resolvedText = '#0f172a';
+    let resolvedSubtext = '#64748b';
+
+    if (textColor && textColor !== 'default') {
+        const textDef = TEXT_COLOR_PALETTES[textColor.toLowerCase()];
+        if (textDef) {
+            resolvedText = textDef.text;
+            resolvedSubtext = textDef.subtext;
+        }
+    } else if (cleanColor === 'dark' && style === 'highlight') {
+        resolvedText = '#ffffff';
+        resolvedSubtext = '#cbd5e1';
+    }
+
+    const textStyle: React.CSSProperties = { color: resolvedText };
+    const subtextStyle: React.CSSProperties = { color: resolvedSubtext };
 
     switch (style) {
         case 'boxed':
@@ -599,7 +633,9 @@ export const getContainerStyleClasses = (
                 },
                 titleStyle: {
                     color: c.text,
-                }
+                },
+                textStyle,
+                subtextStyle
             };
         case 'highlight':
             return {
@@ -618,7 +654,9 @@ export const getContainerStyleClasses = (
                 },
                 titleStyle: {
                     color: c.text,
-                }
+                },
+                textStyle,
+                subtextStyle
             };
         case 'card':
             return {
@@ -638,7 +676,9 @@ export const getContainerStyleClasses = (
                 },
                 titleStyle: {
                     color: c.primary,
-                }
+                },
+                textStyle,
+                subtextStyle
             };
         case 'banner':
             return {
@@ -657,7 +697,9 @@ export const getContainerStyleClasses = (
                 },
                 titleStyle: {
                     color: '#ffffff',
-                }
+                },
+                textStyle,
+                subtextStyle
             };
         case 'minimal':
             return {
@@ -676,7 +718,9 @@ export const getContainerStyleClasses = (
                 },
                 titleStyle: {
                     color: c.primary,
-                }
+                },
+                textStyle,
+                subtextStyle
             };
         case 'standard':
         default:
@@ -695,7 +739,9 @@ export const getContainerStyleClasses = (
                 },
                 titleStyle: {
                     color: c.text,
-                }
+                },
+                textStyle,
+                subtextStyle
             };
     }
 };

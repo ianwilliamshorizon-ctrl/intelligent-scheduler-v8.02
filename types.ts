@@ -542,6 +542,7 @@ export type DocumentBlockType =
 
 export type DocumentContainerStyle = 'standard' | 'boxed' | 'highlight' | 'card' | 'banner' | 'minimal';
 export type DocumentContainerColor = 'default' | 'slate' | 'indigo' | 'blue' | 'sky' | 'emerald' | 'amber' | 'rose' | 'purple' | 'dark';
+export type DocumentTextColor = 'default' | 'dark' | 'white' | 'slate' | 'indigo' | 'blue' | 'emerald' | 'amber' | 'rose' | 'purple';
 
 export interface DocumentBlockConfig {
     id: string;
@@ -564,6 +565,7 @@ export interface DocumentBlockConfig {
         columns?: 1 | 2 | 3;
         style?: DocumentContainerStyle;
         containerColor?: DocumentContainerColor;
+        textColor?: DocumentTextColor;
         customNarrative?: string;
         fontSize?: 'small' | 'medium' | 'large';
     };

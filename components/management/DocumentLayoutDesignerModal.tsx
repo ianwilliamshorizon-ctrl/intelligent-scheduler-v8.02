@@ -48,6 +48,19 @@ const CONTAINER_COLORS = [
     { key: 'dark', label: 'Dark', bg: 'bg-slate-900' },
 ];
 
+const TEXT_COLORS_LIST = [
+    { key: 'default', label: 'Auto', bg: 'bg-slate-900' },
+    { key: 'dark', label: 'Dark', bg: 'bg-black' },
+    { key: 'white', label: 'White', bg: 'bg-white border border-slate-300' },
+    { key: 'slate', label: 'Slate', bg: 'bg-slate-600' },
+    { key: 'indigo', label: 'Indigo', bg: 'bg-indigo-700' },
+    { key: 'blue', label: 'Blue', bg: 'bg-blue-700' },
+    { key: 'emerald', label: 'Emerald', bg: 'bg-emerald-700' },
+    { key: 'amber', label: 'Amber', bg: 'bg-amber-700' },
+    { key: 'rose', label: 'Rose', bg: 'bg-rose-700' },
+    { key: 'purple', label: 'Purple', bg: 'bg-purple-700' },
+];
+
 interface DocumentLayoutDesignerModalProps {
     isOpen: boolean;
     onClose: () => void;
@@ -204,6 +217,18 @@ export const DocumentLayoutDesignerModal: React.FC<DocumentLayoutDesignerModalPr
             }
         })));
         toast.success(`Applied '${color}' color accent to all blocks!`);
+    };
+
+    // Apply current block's text color to all blocks
+    const handleApplyTextColorToAll = (textColor: string) => {
+        setBlocks(prev => prev.map(b => ({
+            ...b,
+            settings: {
+                ...(b.settings || {}),
+                textColor: textColor as any
+            }
+        })));
+        toast.success(`Applied '${textColor}' text color to all blocks!`);
     };
 
     // Reset to defaults
@@ -672,6 +697,48 @@ export const DocumentLayoutDesignerModal: React.FC<DocumentLayoutDesignerModalPr
                                                         })}
                                                     </div>
                                                 </div>
+
+                                                {/* Text & Content Color Setting */}
+                                                <div>
+                                                    <div className="flex items-center justify-between mb-1">
+                                                        <div className="flex items-center gap-1.5">
+                                                            <label className="block text-[11px] font-bold text-slate-700">
+                                                                Box Text Color
+                                                            </label>
+                                                            <span className="text-[10px] font-bold text-slate-500 capitalize">
+                                                                ({block.settings?.textColor || 'Auto'})
+                                                            </span>
+                                                        </div>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleApplyTextColorToAll(block.settings?.textColor || 'default')}
+                                                            className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 hover:underline cursor-pointer"
+                                                            title="Apply this text color to all blocks in the document"
+                                                        >
+                                                            Apply to All Blocks
+                                                        </button>
+                                                    </div>
+                                                    <div className="grid grid-cols-5 gap-1.5">
+                                                        {TEXT_COLORS_LIST.map((tc) => {
+                                                            const isSelected = (block.settings?.textColor || 'default') === tc.key;
+                                                            return (
+                                                                <button
+                                                                    key={tc.key}
+                                                                    type="button"
+                                                                    onClick={() => handleUpdateBlockSetting(block.id, 'textColor', tc.key)}
+                                                                    className={`flex items-center gap-1.5 p-1 rounded-lg border text-[10px] font-bold transition cursor-pointer ${
+                                                                        isSelected 
+                                                                            ? 'bg-slate-900 text-white border-slate-900 ring-2 ring-indigo-400 shadow-xs' 
+                                                                            : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                                                                    }`}
+                                                                >
+                                                                    <span className={`w-3 h-3 rounded-full shrink-0 ${tc.bg}`} />
+                                                                    <span className="truncate">{tc.label}</span>
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
                                             </div>
                                         )}
                                     </div>
@@ -695,7 +762,12 @@ export const DocumentLayoutDesignerModal: React.FC<DocumentLayoutDesignerModalPr
                         >
                             {/* Render Visible Blocks dynamically in sequence */}
                             {blocks.filter(b => b.visible).map((block) => {
-                                const cs = getContainerStyleClasses(block.settings?.style, block.settings?.containerColor, accentColor);
+                                const cs = getContainerStyleClasses(
+                                    block.settings?.style, 
+                                    block.settings?.containerColor, 
+                                    accentColor,
+                                    block.settings?.textColor
+                                );
 
                                 return (
                                     <div key={block.id} className="transition-all">
@@ -776,11 +848,11 @@ export const DocumentLayoutDesignerModal: React.FC<DocumentLayoutDesignerModalPr
                                                     </h4>
                                                 </div>
                                                 <div className={cs.bodyClass}>
-                                                    <div className="text-xs text-slate-800 space-y-0.5">
-                                                        <div className="font-bold text-sm text-slate-900">Dr. Anthony Harrington</div>
+                                                    <div className="text-xs space-y-0.5" style={cs.textStyle}>
+                                                        <div className="font-bold text-sm">Dr. Anthony Harrington</div>
                                                         <div>42 Manor House Gardens, Sunningdale</div>
                                                         <div>Ascot, Berkshire, <span className="font-semibold uppercase">SL5 9PQ</span></div>
-                                                        <div>Phone: <span className="font-semibold">07891 234567</span> | Email: <span className="font-semibold">anthony.h@example.com</span></div>
+                                                        <div style={cs.subtextStyle}>Phone: <span className="font-semibold">07891 234567</span> | Email: <span className="font-semibold">anthony.h@example.com</span></div>
                                                     </div>
                                                 </div>
                                             </div>
@@ -798,11 +870,11 @@ export const DocumentLayoutDesignerModal: React.FC<DocumentLayoutDesignerModalPr
                                                     </span>
                                                 </div>
                                                 <div className={cs.bodyClass}>
-                                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs text-slate-800">
-                                                        <div><span className="text-slate-400 block text-[10px]">Make & Model:</span><strong>Porsche 911 (992) GT3 RS</strong></div>
-                                                        <div><span className="text-slate-400 block text-[10px]">Year / Color:</span><strong>2023 / Guards Red</strong></div>
-                                                        <div><span className="text-slate-400 block text-[10px]">Recorded Mileage:</span><strong>14,820 miles</strong></div>
-                                                        <div><span className="text-slate-400 block text-[10px]">Key Tag / Slot:</span><strong>Key #12 (Slot 4)</strong></div>
+                                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs" style={cs.textStyle}>
+                                                        <div><span className="block text-[10px]" style={cs.subtextStyle}>Make & Model:</span><strong>Porsche 911 (992) GT3 RS</strong></div>
+                                                        <div><span className="block text-[10px]" style={cs.subtextStyle}>Year / Color:</span><strong>2023 / Guards Red</strong></div>
+                                                        <div><span className="block text-[10px]" style={cs.subtextStyle}>Recorded Mileage:</span><strong>14,820 miles</strong></div>
+                                                        <div><span className="block text-[10px]" style={cs.subtextStyle}>Key Tag / Slot:</span><strong>Key #12 (Slot 4)</strong></div>
                                                     </div>
                                                 </div>
                                             </div>
@@ -817,7 +889,7 @@ export const DocumentLayoutDesignerModal: React.FC<DocumentLayoutDesignerModalPr
                                                     </h4>
                                                 </div>
                                                 <div className={cs.bodyClass}>
-                                                    <p className="text-xs text-slate-700 leading-relaxed italic">
+                                                    <p className="text-xs leading-relaxed italic" style={cs.textStyle}>
                                                         "Customer booked in for Major 24k Service inspection, brake fluid flush, and investigating a slight squeal from front left ceramic brake discs when cold. Check tyre wear and track day alignment."
                                                     </p>
                                                 </div>
@@ -833,15 +905,15 @@ export const DocumentLayoutDesignerModal: React.FC<DocumentLayoutDesignerModalPr
                                                     </div>
                                                 </div>
                                                 <div className="p-0 overflow-x-auto">
-                                                    <table className="w-full text-xs text-left">
-                                                        <thead className="bg-slate-50 border-b text-[10px] text-slate-500 uppercase">
+                                                    <table className="w-full text-xs text-left" style={cs.textStyle}>
+                                                        <thead className="bg-slate-50/60 border-b text-[10px] uppercase" style={cs.subtextStyle}>
                                                             <tr>
                                                                 <th className="p-2">Description</th>
                                                                 <th className="p-2 text-center">Hours</th>
                                                                 {block.settings?.showPrices !== false && <th className="p-2 text-right">Net Price</th>}
                                                             </tr>
                                                         </thead>
-                                                        <tbody className="divide-y divide-slate-100">
+                                                        <tbody className="divide-y divide-slate-100/60">
                                                             <tr>
                                                                 <td className="p-2 font-medium">Major 24,000 Mile Service Package (Engine Oil, Filters, Spark Plugs)</td>
                                                                 <td className="p-2 text-center font-mono">3.50 hrs</td>
@@ -872,8 +944,8 @@ export const DocumentLayoutDesignerModal: React.FC<DocumentLayoutDesignerModalPr
                                                     </div>
                                                 </div>
                                                 <div className="p-0 overflow-x-auto">
-                                                    <table className="w-full text-xs text-left">
-                                                        <thead className="bg-slate-50 border-b text-[10px] text-slate-500 uppercase">
+                                                    <table className="w-full text-xs text-left" style={cs.textStyle}>
+                                                        <thead className="bg-slate-50/60 border-b text-[10px] uppercase" style={cs.subtextStyle}>
                                                             <tr>
                                                                 {block.settings?.showPartNumbers !== false && <th className="p-2">Part No.</th>}
                                                                 <th className="p-2">Description</th>
@@ -882,23 +954,23 @@ export const DocumentLayoutDesignerModal: React.FC<DocumentLayoutDesignerModalPr
                                                                 {block.settings?.showPrices !== false && <th className="p-2 text-right">Total Net</th>}
                                                             </tr>
                                                         </thead>
-                                                        <tbody className="divide-y divide-slate-100">
+                                                        <tbody className="divide-y divide-slate-100/60">
                                                             <tr>
-                                                                {block.settings?.showPartNumbers !== false && <td className="p-2 font-mono text-[10px]">0PB-115-561</td>}
+                                                                {block.settings?.showPartNumbers !== false && <td className="p-2 font-mono text-[10px]" style={cs.subtextStyle}>0PB-115-561</td>}
                                                                 <td className="p-2 font-medium">Genuine Porsche Oil Filter Element</td>
                                                                 <td className="p-2 text-center">1</td>
                                                                 {block.settings?.showPrices !== false && <td className="p-2 text-right font-mono">£34.50</td>}
                                                                 {block.settings?.showPrices !== false && <td className="p-2 text-right font-semibold font-mono">£34.50</td>}
                                                             </tr>
                                                             <tr>
-                                                                {block.settings?.showPartNumbers !== false && <td className="p-2 font-mono text-[10px]">MOB-1-0W40</td>}
+                                                                {block.settings?.showPartNumbers !== false && <td className="p-2 font-mono text-[10px]" style={cs.subtextStyle}>MOB-1-0W40</td>}
                                                                 <td className="p-2 font-medium">Mobil 1 ESP X3 0W-40 Synthetic (Litres)</td>
                                                                 <td className="p-2 text-center">8</td>
                                                                 {block.settings?.showPrices !== false && <td className="p-2 text-right font-mono">£16.50</td>}
                                                                 {block.settings?.showPrices !== false && <td className="p-2 text-right font-semibold font-mono">£132.00</td>}
                                                             </tr>
                                                             <tr>
-                                                                {block.settings?.showPartNumbers !== false && <td className="p-2 font-mono text-[10px]">MOTUL-RBF660</td>}
+                                                                {block.settings?.showPartNumbers !== false && <td className="p-2 font-mono text-[10px]" style={cs.subtextStyle}>MOTUL-RBF660</td>}
                                                                 <td className="p-2 font-medium">Motul RBF660 Factory Line High Temp Brake Fluid (500ml)</td>
                                                                 <td className="p-2 text-center">2</td>
                                                                 {block.settings?.showPrices !== false && <td className="p-2 text-right font-mono">£19.00</td>}
@@ -913,13 +985,13 @@ export const DocumentLayoutDesignerModal: React.FC<DocumentLayoutDesignerModalPr
                                         {/* Block 8: Labour Summary (Job Card specific) */}
                                         {block.type === 'labour_summary' && (
                                             <div className={`${cs.wrapperClass} flex items-center justify-between`} style={cs.wrapperStyle}>
-                                                <div className="p-3.5">
-                                                    <span className="font-bold text-slate-800">Technician Time Allocation</span>
-                                                    <div className="text-[11px] text-slate-500">Allocated: 5.00 hrs | Booked Time: 4.75 hrs</div>
+                                                <div className="p-3.5" style={cs.textStyle}>
+                                                    <span className="font-bold">Technician Time Allocation</span>
+                                                    <div className="text-[11px]" style={cs.subtextStyle}>Allocated: 5.00 hrs | Booked Time: 4.75 hrs</div>
                                                 </div>
-                                                <div className="p-3.5 flex items-center gap-4 text-xs font-mono font-bold">
-                                                    <span className="bg-white px-2 py-1 rounded border border-slate-200">Start: 08:30</span>
-                                                    <span className="bg-white px-2 py-1 rounded border border-slate-200">Finish: 13:15</span>
+                                                <div className="p-3.5 flex items-center gap-4 text-xs font-mono font-bold" style={cs.textStyle}>
+                                                    <span className="bg-white/80 px-2 py-1 rounded border border-slate-200">Start: 08:30</span>
+                                                    <span className="bg-white/80 px-2 py-1 rounded border border-slate-200">Finish: 13:15</span>
                                                 </div>
                                             </div>
                                         )}
@@ -928,23 +1000,23 @@ export const DocumentLayoutDesignerModal: React.FC<DocumentLayoutDesignerModalPr
                                         {block.type === 'financial_totals' && (
                                             <div className="flex justify-end pt-2">
                                                 <div className={`w-72 ${cs.wrapperClass} p-3.5 space-y-1.5 text-xs`} style={cs.wrapperStyle}>
-                                                    <div className="flex justify-between text-slate-600">
+                                                    <div className="flex justify-between" style={cs.subtextStyle}>
                                                         <span>Labour Subtotal:</span>
-                                                        <span className="font-mono font-semibold">£550.00</span>
+                                                        <span className="font-mono font-semibold" style={cs.textStyle}>£550.00</span>
                                                     </div>
-                                                    <div className="flex justify-between text-slate-600">
+                                                    <div className="flex justify-between" style={cs.subtextStyle}>
                                                         <span>Parts & Materials:</span>
-                                                        <span className="font-mono font-semibold">£204.50</span>
+                                                        <span className="font-mono font-semibold" style={cs.textStyle}>£204.50</span>
                                                     </div>
-                                                    <div className="flex justify-between text-slate-600">
+                                                    <div className="flex justify-between" style={cs.subtextStyle}>
                                                         <span>Net Amount:</span>
-                                                        <span className="font-mono font-bold text-slate-800">£754.50</span>
+                                                        <span className="font-mono font-bold" style={cs.textStyle}>£754.50</span>
                                                     </div>
-                                                    <div className="flex justify-between text-slate-600">
+                                                    <div className="flex justify-between" style={cs.subtextStyle}>
                                                         <span>VAT (20.0%):</span>
-                                                        <span className="font-mono font-semibold">£150.90</span>
+                                                        <span className="font-mono font-semibold" style={cs.textStyle}>£150.90</span>
                                                     </div>
-                                                    <div className="flex justify-between text-base font-black text-slate-900 border-t border-slate-300 pt-1.5">
+                                                    <div className="flex justify-between text-base font-black border-t border-slate-300 pt-1.5" style={cs.textStyle}>
                                                         <span>TOTAL DUE:</span>
                                                         <span className="font-mono" style={{ color: cs.titleStyle?.color || '#4f46e5' }}>£905.40</span>
                                                     </div>
@@ -959,14 +1031,14 @@ export const DocumentLayoutDesignerModal: React.FC<DocumentLayoutDesignerModalPr
                                                     <h4 className={cs.titleClass} style={cs.titleStyle}>
                                                         {block.title || 'Bank Remittance Details'}
                                                     </h4>
-                                                    <div className="text-slate-700 text-[11px] pt-0.5">
+                                                    <div className="text-[11px] pt-0.5" style={cs.subtextStyle}>
                                                         Please quote invoice reference on electronic transfers.
                                                     </div>
                                                 </div>
-                                                <div className="flex items-center gap-4 text-xs font-mono">
-                                                    <div><span className="text-[10px] text-slate-500 block">Bank</span><strong>Barclays Bank UK</strong></div>
-                                                    <div><span className="text-[10px] text-slate-500 block">Sort Code</span><strong>20-45-78</strong></div>
-                                                    <div><span className="text-[10px] text-slate-500 block">Account No.</span><strong>83920194</strong></div>
+                                                <div className="flex items-center gap-4 text-xs font-mono" style={cs.textStyle}>
+                                                    <div><span className="text-[10px] block" style={cs.subtextStyle}>Bank</span><strong>Barclays Bank UK</strong></div>
+                                                    <div><span className="text-[10px] block" style={cs.subtextStyle}>Sort Code</span><strong>20-45-78</strong></div>
+                                                    <div><span className="text-[10px] block" style={cs.subtextStyle}>Account No.</span><strong>83920194</strong></div>
                                                 </div>
                                             </div>
                                         )}
@@ -980,18 +1052,18 @@ export const DocumentLayoutDesignerModal: React.FC<DocumentLayoutDesignerModalPr
                                                     </h4>
                                                 </div>
                                                 <div className={cs.bodyClass}>
-                                                    <div className="text-[10px] text-slate-500 leading-tight">
+                                                    <div className="text-[10px] leading-tight" style={cs.subtextStyle}>
                                                         I hereby authorize the repair work and acknowledge receipt of vehicle in satisfactory condition. All parts replaced remain the property of the workshop until invoice is paid in full.
                                                     </div>
                                                     <div className="grid grid-cols-2 gap-4 pt-1">
                                                         {block.settings?.showCustomerSignature !== false && (
-                                                            <div className="border-t border-slate-400 pt-1 flex justify-between text-[10px] text-slate-600">
+                                                            <div className="border-t border-slate-400 pt-1 flex justify-between text-[10px]" style={cs.subtextStyle}>
                                                                 <span>Customer Signature</span>
                                                                 <span>Date: ____________</span>
                                                             </div>
                                                         )}
                                                         {block.settings?.showTechnicianSignature !== false && (
-                                                            <div className="border-t border-slate-400 pt-1 flex justify-between text-[10px] text-slate-600">
+                                                            <div className="border-t border-slate-400 pt-1 flex justify-between text-[10px]" style={cs.subtextStyle}>
                                                                 <span>Technician Signature</span>
                                                                 <span>Date: ____________</span>
                                                             </div>
