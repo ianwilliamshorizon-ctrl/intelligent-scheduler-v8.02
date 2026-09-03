@@ -391,6 +391,7 @@ export interface Estimate {
     expiryDate: string; 
     status: 'Draft' | 'Sent' | 'Approved' | 'Rejected' | 'Converted to Job' | 'Closed';
     lineItems: EstimateLineItem[];
+    description?: string;
     notes?: string;
     jobId?: string;
     entityId?: string;
