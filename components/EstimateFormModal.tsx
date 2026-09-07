@@ -72,9 +72,10 @@ const MemoizedEditableLineItemRow = React.memo(({
     };
 
     if (isPackageHeader) {
+        const packageTotal = (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0);
         return (
-            <div className={`grid grid-cols-12 gap-2 items-center p-2 rounded-lg border bg-indigo-50 border-indigo-200 transition-all hover:shadow-md mb-2`}>
-                <div className="col-span-5 flex items-center gap-2">
+            <div className={`grid grid-cols-[minmax(0,1fr)_60px_80px_85px_95px_70px_36px] gap-2 items-center p-2 rounded-lg border bg-indigo-50 border-indigo-200 transition-all hover:shadow-md mb-2`}>
+                <div className="flex items-center gap-2 min-w-0">
                     {onToggleCollapse && (
                         <button
                             type="button"
@@ -92,13 +93,13 @@ const MemoizedEditableLineItemRow = React.memo(({
                         className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 flex-shrink-0"
                         title="Mark Package as Optional"
                     />
-                    <div className="bg-indigo-600 text-white text-[10px] uppercase font-black px-1.5 py-0.5 rounded shadow-sm">Pkg</div>
-                    <div className="w-full flex flex-col gap-1">
+                    <div className="bg-indigo-600 text-white text-[10px] uppercase font-black px-1.5 py-0.5 rounded shadow-sm flex-shrink-0">Pkg</div>
+                    <div className="w-full flex flex-col gap-1 min-w-0">
                         <input 
                             type="text" 
                             value={item.description || ''} 
                             onChange={e => onLineItemChange(item.id, 'description', e.target.value)}
-                            className="w-full bg-transparent border-none focus:ring-0 font-bold text-indigo-900 placeholder:text-indigo-300"
+                            className="w-full bg-transparent border-none focus:ring-0 font-bold text-indigo-900 placeholder:text-indigo-300 truncate text-sm"
                             placeholder="Package Description"
                         />
                         {item.isOptional && (
@@ -122,7 +123,7 @@ const MemoizedEditableLineItemRow = React.memo(({
                         )}
                     </div>
                 </div>
-                <div className="col-span-1">
+                <div>
                     <input 
                         type="number" 
                         step="0.1" 
@@ -131,8 +132,8 @@ const MemoizedEditableLineItemRow = React.memo(({
                         className="w-full p-1 border border-indigo-100 rounded text-right text-sm bg-white" 
                     />
                 </div>
-                <div className="col-span-2 text-center text-[10px] text-indigo-400 font-bold uppercase tracking-widest bg-white/50 py-1 rounded">Package Total</div>
-                <div className="col-span-2">
+                <div className="text-center text-[10px] text-indigo-400 font-bold uppercase tracking-wider bg-white/50 py-1 rounded truncate">Package</div>
+                <div>
                     <input 
                         type="number" 
                         step="0.01" 
@@ -142,19 +143,24 @@ const MemoizedEditableLineItemRow = React.memo(({
                         placeholder="Sell" 
                     />
                 </div>
-                <div className="col-span-1 text-center text-xs text-indigo-500 font-medium">
+                <div className="text-right text-sm font-bold text-indigo-900 truncate pr-1">
+                    {formatCurrency(packageTotal)}
+                </div>
+                <div className="text-center text-xs text-indigo-500 font-medium">
                      {item.taxCodeId === 'tax_99' ? 'Mix' : 'T1'}
                 </div>
-                <div className="col-span-1 flex justify-center items-center gap-1">
+                <div className="flex justify-center items-center gap-1">
                     <button onClick={() => onRemoveLineItem(item.id)} className="text-red-500 hover:text-red-700 bg-white p-1 rounded-full shadow-sm hover:shadow transition-all"><Trash2 size={14} /></button>
                 </div>
             </div>
         );
     }
 
+    const lineTotal = (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0);
+
     return (
-         <div className={`grid grid-cols-12 gap-2 items-start p-2 rounded-lg border ${isPackageComponent ? 'bg-gray-100' : 'bg-white'}`}>
-            <div className="col-span-5 flex items-start gap-2">
+         <div className={`grid grid-cols-[minmax(0,1fr)_60px_80px_85px_95px_70px_36px] gap-2 items-start p-2 rounded-lg border ${isPackageComponent ? 'bg-gray-100' : 'bg-white'}`}>
+            <div className="flex items-start gap-2 min-w-0">
                  {!isPackageComponent && (
                     <input 
                         type="checkbox" 
@@ -164,7 +170,7 @@ const MemoizedEditableLineItemRow = React.memo(({
                         title="Mark as Optional"
                     />
                 )}
-                <div className="w-full space-y-1">
+                <div className="w-full space-y-1 min-w-0">
                     <input 
                         type="text" 
                         placeholder="Part No." 
@@ -225,10 +231,17 @@ const MemoizedEditableLineItemRow = React.memo(({
                     )}
                 </div>
             </div>
-            <input type="number" step="0.1" value={item.quantity} onChange={e => onLineItemChange(item.id, 'quantity', e.target.value)} className="col-span-1 p-1 border rounded text-right text-sm" />
-            <input type="number" step="0.01" value={item.unitCost || ''} onChange={e => onLineItemChange(item.id, 'unitCost', e.target.value)} className="col-span-2 p-1 border rounded text-right text-sm" placeholder="Cost" />
-            <input type="number" step="0.01" value={item.unitPrice} onChange={e => onLineItemChange(item.id, 'unitPrice', e.target.value)} className="col-span-2 p-1 border rounded text-right text-sm" placeholder="Sell" />
-            <div className="col-span-1">
+            <input type="number" step="0.1" value={item.quantity} onChange={e => onLineItemChange(item.id, 'quantity', e.target.value)} className="p-1 border rounded text-right text-sm" />
+            <input type="number" step="0.01" value={item.unitCost || ''} onChange={e => onLineItemChange(item.id, 'unitCost', e.target.value)} className="p-1 border rounded text-right text-sm" placeholder="Cost" />
+            <input type="number" step="0.01" value={item.unitPrice} onChange={e => onLineItemChange(item.id, 'unitPrice', e.target.value)} className="p-1 border rounded text-right text-sm font-medium" placeholder="Sell" />
+            <div className="text-right text-sm font-bold text-slate-800 pt-1.5 truncate pr-1">
+                {isPackageComponent && !item.unitPrice ? (
+                    <span className="text-gray-400 text-xs font-normal italic">Included</span>
+                ) : (
+                    formatCurrency(lineTotal)
+                )}
+            </div>
+            <div>
                 <button 
                     type="button" 
                     onClick={() => onOpenSupplierSelection(item.id)} 
@@ -238,7 +251,7 @@ const MemoizedEditableLineItemRow = React.memo(({
                     {supplierShortCode}
                 </button>
             </div>
-            <div className="col-span-1 flex justify-center items-center gap-1">
+            <div className="flex justify-center items-center gap-1 pt-1.5">
                 <button onClick={() => onRemoveLineItem(item.id)} className="text-red-500 hover:text-red-700 disabled:opacity-50 p-1"><Trash2 size={14} /></button>
             </div>
          </div>
@@ -1322,13 +1335,14 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                 <div className="lg:col-span-2 space-y-4">
                      <Section title="Line Items" icon={FileText}>
                          <div className="space-y-4">
-                            <div className="hidden lg:grid grid-cols-12 gap-2 text-xs text-gray-500 font-medium px-2">
-                                <div className="col-span-5">Part / Description</div>
-                                <div className="col-span-1 text-right">Qty/Hrs</div>
-                                <div className="col-span-2 text-right">Cost</div>
-                                <div className="col-span-2 text-right">Sell</div>
-                                <div className="col-span-1 text-center">Supplier</div>
-                                <div className="col-span-1"></div>
+                            <div className="hidden lg:grid grid-cols-[minmax(0,1fr)_60px_80px_85px_95px_70px_36px] gap-2 text-xs text-gray-500 font-medium px-2">
+                                <div>Part / Description</div>
+                                <div className="text-right">Qty/Hrs</div>
+                                <div className="text-right">Cost</div>
+                                <div className="text-right">Sell</div>
+                                <div className="text-right font-bold text-gray-700">Total</div>
+                                <div className="text-center">Supplier</div>
+                                <div></div>
                             </div>
                             {estimateBreakdown.packages.length > 0 && (
                                 <div>

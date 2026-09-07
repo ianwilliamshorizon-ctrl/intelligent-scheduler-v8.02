@@ -117,36 +117,44 @@ const MemoizedEditableLineItemRow = React.memo(({
 
     if (isPackageHeader) {
         return (
-            <div className={`grid grid-cols-12 gap-2 items-center p-2 rounded-lg border bg-indigo-50 border-indigo-200`}>
-                <div className="col-span-5 font-bold text-indigo-800 flex items-center gap-2">
+            <div className={`grid grid-cols-[minmax(0,1fr)_60px_80px_85px_95px_70px_60px] gap-2 items-center p-2 rounded-lg border bg-indigo-50 border-indigo-200`}>
+                <div className="font-bold text-indigo-800 flex items-center gap-2 min-w-0">
                     <button 
                         type="button" 
                         onClick={(e) => { e.stopPropagation(); onToggleCollapse?.(); }}
-                        className="text-indigo-600 hover:text-indigo-800 p-0.5 rounded hover:bg-indigo-100 transition-colors flex items-center justify-center"
+                        className="text-indigo-600 hover:text-indigo-800 p-0.5 rounded hover:bg-indigo-100 transition-colors flex items-center justify-center flex-shrink-0"
                         title={isCollapsed ? "Expand Package Details" : "Collapse Package Details"}
                     >
                         {isCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
                     </button>
-                    <span>{item.description}</span>
+                    <span className="truncate">{item.description}</span>
                 </div>
-                <div className="col-span-1 p-1 text-right">{item.quantity}</div>
-                <div className="col-span-2"></div> {/* Cost placeholder */}
+                <div className="p-1 text-right">{item.quantity}</div>
+                <div className="text-center text-[10px] text-indigo-400 font-bold uppercase tracking-wider bg-white/50 py-1 rounded truncate">Package</div>
                 {canViewPricing ? (
-                    <div className="col-span-2 p-1 text-right font-semibold">{formatCurrency(packageTotal || 0)}</div>
+                    <>
+                        <div className="p-1 text-right font-medium text-slate-700">{formatCurrency(item.unitPrice || 0)}</div>
+                        <div className="p-1 text-right font-bold text-indigo-900">{formatCurrency(packageTotal || ((Number(item.quantity) || 0) * (Number(item.unitPrice) || 0)))}</div>
+                    </>
                 ) : (
-                    <div className="col-span-2"></div>
+                    <>
+                        <div></div>
+                        <div></div>
+                    </>
                 )}
-                <div className="col-span-1 text-center text-gray-500">-</div>
-                <div className="col-span-1 flex justify-end items-center gap-1">
+                <div className="text-center text-gray-500">-</div>
+                <div className="flex justify-end items-center gap-1">
                     <button onClick={() => onRemoveLineItem(item.id)} className="text-red-500 hover:text-red-700 p-1" disabled={isReadOnly}><Trash2 size={14} /></button>
                 </div>
             </div>
         );
     }
 
+    const lineTotal = (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0);
+
     return (
-         <div className={`grid grid-cols-12 gap-2 items-start p-2 rounded-lg border ${isPackageComponent ? 'bg-gray-100' : 'bg-white'}`}>
-            <div className="col-span-5 flex items-start gap-2">
+         <div className={`grid grid-cols-[minmax(0,1fr)_60px_80px_85px_95px_70px_60px] gap-2 items-start p-2 rounded-lg border ${isPackageComponent ? 'bg-gray-100' : 'bg-white'}`}>
+            <div className="flex items-start gap-2 min-w-0">
                 {!isPackageComponent && (
                     <input 
                         type="checkbox" 
@@ -157,7 +165,7 @@ const MemoizedEditableLineItemRow = React.memo(({
                         title="Mark as Optional"
                     />
                 )}
-                <div className="flex-grow space-y-1">
+                <div className="flex-grow space-y-1 min-w-0">
                     <input 
                         type="text" 
                         placeholder="Part No." 
@@ -233,18 +241,25 @@ const MemoizedEditableLineItemRow = React.memo(({
                 </div>
             </div>
             
-            <input type="number" step="0.1" value={item.quantity} onChange={e => onLineItemChange(item.id, 'quantity', e.target.value)} className="col-span-1 p-1 border rounded text-right disabled:bg-gray-200 text-sm self-center" disabled={isReadOnly} />
+            <input type="number" step="0.1" value={item.quantity} onChange={e => onLineItemChange(item.id, 'quantity', e.target.value)} className="p-1 border rounded text-right disabled:bg-gray-200 text-sm self-center" disabled={isReadOnly} />
             
             {canViewPricing ? (
                 <>
-                    <input type="number" step="0.01" value={item.unitCost || ''} onChange={e => onLineItemChange(item.id, 'unitCost', e.target.value)} className="col-span-2 p-1 border rounded text-right text-sm self-center" placeholder="Cost" disabled={isReadOnly}/>
-<input type="number" step="0.01" value={item.unitPrice} onChange={e => onLineItemChange(item.id, 'unitPrice', e.target.value)} className="col-span-2 p-1 border rounded text-right text-sm self-center" placeholder="Sell" disabled={isReadOnly}/>
+                    <input type="number" step="0.01" value={item.unitCost || ''} onChange={e => onLineItemChange(item.id, 'unitCost', e.target.value)} className="p-1 border rounded text-right text-sm self-center" placeholder="Cost" disabled={isReadOnly}/>
+                    <input type="number" step="0.01" value={item.unitPrice} onChange={e => onLineItemChange(item.id, 'unitPrice', e.target.value)} className="p-1 border rounded text-right text-sm self-center font-medium" placeholder="Sell" disabled={isReadOnly}/>
+                    <div className="text-right text-sm font-bold text-slate-800 self-center truncate pr-1">
+                        {isPackageComponent && !item.unitPrice ? (
+                            <span className="text-gray-400 text-xs font-normal italic">Included</span>
+                        ) : (
+                            formatCurrency(lineTotal)
+                        )}
+                    </div>
                 </>
             ) : (
-                <div className="col-span-4 p-1 text-right font-semibold text-gray-500 self-center">Hidden</div>
+                <div className="col-span-3 p-1 text-right font-semibold text-gray-500 self-center">Hidden</div>
             )}
             
-            <div className="col-span-1 self-center">
+            <div className="self-center">
                 <button 
                     type="button" 
                     onClick={() => onOpenSupplierSelection(item.id)} 
@@ -255,7 +270,7 @@ const MemoizedEditableLineItemRow = React.memo(({
                 </button>
             </div>
            
-            <div className="col-span-1 flex justify-end items-center gap-1 self-center">
+            <div className="flex justify-end items-center gap-1 self-center">
                 {!isPackageComponent && (
                     <button 
                         onClick={() => onManageMedia(item.id)} 
@@ -273,24 +288,45 @@ const MemoizedEditableLineItemRow = React.memo(({
                     <Trash2 size={14} />
                 </button>
             </div>
-        </div>
+         </div>
     );
 });
 
-const ReadOnlyEstimateList: React.FC<{ items: EstimateLineItem[] }> = ({ items }) => (
+const ReadOnlyEstimateList: React.FC<{ items: EstimateLineItem[]; canViewPricing?: boolean }> = ({ items, canViewPricing }) => (
     <div className="mt-2 text-xs bg-gray-50 rounded border p-2 space-y-1">
         <div className="grid grid-cols-12 font-bold text-gray-500 pb-1 border-b mb-1">
             <div className="col-span-2">Part No.</div>
-            <div className="col-span-8">Description</div>
-            <div className="col-span-2 text-right">Qty</div>
+            <div className={canViewPricing ? "col-span-5" : "col-span-8"}>Description</div>
+            <div className={canViewPricing ? "col-span-1 text-right" : "col-span-2 text-right"}>Qty</div>
+            {canViewPricing && (
+                <>
+                    <div className="col-span-2 text-right">Sell</div>
+                    <div className="col-span-2 text-right font-bold text-gray-700">Total</div>
+                </>
+            )}
         </div>
-        {items.map((item, i) => (
-            <div key={i} className="grid grid-cols-12">
-                <div className="col-span-2 font-mono">{item.partNumber || '-'}</div>
-                <div className="col-span-8">{item.description}</div>
-                <div className="col-span-2 text-right">{item.quantity}</div>
-            </div>
-        ))}
+        {items.map((item, i) => {
+            const lineTotal = (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0);
+            return (
+                <div key={i} className="grid grid-cols-12 py-0.5 items-center">
+                    <div className="col-span-2 font-mono text-gray-500">{item.partNumber || '-'}</div>
+                    <div className={canViewPricing ? "col-span-5 truncate" : "col-span-8"}>{item.description}</div>
+                    <div className={canViewPricing ? "col-span-1 text-right" : "col-span-2 text-right"}>{item.quantity}</div>
+                    {canViewPricing && (
+                        <>
+                            <div className="col-span-2 text-right text-gray-600">{formatCurrency(item.unitPrice || 0)}</div>
+                            <div className="col-span-2 text-right font-bold text-slate-800">
+                                {item.isPackageComponent && (!item.unitPrice || Number(item.unitPrice) === 0) ? (
+                                    <span className="text-gray-400 font-normal italic">Included</span>
+                                ) : (
+                                    formatCurrency(lineTotal)
+                                )}
+                            </div>
+                        </>
+                    )}
+                </div>
+            );
+        })}
     </div>
 );
 
@@ -607,7 +643,7 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
                                             </div>
                                         </div>
                                         {isExpanded && est.lineItems && (
-                                            <ReadOnlyEstimateList items={est.lineItems} />
+                                            <ReadOnlyEstimateList items={est.lineItems} canViewPricing={canViewPricing} />
                                         )}
                                     </div>
                                 );
@@ -648,19 +684,20 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
                     
                     {editableEstimate && (
                         <div className="space-y-2">
-                            <div className="hidden lg:grid grid-cols-12 gap-2 text-xs text-gray-500 font-medium px-2">
-                                <div className="col-span-5">Part / Description</div>
-                                <div className="col-span-1 text-right">Qty/Hrs</div>
+                            <div className="hidden lg:grid grid-cols-[minmax(0,1fr)_60px_80px_85px_95px_70px_60px] gap-2 text-xs text-gray-500 font-medium px-2">
+                                <div>Part / Description</div>
+                                <div className="text-right">Qty/Hrs</div>
                                 {canViewPricing ? (
                                     <>
-                                        <div className="col-span-2 text-right">Cost</div>
-                                        <div className="col-span-2 text-right">Sell</div>
+                                        <div className="text-right">Cost</div>
+                                        <div className="text-right">Sell</div>
+                                        <div className="text-right font-bold text-gray-700">Total</div>
                                     </>
                                 ) : (
-                                    <div className="col-span-4"></div>
+                                    <div className="col-span-3"></div>
                                 )}
-                                <div className="col-span-1 text-center">Supplier</div>
-                                <div className="col-span-1 text-right">Actions</div>
+                                <div className="text-center">Supplier</div>
+                                <div className="text-right">Actions</div>
                             </div>
                             
                             {estimateBreakdown.packages.length > 0 && <h5 className="font-bold text-gray-800 text-xs uppercase pt-2">Service Packages</h5>}

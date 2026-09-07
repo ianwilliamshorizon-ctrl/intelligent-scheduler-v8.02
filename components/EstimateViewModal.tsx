@@ -608,6 +608,12 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                                                 <div className="space-y-2">
                                                     <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Labour</h4>
                                                     <div className="border rounded-lg overflow-hidden bg-white shadow-sm">
+                                                        <div className="grid grid-cols-12 gap-2 items-center px-3 py-1.5 bg-gray-50 border-b text-[10px] uppercase font-bold text-gray-400 tracking-wider">
+                                                            <div className="col-span-1"></div>
+                                                            <div className="col-span-5 sm:col-span-7">Description</div>
+                                                            <div className="col-span-2 sm:col-span-2 text-right">Qty</div>
+                                                            <div className="col-span-4 sm:col-span-2 text-right">Total</div>
+                                                        </div>
                                                         {essentialGroups.labor.map(item => (
                                                             <SelectableEstimateItemRow key={item.id} item={item} isSelected={false} onToggle={() => {}} canInteract={false} canViewPricing={canViewPricing} isOptional={false}/>
                                                         ))}
@@ -619,6 +625,12 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                                                 <div className="space-y-2">
                                                     <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Parts & Materials</h4>
                                                     <div className="border rounded-lg overflow-hidden bg-white shadow-sm">
+                                                        <div className="grid grid-cols-12 gap-2 items-center px-3 py-1.5 bg-gray-50 border-b text-[10px] uppercase font-bold text-gray-400 tracking-wider">
+                                                            <div className="col-span-1"></div>
+                                                            <div className="col-span-5 sm:col-span-7">Description</div>
+                                                            <div className="col-span-2 sm:col-span-2 text-right">Qty</div>
+                                                            <div className="col-span-4 sm:col-span-2 text-right">Total</div>
+                                                        </div>
                                                         {essentialGroups.parts.map(item => (
                                                             <SelectableEstimateItemRow key={item.id} item={item} isSelected={false} onToggle={() => {}} canInteract={false} canViewPricing={canViewPricing} isOptional={false}/>
                                                         ))}
@@ -645,6 +657,12 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                                                 <div className="space-y-2">
                                                     <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest ml-1">Labour Recommendations</h4>
                                                     <div className="border-2 border-indigo-200/50 rounded-lg overflow-hidden bg-indigo-50/30 shadow-sm">
+                                                        <div className="grid grid-cols-12 gap-2 items-center px-3 py-1.5 bg-indigo-100/50 border-b border-indigo-200/50 text-[10px] uppercase font-bold text-indigo-700 tracking-wider">
+                                                            <div className="col-span-1 text-center">Include</div>
+                                                            <div className="col-span-5 sm:col-span-7">Description</div>
+                                                            <div className="col-span-2 sm:col-span-2 text-right">Qty</div>
+                                                            <div className="col-span-4 sm:col-span-2 text-right">Total</div>
+                                                        </div>
                                                         {optionalGroups.labor.map(item => (
                                                             <SelectableEstimateItemRow key={item.id} item={item} isSelected={selectedOptionalItems.has(item.id)} onToggle={() => handleToggleOptional(item.id)} canInteract={isInteractive || isApproving} canViewPricing={canViewPricing} isOptional={true}/>
                                                         ))}
@@ -656,6 +674,12 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                                                 <div className="space-y-2">
                                                     <h4 className="text-[10px] font-black text-amber-500 uppercase tracking-widest ml-1">Part Recommendations</h4>
                                                     <div className="border-2 border-amber-200/50 rounded-lg overflow-hidden bg-amber-50/30 shadow-sm">
+                                                        <div className="grid grid-cols-12 gap-2 items-center px-3 py-1.5 bg-amber-100/50 border-b border-amber-200/50 text-[10px] uppercase font-bold text-amber-800 tracking-wider">
+                                                            <div className="col-span-1 text-center">Include</div>
+                                                            <div className="col-span-5 sm:col-span-7">Description</div>
+                                                            <div className="col-span-2 sm:col-span-2 text-right">Qty</div>
+                                                            <div className="col-span-4 sm:col-span-2 text-right">Total</div>
+                                                        </div>
                                                         {optionalGroups.parts.map(item => (
                                                             <SelectableEstimateItemRow key={item.id} item={item} isSelected={selectedOptionalItems.has(item.id)} onToggle={() => handleToggleOptional(item.id)} canInteract={isInteractive || isApproving} canViewPricing={canViewPricing} isOptional={true}/>
                                                         ))}

@@ -1125,19 +1125,20 @@ User Request: ${JSON.stringify(userText)}`;
         const isPackageHeader = !!item.servicePackageId && !item.isPackageComponent;
 
         if (isPackageHeader) {
+            const packageTotal = (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0);
             return (
-                <div key={item.id} className="grid grid-cols-12 gap-2 items-center p-2 rounded-lg border bg-indigo-50 border-indigo-200 transition-all hover:shadow-md mb-2">
-                    <div className="col-span-5 flex items-center gap-2">
-                        <div className="bg-indigo-600 text-white text-[10px] uppercase font-black px-1.5 py-0.5 rounded shadow-sm">Pkg</div>
+                <div key={item.id} className="grid grid-cols-[minmax(0,1fr)_60px_80px_85px_95px_70px_36px] gap-2 items-center p-2 rounded-lg border bg-indigo-50 border-indigo-200 transition-all hover:shadow-md mb-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                        <div className="bg-indigo-600 text-white text-[10px] uppercase font-black px-1.5 py-0.5 rounded shadow-sm flex-shrink-0">Pkg</div>
                         <input 
                             type="text" 
                             value={item.description || ''} 
                             onChange={e => handleLineItemChange(item.id, 'description', e.target.value)}
-                            className="w-full bg-transparent border-none focus:ring-0 font-bold text-indigo-900 placeholder:text-indigo-300 text-sm"
+                            className="w-full bg-transparent border-none focus:ring-0 font-bold text-indigo-900 placeholder:text-indigo-300 text-sm truncate"
                             placeholder="Package Description"
                         />
                     </div>
-                    <div className="col-span-1">
+                    <div>
                         <input 
                             type="number" 
                             step="0.1" 
@@ -1146,30 +1147,35 @@ User Request: ${JSON.stringify(userText)}`;
                             className="w-full p-1 border border-indigo-100 rounded text-right text-sm bg-white" 
                         />
                     </div>
-                    <div className="col-span-2 text-center text-[10px] text-indigo-400 font-bold uppercase tracking-widest bg-white/50 py-1 rounded">Package Total</div>
-                    <div className="col-span-2">
+                    <div className="text-center text-[10px] text-indigo-400 font-bold uppercase tracking-wider bg-white/50 py-1 rounded truncate">Package</div>
+                    <div>
                         <input 
                             type="number" 
                             step="0.01" 
                             value={item.unitPrice} 
                             onChange={e => handleLineItemChange(item.id, 'unitPrice', e.target.value)} 
-                            className="w-full p-1 border border-indigo-100 rounded text-right text-sm bg-white font-bold text-indigo-800" 
+                            className="w-full p-1 border border-indigo-100 rounded text-right text-sm bg-white font-medium" 
                             placeholder="Sell" 
                         />
                     </div>
-                    <div className="col-span-1 text-center text-xs text-indigo-500 font-medium">
+                    <div className="text-right text-sm font-bold text-indigo-900 truncate pr-1">
+                        {formatCurrency(packageTotal)}
+                    </div>
+                    <div className="text-center text-xs text-indigo-500 font-medium">
                          {item.taxCodeId === 'tax_99' ? 'Mix' : 'T1'}
                     </div>
-                    <div className="col-span-1 flex justify-center items-center gap-1">
+                    <div className="flex justify-end items-center">
                         <button onClick={() => handleRemoveLineItem(item.id)} className="text-red-500 hover:text-red-700 bg-white p-1 rounded-full shadow-sm hover:shadow transition-all"><Trash2 size={14} /></button>
                     </div>
                 </div>
             );
         }
 
+        const lineTotal = (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0);
+
         return (
-            <div key={item.id} className={`grid grid-cols-12 gap-2 items-start p-2 rounded-lg border text-sm transition-all shadow-sm ${isPackageComponent ? 'bg-gray-100' : 'bg-white border-gray-200'}`}>
-                <div className="col-span-5 flex items-start gap-2">
+            <div key={item.id} className={`grid grid-cols-[minmax(0,1fr)_60px_80px_85px_95px_70px_36px] gap-2 items-start p-2 rounded-lg border text-sm transition-all shadow-sm ${isPackageComponent ? 'bg-gray-100' : 'bg-white border-gray-200'}`}>
+                <div className="flex items-start gap-2 min-w-0">
                     {!isPackageComponent && (
                         <input 
                             type="checkbox" 
@@ -1179,7 +1185,7 @@ User Request: ${JSON.stringify(userText)}`;
                             title="Mark as Optional"
                         />
                     )}
-                    <div className="w-full space-y-1">
+                    <div className="w-full space-y-1 min-w-0">
                         <input 
                             type="text" 
                             placeholder="Part No." 
@@ -1198,36 +1204,43 @@ User Request: ${JSON.stringify(userText)}`;
                         />
                     </div>
                 </div>
-                <div className="col-span-1">
+                <div>
                     <input 
                         type="number" 
                         step="0.1" 
                         value={item.quantity} 
                         onChange={e => handleLineItemChange(item.id, 'quantity', e.target.value)} 
-                        className="w-full p-1 border rounded text-right text-sm bg-white" 
+                        className="w-full p-1 border rounded text-right text-sm bg-white self-center" 
                     />
                 </div>
-                <div className="col-span-2">
+                <div>
                     <input 
                         type="number" 
                         step="0.01" 
                         value={item.unitCost || ''} 
                         onChange={e => handleLineItemChange(item.id, 'unitCost', e.target.value)} 
-                        className="w-full p-1 border rounded text-right text-sm bg-white" 
+                        className="w-full p-1 border rounded text-right text-sm bg-white self-center" 
                         placeholder="Cost" 
                     />
                 </div>
-                <div className="col-span-2">
+                <div>
                     <input 
                         type="number" 
                         step="0.01" 
                         value={item.unitPrice} 
                         onChange={e => handleLineItemChange(item.id, 'unitPrice', e.target.value)} 
-                        className="w-full p-1 border rounded text-right text-sm bg-white font-bold text-indigo-700" 
+                        className="w-full p-1 border rounded text-right text-sm bg-white font-medium self-center" 
                         placeholder="Sell" 
                     />
                 </div>
-                <div className="col-span-1">
+                <div className="text-right text-sm font-bold text-slate-800 self-center truncate pr-1">
+                    {isPackageComponent && (!item.unitPrice || Number(item.unitPrice) === 0) ? (
+                        <span className="text-gray-400 text-xs font-normal italic">Included</span>
+                    ) : (
+                        formatCurrency(lineTotal)
+                    )}
+                </div>
+                <div className="self-center w-full">
                     <select
                         value={item.supplierId || ''}
                         onChange={e => handleLineItemChange(item.id, 'supplierId', e.target.value)}
@@ -1240,7 +1253,7 @@ User Request: ${JSON.stringify(userText)}`;
                         ))}
                     </select>
                 </div>
-                <div className="col-span-1 flex justify-center items-center gap-1">
+                <div className="flex justify-end items-center self-center">
                     {!isPackageComponent && (
                         <button onClick={() => handleRemoveLineItem(item.id)} className="text-red-500 hover:text-red-700 p-1"><Trash2 size={14} /></button>
                     )}
@@ -1503,13 +1516,14 @@ User Request: ${JSON.stringify(userText)}`;
                             ) : (
                                 <>
                                     {/* Grid Header */}
-                                    <div className="hidden lg:grid grid-cols-12 gap-2 text-xs text-gray-500 font-medium px-2">
-                                        <div className="col-span-5">Part / Description</div>
-                                        <div className="col-span-1 text-right">Qty/Hrs</div>
-                                        <div className="col-span-2 text-right">Cost</div>
-                                        <div className="col-span-2 text-right">Sell</div>
-                                        <div className="col-span-1 text-center">Supplier</div>
-                                        <div className="col-span-1"></div>
+                                    <div className="hidden lg:grid grid-cols-[minmax(0,1fr)_60px_80px_85px_95px_70px_36px] gap-2 text-xs text-gray-500 font-medium px-2">
+                                        <div>Part / Description</div>
+                                        <div className="text-right">Qty/Hrs</div>
+                                        <div className="text-right">Cost</div>
+                                        <div className="text-right">Sell</div>
+                                        <div className="text-right font-bold text-gray-700">Total</div>
+                                        <div className="text-center">Supplier</div>
+                                        <div className="text-right">Actions</div>
                                     </div>
 
                                     {builderBreakdown.packages.length > 0 && (

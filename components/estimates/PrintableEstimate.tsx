@@ -155,8 +155,8 @@ export const PrintableEstimate: React.FC<PrintableEstimateProps> = ({ estimate, 
                     </div>
                 </td>
                 <td style={{ padding: '10px 4px', textAlign: 'center', fontSize: '11px', color: '#64748b' }}>{item.quantity}</td>
-                <td style={{ padding: '10px 4px', textAlign: 'right', fontSize: '11px', color: '#64748b' }}>{canViewPricing ? formatCurrency(item.unitPrice) : '---'}</td>
-                <td style={{ padding: '10px 4px', textAlign: 'right', fontWeight: '700', fontSize: '12px', color: '#000' }}>{canViewPricing ? formatCurrency(net) : '---'}</td>
+                <td style={{ padding: '10px 4px', textAlign: 'right', fontSize: '11px', color: '#64748b' }}>{canViewPricing ? (isChild && (!item.unitPrice || item.unitPrice === 0) ? <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>-</span> : formatCurrency(item.unitPrice)) : '---'}</td>
+                <td style={{ padding: '10px 4px', textAlign: 'right', fontWeight: '700', fontSize: '12px', color: '#000' }}>{canViewPricing ? (isChild && (!item.unitPrice || item.unitPrice === 0) ? <span style={{ color: '#94a3b8', fontStyle: 'italic', fontWeight: 'normal' }}>Included</span> : formatCurrency(net)) : '---'}</td>
             </tr>
         );
     };
@@ -383,6 +383,14 @@ export const PrintableEstimate: React.FC<PrintableEstimateProps> = ({ estimate, 
                                             <h3 className="text-[9px] font-black text-indigo-700 uppercase tracking-widest">Recommended Additional Work</h3>
                                         </div>
                                         <table className="w-full text-left bg-indigo-50/20 border-x border-b border-indigo-100 rounded-b-lg">
+                                            <thead className="bg-indigo-50/50 border-b border-indigo-100">
+                                                <tr>
+                                                    <th className="p-2.5 text-[9px] uppercase tracking-widest font-bold text-indigo-900/60">Description of Work</th>
+                                                    <th className="p-2.5 text-[9px] uppercase tracking-widest font-bold text-indigo-900/60 text-center w-14">Qty</th>
+                                                    <th className="p-2.5 text-[9px] uppercase tracking-widest font-bold text-indigo-900/60 text-right w-24">Unit Price</th>
+                                                    <th className="p-2.5 text-[9px] uppercase tracking-widest font-bold text-indigo-900/60 text-right w-24">Total</th>
+                                                </tr>
+                                            </thead>
                                             <tbody>
                                                 {groupedOptional.packages.map(pkg => (
                                                     <React.Fragment key={pkg.header.id}>
