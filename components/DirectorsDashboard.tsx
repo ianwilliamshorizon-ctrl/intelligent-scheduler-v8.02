@@ -4,15 +4,17 @@ import { useApp } from '../core/state/AppContext';
 import { SimpleLineChart, SimpleBarChart } from './directors-dashboard-sub/charts';
 import AIAssistant from './directors-dashboard-sub/AIAssistant';
 import BaselineCostsEditor from './directors-dashboard-sub/BaselineCostsEditor';
+import MonthlyKpiTab from './directors-dashboard-sub/MonthlyKpiTab';
 import { subMonths, format, startOfMonth, parse, isValid } from 'date-fns';
-import { Job, Estimate, Invoice, FinancialBaseline } from '../types';
-import { TrendingUp, TrendingDown, DollarSign, PieChart, BarChart3, Activity, Loader2 } from 'lucide-react';
+import { Job, Estimate, Invoice, FinancialBaseline, PurchaseOrder } from '../types';
+import { TrendingUp, TrendingDown, DollarSign, PieChart, BarChart3, Activity, Loader2, CalendarDays, LayoutDashboard } from 'lucide-react';
 
 const DirectorsDashboard: React.FC = () => {
-    const { jobs, estimates, invoices, financialBaselines, saveRecord, isDataLoaded } = useData();
+    const { jobs = [], estimates = [], invoices = [], purchaseOrders = [], financialBaselines = [], saveRecord, isDataLoaded } = useData();
     const { businessEntities } = useApp();
     const [selectedEntityId, setSelectedEntityId] = useState<string>('all');
     const [selectedYear, setSelectedYear] = useState<string>(format(new Date(), 'yyyy'));
+    const [activeTab, setActiveTab] = useState<'overview' | 'monthly-kpis'>('overview');
 
     const getSafeDate = (item: any): Date | null => {
         const dateString = item.issueDate || item.createdAt || item.orderDate || item.scheduledDate;
@@ -258,8 +260,51 @@ const DirectorsDashboard: React.FC = () => {
                 </div>
             </div>
 
-            {/* Top Level KPIs */}
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+            {/* Dashboard Navigation Tabs */}
+            <div className="flex items-center gap-2 border-b border-gray-200/80 pb-px">
+                <button
+                    type="button"
+                    onClick={() => setActiveTab('overview')}
+                    className={`flex items-center gap-2 px-5 py-3 rounded-2xl font-black text-xs md:text-sm tracking-tight transition-all cursor-pointer ${
+                        activeTab === 'overview'
+                            ? 'bg-white text-indigo-600 shadow-sm border border-gray-100'
+                            : 'text-gray-500 hover:text-gray-900 hover:bg-white/60'
+                    }`}
+                >
+                    <LayoutDashboard size={18} />
+                    Executive Overview
+                </button>
+                <button
+                    type="button"
+                    onClick={() => setActiveTab('monthly-kpis')}
+                    className={`flex items-center gap-2 px-5 py-3 rounded-2xl font-black text-xs md:text-sm tracking-tight transition-all cursor-pointer ${
+                        activeTab === 'monthly-kpis'
+                            ? 'bg-white text-indigo-600 shadow-sm border border-gray-100'
+                            : 'text-gray-500 hover:text-gray-900 hover:bg-white/60'
+                    }`}
+                >
+                    <CalendarDays size={18} />
+                    Month-by-Month KPIs
+                    <span className="ml-1 text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600">
+                        Detailed
+                    </span>
+                </button>
+            </div>
+
+            {activeTab === 'monthly-kpis' ? (
+                <MonthlyKpiTab
+                    jobs={jobs}
+                    estimates={estimates}
+                    invoices={invoices}
+                    purchaseOrders={purchaseOrders}
+                    selectedEntityId={selectedEntityId}
+                    selectedYear={selectedYear}
+                    businessEntities={businessEntities}
+                />
+            ) : (
+                <>
+                    {/* Top Level KPIs */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
                 <div className="bg-white p-6 rounded-3xl shadow-xl shadow-indigo-100/20 border border-indigo-50 relative overflow-hidden group">
                     <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:scale-110 transition-transform">
                         <TrendingUp size={80} className="text-indigo-600" />
@@ -414,8 +459,10 @@ const DirectorsDashboard: React.FC = () => {
                     </div>
                 </div>
             </div>
-        </div>
-    );
+        </>
+    )}
+</div>
+);
 };
 
 const TrendIndicator: React.FC<{ value: number }> = ({ value }) => {
