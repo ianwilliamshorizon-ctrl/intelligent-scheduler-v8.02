@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { X, Loader2, Wand2, Check, Car, Plus, Trash2, Calendar, AlertTriangle, Calculator, FileText, User, Phone, Mail, Edit, DollarSign, Wallet, TrendingUp, Bot, Sparkles, Info, Volume2, VolumeX, Package } from 'lucide-react';
+import { X, Loader2, Wand2, Check, Car, Plus, Trash2, Calendar, AlertTriangle, Calculator, FileText, User, Phone, Mail, Edit, DollarSign, Wallet, TrendingUp, Bot, Sparkles, Info, Volume2, VolumeX, Package, Clock } from 'lucide-react';
 import { parseJobRequest } from '../core/services/geminiService';
 import { toast } from 'react-toastify';
 import SpeechToTextButton from './shared/SpeechToTextButton';
@@ -30,6 +30,7 @@ interface SmartCreateJobModalProps {
     onVehicleAndJobCreate: (customer: Customer, vehicle: Vehicle, jobData: Job, estimateData?: Estimate) => void;
     onEstimateCreate: (estimateData: Estimate) => void;
     onVehicleAndEstimateCreate: (customer: Customer, vehicle: Vehicle, estimateData: Estimate) => void;
+    onCustomerAndJobCreate?: (customer: Customer, jobData: Job, estimateData?: Estimate) => void;
     onCustomerAndEstimateCreate?: (customer: Customer, estimateData: Estimate) => void;
     vehicles: Vehicle[];
     customers: Customer[];
@@ -47,6 +48,7 @@ const SmartCreateJobModal: React.FC<SmartCreateJobModalProps> = ({
     onVehicleAndJobCreate, 
     onEstimateCreate,
     onVehicleAndEstimateCreate,
+    onCustomerAndJobCreate,
     onCustomerAndEstimateCreate,
     vehicles, 
     customers, 
@@ -74,6 +76,7 @@ const SmartCreateJobModal: React.FC<SmartCreateJobModalProps> = ({
     const [customerCreated, setCustomerCreated] = useState<Customer | null>(null);
     const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
     const [selectedDate, setSelectedDate] = useState<string>(defaultDate || getTodayISOString());
+    const [allowOverbooking, setAllowOverbooking] = useState(false);
     
     // Builder States
     const [lineItems, setLineItems] = useState<EstimateLineItem[]>([]);
@@ -119,6 +122,7 @@ const SmartCreateJobModal: React.FC<SmartCreateJobModalProps> = ({
             setNotes('');
             setShowAddNewVehicle(false);
             setSelectedDate(defaultDate || getTodayISOString());
+            setAllowOverbooking(false);
 
             if (promptToUse) {
                setTimeout(() => handleParseRequest(promptToUse), 100);
@@ -788,7 +792,9 @@ User Request: ${JSON.stringify(userText)}`;
                 createdByUserId: currentUser.id,
                 segments: [], // Generated below
                 estimateId: newEstimate.id,
-                notes: notes,
+                notes: (capacityStats.isOver && !isEstimateMode && allowOverbooking) 
+                    ? (notes ? `${notes}\n\n[Overbooked - Engineer Overtime Authorized for ${selectedDate}]` : `[Overbooked - Engineer Overtime Authorized for ${selectedDate}]`)
+                    : notes,
                 vehicleStatus: 'Awaiting Arrival',
                 partsStatus: lineItems.some(li => 
                     !li.fromStock &&
@@ -870,7 +876,9 @@ User Request: ${JSON.stringify(userText)}`;
                     createdByUserId: currentUser.id,
                     segments: [],
                     estimateId: newEstimate.id,
-                    notes: notes,
+                    notes: (capacityStats.isOver && !isEstimateMode && allowOverbooking) 
+                        ? (notes ? `${notes}\n\n[Overbooked - Engineer Overtime Authorized for ${selectedDate}]` : `[Overbooked - Engineer Overtime Authorized for ${selectedDate}]`)
+                        : notes,
                     vehicleStatus: 'Awaiting Arrival',
                     partsStatus: lineItems.some(li => 
                         !li.fromStock &&
@@ -1452,7 +1460,7 @@ User Request: ${JSON.stringify(userText)}`;
                         <label className="block text-sm font-semibold text-gray-700 mb-1 flex items-center gap-2">
                             <Calendar size={16}/> Scheduled Date
                         </label>
-                        <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="w-full p-2 border rounded mb-3 bg-gray-50"/>
+                        <input type="date" value={selectedDate} onChange={e => { setSelectedDate(e.target.value); setAllowOverbooking(false); }} className="w-full p-2 border rounded mb-3 bg-gray-50"/>
                         
                         <div className="space-y-1">
                             <div className="flex justify-between text-xs font-semibold">
@@ -1465,7 +1473,25 @@ User Request: ${JSON.stringify(userText)}`;
                                 <div className="bg-gray-500 h-2.5" style={{ width: `${Math.min(100, (capacityStats.allocated / capacityStats.max) * 100)}%` }} title="Existing Jobs"></div>
                                 <div className={`h-2.5 ${capacityStats.isOver ? 'bg-red-500' : 'bg-green-500'}`} style={{ width: `${Math.min(100, (capacityStats.currentJobHours / capacityStats.max) * 100)}%` }} title="This Job"></div>
                             </div>
-                            {capacityStats.isOver && <p className="text-xs text-red-600 font-bold mt-1 flex items-center gap-1"><AlertTriangle size={12}/> Over Capacity!</p>}
+                            {capacityStats.isOver && (
+                                <div className="mt-2 pt-2 border-t border-red-100 space-y-1.5">
+                                    <p className="text-xs text-red-600 font-bold flex items-center gap-1"><AlertTriangle size={12}/> Over Capacity!</p>
+                                    <label className="flex items-start gap-2 cursor-pointer text-xs font-semibold text-amber-950 bg-amber-50 p-2 rounded border border-amber-200 hover:bg-amber-100/80 transition">
+                                        <input 
+                                            type="checkbox" 
+                                            checked={allowOverbooking} 
+                                            onChange={(e) => setAllowOverbooking(e.target.checked)}
+                                            className="mt-0.5 rounded text-amber-600 focus:ring-amber-500 h-3.5 w-3.5"
+                                        />
+                                        <span className="leading-tight">
+                                            Authorize Overtime / Overbooking
+                                            <span className="block text-[10px] font-normal text-amber-800 mt-0.5">
+                                                Allow booking beyond capacity if engineer will work overtime.
+                                            </span>
+                                        </span>
+                                    </label>
+                                </div>
+                            )}
                         </div>
                      </div>
                  )}
@@ -1585,13 +1611,13 @@ User Request: ${JSON.stringify(userText)}`;
                             
                             <button 
                                 onClick={handleFinalCreate} 
-                                disabled={lineItems.length === 0 || (capacityStats.isOver && !isEstimateMode)}
+                                disabled={lineItems.length === 0 || (capacityStats.isOver && !isEstimateMode && !allowOverbooking)}
                                 className={`w-full py-3 rounded-lg font-bold text-white shadow-md flex items-center justify-center gap-2 transition-all
-                                    ${lineItems.length === 0 ? 'bg-gray-300 cursor-not-allowed' : capacityStats.isOver && !isEstimateMode ? 'bg-red-500 hover:bg-red-600' : 'bg-green-600 hover:bg-green-700'}
+                                    ${lineItems.length === 0 ? 'bg-gray-300 cursor-not-allowed' : capacityStats.isOver && !isEstimateMode ? (allowOverbooking ? 'bg-amber-600 hover:bg-amber-700' : 'bg-red-500 hover:bg-red-600') : 'bg-green-600 hover:bg-green-700'}
                                 `}
                             >
-                                {capacityStats.isOver && !isEstimateMode ? <AlertTriangle size={20}/> : <Check size={20}/>}
-                                {capacityStats.isOver && !isEstimateMode ? 'Over Capacity - Select different date' : `Confirm & Create ${isEstimateMode ? 'Estimate' : 'Job'}`}
+                                {capacityStats.isOver && !isEstimateMode ? (allowOverbooking ? <Clock size={20}/> : <AlertTriangle size={20}/>) : <Check size={20}/>}
+                                {capacityStats.isOver && !isEstimateMode ? (allowOverbooking ? 'Confirm Overbook Job (Overtime)' : 'Over Capacity - Select different date') : `Confirm & Create ${isEstimateMode ? 'Estimate' : 'Job'}`}
                             </button>
                         </div>
                     </>

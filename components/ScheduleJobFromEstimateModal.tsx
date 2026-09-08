@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { toast } from 'react-toastify';
 import { Estimate, Customer, Vehicle, Job, BusinessEntity, AbsenceRequest, JobSegment, PurchaseOrder, Inquiry, Part, PurchaseOrderStatus, EstimateLineItem } from '../types';
-import { X, Calendar, CheckCircle, ChevronLeft, ChevronRight, AlertTriangle, Gauge, Clock, Printer } from 'lucide-react';
+import { X, Calendar, CheckCircle, ChevronLeft, ChevronRight, AlertTriangle, Gauge, Clock, Printer, CalendarCheck } from 'lucide-react';
 import { formatDate, dateStringToDate, getRelativeDate, splitJobIntoSegments, addDays, findNextAvailableDate, formatReadableDate } from '../core/utils/dateUtils';
 import { generateJobId } from '../core/utils/numberGenerators';
 import { BookingCalendarView } from './BookingCalendarView';
@@ -18,7 +18,7 @@ import { calculateJobPartsStatus } from '../core/utils/jobUtils';
 interface ScheduleJobFromEstimateModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onConfirm: (job: Job, estimate: Estimate, options: { isAlternative: boolean; originalDate: string }, extraJobs?: Job[], newPurchaseOrders?: PurchaseOrder[]) => void;
+    onConfirm: (job: Job, estimate: Estimate, options: { isAlternative: boolean; originalDate: string; isOverbooked?: boolean }, extraJobs?: Job[], newPurchaseOrders?: PurchaseOrder[]) => void;
     estimate: Estimate;
     customer?: Customer;
     vehicle?: Vehicle;
@@ -38,6 +38,7 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
     const { saveRecord, purchaseOrders, servicePackages } = useData();
     const [scheduledDate, setScheduledDate] = useState(() => estimate.jobId ? getRelativeDate(0) : (estimate as any).requestedDate || getRelativeDate(0));
     const [suggestion, setSuggestion] = useState<{ suggestedDate: string; originalDate: string } | null>(null);
+    const [allowOverbooking, setAllowOverbooking] = useState(false);
     const [currentMonth, setCurrentMonth] = useState(() => dateStringToDate(scheduledDate));
     
     const [isMotBookingOpen, setIsMotBookingOpen] = useState(false);
@@ -87,6 +88,7 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
             setScheduledDate(initialDate);
             setCurrentMonth(dateStringToDate(initialDate));
             setSuggestion(null);
+            setAllowOverbooking(false);
             setMotBooking(null);
         }
     }, [isOpen, estimate, onClose]);
@@ -181,7 +183,7 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
 
     if (!isOpen) return null;
 
-    const handleConfirmClick = async () => {
+    const handleConfirmClick = async (overrideOverbook: boolean = false, overrideDate?: string) => {
         if (isMotRequired && !motBooking) {
             setConfirmation({
                 isOpen: true,
@@ -193,14 +195,16 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
             return;
         }
 
+        const targetDate = overrideDate || scheduledDate;
+
         if (customer) {
             await saveRecord('customers', customer);
         }
 
         const entityShortCode = entityForEstimate?.shortCode || 'UNK';
-        const dailyHours = (jobsForEntity.flatMap(j => j.segments) || []).filter(s => s.date === scheduledDate && s.status !== 'Cancelled').reduce((sum, s) => sum + s.duration, 0);
+        const dailyHours = (jobsForEntity.flatMap(j => j.segments) || []).filter(s => s.date === targetDate && s.status !== 'Cancelled').reduce((sum, s) => sum + s.duration, 0);
         const baseCapacity = (entityForEstimate as any)?.dailyCapacityHours || maxDailyCapacityHours;
-        const absenceHours = absencesByDate.get(scheduledDate) || 0;
+        const absenceHours = absencesByDate.get(targetDate) || 0;
         const effectiveCapacity = Math.max(0, baseCapacity - absenceHours);
 
         const hasOtherLabor = estimate.lineItems.some(item => 
@@ -211,10 +215,11 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
         );
         const isMotOnlyEstimate = motBooking && !hasOtherLabor;
 
+        const isOverbookingAuthorized = overrideOverbook || allowOverbooking;
         const startDuration = Math.min(laborHours, 8);
-        if (dailyHours + startDuration > effectiveCapacity && !motBooking) {
-            const alternativeDate = findNextAvailableDate(scheduledDate, laborHours, jobsForEntity, baseCapacity);
-            setSuggestion({ suggestedDate: alternativeDate, originalDate: scheduledDate });
+        if (dailyHours + startDuration > effectiveCapacity && !motBooking && !isOverbookingAuthorized) {
+            const alternativeDate = findNextAvailableDate(targetDate, laborHours, jobsForEntity, baseCapacity);
+            setSuggestion({ suggestedDate: alternativeDate, originalDate: targetDate });
             return;
         }
 
@@ -240,7 +245,7 @@ const ScheduleJobFromEstimateModal: React.FC<ScheduleJobFromEstimateModalProps> 
             } else {
                 const mainJobId = generateJobId(jobs, entityShortCode);
                 mainJob = {
-                    id: mainJobId, entityId: estimate.entityId, vehicleId: estimate.vehicleId, customerId: estimate.customerId, description: `Work from Estimate #${estimate.estimateNumber}`, estimatedHours: laborHours, scheduledDate: scheduledDate, status: 'Unallocated', createdAt: formatDate(new Date()), segments: [], estimateId: estimate.id, notes: estimate.notes || '', vehicleStatus: 'Awaiting Arrival', createdByUserId: '',
+                    id: mainJobId, entityId: estimate.entityId, vehicleId: estimate.vehicleId, customerId: estimate.customerId, description: `Work from Estimate #${estimate.estimateNumber}`, estimatedHours: laborHours, scheduledDate: targetDate, status: 'Unallocated', createdAt: formatDate(new Date()), segments: [], estimateId: estimate.id, notes: estimate.notes || '', vehicleStatus: 'Awaiting Arrival', createdByUserId: '',
                     depositAmount: hasDeposit ? depositAmount : undefined,
                     depositMethod: hasDeposit ? depositMethod : undefined,
                 };
@@ -259,11 +264,16 @@ Linked MOT Booking: #${motJobId} @ ${motBooking.time}`;
             }
         } else {
             const mainJobId = generateJobId(jobs, entityShortCode);
-            mainJob = { id: mainJobId, entityId: estimate.entityId, vehicleId: estimate.vehicleId, customerId: estimate.customerId, description: `Work from Estimate #${estimate.estimateNumber}`, estimatedHours: laborHours, scheduledDate: scheduledDate, status: 'Unallocated', createdAt: formatDate(new Date()), segments: [], estimateId: estimate.id, notes: estimate.notes || '', vehicleStatus: 'Awaiting Arrival', createdByUserId: '',
+            mainJob = { id: mainJobId, entityId: estimate.entityId, vehicleId: estimate.vehicleId, customerId: estimate.customerId, description: `Work from Estimate #${estimate.estimateNumber}`, estimatedHours: laborHours, scheduledDate: targetDate, status: 'Unallocated', createdAt: formatDate(new Date()), segments: [], estimateId: estimate.id, notes: estimate.notes || '', vehicleStatus: 'Awaiting Arrival', createdByUserId: '',
                 depositAmount: hasDeposit ? depositAmount : undefined,
                 depositMethod: hasDeposit ? depositMethod : undefined,
              };
             mainJob.segments = splitJobIntoSegments(mainJob);
+        }
+
+        if (isOverbookingAuthorized) {
+            const overtimeNote = `[Overbooked - Engineer Overtime Authorized for ${formatReadableDate(targetDate)}]`;
+            mainJob.notes = mainJob.notes ? `${mainJob.notes}\n\n${overtimeNote}` : overtimeNote;
         }
 
         mainJob.partsStatus = calculateJobPartsStatus(estimate, purchaseOrders || []);
@@ -271,7 +281,7 @@ Linked MOT Booking: #${motJobId} @ ${motBooking.time}`;
         const updatedEstimate: Estimate = { ...estimate, status: 'Converted to Job', jobId: mainJob.id };
         setIsSubmitting(true);
         try {
-            await onConfirm(mainJob, updatedEstimate, { isAlternative: false, originalDate: scheduledDate }, extraJobs);
+            await onConfirm(mainJob, updatedEstimate, { isAlternative: false, originalDate: targetDate, isOverbooked: isOverbookingAuthorized }, extraJobs);
             setCreatedJobFinal(mainJob);
             setIsSuccess(true);
         } catch (error) {
@@ -338,13 +348,50 @@ Linked MOT Booking: #${motJobId} @ ${motBooking.time}`;
         }
 
         const newJobId = generateJobId(jobs, entityForEstimate?.shortCode || 'UNK');
-        let newJob: Job = { id: newJobId, entityId: estimate.entityId, vehicleId: estimate.vehicleId, customerId: estimate.customerId, description: `Work from Estimate #${estimate.estimateNumber}`, estimatedHours: laborHours, scheduledDate: suggestion.suggestedDate, status: 'Unallocated', createdAt: formatDate(new Date()), segments: [], estimateId: estimate.id, notes: estimate.notes, vehicleStatus: 'Awaiting Arrival', createdByUserId: '', };
+        let newJob: Job = { 
+            id: newJobId, 
+            entityId: estimate.entityId, 
+            vehicleId: estimate.vehicleId, 
+            customerId: estimate.customerId, 
+            description: `Work from Estimate #${estimate.estimateNumber}`, 
+            estimatedHours: laborHours, 
+            scheduledDate: suggestion.suggestedDate, 
+            status: 'Unallocated', 
+            createdAt: formatDate(new Date()), 
+            segments: [], 
+            estimateId: estimate.id, 
+            notes: estimate.notes, 
+            vehicleStatus: 'Awaiting Arrival', 
+            createdByUserId: '',
+            depositAmount: hasDeposit ? depositAmount : undefined,
+            depositMethod: hasDeposit ? depositMethod : undefined,
+        };
         newJob.segments = splitJobIntoSegments(newJob);
 
         newJob.partsStatus = calculateJobPartsStatus(estimate, purchaseOrders || []);
 
         const updatedEstimate: Estimate = { ...estimate, status: 'Converted to Job', jobId: newJob.id };
-        onConfirm(newJob, updatedEstimate, { isAlternative: true, originalDate: suggestion.originalDate }, []);
+        setIsSubmitting(true);
+        try {
+            await onConfirm(newJob, updatedEstimate, { isAlternative: true, originalDate: suggestion.originalDate }, []);
+            setCreatedJobFinal(newJob);
+            setIsSuccess(true);
+        } catch (error) {
+            console.error(error);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleOverbook = async () => {
+        if (!suggestion) return;
+        const targetDate = suggestion.originalDate;
+        setSuggestion(null);
+        await handleConfirmClick(true, targetDate);
+    };
+
+    const handleChooseDifferentDate = () => {
+        setSuggestion(null);
     };
 
     const monthYearString = currentMonth.toLocaleString('default', { month: 'long', year: 'numeric', timeZone: 'UTC' });
@@ -365,13 +412,74 @@ Linked MOT Booking: #${motJobId} @ ${motBooking.time}`;
 
                 <div className="flex-grow overflow-y-auto p-6">
                     {suggestion ? (
-                        <div className="text-center flex flex-col items-center justify-center h-full animate-fade-in">
-                            <AlertTriangle size={48} className="text-amber-500 mb-4" />
-                            <h3 className="text-xl font-bold text-gray-800">Requested Date Fully Booked</h3>
-                            <p className="mt-2 text-gray-600">The date you selected ({formatReadableDate(suggestion.originalDate)}) does not have enough capacity for this {laborHours}hr job.</p>
-                            <p className="mt-4 text-gray-800">We suggest the next available date:</p>
-                            <p className="my-2 p-3 bg-green-100 text-green-800 font-bold text-xl rounded-lg border border-green-200">{formatReadableDate(suggestion.suggestedDate)}</p>
-                            <p className="text-sm text-gray-500">Would you like to book for this date instead?</p>
+                        <div className="text-center flex flex-col items-center justify-center min-h-full animate-fade-in max-w-2xl mx-auto py-4">
+                            <div className="w-16 h-16 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mb-3 shadow-sm">
+                                <AlertTriangle size={32} />
+                            </div>
+                            <h3 className="text-2xl font-black text-gray-900 mb-1">Workshop Capacity Exceeded</h3>
+                            <p className="text-sm text-gray-600 mb-6 max-w-lg">
+                                The date you selected (<span className="font-bold text-gray-800">{formatReadableDate(suggestion.originalDate)}</span>) does not have enough standard capacity for this <span className="font-bold text-gray-800">{laborHours.toFixed(1)}h</span> job.
+                            </p>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full text-left mb-6">
+                                {/* Option 1: Alternate Date */}
+                                <div className="p-5 rounded-xl border-2 border-indigo-200 bg-indigo-50/40 hover:bg-indigo-50 hover:border-indigo-400 transition-all flex flex-col justify-between shadow-sm">
+                                    <div>
+                                        <div className="flex items-center justify-between mb-2">
+                                            <span className="text-[10px] font-black uppercase tracking-wider text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded">Option 1 • Alternate Date</span>
+                                            <CalendarCheck size={18} className="text-indigo-600" />
+                                        </div>
+                                        <h4 className="font-bold text-gray-900 text-base mb-1">Book Next Available Date</h4>
+                                        <p className="text-xs text-gray-600 mb-3">Workshop has standard capacity available. Customer will be notified of this provisional date.</p>
+                                        <div className="p-3 bg-white rounded-lg border border-indigo-100 mb-4">
+                                            <span className="text-[11px] text-gray-500 block font-medium">Suggested Next Date:</span>
+                                            <span className="text-base font-black text-indigo-900">{formatReadableDate(suggestion.suggestedDate)}</span>
+                                        </div>
+                                    </div>
+                                    <button 
+                                        type="button" 
+                                        onClick={handleAcceptSuggestion}
+                                        disabled={isSubmitting}
+                                        className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg shadow-sm transition flex items-center justify-center gap-2 text-sm"
+                                    >
+                                        <CalendarCheck size={16} />
+                                        {isSubmitting ? 'Booking...' : `Book for ${formatReadableDate(suggestion.suggestedDate).split(',')[1] || suggestion.suggestedDate}`}
+                                    </button>
+                                </div>
+
+                                {/* Option 2: Overbook / Overtime */}
+                                <div className="p-5 rounded-xl border-2 border-amber-300 bg-amber-50/40 hover:bg-amber-50 hover:border-amber-400 transition-all flex flex-col justify-between shadow-sm">
+                                    <div>
+                                        <div className="flex items-center justify-between mb-2">
+                                            <span className="text-[10px] font-black uppercase tracking-wider text-amber-800 bg-amber-100 px-2 py-0.5 rounded">Option 2 • Overtime</span>
+                                            <Clock size={18} className="text-amber-600" />
+                                        </div>
+                                        <h4 className="font-bold text-gray-900 text-base mb-1">Overbook Requested Date</h4>
+                                        <p className="text-xs text-gray-600 mb-3">Book on the requested date anyway if an engineer is authorized to work overtime to cover the extra hours.</p>
+                                        <div className="p-3 bg-white rounded-lg border border-amber-200 mb-4">
+                                            <span className="text-[11px] text-gray-500 block font-medium">Requested Date:</span>
+                                            <span className="text-base font-black text-amber-900">{formatReadableDate(suggestion.originalDate)}</span>
+                                        </div>
+                                    </div>
+                                    <button 
+                                        type="button" 
+                                        onClick={handleOverbook}
+                                        disabled={isSubmitting}
+                                        className="w-full py-2.5 px-4 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg shadow-sm transition flex items-center justify-center gap-2 text-sm"
+                                    >
+                                        <Clock size={16} />
+                                        {isSubmitting ? 'Overbooking...' : `Overbook for ${formatReadableDate(suggestion.originalDate).split(',')[1] || suggestion.originalDate}`}
+                                    </button>
+                                </div>
+                            </div>
+
+                            <button 
+                                type="button" 
+                                onClick={handleChooseDifferentDate}
+                                className="text-sm font-semibold text-gray-600 hover:text-gray-900 underline flex items-center gap-1.5"
+                            >
+                                <ChevronLeft size={16}/> Choose a different date on calendar
+                            </button>
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-full">
@@ -412,7 +520,23 @@ Linked MOT Booking: #${motJobId} @ ${motBooking.time}`;
                                         <div className="flex justify-between font-bold text-base mt-1"><span>Remaining:</span> <span>{dailyStats.remainingCapacity.toFixed(1)} hrs</span></div>
                                     </div>
                                     {dailyStats.remainingCapacity < 0 && (
-                                        <p className="mt-2 text-xs font-bold text-red-700 flex items-center"><AlertTriangle size={12} className="mr-1"/> Over Capacity!</p>
+                                        <div className="mt-2 pt-2 border-t border-red-200/60 space-y-1.5">
+                                            <p className="text-xs font-bold text-red-700 flex items-center"><AlertTriangle size={12} className="mr-1"/> Over Capacity ({Math.abs(dailyStats.remainingCapacity).toFixed(1)}h over)</p>
+                                            <label className="flex items-start gap-2 cursor-pointer text-xs font-semibold text-amber-950 bg-amber-50/90 p-2 rounded border border-amber-200 hover:bg-amber-100/80 transition">
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={allowOverbooking} 
+                                                    onChange={(e) => setAllowOverbooking(e.target.checked)}
+                                                    className="mt-0.5 rounded text-amber-600 focus:ring-amber-500 h-3.5 w-3.5"
+                                                />
+                                                <span className="leading-tight">
+                                                    Authorize Overtime / Overbooking
+                                                    <span className="block text-[10px] font-normal text-amber-800 mt-0.5">
+                                                        Engineer will work overtime to complete this job on this date.
+                                                    </span>
+                                                </span>
+                                            </label>
+                                        </div>
                                     )}
                                 </div>
 
@@ -424,7 +548,7 @@ Linked MOT Booking: #${motJobId} @ ${motBooking.time}`;
                                         </div>
                                     )}
                                     <label htmlFor="scheduledDate" className="block text-sm font-medium text-gray-700 mb-1">Selected Start Date</label>
-                                    <input type="date" id="scheduledDate" value={scheduledDate} onChange={(e) => { setScheduledDate(e.target.value); setMotBooking(null); }} className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" required />
+                                    <input type="date" id="scheduledDate" value={scheduledDate} onChange={(e) => { setScheduledDate(e.target.value); setMotBooking(null); setAllowOverbooking(false); }} className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" required />
                                 </div>
 
                                 {isMotRequired && (
@@ -519,12 +643,20 @@ Linked MOT Booking: #${motJobId} @ ${motBooking.time}`;
                 <div className="flex-shrink-0 flex justify-end space-x-2 border-t p-6">
                     <button type="button" onClick={onClose} className="py-2 px-4 bg-gray-200 rounded-lg hover:bg-gray-300 font-semibold">Cancel</button>
                     {suggestion ? (
-                        <button type="button" onClick={handleAcceptSuggestion} className="flex items-center py-2 px-4 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition">
-                           Book for {formatReadableDate(suggestion.suggestedDate).split(',')[1]} & Notify
-                        </button>
+                        <>
+                            <button type="button" onClick={handleChooseDifferentDate} className="py-2 px-4 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-lg font-semibold border">
+                                Choose Another Date
+                            </button>
+                            <button type="button" onClick={handleOverbook} disabled={isSubmitting} className="flex items-center py-2 px-4 bg-amber-600 text-white font-semibold rounded-lg shadow-md hover:bg-amber-700 transition">
+                                <Clock size={16} className="mr-2"/> Overbook (Overtime)
+                            </button>
+                            <button type="button" onClick={handleAcceptSuggestion} disabled={isSubmitting} className="flex items-center py-2 px-4 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition">
+                                <CalendarCheck size={16} className="mr-2"/> Book for {formatReadableDate(suggestion.suggestedDate).split(',')[1] || suggestion.suggestedDate} & Notify
+                            </button>
+                        </>
                     ) : (
-                        <button type="button" onClick={handleConfirmClick} className="flex items-center py-2 px-4 bg-green-600 text-white font-semibold rounded-lg shadow-md hover:bg-green-700 transition">
-                            <CheckCircle size={16} className="mr-2"/> Confirm & Create Job
+                        <button type="button" onClick={() => handleConfirmClick(false)} disabled={isSubmitting} className="flex items-center py-2 px-4 bg-green-600 text-white font-semibold rounded-lg shadow-md hover:bg-green-700 transition">
+                            <CheckCircle size={16} className="mr-2"/> {isSubmitting ? 'Scheduling Job...' : 'Confirm & Create Job'}
                         </button>
                     )}
                 </div>
