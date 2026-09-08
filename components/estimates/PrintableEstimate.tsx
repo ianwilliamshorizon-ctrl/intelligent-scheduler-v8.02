@@ -245,7 +245,7 @@ export const PrintableEstimate: React.FC<PrintableEstimateProps> = ({ estimate, 
                 @media print {
                     @page { 
                         size: A4 portrait;
-                        margin: 0mm; 
+                        margin: 0; 
                     }
                     body { -webkit-print-color-adjust: exact; print-color-adjust: exact; counter-reset: page; }
                     body * { 
@@ -258,9 +258,11 @@ export const PrintableEstimate: React.FC<PrintableEstimateProps> = ({ estimate, 
                         position: absolute !important; 
                         left: 0 !important; 
                         top: 0 !important; 
-                        width: 210mm !important;
+                        width: 100% !important;
+                        max-width: 100% !important;
                         padding: 0 !important;
                         margin: 0 !important;
+                        box-sizing: border-box !important;
                     }
                     
                     thead { display: table-header-group; }
@@ -271,19 +273,23 @@ export const PrintableEstimate: React.FC<PrintableEstimateProps> = ({ estimate, 
                         content: counter(page);
                     }
                     
-                    /* Force fixed width of 210mm for print accuracy */
-                    .printable-page-wrapper { width: 210mm !important; }
+                    /* Ensure table takes full 100% width of printable A4 without overflowing */
+                    .printable-page-wrapper { 
+                        width: 100% !important; 
+                        max-width: 100% !important;
+                        box-sizing: border-box !important;
+                    }
                 }
                 * { -webkit-print-color-adjust: exact !important; color-adjust: exact !important; }
             ` }} />
-            <div className="rebuild-print-container" style={{ width: '100%', maxWidth: '210mm', margin: '0 auto', backgroundColor: '#ffffff', minHeight: '100%' }}>
-                <table className="printable-page-wrapper" style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <div className="rebuild-print-container" style={{ width: '100%', maxWidth: '210mm', margin: '0 auto', backgroundColor: '#ffffff', minHeight: '100%', boxSizing: 'border-box' }}>
+                <table className="printable-page-wrapper" style={{ width: '100%', borderCollapse: 'collapse', boxSizing: 'border-box' }}>
                 <thead className="print-header-group">
                     <tr>
                         <td>
                              {/* HEADING REPEATS ON EVERY PAGE */}
                             <div className="print-header-padding" style={{ height: '10mm' }}></div>
-                            <div id="estimate-print-header" style={{ paddingBottom: '20px', marginBottom: '20px', borderBottom: '2px solid #000', margin: '0 15mm 20px 15mm' }}>
+                            <div id="estimate-print-header" style={{ paddingBottom: '20px', marginBottom: '20px', borderBottom: '2px solid #000', margin: '0 14mm 20px 14mm' }}>
                                 {(() => {
                                     const layout = resolvedEntity?.layoutSettings || {};
                                     const logoPos = layout.logoPosition || 'center';
@@ -323,7 +329,7 @@ export const PrintableEstimate: React.FC<PrintableEstimateProps> = ({ estimate, 
 
                 <tbody>
                     <tr>
-                        <td style={{ padding: '0 15mm' }}>
+                        <td style={{ padding: '0 14mm' }}>
                             <main style={{ paddingBottom: '30px' }}>
                                 <div className="mb-8 pb-6 border-b border-gray-100">
                                     {(!resolvedEntity?.layoutSettings?.customerPosition || resolvedEntity.layoutSettings.customerPosition === 'none') && (
@@ -472,7 +478,7 @@ export const PrintableEstimate: React.FC<PrintableEstimateProps> = ({ estimate, 
                     <tr>
                         <td>
                             <div className="footer-spacing" style={{ height: '10mm' }}></div>
-                             <footer style={{ margin: '0 15mm 10mm 15mm', paddingBottom: '10mm' }}>
+                             <footer style={{ margin: '0 14mm 10mm 14mm', paddingBottom: '10mm' }}>
                                 <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '9px', color: '#94a3b8' }}>
                                     <div style={{ fontStyle: 'italic' }}>
                                         <p>This estimate is valid for 30 days. Final costs subject to actual parts and labor.</p>

@@ -193,9 +193,10 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({
     const accentColor = layoutConfig?.accentColor || resolvedEntity?.color || '#4f46e5';
 
     const pageStyle: React.CSSProperties = {
-        width: '210mm',
+        width: '100%',
+        maxWidth: '210mm',
         minHeight: '297mm',
-        padding: '16mm',
+        padding: '12mm 14mm',
         boxSizing: 'border-box',
         display: 'flex',
         flexDirection: 'column',
@@ -212,7 +213,7 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({
                 @media print {
                     @page { 
                         size: A4 portrait;
-                        margin: 12mm; 
+                        margin: 0; 
                     }
                     body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
                     * {
@@ -227,6 +228,19 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({
                         left: 0 !important; 
                         top: 0 !important; 
                         width: 100% !important;
+                        max-width: 100% !important;
+                        margin: 0 !important;
+                        padding: 0 !important;
+                    }
+                    .printable-page {
+                        width: 100% !important;
+                        max-width: 100% !important;
+                        min-height: 297mm !important;
+                        padding: 12mm 14mm !important;
+                        margin: 0 auto !important;
+                        box-sizing: border-box !important;
+                        page-break-after: always !important;
+                        break-after: page !important;
                     }
                     .printable-page > div, .transition-all {
                         break-inside: avoid !important;
@@ -239,10 +253,6 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({
                     .page-break-before {
                         break-before: page !important;
                         page-break-before: always !important;
-                    }
-                    .printable-page {
-                        page-break-after: always !important;
-                        break-after: page !important;
                     }
                 }
             ` }} />

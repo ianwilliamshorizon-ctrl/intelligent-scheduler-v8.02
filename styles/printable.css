@@ -20,13 +20,12 @@
     
     #print-mount-point-wrapper * {
         visibility: visible !important;
-        border-color: #000000 !important; /* Force black borders for print */
     }
 
-    /* Standard Page Setup */
+    /* Standard Page Setup: A4 Portrait, margin 0 for full bleed control */
     @page {
         size: A4 portrait;
-        margin: 0mm;
+        margin: 0;
     }
 
     body {
@@ -38,19 +37,20 @@
         width: 100% !important;
     }
 
-    /* Content Layout */
+    /* Content Layout for Print */
     .printable-page {
         display: block !important;
-        width: 210mm !important;
-        min-height: 296mm !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        min-height: 297mm !important;
         margin: 0 auto !important;
-        padding: 15mm !important; /* Restore padding */
+        padding: 12mm 14mm !important;
         box-sizing: border-box !important;
         background: white !important;
         page-break-after: always !important;
         break-after: page !important;
         position: relative !important;
-        border: 1px solid #eee; /* Light border for screen preview, hidden in real print usually */
+        border: none !important;
     }
 
     /* Ensure tables don't break mid-row gracefully */
@@ -87,5 +87,14 @@
 @media screen {
     #print-mount-point-wrapper {
         display: none !important;
+    }
+
+    .printable-page {
+        width: 210mm;
+        min-height: 297mm;
+        margin: 0 auto;
+        padding: 12mm 14mm;
+        box-sizing: border-box;
+        background: white;
     }
 }

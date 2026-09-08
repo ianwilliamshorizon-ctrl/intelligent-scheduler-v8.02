@@ -7,9 +7,16 @@ import { getCustomerDisplayName } from '../core/utils/customerUtils';
 import { SummaryJobCard } from './shared/SummaryJobCard';
 import { applyStorageRateToJob } from '../core/utils/jobUtils';
 import AsyncImage from './AsyncImage';
-import { X, Key, LayoutGrid, BarChart, Users, FileText, Briefcase, Car, CalendarCheck, CheckCircle, Clock, LogIn, PlayCircle, PauseCircle, Tag, MessageSquare, Wrench, UserCheck, AlertCircle, Play, ClipboardCheck, Wand2, Camera, Printer } from 'lucide-react';
+import { 
+    X, Key, LayoutGrid, BarChart, Users, FileText, Briefcase, Car, 
+    CalendarCheck, CheckCircle, Clock, LogIn, PlayCircle, PauseCircle, 
+    Tag, MessageSquare, Wrench, UserCheck, AlertCircle, Play, 
+    ClipboardCheck, Wand2, Camera, Printer, ShoppingCart, GitPullRequest, 
+    Archive, Truck, Phone, CalendarDays, Building, Sparkles, ArrowRight 
+} from 'lucide-react';
 import { useReactToPrint } from 'react-to-print';
 import { PrintableOnSiteList } from './PrintableOnSiteList';
+import DirectorsDashboard from './DirectorsDashboard';
 
 // Main Dashboard Component Props
 interface DashboardViewProps {
@@ -546,9 +553,155 @@ const ConciergeDashboard: React.FC<DashboardViewProps & { onSelectDivision: (id:
 
 // DashboardView component continues below
 
+const UniversalRoleDashboard: React.FC<DashboardViewProps & { onSelectDivision: (id: string, name: string) => void }> = (props) => {
+    const { onSelectDivision } = props;
+    const { jobs, vehicles, customers, purchaseOrders, engineers, storageLocations, storageBookings, saveRecord, businessEntities, roles } = useData();
+    const { selectedEntityId, setCurrentView, currentUser } = useApp();
+    const today = getRelativeDate(0);
+
+    const userRoleDef = roles.find(r => r.name?.toLowerCase() === currentUser.role?.toLowerCase() || r.id === currentUser.role);
+    const effectiveAllowedViews: T.ViewType[] = currentUser.allowedViews || userRoleDef?.defaultAllowedViews || [
+        'concierge', 'workflow', 'jobs', 'inquiries'
+    ];
+
+    const VIEW_MODULES: { id: T.ViewType; label: string; description: string; icon: React.ElementType; color: string }[] = [
+        { id: 'dispatch', label: 'Dispatch', description: 'Schedule workshop jobs and technician lifts', icon: CalendarCheck, color: 'bg-blue-600' },
+        { id: 'workflow', label: 'Job Workflow', description: 'Real-time progress from arrival to completion', icon: GitPullRequest, color: 'bg-indigo-600' },
+        { id: 'concierge', label: 'Service Stream', description: 'Vehicle check-ins, arrivals, and quality control', icon: Wrench, color: 'bg-emerald-600' },
+        { id: 'jobs', label: 'Workshop Jobs', description: 'Active job cards, labor hours, and assignments', icon: Briefcase, color: 'bg-sky-600' },
+        { id: 'estimates', label: 'Estimates', description: 'Customer quotes, service packages, and pricing', icon: FileText, color: 'bg-violet-600' },
+        { id: 'invoices', label: 'Invoices', description: 'Billing, statements, and trade accounts', icon: FileText, color: 'bg-amber-600' },
+        { id: 'purchaseOrders', label: 'Purchase Orders', description: 'Parts ordering, receipts, and suppliers', icon: ShoppingCart, color: 'bg-cyan-600' },
+        { id: 'financials', label: 'Financial Reporting', description: 'Workshop performance, margins, and revenue', icon: BarChart, color: 'bg-teal-600' },
+        { id: 'sales', label: 'Car Sales', description: 'Showroom vehicle stock, valuations, and deals', icon: Car, color: 'bg-rose-600' },
+        { id: 'storage', label: 'Vehicle Storage', description: 'Secure storage units, check-ins, and agreements', icon: Archive, color: 'bg-purple-600' },
+        { id: 'rentals', label: 'Rentals & Courtesy Cars', description: 'Fleet hire, courtesy cars, and agreements', icon: Truck, color: 'bg-orange-600' },
+        { id: 'communications', label: 'Communications', description: 'Customer messaging, email notifications & SMS', icon: MessageSquare, color: 'bg-pink-600' },
+        { id: 'inquiries', label: 'Inquiries', description: 'Inbound booking leads, quotes, and customer calls', icon: Phone, color: 'bg-blue-700' },
+        { id: 'absence', label: 'Staff Absence', description: 'Holiday booking, team availability, and coverage', icon: CalendarDays, color: 'bg-lime-600' },
+        { id: 'directors-dashboard', label: 'Executive Summary', description: 'Strategic metrics, financial baselines, and KPIs', icon: Building, color: 'bg-slate-700' },
+    ];
+
+    const userModules = VIEW_MODULES.filter(m => effectiveAllowedViews.includes(m.id));
+
+    const activeJobsToday = useMemo(() => {
+        return jobs.filter(j => 
+            (selectedEntityId === 'all' || j.entityId === selectedEntityId) && 
+            j.status !== 'Cancelled' &&
+            (j.segments || []).some(s => s.date === today)
+        );
+    }, [jobs, selectedEntityId, today]);
+
+    return (
+        <div className="space-y-6">
+            <SummaryMetrics jobs={jobs} selectedEntityId={selectedEntityId || 'all'} today={today} setCurrentView={setCurrentView} storageBookings={storageBookings} />
+
+            {/* Quick Navigation Launchpad */}
+            {userModules.length > 0 && (
+                <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+                    <div className="flex justify-between items-center mb-4">
+                        <div>
+                            <h3 className="text-base font-bold text-gray-900">Your Workspace Modules</h3>
+                            <p className="text-xs text-gray-500">Quick access to the tools and sections available for your role</p>
+                        </div>
+                        <span className="text-xs font-semibold px-2.5 py-1 bg-indigo-50 text-indigo-700 rounded-full border border-indigo-100">
+                            Role: {currentUser.role || 'Team Member'}
+                        </span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                        {userModules.map(mod => (
+                            <button
+                                key={mod.id}
+                                onClick={() => setCurrentView(mod.id)}
+                                className="flex items-start p-4 rounded-xl border border-gray-200 hover:border-indigo-400 hover:shadow-md transition-all duration-200 bg-gray-50/50 hover:bg-white text-left group cursor-pointer"
+                            >
+                                <div className={`p-2.5 rounded-lg ${mod.color} text-white mr-3 group-hover:scale-105 transition-transform flex-shrink-0`}>
+                                    <mod.icon size={20} />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <h4 className="text-sm font-bold text-gray-800 group-hover:text-indigo-600 transition-colors flex items-center justify-between">
+                                        <span className="truncate">{mod.label}</span>
+                                        <ArrowRight size={14} className="opacity-0 group-hover:opacity-100 text-indigo-500 transition-opacity flex-shrink-0 ml-1" />
+                                    </h4>
+                                    <p className="text-xs text-gray-500 mt-0.5 line-clamp-2 leading-relaxed">{mod.description}</p>
+                                </div>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* Workshop Overview & Support */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <OnSiteByDivisionCard jobs={jobs} businessEntities={businessEntities} storageBookings={storageBookings} onSelectDivision={onSelectDivision} />
+
+                <Widget title="Scheduled Today" icon={CalendarCheck}>
+                    <div className="space-y-2">
+                        {activeJobsToday.length > 0 ? activeJobsToday.slice(0, 10).map(job => (
+                            <SummaryJobCard 
+                                key={job.id}
+                                job={job}
+                                vehicle={vehicles.find(v => v.id === job.vehicleId)}
+                                customer={customers.find(c => c.id === job.customerId)}
+                                purchaseOrders={purchaseOrders}
+                                engineers={engineers}
+                                currentUser={currentUser}
+                                onEdit={props.onEditJob}
+                                onCheckIn={props.onCheckIn}
+                                onOpenPurchaseOrder={() => {}}
+                                onOpenAssistant={props.onOpenAssistant}
+                                onStartWork={props.onStartWork}
+                                onPause={(jId, sId) => props.onPause(jId, sId, 'Paused from dashboard')}
+                                onRestart={props.onRestartWork}
+                                onQcApprove={() => {}}
+                                onEngineerComplete={props.onEngineerComplete}
+                                storageLocations={storageLocations}
+                                onUpdateJob={(updatedJob) => saveRecord('jobs', updatedJob)}
+                            />
+                        )) : <p className="text-sm text-gray-500 text-center py-8">No jobs scheduled for today.</p>}
+                    </div>
+                </Widget>
+
+                <Widget title="Assistance & Tools" icon={Sparkles}>
+                    <div className="p-4 bg-gradient-to-br from-indigo-50 to-blue-50 rounded-xl border border-indigo-100 space-y-4">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2.5 bg-indigo-600 text-white rounded-lg shadow-sm">
+                                <Sparkles size={20} />
+                            </div>
+                            <div>
+                                <h4 className="font-bold text-indigo-950 text-sm">Intelligent Assistant</h4>
+                                <p className="text-xs text-indigo-700">Workshop & scheduling intelligence</p>
+                            </div>
+                        </div>
+                        <p className="text-xs text-indigo-800/80 leading-relaxed">
+                            Need help finding vehicle details, customer history, job statuses, or scheduling guidelines? Click below to launch the assistant anytime.
+                        </p>
+                        <div className="space-y-2 pt-1">
+                            <button
+                                onClick={() => props.onOpenAssistant('')}
+                                className="w-full py-2 px-3 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg shadow transition flex items-center justify-center gap-1.5 cursor-pointer"
+                            >
+                                <Sparkles size={14} /> Open AI Assistant
+                            </button>
+                            {effectiveAllowedViews.includes('inquiries') && (
+                                <button
+                                    onClick={() => setCurrentView('inquiries')}
+                                    className="w-full py-2 px-3 bg-white hover:bg-indigo-50 text-indigo-700 border border-indigo-200 text-xs font-bold rounded-lg shadow-sm transition flex items-center justify-center gap-1.5 cursor-pointer"
+                                >
+                                    <Phone size={14} /> View Customer Inquiries
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </Widget>
+            </div>
+        </div>
+    );
+};
+
 const DashboardView: React.FC<DashboardViewProps> = (props) => {
-    const { currentUser } = useApp();
-    const { roles, forceRefresh, jobs, vehicles } = useData();
+    const { currentUser, selectedEntityId, setCurrentView } = useApp();
+    const { roles, forceRefresh, jobs, vehicles, storageBookings } = useData();
     const [selectedDivision, setSelectedDivision] = React.useState<{ id: string, name: string } | null>(null);
     
     const onSelectDivision = (id: string, name: string) => {
@@ -586,22 +739,38 @@ const DashboardView: React.FC<DashboardViewProps> = (props) => {
 
     const renderDashboardByRole = () => {
         // Determine the base role type for the current user
-        const userRole = roles.find(r => r.name === currentUser.role);
-        const baseRole = userRole ? userRole.baseRole : 'Dispatcher'; // Default fallback
+        const userRole = roles.find(r => 
+            r.name?.toLowerCase() === currentUser.role?.toLowerCase() || 
+            r.id === currentUser.role
+        );
+        
+        // Priority 1: userRole.baseRole if set
+        // Priority 2: match currentUser.role or userRole.name directly
+        const rawRole = (userRole?.baseRole || currentUser.role || userRole?.name || 'Dispatcher').toLowerCase().trim();
 
-        switch (baseRole) {
-            case 'Admin':
-            case 'Dispatcher':
-                return <AdminDispatcherDashboard {...props} onOpenInquiry={props.onOpenInquiry as any} onSelectDivision={onSelectDivision} />;
-            case 'Engineer':
-                return <EngineerDashboard {...props} />;
-            case 'Sales':
-                return <SalesDashboard {...props} onSelectDivision={onSelectDivision} />;
-            case 'Garage Concierge':
-                return <ConciergeDashboard {...props} onSelectDivision={onSelectDivision} />;
-            default:
-                return <p>No dashboard configured for your role.</p>;
+        if (rawRole.includes('admin') || rawRole.includes('dispatch')) {
+            return <AdminDispatcherDashboard {...props} onOpenInquiry={props.onOpenInquiry as any} onSelectDivision={onSelectDivision} />;
         }
+        if (rawRole.includes('engineer') || rawRole.includes('technician') || rawRole.includes('mechanic')) {
+            return <EngineerDashboard {...props} />;
+        }
+        if (rawRole.includes('sales')) {
+            return <SalesDashboard {...props} onSelectDivision={onSelectDivision} />;
+        }
+        if (rawRole.includes('concierge')) {
+            return <ConciergeDashboard {...props} onSelectDivision={onSelectDivision} />;
+        }
+        if (rawRole.includes('director')) {
+            return (
+                <div className="space-y-6">
+                    <SummaryMetrics jobs={jobs} selectedEntityId={selectedEntityId || 'all'} today={today} setCurrentView={setCurrentView} storageBookings={storageBookings} />
+                    <DirectorsDashboard />
+                </div>
+            );
+        }
+
+        // For ALL other roles (and any custom roles), render the Universal Role Dashboard
+        return <UniversalRoleDashboard {...props} onSelectDivision={onSelectDivision} />;
     };
 
     return (
