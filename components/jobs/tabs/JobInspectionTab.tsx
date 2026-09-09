@@ -59,22 +59,22 @@ export const JobInspectionTab: React.FC<JobInspectionTabProps> = ({
     const hasChecklist = checklistData && checklistData.length > 0;
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 text-slate-900">
             {!isReadOnly && (
-                <div className="p-3 bg-gray-100 rounded-lg flex justify-between items-center border border-gray-200">
+                <div className="p-3 bg-slate-100 rounded-xl flex flex-wrap justify-between items-center gap-2 border border-slate-200 text-slate-900">
                     <div className="flex items-center gap-2">
                         <FileText size={18} className="text-indigo-600"/>
-                        <span className="text-sm font-semibold text-gray-700">Checklist Template:</span>
+                        <span className="text-sm font-bold text-slate-800">Checklist Template:</span>
                     </div>
                     <div className="flex items-center gap-2">
                          <select 
-                            className="text-sm border rounded p-1.5 bg-white max-w-md focus:ring-2 focus:ring-indigo-500 outline-none"
+                            className="text-sm border border-slate-300 rounded-lg p-2 bg-white text-slate-900 max-w-md focus:ring-2 focus:ring-indigo-500 outline-none font-medium"
                             value={selectedTemplateId || ''}
                             onChange={handleSelectChange}
                         >
-                            <option value="" disabled>Load Template...</option>
+                            <option value="" disabled className="text-slate-500 bg-white">Load Template...</option>
                             {sortedTemplates.map(t => (
-                                <option key={t.id} value={t.id}>{t.name}</option>
+                                <option key={t.id} value={t.id} className="text-slate-900 bg-white">{t.name}</option>
                             ))}
                         </select>
                     </div>
@@ -88,9 +88,9 @@ export const JobInspectionTab: React.FC<JobInspectionTabProps> = ({
                     isReadOnly={isReadOnly}
                 />
             ) : (
-                <div className="text-center py-10 bg-gray-50 border-2 border-dashed rounded-lg text-gray-500">
-                    <p className="font-medium">No inspection checklist loaded.</p>
-                    <p className="text-sm">Select a template above to begin.</p>
+                <div className="text-center py-10 bg-slate-100 border-2 border-dashed border-slate-300 rounded-xl text-slate-700">
+                    <p className="font-bold text-slate-800">No inspection checklist loaded.</p>
+                    <p className="text-sm text-slate-500">Select a template above to begin.</p>
                 </div>
             )}
 

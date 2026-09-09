@@ -47,9 +47,9 @@ const TyreCheck: React.FC<TyreCheckProps> = ({ tyreData, onUpdate, isReadOnly })
     };
     
     return (
-        <div className="border rounded-lg bg-white overflow-hidden avoid-break">
-            <h3 className="text-md font-bold p-3 bg-gray-100 border-b">Tyre Report</h3>
-            <div className="divide-y">
+        <div className="border border-slate-200 rounded-xl bg-white text-slate-900 overflow-hidden avoid-break shadow-sm">
+            <h3 className="text-sm sm:text-base font-bold p-3 bg-slate-100 text-slate-900 border-b border-slate-200">Tyre Report</h3>
+            <div className="divide-y divide-slate-100">
                 {Object.keys(tyreLabels).map(loc => {
                     const location = loc as TyreLocation;
                     const data = tyreData[location];
@@ -59,27 +59,27 @@ const TyreCheck: React.FC<TyreCheckProps> = ({ tyreData, onUpdate, isReadOnly })
                     if (isReadOnly && data.indicator === 'na' && !hasTreadData && !data.pressure && !data.comments) return null;
 
                     return (
-                        <div key={location} className="p-3 flex flex-wrap items-center gap-x-4 gap-y-2">
-                            <h4 className="w-full sm:w-48 font-semibold text-sm flex-shrink-0">{tyreLabels[location]}</h4>
+                        <div key={location} className="p-3 flex flex-wrap items-center gap-x-4 gap-y-2 hover:bg-slate-50/60 transition">
+                            <h4 className="w-full sm:w-48 font-bold text-xs sm:text-sm text-slate-900 flex-shrink-0">{tyreLabels[location]}</h4>
                             
                             <div style={{ width: '190px' }}>
-                                <label className="text-xs text-gray-500">Tread Depth (mm): O | M | I</label>
+                                <label className="text-xs font-semibold text-slate-600 block mb-1">Tread Depth (mm): O | M | I</label>
                                 <div className="flex gap-2">
-                                    <input type="number" step="0.1" value={data.outer ?? ''} onChange={e => handleUpdate(location, 'outer', e.target.value)} placeholder="O" className="w-1/3 p-1 border rounded text-xs text-center" disabled={isReadOnly} />
-                                    <input type="number" step="0.1" value={data.middle ?? ''} onChange={e => handleUpdate(location, 'middle', e.target.value)} placeholder="M" className="w-1/3 p-1 border rounded text-xs text-center" disabled={isReadOnly} />
-                                    <input type="number" step="0.1" value={data.inner ?? ''} onChange={e => handleUpdate(location, 'inner', e.target.value)} placeholder="I" className="w-1/3 p-1 border rounded text-xs text-center" disabled={isReadOnly} />
+                                    <input type="number" step="0.1" value={data.outer ?? ''} onChange={e => handleUpdate(location, 'outer', e.target.value)} placeholder="O" className="w-1/3 p-1.5 border border-slate-300 rounded-lg text-xs font-bold text-slate-900 bg-white placeholder:text-slate-400 text-center" disabled={isReadOnly} />
+                                    <input type="number" step="0.1" value={data.middle ?? ''} onChange={e => handleUpdate(location, 'middle', e.target.value)} placeholder="M" className="w-1/3 p-1.5 border border-slate-300 rounded-lg text-xs font-bold text-slate-900 bg-white placeholder:text-slate-400 text-center" disabled={isReadOnly} />
+                                    <input type="number" step="0.1" value={data.inner ?? ''} onChange={e => handleUpdate(location, 'inner', e.target.value)} placeholder="I" className="w-1/3 p-1.5 border border-slate-300 rounded-lg text-xs font-bold text-slate-900 bg-white placeholder:text-slate-400 text-center" disabled={isReadOnly} />
                                 </div>
                             </div>
                             
                             <div className="w-24">
-                                <label className="text-xs text-gray-500">Pressure</label>
-                                <input type="number" value={data.pressure ?? ''} onChange={e => handleUpdate(location, 'pressure', e.target.value)} placeholder="PSI" className="w-full p-1 border rounded text-xs" disabled={isReadOnly} />
+                                <label className="text-xs font-semibold text-slate-600 block mb-1">Pressure</label>
+                                <input type="number" value={data.pressure ?? ''} onChange={e => handleUpdate(location, 'pressure', e.target.value)} placeholder="PSI" className="w-full p-1.5 border border-slate-300 rounded-lg text-xs font-bold text-slate-900 bg-white placeholder:text-slate-400" disabled={isReadOnly} />
                             </div>
 
                              <div className="flex-grow sm:flex-grow-0 flex items-center gap-2" style={{ minWidth: '280px' }}>
                                 <div className="flex-grow">
-                                    <label className="text-xs text-gray-500">Comments</label>
-                                    <input type="text" value={data.comments || ''} onChange={e => handleUpdate(location, 'comments', e.target.value)} className="w-full p-1 border rounded text-xs" disabled={isReadOnly} />
+                                    <label className="text-xs font-semibold text-slate-600 block mb-1">Comments</label>
+                                    <input type="text" value={data.comments || ''} onChange={e => handleUpdate(location, 'comments', e.target.value)} placeholder="Tyre comments..." className="w-full p-1.5 border border-slate-300 rounded-lg text-xs font-medium text-slate-900 bg-white placeholder:text-slate-400" disabled={isReadOnly} />
                                 </div>
                                 <div className="flex gap-1 pt-4">
                                     <SpeechToTextButton 

@@ -538,7 +538,7 @@ export const FastTrackFindingModal: React.FC<FastTrackFindingModalProps> = ({
                                 value={suggestedHours}
                                 onChange={(e) => setSuggestedHours(e.target.value === '' ? '' : parseFloat(e.target.value))}
                                 placeholder="e.g. 1.0"
-                                className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold"
+                                className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 outline-none focus:bg-white focus:ring-2 focus:ring-indigo-500"
                             />
                         </div>
                         <div>
@@ -551,7 +551,7 @@ export const FastTrackFindingModal: React.FC<FastTrackFindingModalProps> = ({
                                 value={suggestedParts}
                                 onChange={(e) => setSuggestedParts(e.target.value)}
                                 placeholder="e.g. Front discs + pad set"
-                                className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold"
+                                className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 outline-none focus:bg-white focus:ring-2 focus:ring-indigo-500"
                             />
                         </div>
                     </div>

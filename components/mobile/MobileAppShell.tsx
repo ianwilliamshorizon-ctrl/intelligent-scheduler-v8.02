@@ -1225,7 +1225,7 @@ export const MobileAppShell: React.FC<MobileAppShellProps> = ({
                         </div>
 
                         {/* Content */}
-                        <div className="p-4 overflow-y-auto flex-1 bg-slate-900">
+                        <div className="p-3 sm:p-4 overflow-y-auto flex-1 bg-slate-900 text-slate-900">
                             <JobInspectionTab
                                 checklistData={activeInspectionJob.inspectionChecklist || []}
                                 tyreData={activeInspectionJob.tyreCheck || {}}

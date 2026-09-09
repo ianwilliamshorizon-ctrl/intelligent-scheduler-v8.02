@@ -60,7 +60,7 @@ const DamageMarker: React.FC<DamageMarkerProps> = ({ point, index, onUpdate, onR
                         onChange={(e) => setNotes(e.target.value)}
                         onBlur={handleSave}
                         onKeyDown={(e) => e.key === 'Enter' && handleSave()}
-                        className="w-full p-1 border rounded text-xs"
+                        className="w-full p-2 border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 bg-white placeholder:text-slate-400 shadow-md outline-none focus:ring-2 focus:ring-indigo-500"
                         placeholder="Damage notes..."
                         autoFocus
                     />
@@ -124,14 +124,14 @@ const VehicleDamageReport: React.FC<VehicleDamageReportProps> = ({ activePoints,
     const referenceNotes = referencePoints ? referencePoints.points.filter(p => p.notes) : [];
 
     return (
-        <div className="grid grid-cols-3 gap-x-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-slate-900">
             <div
-                className={`col-span-2 relative w-full mx-auto ${!isReadOnly ? 'cursor-crosshair' : ''}`}
+                className={`col-span-1 md:col-span-2 relative w-full mx-auto ${!isReadOnly ? 'cursor-crosshair' : ''}`}
                 ref={containerRef}
                 onClick={handleContainerClick}
             >
                 <div 
-                    className="relative w-full rounded-lg border overflow-hidden"
+                    className="relative w-full rounded-xl border border-slate-200 overflow-hidden shadow-sm"
                     style={{ backgroundColor: vehicleHex }}
                 >
                     <div className="relative w-full mix-blend-multiply">
@@ -163,20 +163,26 @@ const VehicleDamageReport: React.FC<VehicleDamageReportProps> = ({ activePoints,
             </div>
 
             {(activeNotes.length > 0 || referenceNotes.length > 0) && (
-                <div className="col-span-1 text-xs space-y-3 pt-2">
+                <div className="col-span-1 text-xs space-y-4 pt-1 bg-slate-50 p-3.5 rounded-xl border border-slate-200 text-slate-900">
                      {referenceNotes.length > 0 && (
                         <div>
-                            <h5 className="font-bold text-gray-700 mb-1">Pre-existing Damage:</h5>
-                            <ol className="list-decimal list-inside space-y-1">
-                                {referenceNotes.map((p, index) => <li key={`ref-${p.id}`}><span className="font-semibold">{`#${index + 1}:`}</span> {p.notes}</li>)}
+                            <h5 className="font-bold text-slate-900 mb-1.5 flex items-center gap-1.5">
+                                <span className="w-2 h-2 rounded-full bg-blue-500 inline-block"></span>
+                                Pre-existing Damage:
+                            </h5>
+                            <ol className="list-decimal list-inside space-y-1 text-slate-700">
+                                {referenceNotes.map((p, index) => <li key={`ref-${p.id}`}><span className="font-bold text-slate-900">{`#${index + 1}:`}</span> {p.notes}</li>)}
                             </ol>
                         </div>
                     )}
                     {activeNotes.length > 0 && (
                         <div>
-                            <h5 className="font-bold text-gray-700 mb-1">{referenceNotes.length > 0 ? 'New Damage Recorded:' : 'Damage Recorded:'}</h5>
-                            <ol className="list-decimal list-inside space-y-1">
-                                {activeNotes.map((p, index) => <li key={p.id}><span className="font-semibold">{`#${index + 1}:`}</span> {p.notes}</li>)}
+                            <h5 className="font-bold text-slate-900 mb-1.5 flex items-center gap-1.5">
+                                <span className="w-2 h-2 rounded-full bg-amber-500 inline-block"></span>
+                                {referenceNotes.length > 0 ? 'New Damage Recorded:' : 'Damage Recorded:'}
+                            </h5>
+                            <ol className="list-decimal list-inside space-y-1 text-slate-700">
+                                {activeNotes.map((p, index) => <li key={p.id}><span className="font-bold text-slate-900">{`#${index + 1}:`}</span> {p.notes}</li>)}
                             </ol>
                         </div>
                     )}

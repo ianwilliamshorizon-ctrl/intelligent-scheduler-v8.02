@@ -58,16 +58,16 @@ const InspectionChecklist: React.FC<InspectionChecklistProps> = ({ checklistData
     };
     
     return (
-        <div className="space-y-4">
+        <div className="space-y-4 text-slate-900">
             {checklistData.map((section) => {
                 return (
                     <React.Fragment key={section.id}>
-                        <div className="border rounded-lg bg-white shadow-sm page-break-inside-avoid break-inside-avoid" style={{ border: isReadOnly ? '1pt solid #000' : undefined }}>
-                            <h3 className="text-md font-bold p-3 bg-gray-100 border-b" style={{ backgroundColor: isReadOnly ? '#f3f4f6' : undefined, borderBottom: isReadOnly ? '1pt solid #000' : undefined }}>{section.title}</h3>
-                            <div className="divide-y">
+                        <div className="border border-slate-200 rounded-xl bg-white text-slate-900 shadow-sm page-break-inside-avoid break-inside-avoid" style={{ border: isReadOnly ? '1pt solid #000' : undefined }}>
+                            <h3 className="text-sm sm:text-base font-bold p-3 bg-slate-100 text-slate-900 border-b border-slate-200" style={{ backgroundColor: isReadOnly ? '#f3f4f6' : undefined, borderBottom: isReadOnly ? '1pt solid #000' : undefined }}>{section.title}</h3>
+                            <div className="divide-y divide-slate-100">
                                 {section.items.map((item) => (
-                                    <div key={item.id} className="p-2 grid grid-cols-12 gap-2 items-center page-break-inside-avoid break-inside-avoid">
-                                        <p className="col-span-4 text-sm">{item.label}</p>
+                                    <div key={item.id} className="p-2.5 grid grid-cols-12 gap-2 items-center page-break-inside-avoid break-inside-avoid hover:bg-slate-50/60 transition">
+                                        <p className="col-span-4 text-xs sm:text-sm font-semibold text-slate-900 leading-snug">{item.label}</p>
                                         <div className="col-span-3 flex items-center gap-1">
                                             {Object.keys(statusConfig).map(s => {
                                                 const status = s as ChecklistItemStatus;
@@ -93,7 +93,7 @@ const InspectionChecklist: React.FC<InspectionChecklistProps> = ({ checklistData
                                                 value={item.comment || ''}
                                                 onChange={(e) => handleItemChange(section.id, item.id, 'comment', e.target.value)}
                                                 placeholder="Add comment..."
-                                                className="flex-grow p-1.5 border rounded text-xs focus:ring-1 focus:ring-indigo-500 outline-none"
+                                                className="flex-grow p-1.5 border border-slate-300 rounded-lg text-xs font-medium text-slate-900 bg-white placeholder:text-slate-400 focus:ring-1 focus:ring-indigo-500 outline-none"
                                                 disabled={isReadOnly}
                                             />
                                             <SpeechToTextButton 
@@ -132,9 +132,9 @@ const InspectionChecklist: React.FC<InspectionChecklistProps> = ({ checklistData
                                     </div>
                                 ))}
                             </div>
-                                <div className="p-3 border-t bg-gray-50 page-break-inside-avoid break-inside-avoid relative" style={{ borderTop: isReadOnly ? '1pt solid #000' : undefined, backgroundColor: isReadOnly ? '#f9fafb' : undefined }}>
+                                <div className="p-3 border-t border-slate-200 bg-slate-50 page-break-inside-avoid break-inside-avoid relative" style={{ borderTop: isReadOnly ? '1pt solid #000' : undefined, backgroundColor: isReadOnly ? '#f9fafb' : undefined }}>
                                     <div className="flex justify-between items-center mb-1">
-                                        <label className="text-xs font-semibold text-gray-600 block">Section Notes</label>
+                                        <label className="text-xs font-bold text-slate-700 block">Section Notes</label>
                                     </div>
                                     <div className="relative">
                                         <textarea
@@ -142,7 +142,7 @@ const InspectionChecklist: React.FC<InspectionChecklistProps> = ({ checklistData
                                             onChange={(e) => handleSectionCommentsChange(section.id, e.target.value)}
                                             placeholder="Add overall notes for this section..."
                                             rows={2}
-                                            className="w-full p-2 pr-10 border rounded text-sm focus:ring-1 focus:ring-indigo-500 outline-none"
+                                            className="w-full p-2 pr-10 border border-slate-300 rounded-lg text-xs sm:text-sm font-medium text-slate-900 bg-white placeholder:text-slate-400 focus:ring-1 focus:ring-indigo-500 outline-none"
                                             disabled={isReadOnly}
                                         />
                                         <div className="absolute top-2 right-2 flex items-center gap-1">
