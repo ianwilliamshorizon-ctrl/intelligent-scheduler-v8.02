@@ -31,6 +31,17 @@ window.addEventListener('unhandledrejection', (event) => {
 // Clear reload flag upon successful application load
 sessionStorage.removeItem('vite_preload_error_reloaded');
 
+// Register Service Worker for PWA and offline operation
+if ('serviceWorker' in navigator && (window.location.protocol === 'https:' || window.location.hostname === 'localhost')) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').then((registration) => {
+            console.log('[SW] Service Worker registered with scope:', registration.scope);
+        }).catch((error) => {
+            console.warn('[SW] Service Worker registration failed:', error);
+        });
+    });
+}
+
 // Initialize the Gemini Service via Firebase Functions (Proxy)
 initializeGenerativeAI();
 

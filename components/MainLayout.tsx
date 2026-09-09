@@ -4,7 +4,7 @@ import { useData } from '../core/state/DataContext';
 import { 
     Menu, LogOut, Settings, Building2, UserCheck, LayoutDashboard, 
     Calendar, Wrench, Briefcase, FileText, ShoppingCart, Car, 
-    Archive, Truck, MessageSquare, Phone, CalendarDays, GitPullRequest, Search, X, HelpCircle, Building, AlertCircle, BarChart3, Sparkles
+    Archive, Truck, MessageSquare, Phone, CalendarDays, GitPullRequest, Search, X, HelpCircle, Building, AlertCircle, BarChart3, Sparkles, Smartphone
 } from 'lucide-react';
 import * as T from '../types';
 
@@ -13,8 +13,9 @@ const MainLayout: React.FC<{
     onOpenManagement: () => void, 
     onOpenHelpCentre: () => void, 
     onSearchResult: (type: string, id: string) => void,
-    onOpenAssistant?: () => void
-}> = ({ children, onOpenManagement, onOpenHelpCentre, onSearchResult, onOpenAssistant }) => {
+    onOpenAssistant?: () => void,
+    onToggleMobileMode?: () => void
+}> = ({ children, onOpenManagement, onOpenHelpCentre, onSearchResult, onOpenAssistant, onToggleMobileMode }) => {
     const { 
         currentView, setCurrentView, 
         currentUser, selectedEntityId, setSelectedEntityId, 
@@ -210,6 +211,17 @@ const MainLayout: React.FC<{
                             >
                                 <Sparkles size={20} className="animate-pulse text-purple-600" />
                                 <span className="hidden xl:inline">AI Tech Assistant</span>
+                            </button>
+                        )}
+
+                        {onToggleMobileMode && (
+                            <button 
+                                onClick={onToggleMobileMode} 
+                                title="Switch to Mobile / Bay Mode"
+                                className="p-2 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 rounded-full transition-colors flex items-center gap-1.5 font-bold text-xs"
+                            >
+                                <Smartphone size={20} className="text-indigo-600" />
+                                <span className="hidden lg:inline">Mobile Mode</span>
                             </button>
                         )}
 

@@ -1,0 +1,24 @@
+{
+  "short_name": "Scheduler",
+  "name": "BROOKSPEED Intelligent Scheduler",
+  "description": "Intelligent workshop scheduling, offline job processing, and executive management system.",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/?source=pwa",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "display": "standalone",
+  "orientation": "any"
+}

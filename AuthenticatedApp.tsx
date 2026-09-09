@@ -40,6 +40,8 @@ const InquiriesView = lazy(() => import('./components/InquiriesView'));
 const FinancialReporting = lazy(() => import('./components/FinancialReporting'));
 const ManagementModal = lazy(() => import('./components/ManagementModal'));
 const HelpCentre = lazy(() => import('./components/HelpCentre'));
+const MobileEngineerView = lazy(() => import('./components/mobile/MobileEngineerView'));
+const MobileDirectorView = lazy(() => import('./components/mobile/MobileDirectorView'));
 
 // --- INACTIVITY HOOK ---
 const useInactivityLogout = (logoutFn: () => void, isAuthenticated: boolean, timeoutMs: number = 30 * 60 * 1000) => {
@@ -96,8 +98,21 @@ const AuthenticatedApp = () => {
     const [managementInitialView, setManagementInitialView] = useState<{ tab: string; id: string } | null>(null);
     const lastBackupTimeRef = useRef<string | null>(null);
     const [poToViewId, setPoToViewId] = useState<string | null>(null);
-    const [customerActionState, setCustomerActionState] = useState<'pending' | 'approved' | 'declined'>('pending');
-        
+    const [isMobileMode, setIsMobileMode] = useState<boolean>(() => {
+        const searchParams = new URLSearchParams(window.location.search);
+        if (searchParams.get('mode') === 'mobile' || searchParams.get('source') === 'pwa') return true;
+        const stored = sessionStorage.getItem('brookspeed_mobile_mode');
+        if (stored !== null) return stored === 'true';
+        return window.innerWidth < 768;
+    });
+
+    const handleToggleMobileMode = (val?: boolean) => {
+        setIsMobileMode(prev => {
+            const next = val !== undefined ? val : !prev;
+            sessionStorage.setItem('brookspeed_mobile_mode', String(next));
+            return next;
+        });
+    };
 
     const handleGenerateInvoice = (jobId: string) => {
         const job = (jobs || []).find(j => j.id === jobId);
@@ -483,6 +498,53 @@ const AuthenticatedApp = () => {
         }
     };
 
+    if (isMobileMode) {
+        return (
+            <Router>
+                <VersionChecker />
+                <Suspense fallback={
+                    <div className="min-h-screen bg-slate-950 flex items-center justify-center text-white font-bold p-4">
+                        <div className="flex flex-col items-center gap-3">
+                            <div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+                            <p className="text-slate-400 text-xs font-semibold animate-pulse">Loading Mobile Stream...</p>
+                        </div>
+                    </div>
+                }>
+                    {currentUser.role === 'Engineer' ? (
+                        <MobileEngineerView
+                            currentUser={currentUser}
+                            jobs={jobs || []}
+                            vehicles={vehicles || []}
+                            customers={customers || []}
+                            inspectionTemplates={data.inspectionTemplates || []}
+                            inspectionDiagrams={data.inspectionDiagrams || []}
+                            onSaveJob={async (job) => {
+                                await handleSaveItem(setJobs, job, 'brooks_jobs');
+                            }}
+                            onSwitchToDesktop={() => handleToggleMobileMode(false)}
+                        />
+                    ) : (
+                        <MobileDirectorView
+                            jobs={jobs || []}
+                            invoices={invoices || []}
+                            estimates={estimates || []}
+                            inquiries={inquiries || []}
+                            customers={customers || []}
+                            vehicles={vehicles || []}
+                            businessEntities={businessEntities || []}
+                            selectedEntityId={selectedEntityId}
+                            onSelectEntity={setSelectedEntityId}
+                            onSwitchToDesktop={() => handleToggleMobileMode(false)}
+                            onOpenInquiry={(inq) => setters.setInquiryModal({isOpen: true, inquiry: inq})}
+                        />
+                    )}
+                </Suspense>
+                <AppModals modals={modalsState} setters={setters} actions={modalActions} commonProps={commonProps} />
+                <ToastContainer aria-label="Notifications" />
+            </Router>
+        );
+    }
+
     return (
         <Router>
             <VersionChecker />
@@ -491,6 +553,7 @@ const AuthenticatedApp = () => {
                 onOpenHelpCentre={() => setIsHelpCentreOpen(true)} 
                 onSearchResult={handleSearchResult}
                 onOpenAssistant={() => { setters.setAssistantContextJobId(null); setters.setIsAssistantOpen(true); }}
+                onToggleMobileMode={() => handleToggleMobileMode(true)}
             >
                 <Suspense fallback={
                     <div className="flex items-center justify-center h-screen bg-slate-50 dark:bg-slate-900">
