@@ -56,7 +56,7 @@ export const MobileAppShell: React.FC<MobileAppShellProps> = ({
     onOpenInquiry
 }) => {
     // Determine default tab based on user role
-    const isDirectorOrAdmin = currentUser.role === 'Director' || currentUser.role === 'Admin' || currentUser.role === 'Super Admin' || currentUser.role === 'Workshop Controller';
+    const isDirectorOrAdmin = currentUser.role === 'Director' || currentUser.role === 'Admin' || currentUser.role === 'admin';
     const [activeTab, setActiveTab] = useState<MobileTab>(() => isDirectorOrAdmin ? 'director' : 'schedule');
 
     const { isOnline, pendingCount, triggerSync, isSyncing } = useOfflineSyncStatus(async (col, rec) => {
