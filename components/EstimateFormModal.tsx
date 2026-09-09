@@ -1115,12 +1115,20 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
         address: `${linkedInquiry.addressLine1 || ''}${linkedInquiry.city ? `, ${linkedInquiry.city}` : ''}${linkedInquiry.postcode ? `, ${linkedInquiry.postcode}` : ''}`.replace(/^[\s,]+|[\s,]+$/g, '').trim() || 'N/A',
     } : {});
 
-    const vehicleInfoData = currentVehicle ? {
-        type: `${currentVehicle.year || ''} ${currentVehicle.make || ''} ${currentVehicle.model || ''}`.trim(),
-        colour: currentVehicle.colour,
-        'Year of Manufacture': currentVehicle.manufactureDate,
-        vin: currentVehicle.vin,
-        motDue: currentVehicle.nextMotDate,
+    const effectiveMake = (currentVehicle?.make && currentVehicle.make.toLowerCase() !== 'unknown')
+        ? currentVehicle.make
+        : (linkedInquiry?.vehicleMake && linkedInquiry.vehicleMake.toLowerCase() !== 'unknown' ? linkedInquiry.vehicleMake : '');
+    const effectiveModel = (currentVehicle?.model && currentVehicle.model.toLowerCase() !== 'unknown')
+        ? currentVehicle.model
+        : (linkedInquiry?.vehicleModel && linkedInquiry.vehicleModel.toLowerCase() !== 'unknown' ? linkedInquiry.vehicleModel : '');
+    const effectiveYear = currentVehicle?.year || (linkedInquiry?.vehicleYear ? parseInt(linkedInquiry.vehicleYear) : '');
+
+    const vehicleInfoData = (currentVehicle || linkedInquiry?.vehicleRegistration) ? {
+        type: `${effectiveYear || ''} ${effectiveMake} ${effectiveModel}`.trim(),
+        colour: currentVehicle?.colour,
+        'Year of Manufacture': currentVehicle?.manufactureDate || linkedInquiry?.vehicleManufactureDate,
+        vin: currentVehicle?.vin || linkedInquiry?.vehicleVin,
+        motDue: currentVehicle?.nextMotDate || currentVehicle?.motExpiryDate || linkedInquiry?.vehicleMotExpiry,
     } : {};
 
     const handleOpenLookup = (target: 'customer' | 'vehicle') => {

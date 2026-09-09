@@ -690,6 +690,36 @@ User Request: ${JSON.stringify(userText)}`;
                 
                 if (matchedCust) {
                     activeCustomer = matchedCust;
+                    // Backfill address or contact details from inquiry if missing on customer record
+                    const updatedAddress1 = matchedCust.addressLine1 || parsedData?.addressLine1 || linkedInquiry?.addressLine1 || '';
+                    const updatedAddress2 = matchedCust.addressLine2 || parsedData?.addressLine2 || linkedInquiry?.addressLine2 || '';
+                    const updatedCity = matchedCust.city || parsedData?.city || linkedInquiry?.city || '';
+                    const updatedCounty = matchedCust.county || parsedData?.county || linkedInquiry?.county || '';
+                    const updatedPostcode = matchedCust.postcode || parsedData?.postcode || linkedInquiry?.postcode || '';
+                    const updatedEmail = matchedCust.email || parsedData?.customerEmail || linkedInquiry?.fromEmail || '';
+                    const updatedPhone = matchedCust.phone || parsedData?.customerPhone || linkedInquiry?.fromPhone || '';
+                    
+                    if (
+                        updatedAddress1 !== (matchedCust.addressLine1 || '') ||
+                        updatedCity !== (matchedCust.city || '') ||
+                        updatedPostcode !== (matchedCust.postcode || '') ||
+                        updatedEmail !== (matchedCust.email || '') ||
+                        updatedPhone !== (matchedCust.phone || '')
+                    ) {
+                        const updatedCust: Customer = {
+                            ...matchedCust,
+                            addressLine1: updatedAddress1,
+                            addressLine2: updatedAddress2,
+                            city: updatedCity,
+                            county: updatedCounty,
+                            postcode: updatedPostcode,
+                            email: updatedEmail,
+                            phone: updatedPhone,
+                            mobile: matchedCust.mobile || updatedPhone
+                        };
+                        saveRecord('customers', updatedCust);
+                        activeCustomer = updatedCust;
+                    }
                 } else {
                     const names = nameToCheck.split(/\s+/);
                     const forename = names[0] || 'New';
@@ -698,29 +728,66 @@ User Request: ${JSON.stringify(userText)}`;
                         id: generateCustomerId(surname, customers),
                         forename: forename,
                         surname: surname,
-                        email: linkedInquiry?.fromEmail || '',
-                        phone: linkedInquiry?.fromPhone || '',
-                        addressLine1: '',
-                        city: '',
-                        postcode: ''
+                        email: parsedData?.customerEmail || linkedInquiry?.fromEmail || '',
+                        phone: parsedData?.customerPhone || linkedInquiry?.fromPhone || '',
+                        mobile: parsedData?.customerPhone || linkedInquiry?.fromPhone || '',
+                        addressLine1: parsedData?.addressLine1 || linkedInquiry?.addressLine1 || '',
+                        addressLine2: parsedData?.addressLine2 || linkedInquiry?.addressLine2 || '',
+                        city: parsedData?.city || linkedInquiry?.city || '',
+                        county: parsedData?.county || linkedInquiry?.county || '',
+                        postcode: parsedData?.postcode || linkedInquiry?.postcode || '',
+                        category: 'Retail',
+                        isBusinessCustomer: false,
+                        createdDate: new Date().toISOString()
                     };
                     isNewCustomer = true;
                 }
             }
 
             // Auto-create vehicle if missing (only if registration is provided)
-            if (!activeVehicle && parsedData?.vehicleRegistration) {
-                const reg = parsedData.vehicleRegistration.toUpperCase().replace(/\s/g, '');
-                activeVehicle = {
-                    id: `veh_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
-                    registration: reg,
-                    make: formatTitleCase(parsedData?.vehicleMake || 'Unknown'),
-                    model: formatTitleCase(parsedData?.vehicleModel || 'Unknown'),
-                    year: new Date().getFullYear(),
-                    colour: '',
-                    customerId: activeCustomer?.id || ''
-                };
-                isNewVehicle = true;
+            const targetReg = (parsedData?.vehicleRegistration || linkedInquiry?.vehicleRegistration || '').toUpperCase().replace(/\s/g, '');
+            if (!activeVehicle && targetReg) {
+                const matchedVeh = vehicles.find(v => v.registration?.toUpperCase().replace(/\s/g, '') === targetReg);
+                const rawMake = parsedData?.vehicleMake || linkedInquiry?.vehicleMake || '';
+                const rawModel = parsedData?.vehicleModel || linkedInquiry?.vehicleModel || '';
+                const rawYear = parsedData?.vehicleYear ? parseInt(parsedData.vehicleYear) : (linkedInquiry?.vehicleYear ? parseInt(linkedInquiry.vehicleYear) : undefined);
+
+                if (matchedVeh) {
+                    activeVehicle = matchedVeh;
+                    const newMake = (matchedVeh.make && matchedVeh.make !== 'Unknown') ? matchedVeh.make : (rawMake || matchedVeh.make || '');
+                    const newModel = (matchedVeh.model && matchedVeh.model !== 'Unknown') ? matchedVeh.model : (rawModel || matchedVeh.model || '');
+                    const newYear = matchedVeh.year || rawYear;
+                    if (newMake !== matchedVeh.make || newModel !== matchedVeh.model || newYear !== matchedVeh.year || !matchedVeh.customerId) {
+                        const updatedVeh: Vehicle = {
+                            ...matchedVeh,
+                            make: formatTitleCase(newMake || 'Unknown'),
+                            model: formatTitleCase(newModel || 'Unknown'),
+                            year: newYear || matchedVeh.year,
+                            vin: matchedVeh.vin || linkedInquiry?.vehicleVin,
+                            motExpiryDate: matchedVeh.motExpiryDate || linkedInquiry?.vehicleMotExpiry,
+                            nextMotDate: matchedVeh.nextMotDate || linkedInquiry?.vehicleMotExpiry,
+                            manufactureDate: matchedVeh.manufactureDate || linkedInquiry?.vehicleManufactureDate,
+                            customerId: matchedVeh.customerId || activeCustomer?.id || ''
+                        };
+                        saveRecord('vehicles', updatedVeh);
+                        activeVehicle = updatedVeh;
+                    }
+                } else {
+                    activeVehicle = {
+                        id: `veh_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+                        registration: targetReg,
+                        make: formatTitleCase(rawMake || 'Unknown'),
+                        model: formatTitleCase(rawModel || 'Unknown'),
+                        year: rawYear || new Date().getFullYear(),
+                        colour: '',
+                        vin: linkedInquiry?.vehicleVin || undefined,
+                        nextMotDate: linkedInquiry?.vehicleMotExpiry || undefined,
+                        motExpiryDate: linkedInquiry?.vehicleMotExpiry || undefined,
+                        manufactureDate: linkedInquiry?.vehicleManufactureDate || undefined,
+                        customerId: activeCustomer?.id || ''
+                    };
+                    isNewVehicle = true;
+                }
             }
 
             if (!activeVehicle && !isEstimateMode) {

@@ -382,8 +382,8 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                     city: inquiry.city || linkedCustomer?.city || '',
                     county: inquiry.county || linkedCustomer?.county || '',
                     postcode: inquiry.postcode || extracted.postcode || linkedCustomer?.postcode || '',
-                    vehicleMake: inquiry.vehicleMake || extracted.vehicleMake || linkedVehicle?.make || '',
-                    vehicleModel: inquiry.vehicleModel || extracted.vehicleModel || linkedVehicle?.model || '',
+                    vehicleMake: (inquiry.vehicleMake && inquiry.vehicleMake.toLowerCase() !== 'unknown') ? inquiry.vehicleMake : (extracted.vehicleMake || (linkedVehicle?.make && linkedVehicle.make.toLowerCase() !== 'unknown' ? linkedVehicle.make : '')),
+                    vehicleModel: (inquiry.vehicleModel && inquiry.vehicleModel.toLowerCase() !== 'unknown') ? inquiry.vehicleModel : (extracted.vehicleModel || (linkedVehicle?.model && linkedVehicle.model.toLowerCase() !== 'unknown' ? linkedVehicle.model : '')),
                     vehicleRegistration: inquiry.vehicleRegistration || extracted.vehicleRegistration || linkedVehicle?.registration || '',
                     vehicleYear: inquiry.vehicleYear || linkedVehicle?.year?.toString() || '',
                     vehicleVin: inquiry.vehicleVin || linkedVehicle?.vin || '',
@@ -585,19 +585,14 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
             }
         }
 
-        const inquiryToSave: Inquiry = {
-            id: formData.id || crypto.randomUUID(),
-            createdAt: formData.createdAt || new Date().toISOString(),
-            takenByUserId: formData.takenByUserId || currentUser.id,
-            inquiryNumber: formData.inquiryNumber || generateInquiryNumber(inquiries),
-            ...formData,
-            logs: updatedLogs,
-            followUpDate: updatedFollowUpDate,
-            hasNewReply: false
-        } as Inquiry;
-        
-        if (formData.linkedCustomerId) {
-            const existingCustomer = customers.find(c => c.id === formData.linkedCustomerId);
+        // 1. Resolve or auto-create Customer record
+        let resolvedCustomerId = formData.linkedCustomerId || null;
+        const inquiryEmail = (formData.fromEmail || '').toLowerCase().trim();
+        const inquiryPhone = (formData.fromPhone || '').replace(/\s/g, '');
+        const inquiryName = (formData.fromName || '').toLowerCase().trim();
+
+        if (resolvedCustomerId) {
+            const existingCustomer = customers.find(c => c.id === resolvedCustomerId);
             if (existingCustomer) {
                 const updatedCustomer: Customer = {
                     ...existingCustomer,
@@ -623,7 +618,181 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                     saveRecord('customers', updatedCustomer);
                 }
             }
+        } else {
+            // Check if an existing customer matches contact info or name
+            const matchedCustomer = customers.find(c => {
+                if (inquiryEmail && c.email?.toLowerCase().trim() === inquiryEmail) return true;
+                if (inquiryPhone && (c.phone?.replace(/\s/g, '') === inquiryPhone || c.mobile?.replace(/\s/g, '') === inquiryPhone)) return true;
+                if (inquiryName && (c.companyName?.toLowerCase().trim() === inquiryName || `${c.forename} ${c.surname}`.toLowerCase().trim() === inquiryName)) return true;
+                return false;
+            });
+
+            if (matchedCustomer) {
+                const updatedCustomer: Customer = {
+                    ...matchedCustomer,
+                    addressLine1: matchedCustomer.addressLine1 || formData.addressLine1 || '',
+                    addressLine2: matchedCustomer.addressLine2 || formData.addressLine2 || '',
+                    city: matchedCustomer.city || formData.city || '',
+                    county: matchedCustomer.county || formData.county || '',
+                    postcode: matchedCustomer.postcode || formData.postcode || '',
+                    email: matchedCustomer.email || formData.fromEmail || '',
+                    phone: matchedCustomer.phone || formData.fromPhone || '',
+                    mobile: matchedCustomer.mobile || formData.fromPhone || '',
+                };
+                if (
+                    updatedCustomer.addressLine1 !== matchedCustomer.addressLine1 ||
+                    updatedCustomer.addressLine2 !== matchedCustomer.addressLine2 ||
+                    updatedCustomer.city !== matchedCustomer.city ||
+                    updatedCustomer.county !== matchedCustomer.county ||
+                    updatedCustomer.postcode !== matchedCustomer.postcode ||
+                    updatedCustomer.email !== matchedCustomer.email ||
+                    updatedCustomer.phone !== matchedCustomer.phone ||
+                    updatedCustomer.mobile !== matchedCustomer.mobile
+                ) {
+                    saveRecord('customers', updatedCustomer);
+                }
+                resolvedCustomerId = matchedCustomer.id;
+            } else if (formData.fromName || formData.fromEmail || formData.fromPhone || formData.addressLine1 || formData.postcode) {
+                // Spin up new customer record immediately
+                const names = (formData.fromName || 'Unknown').trim().split(/\s+/);
+                const forename = names[0] || 'Unknown';
+                const surname = names.slice(1).join(' ') || forename;
+                const newCustId = generateCustomerId(surname, customers);
+                const newCustomer: Customer = {
+                    id: newCustId,
+                    forename,
+                    surname,
+                    email: formData.fromEmail || '',
+                    phone: formData.fromPhone || '',
+                    mobile: formData.fromPhone || '',
+                    addressLine1: formData.addressLine1 || '',
+                    addressLine2: formData.addressLine2 || '',
+                    city: formData.city || '',
+                    county: formData.county || '',
+                    postcode: formData.postcode || '',
+                    category: 'Retail',
+                    isBusinessCustomer: false,
+                    createdDate: new Date().toISOString(),
+                    marketingConsent: false,
+                    serviceReminderConsent: false,
+                    declinedCommunication: false,
+                    communicationPreference: 'None'
+                };
+                saveRecord('customers', newCustomer);
+                resolvedCustomerId = newCustId;
+            }
         }
+
+        // 2. Resolve or auto-create Vehicle record
+        let resolvedVehicleId = formData.linkedVehicleId || null;
+        const targetReg = (formData.vehicleRegistration || '').toUpperCase().replace(/\s/g, '');
+        const rawMake = formData.vehicleMake || '';
+        const rawModel = formData.vehicleModel || '';
+        const cleanMake = (rawMake && rawMake.toLowerCase() !== 'unknown') ? formatTitleCase(rawMake) : '';
+        const cleanModel = (rawModel && rawModel.toLowerCase() !== 'unknown') ? formatTitleCase(rawModel) : '';
+        const targetYear = formData.vehicleYear ? parseInt(formData.vehicleYear) : undefined;
+
+        if (resolvedVehicleId) {
+            const existingVehicle = vehicles.find(v => v.id === resolvedVehicleId);
+            if (existingVehicle) {
+                const newMake = (existingVehicle.make && existingVehicle.make.toLowerCase() !== 'unknown')
+                    ? existingVehicle.make
+                    : (cleanMake || existingVehicle.make || '');
+                const newModel = (existingVehicle.model && existingVehicle.model.toLowerCase() !== 'unknown')
+                    ? existingVehicle.model
+                    : (cleanModel || existingVehicle.model || '');
+                const newYear = existingVehicle.year || targetYear;
+                const updatedVehicle: Vehicle = {
+                    ...existingVehicle,
+                    make: formatTitleCase(newMake || ''),
+                    model: formatTitleCase(newModel || ''),
+                    year: newYear,
+                    vin: existingVehicle.vin || formData.vehicleVin,
+                    motExpiryDate: existingVehicle.motExpiryDate || formData.vehicleMotExpiry,
+                    nextMotDate: existingVehicle.nextMotDate || formData.vehicleMotExpiry,
+                    manufactureDate: existingVehicle.manufactureDate || formData.vehicleManufactureDate,
+                    customerId: existingVehicle.customerId || resolvedCustomerId || '',
+                };
+                if (
+                    updatedVehicle.make !== existingVehicle.make ||
+                    updatedVehicle.model !== existingVehicle.model ||
+                    updatedVehicle.year !== existingVehicle.year ||
+                    updatedVehicle.vin !== existingVehicle.vin ||
+                    updatedVehicle.motExpiryDate !== existingVehicle.motExpiryDate ||
+                    updatedVehicle.customerId !== existingVehicle.customerId
+                ) {
+                    saveRecord('vehicles', updatedVehicle);
+                }
+            }
+        } else if (targetReg || cleanMake || cleanModel) {
+            const matchedVehicle = targetReg ? vehicles.find(
+                v => v.registration?.toUpperCase().replace(/\s/g, '') === targetReg
+            ) : null;
+
+            if (matchedVehicle) {
+                const newMake = (matchedVehicle.make && matchedVehicle.make.toLowerCase() !== 'unknown')
+                    ? matchedVehicle.make
+                    : (cleanMake || matchedVehicle.make || '');
+                const newModel = (matchedVehicle.model && matchedVehicle.model.toLowerCase() !== 'unknown')
+                    ? matchedVehicle.model
+                    : (cleanModel || matchedVehicle.model || '');
+                const newYear = matchedVehicle.year || targetYear;
+                const updatedVehicle: Vehicle = {
+                    ...matchedVehicle,
+                    make: formatTitleCase(newMake || ''),
+                    model: formatTitleCase(newModel || ''),
+                    year: newYear,
+                    vin: matchedVehicle.vin || formData.vehicleVin,
+                    motExpiryDate: matchedVehicle.motExpiryDate || formData.vehicleMotExpiry,
+                    nextMotDate: matchedVehicle.nextMotDate || formData.vehicleMotExpiry,
+                    manufactureDate: matchedVehicle.manufactureDate || formData.vehicleManufactureDate,
+                    customerId: matchedVehicle.customerId || resolvedCustomerId || '',
+                };
+                if (
+                    updatedVehicle.make !== matchedVehicle.make ||
+                    updatedVehicle.model !== matchedVehicle.model ||
+                    updatedVehicle.year !== matchedVehicle.year ||
+                    updatedVehicle.vin !== matchedVehicle.vin ||
+                    updatedVehicle.motExpiryDate !== matchedVehicle.motExpiryDate ||
+                    updatedVehicle.customerId !== matchedVehicle.customerId
+                ) {
+                    saveRecord('vehicles', updatedVehicle);
+                }
+                resolvedVehicleId = matchedVehicle.id;
+            } else if (targetReg) {
+                // Spin up new Vehicle record
+                const newVehicleId = `veh_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+                const newVehicle: Vehicle = {
+                    id: newVehicleId,
+                    registration: (formData.vehicleRegistration || 'TBA').toUpperCase().trim(),
+                    make: cleanMake || 'Unknown',
+                    model: cleanModel || 'Unknown',
+                    year: targetYear,
+                    vin: formData.vehicleVin || undefined,
+                    motExpiryDate: formData.vehicleMotExpiry || undefined,
+                    nextMotDate: formData.vehicleMotExpiry || undefined,
+                    manufactureDate: formData.vehicleManufactureDate || undefined,
+                    customerId: resolvedCustomerId || '',
+                } as Vehicle;
+                saveRecord('vehicles', newVehicle);
+                resolvedVehicleId = newVehicleId;
+            }
+        }
+
+        const inquiryToSave: Inquiry = {
+            id: formData.id || crypto.randomUUID(),
+            createdAt: formData.createdAt || new Date().toISOString(),
+            takenByUserId: formData.takenByUserId || currentUser.id,
+            inquiryNumber: formData.inquiryNumber || generateInquiryNumber(inquiries),
+            ...formData,
+            linkedCustomerId: resolvedCustomerId,
+            linkedVehicleId: resolvedVehicleId,
+            vehicleMake: cleanMake || (formData.vehicleMake && formData.vehicleMake.toLowerCase() !== 'unknown' ? formData.vehicleMake : ''),
+            vehicleModel: cleanModel || (formData.vehicleModel && formData.vehicleModel.toLowerCase() !== 'unknown' ? formData.vehicleModel : ''),
+            logs: updatedLogs,
+            followUpDate: updatedFollowUpDate,
+            hasNewReply: false
+        } as Inquiry;
 
         onSave(inquiryToSave, true);
 

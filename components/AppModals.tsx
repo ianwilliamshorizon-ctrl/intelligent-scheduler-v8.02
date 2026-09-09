@@ -124,21 +124,30 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
      */
     const resolveVehicleFromInquiry = (inq: T.Inquiry): string => {
         const inquiryReg = (inq.vehicleRegistration || '').toUpperCase().replace(/\s/g, '');
+        const cleanInqMake = (inq.vehicleMake && inq.vehicleMake.toLowerCase() !== 'unknown') ? inq.vehicleMake : '';
+        const cleanInqModel = (inq.vehicleModel && inq.vehicleModel.toLowerCase() !== 'unknown') ? inq.vehicleModel : '';
 
         // Case 1: Inquiry has a linked vehicle
         if (inq.linkedVehicleId) {
             const existingVehicle = data.vehicles.find(v => v.id === inq.linkedVehicleId);
             if (existingVehicle) {
                 const yearNum = inq.vehicleYear ? parseInt(inq.vehicleYear) : existingVehicle.year;
+                const newMake = (existingVehicle.make && existingVehicle.make.toLowerCase() !== 'unknown')
+                    ? existingVehicle.make
+                    : (cleanInqMake || existingVehicle.make || '');
+                const newModel = (existingVehicle.model && existingVehicle.model.toLowerCase() !== 'unknown')
+                    ? existingVehicle.model
+                    : (cleanInqModel || existingVehicle.model || '');
                 const updatedVehicle: T.Vehicle = {
                     ...existingVehicle,
-                    make: existingVehicle.make || inq.vehicleMake || '',
-                    model: existingVehicle.model || inq.vehicleModel || '',
+                    make: newMake,
+                    model: newModel,
                     year: yearNum,
                     vin: existingVehicle.vin || inq.vehicleVin,
                     nextMotDate: existingVehicle.nextMotDate || inq.vehicleMotExpiry,
                     motExpiryDate: existingVehicle.motExpiryDate || inq.vehicleMotExpiry,
                     manufactureDate: existingVehicle.manufactureDate || inq.vehicleManufactureDate,
+                    customerId: existingVehicle.customerId || inq.linkedCustomerId || '',
                 };
                 if (
                     updatedVehicle.make !== existingVehicle.make ||
@@ -147,7 +156,8 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                     updatedVehicle.vin !== existingVehicle.vin ||
                     updatedVehicle.nextMotDate !== existingVehicle.nextMotDate ||
                     updatedVehicle.motExpiryDate !== existingVehicle.motExpiryDate ||
-                    updatedVehicle.manufactureDate !== existingVehicle.manufactureDate
+                    updatedVehicle.manufactureDate !== existingVehicle.manufactureDate ||
+                    updatedVehicle.customerId !== existingVehicle.customerId
                 ) {
                     handleSaveItem(data.setVehicles, updatedVehicle, 'brooks_vehicles');
                 }
@@ -156,22 +166,29 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
         }
 
         // Case 2: No linked vehicle, but inquiry has a registration, make, or model — try to match existing
-        if (inquiryReg || inq.vehicleMake || inq.vehicleModel) {
+        if (inquiryReg || cleanInqMake || cleanInqModel) {
             const matchedVehicle = inquiryReg ? data.vehicles.find(
                 v => v.registration?.toUpperCase().replace(/\s/g, '') === inquiryReg
             ) : null;
             if (matchedVehicle) {
                 // Backfill details if missing
                 const yearNum = inq.vehicleYear ? parseInt(inq.vehicleYear) : matchedVehicle.year;
+                const newMake = (matchedVehicle.make && matchedVehicle.make.toLowerCase() !== 'unknown')
+                    ? matchedVehicle.make
+                    : (cleanInqMake || matchedVehicle.make || '');
+                const newModel = (matchedVehicle.model && matchedVehicle.model.toLowerCase() !== 'unknown')
+                    ? matchedVehicle.model
+                    : (cleanInqModel || matchedVehicle.model || '');
                 const updatedVehicle: T.Vehicle = {
                     ...matchedVehicle,
-                    make: matchedVehicle.make || inq.vehicleMake || '',
-                    model: matchedVehicle.model || inq.vehicleModel || '',
+                    make: newMake,
+                    model: newModel,
                     year: yearNum,
                     vin: matchedVehicle.vin || inq.vehicleVin,
                     nextMotDate: matchedVehicle.nextMotDate || inq.vehicleMotExpiry,
                     motExpiryDate: matchedVehicle.motExpiryDate || inq.vehicleMotExpiry,
                     manufactureDate: matchedVehicle.manufactureDate || inq.vehicleManufactureDate,
+                    customerId: matchedVehicle.customerId || inq.linkedCustomerId || '',
                 };
                 if (
                     updatedVehicle.make !== matchedVehicle.make ||
@@ -180,7 +197,8 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                     updatedVehicle.vin !== matchedVehicle.vin ||
                     updatedVehicle.nextMotDate !== matchedVehicle.nextMotDate ||
                     updatedVehicle.motExpiryDate !== matchedVehicle.motExpiryDate ||
-                    updatedVehicle.manufactureDate !== matchedVehicle.manufactureDate
+                    updatedVehicle.manufactureDate !== matchedVehicle.manufactureDate ||
+                    updatedVehicle.customerId !== matchedVehicle.customerId
                 ) {
                     handleSaveItem(data.setVehicles, updatedVehicle, 'brooks_vehicles');
                 }
@@ -558,7 +576,13 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
 
                             if (modals.smartCreateInquiryId) {
                                 const inq = data.inquiries.find(i => i.id === modals.smartCreateInquiryId);
-                                if (inq) await handleSaveItem(data.setInquiries, { ...inq, status: 'Quoted or Responded', linkedEstimateId: estWithInquiry.id }, 'brooks_inquiries');
+                                if (inq) await handleSaveItem(data.setInquiries, { 
+                                    ...inq, 
+                                    status: 'Quoted or Responded', 
+                                    linkedEstimateId: estWithInquiry.id,
+                                    linkedCustomerId: c.id,
+                                    linkedVehicleId: v.id
+                                }, 'brooks_inquiries');
                                 setters.setSmartCreateInquiryId(null);
                             }
                             setters.setIsSmartCreateOpen(false); 
@@ -571,7 +595,12 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
 
                             if (modals.smartCreateInquiryId) {
                                 const inq = data.inquiries.find(i => i.id === modals.smartCreateInquiryId);
-                                if (inq) await handleSaveItem(data.setInquiries, { ...inq, status: 'Quoted or Responded', linkedEstimateId: estWithInquiry.id }, 'brooks_inquiries');
+                                if (inq) await handleSaveItem(data.setInquiries, { 
+                                    ...inq, 
+                                    status: 'Quoted or Responded', 
+                                    linkedEstimateId: estWithInquiry.id,
+                                    linkedCustomerId: c.id
+                                }, 'brooks_inquiries');
                                 setters.setSmartCreateInquiryId(null);
                             }
                             setters.setIsSmartCreateOpen(false); 

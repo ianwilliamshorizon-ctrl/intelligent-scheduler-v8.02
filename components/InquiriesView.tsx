@@ -37,8 +37,20 @@ export const getLatestActivityTime = (inquiry: Inquiry) => {
         : new Date(inquiry.createdAt).getTime();
 };
 
-export const getInquiryHealth = (inquiry: Inquiry) => {
+export const isScheduledInquiry = (inquiry: Inquiry, linkedJob?: any) => {
+    return inquiry.status === 'Scheduled' || Boolean(inquiry.linkedJobId) || Boolean(linkedJob);
+};
+
+export const getInquiryHealth = (inquiry: Inquiry, isScheduledJob: boolean = false) => {
     if (inquiry.status === 'Closed') return 'closed';
+    if (inquiry.isUrgent) return 'urgent';
+
+    // Scheduled tasks/jobs have aging disabled
+    const isScheduled = isScheduledJob || inquiry.status === 'Scheduled' || Boolean(inquiry.linkedJobId);
+    if (isScheduled) {
+        if (inquiry.hasNewReply) return 'responded';
+        return 'normal';
+    }
 
     const isOverdue = inquiry.followUpDate && new Date(inquiry.followUpDate) < new Date(new Date().setHours(0,0,0,0));
     const isToday = inquiry.followUpDate && new Date(inquiry.followUpDate).toDateString() === new Date().toDateString();
@@ -48,7 +60,6 @@ export const getInquiryHealth = (inquiry: Inquiry) => {
     
     const hoursSinceLastActivity = (Date.now() - latestLogTime) / (1000 * 60 * 60);
 
-    if (inquiry.isUrgent) return 'urgent';
     if (isOverdue || isToday) return 'overdue';
     if (inquiry.hasNewReply) return 'responded';
     if (isFutureFollowUp) return 'future_follow_up';
@@ -112,7 +123,9 @@ const InquiryCard: React.FC<{
     const customer = inquiry.linkedCustomerId ? customers.find(c => c.id === inquiry.linkedCustomerId) : null;
     const vehicle = inquiry.linkedVehicleId ? vehicles.find(v => v.id === inquiry.linkedVehicleId) : null;
     const estimate = inquiry.linkedEstimateId ? estimates.find(e => e.id === inquiry.linkedEstimateId) : null;
-    const job = estimate?.jobId ? jobs.find(j => j.id === estimate.jobId) : null;
+    const job = inquiry.linkedJobId 
+        ? jobs.find(j => j.id === inquiry.linkedJobId) 
+        : (estimate?.jobId ? jobs.find(j => j.id === estimate.jobId) : null);
     const estimateVehicle = estimate?.vehicleId ? vehicles.find(v => v.id === estimate.vehicleId) : null;
     const extractedReg = extractUKRegistration(`${inquiry.subject || ''} ${inquiry.message || ''}`);
     const effectiveReg = vehicle?.registration || inquiry.vehicleRegistration || estimateVehicle?.registration || (estimate as any)?.vehicleRegistration || extractedReg || '';
@@ -155,17 +168,18 @@ const InquiryCard: React.FC<{
 
     const isApproved = estimate?.status === 'Approved';
     const mergeJobId = estimate?.jobId;
+    const isScheduledJob = isScheduledInquiry(inquiry, job);
     const latestLog = inquiry.logs && inquiry.logs.length > 0 
         ? [...inquiry.logs].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())[inquiry.logs.length - 1] 
         : null;
-    const isOverdue = inquiry.followUpDate && new Date(inquiry.followUpDate) < new Date(new Date().setHours(0,0,0,0));
-    const isToday = inquiry.followUpDate && new Date(inquiry.followUpDate).toDateString() === new Date().toDateString();
+    const isOverdue = !isScheduledJob && inquiry.followUpDate && new Date(inquiry.followUpDate) < new Date(new Date().setHours(0,0,0,0));
+    const isToday = !isScheduledJob && inquiry.followUpDate && new Date(inquiry.followUpDate).toDateString() === new Date().toDateString();
 
     const now = new Date().getTime();
     const latestActivityTime = latestLog ? new Date(latestLog.timestamp).getTime() : new Date(inquiry.createdAt).getTime();
     const hoursSinceLastActivity = (now - latestActivityTime) / (1000 * 60 * 60);
     const daysSinceLastActivity = Math.floor(hoursSinceLastActivity / 24);
-    const showDaysBadge = daysSinceLastActivity >= 1 && !['Rejected', 'Scheduled', 'Closed', 'Approved'].includes(inquiry.status);
+    const showDaysBadge = !isScheduledJob && daysSinceLastActivity >= 1 && !['Rejected', 'Scheduled', 'Closed', 'Approved'].includes(inquiry.status);
     
     let badgeColorClass = 'bg-green-500 text-white';
     if (daysSinceLastActivity > 14) {
@@ -179,12 +193,23 @@ const InquiryCard: React.FC<{
     let cardExplanation = 'New or normal status (White background)';
     
     if (inquiry.status !== 'Closed') {
-        const isFutureFollowUp = inquiry.followUpDate && !isOverdue && !isToday;
+        const isFutureFollowUp = !isScheduledJob && inquiry.followUpDate && !isOverdue && !isToday;
 
         if (inquiry.isUrgent) {
             healthBgClass = 'bg-red-50/80';
             ringClass = 'ring-2 ring-red-500 shadow-md';
             cardExplanation = 'Urgent Inquiry (Red border)';
+        } else if (isScheduledJob) {
+            // Once a job is scheduled, remove aging feature
+            if (inquiry.hasNewReply) {
+                healthBgClass = 'bg-yellow-100/60';
+                ringClass = 'ring-1 ring-yellow-400';
+                cardExplanation = 'Customer Responded: Customer has sent a new reply (Yellow background)';
+            } else {
+                healthBgClass = 'bg-white';
+                ringClass = 'ring-1 ring-indigo-200 hover:ring-indigo-300';
+                cardExplanation = 'Scheduled Job (Aging disabled)';
+            }
         } else if (isOverdue || isToday) {
             healthBgClass = 'bg-red-100/60';
             ringClass = 'ring-1 ring-red-400';
@@ -232,7 +257,7 @@ const InquiryCard: React.FC<{
                     inquiry.status === 'New Requests' ? 'border-blue-400' : 
                     inquiry.status === 'Our Action' ? 'border-amber-400' : 
                     inquiry.status === 'Online Approved' ? 'border-green-400' :
-                    inquiry.status === 'Scheduled' ? 'border-indigo-400' : 
+                    inquiry.status === 'Scheduled' || isScheduledJob ? 'border-indigo-400' : 
                     inquiry.status === 'Waiting on Customer' ? (isStale72h(inquiry) ? 'border-red-500 text-red-800' : 'border-gray-200') : 
                     'border-gray-200'
                 } ${isExpanded ? 'shadow-md ring-1 ring-indigo-400' : ringClass} cursor-pointer transition-all mb-1.5`}
@@ -254,10 +279,11 @@ const InquiryCard: React.FC<{
                                     {daysSinceLastActivity}d
                                 </span>
                             )}
-                            {(customer || estimate || linkedPOs.length > 0) && (
+                            {(customer || estimate || job || linkedPOs.length > 0) && (
                                 <div className={`flex gap-0.5 items-center ${isExpanded ? 'hidden' : ''}`}>
                                     {customer && <UserCheck size={8} className="text-green-600"/>}
                                     {estimate && <FileText size={8} className="text-purple-600"/>}
+                                    {job && <CalendarCheck size={8} className="text-indigo-600"/>}
                                     {linkedPOs.length > 0 && <PackageIcon size={8} className="text-amber-600"/>}
                                 </div>
                             )}
@@ -319,7 +345,7 @@ const InquiryCard: React.FC<{
                 )}
                 
                 {/* Badges Row */}
-                {(customer || vehicle || effectiveReg || estimate || linkedPOs.length > 0) && (
+                {(customer || vehicle || effectiveReg || estimate || job || linkedPOs.length > 0) && (
                     <div className={`${isExpanded ? 'flex' : 'hidden'} flex-wrap gap-1 mt-1 pt-1 border-t border-gray-100/50`}>
                         {customer && (
                             <button
@@ -335,20 +361,25 @@ const InquiryCard: React.FC<{
                                 <span className="truncate">{customer.surname || customer.forename}</span>
                             </button>
                         )}
-                        {vehicle ? (
-                            <button
-                                type="button"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    onViewVehicle?.(vehicle.id);
-                                }}
-                                className="flex items-center gap-0.5 bg-blue-50 text-blue-700 px-1 rounded text-[9px] font-bold hover:bg-blue-100 hover:underline cursor-pointer border border-blue-200/30 text-left transition font-mono"
-                                title={`${vehicle.registration} - ${vehicle.make} ${vehicle.model}`}
-                            >
-                                <Car size={9} className="shrink-0 text-blue-600"/>
-                                <span>{vehicle.registration}</span>
-                            </button>
-                        ) : effectiveReg ? (
+                        {vehicle ? (() => {
+                            const make = (vehicle.make && vehicle.make.toLowerCase() !== 'unknown') ? vehicle.make : (inquiry.vehicleMake && inquiry.vehicleMake.toLowerCase() !== 'unknown' ? inquiry.vehicleMake : '');
+                            const model = (vehicle.model && vehicle.model.toLowerCase() !== 'unknown') ? vehicle.model : (inquiry.vehicleModel && inquiry.vehicleModel.toLowerCase() !== 'unknown' ? inquiry.vehicleModel : '');
+                            const spec = make ? ` - ${make} ${model}`.trim() : '';
+                            return (
+                                <button
+                                    type="button"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        onViewVehicle?.(vehicle.id);
+                                    }}
+                                    className="flex items-center gap-0.5 bg-blue-50 text-blue-700 px-1 rounded text-[9px] font-bold hover:bg-blue-100 hover:underline cursor-pointer border border-blue-200/30 text-left transition font-mono"
+                                    title={`${vehicle.registration}${spec}`}
+                                >
+                                    <Car size={9} className="shrink-0 text-blue-600"/>
+                                    <span>{vehicle.registration}</span>
+                                </button>
+                            );
+                        })() : effectiveReg ? (
                             <span 
                                 className="flex items-center gap-0.5 bg-amber-50 text-amber-800 px-1 rounded text-[9px] font-bold border border-amber-200/50 font-mono"
                                 title={`Vehicle Reg: ${effectiveReg}`}
@@ -370,6 +401,15 @@ const InquiryCard: React.FC<{
                                 <FileText size={9} className="shrink-0 text-purple-600"/>
                                 <span>#{estimate.estimateNumber}</span>
                             </button>
+                        )}
+                        {job && (
+                            <span
+                                className="flex items-center gap-0.5 bg-indigo-50 text-indigo-700 px-1 rounded text-[9px] font-bold border border-indigo-200/50 text-left transition"
+                                title={`Job #${job.id}${job.scheduledDate ? ` - Scheduled: ${job.scheduledDate}` : ''}`}
+                            >
+                                <CalendarCheck size={9} className="shrink-0 text-indigo-600"/>
+                                <span>Job #{job.id}</span>
+                            </span>
                         )}
                         {linkedPOs.map(po => {
                             const poStyles = getPoStatusStyles(po.status);
@@ -464,7 +504,7 @@ const InquiryCard: React.FC<{
                 inquiry.status === 'New Requests' ? 'border-blue-400' : 
                 inquiry.status === 'Our Action' ? 'border-amber-400' : 
                 inquiry.status === 'Online Approved' ? 'border-green-400' :
-                inquiry.status === 'Scheduled' ? 'border-indigo-400' : 
+                inquiry.status === 'Scheduled' || isScheduledJob ? 'border-indigo-400' : 
                 inquiry.status === 'Waiting on Customer' ? (isStale72h(inquiry) ? 'border-red-500 text-red-800' : 'border-gray-200') : 
                 'border-gray-200'
             } ${ringClass} cursor-pointer transition-all mb-3 relative`}
@@ -567,23 +607,28 @@ const InquiryCard: React.FC<{
                     </button>
                 )}
                 
-                {vehicle ? (
-                    <button
-                        type="button"
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            onViewVehicle?.(vehicle.id);
-                        }}
-                        className="flex items-center gap-2 text-xs text-blue-700 bg-blue-50 px-2 py-1 rounded hover:bg-blue-100 hover:underline cursor-pointer border border-blue-200/50 w-fit text-left transition font-semibold font-mono"
-                        title={`${vehicle.registration} - ${vehicle.make} ${vehicle.model}`}
-                    >
-                        <Car size={14} className="text-blue-600 shrink-0"/>
-                        <span>{vehicle.registration} {vehicle.make ? `(${vehicle.make} ${vehicle.model})` : ''}</span>
-                    </button>
-                ) : effectiveReg ? (
+                {vehicle ? (() => {
+                    const make = (vehicle.make && vehicle.make.toLowerCase() !== 'unknown') ? vehicle.make : (inquiry.vehicleMake && inquiry.vehicleMake.toLowerCase() !== 'unknown' ? inquiry.vehicleMake : '');
+                    const model = (vehicle.model && vehicle.model.toLowerCase() !== 'unknown') ? vehicle.model : (inquiry.vehicleModel && inquiry.vehicleModel.toLowerCase() !== 'unknown' ? inquiry.vehicleModel : '');
+                    const displaySpecs = make ? `(${make} ${model})`.trim() : '';
+                    return (
+                        <button
+                            type="button"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onViewVehicle?.(vehicle.id);
+                            }}
+                            className="flex items-center gap-2 text-xs text-blue-700 bg-blue-50 px-2 py-1 rounded hover:bg-blue-100 hover:underline cursor-pointer border border-blue-200/50 w-fit text-left transition font-semibold font-mono"
+                            title={`${vehicle.registration}${displaySpecs ? ` - ${displaySpecs}` : ''}`}
+                        >
+                            <Car size={14} className="text-blue-600 shrink-0"/>
+                            <span>{vehicle.registration} {displaySpecs}</span>
+                        </button>
+                    );
+                })() : effectiveReg ? (
                     <div className="flex items-center gap-2 text-xs text-amber-800 bg-amber-50 px-2 py-1 rounded border border-amber-200/60 w-fit font-semibold font-mono" title={`Vehicle Registration: ${effectiveReg}`}>
                         <Car size={14} className="text-amber-600 shrink-0"/>
-                        <span>{effectiveReg} {inquiry.vehicleMake ? `(${inquiry.vehicleMake} ${inquiry.vehicleModel || ''})` : ''}</span>
+                        <span>{effectiveReg} {inquiry.vehicleMake && inquiry.vehicleMake.toLowerCase() !== 'unknown' ? `(${inquiry.vehicleMake} ${inquiry.vehicleModel && inquiry.vehicleModel.toLowerCase() !== 'unknown' ? inquiry.vehicleModel : ''})`.trim() : ''}</span>
                     </div>
                 ) : null}
                 
@@ -600,6 +645,25 @@ const InquiryCard: React.FC<{
                                 <button type="button" onClick={(e) => { e.stopPropagation(); onViewEstimate(estimate); }} className="text-xs text-indigo-600 hover:underline">View</button>
                             )}
                         </div>
+                    </div>
+                )}
+
+                {job && (
+                    <div className="flex items-center justify-between p-2 bg-indigo-50/70 border border-indigo-200 rounded text-xs">
+                        <div className="flex items-center gap-2 text-indigo-800 font-bold">
+                            <CalendarCheck size={14} className="text-indigo-600 shrink-0"/>
+                            <span>Job #{job.id}</span>
+                            {job.status && (
+                                <span className="text-[10px] bg-white text-indigo-700 border border-indigo-200 px-1.5 py-0.5 rounded font-semibold">
+                                    {job.status}
+                                </span>
+                            )}
+                        </div>
+                        {job.scheduledDate && (
+                            <span className="text-[11px] text-indigo-600 font-medium">
+                                Scheduled: {job.scheduledDate}
+                            </span>
+                        )}
                     </div>
                 )}
 
@@ -1260,7 +1324,12 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
         }
 
         if (healthFilter !== 'all') {
-            filtered = filtered.filter(i => getInquiryHealth(i) === healthFilter);
+            filtered = filtered.filter(i => {
+                const est = i.linkedEstimateId ? estimates.find(e => e.id === i.linkedEstimateId) : null;
+                const jb = i.linkedJobId ? jobs.find(j => j.id === i.linkedJobId) : (est?.jobId ? jobs.find(j => j.id === est.jobId) : null);
+                const isSched = isScheduledInquiry(i, jb);
+                return getInquiryHealth(i, isSched) === healthFilter;
+            });
         }
 
         if (searchTerm.trim()) {
@@ -1811,22 +1880,27 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                                                 </td>
                                                 {/* Vehicle */}
                                                 <td className="py-1.5 px-3 whitespace-nowrap">
-                                                    {vehicle ? (
-                                                        <button
-                                                            type="button"
-                                                            onClick={(e) => {
-                                                                if (props.onViewVehicle) {
-                                                                    e.stopPropagation();
-                                                                    props.onViewVehicle(vehicle.id);
-                                                                }
-                                                            }}
-                                                            className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 hover:bg-blue-100 px-1.5 py-0.5 rounded text-[10px] font-bold font-mono border border-blue-200/50 cursor-pointer"
-                                                            title={`${vehicle.registration} - ${vehicle.make} ${vehicle.model}`}
-                                                        >
-                                                            <Car size={10} className="shrink-0" />
-                                                            <span>{vehicle.registration}</span>
-                                                        </button>
-                                                    ) : effectiveReg ? (
+                                                    {vehicle ? (() => {
+                                                        const make = (vehicle.make && vehicle.make.toLowerCase() !== 'unknown') ? vehicle.make : (i.vehicleMake && i.vehicleMake.toLowerCase() !== 'unknown' ? i.vehicleMake : '');
+                                                        const model = (vehicle.model && vehicle.model.toLowerCase() !== 'unknown') ? vehicle.model : (i.vehicleModel && i.vehicleModel.toLowerCase() !== 'unknown' ? i.vehicleModel : '');
+                                                        const spec = make ? ` - ${make} ${model}`.trim() : '';
+                                                        return (
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                    if (props.onViewVehicle) {
+                                                                        e.stopPropagation();
+                                                                        props.onViewVehicle(vehicle.id);
+                                                                    }
+                                                                }}
+                                                                className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 hover:bg-blue-100 px-1.5 py-0.5 rounded text-[10px] font-bold font-mono border border-blue-200/50 cursor-pointer"
+                                                                title={`${vehicle.registration}${spec}`}
+                                                            >
+                                                                <Car size={10} className="shrink-0" />
+                                                                <span>{vehicle.registration}</span>
+                                                            </button>
+                                                        );
+                                                    })() : effectiveReg ? (
                                                         <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-800 border border-amber-200 px-1.5 py-0.5 rounded text-[10px] font-bold font-mono" title={`Vehicle Registration: ${effectiveReg}`}>
                                                             <Car size={10} className="shrink-0 text-amber-600" />
                                                             <span>{effectiveReg}</span>

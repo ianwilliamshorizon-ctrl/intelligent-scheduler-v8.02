@@ -210,7 +210,9 @@ export const PrintableEstimate: React.FC<PrintableEstimateProps> = ({ estimate, 
         }}>
             <h3 style={{ fontSize: '8px', fontWeight: 'bold', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '4px' }}>Vehicle</h3>
             <p style={{ display: 'inline-block', fontSize: '14px', fontWeight: '900', backgroundColor: '#FFD700', color: '#000', padding: '1px 6px', borderRadius: '3px', border: '1px solid rgba(0,0,0,0.1)' }}>{vehicle?.registration}</p>
-            <p style={{ fontSize: '10px', fontWeight: 'bold', color: '#64748b', marginTop: '2px' }}>{vehicle?.make} {vehicle?.model}</p>
+            <p style={{ fontSize: '10px', fontWeight: 'bold', color: '#64748b', marginTop: '2px' }}>
+                {[vehicle?.make && vehicle.make.toLowerCase() !== 'unknown' ? vehicle.make : '', vehicle?.model && vehicle.model.toLowerCase() !== 'unknown' ? vehicle.model : ''].filter(Boolean).join(' ')}
+            </p>
         </div>
     );
 
