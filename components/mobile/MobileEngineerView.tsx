@@ -69,7 +69,8 @@ export const MobileEngineerView: React.FC<MobileEngineerViewProps> = ({
             // Count jobs for this day
             const count = jobs.filter(j => {
                 const jDate = j.scheduledDate ? j.scheduledDate.split('T')[0] : '';
-                const isAssigned = !currentUser.id || 
+                const isDirectorOrAdmin = currentUser.role === 'Director' || currentUser.role === 'Admin' || currentUser.role === 'admin' || currentUser.role !== 'Engineer';
+                const isAssigned = isDirectorOrAdmin || !currentUser.id || 
                     (j.segments && j.segments.some(s => s.engineerId === currentUser.engineerId || s.engineerId === currentUser.id));
                 return isAssigned && jDate === dateStr;
             }).length;
@@ -77,13 +78,14 @@ export const MobileEngineerView: React.FC<MobileEngineerViewProps> = ({
             days.push({ dateStr, dayName, dayNum, isToday, count });
         }
         return days;
-    }, [jobs, currentUser.id, currentUser.engineerId]);
+    }, [jobs, currentUser.id, currentUser.engineerId, currentUser.role]);
 
     // Filter jobs for selected day
     const dayJobs = useMemo(() => {
+        const isDirectorOrAdmin = currentUser.role === 'Director' || currentUser.role === 'Admin' || currentUser.role === 'admin' || currentUser.role !== 'Engineer';
         return jobs.filter(j => {
             const jDate = j.scheduledDate ? j.scheduledDate.split('T')[0] : '';
-            const isAssigned = !currentUser.id || 
+            const isAssigned = isDirectorOrAdmin || !currentUser.id || 
                 (j.segments && j.segments.some(s => s.engineerId === currentUser.engineerId || s.engineerId === currentUser.id));
             
             const matchDay = jDate === selectedDate || (j.status === 'In Progress' && selectedDate === new Date().toISOString().split('T')[0]);

@@ -1,14 +1,14 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
     Job, Vehicle, Customer, Invoice, Estimate, Inquiry, 
-    BusinessEntity, InspectionTemplate, InspectionDiagram, User 
+    BusinessEntity, InspectionTemplate, InspectionDiagram, User, Engineer 
 } from '../../types';
 import { 
     Wrench, CalendarDays, AlertOctagon, ClipboardCheck, BarChart3, 
     PlayCircle, PauseCircle, CheckCircle2, Phone, Wifi, WifiOff, 
     RefreshCw, Monitor, Search, Car, User as UserIcon, Clock, 
     TrendingUp, Building2, ChevronRight, X, Camera, AlertTriangle,
-    ShieldAlert, Sparkles, Check, Play, ArrowRight, Layers
+    ShieldAlert, Sparkles, Check, Play, ArrowRight, Layers, Users
 } from 'lucide-react';
 import { formatReadableDate } from '../../core/utils/dateUtils';
 import { 
@@ -25,6 +25,7 @@ interface MobileAppShellProps {
     jobs: Job[];
     vehicles: Vehicle[];
     customers: Customer[];
+    engineers?: Engineer[];
     invoices: Invoice[];
     estimates: Estimate[];
     inquiries: Inquiry[];
@@ -43,6 +44,7 @@ export const MobileAppShell: React.FC<MobileAppShellProps> = ({
     jobs = [],
     vehicles = [],
     customers = [],
+    engineers = [],
     invoices = [],
     estimates = [],
     inquiries = [],
@@ -55,9 +57,10 @@ export const MobileAppShell: React.FC<MobileAppShellProps> = ({
     onSwitchToDesktop,
     onOpenInquiry
 }) => {
-    // Determine default tab based on user role
-    const isDirectorOrAdmin = currentUser.role === 'Director' || currentUser.role === 'Admin' || currentUser.role === 'admin';
+    // Determine default tab based on user role (Directors/Admins/Dispatchers see all jobs)
+    const isDirectorOrAdmin = currentUser.role === 'Director' || currentUser.role === 'Admin' || currentUser.role === 'admin' || currentUser.role === 'Dispatcher' || currentUser.role !== 'Engineer';
     const [activeTab, setActiveTab] = useState<MobileTab>(() => isDirectorOrAdmin ? 'director' : 'schedule');
+    const [selectedEngineerFilter, setSelectedEngineerFilter] = useState<string>('all');
 
     const { isOnline, pendingCount, triggerSync, isSyncing } = useOfflineSyncStatus(async (col, rec) => {
         if (col === 'jobs') {
@@ -70,13 +73,14 @@ export const MobileAppShell: React.FC<MobileAppShellProps> = ({
     const [activeFindingJob, setActiveFindingJob] = useState<Job | null>(null);
     const [activeInspectionJob, setActiveInspectionJob] = useState<Job | null>(null);
 
-    // Pre-cache 7-day vault
+    // Pre-cache 7-day vault (caches all workshop jobs if director/admin)
     useEffect(() => {
         if (isOnline && jobs.length > 0) {
-            cacheWeeklyJobs(currentUser.id, jobs, vehicles, customers, inspectionTemplates, inspectionDiagrams)
+            const cacheKey = isDirectorOrAdmin ? 'all' : (currentUser.engineerId || currentUser.id);
+            cacheWeeklyJobs(cacheKey, jobs, vehicles, customers, inspectionTemplates, inspectionDiagrams)
                 .catch(err => console.warn('[Mobile App] Pre-cache error:', err));
         }
-    }, [currentUser.id, jobs, vehicles, customers, inspectionTemplates, inspectionDiagrams, isOnline]);
+    }, [currentUser.id, currentUser.engineerId, isDirectorOrAdmin, jobs, vehicles, customers, inspectionTemplates, inspectionDiagrams, isOnline]);
 
     // Format currency helper
     const formatCurrency = (val: number) => {
@@ -100,34 +104,52 @@ export const MobileAppShell: React.FC<MobileAppShellProps> = ({
 
             const count = jobs.filter(j => {
                 const jDate = j.scheduledDate ? j.scheduledDate.split('T')[0] : '';
-                const isAssigned = !currentUser.id || 
-                    (j.segments && j.segments.some(s => s.engineerId === currentUser.engineerId || s.engineerId === currentUser.id));
-                return isAssigned && jDate === dateStr;
+                if (selectedEntityId && selectedEntityId !== 'all' && j.entityId !== selectedEntityId) return false;
+                
+                const matchesEngineer = isDirectorOrAdmin
+                    ? (selectedEngineerFilter === 'all' || (j.segments && j.segments.some(s => s.engineerId === selectedEngineerFilter)))
+                    : (j.segments && j.segments.some(s => s.engineerId === currentUser.engineerId || s.engineerId === currentUser.id));
+
+                return matchesEngineer && jDate === dateStr;
             }).length;
 
             days.push({ dateStr, dayName, dayNum, isToday, count });
         }
         return days;
-    }, [jobs, currentUser.id, currentUser.engineerId]);
+    }, [jobs, currentUser.id, currentUser.engineerId, isDirectorOrAdmin, selectedEngineerFilter, selectedEntityId]);
+
+    // All active in-progress jobs across the workshop
+    const activeWorkshopJobs = useMemo(() => {
+        return jobs.filter(j => {
+            if (selectedEntityId && selectedEntityId !== 'all' && j.entityId !== selectedEntityId) return false;
+            return j.status === 'In Progress';
+        });
+    }, [jobs, selectedEntityId]);
 
     // Active in-progress job for engineer cockpit
     const inProgressJob = useMemo(() => {
+        if (isDirectorOrAdmin) {
+            return activeWorkshopJobs[0] || null;
+        }
         return jobs.find(j => {
-            const isAssigned = !currentUser.id || 
-                (j.segments && j.segments.some(s => s.engineerId === currentUser.engineerId || s.engineerId === currentUser.id));
+            const isAssigned = j.segments && j.segments.some(s => s.engineerId === currentUser.engineerId || s.engineerId === currentUser.id);
             return isAssigned && j.status === 'In Progress';
         });
-    }, [jobs, currentUser.id, currentUser.engineerId]);
+    }, [jobs, currentUser.id, currentUser.engineerId, isDirectorOrAdmin, activeWorkshopJobs]);
 
     // Filter jobs for selected day
     const dayJobs = useMemo(() => {
+        const todayStr = new Date().toISOString().split('T')[0];
         return jobs.filter(j => {
             const jDate = j.scheduledDate ? j.scheduledDate.split('T')[0] : '';
-            const isAssigned = !currentUser.id || 
-                (j.segments && j.segments.some(s => s.engineerId === currentUser.engineerId || s.engineerId === currentUser.id));
-            
-            const matchDay = jDate === selectedDate || (j.status === 'In Progress' && selectedDate === new Date().toISOString().split('T')[0]);
-            if (!matchDay || !isAssigned) return false;
+            if (selectedEntityId && selectedEntityId !== 'all' && j.entityId !== selectedEntityId) return false;
+
+            const matchesEngineer = isDirectorOrAdmin
+                ? (selectedEngineerFilter === 'all' || (j.segments && j.segments.some(s => s.engineerId === selectedEngineerFilter)))
+                : (j.segments && j.segments.some(s => s.engineerId === currentUser.engineerId || s.engineerId === currentUser.id));
+
+            const matchDay = jDate === selectedDate || (j.status === 'In Progress' && selectedDate === todayStr);
+            if (!matchDay || !matchesEngineer) return false;
 
             if (searchFilter.trim()) {
                 const q = searchFilter.toLowerCase().trim();
@@ -138,7 +160,7 @@ export const MobileAppShell: React.FC<MobileAppShellProps> = ({
             }
             return true;
         });
-    }, [jobs, selectedDate, currentUser.id, currentUser.engineerId, vehicles, searchFilter]);
+    }, [jobs, selectedDate, currentUser.id, currentUser.engineerId, isDirectorOrAdmin, selectedEngineerFilter, selectedEntityId, vehicles, searchFilter]);
 
     // Handle job status change with offline outbox fallback
     const handleUpdateJobStatus = async (job: Job, newStatus: Job['status'], reason?: string) => {
@@ -366,6 +388,57 @@ export const MobileAppShell: React.FC<MobileAppShellProps> = ({
                         </div>
                     </div>
 
+                    {/* Technician Filter Pill Strip for Directors & Managers */}
+                    {isDirectorOrAdmin && engineers.length > 0 && (
+                        <div className="bg-slate-900/60 border-b border-slate-800/80 py-2 px-3 shrink-0">
+                            <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide max-w-2xl mx-auto px-1">
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1 shrink-0 mr-1">
+                                    <Users size={12} className="text-indigo-400" />
+                                    Tech:
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={() => setSelectedEngineerFilter('all')}
+                                    className={`px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap transition border cursor-pointer ${
+                                        selectedEngineerFilter === 'all'
+                                            ? 'bg-indigo-600 text-white border-indigo-400 shadow-xs'
+                                            : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200'
+                                    }`}
+                                >
+                                    All Technicians
+                                </button>
+                                {engineers.map(eng => {
+                                    const engJobCount = jobs.filter(j => {
+                                        const jDate = j.scheduledDate ? j.scheduledDate.split('T')[0] : '';
+                                        return jDate === selectedDate && j.segments && j.segments.some(s => s.engineerId === eng.id);
+                                    }).length;
+
+                                    return (
+                                        <button
+                                            key={eng.id}
+                                            type="button"
+                                            onClick={() => setSelectedEngineerFilter(eng.id)}
+                                            className={`px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap transition border flex items-center gap-1.5 cursor-pointer ${
+                                                selectedEngineerFilter === eng.id
+                                                    ? 'bg-indigo-600 text-white border-indigo-400 shadow-xs'
+                                                    : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200'
+                                            }`}
+                                        >
+                                            <span>{eng.name}</span>
+                                            {engJobCount > 0 && (
+                                                <span className={`w-4 h-4 rounded-full text-[9px] font-black flex items-center justify-center ${
+                                                    selectedEngineerFilter === eng.id ? 'bg-white text-indigo-700' : 'bg-slate-800 text-slate-300'
+                                                }`}>
+                                                    {engJobCount}
+                                                </span>
+                                            )}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+
                     {/* Job Stream Content */}
                     <main className="flex-1 p-3.5 max-w-2xl w-full mx-auto space-y-3">
                         {/* Quick Filter Input */}
@@ -456,6 +529,23 @@ export const MobileAppShell: React.FC<MobileAppShellProps> = ({
                                                     <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-800 text-indigo-300 border border-slate-700">
                                                         Lift {lift}
                                                     </span>
+                                                )}
+                                                {isDirectorOrAdmin && (
+                                                    (() => {
+                                                        const assignedNames = (job.segments || [])
+                                                            .map(s => engineers.find(e => e.id === s.engineerId)?.name)
+                                                            .filter(Boolean);
+                                                        return assignedNames.length > 0 ? (
+                                                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-950/70 text-indigo-300 border border-indigo-800/60 flex items-center gap-1">
+                                                                <UserIcon size={9} />
+                                                                {assignedNames.join(', ')}
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">
+                                                                Unallocated
+                                                            </span>
+                                                        );
+                                                    })()
                                                 )}
                                             </div>
 
@@ -585,7 +675,85 @@ export const MobileAppShell: React.FC<MobileAppShellProps> = ({
             {/* TAB 2: ACTIVE COCKPIT MODE */}
             {activeTab === 'cockpit' && (
                 <main className="flex-1 p-4 max-w-2xl w-full mx-auto space-y-4">
-                    {inProgressJob ? (
+                    {isDirectorOrAdmin ? (
+                        <div className="space-y-4">
+                            <div className="flex items-center justify-between">
+                                <h2 className="text-sm font-black uppercase tracking-wider text-white flex items-center gap-2">
+                                    <Wrench size={16} className="text-indigo-400" />
+                                    Workshop Live Fleet ({activeWorkshopJobs.length} On Lifts)
+                                </h2>
+                                <span className="text-[10px] text-slate-400">
+                                    Real-Time Bay Status
+                                </span>
+                            </div>
+
+                            {activeWorkshopJobs.length === 0 ? (
+                                <div className="text-center py-16 px-4 bg-slate-900/40 rounded-3xl border border-slate-800/80">
+                                    <CheckCircle2 size={36} className="mx-auto text-emerald-400 mb-2" />
+                                    <h3 className="text-sm font-bold text-slate-200">All Bays Ready</h3>
+                                    <p className="text-xs text-slate-400 mt-1 max-w-xs mx-auto">
+                                        No active jobs are currently clocked in on workshop lifts.
+                                    </p>
+                                </div>
+                            ) : (
+                                activeWorkshopJobs.map(job => {
+                                    const veh = vehicles.find(v => v.id === job.vehicleId);
+                                    const cust = customers.find(c => c.id === job.customerId);
+                                    const engNames = (job.segments || []).map(s => engineers.find(e => e.id === s.engineerId)?.name).filter(Boolean);
+                                    const lift = job.segments?.[0]?.allocatedLift;
+
+                                    return (
+                                        <div key={job.id} className="bg-gradient-to-br from-indigo-950/60 via-slate-900 to-slate-900 border border-indigo-500/50 rounded-2xl p-4 shadow-xl space-y-3">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    {renderUKPlate(veh?.registration || job.vehicleRegistration || '')}
+                                                    <span className="text-xs font-bold text-white">
+                                                        {veh?.make} {veh?.model}
+                                                    </span>
+                                                    {lift && (
+                                                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-800 text-indigo-300 border border-slate-700">
+                                                            Lift {lift}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                                                    On Lift
+                                                </span>
+                                            </div>
+
+                                            <div>
+                                                <h3 className="text-sm font-bold text-slate-100">{job.description}</h3>
+                                                <div className="flex items-center justify-between text-xs text-slate-400 mt-2 pt-2 border-t border-slate-800/80">
+                                                    <span className="text-indigo-300 font-semibold flex items-center gap-1">
+                                                        <UserIcon size={11} /> Tech: {engNames.length > 0 ? engNames.join(', ') : 'Unassigned'}
+                                                    </span>
+                                                    <span>{cust ? `${cust.forename} ${cust.surname}` : ''}</span>
+                                                </div>
+                                            </div>
+
+                                            <div className="flex items-center gap-2 pt-1">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setActiveFindingJob(job)}
+                                                    className="flex-1 py-2 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 text-xs font-bold flex items-center justify-center gap-1.5 active:scale-95 transition cursor-pointer"
+                                                >
+                                                    <AlertOctagon size={14} className="text-rose-400" /> Ramp Finding
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setActiveInspectionJob(job)}
+                                                    className="flex-1 py-2 rounded-xl bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 border border-indigo-500/30 text-xs font-bold flex items-center justify-center gap-1.5 active:scale-95 transition cursor-pointer"
+                                                >
+                                                    <ClipboardCheck size={14} className="text-indigo-400" /> Inspection
+                                                </button>
+                                            </div>
+                                        </div>
+                                    );
+                                })
+                            )}
+                        </div>
+                    ) : inProgressJob ? (
                         <div className="space-y-4">
                             {/* Live Cockpit Card */}
                             <div className="bg-gradient-to-br from-indigo-950 via-slate-900 to-slate-900 border border-indigo-500/60 rounded-3xl p-5 shadow-2xl relative overflow-hidden">
@@ -634,14 +802,14 @@ export const MobileAppShell: React.FC<MobileAppShellProps> = ({
                                             const reason = window.prompt('Reason for pausing:');
                                             handleUpdateJobStatus(inProgressJob, 'Paused', reason || undefined);
                                         }}
-                                        className="py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 active:scale-95 transition"
+                                        className="py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 active:scale-95 transition cursor-pointer"
                                     >
                                         <PauseCircle size={16} /> Pause Job
                                     </button>
                                     <button
                                         type="button"
                                         onClick={() => handleUpdateJobStatus(inProgressJob, 'Complete')}
-                                        className="py-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-900/40 active:scale-95 transition"
+                                        className="py-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-900/40 active:scale-95 transition cursor-pointer"
                                     >
                                         <CheckCircle2 size={16} /> Sign Off
                                     </button>
@@ -696,7 +864,7 @@ export const MobileAppShell: React.FC<MobileAppShellProps> = ({
                             </p>
                             <button
                                 onClick={() => setActiveTab('schedule')}
-                                className="mt-4 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold uppercase tracking-wider active:scale-95 transition"
+                                className="mt-4 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold uppercase tracking-wider active:scale-95 transition cursor-pointer"
                             >
                                 Open Bay Schedule
                             </button>
