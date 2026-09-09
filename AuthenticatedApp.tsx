@@ -42,6 +42,7 @@ const ManagementModal = lazy(() => import('./components/ManagementModal'));
 const HelpCentre = lazy(() => import('./components/HelpCentre'));
 const MobileEngineerView = lazy(() => import('./components/mobile/MobileEngineerView'));
 const MobileDirectorView = lazy(() => import('./components/mobile/MobileDirectorView'));
+const MobileAppShell = lazy(() => import('./components/mobile/MobileAppShell'));
 
 // --- INACTIVITY HOOK ---
 const useInactivityLogout = (logoutFn: () => void, isAuthenticated: boolean, timeoutMs: number = 30 * 60 * 1000) => {
@@ -510,34 +511,25 @@ const AuthenticatedApp = () => {
                         </div>
                     </div>
                 }>
-                    {currentUser.role === 'Engineer' ? (
-                        <MobileEngineerView
-                            currentUser={currentUser}
-                            jobs={jobs || []}
-                            vehicles={vehicles || []}
-                            customers={customers || []}
-                            inspectionTemplates={data.inspectionTemplates || []}
-                            inspectionDiagrams={data.inspectionDiagrams || []}
-                            onSaveJob={async (job) => {
-                                await handleSaveItem(setJobs, job, 'brooks_jobs');
-                            }}
-                            onSwitchToDesktop={() => handleToggleMobileMode(false)}
-                        />
-                    ) : (
-                        <MobileDirectorView
-                            jobs={jobs || []}
-                            invoices={invoices || []}
-                            estimates={estimates || []}
-                            inquiries={inquiries || []}
-                            customers={customers || []}
-                            vehicles={vehicles || []}
-                            businessEntities={businessEntities || []}
-                            selectedEntityId={selectedEntityId}
-                            onSelectEntity={setSelectedEntityId}
-                            onSwitchToDesktop={() => handleToggleMobileMode(false)}
-                            onOpenInquiry={(inq) => setters.setInquiryModal({isOpen: true, inquiry: inq})}
-                        />
-                    )}
+                    <MobileAppShell
+                        currentUser={currentUser}
+                        jobs={jobs || []}
+                        vehicles={vehicles || []}
+                        customers={customers || []}
+                        invoices={invoices || []}
+                        estimates={estimates || []}
+                        inquiries={inquiries || []}
+                        businessEntities={businessEntities || []}
+                        selectedEntityId={selectedEntityId}
+                        onSelectEntity={setSelectedEntityId}
+                        inspectionTemplates={data.inspectionTemplates || []}
+                        inspectionDiagrams={data.inspectionDiagrams || []}
+                        onSaveJob={async (job) => {
+                            await handleSaveItem(setJobs, job, 'brooks_jobs');
+                        }}
+                        onSwitchToDesktop={() => handleToggleMobileMode(false)}
+                        onOpenInquiry={(inq) => setters.setInquiryModal({isOpen: true, inquiry: inq})}
+                    />
                 </Suspense>
                 <AppModals modals={modalsState} setters={setters} actions={modalActions} commonProps={commonProps} />
                 <ToastContainer aria-label="Notifications" />
