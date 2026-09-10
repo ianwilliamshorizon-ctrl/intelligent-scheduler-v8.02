@@ -272,6 +272,48 @@ describe('PrintableInquiryList - Scheduled Inquiries Printing', () => {
         expect(screen.queryByText('01/09/2026')).not.toBeInTheDocument();
         expect(screen.queryByText('20/08/2026')).not.toBeInTheDocument();
     });
+
+    it('renders customer address and phone number on the scheduled list', () => {
+        const customerWithContact: Customer = {
+            id: 'cust-contact-1',
+            forename: 'Sarah',
+            surname: 'Connor',
+            mobile: '07888 123456',
+            addressLine1: '42 Cyberdyne Way',
+            city: 'Southampton',
+            postcode: 'SO14 0AA'
+        };
+
+        const inqWithContact: Inquiry = {
+            id: 'inq-contact-1',
+            inquiryNumber: 'INQ-CONT-1',
+            createdAt: '2026-09-01T10:00:00Z',
+            fromName: 'Sarah Connor',
+            fromContact: '07888 123456',
+            fromPhone: '07888 123456',
+            message: 'Need urgent service',
+            takenByUserId: 'user-1',
+            status: 'Scheduled',
+            linkedCustomerId: 'cust-contact-1',
+            linkedJobId: 'job-1'
+        };
+
+        render(
+            <PrintableInquiryList
+                isOpen={true}
+                title="Active Inquiries"
+                inquiries={[inqWithContact]}
+                vehicles={mockVehicles}
+                customers={[customerWithContact]}
+                jobs={mockJobs}
+                initialFilter="scheduled"
+            />
+        );
+
+        expect(screen.getByText('Sarah Connor')).toBeInTheDocument();
+        expect(screen.getByText(/07888 123456/)).toBeInTheDocument();
+        expect(screen.getByText(/42 Cyberdyne Way, Southampton, SO14 0AA/)).toBeInTheDocument();
+    });
 });
 
 

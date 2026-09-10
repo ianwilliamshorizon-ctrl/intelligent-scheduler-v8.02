@@ -211,11 +211,12 @@ export const PrintableInquirySheet: React.FC<PrintableInquirySheetProps> = ({
                                     </div>
                                 </th>
                                 <th 
-                                    className="p-2 border border-gray-300 min-w-[140px] cursor-pointer hover:bg-gray-200 transition select-none"
+                                    className="p-2 border border-gray-300 min-w-[160px] cursor-pointer hover:bg-gray-200 transition select-none"
                                     onClick={() => onSortChange?.('customer')}
                                 >
                                     <div className="flex items-center gap-1">
                                         <span>Customer</span>
+                                        <span className="text-[9px] font-normal text-gray-500 lowercase">(phone/addr)</span>
                                         {sortBy === 'customer' && (sortOrder === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
                                     </div>
                                 </th>
@@ -256,6 +257,15 @@ export const PrintableInquirySheet: React.FC<PrintableInquirySheetProps> = ({
                                     : '-';
                                 const fullJobNumber = linkedJob?.jobNumber || linkedJob?.id || '-';
 
+                                const phone = customer?.mobile || customer?.phone || inquiry.fromPhone || (inquiry.fromContact && !inquiry.fromContact.includes('@') ? inquiry.fromContact : '') || (linkedJob as any)?.customerPhone || (linkedJob as any)?.customerMobile || '';
+                                const addressParts = [
+                                    customer?.addressLine1 || inquiry.addressLine1,
+                                    customer?.addressLine2 || inquiry.addressLine2,
+                                    customer?.city || inquiry.city,
+                                    customer?.postcode || inquiry.postcode
+                                ].filter(Boolean);
+                                const address = addressParts.length > 0 ? addressParts.join(', ') : (customer?.address || '');
+
                                 return (
                                     <tr key={inquiry.id} className="hover:bg-gray-50">
                                         <td className="p-2 border border-gray-300 font-mono font-bold whitespace-nowrap">
@@ -264,7 +274,19 @@ export const PrintableInquirySheet: React.FC<PrintableInquirySheetProps> = ({
                                         <td className="p-2 border border-gray-300 font-mono text-[10px] whitespace-nowrap">
                                             {new Date(inquiry.createdAt).toLocaleDateString('en-GB')} {new Date(inquiry.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                         </td>
-                                        <td className="p-2 border border-gray-300 font-semibold">{customerName}</td>
+                                        <td className="p-2 border border-gray-300 min-w-[150px]">
+                                            <div className="font-bold text-gray-900">{customerName}</div>
+                                            {phone ? (
+                                                <div className="text-[10px] text-indigo-700 font-mono font-semibold flex items-center gap-1 mt-0.5 whitespace-nowrap">
+                                                    <span>📞 {phone}</span>
+                                                </div>
+                                            ) : null}
+                                            {address ? (
+                                                <div className="text-[10px] text-gray-600 leading-tight mt-0.5 max-w-[220px]">
+                                                    {address}
+                                                </div>
+                                            ) : null}
+                                        </td>
                                         <td className="p-2 border border-gray-300 min-w-[120px]">
                                             <div className="font-mono font-bold text-blue-800 whitespace-nowrap">
                                                 {vehicleInfo.reg || '-'}
