@@ -114,4 +114,23 @@ describe('PrintableInquiryList - Scheduled Inquiries Printing', () => {
         expect(screen.getByText('INQ-001')).toBeInTheDocument();
         expect(screen.getByText('INQ-002')).toBeInTheDocument();
     });
+
+    it('triggers print when Print button is clicked', () => {
+        render(
+            <PrintableInquiryList
+                isOpen={true}
+                title="Active Inquiries"
+                inquiries={mockInquiries}
+                vehicles={mockVehicles}
+                customers={mockCustomers}
+                jobs={mockJobs}
+                initialFilter="scheduled"
+            />
+        );
+
+        const printBtn = screen.getByText('Print Scheduled');
+        fireEvent.click(printBtn);
+        expect(screen.getByText('Preparing Print...')).toBeInTheDocument();
+    });
 });
+
