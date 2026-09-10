@@ -4,9 +4,10 @@ import {
     Wrench, Car, User as UserIcon, Clock, AlertOctagon, CheckCircle2, 
     PauseCircle, PlayCircle, ClipboardCheck, Phone, RefreshCw, 
     Wifi, WifiOff, Monitor, ChevronRight, AlertTriangle, ShieldCheck,
-    Camera, FileText, Check, Plus, MessageSquare
+    Camera, FileText, Check, Plus, MessageSquare, CalendarDays
 } from 'lucide-react';
-import { formatReadableDate } from '../../core/utils/dateUtils';
+import { formatReadableDate, formatScheduledArrivalDate } from '../../core/utils/dateUtils';
+import { TIME_SEGMENTS } from '../../constants';
 import { cacheWeeklyJobs, getCachedWeeklyVault, useOfflineSyncStatus, enqueueOfflineAction } from '../../core/services/offlineSyncService';
 import FastTrackFindingModal from '../jobs/FastTrackFindingModal';
 import { JobInspectionTab } from '../jobs/tabs/JobInspectionTab';
@@ -312,6 +313,44 @@ export const MobileEngineerView: React.FC<MobileEngineerViewProps> = ({
                                         <h2 className="text-sm font-bold text-white mt-1.5 leading-snug">
                                             {job.description}
                                         </h2>
+
+                                        {/* Scheduled Arrival Date & Vehicle Status Badge */}
+                                        {(() => {
+                                            const rawDate = job.scheduledDate || job.segments?.[0]?.date;
+                                            const arrivalDateFormatted = formatScheduledArrivalDate(rawDate);
+                                            const startSeg = job.segments?.find(s => s.scheduledStartSegment !== null && s.scheduledStartSegment !== undefined)?.scheduledStartSegment;
+                                            const timeStr = (startSeg !== undefined && startSeg !== null && TIME_SEGMENTS[startSeg]) ? TIME_SEGMENTS[startSeg] : null;
+                                            const todayStr = new Date().toISOString().split('T')[0];
+                                            const isToday = rawDate ? rawDate.split('T')[0] === todayStr : false;
+
+                                            return (
+                                                <div className="flex items-center justify-between gap-2 text-[11px] bg-slate-950/70 px-2.5 py-1.5 rounded-xl border border-slate-800/80 my-2">
+                                                    <div className="flex items-center gap-1.5 text-slate-300 min-w-0">
+                                                        <CalendarDays size={12} className="text-indigo-400 shrink-0" />
+                                                        <span className="text-slate-400 font-medium">Arrival:</span>
+                                                        <span className={`font-bold truncate ${isToday ? 'text-indigo-300' : 'text-slate-200'}`}>
+                                                            {arrivalDateFormatted}
+                                                        </span>
+                                                        {timeStr && (
+                                                            <span className="text-indigo-400 font-bold shrink-0 flex items-center gap-0.5 ml-1">
+                                                                <Clock size={10} /> {timeStr}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    {job.vehicleStatus && (
+                                                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border shrink-0 ${
+                                                            job.vehicleStatus === 'On Site'
+                                                                ? 'bg-emerald-950/70 text-emerald-300 border-emerald-800/60'
+                                                                : job.vehicleStatus === 'Awaiting Arrival'
+                                                                ? 'bg-sky-950/70 text-sky-300 border-sky-800/60'
+                                                                : 'bg-slate-800 text-slate-400 border-slate-700'
+                                                        }`}>
+                                                            {job.vehicleStatus}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            );
+                                        })()}
                                     </div>
 
                                     <div className="flex flex-col items-end gap-1 shrink-0">

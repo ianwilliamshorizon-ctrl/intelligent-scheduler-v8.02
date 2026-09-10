@@ -10,7 +10,8 @@ import {
     TrendingUp, Building2, ChevronRight, X, Camera, AlertTriangle,
     ShieldAlert, Sparkles, Check, Play, ArrowRight, Layers, Users
 } from 'lucide-react';
-import { formatReadableDate } from '../../core/utils/dateUtils';
+import { formatReadableDate, formatScheduledArrivalDate } from '../../core/utils/dateUtils';
+import { TIME_SEGMENTS } from '../../constants';
 import { 
     cacheWeeklyJobs, useOfflineSyncStatus, enqueueOfflineAction 
 } from '../../core/services/offlineSyncService';
@@ -268,6 +269,44 @@ export const MobileAppShell: React.FC<MobileAppShellProps> = ({
                 <div className="bg-gradient-to-b from-amber-300 to-amber-400 text-slate-950 px-2 py-0.5 tracking-wider font-black">
                     {cleanVrm}
                 </div>
+            </div>
+        );
+    };
+
+    // Render Scheduled Arrival Date & Vehicle Status Badge
+    const renderScheduledArrivalBadge = (j: Job) => {
+        const rawDate = j.scheduledDate || j.segments?.[0]?.date;
+        const arrivalDateFormatted = formatScheduledArrivalDate(rawDate);
+        const startSeg = j.segments?.find(s => s.scheduledStartSegment !== null && s.scheduledStartSegment !== undefined)?.scheduledStartSegment;
+        const timeStr = (startSeg !== undefined && startSeg !== null && TIME_SEGMENTS[startSeg]) ? TIME_SEGMENTS[startSeg] : null;
+        const todayStr = new Date().toISOString().split('T')[0];
+        const isToday = rawDate ? rawDate.split('T')[0] === todayStr : false;
+
+        return (
+            <div className="flex items-center justify-between gap-2 text-[11px] bg-slate-950/70 px-2.5 py-1.5 rounded-xl border border-slate-800/80 my-2">
+                <div className="flex items-center gap-1.5 text-slate-300 min-w-0">
+                    <CalendarDays size={12} className="text-indigo-400 shrink-0" />
+                    <span className="text-slate-400 font-medium">Arrival:</span>
+                    <span className={`font-bold truncate ${isToday ? 'text-indigo-300' : 'text-slate-200'}`}>
+                        {arrivalDateFormatted}
+                    </span>
+                    {timeStr && (
+                        <span className="text-indigo-400 font-bold shrink-0 flex items-center gap-0.5 ml-1">
+                            <Clock size={10} /> {timeStr}
+                        </span>
+                    )}
+                </div>
+                {j.vehicleStatus && (
+                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border shrink-0 ${
+                        j.vehicleStatus === 'On Site'
+                            ? 'bg-emerald-950/70 text-emerald-300 border-emerald-800/60'
+                            : j.vehicleStatus === 'Awaiting Arrival'
+                            ? 'bg-sky-950/70 text-sky-300 border-sky-800/60'
+                            : 'bg-slate-800 text-slate-400 border-slate-700'
+                    }`}>
+                        {j.vehicleStatus}
+                    </span>
+                )}
             </div>
         );
     };
@@ -567,6 +606,9 @@ export const MobileAppShell: React.FC<MobileAppShellProps> = ({
                                             {job.description}
                                         </h3>
 
+                                        {/* Scheduled Arrival Date & Vehicle Status Badge */}
+                                        {renderScheduledArrivalBadge(job)}
+
                                         {/* Customer & Parts Pill Row */}
                                         <div className="flex items-center justify-between text-xs text-slate-400 mt-2.5 pt-2 border-t border-slate-800/70">
                                             <div className="flex items-center gap-1.5 truncate">
@@ -724,6 +766,7 @@ export const MobileAppShell: React.FC<MobileAppShellProps> = ({
 
                                             <div>
                                                 <h3 className="text-sm font-bold text-slate-100">{job.description}</h3>
+                                                {renderScheduledArrivalBadge(job)}
                                                 <div className="flex items-center justify-between text-xs text-slate-400 mt-2 pt-2 border-t border-slate-800/80">
                                                     <span className="text-indigo-300 font-semibold flex items-center gap-1">
                                                         <UserIcon size={11} /> Tech: {engNames.length > 0 ? engNames.join(', ') : 'Unassigned'}
@@ -777,6 +820,7 @@ export const MobileAppShell: React.FC<MobileAppShellProps> = ({
                                     <p className="text-xs text-slate-300 mt-0.5">
                                         {inProgressJob.description}
                                     </p>
+                                    {renderScheduledArrivalBadge(inProgressJob)}
                                 </div>
 
                                 <div className="mt-4 pt-3 border-t border-slate-800/80 grid grid-cols-2 gap-2 text-xs">
@@ -953,6 +997,7 @@ export const MobileAppShell: React.FC<MobileAppShellProps> = ({
                                     <p className="text-xs text-slate-400 truncate">
                                         {j.description}
                                     </p>
+                                    {renderScheduledArrivalBadge(j)}
                                     <div className="flex items-center gap-2 mt-2">
                                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
                                             hasChecklist ? 'bg-emerald-950/50 text-emerald-300 border-emerald-800/40' : 'bg-slate-800 text-slate-400 border-slate-700'

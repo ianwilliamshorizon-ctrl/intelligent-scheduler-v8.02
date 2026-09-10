@@ -1,6 +1,6 @@
 import React from 'react';
 import { Job, Vehicle, Customer, PurchaseOrder, User, Engineer } from '../../types';
-import { KeyRound, Wrench, Warehouse, MapPin, LogIn, FileText, LogOut, PlayCircle, PauseCircle, CheckCircle } from 'lucide-react';
+import { KeyRound, Wrench, Warehouse, MapPin, LogIn, FileText, LogOut, PlayCircle, PauseCircle, CheckCircle, CalendarDays } from 'lucide-react';
 import { StorageLocation } from '../../types';
 import { JobHoverPopout } from './JobHoverPopout';
 import { useData } from '../../core/state/DataContext';
@@ -88,11 +88,26 @@ export const SummaryJobCard: React.FC<SummaryJobCardProps> = (props) => {
                             <span className="bg-rose-600 text-white px-1 rounded font-black uppercase tracking-tighter shadow-sm border border-rose-700/20">PARTS NEEDED</span>
                         )}
                     </div>
-                    {job.keyNumber && (
-                        <span className="flex items-center gap-0.5 text-amber-600 bg-amber-50 px-1 rounded border border-amber-100">
-                            <KeyRound size={9} /> {job.keyNumber}
-                        </span>
-                    )}
+                    <div className="flex items-center gap-1">
+                        {job.scheduledDate && (
+                            <span className="flex items-center gap-0.5 text-slate-600 bg-slate-100 px-1.5 py-0.2 rounded border border-slate-200 text-[8px] font-bold" title={`Scheduled Arrival: ${job.scheduledDate}`}>
+                                <CalendarDays size={8} className="text-indigo-500 shrink-0" />
+                                {(() => {
+                                    try {
+                                        const d = new Date(job.scheduledDate.includes('T') ? job.scheduledDate : `${job.scheduledDate}T00:00:00`);
+                                        return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+                                    } catch {
+                                        return job.scheduledDate;
+                                    }
+                                })()}
+                            </span>
+                        )}
+                        {job.keyNumber && (
+                            <span className="flex items-center gap-0.5 text-amber-600 bg-amber-50 px-1 rounded border border-amber-100">
+                                <KeyRound size={9} /> {job.keyNumber}
+                            </span>
+                        )}
+                    </div>
                 </div>
                 
                 <div className="flex flex-col gap-0.5">

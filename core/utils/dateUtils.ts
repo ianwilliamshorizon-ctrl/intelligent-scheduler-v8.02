@@ -69,6 +69,35 @@ export const formatReadableDate = (dateString: string): string => {
     }
 };
 
+/** Formats a scheduled arrival date nicely with relative day awareness (e.g. "Today (Thu, 10 Sep 2026)", "Tomorrow (Fri, 11 Sep 2026)", or "Wed, 16 Sep 2026") */
+export const formatScheduledArrivalDate = (dateString?: string): string => {
+    if (!dateString) return 'Unscheduled';
+    try {
+        const cleanDate = dateString.split('T')[0];
+        const todayStr = getTodayISOString();
+        const tomorrowStr = getFutureDateISOString(1);
+
+        const date = dateStringToDate(cleanDate);
+        const formatted = date.toLocaleDateString('en-GB', {
+            weekday: 'short',
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric',
+            timeZone: 'UTC'
+        });
+
+        if (cleanDate === todayStr) {
+            return `Today (${formatted})`;
+        }
+        if (cleanDate === tomorrowStr) {
+            return `Tomorrow (${formatted})`;
+        }
+        return formatted;
+    } catch {
+        return dateString;
+    }
+};
+
 /** Adds a number of days to a Date object, returns a new Date object */
 export const addDays = (date: Date, days: number): Date => {
     const newDate = new Date(date.valueOf());
