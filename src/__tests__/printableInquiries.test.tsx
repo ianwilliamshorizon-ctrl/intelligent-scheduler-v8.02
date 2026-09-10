@@ -40,10 +40,11 @@ describe('PrintableInquiryList - Scheduled Inquiries Printing', () => {
             createdAt: '2026-09-02T10:00:00Z',
             fromName: 'Jane Doe',
             fromContact: '07444555666',
-            message: 'Scheduled brake replacement',
+            message: 'Scheduled brake replacement\nLine 2 details\nLine 3 details\nLine 4 details\nLine 5 extra long notes',
             takenByUserId: 'user-1',
             status: 'Scheduled',
-            linkedJobId: 'job-1'
+            linkedJobId: 'job-1',
+            linkedVehicleId: 'veh-1'
         }
     ];
 
@@ -183,6 +184,43 @@ describe('PrintableInquiryList - Scheduled Inquiries Printing', () => {
         const printBtn = screen.getByRole('button', { name: /Print Scheduled/i });
         fireEvent.click(printBtn);
         expect(screen.getByText('Preparing Print...')).toBeInTheDocument();
+    });
+
+    it('renders vehicle registration and make/model in the vehicle column', () => {
+        render(
+            <PrintableInquiryList
+                isOpen={true}
+                title="Active Inquiries"
+                inquiries={mockInquiries}
+                vehicles={mockVehicles}
+                customers={mockCustomers}
+                jobs={mockJobs}
+                initialFilter="scheduled"
+            />
+        );
+
+        expect(screen.getAllByText('Vehicle (Reg / Model)')[0]).toBeInTheDocument();
+        expect(screen.getAllByText('AA11AAA')[0]).toBeInTheDocument();
+        expect(screen.getAllByText('Porsche 911')[0]).toBeInTheDocument();
+    });
+
+    it('renders comments/message column with 4-line clamping restriction', () => {
+        render(
+            <PrintableInquiryList
+                isOpen={true}
+                title="Active Inquiries"
+                inquiries={mockInquiries}
+                vehicles={mockVehicles}
+                customers={mockCustomers}
+                jobs={mockJobs}
+                initialFilter="scheduled"
+            />
+        );
+
+        expect(screen.getAllByText('Comments / Message')[0]).toBeInTheDocument();
+        const clampedDiv = document.querySelector('.line-clamp-4');
+        expect(clampedDiv).not.toBeNull();
+        expect(clampedDiv).toHaveStyle({ WebkitLineClamp: '4' });
     });
 });
 

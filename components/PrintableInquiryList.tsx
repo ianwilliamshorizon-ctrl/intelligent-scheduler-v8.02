@@ -66,22 +66,51 @@ export const PrintableInquirySheet: React.FC<PrintableInquirySheetProps> = ({
         return null;
     };
 
-    const resolveRegNo = (inquiry: Inquiry): string => {
+    const resolveVehicleInfo = (inquiry: Inquiry): { reg: string; details: string } => {
+        let v: Vehicle | undefined = undefined;
         if (inquiry.linkedVehicleId && vehiclesById.has(inquiry.linkedVehicleId)) {
-            const v = vehiclesById.get(inquiry.linkedVehicleId);
-            if (v?.registration) return v.registration;
-        }
-        if (inquiry.vehicleRegistration && inquiry.vehicleRegistration.trim()) {
-            return inquiry.vehicleRegistration.trim();
-        }
-        if (inquiry.linkedEstimateId && estimatesById.has(inquiry.linkedEstimateId)) {
+            v = vehiclesById.get(inquiry.linkedVehicleId);
+        } else if (inquiry.linkedEstimateId && estimatesById.has(inquiry.linkedEstimateId)) {
             const est = estimatesById.get(inquiry.linkedEstimateId);
-            if ((est as any)?.vehicleRegistration) return (est as any).vehicleRegistration;
             if (est?.vehicleId && vehiclesById.has(est.vehicleId)) {
-                return vehiclesById.get(est.vehicleId)?.registration || '';
+                v = vehiclesById.get(est.vehicleId);
             }
         }
-        return '';
+        if (!v) {
+            const job = resolveLinkedJob(inquiry);
+            if (job?.vehicleId && vehiclesById.has(job.vehicleId)) {
+                v = vehiclesById.get(job.vehicleId);
+            }
+        }
+
+        const reg = (v?.registration && v.registration.trim())
+            || (inquiry.vehicleRegistration && inquiry.vehicleRegistration.trim())
+            || (inquiry.linkedEstimateId && (estimatesById.get(inquiry.linkedEstimateId) as any)?.vehicleRegistration)
+            || '';
+
+        const make = (v?.make && v.make.toLowerCase() !== 'unknown')
+            ? v.make
+            : (inquiry.vehicleMake && inquiry.vehicleMake.toLowerCase() !== 'unknown' ? inquiry.vehicleMake : '');
+
+        const model = (v?.model && v.model.toLowerCase() !== 'unknown')
+            ? v.model
+            : (inquiry.vehicleModel && inquiry.vehicleModel.toLowerCase() !== 'unknown' ? inquiry.vehicleModel : '');
+
+        const type = (v?.type && v.type.toLowerCase() !== 'unknown')
+            ? v.type
+            : ((inquiry as any).vehicleType && (inquiry as any).vehicleType.toLowerCase() !== 'unknown' ? (inquiry as any).vehicleType : '');
+
+        const makeModel = [make, model].filter(Boolean).join(' ').trim();
+        let details = makeModel;
+        if (type) {
+            if (!details) {
+                details = type;
+            } else if (!details.toLowerCase().includes(type.toLowerCase())) {
+                details = `${details} (${type})`;
+            }
+        }
+
+        return { reg, details };
     };
 
     const getAssignedName = (inquiry: Inquiry): string => {
@@ -189,7 +218,7 @@ export const PrintableInquirySheet: React.FC<PrintableInquirySheetProps> = ({
                                         {sortBy === 'customer' && (sortOrder === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
                                     </div>
                                 </th>
-                                <th className="p-2 border border-gray-300 min-w-[95px] whitespace-nowrap">Reg No</th>
+                                <th className="p-2 border border-gray-300 min-w-[130px] whitespace-nowrap">Vehicle (Reg / Model)</th>
                                 {filterMode === 'scheduled' && (
                                     <>
                                         {/* Enlarged Job # Column to prevent truncation */}
@@ -209,7 +238,7 @@ export const PrintableInquirySheet: React.FC<PrintableInquirySheetProps> = ({
                                     </>
                                 )}
                                 <th className="p-2 border border-gray-300 min-w-[95px] whitespace-nowrap">Status</th>
-                                <th className="p-2 border border-gray-300 min-w-[200px]">Subject / Message</th>
+                                <th className="p-2 border border-gray-300 min-w-[200px]">Comments / Message</th>
                                 <th className="p-2 border border-gray-300 min-w-[110px] whitespace-nowrap">Assigned To</th>
                             </tr>
                         </thead>
@@ -217,7 +246,7 @@ export const PrintableInquirySheet: React.FC<PrintableInquirySheetProps> = ({
                             {inquiries.map(inquiry => {
                                 const customer = inquiry.linkedCustomerId ? customersById.get(inquiry.linkedCustomerId) : null;
                                 const customerName = customer ? getCustomerDisplayName(customer) : inquiry.fromName;
-                                const regNo = resolveRegNo(inquiry);
+                                const vehicleInfo = resolveVehicleInfo(inquiry);
                                 const assignedTo = getAssignedName(inquiry);
                                 const linkedJob = resolveLinkedJob(inquiry);
                                 const scheduledDateStr = linkedJob?.scheduledDate 
@@ -234,25 +263,43 @@ export const PrintableInquirySheet: React.FC<PrintableInquirySheetProps> = ({
                                             {new Date(inquiry.createdAt).toLocaleDateString('en-GB')} {new Date(inquiry.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                         </td>
                                         <td className="p-2 border border-gray-300 font-semibold">{customerName}</td>
-                                        <td className="p-2 border border-gray-300 font-mono font-bold text-blue-800 whitespace-nowrap">
-                                            {regNo || '-'}
+                                        <td className="p-2 border border-gray-300 min-w-[120px]">
+                                            <div className="font-mono font-bold text-blue-800 whitespace-nowrap">
+                                                {vehicleInfo.reg || '-'}
+                                            </div>
+                                            {vehicleInfo.details ? (
+                                                <div className="text-[10px] text-gray-700 font-medium whitespace-normal leading-tight mt-0.5">
+                                                    {vehicleInfo.details}
+                                                </div>
+                                            ) : null}
                                         </td>
                                         {filterMode === 'scheduled' && (
-                                            <>
-                                                {/* Whole Job Number displayed with expanded width */}
-                                                <td className="p-2 border border-gray-300 font-mono font-bold text-emerald-800 whitespace-nowrap min-w-[150px]">
-                                                    {fullJobNumber}
-                                                </td>
-                                                <td className="p-2 border border-gray-300 font-bold text-gray-900 whitespace-nowrap min-w-[130px]">
-                                                    {scheduledDateStr}
-                                                </td>
-                                            </>
-                                        )}
-                                        <td className="p-2 border border-gray-300 font-semibold whitespace-nowrap">{inquiry.status}</td>
-                                        <td className="p-2 border border-gray-300 max-w-[280px] break-words" title={inquiry.subject || inquiry.message}>
-                                            {inquiry.subject ? <span className="font-semibold text-gray-900">{inquiry.subject}: </span> : null}
-                                            <span className="text-gray-700">{inquiry.message}</span>
-                                        </td>
+                                             <>
+                                                 {/* Whole Job Number displayed with expanded width */}
+                                                 <td className="p-2 border border-gray-300 font-mono font-bold text-emerald-800 whitespace-nowrap min-w-[150px]">
+                                                     {fullJobNumber}
+                                                 </td>
+                                                 <td className="p-2 border border-gray-300 font-bold text-gray-900 whitespace-nowrap min-w-[130px]">
+                                                     {scheduledDateStr}
+                                                 </td>
+                                             </>
+                                         )}
+                                         <td className="p-2 border border-gray-300 font-semibold whitespace-nowrap">{inquiry.status}</td>
+                                         <td className="p-2 border border-gray-300 max-w-[280px] break-words" title={inquiry.subject ? `${inquiry.subject}: ${inquiry.message}` : inquiry.message}>
+                                             <div 
+                                                 className="text-[10px] text-gray-700 leading-snug line-clamp-4 overflow-hidden"
+                                                 style={{
+                                                     display: '-webkit-box',
+                                                     WebkitLineClamp: 4,
+                                                     WebkitBoxOrient: 'vertical',
+                                                     overflow: 'hidden',
+                                                     maxHeight: '4.8em'
+                                                 }}
+                                             >
+                                                 {inquiry.subject ? <span className="font-semibold text-gray-900">{inquiry.subject}: </span> : null}
+                                                 <span>{inquiry.message}</span>
+                                             </div>
+                                         </td>
                                         <td className="p-2 border border-gray-300 whitespace-nowrap">{assignedTo}</td>
                                     </tr>
                                 );
