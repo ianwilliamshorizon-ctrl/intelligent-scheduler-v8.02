@@ -425,7 +425,7 @@ const InquiryCard: React.FC<{
                                     title={`PO #${po.poNumber || po.id} - ${po.status}`}
                                 >
                                     <PackageIcon size={9} className={`shrink-0 ${poStyles.icon}`}/>
-                                    <span>{po.poNumber || 'PO'}</span>
+                                    <span>{po.poNumber || po.id}</span>
                                 </button>
                             );
                         })}

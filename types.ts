@@ -463,6 +463,7 @@ export type PurchaseOrderStatus = 'Draft' | 'Ordered' | 'Partially Received' | '
 
 export interface PurchaseOrder { 
     id: string; 
+    poNumber?: string;
     status?: PurchaseOrderStatus; 
     supplierId?: string;
     entityId?: string;
