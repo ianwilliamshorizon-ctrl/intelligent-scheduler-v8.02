@@ -1132,6 +1132,7 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
     const [selectedInquiryIds, setSelectedInquiryIds] = useState<string[]>([]);
     const [isSyncing, setIsSyncing] = useState(false);
     const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+    const [printFilterMode, setPrintFilterMode] = useState<'all' | 'scheduled'>('all');
 
     const handleSyncEmails = async () => {
         setIsSyncing(true);
@@ -1689,16 +1690,33 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                             </div>
                         )}
 
-                        {/* Print List Button */}
-                        <button
-                            type="button"
-                            onClick={() => setIsPrintModalOpen(true)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-gray-50 border border-gray-300 text-gray-700 font-bold text-xs rounded-lg shadow-sm transition-all whitespace-nowrap cursor-pointer"
-                            title="Print currently filtered list of inquiries"
-                        >
-                            <Printer size={15} className="text-gray-600" />
-                            <span>Print List</span>
-                        </button>
+                        {/* Print Actions */}
+                        <div className="flex items-center gap-1.5">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setPrintFilterMode('all');
+                                    setIsPrintModalOpen(true);
+                                }}
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-gray-50 border border-gray-300 text-gray-700 font-bold text-xs rounded-lg shadow-sm transition-all whitespace-nowrap cursor-pointer"
+                                title="Print currently filtered list of inquiries"
+                            >
+                                <Printer size={15} className="text-gray-600" />
+                                <span>Print List</span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setPrintFilterMode('scheduled');
+                                    setIsPrintModalOpen(true);
+                                }}
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 font-bold text-xs rounded-lg shadow-sm transition-all whitespace-nowrap cursor-pointer"
+                                title="Print only scheduled inquiries"
+                            >
+                                <CalendarCheck size={15} className="text-emerald-600" />
+                                <span>Print Scheduled</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </header>
@@ -2165,6 +2183,8 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                     estimates={estimates}
                     users={users}
                     entities={entities}
+                    jobs={jobs}
+                    initialFilter={printFilterMode}
                     title={`${activeTab === 'active' ? 'Active' : 'Closed'} Inquiries (${dateFilter === 'today' ? 'Today' : dateFilter === 'all' ? 'All Time' : `${dateFilter} Days`})`}
                 />
             )}
