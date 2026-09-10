@@ -10,7 +10,7 @@ import {
     TrendingUp, Building2, ChevronRight, X, Camera, AlertTriangle,
     ShieldAlert, Sparkles, Check, Play, ArrowRight, Layers, Users
 } from 'lucide-react';
-import { formatReadableDate, formatScheduledArrivalDate } from '../../core/utils/dateUtils';
+import { formatReadableDate, formatScheduledArrivalDate, getEffectiveJobScheduledDate } from '../../core/utils/dateUtils';
 import { TIME_SEGMENTS } from '../../constants';
 import { 
     cacheWeeklyJobs, useOfflineSyncStatus, enqueueOfflineAction 
@@ -275,8 +275,8 @@ export const MobileAppShell: React.FC<MobileAppShellProps> = ({
 
     // Render Scheduled Arrival Date & Vehicle Status Badge
     const renderScheduledArrivalBadge = (j: Job) => {
-        const rawDate = j.scheduledDate || j.segments?.[0]?.date;
-        const arrivalDateFormatted = formatScheduledArrivalDate(rawDate);
+        const rawDate = getEffectiveJobScheduledDate(j);
+        const arrivalDateFormatted = formatScheduledArrivalDate(rawDate || undefined);
         const startSeg = j.segments?.find(s => s.scheduledStartSegment !== null && s.scheduledStartSegment !== undefined)?.scheduledStartSegment;
         const timeStr = (startSeg !== undefined && startSeg !== null && TIME_SEGMENTS[startSeg]) ? TIME_SEGMENTS[startSeg] : null;
         const todayStr = new Date().toISOString().split('T')[0];

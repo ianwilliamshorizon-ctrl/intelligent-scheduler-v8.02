@@ -3,6 +3,7 @@ import { Inquiry, Vehicle, Customer, Estimate, BusinessEntity, Job } from '../ty
 import { getCustomerDisplayName } from '../utils/customerUtils';
 import { Printer, CalendarCheck, ListFilter, Loader2, ArrowUpDown, LayoutTemplate, ArrowUp, ArrowDown } from 'lucide-react';
 import { usePrint } from '../core/hooks/usePrint';
+import { getEffectiveInquiryScheduledDate, getEffectiveJobScheduledDate } from '../core/utils/dateUtils';
 
 interface PrintableInquiryListProps {
     inquiries: Inquiry[];
@@ -249,9 +250,10 @@ export const PrintableInquirySheet: React.FC<PrintableInquirySheetProps> = ({
                                 const vehicleInfo = resolveVehicleInfo(inquiry);
                                 const assignedTo = getAssignedName(inquiry);
                                 const linkedJob = resolveLinkedJob(inquiry);
-                                const scheduledDateStr = linkedJob?.scheduledDate 
-                                    ? new Date(linkedJob.scheduledDate).toLocaleDateString('en-GB')
-                                    : (inquiry.followUpDate ? new Date(inquiry.followUpDate).toLocaleDateString('en-GB') : '-');
+                                const effectiveDate = getEffectiveInquiryScheduledDate(inquiry, linkedJob);
+                                const scheduledDateStr = effectiveDate 
+                                    ? new Date(effectiveDate.includes('T') ? effectiveDate : `${effectiveDate}T00:00:00`).toLocaleDateString('en-GB')
+                                    : '-';
                                 const fullJobNumber = linkedJob?.jobNumber || linkedJob?.id || '-';
 
                                 return (
@@ -389,12 +391,9 @@ export const PrintableInquiryList: React.FC<PrintableInquiryListProps> = ({
 
     const getScheduledTimestamp = React.useCallback((inquiry: Inquiry): number => {
         const job = resolveLinkedJob(inquiry);
-        if (job?.scheduledDate) {
-            const t = new Date(job.scheduledDate).getTime();
-            if (!isNaN(t)) return t;
-        }
-        if (inquiry.followUpDate) {
-            const t = new Date(inquiry.followUpDate).getTime();
+        const effectiveDate = getEffectiveInquiryScheduledDate(inquiry, job);
+        if (effectiveDate) {
+            const t = new Date(effectiveDate.includes('T') ? effectiveDate : `${effectiveDate}T00:00:00`).getTime();
             if (!isNaN(t)) return t;
         }
         return sortOrder === 'asc' ? 9999999999999 : 0;

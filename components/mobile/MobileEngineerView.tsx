@@ -6,7 +6,7 @@ import {
     Wifi, WifiOff, Monitor, ChevronRight, AlertTriangle, ShieldCheck,
     Camera, FileText, Check, Plus, MessageSquare, CalendarDays
 } from 'lucide-react';
-import { formatReadableDate, formatScheduledArrivalDate } from '../../core/utils/dateUtils';
+import { formatReadableDate, formatScheduledArrivalDate, getEffectiveJobScheduledDate } from '../../core/utils/dateUtils';
 import { TIME_SEGMENTS } from '../../constants';
 import { cacheWeeklyJobs, getCachedWeeklyVault, useOfflineSyncStatus, enqueueOfflineAction } from '../../core/services/offlineSyncService';
 import FastTrackFindingModal from '../jobs/FastTrackFindingModal';
@@ -316,8 +316,8 @@ export const MobileEngineerView: React.FC<MobileEngineerViewProps> = ({
 
                                         {/* Scheduled Arrival Date & Vehicle Status Badge */}
                                         {(() => {
-                                            const rawDate = job.scheduledDate || job.segments?.[0]?.date;
-                                            const arrivalDateFormatted = formatScheduledArrivalDate(rawDate);
+                                            const rawDate = getEffectiveJobScheduledDate(job);
+                                            const arrivalDateFormatted = formatScheduledArrivalDate(rawDate || undefined);
                                             const startSeg = job.segments?.find(s => s.scheduledStartSegment !== null && s.scheduledStartSegment !== undefined)?.scheduledStartSegment;
                                             const timeStr = (startSeg !== undefined && startSeg !== null && TIME_SEGMENTS[startSeg]) ? TIME_SEGMENTS[startSeg] : null;
                                             const todayStr = new Date().toISOString().split('T')[0];

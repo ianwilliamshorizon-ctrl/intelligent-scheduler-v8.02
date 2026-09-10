@@ -222,6 +222,56 @@ describe('PrintableInquiryList - Scheduled Inquiries Printing', () => {
         expect(clampedDiv).not.toBeNull();
         expect(clampedDiv).toHaveStyle({ WebkitLineClamp: '4' });
     });
+
+    it('checks and displays updated scheduled date when it changed from original card date', () => {
+        // Job was originally created on 2026-09-01, but later rescheduled/moved to 2026-09-28 in segments
+        const rescheduledJob: Job = {
+            id: 'job-resched',
+            jobNumber: 'JOB-RESCHED',
+            scheduledDate: '2026-09-01', // Old original creation date
+            description: 'Rescheduled Job',
+            status: 'Allocated',
+            segments: [
+                {
+                    id: 'seg-1',
+                    segmentId: 'seg-1',
+                    date: '2026-09-28', // New rescheduled workshop date
+                    duration: 4,
+                    status: 'Allocated'
+                }
+            ]
+        };
+
+        const inqRescheduled: Inquiry = {
+            id: 'inq-resched',
+            inquiryNumber: 'INQ-RESCHED',
+            createdAt: '2026-08-15T10:00:00Z',
+            followUpDate: '2026-08-20', // Stale inquiry creation follow-up date
+            fromName: 'Rescheduled Customer',
+            fromContact: '07999888777',
+            message: 'Rescheduled booking test',
+            takenByUserId: 'user-1',
+            status: 'Scheduled',
+            linkedJobId: 'job-resched'
+        };
+
+        render(
+            <PrintableInquiryList
+                isOpen={true}
+                title="Active Inquiries"
+                inquiries={[inqRescheduled]}
+                vehicles={mockVehicles}
+                customers={mockCustomers}
+                jobs={[rescheduledJob]}
+                initialFilter="scheduled"
+            />
+        );
+
+        // The displayed scheduled date must be 28/09/2026 (the updated live date), NOT 01/09/2026 or 20/08/2026
+        expect(screen.getAllByText('28/09/2026')[0]).toBeInTheDocument();
+        expect(screen.queryByText('01/09/2026')).not.toBeInTheDocument();
+        expect(screen.queryByText('20/08/2026')).not.toBeInTheDocument();
+    });
 });
 
 

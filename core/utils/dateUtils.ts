@@ -1,4 +1,4 @@
-import { Job, JobSegment } from '../../types';
+import { Job, JobSegment, Inquiry } from '../../types';
 
 /** Formats a Date object to YYYY-MM-DD string using UTC values to avoid timezone issues */
 export const formatDate = (date: Date): string => {
@@ -96,6 +96,45 @@ export const formatScheduledArrivalDate = (dateString?: string): string => {
     } catch {
         return dateString;
     }
+};
+
+/**
+ * Resolves the effective, live scheduled date for a Job.
+ * Prioritizes active (non-cancelled) segment dates over job.scheduledDate,
+ * ensuring that if the card was moved on the scheduler, the latest scheduled date is returned.
+ */
+export const getEffectiveJobScheduledDate = (job?: Job | null): string | null => {
+    if (!job) return null;
+
+    if (Array.isArray(job.segments) && job.segments.length > 0) {
+        const validSegmentDates = job.segments
+            .filter(s => s && s.status !== 'Cancelled' && s.date)
+            .map(s => s.date!)
+            .sort();
+
+        if (validSegmentDates.length > 0) {
+            return validSegmentDates[0];
+        }
+    }
+
+    if (job.scheduledDate) {
+        return job.scheduledDate;
+    }
+
+    return null;
+};
+
+/**
+ * Resolves the effective scheduled date for an inquiry, prioritizing the linked job's
+ * live schedule (and segments) over stale dates from when the inquiry card was originally created.
+ */
+export const getEffectiveInquiryScheduledDate = (inquiry: Inquiry, job?: Job | null): string | null => {
+    const jobDate = getEffectiveJobScheduledDate(job);
+    if (jobDate) return jobDate;
+
+    if (inquiry.followUpDate) return inquiry.followUpDate;
+
+    return null;
 };
 
 /** Adds a number of days to a Date object, returns a new Date object */

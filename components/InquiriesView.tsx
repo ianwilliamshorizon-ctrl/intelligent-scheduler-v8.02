@@ -18,6 +18,7 @@ import { triggerEmailSync } from '../core/services/emailService';
 import { doc, onSnapshot, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../core/services/firebaseServices';
 import { extractUKRegistration, getCleanInquirySnippet } from '../core/utils/inquiryUtils';
+import { getEffectiveJobScheduledDate, getEffectiveInquiryScheduledDate } from '../core/utils/dateUtils';
 
 interface InquiriesViewProps {
     onOpenInquiryModal: (inquiry: Partial<Inquiry> | null) => void;
@@ -125,7 +126,9 @@ const InquiryCard: React.FC<{
     const estimate = inquiry.linkedEstimateId ? estimates.find(e => e.id === inquiry.linkedEstimateId) : null;
     const job = inquiry.linkedJobId 
         ? jobs.find(j => j.id === inquiry.linkedJobId) 
-        : (estimate?.jobId ? jobs.find(j => j.id === estimate.jobId) : null);
+        : (jobs.find(j => (j as any).associatedInquiryId === inquiry.id)
+           || (estimate?.jobId ? jobs.find(j => j.id === estimate.jobId) : null)
+           || (inquiry.linkedEstimateId ? jobs.find(j => j.estimateId === inquiry.linkedEstimateId) : null));
     const estimateVehicle = estimate?.vehicleId ? vehicles.find(v => v.id === estimate.vehicleId) : null;
     const extractedReg = extractUKRegistration(`${inquiry.subject || ''} ${inquiry.message || ''}`);
     const effectiveReg = vehicle?.registration || inquiry.vehicleRegistration || estimateVehicle?.registration || (estimate as any)?.vehicleRegistration || extractedReg || '';
@@ -302,11 +305,27 @@ const InquiryCard: React.FC<{
                     <span className="text-[9px] text-gray-400 shrink-0 font-medium flex flex-col items-end leading-tight">
                         <span>{new Date(inquiry.createdAt).toLocaleDateString()}</span>
                         {inquiry.inquiryNumber && <span className="text-gray-500 font-semibold">{inquiry.inquiryNumber}</span>}
-                        {inquiry.followUpDate && (
-                            <span className={`mt-0.5 ${(isOverdue || isToday) ? 'text-red-500 font-bold' : 'text-blue-500'} ${!(isOverdue || isToday) && !isExpanded ? 'hidden' : 'inline'}`}>
-                                FU: {new Date(inquiry.followUpDate).toLocaleDateString()}
-                            </span>
-                        )}
+                        {(() => {
+                            const effectiveDate = getEffectiveInquiryScheduledDate(inquiry, job);
+                            if (isScheduledJob || inquiry.status === 'Scheduled') {
+                                if (!effectiveDate) return null;
+                                const formatted = new Date(effectiveDate.includes('T') ? effectiveDate : `${effectiveDate}T00:00:00`).toLocaleDateString('en-GB');
+                                return (
+                                    <span className="mt-0.5 text-indigo-600 font-bold inline-flex items-center gap-0.5" title={`Scheduled Arrival: ${effectiveDate}`}>
+                                        <CalendarCheck size={9} className="shrink-0 text-indigo-600" />
+                                        <span>{formatted}</span>
+                                    </span>
+                                );
+                            }
+                            if (inquiry.followUpDate) {
+                                return (
+                                    <span className={`mt-0.5 ${(isOverdue || isToday) ? 'text-red-500 font-bold' : 'text-blue-500'} ${!(isOverdue || isToday) && !isExpanded ? 'hidden' : 'inline'}`}>
+                                        FU: {new Date(inquiry.followUpDate).toLocaleDateString()}
+                                    </span>
+                                );
+                            }
+                            return null;
+                        })()}
                     </span>
                 </div>
                 
@@ -402,15 +421,21 @@ const InquiryCard: React.FC<{
                                 <span>#{estimate.estimateNumber}</span>
                             </button>
                         )}
-                        {job && (
-                            <span
-                                className="flex items-center gap-0.5 bg-indigo-50 text-indigo-700 px-1 rounded text-[9px] font-bold border border-indigo-200/50 text-left transition"
-                                title={`Job #${job.id}${job.scheduledDate ? ` - Scheduled: ${job.scheduledDate}` : ''}`}
-                            >
-                                <CalendarCheck size={9} className="shrink-0 text-indigo-600"/>
-                                <span>Job #{job.id}</span>
-                            </span>
-                        )}
+                        {job && (() => {
+                            const effectiveJobDate = getEffectiveJobScheduledDate(job);
+                            return (
+                                <span
+                                    className="flex items-center gap-0.5 bg-indigo-50 text-indigo-700 px-1 rounded text-[9px] font-bold border border-indigo-200/50 text-left transition"
+                                    title={`Job #${job.id}${effectiveJobDate ? ` - Scheduled: ${effectiveJobDate}` : ''}`}
+                                >
+                                    <CalendarCheck size={9} className="shrink-0 text-indigo-600"/>
+                                    <span>Job #{job.id}</span>
+                                    {effectiveJobDate && (
+                                        <span className="text-indigo-900 font-mono ml-0.5">({new Date(effectiveJobDate.includes('T') ? effectiveJobDate : `${effectiveJobDate}T00:00:00`).toLocaleDateString('en-GB')})</span>
+                                    )}
+                                </span>
+                            );
+                        })()}
                         {linkedPOs.map(po => {
                             const poStyles = getPoStatusStyles(po.status);
                             return (
@@ -648,24 +673,28 @@ const InquiryCard: React.FC<{
                     </div>
                 )}
 
-                {job && (
-                    <div className="flex items-center justify-between p-2 bg-indigo-50/70 border border-indigo-200 rounded text-xs">
-                        <div className="flex items-center gap-2 text-indigo-800 font-bold">
-                            <CalendarCheck size={14} className="text-indigo-600 shrink-0"/>
-                            <span>Job #{job.id}</span>
-                            {job.status && (
-                                <span className="text-[10px] bg-white text-indigo-700 border border-indigo-200 px-1.5 py-0.5 rounded font-semibold">
-                                    {job.status}
+                {job && (() => {
+                    const effectiveJobDate = getEffectiveJobScheduledDate(job);
+                    return (
+                        <div className="flex items-center justify-between p-2 bg-indigo-50/70 border border-indigo-200 rounded text-xs">
+                            <div className="flex items-center gap-2 text-indigo-800 font-bold">
+                                <CalendarCheck size={14} className="text-indigo-600 shrink-0"/>
+                                <span>Job #{job.id}</span>
+                                {job.status && (
+                                    <span className="text-[10px] bg-white text-indigo-700 border border-indigo-200 px-1.5 py-0.5 rounded font-semibold">
+                                        {job.status}
+                                    </span>
+                                )}
+                            </div>
+                            {effectiveJobDate && (
+                                <span className="text-[11px] text-indigo-700 font-bold flex items-center gap-1">
+                                    <CalendarCheck size={12} className="text-indigo-600" />
+                                    Scheduled: {new Date(effectiveJobDate.includes('T') ? effectiveJobDate : `${effectiveJobDate}T00:00:00`).toLocaleDateString('en-GB')}
                                 </span>
                             )}
                         </div>
-                        {job.scheduledDate && (
-                            <span className="text-[11px] text-indigo-600 font-medium">
-                                Scheduled: {job.scheduledDate}
-                            </span>
-                        )}
-                    </div>
-                )}
+                    );
+                })()}
 
                 {isApproved && estimate && (
                     <div className="grid grid-cols-2 gap-2 mt-2 border-t pt-2">
@@ -1452,13 +1481,15 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                 valB = getReg(b);
             } else if (sortField === 'scheduledDate') {
                 const getSchedDate = (inq: Inquiry) => {
-                    const jb = inq.linkedJobId ? jobs.find(j => j.id === inq.linkedJobId) : null;
-                    if (jb?.scheduledDate) {
-                        const t = new Date(jb.scheduledDate).getTime();
-                        if (!isNaN(t)) return t;
-                    }
-                    if (inq.followUpDate) {
-                        const t = new Date(inq.followUpDate).getTime();
+                    const est = inq.linkedEstimateId ? estimates.find(e => e.id === inq.linkedEstimateId) : null;
+                    const jb = inq.linkedJobId 
+                        ? jobs.find(j => j.id === inq.linkedJobId) 
+                        : (jobs.find(j => (j as any).associatedInquiryId === inq.id)
+                           || (est?.jobId ? jobs.find(j => j.id === est.jobId) : null)
+                           || (inq.linkedEstimateId ? jobs.find(j => j.estimateId === inq.linkedEstimateId) : null));
+                    const effectiveDate = getEffectiveInquiryScheduledDate(inq, jb);
+                    if (effectiveDate) {
+                        const t = new Date(effectiveDate.includes('T') ? effectiveDate : `${effectiveDate}T00:00:00`).getTime();
                         if (!isNaN(t)) return t;
                     }
                     return sortOrder === 'asc' ? 9999999999999 : 0;

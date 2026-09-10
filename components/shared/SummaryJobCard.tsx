@@ -4,7 +4,7 @@ import { KeyRound, Wrench, Warehouse, MapPin, LogIn, FileText, LogOut, PlayCircl
 import { StorageLocation } from '../../types';
 import { JobHoverPopout } from './JobHoverPopout';
 import { useData } from '../../core/state/DataContext';
-import { getRelativeDate } from '../../core/utils/dateUtils';
+import { getRelativeDate, getEffectiveJobScheduledDate } from '../../core/utils/dateUtils';
 import { getWheelbaseAlertInfo } from '../../core/utils/vehicleUtils';
 
 interface SummaryJobCardProps {
@@ -89,19 +89,23 @@ export const SummaryJobCard: React.FC<SummaryJobCardProps> = (props) => {
                         )}
                     </div>
                     <div className="flex items-center gap-1">
-                        {job.scheduledDate && (
-                            <span className="flex items-center gap-0.5 text-slate-600 bg-slate-100 px-1.5 py-0.2 rounded border border-slate-200 text-[8px] font-bold" title={`Scheduled Arrival: ${job.scheduledDate}`}>
-                                <CalendarDays size={8} className="text-indigo-500 shrink-0" />
-                                {(() => {
-                                    try {
-                                        const d = new Date(job.scheduledDate.includes('T') ? job.scheduledDate : `${job.scheduledDate}T00:00:00`);
-                                        return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-                                    } catch {
-                                        return job.scheduledDate;
-                                    }
-                                })()}
-                            </span>
-                        )}
+                        {(() => {
+                            const effectiveDate = getEffectiveJobScheduledDate(job);
+                            if (!effectiveDate) return null;
+                            return (
+                                <span className="flex items-center gap-0.5 text-slate-600 bg-slate-100 px-1.5 py-0.2 rounded border border-slate-200 text-[8px] font-bold" title={`Scheduled Arrival: ${effectiveDate}`}>
+                                    <CalendarDays size={8} className="text-indigo-500 shrink-0" />
+                                    {(() => {
+                                        try {
+                                            const d = new Date(effectiveDate.includes('T') ? effectiveDate : `${effectiveDate}T00:00:00`);
+                                            return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+                                        } catch {
+                                            return effectiveDate;
+                                        }
+                                    })()}
+                                </span>
+                            );
+                        })()}
                         {job.keyNumber && (
                             <span className="flex items-center gap-0.5 text-amber-600 bg-amber-50 px-1 rounded border border-amber-100">
                                 <KeyRound size={9} /> {job.keyNumber}
