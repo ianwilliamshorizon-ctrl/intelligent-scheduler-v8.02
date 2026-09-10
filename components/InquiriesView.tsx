@@ -1127,7 +1127,7 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
     const [isCompact, setIsCompact] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [dateFilter, setDateFilter] = useState<'today' | '7' | '30' | '90' | 'all'>('all');
-    const [sortField, setSortField] = useState<'createdAt' | 'fromName' | 'registration' | 'status' | 'inquiryNumber'>('createdAt');
+    const [sortField, setSortField] = useState<'createdAt' | 'fromName' | 'registration' | 'status' | 'inquiryNumber' | 'scheduledDate'>('createdAt');
     const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
     const [selectedInquiryIds, setSelectedInquiryIds] = useState<string[]>([]);
     const [isSyncing, setIsSyncing] = useState(false);
@@ -1207,12 +1207,12 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
         });
     };
 
-    const handleSort = (field: 'createdAt' | 'fromName' | 'registration' | 'status' | 'inquiryNumber') => {
+    const handleSort = (field: 'createdAt' | 'fromName' | 'registration' | 'status' | 'inquiryNumber' | 'scheduledDate') => {
         if (sortField === field) {
             setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
         } else {
             setSortField(field);
-            setSortOrder('desc');
+            setSortOrder(field === 'scheduledDate' ? 'asc' : 'desc');
         }
     };
 
@@ -1450,6 +1450,21 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                 };
                 valA = getReg(a);
                 valB = getReg(b);
+            } else if (sortField === 'scheduledDate') {
+                const getSchedDate = (inq: Inquiry) => {
+                    const jb = inq.linkedJobId ? jobs.find(j => j.id === inq.linkedJobId) : null;
+                    if (jb?.scheduledDate) {
+                        const t = new Date(jb.scheduledDate).getTime();
+                        if (!isNaN(t)) return t;
+                    }
+                    if (inq.followUpDate) {
+                        const t = new Date(inq.followUpDate).getTime();
+                        if (!isNaN(t)) return t;
+                    }
+                    return sortOrder === 'asc' ? 9999999999999 : 0;
+                };
+                valA = getSchedDate(a);
+                valB = getSchedDate(b);
             }
             
             if (valA < valB) return sortOrder === 'asc' ? -1 : 1;
@@ -1458,7 +1473,7 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
         });
         
         return items;
-    }, [filteredInquiries, activeTab, sortField, sortOrder, vehicles]);
+    }, [filteredInquiries, activeTab, sortField, sortOrder, vehicles, jobs]);
 
     return (
         <div className="w-full h-full flex flex-col p-6 bg-gray-50">
@@ -1708,10 +1723,12 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                                 type="button"
                                 onClick={() => {
                                     setPrintFilterMode('scheduled');
+                                    setSortField('scheduledDate');
+                                    setSortOrder('asc');
                                     setIsPrintModalOpen(true);
                                 }}
                                 className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 font-bold text-xs rounded-lg shadow-sm transition-all whitespace-nowrap cursor-pointer"
-                                title="Print only scheduled inquiries"
+                                title="Print only scheduled inquiries sorted by scheduled date"
                             >
                                 <CalendarCheck size={15} className="text-emerald-600" />
                                 <span>Print Scheduled</span>
