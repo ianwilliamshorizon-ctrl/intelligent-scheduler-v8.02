@@ -490,7 +490,7 @@ export const PrintableEstimate: React.FC<PrintableEstimateProps> = ({ estimate, 
                                      </div>
                                 </div>
                                 <div style={{ marginTop: '8px', textAlign: 'center', fontSize: '8px', color: '#cbd5e1', fontWeight: 'bold', letterSpacing: '0.1em' }}>
-                                    BROOKSPEED PRODUCTION SYSTEM v8.02
+                                    BROOKSPEED PRODUCTION SYSTEM v{typeof __APP_VERSION_NUM__ !== 'undefined' ? __APP_VERSION_NUM__ : '8.02.001'}
                                 </div>
                             </footer>
                         </td>

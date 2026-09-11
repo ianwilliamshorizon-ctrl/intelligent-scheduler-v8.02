@@ -105,10 +105,7 @@ export const ManagementBackupTab: React.FC<ManagementBackupTabProps> = ({
         const formatSemver = (semver: string) => {
             const parts = semver.split('.');
             if (parts.length >= 3) {
-                const major = parts[0];
-                const minor = parts[1];
-                const patch = parts[2];
-                return `${major}.${minor}${patch}`;
+                return `${parts[0]}.${parts[1]}.${parts[2]}`;
             }
             return semver;
         };

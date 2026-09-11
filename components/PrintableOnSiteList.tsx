@@ -167,7 +167,7 @@ export const PrintableOnSiteList: React.FC<PrintableOnSiteListProps> = ({ entity
             </main>
 
             <footer style={{ marginTop: '30px', borderTop: '1px solid #f1f5f9', paddingTop: '15px', display: 'flex', justifyContent: 'space-between', fontSize: '9px', color: '#94a3b8', fontWeight: 'bold' }}>
-                <div>BROOKSPEED PRODUCTION SYSTEM v8.02</div>
+                <div>BROOKSPEED PRODUCTION SYSTEM v{typeof __APP_VERSION_NUM__ !== 'undefined' ? __APP_VERSION_NUM__ : '8.02.001'}</div>
                 <div>TOTAL VEHICLES (ON/OFF SITE): {jobs.length + storageBookings.filter(b => !b.endDate && (entityName === 'All' || entityName === 'Storage' || entityName.toLowerCase().includes('storage'))).length}</div>
             </footer>
         </div>

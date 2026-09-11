@@ -73,7 +73,7 @@ export const ManagementNominalCodesTab: React.FC<ManagementNominalCodesTabProps>
 
             <div>
                 <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-lg font-bold text-gray-700">Nominal Assignment Rules (v8.02)</h3>
+                    <h3 className="text-lg font-bold text-gray-700">Nominal Assignment Rules</h3>
                     <button onClick={() => { setSelectedRule(null); setIsRuleModalOpen(true); }} className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 shadow flex items-center gap-2 text-sm">
                         <PlusCircle size={16}/> Add Rule
                     </button>

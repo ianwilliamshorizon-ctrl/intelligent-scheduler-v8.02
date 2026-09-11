@@ -15,3 +15,4 @@ interface ImportMetaEnv {
   }
   
   declare const __APP_VERSION__: string;
+declare const __APP_VERSION_NUM__: string;

@@ -330,8 +330,9 @@ export const MobileAppShell: React.FC<MobileAppShellProps> = ({
                                     {currentUser.role || 'Bay'}
                                 </span>
                             </div>
-                            <p className="text-[10px] text-slate-400 font-medium">
-                                Brookspeed Intelligent Scheduler
+                            <p className="text-[10px] text-slate-400 font-medium flex items-center gap-1.5">
+                                <span>Brookspeed Intelligent Scheduler</span>
+                                <span className="font-mono text-indigo-400/90 text-[9px]">v{typeof __APP_VERSION_NUM__ !== 'undefined' ? __APP_VERSION_NUM__ : '8.02.001'}</span>
                             </p>
                         </div>
                     </div>

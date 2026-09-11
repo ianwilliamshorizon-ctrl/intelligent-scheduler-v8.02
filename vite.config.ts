@@ -18,6 +18,7 @@ export default defineConfig(({ mode }) => {
     return {
       define: {
         __APP_VERSION__: JSON.stringify(appVersion),
+        __APP_VERSION_NUM__: JSON.stringify(pkg.version),
       },
       server: {
         port: 3000,

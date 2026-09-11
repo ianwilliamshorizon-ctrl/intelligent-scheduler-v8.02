@@ -102,7 +102,10 @@ const MainLayout: React.FC<{
                     isAppSpacing ? 'h-20 pt-5 pb-3' : 'h-16'
                 } ${isSidebarOpen ? 'justify-between' : 'justify-center'}`}>
                     {isSidebarOpen && (
-                        <span className="font-bold text-xl tracking-tight hidden lg:block">BROOKSPEED</span>
+                        <div className="hidden lg:flex flex-col">
+                            <span className="font-bold text-xl tracking-tight leading-tight">BROOKSPEED</span>
+                            <span className="text-[10px] text-slate-400 font-mono tracking-wider">v{typeof __APP_VERSION_NUM__ !== 'undefined' ? __APP_VERSION_NUM__ : '8.02.001'}</span>
+                        </div>
                     )}
                     <button 
                         onClick={() => setIsSidebarOpen(!isSidebarOpen)} 
@@ -138,6 +141,10 @@ const MainLayout: React.FC<{
                         ))}
                     </div>
                 </nav>
+
+                <div className="p-3 border-t border-slate-800 text-[11px] text-slate-500 text-center font-mono select-none hidden lg:block">
+                    {isSidebarOpen ? `v${typeof __APP_VERSION_NUM__ !== 'undefined' ? __APP_VERSION_NUM__ : '8.02.001'}` : `v${(typeof __APP_VERSION_NUM__ !== 'undefined' ? __APP_VERSION_NUM__ : '8.02.001').split('.')[0] || '8'}`}
+                </div>
             </aside>
 
             <div className="flex-grow flex flex-col h-full overflow-hidden w-full">

@@ -115,7 +115,7 @@ const LoginView: React.FC<LoginViewProps> = ({ users, onLogin, environment, busi
                             <span className="md:hidden">Brookspeed</span>
                             <span className="hidden md:inline">Brookspeed Intelligent Scheduling System</span>
                         </h1>
-                        <p className="text-indigo-100 mt-2 font-bold tracking-widest text-[10px] uppercase opacity-80">v8.02 &bull; Professional Management</p>
+                        <p className="text-indigo-100 mt-2 font-bold tracking-widest text-[10px] uppercase opacity-80">v{typeof __APP_VERSION_NUM__ !== 'undefined' ? __APP_VERSION_NUM__ : '8.02.001'} &bull; Professional Management</p>
                     </div>
                 </div>
                 
@@ -222,7 +222,7 @@ const LoginView: React.FC<LoginViewProps> = ({ users, onLogin, environment, busi
 
                     <div className="mt-8 pt-6 border-t border-gray-100 text-center">
                         <p className="text-xs text-gray-400 font-medium mb-2">
-                            Authorized Access Only &bull; v8.02
+                            Authorized Access Only &bull; v{typeof __APP_VERSION_NUM__ !== 'undefined' ? __APP_VERSION_NUM__ : '8.02.001'}
                         </p>
                         <div className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
                             activeEnv === 'uat' ? 'bg-orange-100 text-orange-800' : 
