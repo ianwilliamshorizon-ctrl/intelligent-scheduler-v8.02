@@ -4,9 +4,10 @@ import { useData } from '../core/state/DataContext';
 import { 
     Menu, LogOut, Settings, Building2, UserCheck, LayoutDashboard, 
     Calendar, Wrench, Briefcase, FileText, ShoppingCart, Car, 
-    Archive, Truck, MessageSquare, Phone, CalendarDays, GitPullRequest, Search, X, HelpCircle, Building, AlertCircle, BarChart3, Sparkles, Smartphone
+    Archive, Truck, MessageSquare, Phone, CalendarDays, GitPullRequest, Search, X, HelpCircle, Building, AlertCircle, BarChart3, Sparkles, Smartphone, MoveVertical
 } from 'lucide-react';
 import * as T from '../types';
+import { useAppSpacing } from '../core/hooks/useAppSpacing';
 
 const MainLayout: React.FC<{ 
     children: React.ReactNode, 
@@ -22,6 +23,7 @@ const MainLayout: React.FC<{
         allWorkshops, logout
     } = useApp();
     const { roles, customers, vehicles, parts } = useData();
+    const { isAppSpacing, toggleAppSpacing, isStandalone } = useAppSpacing();
 
     const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth >= 1024);
     const [searchQuery, setSearchQuery] = useState('');
@@ -82,7 +84,7 @@ const MainLayout: React.FC<{
     const visibleNavItems = navItems.filter(item => allowedViews.includes(item.id as T.ViewType));
 
     return (
-        <div className="flex h-screen bg-gray-100 print:bg-white font-sans text-gray-900 overflow-hidden">
+        <div className={`flex h-screen bg-gray-100 print:bg-white font-sans text-gray-900 overflow-hidden ${isAppSpacing ? 'app-spacing-mode' : ''}`}>
             
             {isSidebarOpen && (
                 <div 
@@ -96,7 +98,9 @@ const MainLayout: React.FC<{
                 ${isSidebarOpen ? 'w-64 translate-x-0' : 'w-0 -translate-x-full lg:translate-x-0 lg:w-20'} 
                 bg-slate-900 text-white transition-all duration-300 flex flex-col flex-shrink-0 overflow-hidden
             `}>
-                <div className={`p-4 flex items-center h-16 border-b border-slate-800 flex-shrink-0 ${isSidebarOpen ? 'justify-between' : 'justify-center'}`}>
+                <div className={`p-4 flex items-center border-b border-slate-800 flex-shrink-0 transition-all duration-200 ${
+                    isAppSpacing ? 'h-20 pt-5 pb-3' : 'h-16'
+                } ${isSidebarOpen ? 'justify-between' : 'justify-center'}`}>
                     {isSidebarOpen && (
                         <span className="font-bold text-xl tracking-tight hidden lg:block">BROOKSPEED</span>
                     )}
@@ -138,7 +142,9 @@ const MainLayout: React.FC<{
 
             <div className="flex-grow flex flex-col h-full overflow-hidden w-full">
                 
-                <header className="bg-white border-b border-gray-200 h-16 flex items-center justify-between px-2 lg:px-6 flex-shrink-0 z-30 shadow-sm">
+                <header className={`bg-white border-b border-gray-200 flex items-center justify-between px-2 lg:px-6 flex-shrink-0 z-30 shadow-sm transition-all duration-200 ${
+                    isAppSpacing ? 'h-20 pt-4 pb-2' : 'h-16'
+                }`}>
                     <div className="flex items-center gap-2 lg:gap-4 flex-1 min-w-0">
                         <button onClick={() => setIsSidebarOpen(true)} className="lg:hidden p-2 -ml-1 text-gray-600 flex-shrink-0">
                             <Menu size={24} />
@@ -225,6 +231,19 @@ const MainLayout: React.FC<{
                             </button>
                         )}
 
+                        <button 
+                            onClick={toggleAppSpacing} 
+                            title={isAppSpacing ? "App Screen Spacing Active: Extra top padding enabled (Click for Compact mode)" : "Compact Mode: Standard top padding (Click to enable App Screen Spacing)"}
+                            className={`p-2 rounded-full transition-colors flex items-center gap-1.5 font-bold text-xs ${
+                                isAppSpacing 
+                                    ? 'text-indigo-700 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 shadow-xs' 
+                                    : 'text-gray-400 hover:text-indigo-600 hover:bg-indigo-50'
+                            }`}
+                        >
+                            <MoveVertical size={18} className={isAppSpacing ? "text-indigo-600" : "text-gray-400"} />
+                            <span className="hidden xl:inline text-[11px] font-semibold">{isAppSpacing ? 'App Spacing' : 'Compact'}</span>
+                        </button>
+
                          <button 
                             onClick={onOpenHelpCentre} 
                             data-action="help-centre"
@@ -260,7 +279,9 @@ const MainLayout: React.FC<{
                     </div>
                 </header>
 
-                <main className="flex-grow overflow-auto relative bg-gray-100 print:bg-white">
+                <main className={`flex-grow overflow-auto relative bg-gray-100 print:bg-white transition-all duration-200 ${
+                    isAppSpacing ? 'pt-3 pb-4' : ''
+                }`}>
                     {children}
                 </main>
 

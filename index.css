@@ -147,7 +147,28 @@
 /* App UI Stuff */
 ::-webkit-scrollbar { width: 8px; }
 ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-#root { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+#root { height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+
+/* --- Screen Spacing for Installed App / Standalone Mode --- */
+:root {
+  --app-top-inset: 0px;
+  --app-header-h: 4rem;
+  --app-content-pt: 0px;
+}
+
+@media (display-mode: standalone), (display-mode: window-controls-overlay), (display-mode: fullscreen) {
+  :root {
+    --app-top-inset: max(16px, env(safe-area-inset-top, 0px));
+    --app-header-h: calc(4.5rem + var(--app-top-inset));
+    --app-content-pt: 12px;
+  }
+}
+
+html.app-spacing-mode, body.app-spacing-mode {
+  --app-top-inset: max(16px, env(safe-area-inset-top, 0px));
+  --app-header-h: calc(4.5rem + var(--app-top-inset));
+  --app-content-pt: 12px;
+}
 
 /* Prose/Markdown Styles for AI Chat */
 .prose {

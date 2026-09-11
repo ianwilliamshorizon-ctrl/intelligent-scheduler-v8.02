@@ -314,7 +314,7 @@ export const MobileAppShell: React.FC<MobileAppShellProps> = ({
     return (
         <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans select-none pb-24">
             {/* Top Bar: Frosted Glass & Safe Area */}
-            <header className="sticky top-0 z-30 bg-slate-900/85 backdrop-blur-xl border-b border-slate-800/80 px-3.5 py-2.5 shadow-md">
+            <header className="sticky top-0 z-30 bg-slate-900/85 backdrop-blur-xl border-b border-slate-800/80 px-3.5 pt-[max(12px,calc(env(safe-area-inset-top,0px)+0.5rem))] pb-3 shadow-md">
                 <div className="flex items-center justify-between max-w-2xl mx-auto w-full">
                     {/* Brand & User Chip */}
                     <div className="flex items-center gap-2.5">
