@@ -209,9 +209,9 @@ const InquiryCard: React.FC<{
                 ringClass = 'ring-1 ring-yellow-400';
                 cardExplanation = 'Customer Responded: Customer has sent a new reply (Yellow background)';
             } else {
-                healthBgClass = 'bg-emerald-100/60';
-                ringClass = 'ring-1 ring-emerald-300 hover:ring-emerald-400';
-                cardExplanation = 'Scheduled Job (Light green background)';
+                healthBgClass = 'bg-purple-100/75';
+                ringClass = 'ring-1 ring-purple-300 hover:ring-purple-400';
+                cardExplanation = 'Scheduled Job (Pale purple background)';
             }
         } else if (isOverdue || isToday) {
             healthBgClass = 'bg-red-100/60';
@@ -260,7 +260,7 @@ const InquiryCard: React.FC<{
                     inquiry.status === 'New Requests' ? 'border-blue-400' : 
                     inquiry.status === 'Our Action' ? 'border-amber-400' : 
                     inquiry.status === 'Online Approved' ? 'border-green-400' :
-                    inquiry.status === 'Scheduled' || isScheduledJob ? 'border-emerald-500' : 
+                    inquiry.status === 'Scheduled' || isScheduledJob ? 'border-purple-600' : 
                     inquiry.status === 'Waiting on Customer' ? (isStale72h(inquiry) ? 'border-red-500 text-red-800' : 'border-gray-200') : 
                     'border-gray-200'
                 } ${isExpanded ? 'shadow-md ring-1 ring-indigo-400' : ringClass} cursor-pointer transition-all mb-1.5`}
@@ -308,11 +308,18 @@ const InquiryCard: React.FC<{
                         {(() => {
                             const effectiveDate = getEffectiveInquiryScheduledDate(inquiry, job);
                             if (isScheduledJob || inquiry.status === 'Scheduled') {
-                                if (!effectiveDate) return null;
+                                if (!effectiveDate) {
+                                    return (
+                                        <span className="mt-0.5 text-purple-800 font-bold inline-flex items-center gap-0.5 bg-purple-200/70 px-1 py-0.2 rounded border border-purple-300/80 shrink-0" title="Scheduled">
+                                            <CalendarCheck size={9} className="shrink-0 text-purple-600" />
+                                            <span>Scheduled</span>
+                                        </span>
+                                    );
+                                }
                                 const formatted = new Date(effectiveDate.includes('T') ? effectiveDate : `${effectiveDate}T00:00:00`).toLocaleDateString('en-GB');
                                 return (
-                                    <span className="mt-0.5 text-emerald-700 font-bold inline-flex items-center gap-0.5" title={`Scheduled Arrival: ${effectiveDate}`}>
-                                        <CalendarCheck size={9} className="shrink-0 text-emerald-600" />
+                                    <span className="mt-0.5 text-purple-800 font-bold inline-flex items-center gap-0.5 bg-purple-200/70 px-1 py-0.2 rounded border border-purple-300/80 shrink-0" title={`Scheduled Arrival: ${effectiveDate}`}>
+                                        <CalendarCheck size={9} className="shrink-0 text-purple-600" />
                                         <span>{formatted}</span>
                                     </span>
                                 );
@@ -529,7 +536,7 @@ const InquiryCard: React.FC<{
                 inquiry.status === 'New Requests' ? 'border-blue-400' : 
                 inquiry.status === 'Our Action' ? 'border-amber-400' : 
                 inquiry.status === 'Online Approved' ? 'border-green-400' :
-                inquiry.status === 'Scheduled' || isScheduledJob ? 'border-emerald-500' : 
+                inquiry.status === 'Scheduled' || isScheduledJob ? 'border-purple-600' : 
                 inquiry.status === 'Waiting on Customer' ? (isStale72h(inquiry) ? 'border-red-500 text-red-800' : 'border-gray-200') : 
                 'border-gray-200'
             } ${ringClass} cursor-pointer transition-all mb-3 relative`}
@@ -558,6 +565,21 @@ const InquiryCard: React.FC<{
                             {daysSinceLastActivity}d
                         </span>
                     )}
+                    {(() => {
+                        const effectiveDate = getEffectiveInquiryScheduledDate(inquiry, job);
+                        if (isScheduledJob || inquiry.status === 'Scheduled') {
+                            const formatted = effectiveDate 
+                                ? new Date(effectiveDate.includes('T') ? effectiveDate : `${effectiveDate}T00:00:00`).toLocaleDateString('en-GB')
+                                : null;
+                            return (
+                                <span className="mt-1 text-purple-900 font-bold text-xs inline-flex items-center gap-1 bg-purple-200/80 px-2 py-0.5 rounded border border-purple-300 shadow-2xs" title={effectiveDate ? `Scheduled Arrival: ${effectiveDate}` : 'Scheduled'}>
+                                    <CalendarCheck size={12} className="shrink-0 text-purple-700" />
+                                    <span>{formatted ? `Scheduled: ${formatted}` : 'Scheduled'}</span>
+                                </span>
+                            );
+                        }
+                        return null;
+                    })()}
                 </div>
             </div>
 
@@ -1358,6 +1380,7 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                 const est = i.linkedEstimateId ? estimates.find(e => e.id === i.linkedEstimateId) : null;
                 const jb = i.linkedJobId ? jobs.find(j => j.id === i.linkedJobId) : (est?.jobId ? jobs.find(j => j.id === est.jobId) : null);
                 const isSched = isScheduledInquiry(i, jb);
+                if (healthFilter === 'scheduled') return isSched;
                 return getInquiryHealth(i, isSched) === healthFilter;
             });
         }
@@ -1608,7 +1631,7 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                                 <span className="font-medium text-gray-700">Active</span>
                             </div>
                             <div className="flex items-center gap-1.5" title="Job is scheduled / booked">
-                                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 border border-emerald-500 block shrink-0"></span>
+                                <span className="w-2.5 h-2.5 rounded-full bg-purple-500 border border-purple-600 block shrink-0"></span>
                                 <span className="font-medium text-gray-700">Scheduled</span>
                             </div>
                             <div className="flex items-center gap-1.5" title="No activity for more than 48 hours">
@@ -1649,6 +1672,7 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                                 className="bg-white border rounded-lg px-2 py-1.5 text-xs font-bold text-gray-700 shadow-sm outline-none"
                             >
                                 <option value="all">All Card Health</option>
+                                <option value="scheduled">Scheduled (Pale Purple)</option>
                                 <option value="urgent">Urgent (Red Border)</option>
                                 <option value="overdue">Overdue / Today</option>
                                 <option value="responded">New Reply</option>
@@ -1986,7 +2010,7 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                                                         i.status === 'New Requests' ? 'bg-blue-50 text-blue-700 border-blue-200' :
                                                         i.status === 'Our Action' ? 'bg-orange-50 text-orange-700 border-orange-200' :
                                                         i.status === 'Online Approved' ? 'bg-green-50 text-green-700 border-green-200' :
-                                                        i.status === 'Scheduled' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' :
+                                                        i.status === 'Scheduled' ? 'bg-purple-100 text-purple-800 border-purple-300' :
                                                         i.status === 'Waiting on Customer' ? (isStale72h(i) ? 'bg-red-50 text-red-800 border-red-500 ring-1 ring-red-400' : 'bg-purple-50 text-purple-700 border-purple-200') :
                                                         'bg-gray-100 text-gray-800 border-gray-300'
                                                     }`}
@@ -2089,7 +2113,7 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                                 }}
                             >
                                 <div 
-                                    className={`p-3 border-b-2 ${status === 'Scheduled' ? 'border-emerald-300 bg-emerald-50/40' : 'border-indigo-200 bg-white'} rounded-t-xl font-bold text-gray-700`}
+                                    className={`p-3 border-b-2 ${status === 'Scheduled' ? 'border-purple-300 bg-purple-50/60 text-purple-950' : 'border-indigo-200 bg-white'} rounded-t-xl font-bold text-gray-700`}
                                     onMouseEnter={() => setHoveredInquiryId(null)}
                                 >
                                     {status} ({activeInquiries[status]?.length || 0})
