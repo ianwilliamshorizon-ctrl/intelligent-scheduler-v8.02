@@ -91,6 +91,11 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
     const [firstNameInput, setFirstNameInput] = useState('');
     const [surnameInput, setSurnameInput] = useState('');
 
+    // Customer Mode & Address State
+    const [customerMode, setCustomerMode] = useState<'new' | 'existing'>('new');
+    const [dismissedMatchSuggestions, setDismissedMatchSuggestions] = useState(false);
+    const [showManualAddress, setShowManualAddress] = useState(false);
+
     const parsedThread = React.useMemo(() => parseEmailThread(formData.message || ''), [formData.message]);
 
     const copyToClipboard = (text: string, fieldName: string) => {
@@ -181,25 +186,39 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
     }, [formData.fromName, firstNameInput, surnameInput]);
 
     const checkCustomerMatch = (first: string, last: string) => {
-        const lowerName = `${first} ${last}`.toLowerCase().trim();
-        if (lowerName.length > 2) {
-            const searchWords = lowerName.split(/\s+/).filter(w => w.length > 1);
-            const matches = customers.filter(c => {
-                const fullName = `${c.title || ''} ${c.forename || ''} ${c.surname || ''}`.toLowerCase();
-                const company = (c.companyName || '').toLowerCase();
-                if (fullName.includes(lowerName) || company.includes(lowerName)) return true;
-                if (lowerName.includes(fullName.trim()) && fullName.trim().length > 3) return true;
-                if (searchWords.length > 0 && searchWords.every(w => fullName.includes(w))) return true;
-                return false;
-            });
-            if (matches.length > 0 && !formData.linkedCustomerId) {
-                setSuggestedCustomers(matches);
-            } else {
-                setSuggestedCustomers([]);
-            }
-        } else {
+        if (customerMode === 'existing' || dismissedMatchSuggestions || formData.linkedCustomerId) {
             setSuggestedCustomers([]);
+            return;
         }
+        const trimmedFirst = first.trim().toLowerCase();
+        const trimmedLast = last.trim().toLowerCase();
+        const combined = `${trimmedFirst} ${trimmedLast}`.trim();
+
+        // Only suggest if we have at least 3 characters and either a full name (both first & last) 
+        // or a distinct name of at least 4 chars to avoid nuisance matches on common short prefixes
+        if (combined.length < 3) {
+            setSuggestedCustomers([]);
+            return;
+        }
+
+        const matches = customers.filter(c => {
+            const cFirst = (c.forename || '').trim().toLowerCase();
+            const cLast = (c.surname || '').trim().toLowerCase();
+            const cFull = `${c.title || ''} ${c.forename || ''} ${c.surname || ''}`.toLowerCase().trim();
+            const cCompany = (c.companyName || '').toLowerCase().trim();
+
+            if (combined && (cFull === combined || cCompany === combined)) return true;
+            if (trimmedFirst && trimmedLast) {
+                return (cFirst === trimmedFirst && cLast === trimmedLast) ||
+                       (cFirst.includes(trimmedFirst) && cLast.includes(trimmedLast));
+            }
+            if (combined.length >= 4) {
+                return cFull.includes(combined) || cCompany.includes(combined);
+            }
+            return false;
+        });
+
+        setSuggestedCustomers(matches.slice(0, 5));
     };
 
     const handleFirstNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -438,6 +457,11 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
         setReplyAttachments([]);
         setIsDraftingReply(false);
         setIsSendingReply(false);
+        setDismissedMatchSuggestions(false);
+        setShowManualAddress(Boolean(inquiry?.addressLine1 || inquiry?.city));
+        setCustomerMode(inquiry?.linkedCustomerId ? 'existing' : 'new');
+        // If it's a new inquiry (no id), open directly in raw edit mode so the user can type message immediately
+        setIsFormattedView(Boolean(inquiry && inquiry.id));
 
         // Reset split-name inputs directly from the incoming inquiry so they
         // cannot retain a previously typed name across sessions.
@@ -481,27 +505,6 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                 }
                 if (extracted.postcode && !p.postcode) {
                     nextData.postcode = extracted.postcode;
-                }
-            }
-
-            if (name === 'fromName' && value.length > 2) {
-                const lowerName = value.toLowerCase().trim();
-                const existingCustomer = customers.find(c => 
-                    getCustomerDisplayName(c).toLowerCase() === lowerName || 
-                    (c.companyName || '').toLowerCase() === lowerName
-                );
-
-                if (existingCustomer && !p.linkedCustomerId) {
-                    nextData.linkedCustomerId = existingCustomer.id;
-                    nextData.fromEmail = existingCustomer.email || nextData.fromEmail || '';
-                    nextData.fromPhone = existingCustomer.mobile || existingCustomer.phone || nextData.fromPhone || '';
-                    nextData.addressLine1 = existingCustomer.addressLine1 || nextData.addressLine1 || '';
-                    nextData.addressLine2 = existingCustomer.addressLine2 || nextData.addressLine2 || '';
-                    nextData.city = existingCustomer.city || nextData.city || '';
-                    nextData.county = existingCustomer.county || nextData.county || '';
-                    nextData.postcode = existingCustomer.postcode || nextData.postcode || '';
-                    // Also clear suggested customer since we auto-linked
-                    setSuggestedCustomers([]);
                 }
             }
 
@@ -591,19 +594,19 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
         const inquiryPhone = (formData.fromPhone || '').replace(/\s/g, '');
         const inquiryName = (formData.fromName || '').toLowerCase().trim();
 
-        if (resolvedCustomerId) {
+        if (customerMode === 'existing' && resolvedCustomerId) {
             const existingCustomer = customers.find(c => c.id === resolvedCustomerId);
             if (existingCustomer) {
                 const updatedCustomer: Customer = {
                     ...existingCustomer,
-                    addressLine1: existingCustomer.addressLine1 || formData.addressLine1 || '',
-                    addressLine2: existingCustomer.addressLine2 || formData.addressLine2 || '',
-                    city: existingCustomer.city || formData.city || '',
-                    county: existingCustomer.county || formData.county || '',
-                    postcode: existingCustomer.postcode || formData.postcode || '',
-                    email: existingCustomer.email || formData.fromEmail || '',
-                    phone: existingCustomer.phone || formData.fromPhone || '',
-                    mobile: existingCustomer.mobile || formData.fromPhone || '',
+                    addressLine1: formData.addressLine1 || existingCustomer.addressLine1 || '',
+                    addressLine2: formData.addressLine2 || existingCustomer.addressLine2 || '',
+                    city: formData.city || existingCustomer.city || '',
+                    county: formData.county || existingCustomer.county || '',
+                    postcode: formData.postcode || existingCustomer.postcode || '',
+                    email: formData.fromEmail || existingCustomer.email || '',
+                    phone: formData.fromPhone || existingCustomer.phone || '',
+                    mobile: formData.fromPhone || existingCustomer.mobile || '',
                 };
                 if (
                     updatedCustomer.addressLine1 !== existingCustomer.addressLine1 ||
@@ -619,41 +622,8 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                 }
             }
         } else {
-            // Check if an existing customer matches contact info or name
-            const matchedCustomer = customers.find(c => {
-                if (inquiryEmail && c.email?.toLowerCase().trim() === inquiryEmail) return true;
-                if (inquiryPhone && (c.phone?.replace(/\s/g, '') === inquiryPhone || c.mobile?.replace(/\s/g, '') === inquiryPhone)) return true;
-                if (inquiryName && (c.companyName?.toLowerCase().trim() === inquiryName || `${c.forename} ${c.surname}`.toLowerCase().trim() === inquiryName)) return true;
-                return false;
-            });
-
-            if (matchedCustomer) {
-                const updatedCustomer: Customer = {
-                    ...matchedCustomer,
-                    addressLine1: matchedCustomer.addressLine1 || formData.addressLine1 || '',
-                    addressLine2: matchedCustomer.addressLine2 || formData.addressLine2 || '',
-                    city: matchedCustomer.city || formData.city || '',
-                    county: matchedCustomer.county || formData.county || '',
-                    postcode: matchedCustomer.postcode || formData.postcode || '',
-                    email: matchedCustomer.email || formData.fromEmail || '',
-                    phone: matchedCustomer.phone || formData.fromPhone || '',
-                    mobile: matchedCustomer.mobile || formData.fromPhone || '',
-                };
-                if (
-                    updatedCustomer.addressLine1 !== matchedCustomer.addressLine1 ||
-                    updatedCustomer.addressLine2 !== matchedCustomer.addressLine2 ||
-                    updatedCustomer.city !== matchedCustomer.city ||
-                    updatedCustomer.county !== matchedCustomer.county ||
-                    updatedCustomer.postcode !== matchedCustomer.postcode ||
-                    updatedCustomer.email !== matchedCustomer.email ||
-                    updatedCustomer.phone !== matchedCustomer.phone ||
-                    updatedCustomer.mobile !== matchedCustomer.mobile
-                ) {
-                    saveRecord('customers', updatedCustomer);
-                }
-                resolvedCustomerId = matchedCustomer.id;
-            } else if (formData.fromName || formData.fromEmail || formData.fromPhone || formData.addressLine1 || formData.postcode) {
-                // Spin up new customer record immediately
+            // New Customer Mode: Create a brand new customer record for this new customer
+            if (formData.fromName || formData.fromEmail || formData.fromPhone || formData.addressLine1 || formData.postcode) {
                 const names = (formData.fromName || 'Unknown').trim().split(/\s+/);
                 const forename = names[0] || 'Unknown';
                 const surname = names.slice(1).join(' ') || forename;
@@ -810,6 +780,7 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
 
 
     const handleLinkCustomer = (customer: Customer) => {
+        setCustomerMode('existing');
         const updatedCustomer: Customer = {
             ...customer,
             addressLine1: customer.addressLine1 || formData.addressLine1 || '',
@@ -820,21 +791,15 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
             email: customer.email || formData.fromEmail || '',
             phone: customer.phone || formData.fromPhone || '',
         };
-        if (
-            updatedCustomer.addressLine1 !== customer.addressLine1 ||
-            updatedCustomer.addressLine2 !== customer.addressLine2 ||
-            updatedCustomer.city !== customer.city ||
-            updatedCustomer.county !== customer.county ||
-            updatedCustomer.postcode !== customer.postcode ||
-            updatedCustomer.email !== customer.email ||
-            updatedCustomer.phone !== customer.phone
-        ) {
-            saveRecord('customers', updatedCustomer);
-        }
+
+        const displayName = getCustomerDisplayName(customer);
+        setFirstNameInput(customer.forename || '');
+        setSurnameInput(customer.surname || '');
 
         setFormData(p => ({ 
             ...p, 
             linkedCustomerId: customer.id,
+            fromName: displayName,
             fromEmail: updatedCustomer.email || p.fromEmail || '',
             fromPhone: updatedCustomer.mobile || updatedCustomer.phone || p.fromPhone || '',
             addressLine1: updatedCustomer.addressLine1 || p.addressLine1 || '',
@@ -863,6 +828,9 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
 
     const handleUnlinkCustomer = () => {
         setFormData(p => ({ ...p, linkedCustomerId: null }));
+        setCustomerMode('new');
+        setDismissedMatchSuggestions(true);
+        setSuggestedCustomers([]);
     };
     
     const handleUnlinkVehicle = () => {
@@ -1342,50 +1310,73 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
 
                             {/* Column 2 (4 cols): Customer Contact & Vehicle Dossier with DVLA and Address Search */}
                             <div className="lg:col-span-4 space-y-4">
-                                {/* AI Suggestions Banner if matches found */}
-                                {(suggestedCustomers.length > 0 || suggestedVehicle || aiError) && (
+                                {/* Auto-Match Customer Suggestions Banner if matches found */}
+                                {suggestedCustomers.length > 0 && !dismissedMatchSuggestions && !formData.linkedCustomerId && customerMode === 'new' && (
+                                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-2 animate-fade-in shadow-2xs">
+                                        <div className="flex items-center justify-between gap-2">
+                                            <h4 className="font-bold text-amber-900 text-xs flex items-center gap-1.5">
+                                                <Sparkles size={14} className="text-amber-600"/> Possible Customer Matches
+                                            </h4>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setDismissedMatchSuggestions(true);
+                                                    setSuggestedCustomers([]);
+                                                }}
+                                                className="text-[11px] font-bold text-amber-800 hover:text-amber-950 bg-amber-100 hover:bg-amber-200 px-2 py-0.5 rounded transition cursor-pointer"
+                                            >
+                                                Ignore & Keep as New Customer
+                                            </button>
+                                        </div>
+                                        <p className="text-[11px] text-amber-800">
+                                            Existing customer(s) found with a matching name. Would you like to link one or continue adding a brand new customer?
+                                        </p>
+                                        <div className="flex flex-col gap-1.5">
+                                            {suggestedCustomers.map(cust => (
+                                                <div key={cust.id} className="flex justify-between items-center text-xs p-2 bg-white rounded-lg border border-amber-200 shadow-2xs">
+                                                    <div className="flex items-center gap-1.5 truncate">
+                                                        <UserIcon size={14} className="text-blue-500 shrink-0" />
+                                                        <span className="font-bold text-gray-800 truncate">{getCustomerDisplayName(cust)}</span>
+                                                        {cust.email && <span className="text-[11px] text-gray-500 truncate">({cust.email})</span>}
+                                                    </div>
+                                                    <button 
+                                                        type="button" 
+                                                        onClick={() => handleLinkCustomer(cust)} 
+                                                        className="flex items-center gap-1 py-1 px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-md shadow-2xs transition shrink-0 cursor-pointer text-xs"
+                                                    >
+                                                        <LinkIcon size={12}/> Link Customer
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {suggestedVehicle && !formData.linkedVehicleId && (
                                     <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-xl space-y-2 animate-fade-in shadow-2xs">
                                         <h4 className="font-bold text-indigo-900 text-xs flex items-center gap-1.5">
-                                            <Wand2 size={14} className="text-indigo-600"/> Auto-Match Suggestions
+                                            <Car size={14} className="text-indigo-600"/> Vehicle Match
                                         </h4>
-                                        {aiError && <p className="text-red-600 text-xs">{aiError}</p>}
-                                        
-                                        {suggestedCustomers.length > 0 && !formData.linkedCustomerId && (
-                                            <div className="flex flex-col gap-1.5">
-                                                {suggestedCustomers.map(cust => (
-                                                    <div key={cust.id} className="flex justify-between items-center text-xs p-2 bg-white rounded-lg border border-indigo-100 shadow-2xs">
-                                                        <div className="flex items-center gap-1.5 truncate">
-                                                            <UserIcon size={14} className="text-blue-500 shrink-0" />
-                                                            <span className="font-bold text-gray-800 truncate">{getCustomerDisplayName(cust)}</span>
-                                                        </div>
-                                                        <button 
-                                                            type="button" 
-                                                            onClick={() => handleLinkCustomer(cust)} 
-                                                            className="flex items-center gap-1 py-1 px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-md shadow-2xs transition shrink-0 cursor-pointer text-xs"
-                                                        >
-                                                            <LinkIcon size={12}/> Link
-                                                        </button>
-                                                    </div>
-                                                ))}
+                                        <div className="flex justify-between items-center text-xs p-2 bg-white rounded-lg border border-indigo-100 shadow-2xs">
+                                            <div className="flex items-center gap-1.5 truncate">
+                                                <Car size={14} className="text-emerald-500 shrink-0" />
+                                                <span className="font-black text-gray-900 uppercase font-mono">{suggestedVehicle.registration}</span>
+                                                <span className="text-gray-600 truncate">({suggestedVehicle.make} {suggestedVehicle.model})</span>
                                             </div>
-                                        )}
-                                        
-                                        {suggestedVehicle && !formData.linkedVehicleId && (
-                                            <div className="flex justify-between items-center text-xs p-2 bg-white rounded-lg border border-indigo-100 shadow-2xs">
-                                                <div className="flex items-center gap-1.5 truncate">
-                                                    <Car size={14} className="text-emerald-500 shrink-0" />
-                                                    <span className="font-black text-gray-900 uppercase font-mono">{suggestedVehicle.registration}</span>
-                                                    <span className="text-gray-600 truncate">({suggestedVehicle.make} {suggestedVehicle.model})</span>
-                                                </div>
-                                                <button 
-                                                    type="button" 
-                                                    onClick={() => handleLinkVehicle(suggestedVehicle)} 
-                                                    className="flex items-center gap-1 py-1 px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-md shadow-2xs transition shrink-0 cursor-pointer text-xs"
-                                                >
-                                                    <LinkIcon size={12}/> Link
-                                                </button>
-                                            </div>
-                                        )}
+                                            <button 
+                                                type="button" 
+                                                onClick={() => handleLinkVehicle(suggestedVehicle)} 
+                                                className="flex items-center gap-1 py-1 px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-md shadow-2xs transition shrink-0 cursor-pointer text-xs"
+                                            >
+                                                <LinkIcon size={12}/> Link Vehicle
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {aiError && (
+                                    <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700">
+                                        {aiError}
                                     </div>
                                 )}
 
@@ -1398,171 +1389,260 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                                 Customer Contact
                                             </h3>
                                         </div>
-                                        {linkedCustomer && (
-                                            <div className="flex items-center gap-1.5">
-                                                <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">
-                                                    Linked
-                                                </span>
-                                                <button 
-                                                    type="button" 
-                                                    onClick={handleUnlinkCustomer} 
-                                                    title="Unlink Customer" 
-                                                    className="text-xs text-red-500 hover:text-red-700 flex items-center gap-1 font-semibold transition cursor-pointer"
-                                                >
-                                                    <XCircle size={13} /> Unlink
-                                                </button>
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {/* Contact Fields */}
-                                    <div className="space-y-2.5">
-                                        <div className="grid grid-cols-2 gap-2">
-                                            <div>
-                                                <label className="block text-[11px] font-bold text-gray-700 mb-1">First Name*</label>
-                                                <input 
-                                                    value={firstNameInput} 
-                                                    onChange={handleFirstNameChange} 
-                                                    className="w-full p-2 border border-gray-300 rounded-lg text-xs sm:text-sm font-medium focus:ring-2 focus:ring-indigo-500 transition" 
-                                                    required 
-                                                    placeholder="First name" 
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="block text-[11px] font-bold text-gray-700 mb-1">Surname</label>
-                                                <input 
-                                                    value={surnameInput} 
-                                                    onChange={handleSurnameChange} 
-                                                    className="w-full p-2 border border-gray-300 rounded-lg text-xs sm:text-sm font-medium focus:ring-2 focus:ring-indigo-500 transition" 
-                                                    placeholder="Surname" 
-                                                />
-                                            </div>
-                                        </div>
-
-                                        <div className="grid grid-cols-2 gap-2">
-                                            <div>
-                                                <label className="block text-[11px] font-bold text-gray-700 mb-1">Email</label>
-                                                <input 
-                                                    type="email" 
-                                                    name="fromEmail" 
-                                                    value={formData.fromEmail || ''} 
-                                                    onChange={handleChange} 
-                                                    className="w-full p-2 border border-gray-300 rounded-lg text-xs sm:text-sm font-medium focus:ring-2 focus:ring-indigo-500 transition" 
-                                                    placeholder="email@example.com" 
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="block text-[11px] font-bold text-gray-700 mb-1">Phone</label>
-                                                <input 
-                                                    type="tel" 
-                                                    name="fromPhone" 
-                                                    value={formData.fromPhone || ''} 
-                                                    onChange={handleChange} 
-                                                    className="w-full p-2 border border-gray-300 rounded-lg text-xs sm:text-sm font-bold focus:ring-2 focus:ring-indigo-500 transition" 
-                                                    placeholder="07123456789" 
-                                                />
-                                            </div>
-                                        </div>
-
-                                        {/* Postcode & Address Lookup */}
-                                        <div>
-                                            <label className="block text-[11px] font-bold text-gray-700 mb-1">Postcode & Address</label>
-                                            <div className="flex gap-1.5">
-                                                <input 
-                                                    type="text" 
-                                                    name="postcode" 
-                                                    value={formData.postcode || ''} 
-                                                    onChange={handleChange} 
-                                                    className="w-full p-2 border border-gray-300 rounded-lg text-xs sm:text-sm uppercase font-bold tracking-wider focus:ring-2 focus:ring-indigo-500 transition" 
-                                                    placeholder="e.g. GU24 9NY" 
-                                                />
-                                                <button
-                                                    type="button"
-                                                    onClick={handleLookupAddress}
-                                                    disabled={!formData.postcode || isLookingUpAddress}
-                                                    className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 text-white font-bold rounded-lg px-3 py-2 flex items-center gap-1 transition text-xs shrink-0 cursor-pointer shadow-2xs"
-                                                    title="Lookup address by UK postcode"
-                                                >
-                                                    {isLookingUpAddress ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
-                                                    <span>Lookup</span>
-                                                </button>
-                                            </div>
-                                        </div>
-
-                                        {/* Address Lookup Dropdown */}
-                                        {addressList.length > 0 && (
-                                            <div className="bg-white border-2 border-indigo-300 rounded-lg shadow-md overflow-hidden">
-                                                <div className="bg-indigo-50 px-2.5 py-1.5 text-[11px] font-bold text-indigo-900 border-b border-indigo-200 flex items-center justify-between">
-                                                    <span>Select Address ({addressList.length})</span>
-                                                </div>
-                                                <ul className="max-h-36 overflow-y-auto divide-y divide-gray-100">
-                                                    {addressList.map((addr, idx) => (
-                                                        <li key={idx}>
-                                                            <button
-                                                                type="button"
-                                                                className="w-full text-left px-2.5 py-1.5 text-xs hover:bg-indigo-50 transition cursor-pointer text-gray-800"
-                                                                onClick={() => {
-                                                                    setFormData(prev => ({
-                                                                        ...prev,
-                                                                        addressLine1: addr.street || '',
-                                                                        addressLine2: addr.locality || '',
-                                                                        city: addr.postTown || '',
-                                                                        county: addr.county || '',
-                                                                        postcode: addr.postcode || prev.postcode
-                                                                    }));
-                                                                    setAddressList([]);
-                                                                }}
-                                                            >
-                                                                {addr.summaryAddress || `${addr.street || ''} ${addr.locality || ''} ${addr.postTown || ''}`}
-                                                            </button>
-                                                        </li>
-                                                    ))}
-                                                </ul>
-                                            </div>
-                                        )}
-
-                                        {(formData.addressLine1 || formData.city) && (
-                                            <div className="p-2 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-800 flex items-start gap-1.5">
-                                                <MapPin size={14} className="text-indigo-600 shrink-0 mt-0.5" />
-                                                <div className="font-medium text-[11px]">
-                                                    <div>{formData.addressLine1} {formData.addressLine2 ? `, ${formData.addressLine2}` : ''}</div>
-                                                    <div>{formData.city} {formData.county} <strong className="uppercase">{formData.postcode}</strong></div>
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {/* Customer Link / Auto-Create */}
-                                        <div className="pt-1.5 border-t border-gray-100 space-y-1.5">
-                                            <SearchableSelect
-                                                options={customers.map(c => ({ id: c.id, label: getCustomerDisplayName(c), value: c.id }))}
-                                                defaultValue={formData.linkedCustomerId || null}
-                                                onSelect={(value) => {
-                                                    const cust = customers.find(c => c.id === value);
-                                                    setFormData(p => {
-                                                        const customersCars = vehicles.filter(v => v.customerId === value);
-                                                        let newVehicleId = p.linkedVehicleId;
-                                                        if (!newVehicleId || !customersCars.some(car => car.id === newVehicleId)) {
-                                                            newVehicleId = customersCars.length === 1 ? customersCars[0].id : null;
-                                                        }
-                                                        return { 
-                                                            ...p, 
-                                                            linkedCustomerId: value,
-                                                            linkedVehicleId: newVehicleId,
-                                                            fromEmail: cust?.email || p.fromEmail || '',
-                                                            fromPhone: cust?.mobile || cust?.phone || p.fromPhone || '',
-                                                            addressLine1: cust?.addressLine1 || p.addressLine1 || '',
-                                                            addressLine2: cust?.addressLine2 || p.addressLine2 || '',
-                                                            city: cust?.city || p.city || '',
-                                                            county: cust?.county || p.county || '',
-                                                            postcode: cust?.postcode || p.postcode || ''
-                                                        };
-                                                    });
-                                                    setSuggestedCustomers([]);
+                                        
+                                        <div className="flex items-center gap-1 bg-gray-100 p-0.5 rounded-lg text-xs">
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setCustomerMode('new');
+                                                    if (formData.linkedCustomerId) {
+                                                        setFormData(p => ({ ...p, linkedCustomerId: null }));
+                                                    }
+                                                    setDismissedMatchSuggestions(true);
                                                 }}
-                                                placeholder={linkedCustomer ? "Change linked customer..." : "Link existing customer..."}
-                                            />
+                                                className={`px-2.5 py-1 rounded-md font-bold transition flex items-center gap-1 text-[11px] cursor-pointer ${customerMode === 'new' ? 'bg-white text-indigo-700 shadow-xs' : 'text-gray-600 hover:text-gray-900'}`}
+                                            >
+                                                <UserIcon size={12} /> New Customer
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setCustomerMode('existing')}
+                                                className={`px-2.5 py-1 rounded-md font-bold transition flex items-center gap-1 text-[11px] cursor-pointer ${customerMode === 'existing' ? 'bg-white text-indigo-700 shadow-xs' : 'text-gray-600 hover:text-gray-900'}`}
+                                            >
+                                                <LinkIcon size={12} /> Existing Customer
+                                            </button>
                                         </div>
                                     </div>
+
+                                    {customerMode === 'existing' ? (
+                                        <div className="space-y-3">
+                                            <div className="space-y-1.5">
+                                                <label className="block text-[11px] font-bold text-gray-700">Search & Select Customer</label>
+                                                <SearchableSelect
+                                                    options={customers.map(c => ({ id: c.id, label: `${getCustomerDisplayName(c)}${c.email ? ` (${c.email})` : ''}`, value: c.id }))}
+                                                    defaultValue={formData.linkedCustomerId || null}
+                                                    onSelect={(value) => {
+                                                        const cust = customers.find(c => c.id === value);
+                                                        if (cust) {
+                                                            handleLinkCustomer(cust);
+                                                        }
+                                                    }}
+                                                    placeholder={linkedCustomer ? getCustomerDisplayName(linkedCustomer) : "Search customer by name or email..."}
+                                                />
+                                            </div>
+
+                                            {linkedCustomer ? (
+                                                <div className="p-3 bg-emerald-50/70 border border-emerald-200 rounded-lg space-y-2">
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex items-center gap-1.5">
+                                                            <span className="text-[10px] font-bold bg-emerald-600 text-white px-2 py-0.5 rounded-full">
+                                                                Linked Customer
+                                                            </span>
+                                                            <span className="font-bold text-xs text-emerald-950">{getCustomerDisplayName(linkedCustomer)}</span>
+                                                        </div>
+                                                        <button 
+                                                            type="button" 
+                                                            onClick={handleUnlinkCustomer} 
+                                                            title="Unlink and enter new customer" 
+                                                            className="text-xs text-red-600 hover:text-red-800 flex items-center gap-1 font-semibold transition cursor-pointer"
+                                                        >
+                                                            <XCircle size={13} /> Unlink
+                                                        </button>
+                                                    </div>
+                                                    <div className="text-xs text-emerald-900 grid grid-cols-2 gap-1 pt-1 border-t border-emerald-100">
+                                                        {formData.fromEmail && <div>Email: <strong className="font-medium">{formData.fromEmail}</strong></div>}
+                                                        {formData.fromPhone && <div>Phone: <strong className="font-medium">{formData.fromPhone}</strong></div>}
+                                                        {(formData.addressLine1 || formData.postcode) && (
+                                                            <div className="col-span-2">Address: <strong className="font-medium">{[formData.addressLine1, formData.city, formData.postcode].filter(Boolean).join(', ')}</strong></div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="text-center py-3 px-2 bg-gray-50 border border-dashed border-gray-200 rounded-lg text-xs text-gray-500">
+                                                    Select a customer above to link to this inquiry, or switch to <button type="button" onClick={() => setCustomerMode('new')} className="text-indigo-600 font-bold underline cursor-pointer">New Customer</button>.
+                                                </div>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        /* New Customer Entry Mode */
+                                        <div className="space-y-2.5">
+                                            <div className="flex items-center justify-between bg-indigo-50/60 px-2.5 py-1.5 rounded-lg border border-indigo-100">
+                                                <span className="text-[11px] font-bold text-indigo-900 flex items-center gap-1">
+                                                    <Sparkles size={12} className="text-indigo-600" /> New Customer Profile
+                                                </span>
+                                                <span className="text-[10px] text-indigo-700 font-medium">Will be saved as new customer</span>
+                                            </div>
+
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <div>
+                                                    <label className="block text-[11px] font-bold text-gray-700 mb-1">First Name*</label>
+                                                    <input 
+                                                        value={firstNameInput} 
+                                                        onChange={handleFirstNameChange} 
+                                                        className="w-full p-2 border border-gray-300 rounded-lg text-xs sm:text-sm font-medium focus:ring-2 focus:ring-indigo-500 transition" 
+                                                        required 
+                                                        placeholder="First name" 
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-[11px] font-bold text-gray-700 mb-1">Surname</label>
+                                                    <input 
+                                                        value={surnameInput} 
+                                                        onChange={handleSurnameChange} 
+                                                        className="w-full p-2 border border-gray-300 rounded-lg text-xs sm:text-sm font-medium focus:ring-2 focus:ring-indigo-500 transition" 
+                                                        placeholder="Surname" 
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <div>
+                                                    <label className="block text-[11px] font-bold text-gray-700 mb-1">Email</label>
+                                                    <input 
+                                                        type="email" 
+                                                        name="fromEmail" 
+                                                        value={formData.fromEmail || ''} 
+                                                        onChange={handleChange} 
+                                                        className="w-full p-2 border border-gray-300 rounded-lg text-xs sm:text-sm font-medium focus:ring-2 focus:ring-indigo-500 transition" 
+                                                        placeholder="email@example.com" 
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-[11px] font-bold text-gray-700 mb-1">Phone</label>
+                                                    <input 
+                                                        type="tel" 
+                                                        name="fromPhone" 
+                                                        value={formData.fromPhone || ''} 
+                                                        onChange={handleChange} 
+                                                        className="w-full p-2 border border-gray-300 rounded-lg text-xs sm:text-sm font-bold focus:ring-2 focus:ring-indigo-500 transition" 
+                                                        placeholder="07123456789" 
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            {/* Postcode & Address Lookup */}
+                                            <div>
+                                                <div className="flex items-center justify-between mb-1">
+                                                    <label className="block text-[11px] font-bold text-gray-700">Postcode & Address</label>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setShowManualAddress(p => !p)}
+                                                        className="text-[10px] font-semibold text-indigo-600 hover:text-indigo-800 underline cursor-pointer"
+                                                    >
+                                                        {showManualAddress ? 'Hide address fields' : 'Edit address manually'}
+                                                    </button>
+                                                </div>
+                                                <div className="flex gap-1.5">
+                                                    <input 
+                                                        type="text" 
+                                                        name="postcode" 
+                                                        value={formData.postcode || ''} 
+                                                        onChange={handleChange} 
+                                                        className="w-full p-2 border border-gray-300 rounded-lg text-xs sm:text-sm uppercase font-bold tracking-wider focus:ring-2 focus:ring-indigo-500 transition" 
+                                                        placeholder="e.g. GU24 9NY" 
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={handleLookupAddress}
+                                                        disabled={!formData.postcode || isLookingUpAddress}
+                                                        className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 text-white font-bold rounded-lg px-3 py-2 flex items-center gap-1 transition text-xs shrink-0 cursor-pointer shadow-2xs"
+                                                        title="Lookup address by UK postcode"
+                                                    >
+                                                        {isLookingUpAddress ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
+                                                        <span>Lookup</span>
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            {/* Address Lookup Dropdown */}
+                                            {addressList.length > 0 && (
+                                                <div className="bg-white border-2 border-indigo-300 rounded-lg shadow-md overflow-hidden">
+                                                    <div className="bg-indigo-50 px-2.5 py-1.5 text-[11px] font-bold text-indigo-900 border-b border-indigo-200 flex items-center justify-between">
+                                                        <span>Select Address ({addressList.length})</span>
+                                                    </div>
+                                                    <ul className="max-h-36 overflow-y-auto divide-y divide-gray-100">
+                                                        {addressList.map((addr, idx) => (
+                                                            <li key={idx}>
+                                                                <button
+                                                                    type="button"
+                                                                    className="w-full text-left px-2.5 py-1.5 text-xs hover:bg-indigo-50 transition cursor-pointer text-gray-800"
+                                                                    onClick={() => {
+                                                                        setFormData(prev => ({
+                                                                            ...prev,
+                                                                            addressLine1: addr.street || '',
+                                                                            addressLine2: addr.locality || '',
+                                                                            city: addr.postTown || '',
+                                                                            county: addr.county || '',
+                                                                            postcode: addr.postcode || prev.postcode
+                                                                        }));
+                                                                        setAddressList([]);
+                                                                        setShowManualAddress(true);
+                                                                    }}
+                                                                >
+                                                                    {addr.summaryAddress || `${addr.street || ''} ${addr.locality || ''} ${addr.postTown || ''}`}
+                                                                </button>
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                </div>
+                                            )}
+
+                                            {/* Manual Address Fields */}
+                                            {(showManualAddress || formData.addressLine1 || formData.city) && (
+                                                <div className="p-2.5 bg-gray-50 border border-gray-200 rounded-lg space-y-2 animate-fade-in">
+                                                    <div className="text-[11px] font-bold text-gray-700 flex items-center gap-1">
+                                                        <MapPin size={13} className="text-indigo-600" /> Street Address Details
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-[10px] font-bold text-gray-600 mb-0.5">Address Line 1</label>
+                                                        <input
+                                                            type="text"
+                                                            name="addressLine1"
+                                                            value={formData.addressLine1 || ''}
+                                                            onChange={handleChange}
+                                                            placeholder="Street address or house name/number"
+                                                            className="w-full p-1.5 border border-gray-300 rounded text-xs font-medium focus:ring-1 focus:ring-indigo-500 bg-white"
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-[10px] font-bold text-gray-600 mb-0.5">Address Line 2 (Optional)</label>
+                                                        <input
+                                                            type="text"
+                                                            name="addressLine2"
+                                                            value={formData.addressLine2 || ''}
+                                                            onChange={handleChange}
+                                                            placeholder="Apartment, suite, unit, etc."
+                                                            className="w-full p-1.5 border border-gray-300 rounded text-xs font-medium focus:ring-1 focus:ring-indigo-500 bg-white"
+                                                        />
+                                                    </div>
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        <div>
+                                                            <label className="block text-[10px] font-bold text-gray-600 mb-0.5">Town / City</label>
+                                                            <input
+                                                                type="text"
+                                                                name="city"
+                                                                value={formData.city || ''}
+                                                                onChange={handleChange}
+                                                                placeholder="City"
+                                                                className="w-full p-1.5 border border-gray-300 rounded text-xs font-medium focus:ring-1 focus:ring-indigo-500 bg-white"
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-[10px] font-bold text-gray-600 mb-0.5">County</label>
+                                                            <input
+                                                                type="text"
+                                                                name="county"
+                                                                value={formData.county || ''}
+                                                                onChange={handleChange}
+                                                                placeholder="County"
+                                                                className="w-full p-1.5 border border-gray-300 rounded text-xs font-medium focus:ring-1 focus:ring-indigo-500 bg-white"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
 
                                 {/* Vehicle Connection & DVLA Lookup Card */}
@@ -1617,8 +1697,45 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                             </div>
                                         </div>
 
+                                        {/* Editable Make, Model, Year */}
+                                        <div className="grid grid-cols-3 gap-2">
+                                            <div>
+                                                <label className="block text-[11px] font-bold text-gray-700 mb-1">Make</label>
+                                                <input 
+                                                    type="text" 
+                                                    name="vehicleMake" 
+                                                    value={formData.vehicleMake || ''} 
+                                                    onChange={handleChange} 
+                                                    className="w-full p-2 border border-gray-300 rounded-lg text-xs sm:text-sm font-medium focus:ring-2 focus:ring-indigo-500 transition bg-white" 
+                                                    placeholder="e.g. Porsche" 
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-[11px] font-bold text-gray-700 mb-1">Model</label>
+                                                <input 
+                                                    type="text" 
+                                                    name="vehicleModel" 
+                                                    value={formData.vehicleModel || ''} 
+                                                    onChange={handleChange} 
+                                                    className="w-full p-2 border border-gray-300 rounded-lg text-xs sm:text-sm font-medium focus:ring-2 focus:ring-indigo-500 transition bg-white" 
+                                                    placeholder="e.g. 911 GT3" 
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-[11px] font-bold text-gray-700 mb-1">Year</label>
+                                                <input 
+                                                    type="text" 
+                                                    name="vehicleYear" 
+                                                    value={formData.vehicleYear || ''} 
+                                                    onChange={handleChange} 
+                                                    className="w-full p-2 border border-gray-300 rounded-lg text-xs sm:text-sm font-medium focus:ring-2 focus:ring-indigo-500 transition bg-white" 
+                                                    placeholder="e.g. 2022" 
+                                                />
+                                            </div>
+                                        </div>
+
                                         {/* Vehicle Specs Display */}
-                                        {(formData.vehicleMake || formData.vehicleModel || formData.vehicleYear || formData.vehicleVin || formData.vehicleMotExpiry || linkedVehicle?.wheelbaseType) && (
+                                        {(formData.vehicleVin || formData.vehicleMotExpiry || linkedVehicle?.wheelbaseType) && (
                                             <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 space-y-1">
                                                 <div className="flex items-center justify-between gap-1 flex-wrap">
                                                     <div className="font-extrabold text-xs sm:text-sm text-slate-900 truncate">

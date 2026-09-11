@@ -269,17 +269,15 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
             }
         }
 
-        // Case 2: No linked customer, try to match existing customer
+        // Case 2: No linked customer, try to match existing customer by email or phone (never by name alone to avoid hijacking new customers)
         const inquiryEmail = (inq.fromEmail || '').toLowerCase().trim();
         const inquiryPhone = (inq.fromPhone || '').replace(/\s/g, '');
-        const inquiryName = (inq.fromName || '').toLowerCase().trim();
 
-        const matchedCustomer = data.customers.find(c => {
+        const matchedCustomer = (inquiryEmail || inquiryPhone) ? data.customers.find(c => {
             if (inquiryEmail && c.email?.toLowerCase().trim() === inquiryEmail) return true;
             if (inquiryPhone && (c.phone?.replace(/\s/g, '') === inquiryPhone || c.mobile?.replace(/\s/g, '') === inquiryPhone)) return true;
-            if (inquiryName && (c.companyName?.toLowerCase().trim() === inquiryName || `${c.forename} ${c.surname}`.toLowerCase().trim() === inquiryName)) return true;
             return false;
-        });
+        }) : null;
 
         if (matchedCustomer) {
             const updatedCustomer: T.Customer = {
