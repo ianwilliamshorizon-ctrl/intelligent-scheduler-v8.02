@@ -66,6 +66,7 @@ const NominalCodeExportModal: React.FC<NominalCodeExportModalProps> = ({
         if (type === 'invoices') {
             const invoices = items as Invoice[];
             invoices.forEach(invoice => {
+                const vehicleReg = invoice.vehicleId ? vehicleMap.get(invoice.vehicleId) || '' : '';
                 const itemsToProcess = (invoice.lineItems && invoice.lineItems.length > 0) ? invoice.lineItems : [
                     {
                         id: 'li_fallback',
