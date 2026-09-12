@@ -3,6 +3,8 @@ import { Invoice, Customer, Vehicle, EstimateLineItem, TaxRate } from '../types'
 import { formatCurrency } from '../utils/formatUtils';
 import { getCustomerDisplayName } from '../core/utils/customerUtils';
 
+import { getInvoiceGrossTotal, getInvoicePaymentStatus } from '../core/utils/invoiceCalculations';
+
 interface PrintableInvoiceListProps {
     invoices: Invoice[];
     customers: Map<string, Customer>;
@@ -12,31 +14,8 @@ interface PrintableInvoiceListProps {
 }
 
 const PrintableInvoiceList: React.FC<PrintableInvoiceListProps> = ({ invoices, customers, vehicles, taxRates, title }) => {
-    const taxRatesMap = new Map<string, number>(taxRates.map(t => [t.id, t.rate]));
-    const standardTaxRateId = taxRates.find(t => t.code === 'T1')?.id;
-
-    const calculateTotal = (lineItems: EstimateLineItem[]) => {
-        let totalNet = 0;
-        let totalVat = 0;
-
-        (lineItems || []).forEach(item => {
-            if (item.isOptional) return;
-
-            const itemNet = (item.quantity || 0) * (item.unitPrice || 0);
-
-            if (!item.isPackageComponent) {
-                totalNet += itemNet;
-            }
-
-            const effectiveTaxCodeId = (item.taxCodeId === 'Taxstd' || !item.taxCodeId) 
-                ? standardTaxRateId 
-                : item.taxCodeId;
-
-            const rate = effectiveTaxCodeId ? (taxRatesMap.get(effectiveTaxCodeId) || 0) / 100 : 0;
-            totalVat += itemNet * rate;
-        });
-
-        return totalNet + totalVat;
+    const calculateTotal = (inv: Invoice) => {
+        return getInvoiceGrossTotal(inv, taxRates);
     };
 
 
@@ -102,15 +81,18 @@ const PrintableInvoiceList: React.FC<PrintableInvoiceListProps> = ({ invoices, c
                             {invoices.map(inv => {
                                 const customer = customers.get(inv.customerId);
                                 const vehicle = inv.vehicleId ? vehicles.get(inv.vehicleId) : null;
-                                const total = calculateTotal(inv.lineItems);
+                                const total = calculateTotal(inv);
+                                const paymentStatus = getInvoicePaymentStatus(inv, total);
                                 return (
                                     <tr key={inv.id}>
                                         <td className="p-2 border font-mono">{inv.id}</td>
                                         <td className="p-2 border">{inv.issueDate}</td>
                                         <td className="p-2 border">{getCustomerDisplayName(customer)}</td>
                                         <td className="p-2 border">{vehicle?.registration || 'N/A'}</td>
-                                        <td className="p-2 border">{inv.status}</td>
-                                        <td className="p-2 border text-right">{formatCurrency(total)}</td>
+                                        <td className="p-2 border font-semibold">
+                                            {paymentStatus.statusLabel} ({inv.status})
+                                        </td>
+                                        <td className="p-2 border text-right font-bold">{formatCurrency(total)}</td>
                                     </tr>
                                 );
                             })}

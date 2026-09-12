@@ -10,6 +10,8 @@ import { getCustomerDisplayName } from '../../core/utils/customerUtils';
 import { StatusFilter } from '../../components/shared/StatusFilter';
 import { HoverInfo } from '../../components/shared/HoverInfo';
 
+import { getInvoiceGrossTotal, getInvoicePaymentStatus } from '../../core/utils/invoiceCalculations';
+
 interface InvoicesViewProps {
     onViewInvoice: (invoice: Invoice) => void;
     onEditInvoice: (invoice: Invoice) => void;
@@ -35,7 +37,7 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({
     onCreateAdhocInvoice,
     onViewAgedDebtors
 }) => {
-    const { invoices, customers, vehicles, jobs, businessEntities, taxRates } = useData();
+    const { invoices, customers, vehicles, jobs, businessEntities, taxRates, saleVehicles } = useData();
     const { selectedEntityId } = useApp();
     const [filter, setFilter] = useState('');
     const [statusFilter, setStatusFilter] = useState<Invoice['status'][]>([]);
@@ -62,18 +64,14 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({
     const customerMap = useMemo(() => new Map(customers.map(c => [c.id, c])), [customers]);
     const vehicleMap = useMemo(() => new Map(vehicles.map(v => [v.id, v])), [vehicles]);
     const jobsMap = useMemo(() => new Map((jobs || []).map(j => [j.id, j])), [jobs]);
+    const saleVehiclesMap = useMemo(() => new Map((saleVehicles || []).map(sv => [sv.id, sv])), [saleVehicles]);
     const taxRatesMap = useMemo(() => new Map(taxRates.map(t => [t.id, t.rate])), [taxRates]);
     const standardTaxRate = useMemo(() => taxRates.find(t => t.code === 'T1')?.rate || 0, [taxRates]);
     const standardTaxRateId = useMemo(() => taxRates.find(t => t.code === 'T1')?.id, [taxRates]);
 
-    const calculateGrossTotal = (lineItems: EstimateLineItem[]) => {
-        return (lineItems || []).reduce((sum, item) => {
-            if (item.isPackageComponent) return sum;
-            const net = (item.quantity || 0) * (item.unitPrice || 0);
-            const rate = taxRatesMap.get(item.taxCodeId || standardTaxRateId) ?? standardTaxRate;
-            const vat = net * (rate / 100);
-            return sum + net + vat;
-        }, 0);
+    const calculateGrossTotal = (invoice: Invoice) => {
+        const saleVehicle = invoice.saleVehicleId ? saleVehiclesMap.get(invoice.saleVehicleId) : null;
+        return getInvoiceGrossTotal(invoice, taxRates, saleVehicle);
     };
 
     const filteredInvoices = useMemo(() => {
@@ -83,8 +81,13 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({
             }
 
             const job = invoice.jobId ? jobsMap.get(invoice.jobId) : null;
-            const customer = customerMap.get(invoice.customerId) || (job?.customerId ? customerMap.get(job.customerId) : null);
-            const vehicle = invoice.vehicleId ? vehicleMap.get(invoice.vehicleId) : (job?.vehicleId ? vehicleMap.get(job.vehicleId) : null);
+            const saleVehicle = invoice.saleVehicleId ? saleVehiclesMap.get(invoice.saleVehicleId) : null;
+            const customer = customerMap.get(invoice.customerId) || 
+                (job?.customerId ? customerMap.get(job.customerId) : null) ||
+                (saleVehicle?.buyerCustomerId ? customerMap.get(saleVehicle.buyerCustomerId) : null);
+            const vehicle = invoice.vehicleId ? vehicleMap.get(invoice.vehicleId) : 
+                (job?.vehicleId ? vehicleMap.get(job.vehicleId) : null) ||
+                (saleVehicle?.vehicleId ? vehicleMap.get(saleVehicle.vehicleId) : null);
             const lowerFilter = filter.toLowerCase();
 
             if (!isWithinDateRange(invoice.issueDate, startDate, endDate)) {
@@ -97,13 +100,18 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({
                 (vehicle && (
                     vehicle.registration.toLowerCase().replace(/\s/g, '').includes(lowerFilter.replace(/\s/g, '')) ||
                     (vehicle.previousRegistrations || []).some(pr => pr.registration.toLowerCase().replace(/\s/g, '').includes(lowerFilter.replace(/\s/g, '')))
+                )) ||
+                (saleVehicle && (
+                    (saleVehicle.make || '').toLowerCase().includes(lowerFilter) ||
+                    (saleVehicle.model || '').toLowerCase().includes(lowerFilter) ||
+                    (saleVehicle.registration || '').toLowerCase().replace(/\s/g, '').includes(lowerFilter.replace(/\s/g, ''))
                 ));
             
             const matchesStatus = statusFilter.length === 0 || statusFilter.includes(invoice.status);
 
             return matchesSearch && matchesStatus;
         }).sort((a,b) => (b.issueDate || '').localeCompare(a.issueDate || '') || (b.id || '').localeCompare(a.id || ''));
-    }, [invoices, filter, statusFilter, customerMap, vehicleMap, jobsMap, selectedEntityId, businessEntities, dateFilter]);
+    }, [invoices, filter, statusFilter, customerMap, vehicleMap, jobsMap, saleVehiclesMap, selectedEntityId, businessEntities, dateFilter]);
 
     const handleStatusToggle = (status: Invoice['status']) => {
         setStatusFilter(prev =>
@@ -240,17 +248,46 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({
                                     </td>
                                     <td className="p-3">{invoice.issueDate}</td>
                                     <td className="p-3">
-                                        <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${
-                                            invoice.status === 'Paid' ? 'bg-green-100 text-green-800' : 
-                                            invoice.status === 'Overdue' ? 'bg-red-100 text-red-800' : 
-                                            invoice.status === 'Part Paid' ? 'bg-amber-100 text-amber-800' : 
-                                            invoice.status === 'Sent' ? 'bg-blue-100 text-blue-800' : 
-                                            invoice.status === 'Archived' ? 'bg-slate-300 text-slate-800' :
-                                            invoice.status === 'Archived Not Paid' ? 'bg-slate-200 text-slate-700 font-bold' :
-                                            'bg-gray-100'}`}>{invoice.status}</span>
+                                        {(() => {
+                                            const gross = calculateGrossTotal(invoice);
+                                            const paymentStatus = getInvoicePaymentStatus(invoice, gross);
+                                            return (
+                                                <div className="flex flex-col gap-1 items-start">
+                                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                                        {paymentStatus.isPaid ? (
+                                                            <span className="px-2 py-0.5 text-xs font-bold rounded-full bg-green-100 text-green-800 border border-green-300">
+                                                                Paid
+                                                            </span>
+                                                        ) : paymentStatus.isPartPaid ? (
+                                                            <span className="px-2 py-0.5 text-xs font-bold rounded-full bg-amber-100 text-amber-800 border border-amber-300">
+                                                                Part Paid
+                                                            </span>
+                                                        ) : (
+                                                            <span className="px-2 py-0.5 text-xs font-bold rounded-full bg-red-100 text-red-800 border border-red-300">
+                                                                Unpaid
+                                                            </span>
+                                                        )}
+                                                        {invoice.status !== 'Paid' && (
+                                                            <span className={`px-1.5 py-0.2 text-[10px] font-semibold rounded ${
+                                                                invoice.status === 'Overdue' ? 'bg-red-50 text-red-700' :
+                                                                invoice.status === 'Sent' ? 'bg-blue-50 text-blue-700' :
+                                                                invoice.status === 'Archived' ? 'bg-slate-200 text-slate-700' :
+                                                                invoice.status === 'Archived Not Paid' ? 'bg-slate-300 text-slate-800' :
+                                                                'bg-gray-100 text-gray-700'
+                                                            }`}>{invoice.status}</span>
+                                                        )}
+                                                    </div>
+                                                    {invoice.saleVehicleId && (
+                                                        <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded">
+                                                            Vehicle Sale
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            );
+                                        })()}
                                     </td>
-                                    <td className="p-3 text-right font-semibold">
-                                        {formatCurrency(calculateGrossTotal(invoice.lineItems))}
+                                    <td className="p-3 text-right font-bold text-gray-900">
+                                        {formatCurrency(calculateGrossTotal(invoice))}
                                     </td>
                                     <td className="p-3">
                                         <div className="flex gap-1">

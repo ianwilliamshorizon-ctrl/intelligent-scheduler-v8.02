@@ -740,21 +740,27 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                 </ModalSuspense>
             )}
 
-            {modals.salesInvoiceModal.isOpen && modals.salesInvoiceModal.invoice && (
-                <ModalSuspense>
-                    <SalesInvoiceModal 
-                        isOpen={modals.salesInvoiceModal.isOpen}
-                        onClose={() => setters.setSalesInvoiceModal({isOpen: false, invoice: null})}
-                        saleVehicle={data.saleVehicles.find(sv => sv.id === modals.salesInvoiceModal.invoice!.saleVehicleId)!}
-                        invoice={modals.salesInvoiceModal.invoice}
-                        vehicle={data.vehicles.find(v => v.id === modals.salesInvoiceModal.invoice!.vehicleId)}
-                        buyer={data.customers.find(c => c.id === modals.salesInvoiceModal.invoice!.customerId)}
-                        entity={data.businessEntities.find(e => e.id === modals.salesInvoiceModal.invoice!.entityId)}
-                        taxRates={data.taxRates}
-                        onUpdateInvoice={(inv) => handleSaveItem(data.setInvoices, inv, 'brooks_invoices')}
-                    />
-                </ModalSuspense>
-            )}
+            {modals.salesInvoiceModal.isOpen && modals.salesInvoiceModal.invoice && (() => {
+                const inv = modals.salesInvoiceModal.invoice;
+                const saleVehicle = data.saleVehicles.find(sv => sv.id === inv.saleVehicleId || (inv.id && sv.invoiceId === inv.id));
+                const vehicle = data.vehicles.find(v => v.id === inv.vehicleId || (saleVehicle?.vehicleId && v.id === saleVehicle.vehicleId));
+                const buyer = data.customers.find(c => c.id === inv.customerId || (saleVehicle?.buyerCustomerId && c.id === saleVehicle.buyerCustomerId));
+                return (
+                    <ModalSuspense>
+                        <SalesInvoiceModal 
+                            isOpen={modals.salesInvoiceModal.isOpen}
+                            onClose={() => setters.setSalesInvoiceModal({isOpen: false, invoice: null})}
+                            saleVehicle={saleVehicle}
+                            invoice={inv}
+                            vehicle={vehicle}
+                            buyer={buyer}
+                            entity={data.businessEntities.find(e => e.id === inv.entityId)}
+                            taxRates={data.taxRates}
+                            onUpdateInvoice={(updatedInv) => handleSaveItem(data.setInvoices, updatedInv, 'brooks_invoices')}
+                        />
+                    </ModalSuspense>
+                );
+            })()}
 
             {modals.rentalBookingModal.isOpen && (
                 <ModalSuspense>
@@ -926,8 +932,10 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                         onViewSORContract={(sv) => setters.setSorContractModal({ isOpen: true, saleVehicle: sv })}
                         onViewInternalStatement={(sv) => setters.setInternalStatementModal({ isOpen: true, saleVehicle: sv })}
                         onViewInvoice={(sv) => {
-                            const inv = data.invoices.find(i => i.id === sv.invoiceId);
-                            if (inv) setters.setSalesInvoiceModal({ isOpen: true, invoice: inv });
+                            const inv = data.invoices.find(i => (sv.invoiceId && i.id === sv.invoiceId) || (sv.id && i.saleVehicleId === sv.id));
+                            if (inv) {
+                                setters.setSalesInvoiceModal({ isOpen: true, invoice: inv });
+                            }
                         }}
                         onViewOrderForm={(sv) => setters.setVehicleOrderFormModal({ isOpen: true, saleVehicle: sv })}
                         saleVehicle={modals.manageSaleVehicleModal.saleVehicle}

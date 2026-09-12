@@ -379,7 +379,19 @@ const AuthenticatedApp = () => {
                     }
                 }} />;
             case 'invoices':
-                return <InvoicesView onViewInvoice={(inv) => setters.setViewInvoiceModal({isOpen: true, invoice: inv})} onEditInvoice={(inv) => setters.setInvoiceFormModal({isOpen: true, invoice: inv})} onOpenExportModal={(type, items) => setters.setExportModal({isOpen: true, type: type as any, items})} onCreateAdhocInvoice={() => setters.setInvoiceFormModal({isOpen: true, job: null, invoice: null })} onViewAgedDebtors={() => setCurrentView('aged-debtors')} />;
+                return <InvoicesView 
+                    onViewInvoice={(inv) => {
+                        if (inv.saleVehicleId) {
+                            setters.setSalesInvoiceModal({ isOpen: true, invoice: inv });
+                        } else {
+                            setters.setViewInvoiceModal({ isOpen: true, invoice: inv });
+                        }
+                    }} 
+                    onEditInvoice={(inv) => setters.setInvoiceFormModal({isOpen: true, invoice: inv})} 
+                    onOpenExportModal={(type, items) => setters.setExportModal({isOpen: true, type: type as any, items})} 
+                    onCreateAdhocInvoice={() => setters.setInvoiceFormModal({isOpen: true, job: null, invoice: null })} 
+                    onViewAgedDebtors={() => setCurrentView('aged-debtors')} 
+                />;
             case 'purchaseOrders':
                 return <PurchaseOrdersView onOpenPurchaseOrderModal={(po) => setters.setPoModal({isOpen: true, po})} onViewPurchaseOrder={(po) => setters.setViewPoModal({isOpen: true, po})} onExport={(data, type) => setters.setExportModal({isOpen: true, type: type as any, items: data})} onOpenBatchAddModal={() => setters.setBatchPoModalOpen(true)} onOpenBatchUpdateRefModal={() => setters.setBatchUpdatePoRefModalOpen(true)} />;
             case 'sales':

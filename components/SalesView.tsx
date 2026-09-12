@@ -5,6 +5,7 @@ import { BusinessEntity, SaleVehicle, Vehicle, Customer, Prospect } from '../typ
 import { Car, Tag, CheckCircle, Clock, MoreHorizontal, User, BatteryCharging, KeyRound, PlusCircle, Search, X, FileText, Users, Link as LinkIcon, Edit, UserCheck } from 'lucide-react';
 import { formatCurrency } from '../utils/formatUtils';
 import { getCustomerDisplayName } from '../core/utils/customerUtils';
+import { getInvoiceGrossTotal, getInvoicePaymentStatus } from '../core/utils/invoiceCalculations';
 
 interface SalesViewProps {
     entity: BusinessEntity;
@@ -18,7 +19,7 @@ interface SalesViewProps {
 }
 
 const SalesView: React.FC<SalesViewProps> = ({ entity, onManageSaleVehicle, onAddSaleVehicle, onGenerateReport, onAddProspect, onEditProspect, onViewCustomer, onPrintProspects }) => {
-    const { saleVehicles, vehicles, customers, prospects } = useData();
+    const { saleVehicles, vehicles, customers, prospects, invoices, taxRates } = useData();
     const [activeTab, setActiveTab] = useState<'forSale' | 'prospects'>('forSale');
     const [searchTerm, setSearchTerm] = useState('');
     
@@ -112,13 +113,49 @@ const SalesView: React.FC<SalesViewProps> = ({ entity, onManageSaleVehicle, onAd
                             </button>
                         </div>
                     )}
-                     {isSold && (
-                         <div className="flex items-center gap-2">
-                            <Tag size={14} className="text-gray-500" />
-                            <span className="font-semibold w-24">Sold Price:</span>
-                            <span className="font-semibold text-green-700">{formatCurrency(saleVehicle.finalSalePrice)}</span>
-                        </div>
-                    )}
+                     {isSold && (() => {
+                         const linkedInvoice = (invoices || []).find(inv => (saleVehicle.invoiceId && inv.id === saleVehicle.invoiceId) || (saleVehicle.id && inv.saleVehicleId === saleVehicle.id));
+                         const soldPrice = saleVehicle.finalSalePrice || (linkedInvoice ? getInvoiceGrossTotal(linkedInvoice, taxRates, saleVehicle) : 0) || saleVehicle.price || 0;
+                         const paymentStatus = linkedInvoice ? getInvoicePaymentStatus(linkedInvoice, soldPrice) : null;
+                         return (
+                             <div className="space-y-1.5 pt-1.5 mt-1.5 border-t border-gray-100">
+                                 <div className="flex items-center justify-between text-sm">
+                                     <span className="text-gray-500 font-medium flex items-center gap-1.5">
+                                         <Tag size={14} className="text-gray-400" /> Sold Price:
+                                     </span>
+                                     <span className="font-bold text-gray-900">{formatCurrency(soldPrice)}</span>
+                                 </div>
+                                 <div className="flex items-center justify-between text-xs">
+                                     <span className="text-gray-500 font-medium">Status:</span>
+                                     <div>
+                                         {paymentStatus?.isPaid ? (
+                                             <span className="px-2 py-0.5 rounded-full font-bold bg-green-100 text-green-800 border border-green-300">
+                                                 Paid
+                                             </span>
+                                         ) : paymentStatus?.isPartPaid ? (
+                                             <span className="px-2 py-0.5 rounded-full font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                                                 Part Paid
+                                             </span>
+                                         ) : linkedInvoice ? (
+                                             <span className="px-2 py-0.5 rounded-full font-bold bg-red-100 text-red-800 border border-red-300">
+                                                 Unpaid
+                                             </span>
+                                         ) : (
+                                             <span className="px-2 py-0.5 rounded-full font-bold bg-gray-100 text-gray-600">
+                                                 No Invoice
+                                             </span>
+                                         )}
+                                     </div>
+                                 </div>
+                                 {linkedInvoice && (
+                                     <div className="flex items-center justify-between text-[11px] text-gray-500 font-mono">
+                                         <span>Invoice:</span>
+                                         <span className="font-semibold text-indigo-700">#{linkedInvoice.id}</span>
+                                     </div>
+                                 )}
+                             </div>
+                         );
+                     })()}
                     {hasActiveCharge && (
                         <div className="flex items-center gap-1.5 text-xs font-bold text-yellow-600 animate-pulse bg-yellow-100 p-2 rounded-lg mt-2">
                             <BatteryCharging size={14} /> ON CHARGE

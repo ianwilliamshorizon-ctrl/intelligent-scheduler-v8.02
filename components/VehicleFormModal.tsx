@@ -142,7 +142,12 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
         );
     }
 
-    const getInvoiceTotal = (inv: any) => inv.lineItems?.reduce((sum: number, item: any) => sum + (item.quantity * item.unitPrice), 0) || 0;
+    const getInvoiceTotal = (inv: any) => {
+        if (inv.grandTotal && inv.grandTotal > 0) return inv.grandTotal;
+        if (inv.totalAmount && inv.totalAmount > 0) return inv.totalAmount;
+        if (inv.totalNet && inv.totalNet > 0) return inv.totalNet;
+        return inv.lineItems?.reduce((sum: number, item: any) => sum + ((item.quantity ?? 1) * (item.unitPrice ?? 0)), 0) || 0;
+    };
     const getEstimateTotal = (est: Estimate) => est.lineItems.reduce((sum, item) => sum + (item.isOptional ? 0 : (item.quantity * item.unitPrice)), 0);
 
     const vehicleJobs = useMemo(() => {
@@ -614,13 +619,21 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
                             {vehicleInvoices.length > 0 && (
                                 <div className="space-y-1 mt-4">
                                     <h5 className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest">Billing</h5>
-                                    {vehicleInvoices.map(inv => (
-                                        <div key={inv.id} className="text-xs flex justify-between p-2 border rounded bg-green-50/30 hover:bg-green-100 cursor-pointer transition-colors" onClick={() => onViewInvoice?.(inv)}>
-                                            <span className="text-gray-500 font-mono">{inv.issueDate}</span>
-                                            <span className="flex-1 px-2 font-bold text-green-900">#{inv.id.slice(-6)}</span>
-                                            <span className="font-extrabold">{formatCurrency(getInvoiceTotal(inv))}</span>
-                                        </div>
-                                    ))}
+                                    {vehicleInvoices.map(inv => {
+                                        const total = getInvoiceTotal(inv);
+                                        const totalPaid = (inv.payments || []).reduce((s: number, p: any) => s + (p.amount || 0), 0);
+                                        const isPaid = inv.status === 'Paid' || (total > 0 && totalPaid >= total);
+                                        return (
+                                            <div key={inv.id} className="text-xs flex items-center justify-between p-2 border rounded bg-green-50/30 hover:bg-green-100 cursor-pointer transition-colors" onClick={() => onViewInvoice?.(inv)}>
+                                                <span className="text-gray-500 font-mono">{inv.issueDate}</span>
+                                                <span className="px-2 font-bold text-green-900">#{inv.id.slice(-6)}</span>
+                                                <span className={`px-1.5 py-0.2 rounded text-[10px] font-bold ${isPaid ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                                                    {isPaid ? 'PAID' : 'UNPAID'}
+                                                </span>
+                                                <span className="font-extrabold ml-auto">{formatCurrency(total)}</span>
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             )}
 

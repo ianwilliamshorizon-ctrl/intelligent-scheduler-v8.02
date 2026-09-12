@@ -66,8 +66,16 @@ const NominalCodeExportModal: React.FC<NominalCodeExportModalProps> = ({
         if (type === 'invoices') {
             const invoices = items as Invoice[];
             invoices.forEach(invoice => {
-                const vehicleReg = invoice.vehicleId ? vehicleMap.get(invoice.vehicleId) || '' : '';
-                invoice.lineItems.forEach(lineItem => {
+                const itemsToProcess = (invoice.lineItems && invoice.lineItems.length > 0) ? invoice.lineItems : [
+                    {
+                        id: 'li_fallback',
+                        description: `Invoice #${invoice.id}`,
+                        quantity: 1,
+                        unitPrice: invoice.grandTotal || invoice.totalAmount || invoice.totalNet || 0,
+                        taxCodeId: ''
+                    }
+                ];
+                itemsToProcess.forEach(lineItem => {
                     const supplierName = lineItem.supplierId ? supplierMap.get(lineItem.supplierId) : '';
                     const assignedCodeId = assignNominalCode(lineItem, invoice.entityId || '', nominalCodeRules, supplierName);
                     const net = (lineItem.quantity || 0) * (lineItem.unitPrice || 0);

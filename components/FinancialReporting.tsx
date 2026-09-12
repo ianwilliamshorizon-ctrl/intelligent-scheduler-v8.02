@@ -6,9 +6,10 @@ import { formatDate } from '../core/utils/dateUtils';
 import { FileText, Download, Printer, ListFilter, Wallet, Group, Building2, Calendar, Filter, ChevronDown, ChevronRight, CreditCard } from 'lucide-react';
 import Papa from 'papaparse';
 import { useReactToPrint } from 'react-to-print';
+import { getInvoiceGrossTotal, getInvoicePaymentStatus } from '../core/utils/invoiceCalculations';
 
 const FinancialReporting: React.FC = () => {
-    const { invoices, customers, businessEntities } = useData();
+    const { invoices, customers, businessEntities, saleVehicles, taxRates } = useData();
     const { selectedEntityId, currentUser } = useApp();
     const componentRef = useRef<HTMLDivElement>(null);
     
@@ -47,11 +48,13 @@ const FinancialReporting: React.FC = () => {
             if (invDate < start || invDate > end) return false;
 
             // Mode filtering
+            const saleVehicle = inv.saleVehicleId ? saleVehicles.find(s => s.id === inv.saleVehicleId) : null;
+            const totalAmount = getInvoiceGrossTotal(inv, taxRates, saleVehicle);
+            const paymentStatus = getInvoicePaymentStatus(inv, totalAmount);
+
             if (reportMode === 'aged') {
-                if (inv.status === 'Paid' || inv.status === 'Archived') return false;
-                const totalPaid = (inv.payments || []).reduce((sum, p) => sum + p.amount, 0);
-                const totalAmount = inv.totalAmount || (inv.lineItems || []).reduce((sum: number, item: any) => sum + (item.totalPrice || 0), 0);
-                return totalPaid < totalAmount;
+                if (paymentStatus.isPaid || inv.status === 'Archived') return false;
+                return paymentStatus.balanceDue > 0;
             }
 
             return true;
@@ -69,17 +72,19 @@ const FinancialReporting: React.FC = () => {
                     grouped[gId] = { groupName, items: [], totalValue: 0, totalDue: 0 };
                 }
 
-                const totalPaid = (inv.payments || []).reduce((sum, p) => sum + p.amount, 0);
-                const totalAmount = inv.totalAmount || (inv.lineItems || []).reduce((sum: number, item: any) => sum + (item.totalPrice || 0), 0);
-                const balance = totalAmount - totalPaid;
+                const saleVehicle = inv.saleVehicleId ? saleVehicles.find(s => s.id === inv.saleVehicleId) : null;
+                const totalAmount = getInvoiceGrossTotal(inv, taxRates, saleVehicle);
+                const paymentStatus = getInvoicePaymentStatus(inv, totalAmount);
+                const balance = paymentStatus.balanceDue;
 
                 grouped[gId].items.push({
                     ...inv,
                     customerName: customers.find(c => c.id === inv.customerId)?.companyName || 
-                                   `${customers.find(c => c.id === inv.customerId)?.forename} ${customers.find(c => c.id === inv.customerId)?.surname}`,
+                                   `${customers.find(c => c.id === inv.customerId)?.forename || ''} ${customers.find(c => c.id === inv.customerId)?.surname || ''}`.trim() || 'Unknown Customer',
                     balance,
                     totalAmount,
-                    primaryMethod: inv.payments?.[0]?.method || 'N/A'
+                    paymentStatus,
+                    primaryMethod: inv.payments?.[0]?.method || (paymentStatus.isPaid ? 'Paid' : 'Unpaid')
                 });
                 grouped[gId].totalValue += totalAmount;
                 if (grouped[gId].totalDue !== undefined) grouped[gId].totalDue += balance;
@@ -87,7 +92,12 @@ const FinancialReporting: React.FC = () => {
         } else {
             // Group by primary payment method
             filteredInvoices.forEach(inv => {
-                const method = inv.payments?.[0]?.method || 'Unpaid/Other';
+                const saleVehicle = inv.saleVehicleId ? saleVehicles.find(s => s.id === inv.saleVehicleId) : null;
+                const totalAmount = getInvoiceGrossTotal(inv, taxRates, saleVehicle);
+                const paymentStatus = getInvoicePaymentStatus(inv, totalAmount);
+                const balance = paymentStatus.balanceDue;
+
+                const method = inv.payments?.[0]?.method || (paymentStatus.isPaid ? 'Paid' : 'Unpaid');
                 const gId = method;
                 const groupName = method;
 
@@ -95,16 +105,13 @@ const FinancialReporting: React.FC = () => {
                     grouped[gId] = { groupName, items: [], totalValue: 0, totalDue: 0 };
                 }
 
-                const totalPaid = (inv.payments || []).reduce((sum, p) => sum + p.amount, 0);
-                const totalAmount = inv.totalAmount || (inv.lineItems || []).reduce((sum: number, item: any) => sum + (item.totalPrice || 0), 0);
-                const balance = totalAmount - totalPaid;
-
                 grouped[gId].items.push({
                     ...inv,
                     customerName: customers.find(c => c.id === inv.customerId)?.companyName || 
-                                   `${customers.find(c => c.id === inv.customerId)?.forename} ${customers.find(c => c.id === inv.customerId)?.surname}`,
+                                   `${customers.find(c => c.id === inv.customerId)?.forename || ''} ${customers.find(c => c.id === inv.customerId)?.surname || ''}`.trim() || 'Unknown Customer',
                     balance,
                     totalAmount,
+                    paymentStatus,
                     entityName: businessEntities.find(e => e.id === inv.entityId)?.name || 'Unknown'
                 });
                 grouped[gId].totalValue += totalAmount;
@@ -347,12 +354,12 @@ const FinancialReporting: React.FC = () => {
                                                         )}
                                                         <td className="px-6 py-4 border-b border-gray-50 print:py-2 text-center print:px-2">
                                                             <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-tight print:border print:border-gray-800 print:text-black ${
-                                                                inv.status === 'Paid' ? 'bg-green-100 text-green-700' :
+                                                                inv.paymentStatus?.isPaid ? 'bg-green-100 text-green-700' :
+                                                                inv.paymentStatus?.isPartPaid ? 'bg-amber-100 text-amber-700' :
                                                                 inv.status === 'Overdue' ? 'bg-rose-100 text-rose-700' :
-                                                                inv.status === 'Part Paid' ? 'bg-amber-100 text-amber-700' :
-                                                                'bg-gray-100 text-gray-700'
+                                                                'bg-red-100 text-red-700'
                                                             }`}>
-                                                                {inv.status}
+                                                                {inv.paymentStatus?.statusLabel || inv.status}
                                                             </span>
                                                         </td>
                                                     </tr>
