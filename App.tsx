@@ -12,6 +12,7 @@ import { DataProvider } from './core/state/DataContext';
 import LoginView from './components/LoginView';
 import EstimateViewModal from './components/EstimateViewModal';
 import PrintableInvoice from './components/PrintableInvoice';
+import VersionChecker from './components/VersionChecker';
 
 // Trigger background prefetch for the authenticated app
 const AuthenticatedAppPromise = import('./AuthenticatedApp');
@@ -354,6 +355,7 @@ const App = () => {
         const dummyCustomerUser = { id: 'customer', name: 'Customer', email: '', role: 'Client' } as unknown as T.User;
         return (
             <div className="min-h-screen bg-gray-100 flex justify-center items-start">
+                <VersionChecker />
                 <EstimateViewModal
                     isOpen={true}
                     onClose={() => {
@@ -411,6 +413,7 @@ const App = () => {
     if (!isAuthenticated) {
         return (
             <>
+                <VersionChecker />
                 <LoginView users={users} onLogin={login} environment={appEnvironment} businessEntities={businessEntities} />
                 <ToastContainer aria-label="Notifications" />
             </>
@@ -419,6 +422,7 @@ const App = () => {
 
     return (
         <DataProvider>
+            <VersionChecker />
             <Suspense fallback={
                 <div className="flex items-center justify-center h-screen bg-slate-50 dark:bg-slate-900">
                     <div className="flex flex-col items-center gap-4">

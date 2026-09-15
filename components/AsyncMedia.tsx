@@ -5,13 +5,15 @@ import { getImage } from '../utils/imageStore';
 import { Loader2, AlertCircle } from 'lucide-react';
 
 interface AsyncMediaProps {
-    imageId: string;
+    imageId?: string;
+    mediaId?: string;
     alt?: string;
     className?: string;
     type?: 'photo' | 'video';
 }
 
-export const AsyncMedia: React.FC<AsyncMediaProps> = ({ imageId, alt = "Media", className, type }) => {
+export const AsyncMedia: React.FC<AsyncMediaProps> = ({ imageId: rawImageId, mediaId, alt = "Media", className, type }) => {
+    const imageId = rawImageId || mediaId || '';
     const [mediaUrl, setMediaUrl] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(false);

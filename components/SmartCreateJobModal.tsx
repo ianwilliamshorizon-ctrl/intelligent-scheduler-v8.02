@@ -57,7 +57,7 @@ const SmartCreateJobModal: React.FC<SmartCreateJobModalProps> = ({
     initialPrompt,
     inquiryId,
 }) => {
-    const { taxRates, jobs, businessEntities, estimates, parts, suppliers, inquiries } = useData();
+    const { taxRates, jobs, businessEntities, estimates, parts, suppliers, inquiries, saveRecord } = useData();
     const { selectedEntityId, currentUser } = useApp();
 
     const linkedInquiry = useMemo(() => inquiries?.find(i => i.id === inquiryId), [inquiries, inquiryId]);

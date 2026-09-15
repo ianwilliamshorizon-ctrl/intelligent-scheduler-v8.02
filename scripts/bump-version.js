@@ -29,5 +29,11 @@ if (fs.existsSync(indexPath)) {
     fs.writeFileSync(indexPath, indexHtml);
 }
 
-console.log(`[Version Bump] Updated package.json and index.html version to: v${pkg.version}`);
+// Also keep public/version.json in sync for immediate client polling detection
+const publicDir = path.resolve(__dirname, '../public');
+if (!fs.existsSync(publicDir)) fs.mkdirSync(publicDir, { recursive: true });
+const appVersion = `${pkg.version}-${Date.now()}`;
+fs.writeFileSync(path.join(publicDir, 'version.json'), JSON.stringify({ version: appVersion }));
+
+console.log(`[Version Bump] Updated package.json, index.html, and version.json to: v${pkg.version}`);
 

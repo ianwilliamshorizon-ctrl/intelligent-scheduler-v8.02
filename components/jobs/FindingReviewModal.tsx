@@ -39,7 +39,7 @@ interface FindingReviewModalProps {
     job: Job;
     vehicle?: Vehicle;
     customer?: Customer;
-    onSaveJob: (updatedJob: Job) => Promise<void> | void;
+    onSaveJob: (updatedJob: Job) => Promise<any> | any;
     onCreateEstimateFromFinding?: (finding: InspectionFinding, job: Job) => void;
     onCreateEstimateFromAllFindings?: (findings: InspectionFinding[], job: Job) => void;
 }

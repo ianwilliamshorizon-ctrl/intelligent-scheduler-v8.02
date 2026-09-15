@@ -85,18 +85,39 @@ export const ManagementBackupTab: React.FC<ManagementBackupTabProps> = ({
     };
 
     const [availableVersion, setAvailableVersion] = useState<string | null>(null);
+    const [isCheckingVersion, setIsCheckingVersion] = useState(false);
+
+    const checkServerVersion = async (notify: boolean = false) => {
+        setIsCheckingVersion(true);
+        try {
+            const res = await fetch(`/version.json?t=${Date.now()}`, {
+                cache: 'no-store',
+                headers: { 'Cache-Control': 'no-cache, no-store' }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                if (data && data.version) {
+                    setAvailableVersion(data.version);
+                    if (notify) {
+                        if (typeof __APP_VERSION__ !== 'undefined' && data.version !== __APP_VERSION__) {
+                            onShowStatus('A new version is available on the server!', 'info');
+                        } else {
+                            onShowStatus('System software is up to date.', 'success');
+                        }
+                    }
+                }
+            }
+        } catch (err) {
+            console.error("Could not fetch server version", err);
+            if (notify) onShowStatus('Could not check server version.', 'error');
+        } finally {
+            setIsCheckingVersion(false);
+        }
+    };
 
     React.useEffect(() => {
         fetchSnapshots();
-        // Fetch the server version specifically for this tab
-        fetch(`/version.json?t=${Date.now()}`)
-            .then(res => res.json())
-            .then(data => {
-                if (data && data.version) {
-                    setAvailableVersion(data.version);
-                }
-            })
-            .catch(err => console.error("Could not fetch server version", err));
+        checkServerVersion();
     }, []);
 
     const formatVersionDate = (versionStr: string) => {
@@ -420,18 +441,40 @@ export const ManagementBackupTab: React.FC<ManagementBackupTabProps> = ({
                     </div>
                     <div className="flex justify-between items-center text-sm">
                         <span className="text-gray-600 font-medium">Available on Server:</span>
-                        <span className="font-mono text-green-700 font-bold bg-green-50 px-2 py-0.5 rounded border border-green-100 flex items-center gap-1">
-                            {!availableVersion ? (
-                                <span className="flex items-center gap-1 text-gray-500"><RefreshCw size={12} className="animate-spin" /> Checking...</span>
-                            ) : (
-                                formatVersionDate(availableVersion)
-                            )}
-                        </span>
+                        <div className="flex items-center gap-2">
+                            <span className="font-mono text-green-700 font-bold bg-green-50 px-2 py-0.5 rounded border border-green-100 flex items-center gap-1">
+                                {!availableVersion || isCheckingVersion ? (
+                                    <span className="flex items-center gap-1 text-gray-500"><RefreshCw size={12} className="animate-spin" /> Checking...</span>
+                                ) : (
+                                    formatVersionDate(availableVersion)
+                                )}
+                            </span>
+                            <button
+                                type="button"
+                                onClick={() => checkServerVersion(true)}
+                                disabled={isCheckingVersion}
+                                title="Check for software update now"
+                                className="p-1 hover:bg-indigo-100 rounded text-indigo-600 transition-colors"
+                            >
+                                <RefreshCw size={14} className={isCheckingVersion ? "animate-spin" : ""} />
+                            </button>
+                        </div>
                     </div>
                     {availableVersion && typeof __APP_VERSION__ !== 'undefined' && availableVersion !== __APP_VERSION__ && (
                         <div className="mt-3 p-2 bg-yellow-50 border border-yellow-200 text-yellow-800 text-xs rounded-md font-bold flex items-center justify-between">
                             <span>An update is available!</span>
-                            <button onClick={() => window.location.reload()} className="px-2 py-1 bg-white border border-yellow-300 rounded shadow-sm hover:bg-yellow-100 text-yellow-900 transition-colors">Reload to Update</button>
+                            <button 
+                                onClick={async () => {
+                                    if ('caches' in window) {
+                                        const keys = await caches.keys();
+                                        await Promise.all(keys.map(k => caches.delete(k)));
+                                    }
+                                    window.location.reload();
+                                }} 
+                                className="px-2 py-1 bg-white border border-yellow-300 rounded shadow-sm hover:bg-yellow-100 text-yellow-900 transition-colors"
+                            >
+                                Reload to Update
+                            </button>
                         </div>
                     )}
                 </div>

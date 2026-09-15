@@ -432,7 +432,7 @@ const ConciergeView: React.FC<ConciergeViewProps> = (props) => {
                     job={selectedJobForReview}
                     vehicle={vehiclesById.get(selectedJobForReview.vehicleId)}
                     customer={customersById.get(selectedJobForReview.customerId)}
-                    onSaveJob={(updatedJob) => saveRecord('jobs', updatedJob)}
+                    onSaveJob={async (updatedJob) => { await saveRecord('jobs', updatedJob); }}
                     onCreateEstimateFromFinding={props.onRaiseEstimateForFinding}
                     onCreateEstimateFromAllFindings={props.onRaiseEstimateFromAllFindings}
                 />
