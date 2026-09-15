@@ -17,6 +17,7 @@ import { useWorkshopActions } from '../../core/hooks/useWorkshopActions';
 import { useDispatchFilters } from './hooks/useDispatchFilters';
 import { useDispatchDragDrop } from './hooks/useDispatchDragDrop';
 import { DispatchHeader } from './components/DispatchHeader';
+import MonthlyLaborTallyModal from '../../components/jobs/MonthlyLaborTallyModal';
 
 interface DispatchViewProps {
     setDefaultDateForModal: (date: Date | null) => void;
@@ -85,6 +86,7 @@ const DispatchView: React.FC<DispatchViewProps> = ({
     // -- Modal State --
     const [assignModalData, setAssignModalData] = useState<{ job: Job, segment: JobSegment, lift: Lift, startSegmentIndex: number, currentEngineerId?: string | null } | null>(null);
     const [reassignModalData, setReassignModalData] = useState<{ jobId: string; segmentId: string; liftName: string; startSegmentIndex: number; currentEngineerId?: string | null; } | null>(null);
+    const [isLaborTallyModalOpen, setIsLaborTallyModalOpen] = useState(false);
 
     // -- Bank Holidays State --
     const [bankHolidays, setBankHolidays] = useState<Map<string, string[]>>(new Map());
@@ -213,6 +215,7 @@ const DispatchView: React.FC<DispatchViewProps> = ({
                 setIsSmartCreateOpen={setIsSmartCreateOpen}
                 setSmartCreateMode={setSmartCreateMode}
                 setDefaultDateForModal={setDefaultDateForModal}
+                onOpenLaborTally={() => setIsLaborTallyModalOpen(true)}
             />
             
             {viewMode === 'timeline' && (
@@ -315,6 +318,22 @@ const DispatchView: React.FC<DispatchViewProps> = ({
                     initialStartSegmentIndex={reassignModalData.startSegmentIndex}
                     initialEngineerId={reassignModalData.currentEngineerId}
                     timeSegments={TIME_SEGMENTS}
+                />
+            )}
+
+            {isLaborTallyModalOpen && (
+                <MonthlyLaborTallyModal
+                    isOpen={isLaborTallyModalOpen}
+                    onClose={() => setIsLaborTallyModalOpen(false)}
+                    jobs={jobs}
+                    engineers={engineers}
+                    businessEntities={businessEntities}
+                    vehicles={vehicles}
+                    selectedEntityId={selectedEntityId}
+                    onOpenJob={(id) => {
+                        setIsLaborTallyModalOpen(false);
+                        handleEditJob(id, 'segments');
+                    }}
                 />
             )}
         </div>

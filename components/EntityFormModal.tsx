@@ -259,6 +259,24 @@ const EntityFormModal: React.FC<EntityFormModalProps> = ({ isOpen, onClose, onSa
                                 <EntityFormInput label="Labor Cost Rate (£)" name="laborCostRate" type="number" step="0.01" value={formData.laborCostRate || ''} onChange={handleChange} />
                                 <EntityFormInput label="Daily Capacity (hours)" name="dailyCapacityHours" type="number" step="0.5" value={formData.dailyCapacityHours || ''} onChange={handleChange} />
                             </div>
+
+                            <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-between">
+                                <div>
+                                    <label htmlFor="enableLaborTracking" className="font-bold text-sm text-slate-900 block cursor-pointer">
+                                        Enable Advanced Labor Tracking & Assists
+                                    </label>
+                                    <p className="text-xs text-slate-500 mt-0.5">
+                                        Record allocated time, actual time to complete, and helper assist percentages in the segments section.
+                                    </p>
+                                </div>
+                                <input
+                                    type="checkbox"
+                                    id="enableLaborTracking"
+                                    checked={formData.enableLaborTracking || false}
+                                    onChange={(e) => setFormData({ ...formData, enableLaborTracking: e.target.checked })}
+                                    className="h-5 w-5 text-indigo-600 rounded-lg border-slate-300 cursor-pointer"
+                                />
+                            </div>
                             
                             <div className="p-5 bg-indigo-50/50 rounded-2xl border border-indigo-100">
                                 <h4 className="font-bold text-sm text-indigo-900 mb-4 flex items-center gap-2"><Clock size={16}/> Workshop Hours</h4>
@@ -483,7 +501,7 @@ const SAMPLE_CUSTOMER: T.Customer = {
 };
 
 const SAMPLE_VEHICLE: T.Vehicle = {
-    id: 'sample', registration: 'AB12 CDE', make: 'PORSCHE', model: '911 GT3 RS', year: 2024, colour: 'Guards Red', customerId: 'sample', vin: 'WP0ZZZ99ZNS123456', mileage: 12450
+    id: 'sample', registration: 'AB12 CDE', make: 'PORSCHE', model: '911 GT3 RS', year: 2024, colour: 'Guards Red', customerId: 'sample', vin: 'WP0ZZZ99ZNS123456'
 };
 
 const SAMPLE_JOB: T.Job = {
@@ -506,8 +524,8 @@ const SAMPLE_JOB: T.Job = {
         { id: '5', description: 'Brake Fluid System Flush & Bleed (DOT 4)', quantity: 1, unitPrice: 75, unitCost: 20, isLabor: true, taxCodeId: 'T1' }
     ],
     segments: [
-        { id: 'seg1', engineerId: 'eng1', startTime: '09:00', endTime: '11:00', date: '2026-04-22', duration: 120 },
-        { id: 'seg2', engineerId: 'eng1', startTime: '11:30', endTime: '13:00', date: '2026-04-22', duration: 90 }
+        { id: 'seg1', segmentId: 'seg1', engineerId: 'eng1', description: 'Major Service Part 1', status: 'In Progress', date: '2026-04-22', duration: 2 },
+        { id: 'seg2', segmentId: 'seg2', engineerId: 'eng1', description: 'Brake Fluid Flush & Bleed', status: 'Allocated', date: '2026-04-22', duration: 1.5 }
     ],
     technicianObservations: [
         'Front brake discs at 31.8mm (minimum thickness 30.0mm) - serviceable.',

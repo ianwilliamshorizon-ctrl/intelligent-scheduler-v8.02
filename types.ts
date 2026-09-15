@@ -82,6 +82,7 @@ export interface User {
     holidayApproverId?: string;
     holidayEntitlement?: number;
     backupEmail?: string;
+    hourlyRate?: number;
 }
 
 export interface Role {
@@ -263,6 +264,16 @@ export interface Vehicle {
 /**
  * WORKSHOP & JOB TYPES
  */
+export interface SegmentAssist {
+    id: string;
+    engineerId: string;
+    percentage: number; // Nominated % of time, e.g. 25 for 25%
+    allocatedHours?: number;
+    actualHours?: number;
+    notes?: string;
+    addedAt?: string;
+}
+
 export interface JobSegment {
     id?: string;
     description?: string;
@@ -273,6 +284,9 @@ export interface JobSegment {
     allocatedLift?: string;
     scheduledStartSegment?: number;
     duration?: number;
+    allocatedHours?: number;
+    actualHours?: number;
+    assists?: SegmentAssist[];
     engineerCompletedAt?: string;
 }
 
@@ -665,6 +679,7 @@ export interface BusinessEntity {
     jobCardLayout?: DocumentTemplateConfig;
     invoiceLayout?: DocumentTemplateConfig;
     estimateLayout?: DocumentTemplateConfig;
+    enableLaborTracking?: boolean;
 }
 
 export interface Engineer { 
@@ -672,6 +687,7 @@ export interface Engineer {
     name: string; 
     entityId?: string;
     specialization?: string;
+    hourlyRate?: number;
 }
 
 export interface ServicePackage {

@@ -4,7 +4,7 @@ import { useData } from '../core/state/DataContext';
 import { findBestVoice, prepareTextForSpeech } from '../core/utils/speechUtils';
 import { useApp } from '../core/state/AppContext';
 import * as T from '../types';
-import { X, Save, Car, User, FileText, Wrench, Package, DollarSign, Edit, Plus, Trash2, KeyRound, MessageSquare, ChevronUp, ChevronDown, ListChecks, PlusCircle, ClipboardCheck, CarFront, Image as ImageIcon, Ban, Expand, Loader2, Printer, CalendarDays, PlayCircle, PauseCircle, CheckCircle, RotateCcw, UserCheck, UserPlus, MoreHorizontal, Camera, Info, Volume2, History } from 'lucide-react';
+import { X, Save, Car, User, FileText, Wrench, Package, DollarSign, Edit, Plus, Trash2, KeyRound, MessageSquare, ChevronUp, ChevronDown, ListChecks, PlusCircle, ClipboardCheck, CarFront, Image as ImageIcon, Ban, Expand, Loader2, Printer, CalendarDays, PlayCircle, PauseCircle, CheckCircle, RotateCcw, UserCheck, UserPlus, MoreHorizontal, Camera, Info, Volume2, History, Clock, ToggleLeft, ToggleRight, ShieldAlert, SlidersHorizontal, UserMinus } from 'lucide-react';
 import { formatCurrency } from '../utils/formatUtils';
 import { formatDate, addDays } from '../core/utils/dateUtils';
 import { generateEstimateNumber } from '../core/utils/numberGenerators';
@@ -35,6 +35,7 @@ import { PrintableEstimate } from './estimates/PrintableEstimate';
 import AsyncMedia from './AsyncMedia';
 import FastTrackFindingModal from './jobs/FastTrackFindingModal';
 import FindingReviewModal from './jobs/FindingReviewModal';
+import MonthlyLaborTallyModal from './jobs/MonthlyLaborTallyModal';
 import { AlertOctagon } from 'lucide-react';
 import MediaLightbox from './MediaLightbox';
 import SpeechToTextButton from './shared/SpeechToTextButton';
@@ -190,10 +191,115 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
     const [isFindingModalOpen, setIsFindingModalOpen] = useState(false);
     const [isFindingReviewModalOpen, setIsFindingReviewModalOpen] = useState(false);
 
+    // Optional Add-on: Labor & Assist Tracking
+    const [isLaborTrackingEnabled, setIsLaborTrackingEnabled] = useState<boolean>(() => {
+        try {
+            return localStorage.getItem('intelligent_scheduler_labor_tracking') === 'true';
+        } catch {
+            return false;
+        }
+    });
+    const [isMonthlyTallyOpen, setIsMonthlyTallyOpen] = useState(false);
+    const [assistAddingSegmentId, setAssistAddingSegmentId] = useState<string | null>(null);
+    const [selectedAssistEngineerId, setSelectedAssistEngineerId] = useState<string>('');
+    const [assistPercentage, setAssistPercentage] = useState<number>(20);
+    const [assistNotes, setAssistNotes] = useState<string>('');
+
     const job = useMemo(() => (Array.isArray(jobs) ? jobs : []).find(j => j.id === selectedJobId), [jobs, selectedJobId]);
     const vehicle = useMemo(() => job ? (Array.isArray(vehicles) ? vehicles : []).find(v => v.id === job.vehicleId) : undefined, [job, vehicles]);
     const customer = useMemo(() => job ? (Array.isArray(customers) ? customers : []).find(c => c.id === job.customerId) : undefined, [job, customers]);
     const businessEntity = useMemo(() => (Array.isArray(businessEntities) ? businessEntities : []).find(e => e.id === editableJob?.entityId), [businessEntities, editableJob?.entityId]);
+
+    useEffect(() => {
+        if (businessEntity?.enableLaborTracking !== undefined) {
+            setIsLaborTrackingEnabled(businessEntity.enableLaborTracking);
+        }
+    }, [businessEntity?.enableLaborTracking]);
+
+    const handleToggleLaborTracking = () => {
+        setIsLaborTrackingEnabled(prev => {
+            const next = !prev;
+            try {
+                localStorage.setItem('intelligent_scheduler_labor_tracking', String(next));
+            } catch (e) {
+                // ignore
+            }
+            if (businessEntity && data.setBusinessEntities) {
+                handleSaveItem(data.setBusinessEntities, { ...businessEntity, enableLaborTracking: next }, 'brooks_businessEntities');
+            }
+            return next;
+        });
+    };
+
+    const handleAddAssist = (segmentId: string, engineerId: string, percentage: number, notes?: string) => {
+        if (!engineerId) return;
+        setEditableJob(prev => {
+            if (!prev) return null;
+            const newSegments = (prev.segments || []).map(seg => {
+                if (seg.segmentId !== segmentId) return seg;
+                const currentAssists = Array.isArray(seg.assists) ? seg.assists : [];
+                if (currentAssists.some(a => a.engineerId === engineerId)) return seg;
+                
+                const newAssist: T.SegmentAssist = {
+                    id: crypto.randomUUID(),
+                    engineerId,
+                    percentage: Math.min(100, Math.max(1, percentage)),
+                    notes: notes?.trim() || undefined,
+                    addedAt: new Date().toISOString()
+                };
+                return {
+                    ...seg,
+                    assists: [...currentAssists, newAssist]
+                };
+            });
+            return { ...prev, segments: newSegments };
+        });
+        setAssistAddingSegmentId(null);
+        setSelectedAssistEngineerId('');
+        setAssistPercentage(20);
+        setAssistNotes('');
+    };
+
+    const handleRemoveAssist = (segmentId: string, assistId: string) => {
+        setEditableJob(prev => {
+            if (!prev) return null;
+            const newSegments = (prev.segments || []).map(seg => {
+                if (seg.segmentId !== segmentId) return seg;
+                return {
+                    ...seg,
+                    assists: (seg.assists || []).filter(a => a.id !== assistId)
+                };
+            });
+            return { ...prev, segments: newSegments };
+        });
+    };
+
+    const handleUpdateAssistPercentage = (segmentId: string, assistId: string, newPercentage: number) => {
+        setEditableJob(prev => {
+            if (!prev) return null;
+            const newSegments = (prev.segments || []).map(seg => {
+                if (seg.segmentId !== segmentId) return seg;
+                return {
+                    ...seg,
+                    assists: (seg.assists || []).map(a => 
+                        a.id === assistId ? { ...a, percentage: Math.min(100, Math.max(1, newPercentage)) } : a
+                    )
+                };
+            });
+            return { ...prev, segments: newSegments };
+        });
+    };
+
+    const handleUpdateSegmentLabor = (segmentId: string, field: 'allocatedHours' | 'actualHours', value: number) => {
+        setEditableJob(prev => {
+            if (!prev) return null;
+            const newSegments = (prev.segments || []).map(seg => {
+                if (seg.segmentId !== segmentId) return seg;
+                return { ...seg, [field]: value };
+            });
+            return { ...prev, segments: newSegments };
+        });
+    };
     
     const { isSaving, lastSaved } = useDebouncedSave('brooks_jobs', editableJob, 1500);
 
@@ -1375,12 +1481,63 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
                             )}
                             {activeTab === 'segments' && (
                                 <div className="space-y-4">
-                                    <div className="flex justify-between items-center">
-                                        <h3 className="text-lg font-bold text-gray-800">Operational Timeline</h3>
-                                        <span className="text-xs bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full font-bold uppercase tracking-wider border border-indigo-100 italic">
-                                            {totalLaborHours} Total Estimation Hours
-                                        </span>
+                                    {/* Segments Header with Labor Tracking Toggle & Monthly Tally Button */}
+                                    <div className="flex flex-wrap justify-between items-center gap-3 pb-2 border-b border-gray-100">
+                                        <div>
+                                            <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                                                Operational Timeline
+                                                {isLaborTrackingEnabled && (
+                                                    <span className="text-[10px] uppercase font-black tracking-widest bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full border border-emerald-200">
+                                                        Labor Tracking Active
+                                                    </span>
+                                                )}
+                                            </h3>
+                                            <p className="text-xs text-gray-500">Manage time allocation, lead technicians, and assist distribution</p>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            {/* Add-on Option Toggle Button */}
+                                            <button
+                                                type="button"
+                                                onClick={handleToggleLaborTracking}
+                                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
+                                                    isLaborTrackingEnabled 
+                                                        ? 'bg-indigo-50 border-indigo-200 text-indigo-700 shadow-xs' 
+                                                        : 'bg-gray-100 border-gray-200 text-gray-600 hover:bg-gray-200'
+                                                }`}
+                                                title="Toggle advanced labor time and assist tracking on or off"
+                                            >
+                                                {isLaborTrackingEnabled ? (
+                                                    <>
+                                                        <ToggleRight size={18} className="text-indigo-600" />
+                                                        <span>Labor Tracking: <strong>ON</strong></span>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <ToggleLeft size={18} className="text-gray-400" />
+                                                        <span>Labor Tracking: <strong>OFF</strong></span>
+                                                    </>
+                                                )}
+                                            </button>
+
+                                            {/* Monthly Labor Tally Modal Button */}
+                                            {isLaborTrackingEnabled && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setIsMonthlyTallyOpen(true)}
+                                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r from-slate-900 to-indigo-900 text-white hover:from-slate-800 hover:to-indigo-800 shadow-xs transition-all"
+                                                    title="Open monthly hours tally and breakdown"
+                                                >
+                                                    <Clock size={14} className="text-indigo-300" />
+                                                    <span>Monthly Tally</span>
+                                                </button>
+                                            )}
+
+                                            <span className="text-xs bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-xl font-bold uppercase tracking-wider border border-indigo-100 italic">
+                                                {totalLaborHours} Total Estimation Hours
+                                            </span>
+                                        </div>
                                     </div>
+
                                     <div className="space-y-3">
                                         {(Array.isArray(editableJob.segments) ? editableJob.segments : []).map((seg, idx) => {
                                             const engineer = safeEngineers.find(e => e.id === seg.engineerId);
@@ -1415,7 +1572,7 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
                                                 },
                                                 {
                                                     id: 'assign',
-                                                    label: seg.engineerId ? 'Change Engineer' : 'Assign Engineer',
+                                                    label: seg.engineerId ? 'Change Lead Engineer' : 'Assign Lead Engineer',
                                                     icon: seg.engineerId ? UserCheck : UserPlus,
                                                     onClick: () => {
                                                         setActiveSegmentForAssignment(seg);
@@ -1466,7 +1623,7 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
                                                                         title="Click to reschedule"
                                                                     />
                                                                     <span>•</span>
-                                                                    <span>{seg.duration} hrs</span>
+                                                                    <span>{seg.duration} hrs booked</span>
                                                                 </div>
                                                             </div>
                                                         </div>
@@ -1482,16 +1639,43 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
                                                             <JobActionsMenu actions={actions} colorScheme="light" size="md" />
                                                         </div>
                                                     </div>
+
+                                                    {/* Lead Engineer Assignment Alert if Unassigned */}
+                                                    {!seg.engineerId && (
+                                                        <div className="mb-3 p-2.5 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between">
+                                                            <div className="flex items-center gap-2 text-xs font-bold text-amber-900">
+                                                                <ShieldAlert size={16} className="text-amber-600 flex-shrink-0" />
+                                                                <span>At least one engineer (Job Card Owner) is required for this segment</span>
+                                                            </div>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setActiveSegmentForAssignment(seg);
+                                                                    setIsAssignModalOpen(true);
+                                                                }}
+                                                                className="px-2.5 py-1 bg-amber-600 text-white rounded-lg text-xs font-bold hover:bg-amber-700 transition-colors shadow-xs flex items-center gap-1"
+                                                            >
+                                                                <UserPlus size={13} />
+                                                                <span>Assign Lead</span>
+                                                            </button>
+                                                        </div>
+                                                    )}
                                                     
+                                                    {/* Technician & Location Badges */}
                                                     <div className="grid grid-cols-2 gap-4 pt-3 border-t border-gray-50">
                                                         <div className="flex flex-col">
-                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Technician</span>
+                                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 flex items-center gap-1">
+                                                                <span>Lead Technician</span>
+                                                                <span className="text-[9px] text-indigo-600 font-semibold">(Job Card Owner)</span>
+                                                            </span>
                                                             <div className="flex items-center gap-2">
-                                                                <div className="w-6 h-6 rounded-lg bg-gray-100 flex items-center justify-center">
-                                                                    <User size={12} className="text-gray-400" />
+                                                                <div className={`w-6 h-6 rounded-lg flex items-center justify-center ${
+                                                                    engineer ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-400'
+                                                                }`}>
+                                                                    <User size={12} />
                                                                 </div>
-                                                                <span className="text-sm font-bold text-gray-700">
-                                                                    {engineer?.name || 'Waiting for Assignment'}
+                                                                <span className={`text-sm font-bold ${engineer ? 'text-gray-900' : 'text-amber-600 italic'}`}>
+                                                                    {engineer?.name || 'Assignment Required'}
                                                                 </span>
                                                             </div>
                                                         </div>
@@ -1507,6 +1691,209 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
                                                             </div>
                                                         </div>
                                                     </div>
+
+                                                    {/* Enhanced Labor Tracking & Assists Section (Shown when add-on toggle is ON) */}
+                                                    {isLaborTrackingEnabled && (
+                                                        <div className="mt-3 pt-3 border-t border-indigo-100 bg-indigo-50/30 -mx-4 -mb-4 p-4 rounded-b-xl space-y-3 border-t">
+                                                            {/* Allocated vs Actual Hours */}
+                                                            <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3 rounded-xl border border-gray-200 shadow-xs">
+                                                                <div className="flex items-center gap-2">
+                                                                    <Clock size={16} className="text-indigo-600" />
+                                                                    <div>
+                                                                        <span className="text-xs font-bold text-gray-900 block">Labor Time Tracking</span>
+                                                                        <span className="text-[10px] text-gray-400">Allocated vs actual hours to complete</span>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="flex items-center gap-3">
+                                                                    <label className="flex items-center gap-1.5 text-xs font-bold text-gray-700">
+                                                                        <span className="text-gray-500 font-medium text-[11px]">Allocated:</span>
+                                                                        <input
+                                                                            type="number"
+                                                                            step="0.25"
+                                                                            min="0"
+                                                                            value={seg.allocatedHours ?? seg.duration ?? 0}
+                                                                            onChange={(e) => handleUpdateSegmentLabor(seg.segmentId, 'allocatedHours', parseFloat(e.target.value) || 0)}
+                                                                            className="w-16 px-2 py-1 bg-gray-50 border border-gray-300 rounded-lg font-mono font-bold text-right outline-none focus:border-indigo-500 focus:bg-white text-xs"
+                                                                        />
+                                                                        <span className="text-gray-400 text-[11px]">hrs</span>
+                                                                    </label>
+                                                                    <label className="flex items-center gap-1.5 text-xs font-bold text-gray-700">
+                                                                        <span className="text-gray-500 font-medium text-[11px]">Actual:</span>
+                                                                        <input
+                                                                            type="number"
+                                                                            step="0.25"
+                                                                            min="0"
+                                                                            value={seg.actualHours ?? seg.duration ?? 0}
+                                                                            onChange={(e) => handleUpdateSegmentLabor(seg.segmentId, 'actualHours', parseFloat(e.target.value) || 0)}
+                                                                            className="w-16 px-2 py-1 bg-gray-50 border border-gray-300 rounded-lg font-mono font-bold text-right outline-none focus:border-indigo-500 focus:bg-white text-xs"
+                                                                        />
+                                                                        <span className="text-gray-400 text-[11px]">hrs</span>
+                                                                    </label>
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Assists / Helpers Section */}
+                                                            <div className="space-y-2">
+                                                                <div className="flex items-center justify-between">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className="text-[10px] font-bold text-gray-600 uppercase tracking-widest">
+                                                                            Assists & Helpers ({(seg.assists || []).length})
+                                                                        </span>
+                                                                        {(() => {
+                                                                            const actual = seg.actualHours ?? seg.duration ?? 0;
+                                                                            const assists = Array.isArray(seg.assists) ? seg.assists : [];
+                                                                            const totalAssistPct = assists.reduce((sum, a) => sum + (Number(a.percentage) || 0), 0);
+                                                                            const leadPct = Math.max(0, 100 - Math.min(100, totalAssistPct));
+                                                                            const leadCredited = actual * (leadPct / 100);
+                                                                            return (
+                                                                                <span className="text-[10px] font-bold bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded-full border border-indigo-200">
+                                                                                    Lead Share: {leadPct}% ({leadCredited.toFixed(1)} hrs)
+                                                                                </span>
+                                                                            );
+                                                                        })()}
+                                                                    </div>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => {
+                                                                            setAssistAddingSegmentId(assistAddingSegmentId === seg.segmentId ? null : seg.segmentId);
+                                                                            setSelectedAssistEngineerId('');
+                                                                            setAssistPercentage(20);
+                                                                            setAssistNotes('');
+                                                                        }}
+                                                                        className="text-[11px] font-bold text-indigo-700 hover:text-indigo-900 flex items-center gap-1 hover:underline"
+                                                                    >
+                                                                        <Plus size={13} />
+                                                                        <span>{assistAddingSegmentId === seg.segmentId ? 'Cancel Assist' : 'Add Assist'}</span>
+                                                                    </button>
+                                                                </div>
+
+                                                                {/* List of Active Assists */}
+                                                                {(Array.isArray(seg.assists) && seg.assists.length > 0) && (
+                                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                                        {seg.assists.map(assist => {
+                                                                            const helperEng = safeEngineers.find(e => e.id === assist.engineerId);
+                                                                            const actual = seg.actualHours ?? seg.duration ?? 0;
+                                                                            const helperCredited = actual * ((assist.percentage || 0) / 100);
+
+                                                                            return (
+                                                                                <div key={assist.id} className="flex items-center justify-between p-2.5 bg-white rounded-xl border border-gray-200 text-xs shadow-xs">
+                                                                                    <div className="flex items-center gap-2 min-w-0">
+                                                                                        <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center justify-center font-bold text-xs flex-shrink-0">
+                                                                                            {helperEng?.name.substring(0, 2).toUpperCase() || 'AS'}
+                                                                                        </div>
+                                                                                        <div className="min-w-0">
+                                                                                            <div className="font-bold text-gray-900 truncate">{helperEng?.name || 'Helper Technician'}</div>
+                                                                                            <div className="text-[10px] text-emerald-600 font-semibold">
+                                                                                                {helperCredited.toFixed(1)} hrs credited ({assist.percentage}%)
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    </div>
+
+                                                                                    <div className="flex items-center gap-2 flex-shrink-0">
+                                                                                        <div className="flex items-center gap-1">
+                                                                                            <input
+                                                                                                type="number"
+                                                                                                min="1"
+                                                                                                max="100"
+                                                                                                value={assist.percentage}
+                                                                                                onChange={(e) => handleUpdateAssistPercentage(seg.segmentId, assist.id, parseFloat(e.target.value) || 0)}
+                                                                                                className="w-12 px-1.5 py-0.5 bg-gray-50 border border-gray-200 rounded-md text-center font-bold font-mono outline-none text-xs"
+                                                                                            />
+                                                                                            <span className="text-gray-400 font-bold text-xs">%</span>
+                                                                                        </div>
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            onClick={() => handleRemoveAssist(seg.segmentId, assist.id)}
+                                                                                            className="p-1 text-gray-400 hover:text-red-600 rounded transition-colors"
+                                                                                            title="Remove Assist"
+                                                                                        >
+                                                                                            <Trash2 size={14} />
+                                                                                        </button>
+                                                                                    </div>
+                                                                                </div>
+                                                                            );
+                                                                        })}
+                                                                    </div>
+                                                                )}
+
+                                                                {/* Inline Form to Nominate an Assist */}
+                                                                {assistAddingSegmentId === seg.segmentId && (
+                                                                    <div className="p-3 bg-white rounded-xl border-2 border-indigo-200 space-y-3 animate-in fade-in shadow-xs">
+                                                                        <div className="flex items-center justify-between">
+                                                                            <span className="text-xs font-bold text-indigo-950">Nominate Helper / Assist</span>
+                                                                            <span className="text-[10px] text-gray-500 font-medium">Job Card Owner allows a % of actual time to helper</span>
+                                                                        </div>
+                                                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                                                            <div className="sm:col-span-2">
+                                                                                <select
+                                                                                    value={selectedAssistEngineerId}
+                                                                                    onChange={(e) => setSelectedAssistEngineerId(e.target.value)}
+                                                                                    className="w-full text-xs p-2 border border-gray-300 rounded-lg bg-white font-medium outline-none focus:border-indigo-500"
+                                                                                >
+                                                                                    <option value="">Select helper engineer...</option>
+                                                                                    {safeEngineers
+                                                                                        .filter(e => e.id !== seg.engineerId && !(seg.assists || []).some(a => a.engineerId === e.id))
+                                                                                        .map(e => (
+                                                                                            <option key={e.id} value={e.id}>
+                                                                                                {e.name} {e.specialization ? `(${e.specialization})` : ''}
+                                                                                            </option>
+                                                                                        ))}
+                                                                                </select>
+                                                                            </div>
+                                                                            <div className="flex items-center gap-1.5">
+                                                                                <input
+                                                                                    type="number"
+                                                                                    min="1"
+                                                                                    max="100"
+                                                                                    value={assistPercentage}
+                                                                                    onChange={(e) => setAssistPercentage(Math.min(100, Math.max(1, parseFloat(e.target.value) || 0)))}
+                                                                                    className="w-16 text-xs p-1.5 border border-gray-300 rounded-lg text-center font-bold outline-none font-mono"
+                                                                                    placeholder="%"
+                                                                                />
+                                                                                <span className="text-xs font-bold text-gray-500">% time</span>
+                                                                            </div>
+                                                                        </div>
+
+                                                                        <div className="flex items-center justify-between gap-2 pt-1 border-t border-gray-100">
+                                                                            <div className="flex items-center gap-1">
+                                                                                {[10, 20, 25, 33, 50].map(pct => (
+                                                                                    <button
+                                                                                        key={pct}
+                                                                                        type="button"
+                                                                                        onClick={() => setAssistPercentage(pct)}
+                                                                                        className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-colors ${
+                                                                                            assistPercentage === pct
+                                                                                                ? 'bg-indigo-600 text-white border-indigo-600'
+                                                                                                : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
+                                                                                        }`}
+                                                                                    >
+                                                                                        {pct}%
+                                                                                    </button>
+                                                                                ))}
+                                                                            </div>
+                                                                            <div className="flex items-center gap-2">
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={() => setAssistAddingSegmentId(null)}
+                                                                                    className="px-2.5 py-1 text-xs text-gray-500 hover:text-gray-700"
+                                                                                >
+                                                                                    Cancel
+                                                                                </button>
+                                                                                <button
+                                                                                    type="button"
+                                                                                    disabled={!selectedAssistEngineerId}
+                                                                                    onClick={() => handleAddAssist(seg.segmentId, selectedAssistEngineerId, assistPercentage, assistNotes)}
+                                                                                    className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold shadow-xs transition-colors"
+                                                                                >
+                                                                                    Confirm Assist
+                                                                                </button>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             );
                                         })}
@@ -1656,6 +2043,21 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
                     }}
                     onCreateEstimateFromFinding={onRaiseEstimateForFinding}
                     onCreateEstimateFromAllFindings={onRaiseEstimateFromAllFindings}
+                />
+            )}
+
+            {isMonthlyTallyOpen && (
+                <MonthlyLaborTallyModal
+                    isOpen={isMonthlyTallyOpen}
+                    onClose={() => setIsMonthlyTallyOpen(false)}
+                    jobs={safeJobs}
+                    engineers={safeEngineers}
+                    businessEntities={safeBusinessEntities}
+                    vehicles={safeVehicles}
+                    selectedEntityId={editableJob?.entityId}
+                    onOpenJob={(jobId) => {
+                        setIsMonthlyTallyOpen(false);
+                    }}
                 />
             )}
         </div>

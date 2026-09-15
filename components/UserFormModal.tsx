@@ -220,6 +220,27 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, 
                         </div>
                     </div>
 
+                    {/* Labor & Payroll Rates */}
+                    <div className="pt-4 border-t border-slate-100 space-y-3">
+                        <h4 className="text-[11px] font-black uppercase text-indigo-600 tracking-wider">Labor & Payroll Rates</h4>
+                        <div className="space-y-1">
+                            <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Individual Hourly Rate (£/hr)</label>
+                            <div className="relative">
+                                <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-slate-400 text-sm">£</span>
+                                <input
+                                    type="number"
+                                    step="0.50"
+                                    min="0"
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-4 py-3 text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all font-bold"
+                                    value={formData.hourlyRate ?? ''}
+                                    onChange={(e) => setFormData({ ...formData, hourlyRate: e.target.value ? parseFloat(e.target.value) : undefined })}
+                                    placeholder="e.g. 35.00"
+                                    disabled={isSaving}
+                                />
+                            </div>
+                        </div>
+                    </div>
+
                     {/* Info Note */}
                     {!user && (
                         <div className="bg-indigo-50 p-4 rounded-2xl border border-indigo-100">

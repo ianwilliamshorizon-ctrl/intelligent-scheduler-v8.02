@@ -16,6 +16,7 @@ interface DispatchHeaderProps {
     setIsSmartCreateOpen: (isOpen: boolean) => void;
     setSmartCreateMode: (mode: 'job' | 'estimate') => void;
     setDefaultDateForModal: (date: Date | null) => void;
+    onOpenLaborTally?: () => void;
 }
 
 export const DispatchHeader: React.FC<DispatchHeaderProps> = ({
@@ -31,7 +32,8 @@ export const DispatchHeader: React.FC<DispatchHeaderProps> = ({
     setIsDatePickerOpen,
     setIsSmartCreateOpen,
     setSmartCreateMode,
-    setDefaultDateForModal
+    setDefaultDateForModal,
+    onOpenLaborTally
 }) => {
     const handlePrevDay = () => setCurrentDate(formatDate(addDays(new Date(currentDate), -1)));
     const handleNextDay = () => setCurrentDate(formatDate(addDays(new Date(currentDate), 1)));
@@ -98,7 +100,17 @@ export const DispatchHeader: React.FC<DispatchHeaderProps> = ({
                     )}
                 </div>
             </div>
-            {/* Smart Create Job button removed */}
+            
+            {onOpenLaborTally && (
+                <button
+                    onClick={onOpenLaborTally}
+                    className="no-print flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-slate-900 to-indigo-900 hover:from-slate-800 hover:to-indigo-800 text-white rounded-xl text-xs font-bold shadow-xs transition-all"
+                    title="View Monthly Engineer Hours Tally"
+                >
+                    <Clock size={15} className="text-indigo-300" />
+                    <span>Monthly Labor Tally</span>
+                </button>
+            )}
         </header>
     );
 };

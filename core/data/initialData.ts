@@ -188,14 +188,14 @@ export const getInitialLifts = (): Lift[] => ([
 ]);
 
 export const getInitialEngineers = (): Engineer[] => ([
-    { id: 'eng_lewis', entityId: 'ent_porsche', name: 'Lewis' },
-    { id: 'eng_emma', entityId: 'ent_porsche', name: 'Emma' },
-    { id: 'eng_gary', entityId: 'ent_porsche', name: 'Gary' },
-    { id: 'eng_olly', entityId: 'ent_porsche', name: 'Olly' },
-    { id: 'eng_mike_audi', entityId: 'ent_audi', name: 'Mike' },
-    { id: 'eng_dan', entityId: 'ent_audi', name: 'Dan' },
-    { id: 'eng_sam', entityId: 'ent_audi', name: 'Sam' },
-    { id: 'eng_vincent', entityId: 'ent_trimming', name: 'Vincent' },
+    { id: 'eng_lewis', entityId: 'ent_porsche', name: 'Lewis', hourlyRate: 35.00 },
+    { id: 'eng_emma', entityId: 'ent_porsche', name: 'Emma', hourlyRate: 38.00 },
+    { id: 'eng_gary', entityId: 'ent_porsche', name: 'Gary', hourlyRate: 32.50 },
+    { id: 'eng_olly', entityId: 'ent_porsche', name: 'Olly', hourlyRate: 30.00 },
+    { id: 'eng_mike_audi', entityId: 'ent_audi', name: 'Mike', hourlyRate: 36.00 },
+    { id: 'eng_dan', entityId: 'ent_audi', name: 'Dan', hourlyRate: 34.00 },
+    { id: 'eng_sam', entityId: 'ent_audi', name: 'Sam', hourlyRate: 31.00 },
+    { id: 'eng_vincent', entityId: 'ent_trimming', name: 'Vincent', hourlyRate: 40.00 },
 ]);
 
 // --- Jobs & Finance ---
