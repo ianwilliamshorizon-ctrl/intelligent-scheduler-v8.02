@@ -391,6 +391,7 @@ const App = () => {
     if (customerViewData.invoice) {
         return (
             <div className="min-h-screen bg-gray-100 p-8 overflow-y-auto flex justify-center items-start">
+                <VersionChecker />
                 <div className="bg-white shadow-2xl rounded-xl w-full max-w-5xl">
                     <PrintableInvoice
                         invoice={customerViewData.invoice}

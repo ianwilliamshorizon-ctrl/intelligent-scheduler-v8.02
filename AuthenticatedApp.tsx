@@ -18,7 +18,6 @@ import { CheckCircle2, XCircle } from 'lucide-react';
 // Layout & Core Components
 import MainLayout from './components/MainLayout';
 import AppModals from './components/AppModals';
-import VersionChecker from './components/VersionChecker';
 import CoBrowsingController from './components/CoBrowsingController';
 
 // Lazy Loaded Views
@@ -514,7 +513,6 @@ const AuthenticatedApp = () => {
     if (isMobileMode) {
         return (
             <Router>
-                <VersionChecker />
                 <Suspense fallback={
                     <div className="min-h-screen bg-slate-950 flex items-center justify-center text-white font-bold p-4">
                         <div className="flex flex-col items-center gap-3">
@@ -552,7 +550,6 @@ const AuthenticatedApp = () => {
 
     return (
         <Router>
-            <VersionChecker />
             <MainLayout 
                 onOpenManagement={() => setIsManagementOpen(true)} 
                 onOpenHelpCentre={() => setIsHelpCentreOpen(true)} 

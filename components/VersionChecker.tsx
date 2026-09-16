@@ -8,6 +8,13 @@ const VersionChecker = () => {
 
     const checkVersion = useCallback(async () => {
         try {
+            // Trigger service worker update check if supported
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.getRegistrations().then(regs => {
+                    regs.forEach(r => r.update().catch(() => {}));
+                }).catch(() => {});
+            }
+
             // Add a cache-buster query string and disable cache
             const response = await fetch(`/version.json?t=${Date.now()}`, {
                 cache: 'no-store',
@@ -34,8 +41,8 @@ const VersionChecker = () => {
         // Immediate check on mount
         checkVersion();
 
-        // Check every 60 seconds
-        const intervalId = setInterval(checkVersion, 60 * 1000);
+        // Check every 30 seconds for rapid detection
+        const intervalId = setInterval(checkVersion, 30 * 1000);
 
         // Also check version immediately when user switches back to the tab
         const handleActivity = () => {

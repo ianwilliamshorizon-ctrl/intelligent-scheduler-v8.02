@@ -35,5 +35,13 @@ if (!fs.existsSync(publicDir)) fs.mkdirSync(publicDir, { recursive: true });
 const appVersion = `${pkg.version}-${Date.now()}`;
 fs.writeFileSync(path.join(publicDir, 'version.json'), JSON.stringify({ version: appVersion }));
 
-console.log(`[Version Bump] Updated package.json, index.html, and version.json to: v${pkg.version}`);
+// Also keep public/sw.js CACHE_NAME in sync so browsers invalidate cache on new releases
+const swPath = path.resolve(__dirname, '../public/sw.js');
+if (fs.existsSync(swPath)) {
+    let swContent = fs.readFileSync(swPath, 'utf-8');
+    swContent = swContent.replace(/const CACHE_NAME = 'brookspeed-cache-[^']*';/, `const CACHE_NAME = 'brookspeed-cache-v${pkg.version}';`);
+    fs.writeFileSync(swPath, swContent);
+}
+
+console.log(`[Version Bump] Updated package.json, index.html, version.json, and sw.js to: v${pkg.version}`);
 

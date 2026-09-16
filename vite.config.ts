@@ -15,6 +15,14 @@ export default defineConfig(({ mode }) => {
     if (!fs.existsSync(publicDir)) fs.mkdirSync(publicDir, { recursive: true });
     fs.writeFileSync(path.join(publicDir, 'version.json'), JSON.stringify({ version: appVersion }));
 
+    // Keep public/sw.js in sync
+    const swPath = path.resolve(publicDir, 'sw.js');
+    if (fs.existsSync(swPath)) {
+        let swContent = fs.readFileSync(swPath, 'utf-8');
+        swContent = swContent.replace(/const CACHE_NAME = 'brookspeed-cache-[^']*';/, `const CACHE_NAME = 'brookspeed-cache-v${pkg.version}';`);
+        fs.writeFileSync(swPath, swContent);
+    }
+
     return {
       define: {
         __APP_VERSION__: JSON.stringify(appVersion),

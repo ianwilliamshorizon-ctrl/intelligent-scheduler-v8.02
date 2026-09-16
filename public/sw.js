@@ -1,5 +1,5 @@
 // Service Worker for BROOKSPEED Intelligent Scheduler PWA
-const CACHE_NAME = 'brookspeed-cache-v8.02';
+const CACHE_NAME = 'brookspeed-cache-v8.02.007';
 const STATIC_ASSETS = [
     '/',
     '/index.html',
@@ -9,6 +9,12 @@ const STATIC_ASSETS = [
     '/icon-512.png',
     '/index.css'
 ];
+
+self.addEventListener('message', (event) => {
+    if (event.data && (event.data.type === 'SKIP_WAITING' || event.data === 'skipWaiting')) {
+        self.skipWaiting();
+    }
+});
 
 self.addEventListener('install', (event) => {
     event.waitUntil(
@@ -33,6 +39,11 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
     const { request } = event;
     const url = new URL(request.url);
+
+    // Explicitly bypass version.json so version polling always hits the network
+    if (url.pathname === '/version.json' || url.pathname.endsWith('/version.json')) {
+        return;
+    }
 
     // Bypass Firebase, Firestore, and external APIs — handled by IndexedDB & SDK
     if (

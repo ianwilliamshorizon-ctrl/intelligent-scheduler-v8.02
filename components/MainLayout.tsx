@@ -142,8 +142,23 @@ const MainLayout: React.FC<{
                     </div>
                 </nav>
 
-                <div className="p-3 border-t border-slate-800 text-[11px] text-slate-500 text-center font-mono select-none hidden lg:block">
-                    {isSidebarOpen ? `v${typeof __APP_VERSION_NUM__ !== 'undefined' ? __APP_VERSION_NUM__ : '8.02.001'}` : `v${(typeof __APP_VERSION_NUM__ !== 'undefined' ? __APP_VERSION_NUM__ : '8.02.001').split('.')[0] || '8'}`}
+                <div 
+                    className="p-3 border-t border-slate-800 text-[11px] text-slate-400 text-center font-mono select-none hidden lg:flex items-center justify-center gap-1.5 hover:text-white transition-colors cursor-pointer"
+                    onClick={() => {
+                        fetch(`/version.json?t=${Date.now()}`, { cache: 'no-store' })
+                            .then(r => r.json())
+                            .then(d => {
+                                if (d.version && typeof __APP_VERSION__ !== 'undefined' && d.version !== __APP_VERSION__) {
+                                    window.location.reload();
+                                }
+                            }).catch(() => {});
+                    }}
+                    title="System Online — Click to check for updates"
+                >
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span>
+                        {isSidebarOpen ? `v${typeof __APP_VERSION_NUM__ !== 'undefined' ? __APP_VERSION_NUM__ : '8.02.001'}` : `v${(typeof __APP_VERSION_NUM__ !== 'undefined' ? __APP_VERSION_NUM__ : '8.02.001').split('.')[0] || '8'}`}
+                    </span>
                 </div>
             </aside>
 
