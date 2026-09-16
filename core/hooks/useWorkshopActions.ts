@@ -953,19 +953,28 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
     };
 
     const handleUpdateSegmentStatus = async (jobId: string, segmentId: string, newStatus: T.JobSegment['status'], extraUpdates: Partial<T.JobSegment> = {}) => {
-        const job = jobs.find(j => j.id === jobId);
+        const job = jobs.find(j => j.id === jobId || String(j.id) === String(jobId));
         if (job) {
-            const newSegments = job.segments.map(s => s.segmentId === segmentId ? { ...s, status: newStatus, ...extraUpdates } : s);
-            await handleSaveItem(setJobs, { ...job, segments: newSegments, status: calculateJobStatus(newSegments) } as T.Job, 'brooks_jobs');
+            const currentSegments = Array.isArray(job.segments) ? job.segments : [];
+            const newSegments = currentSegments.map(s => 
+                (s.segmentId === segmentId || s.id === segmentId || (!segmentId && currentSegments.length === 1))
+                    ? { ...s, status: newStatus, ...extraUpdates } 
+                    : s
+            );
+            const newStatusCalculated = calculateJobStatus(newSegments);
+            const updatedJob = { ...job, segments: newSegments, status: newStatusCalculated } as T.Job;
+            await handleSaveItem(setJobs, updatedJob, 'brooks_jobs');
+            return updatedJob;
         }
     };
 
 
     const handleQcApprove = async (jobId: string) => {
-        const job = jobs.find(j => j.id === jobId);
+        const job = jobs.find(j => j.id === jobId || String(j.id) === String(jobId));
         if (!job) return;
 
-        const newSegments = job.segments.map(s => 
+        const currentSegments = Array.isArray(job.segments) ? job.segments : [];
+        const newSegments = currentSegments.map(s => 
             s.status === 'Engineer Complete' 
                 ? { ...s, status: 'QC Complete' as const, engineerCompletedAt: new Date().toISOString(), qcCompletedByUserId: currentUser.id } 
                 : s
@@ -976,7 +985,7 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
         await handleSaveItem(setJobs, updatedJob, 'brooks_jobs');
 
         if (job.associatedJobId) {
-            const associatedMOT = jobs.find(j => j.id === job.associatedJobId && j.jobType === 'MOT');
+            const associatedMOT = jobs.find(j => (j.id === job.associatedJobId || String(j.id) === String(job.associatedJobId)) && j.jobType === 'MOT');
             if (associatedMOT) {
                 await handleSaveItem(setJobs, { ...associatedMOT, status: 'Closed' } as T.Job, 'brooks_jobs');
             }
@@ -984,15 +993,20 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
     };
 
     const handleReassignEngineer = async (jobId: string, segmentId: string, newEngineerId: string) => {
-        const job = jobs.find(j => j.id === jobId);
+        const job = jobs.find(j => j.id === jobId || String(j.id) === String(jobId));
         if (job) {
-            const newSegments = job.segments.map(s => s.segmentId === segmentId ? { ...s, engineerId: newEngineerId } : s);
+            const currentSegments = Array.isArray(job.segments) ? job.segments : [];
+            const newSegments = currentSegments.map(s => 
+                (s.segmentId === segmentId || s.id === segmentId || (!segmentId && currentSegments.length === 1))
+                    ? { ...s, engineerId: newEngineerId } 
+                    : s
+            );
             await handleSaveItem(setJobs, { ...job, segments: newSegments } as T.Job, 'brooks_jobs');
 
             if (job.associatedJobId) {
-                const associatedMOT = jobs.find(j => j.id === job.associatedJobId && j.jobType === 'MOT');
-                if (associatedMOT && associatedMOT.segments.every(s => !s.engineerId)) {
-                    const newMotSegments = associatedMOT.segments.map(s => ({ ...s, engineerId: newEngineerId }));
+                const associatedMOT = jobs.find(j => (j.id === job.associatedJobId || String(j.id) === String(job.associatedJobId)) && j.jobType === 'MOT');
+                if (associatedMOT && (associatedMOT.segments || []).every(s => !s.engineerId)) {
+                    const newMotSegments = (associatedMOT.segments || []).map(s => ({ ...s, engineerId: newEngineerId }));
                     await handleSaveItem(setJobs, { ...associatedMOT, segments: newMotSegments } as T.Job, 'brooks_jobs');
                 }
             }
@@ -1000,17 +1014,24 @@ export const useWorkshopActions = (handleGenerateInvoice?: (jobId: string) => vo
     };
 
     const handleUnscheduleSegment = async (jobId: string, segmentId: string) => {
-        const job = jobs.find(j => j.id === jobId);
+        const job = jobs.find(j => j.id === jobId || String(j.id) === String(jobId));
         if (job) {
-            const newSegments = job.segments.map(s => s.segmentId === segmentId ? { ...s, status: 'Unallocated' as const, allocatedLift: null, scheduledStartSegment: null, engineerId: null } : s);
+            const currentSegments = Array.isArray(job.segments) ? job.segments : [];
+            const newSegments = currentSegments.map(s => 
+                (s.segmentId === segmentId || s.id === segmentId || (!segmentId && currentSegments.length === 1))
+                    ? { ...s, status: 'Unallocated' as const, allocatedLift: null, scheduledStartSegment: null, engineerId: null } 
+                    : s
+            );
             await handleSaveItem(setJobs, { ...job, segments: newSegments, status: calculateJobStatus(newSegments) } as T.Job, 'brooks_jobs');
         }
     };
 
     const handleSendOffsite = async (jobId: string, segmentId: string) => {
-        const job = jobs.find(j => j.id === jobId);
+        const job = jobs.find(j => j.id === jobId || String(j.id) === String(jobId));
         if (job) {
-            const newSegments = job.segments.map(s => s.segmentId === segmentId ? { 
+            const currentSegments = Array.isArray(job.segments) ? job.segments : [];
+            const newSegments = currentSegments.map(s => 
+                (s.segmentId === segmentId || s.id === segmentId || (!segmentId && currentSegments.length === 1)) ? { 
                 ...s, 
                 status: 'Unallocated' as const, 
                 allocatedLift: null, 

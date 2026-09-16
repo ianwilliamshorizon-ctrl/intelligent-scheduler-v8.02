@@ -22,7 +22,7 @@ import PrintableJobCard from './PrintableJobCard';
 import InspectionChecklist from './InspectionChecklist';
 import { calculatePackagePrices } from '../core/utils/packageUtils';
 import { useDebouncedSave } from '../core/hooks/useDebouncedSave';
-import { calculateJobPartsStatus } from '../core/utils/jobUtils';
+import { calculateJobPartsStatus, calculateJobStatus } from '../core/utils/jobUtils';
 import { MOTBookingModal } from './MOTBookingModal';
 import { TIME_SEGMENTS } from '../constants';
 import { generateJobId } from '../core/utils/numberGenerators';
@@ -1544,13 +1544,31 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
                                             const isComplete = seg.status === 'Engineer Complete' || seg.status === 'QC Complete';
                                             const isInProgress = seg.status === 'In Progress';
                                             const isPaused = seg.status === 'Paused';
+                                            const targetSegId = seg.segmentId || seg.id || '';
+                                            const handleUpdateSegmentStatusLocal = async (newStatus: T.JobSegment['status'], extraUpdates: Partial<T.JobSegment> = {}) => {
+                                                if (!editableJob) return;
+                                                const currentSegments = Array.isArray(editableJob.segments) ? editableJob.segments : [];
+                                                const newSegments = currentSegments.map(s => 
+                                                    (s.segmentId === targetSegId || s.id === targetSegId || (!targetSegId && currentSegments.length === 1))
+                                                        ? { ...s, status: newStatus, ...extraUpdates } 
+                                                        : s
+                                                );
+                                                const newJobStatus = calculateJobStatus(newSegments);
+                                                const updatedJob: T.Job = { 
+                                                    ...editableJob, 
+                                                    segments: newSegments, 
+                                                    status: newJobStatus 
+                                                };
+                                                setEditableJob(updatedJob);
+                                                await handleUpdateSegmentStatus(editableJob.id, targetSegId, newStatus, extraUpdates);
+                                            };
 
                                             const actions = [
                                                 {
                                                     id: 'start',
                                                     label: isPaused ? 'Resume Work' : 'Start Segment',
                                                     icon: PlayCircle,
-                                                    onClick: () => handleUpdateSegmentStatus(editableJob.id, seg.segmentId, 'In Progress'),
+                                                    onClick: () => handleUpdateSegmentStatusLocal('In Progress'),
                                                     disabled: isComplete || isInProgress,
                                                     group: 'primary' as const
                                                 },
@@ -1558,7 +1576,7 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
                                                     id: 'pause',
                                                     label: 'Pause Work',
                                                     icon: PauseCircle,
-                                                    onClick: () => handleUpdateSegmentStatus(editableJob.id, seg.segmentId, 'Paused'),
+                                                    onClick: () => handleUpdateSegmentStatusLocal('Paused'),
                                                     disabled: !isInProgress,
                                                     group: 'primary' as const
                                                 },
@@ -1566,7 +1584,7 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
                                                     id: 'complete',
                                                     label: 'Mark Complete',
                                                     icon: CheckCircle,
-                                                    onClick: () => handleUpdateSegmentStatus(editableJob.id, seg.segmentId, 'Engineer Complete'),
+                                                    onClick: () => handleUpdateSegmentStatusLocal('Engineer Complete', { engineerCompletedAt: new Date().toISOString() }),
                                                     disabled: isComplete,
                                                     group: 'primary' as const
                                                 },
@@ -1584,14 +1602,14 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
                                                     id: 'reset',
                                                     label: 'Reset Segment',
                                                     icon: RotateCcw,
-                                                    onClick: () => handleUpdateSegmentStatus(editableJob.id, seg.segmentId, 'Allocated'),
+                                                    onClick: () => handleUpdateSegmentStatusLocal('Allocated'),
                                                     disabled: seg.status === 'Allocated',
                                                     group: 'danger' as const
                                                 }
                                             ];
 
                                             return (
-                                                <div key={seg.segmentId} className="group relative bg-white border border-gray-200 rounded-xl p-4 shadow-sm hover:shadow-md transition-all">
+                                                <div key={seg.segmentId || seg.id || idx} className="group relative bg-white border border-gray-200 rounded-xl p-4 shadow-sm hover:shadow-md transition-all">
                                                     <div className="flex items-center justify-between mb-3">
                                                         <div className="flex items-center gap-3">
                                                             <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-sm border-2 ${
@@ -1614,7 +1632,7 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
                                                                             setEditableJob(prev => {
                                                                                 if (!prev) return prev;
                                                                                 const newSegments = (prev.segments || []).map(s => 
-                                                                                    s.segmentId === seg.segmentId ? { ...s, date: newDate } : s
+                                                                                    (s.segmentId === targetSegId || s.id === targetSegId) ? { ...s, date: newDate } : s
                                                                                 );
                                                                                 return { ...prev, segments: newSegments };
                                                                             });
@@ -2008,7 +2026,15 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
                     timeSegments={TIME_SEGMENTS}
                     onAssign={(engineerId) => {
                         if (editableJob && activeSegmentForAssignment) {
-                            handleReassignEngineer(editableJob.id, activeSegmentForAssignment.segmentId, engineerId);
+                            const targetSegId = activeSegmentForAssignment.segmentId || activeSegmentForAssignment.id || '';
+                            const currentSegments = Array.isArray(editableJob.segments) ? editableJob.segments : [];
+                            const updatedSegments = currentSegments.map(s => 
+                                (s.segmentId === targetSegId || s.id === targetSegId || (!targetSegId && currentSegments.length === 1))
+                                    ? { ...s, engineerId }
+                                    : s
+                            );
+                            setEditableJob(prev => prev ? { ...prev, segments: updatedSegments } : prev);
+                            handleReassignEngineer(editableJob.id, targetSegId, engineerId);
                             setIsAssignModalOpen(false);
                             setActiveSegmentForAssignment(null);
                         }

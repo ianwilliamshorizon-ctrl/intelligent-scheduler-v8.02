@@ -37,8 +37,9 @@ export const DraggableJobCard: React.FC<{
     const { roles } = useApp();
     const userRoleObj = roles.find(r => r.name === currentUser.role);
     const baseRole = userRoleObj ? userRoleObj.baseRole : currentUser.role;
-    const canDrag = baseRole === 'Admin' || baseRole === 'Dispatcher';
+    const canDrag = ['Admin', 'Dispatcher', 'Director', 'Manager'].includes(baseRole) || ['Admin', 'Dispatcher', 'Director', 'Manager'].includes(currentUser.role);
     const segmentToDrag = unallocatedSegments[0];
+    const segmentToDragId = segmentToDrag.segmentId || segmentToDrag.id || '';
     const { partsStatus, vehicleStatus } = job;
     const wheelbaseInfo = getWheelbaseAlertInfo(vehicle?.wheelbaseType);
 
@@ -135,7 +136,7 @@ export const DraggableJobCard: React.FC<{
     return (
             <div
                 draggable={canDrag}
-                onDragStart={(e) => canDrag && onDragStart(e, job.id, segmentToDrag.segmentId)}
+                onDragStart={(e) => canDrag && onDragStart(e, job.id, segmentToDragId)}
                 onDragEnd={onDragEnd}
                 className={`p-3.5 rounded-xl shadow-lg border relative transition-all duration-200 hover:shadow-xl hover:scale-[1.01] mb-3 ${canDrag ? 'cursor-grab' : 'cursor-default'} draggable-job ${getCardColorClasses()} ${isActionsMenuOpen ? 'z-[999]' : 'z-10'}`}
                 title={canDrag ? `Drag to schedule: ${job.description} (${segmentToDrag.duration}h)`: 'View job details'}

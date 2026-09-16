@@ -65,8 +65,12 @@ export const AllocatedJobCard: React.FC<{
     const { roles } = useApp();
     const userRoleObj = roles.find(r => r.name === currentUser.role);
     const baseRole = userRoleObj ? userRoleObj.baseRole : currentUser.role;
-    const canDrag = baseRole === 'Admin' || baseRole === 'Dispatcher';
-    const canUnschedule = baseRole === 'Admin' || baseRole === 'Dispatcher';
+    const isAdminOrDispatcher = ['Admin', 'Dispatcher', 'Director', 'Manager'].includes(baseRole) || ['Admin', 'Dispatcher', 'Director', 'Manager'].includes(currentUser.role);
+    const canDrag = isAdminOrDispatcher;
+    const canUnschedule = isAdminOrDispatcher;
+    const canStartOrPause = (currentUser.role === 'Engineer' && engineer?.id === currentUser.engineerId) || isAdminOrDispatcher;
+    const canPerformActions = isAdminOrDispatcher;
+    const segId = segment.segmentId || segment.id || '';
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -83,9 +87,6 @@ export const AllocatedJobCard: React.FC<{
     if (segment.status === 'Engineer Complete') statusColor = 'bg-orange-100 text-orange-900 border-orange-200';
     if (segment.status === 'QC Complete') statusColor = 'bg-emerald-100 text-emerald-900 border-emerald-200';
     if (segment.status === 'Paused') statusColor = 'bg-rose-100 text-rose-900 border-rose-200';
-
-    const canStartOrPause = (currentUser.role === 'Engineer' && engineer?.id === currentUser.engineerId) || baseRole === 'Admin' || baseRole === 'Dispatcher';
-    const canPerformActions = baseRole === 'Admin' || baseRole === 'Dispatcher';
 
     const handleAction = (e: React.MouseEvent, action: () => void) => {
         e.stopPropagation();
@@ -123,12 +124,12 @@ export const AllocatedJobCard: React.FC<{
         // Context-aware actions
         if (canStartOrPause) {
             if (segment.status === 'Allocated') {
-                list.push({ id: 'start', label: 'Start Work', icon: PlayCircle, onClick: () => onStartWork?.(job.id, segment.segmentId), group: 'primary', color: 'text-green-600' });
+                list.push({ id: 'start', label: 'Start Work', icon: PlayCircle, onClick: () => onStartWork?.(job.id, segId), group: 'primary', color: 'text-green-600' });
             } else if (segment.status === 'In Progress') {
-                list.push({ id: 'pause', label: 'Pause Work', icon: PauseCircle, onClick: () => onPause(job.id, segment.segmentId), group: 'primary', color: 'text-orange-600' });
-                list.push({ id: 'complete', label: 'Mark as Complete', icon: CheckCircle, onClick: () => {}, group: 'primary', color: 'text-green-600', disabled: true }); // Need onComplete prop if available?
+                list.push({ id: 'pause', label: 'Pause Work', icon: PauseCircle, onClick: () => onPause(job.id, segId), group: 'primary', color: 'text-orange-600' });
+                list.push({ id: 'complete', label: 'Mark as Complete', icon: CheckCircle, onClick: () => onEngineerComplete?.(job, segId), group: 'primary', color: 'text-green-600', disabled: !onEngineerComplete });
             } else if (segment.status === 'Paused') {
-                list.push({ id: 'restart', label: 'Restart Work', icon: PlayCircle, onClick: () => onRestart(job.id, segment.segmentId), group: 'primary', color: 'text-green-600' });
+                list.push({ id: 'restart', label: 'Restart Work', icon: PlayCircle, onClick: () => onRestart(job.id, segId), group: 'primary', color: 'text-green-600' });
             }
         }
 
@@ -139,23 +140,23 @@ export const AllocatedJobCard: React.FC<{
                 list.push({ id: 'create-invoice', label: 'Convert to Invoice', icon: FileText, onClick: () => onCreateInvoice(job), group: 'primary', color: 'text-emerald-600' });
             }
             list.push({ id: 'pass-to-sales', label: job.saleVehicleId ? 'Linked to Sales' : 'Pass to Sales', icon: PackageIcon, onClick: () => onPassToSales(job.id), group: 'secondary', color: job.saleVehicleId ? 'text-indigo-600' : undefined });
-            list.push({ id: 'reassign', label: 'Reassign Engineer', icon: UserCog, onClick: () => onReassign(job.id, segment.segmentId), group: 'secondary' });
+            list.push({ id: 'reassign', label: 'Reassign Engineer', icon: UserCog, onClick: () => onReassign(job.id, segId), group: 'secondary' });
         }
 
         if (canUnschedule) {
-            list.push({ id: 'unschedule', label: 'Move to Unallocated', icon: Trash2, onClick: () => onUnscheduleSegment(job.id, segment.segmentId), group: 'danger' });
-            list.push({ id: 'send-offsite', label: 'Send Offsite (Third Party)', icon: Camera, onClick: () => onSendOffsite(job.id, segment.segmentId), group: 'danger' });
+            list.push({ id: 'unschedule', label: 'Move to Unallocated', icon: Trash2, onClick: () => onUnscheduleSegment(job.id, segId), group: 'danger' });
+            list.push({ id: 'send-offsite', label: 'Send Offsite (Third Party)', icon: Camera, onClick: () => onSendOffsite(job.id, segId), group: 'danger' });
         }
 
         return list;
-    }, [segment.status, job.id, segment.segmentId, canStartOrPause, canPerformActions, canUnschedule, onStartWork, onPause, onRestart, onOpenAssistant, onEdit, onReassign, onUnscheduleSegment, isSmallCard, customer, engineer, onCreateInvoice]);
+    }, [segment.status, job.id, segId, canStartOrPause, canPerformActions, canUnschedule, onStartWork, onPause, onRestart, onEngineerComplete, onOpenAssistant, onEdit, onReassign, onUnscheduleSegment, onSendOffsite, onPassToSales, isSmallCard, customer, engineer, onCreateInvoice]);
     return (
             <div
                 draggable={canDrag}
                 onDragStart={(e) => {
                     if (!canDrag) return;
                     e.stopPropagation();
-                    onDragStart(e, job.id, segment.segmentId);
+                    onDragStart(e, job.id, segId);
                 }}
                 onDragEnd={onDragEnd}
                 className={`absolute left-0 right-0 p-1.5 rounded-lg shadow-sm border flex flex-col group ${canDrag ? 'cursor-grab' : 'cursor-default'} ${statusColor} allocated-job-container ${isActionsMenuOpen ? 'z-[999]' : 'z-10'} hover:z-50 hover:shadow-md transition-all duration-200`}

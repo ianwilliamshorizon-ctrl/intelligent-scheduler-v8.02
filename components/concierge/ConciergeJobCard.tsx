@@ -99,10 +99,13 @@ export const ConciergeJobCard: React.FC<ConciergeJobCardProps> = (props) => {
     const associatedPOs = Array.from(new Set(allPOs.map(po => po.id))).map(id => allPOs.find(po => po.id === id) as PurchaseOrder);
     
     const canControl = (segment: JobSegment) => {
-        if (!segment.engineerId) return false;
-        if (currentUser.role === 'Engineer') return segment.engineerId === currentUser.engineerId;
-        // Expand to include Sales and Garage Concierge for better visibility across the team
-        return ['Admin', 'Dispatcher', 'Sales', 'Garage Concierge'].includes(baseRole);
+        const isAdminOrManagement = ['Admin', 'Dispatcher', 'Director', 'Manager', 'Sales', 'Garage Concierge'].includes(baseRole) ||
+                                   ['Admin', 'Dispatcher', 'Director', 'Manager', 'Sales', 'Garage Concierge'].includes(currentUser.role);
+        if (isAdminOrManagement) return true;
+        if (currentUser.role === 'Engineer') {
+            return !!segment.engineerId && segment.engineerId === currentUser.engineerId;
+        }
+        return false;
     };
 
     return (
@@ -205,20 +208,23 @@ export const ConciergeJobCard: React.FC<ConciergeJobCardProps> = (props) => {
                         
                         const controlEnabled = canControl(seg);
 
+                        const segId = seg.segmentId || seg.id || '';
+                        const assignedEng = seg.engineerId ? engineersById.get(seg.engineerId) : undefined;
+
                         return (
-                            <div key={seg.segmentId} className={`p-1.5 sm:p-2 rounded-xl transition-colors ${controlEnabled ? 'bg-indigo-50 border border-indigo-100' : 'bg-gray-50'}`}>
+                            <div key={segId || index} className={`p-1.5 sm:p-2 rounded-xl transition-colors ${controlEnabled ? 'bg-indigo-50 border border-indigo-100' : 'bg-gray-50'}`}>
                                 <div className="flex justify-between items-center mb-0.5 sm:mb-1">
-                                    <span className="font-bold truncate text-gray-700">{engineersById.get(seg.engineerId!)?.name} @ {seg.allocatedLift}</span>
+                                    <span className="font-bold truncate text-gray-700">{assignedEng?.name || 'Unassigned'} @ {seg.allocatedLift || 'Unallocated'}</span>
                                     <span className={`font-bold ${seg.status === 'Paused' ? 'text-rose-600 animate-pulse' : 'text-indigo-700'}`}>
                                         {seg.status === 'Paused' ? 'PAUSED' : timeString}
                                     </span>
                                 </div>
                                 {controlEnabled && (
                                     <div className="flex items-center justify-end gap-1 sm:gap-1.5">
-                                        {seg.status === 'Allocated' && onStartWork && <button onClick={(e) => { e.stopPropagation(); onStartWork(job.id, seg.segmentId); }} className="flex items-center gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 shadow-sm text-[9px] sm:text-[10px] font-bold uppercase tracking-tight transition-transform active:scale-95"><PlayCircle size={12} className="sm:w-[14px] sm:h-[14px]" /> Start</button>}
-                                        {seg.status === 'Paused' && onRestart && <button onClick={(e) => { e.stopPropagation(); onRestart(job.id, seg.segmentId); }} className="flex items-center gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 shadow-sm text-[9px] sm:text-[10px] font-bold uppercase tracking-tight transition-transform active:scale-95"><PlayCircle size={12} className="sm:w-[14px] sm:h-[14px]"/> Restart</button>}
-                                        {seg.status === 'In Progress' && onPause && <button onClick={(e) => { e.stopPropagation(); onPause(job.id, seg.segmentId); }} className="flex items-center gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 bg-amber-600 text-white rounded-lg hover:bg-amber-700 shadow-sm text-[9px] sm:text-[10px] font-bold uppercase tracking-tight transition-transform active:scale-95"><PauseCircle size={12} className="sm:w-[14px] sm:h-[14px]"/> Pause</button>}
-                                        {seg.status === 'In Progress' && onEngineerComplete && <button onClick={(e) => { e.stopPropagation(); onEngineerComplete(job, seg.segmentId); }} className="flex items-center gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 shadow-sm text-[9px] sm:text-[10px] font-bold uppercase tracking-tight border border-indigo-200 transition-transform active:scale-95"><CheckCircle size={12} className="sm:w-[14px] sm:h-[14px]"/> Complete</button>}
+                                        {seg.status === 'Allocated' && onStartWork && <button onClick={(e) => { e.stopPropagation(); onStartWork(job.id, segId); }} className="flex items-center gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 shadow-sm text-[9px] sm:text-[10px] font-bold uppercase tracking-tight transition-transform active:scale-95"><PlayCircle size={12} className="sm:w-[14px] sm:h-[14px]" /> Start</button>}
+                                        {seg.status === 'Paused' && onRestart && <button onClick={(e) => { e.stopPropagation(); onRestart(job.id, segId); }} className="flex items-center gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 shadow-sm text-[9px] sm:text-[10px] font-bold uppercase tracking-tight transition-transform active:scale-95"><PlayCircle size={12} className="sm:w-[14px] sm:h-[14px]"/> Restart</button>}
+                                        {seg.status === 'In Progress' && onPause && <button onClick={(e) => { e.stopPropagation(); onPause(job.id, segId); }} className="flex items-center gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 bg-amber-600 text-white rounded-lg hover:bg-amber-700 shadow-sm text-[9px] sm:text-[10px] font-bold uppercase tracking-tight transition-transform active:scale-95"><PauseCircle size={12} className="sm:w-[14px] sm:h-[14px]"/> Pause</button>}
+                                        {seg.status === 'In Progress' && onEngineerComplete && <button onClick={(e) => { e.stopPropagation(); onEngineerComplete(job, segId); }} className="flex items-center gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 shadow-sm text-[9px] sm:text-[10px] font-bold uppercase tracking-tight border border-indigo-200 transition-transform active:scale-95"><CheckCircle size={12} className="sm:w-[14px] sm:h-[14px]"/> Complete</button>}
                                     </div>
                                 )}
                             </div>
@@ -264,7 +270,7 @@ export const ConciergeJobCard: React.FC<ConciergeJobCardProps> = (props) => {
                     )}
 
                     {/* QC Action */}
-                    {job.status === 'Pending QC' && highlightAction !== 'collect' && onQcApprove && (baseRole === 'Admin' || baseRole === 'Dispatcher') && (
+                    {job.status === 'Pending QC' && highlightAction !== 'collect' && onQcApprove && (['Admin', 'Dispatcher', 'Director', 'Manager'].includes(baseRole) || ['Admin', 'Dispatcher', 'Director', 'Manager'].includes(currentUser.role)) && (
                         <button onClick={(e) => {e.stopPropagation(); onQcApprove(job.id);}} className="text-[9px] sm:text-[10px] font-bold uppercase tracking-tight flex items-center gap-1 bg-white text-orange-600 px-2 sm:px-3 py-0.5 sm:py-1 rounded-lg hover:bg-orange-50 border border-orange-100 shadow-xs transition-transform active:scale-95">
                             <ClipboardCheck size={10} className="sm:w-[12px] sm:h-[12px]"/> Sign-off
                         </button>

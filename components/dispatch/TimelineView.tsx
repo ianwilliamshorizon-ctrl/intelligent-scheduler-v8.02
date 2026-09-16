@@ -47,6 +47,7 @@ interface TimelineViewProps {
     onPassToSales: (jobId: string) => void;
     onOpenAssistant: (jobId: string) => void;
     onCreateInvoice?: (job: Job) => void;
+    onEngineerComplete?: (job: Job, segmentId: string) => void;
 }
 
 export const TimelineView: React.FC<TimelineViewProps> = (props) => {
@@ -56,7 +57,7 @@ export const TimelineView: React.FC<TimelineViewProps> = (props) => {
         unallocatedJobs, allocatedSegmentsByLift, unallocatedDateFilter, setUnallocatedDateFilter, 
         showOnSiteOnly, setShowOnSiteOnly, onEditJob, onCheckIn, onOpenPurchaseOrder, 
         onStartWork, onPause, onRestart, onReassign, onUnscheduleSegment, onSendOffsite, onPassToSales,
-        onOpenAssistant, onCreateInvoice
+        onOpenAssistant, onCreateInvoice, onEngineerComplete
     } = props;
 
     const { jobs, engineers, customers, vehicles, purchaseOrders, saveRecord, storageLocations } = useData();
@@ -220,12 +221,12 @@ export const TimelineView: React.FC<TimelineViewProps> = (props) => {
                                 >
                                     {TIME_SEGMENTS.map((_, index) => <div key={index} className="flex-1 border-b border-gray-200"></div>)}
                           
-                                    {allocatedSegments?.map(segment => {
+                                    {allocatedSegments?.map((segment, index) => {
                                         const job = jobs.find(j => j.id === segment.parentJobId);
                                         if (!job) return null;
                                         return (
                                             <AllocatedJobCard 
-                                                key={segment.segmentId}
+                                                key={segment.segmentId || segment.id || index}
                                                 job={job}
                                                 segment={segment}
                                                 vehicle={vehiclesById.get(job.vehicleId)}
@@ -246,6 +247,7 @@ export const TimelineView: React.FC<TimelineViewProps> = (props) => {
                                                 currentUser={currentUser}
                                                 onOpenAssistant={handleOpenAssistant}
                                                 onCreateInvoice={onCreateInvoice}
+                                                onEngineerComplete={onEngineerComplete}
                                             />
                                         );
                                     })}

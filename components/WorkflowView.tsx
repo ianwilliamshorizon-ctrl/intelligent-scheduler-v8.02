@@ -250,11 +250,13 @@ const WorkflowView: React.FC<WorkflowViewProps> = ({ jobs, vehicles, customers, 
     ];
 
     const canControlJob = (engineerId?: string | null) => {
-        if (!engineerId) return false;
-        if (currentUser.role === 'Engineer') return engineerId === currentUser.engineerId;
         const userRoleObj = roles.find(r => r.name === currentUser.role);
         const baseRole = userRoleObj ? userRoleObj.baseRole : currentUser.role;
-        return baseRole === 'Admin' || baseRole === 'Dispatcher';
+        const isAdminOrManagement = ['Admin', 'Dispatcher', 'Director', 'Manager'].includes(baseRole) ||
+                                   ['Admin', 'Dispatcher', 'Director', 'Manager'].includes(currentUser.role);
+        if (isAdminOrManagement) return true;
+        if (currentUser.role === 'Engineer') return !!engineerId && engineerId === currentUser.engineerId;
+        return false;
     };
 
     const renderJobCard = (job: Job, bgColor: string, title?: string) => {
@@ -297,7 +299,7 @@ const WorkflowView: React.FC<WorkflowViewProps> = ({ jobs, vehicles, customers, 
                 today={today}
             >
                 <div className="mt-2 text-xs space-y-1">
-                    {(job.segments || []).filter(s => s.allocatedLift).map(seg => {
+                    {(job.segments || []).filter(s => s.allocatedLift).map((seg, idx) => {
                         const startSegmentIndex = seg.scheduledStartSegment;
                         let timeString = `${seg.duration} hrs`;
                         if (startSegmentIndex !== null && startSegmentIndex !== undefined) {
@@ -311,10 +313,11 @@ const WorkflowView: React.FC<WorkflowViewProps> = ({ jobs, vehicles, customers, 
                             timeString = `${startTime} - ${endTime}`;
                         }
                         
-                        const engineerName = engineersById.get(seg.engineerId!)?.name;
+                        const engineerName = seg.engineerId ? engineersById.get(seg.engineerId)?.name : undefined;
+                        const targetSegId = seg.segmentId || seg.id || '';
 
                         return (
-                             <div key={seg.segmentId} className="p-1.5 bg-gray-100 rounded-md">
+                             <div key={targetSegId || idx} className="p-1.5 bg-gray-100 rounded-md">
                                  <div className="flex justify-between items-center">
                                     <div className="flex items-center gap-2">
                                         {engineerName ? (
@@ -332,7 +335,7 @@ const WorkflowView: React.FC<WorkflowViewProps> = ({ jobs, vehicles, customers, 
                                     <div className="mt-2 flex items-center justify-end gap-1.5">
                                         {seg.status === 'Allocated' && (
                                             <button 
-                                                onClick={(e) => { e.stopPropagation(); onStartWork(job.id, seg.segmentId); }} 
+                                                onClick={(e) => { e.stopPropagation(); onStartWork(job.id, targetSegId); }} 
                                                 className="flex items-center gap-1 px-2 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 shadow-sm text-[10px] font-bold uppercase tracking-tight transition-transform active:scale-95"
                                             >
                                                 <PlayCircle size={14} /> Start
@@ -340,7 +343,7 @@ const WorkflowView: React.FC<WorkflowViewProps> = ({ jobs, vehicles, customers, 
                                         )}
                                         {seg.status === 'Paused' && (
                                             <button 
-                                                onClick={(e) => { e.stopPropagation(); onRestart(job.id, seg.segmentId); }} 
+                                                onClick={(e) => { e.stopPropagation(); onRestart(job.id, targetSegId); }} 
                                                 className="flex items-center gap-1 px-2 py-1 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 shadow-sm text-[10px] font-bold uppercase tracking-tight transition-transform active:scale-95"
                                             >
                                                 <PlayCircle size={14} /> Restart
@@ -348,7 +351,7 @@ const WorkflowView: React.FC<WorkflowViewProps> = ({ jobs, vehicles, customers, 
                                         )}
                                         {seg.status === 'In Progress' && (
                                             <button 
-                                                onClick={(e) => { e.stopPropagation(); onPause(job.id, seg.segmentId); }} 
+                                                onClick={(e) => { e.stopPropagation(); onPause(job.id, targetSegId); }} 
                                                 className="flex items-center gap-1 px-2 py-1 bg-amber-600 text-white rounded-lg hover:bg-amber-700 shadow-sm text-[10px] font-bold uppercase tracking-tight transition-transform active:scale-95"
                                             >
                                                 <PauseCircle size={14} /> Pause
@@ -356,7 +359,7 @@ const WorkflowView: React.FC<WorkflowViewProps> = ({ jobs, vehicles, customers, 
                                         )}
                                         {seg.status === 'In Progress' && (
                                             <button 
-                                                onClick={(e) => { e.stopPropagation(); onEngineerComplete(job, seg.segmentId); }} 
+                                                onClick={(e) => { e.stopPropagation(); onEngineerComplete(job, targetSegId); }} 
                                                 className="flex items-center gap-1 px-2 py-1 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 shadow-sm text-[10px] font-bold uppercase tracking-tight border border-indigo-200 transition-transform active:scale-95"
                                             >
                                                 <CheckCircle size={14} /> Complete

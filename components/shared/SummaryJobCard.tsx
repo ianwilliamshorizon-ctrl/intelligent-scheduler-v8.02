@@ -37,9 +37,13 @@ export const SummaryJobCard: React.FC<SummaryJobCardProps> = (props) => {
     const baseRole = userRoleObj ? userRoleObj.baseRole : currentUser.role;
 
     const canControl = (segment: any) => {
-        if (!segment.engineerId) return false;
-        if (currentUser.role === 'Engineer') return segment.engineerId === currentUser.engineerId;
-        return ['Admin', 'Dispatcher', 'Sales', 'Garage Concierge'].includes(baseRole);
+        const isAdminOrManagement = ['Admin', 'Dispatcher', 'Director', 'Manager', 'Sales', 'Garage Concierge'].includes(baseRole) ||
+                                   ['Admin', 'Dispatcher', 'Director', 'Manager', 'Sales', 'Garage Concierge'].includes(currentUser.role);
+        if (isAdminOrManagement) return true;
+        if (currentUser.role === 'Engineer') {
+            return !!segment.engineerId && segment.engineerId === currentUser.engineerId;
+        }
+        return false;
     };
 
     const today = getRelativeDate(0);
@@ -157,13 +161,14 @@ export const SummaryJobCard: React.FC<SummaryJobCardProps> = (props) => {
                         </div>
                     )}
 
-                    {segmentsToday.map(seg => {
+                    {segmentsToday.map((seg, idx) => {
                         const controlEnabled = canControl(seg);
                         if (!controlEnabled) return null;
+                        const targetSegId = seg.segmentId || seg.id || '';
 
                         return (
                             <div 
-                                key={seg.segmentId} 
+                                key={targetSegId || idx} 
                                 className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between gap-1"
                                 onClick={(e) => e.stopPropagation()}
                             >
@@ -173,7 +178,7 @@ export const SummaryJobCard: React.FC<SummaryJobCardProps> = (props) => {
                                 <div className="flex items-center gap-1">
                                     {seg.status === 'Allocated' && (
                                         <button
-                                            onClick={(e) => { e.stopPropagation(); props.onStartWork(job.id, seg.segmentId); }}
+                                            onClick={(e) => { e.stopPropagation(); props.onStartWork(job.id, targetSegId); }}
                                             className="px-1.5 py-0.5 bg-green-600 text-white rounded text-[8px] font-black uppercase tracking-tight hover:bg-green-700 transition-all active:scale-95 flex items-center gap-0.5"
                                         >
                                             <PlayCircle size={10} /> Start
@@ -181,7 +186,7 @@ export const SummaryJobCard: React.FC<SummaryJobCardProps> = (props) => {
                                     )}
                                     {seg.status === 'Paused' && (
                                         <button
-                                            onClick={(e) => { e.stopPropagation(); props.onRestart(job.id, seg.segmentId); }}
+                                            onClick={(e) => { e.stopPropagation(); props.onRestart(job.id, targetSegId); }}
                                             className="px-1.5 py-0.5 bg-indigo-600 text-white rounded text-[8px] font-black uppercase tracking-tight hover:bg-indigo-700 transition-all active:scale-95 flex items-center gap-0.5"
                                         >
                                             <PlayCircle size={10} /> Restart
@@ -189,7 +194,7 @@ export const SummaryJobCard: React.FC<SummaryJobCardProps> = (props) => {
                                     )}
                                     {seg.status === 'In Progress' && (
                                         <button
-                                            onClick={(e) => { e.stopPropagation(); props.onPause(job.id, seg.segmentId); }}
+                                            onClick={(e) => { e.stopPropagation(); props.onPause(job.id, targetSegId); }}
                                             className="px-1.5 py-0.5 bg-amber-600 text-white rounded text-[8px] font-black uppercase tracking-tight hover:bg-amber-700 transition-all active:scale-95 flex items-center gap-0.5"
                                         >
                                             <PauseCircle size={10} /> Pause
@@ -197,7 +202,7 @@ export const SummaryJobCard: React.FC<SummaryJobCardProps> = (props) => {
                                     )}
                                     {seg.status === 'In Progress' && props.onEngineerComplete && (
                                         <button
-                                            onClick={(e) => { e.stopPropagation(); props.onEngineerComplete(job, seg.segmentId); }}
+                                            onClick={(e) => { e.stopPropagation(); props.onEngineerComplete(job, targetSegId); }}
                                             className="px-1.5 py-0.5 bg-indigo-100 text-indigo-700 rounded text-[8px] font-black uppercase tracking-tight hover:bg-indigo-200 border border-indigo-200 transition-all active:scale-95 flex items-center gap-0.5"
                                         >
                                             <CheckCircle size={10} /> Complete
