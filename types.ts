@@ -242,6 +242,8 @@ export interface FCSGanttBlock {
     resourceType: 'ramp' | 'engineer';
     resourceId: string; // Ramp ID or Engineer ID
     resourceName: string;
+    engineerId?: string; // Assigned engineer ID
+    engineerName?: string; // Assigned engineer display name
     title: string;
     vehicleRegistration?: string;
     fcsState: FCSState;
@@ -262,6 +264,7 @@ export interface FCSDependencyLink {
     jobId: string;
     rampBlockId: string;
     engineerBlockId: string;
+    engineerId?: string;
     fcsState: FCSState;
 }
 

@@ -1,9 +1,146 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { Job, Lift, Engineer, PurchaseOrder, Vehicle, Customer, User, FCSGanttBlock, FCSDependencyLink } from '../../../types';
+import { Job, Lift, Engineer, PurchaseOrder, Vehicle, Customer, User, Estimate, FCSGanttBlock, FCSDependencyLink } from '../../../types';
 import { calculateFCSMatrix, FCSMatrixResult } from '../../../core/services/fcsSchedulingEngine';
 import { ServiceAdvisorBookingBufferModal } from './ServiceAdvisorBookingBufferModal';
 import { Sparkles, Wrench, Layers, AlertTriangle, CheckCircle, Clock, Calendar, Users, RefreshCw, Plus, ChevronLeft, ChevronRight, Activity, ArrowRight, Zap, Info } from 'lucide-react';
 import { getRelativeDate, addDays, formatDate } from '../../../core/utils/dateUtils';
+
+export interface EngineerTheme {
+    id: string;
+    name: string;
+    gradientFrom: string;
+    gradientTo: string;
+    border: string;
+    hex: string;
+    lightHex: string;
+    badgeBg: string;
+    badgeText: string;
+}
+
+export const ENGINEER_COLOR_PALETTES: EngineerTheme[] = [
+    {
+        id: 'cobalt',
+        name: 'Cobalt Blue',
+        gradientFrom: '#2563eb', // blue-600
+        gradientTo: '#1d4ed8',   // blue-700
+        border: '#60a5fa',       // blue-400
+        hex: '#2563eb',
+        lightHex: '#eff6ff',
+        badgeBg: 'bg-blue-100',
+        badgeText: 'text-blue-800'
+    },
+    {
+        id: 'emerald',
+        name: 'Emerald Green',
+        gradientFrom: '#059669', // emerald-600
+        gradientTo: '#047857',   // emerald-700
+        border: '#34d399',       // emerald-400
+        hex: '#059669',
+        lightHex: '#ecfdf5',
+        badgeBg: 'bg-emerald-100',
+        badgeText: 'text-emerald-800'
+    },
+    {
+        id: 'purple',
+        name: 'Royal Purple',
+        gradientFrom: '#7c3aed', // violet-600
+        gradientTo: '#6d28d9',   // violet-700
+        border: '#a78bfa',       // violet-400
+        hex: '#7c3aed',
+        lightHex: '#f5f3ff',
+        badgeBg: 'bg-purple-100',
+        badgeText: 'text-purple-800'
+    },
+    {
+        id: 'amber',
+        name: 'Amber Orange',
+        gradientFrom: '#d97706', // amber-600
+        gradientTo: '#b45309',   // amber-700
+        border: '#fbbf24',       // amber-400
+        hex: '#d97706',
+        lightHex: '#fffbeb',
+        badgeBg: 'bg-amber-100',
+        badgeText: 'text-amber-800'
+    },
+    {
+        id: 'rose',
+        name: 'Ruby Rose',
+        gradientFrom: '#e11d48', // rose-600
+        gradientTo: '#be123c',   // rose-700
+        border: '#fb7185',       // rose-400
+        hex: '#e11d48',
+        lightHex: '#fff1f2',
+        badgeBg: 'bg-rose-100',
+        badgeText: 'text-rose-800'
+    },
+    {
+        id: 'cyan',
+        name: 'Teal Cyan',
+        gradientFrom: '#0891b2', // cyan-600
+        gradientTo: '#0e7490',   // cyan-700
+        border: '#22d3ee',       // cyan-400
+        hex: '#0891b2',
+        lightHex: '#ecfeff',
+        badgeBg: 'bg-cyan-100',
+        badgeText: 'text-cyan-800'
+    },
+    {
+        id: 'fuchsia',
+        name: 'Fuchsia Pink',
+        gradientFrom: '#c026d3', // fuchsia-600
+        gradientTo: '#a21caf',   // fuchsia-700
+        border: '#e879f9',       // fuchsia-400
+        hex: '#c026d3',
+        lightHex: '#fdf4ff',
+        badgeBg: 'bg-fuchsia-100',
+        badgeText: 'text-fuchsia-800'
+    },
+    {
+        id: 'lime',
+        name: 'Vibrant Lime',
+        gradientFrom: '#65a30d', // lime-600
+        gradientTo: '#4d7c0f',   // lime-700
+        border: '#a3e635',       // lime-400
+        hex: '#65a30d',
+        lightHex: '#f7fee7',
+        badgeBg: 'bg-lime-100',
+        badgeText: 'text-lime-800'
+    },
+    {
+        id: 'sky',
+        name: 'Sky Blue',
+        gradientFrom: '#0284c7', // sky-600
+        gradientTo: '#0369a1',   // sky-700
+        border: '#38bdf8',       // sky-400
+        hex: '#0284c7',
+        lightHex: '#f0f9ff',
+        badgeBg: 'bg-sky-100',
+        badgeText: 'text-sky-800'
+    },
+    {
+        id: 'orange',
+        name: 'Sunset Orange',
+        gradientFrom: '#ea580c', // orange-600
+        gradientTo: '#c2410c',   // orange-700
+        border: '#fb923c',       // orange-400
+        hex: '#ea580c',
+        lightHex: '#fff7ed',
+        badgeBg: 'bg-orange-100',
+        badgeText: 'text-orange-800'
+    }
+];
+
+const SIMULATED_TECH_THEME: EngineerTheme = {
+    id: 'simulated',
+    name: 'Simulated Master Tech',
+    gradientFrom: '#9333ea',
+    gradientTo: '#6b21a8',
+    border: '#c084fc',
+    hex: '#9333ea',
+    lightHex: '#faf5ff',
+    badgeBg: 'bg-purple-100',
+    badgeText: 'text-purple-800'
+};
 
 interface ResourceGanttViewProps {
     jobs: Job[];
@@ -13,8 +150,11 @@ interface ResourceGanttViewProps {
     vehicles: Vehicle[];
     customers: Customer[];
     currentUser: User;
+    estimates?: Estimate[];
+    unallocatedJobs?: Job[];
     onEditJob: (jobId: string, initialTab?: string) => void;
     onSaveJob: (job: Partial<Job>) => void;
+    onSaveEstimate?: (estimate: Partial<Estimate>) => void;
 }
 
 export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
@@ -25,8 +165,11 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
     vehicles,
     customers,
     currentUser,
+    estimates = [],
+    unallocatedJobs = [],
     onEditJob,
-    onSaveJob
+    onSaveJob,
+    onSaveEstimate
 }) => {
     const [windowDays, setWindowDays] = useState<number>(7);
     const [simulateExtraEngineers, setSimulateExtraEngineers] = useState<number>(0);
@@ -37,6 +180,23 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
 
     const containerRef = useRef<HTMLDivElement>(null);
     const [blockPositions, setBlockPositions] = useState<Map<string, { x: number; y: number; width: number; height: number }>>(new Map());
+
+    // Deterministic engineer color theme mapping
+    const getEngineerTheme = (engId: string): EngineerTheme => {
+        if (!engId) return ENGINEER_COLOR_PALETTES[0];
+        if (engId.startsWith('sim_')) return SIMULATED_TECH_THEME;
+        const idx = engineers.findIndex(e => e.id === engId);
+        if (idx >= 0) {
+            return ENGINEER_COLOR_PALETTES[idx % ENGINEER_COLOR_PALETTES.length];
+        }
+        // Fallback hash by string
+        let hash = 0;
+        for (let i = 0; i < engId.length; i++) {
+            hash = engId.charCodeAt(i) + ((hash << 5) - hash);
+        }
+        const safeIdx = Math.abs(hash) % ENGINEER_COLOR_PALETTES.length;
+        return ENGINEER_COLOR_PALETTES[safeIdx];
+    };
 
     const startDateStr = useMemo(() => {
         return getRelativeDate(startDateOffset);
@@ -235,8 +395,9 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                         if (!rampPos || !engPos) return null;
 
                         const isHighlighted = hoveredJobId === link.jobId;
-                        const strokeColor = isHighlighted ? '#9333ea' : (link.fcsState === 'ACTIVE' ? '#4f46e5' : '#94a3b8');
-                        const strokeWidth = isHighlighted ? 3 : 1.75;
+                        const engTheme = link.engineerId ? getEngineerTheme(link.engineerId) : null;
+                        const strokeColor = isHighlighted ? '#9333ea' : (engTheme ? engTheme.hex : (link.fcsState === 'ACTIVE' ? '#4f46e5' : '#94a3b8'));
+                        const strokeWidth = isHighlighted ? 3.5 : 2;
                         const strokeDash = link.fcsState === 'QUEUED' ? '4 4' : 'none';
 
                         // Draw smooth bezier vector connecting ramp block to engineer block
@@ -255,7 +416,7 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                                 stroke={strokeColor}
                                 strokeWidth={strokeWidth}
                                 strokeDasharray={strokeDash}
-                                opacity={hoveredJobId ? (isHighlighted ? 1 : 0.2) : 0.65}
+                                opacity={hoveredJobId ? (isHighlighted ? 1 : 0.2) : 0.75}
                                 markerEnd={isHighlighted ? "url(#arrowhead-hover)" : "url(#arrowhead)"}
                                 className="transition-all duration-300"
                             />
@@ -347,6 +508,7 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                                     {row.blocks.map(block => {
                                         const isHovered = hoveredJobId === block.jobId;
                                         const isDimmed = hoveredJobId && !isHovered;
+                                        const engTheme = block.engineerId ? getEngineerTheme(block.engineerId) : null;
 
                                         return (
                                             <div
@@ -357,14 +519,17 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                                                 onClick={() => onEditJob(block.jobId)}
                                                 style={{
                                                     left: `${block.startPercent}%`,
-                                                    width: `${block.durationPercent}%`
+                                                    width: `${block.durationPercent}%`,
+                                                    ...(engTheme && !block.isDeadWeight ? {
+                                                        borderLeft: `5px solid ${engTheme.hex}`
+                                                    } : {})
                                                 }}
                                                 className={`absolute top-1.5 bottom-1.5 rounded-lg px-2.5 py-1 flex flex-col justify-center cursor-pointer transition-all duration-200 z-10 ${
                                                     block.isDeadWeight
                                                         ? 'bg-amber-100 border-2 border-amber-500 text-amber-950 shadow-sm'
-                                                        : 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md border border-blue-400/40'
+                                                        : 'bg-gradient-to-r from-slate-900 to-indigo-950 text-white shadow-md border border-slate-700/60'
                                                 } ${isHovered ? 'ring-2 ring-purple-500 scale-[1.02] z-20 shadow-lg' : ''} ${isDimmed ? 'opacity-35' : ''}`}
-                                                title={`Job #${block.jobId}: ${block.title} (${block.hours}h) - Click to inspect`}
+                                                title={`Job #${block.jobId}: ${block.title} (${block.hours}h)${block.engineerName ? ` • Assigned Tech: ${block.engineerName}` : ''} - Click to inspect`}
                                             >
                                                 {block.isDeadWeight && (
                                                     <div 
@@ -374,9 +539,20 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                                                 )}
                                                 <div className="flex items-center justify-between text-[11px] font-black leading-tight relative z-10">
                                                     <span className="font-mono uppercase tracking-tight truncate">{block.vehicleRegistration || `#${block.jobId}`}</span>
-                                                    <span className="shrink-0">{block.hours}h</span>
+                                                    <div className="flex items-center gap-1.5 shrink-0">
+                                                        {engTheme && !block.isDeadWeight && (
+                                                            <span 
+                                                                className="text-[9px] font-black uppercase px-1.5 py-0.2 rounded text-white shadow-2xs"
+                                                                style={{ backgroundColor: engTheme.hex }}
+                                                                title={`Assigned Tech: ${block.engineerName || 'Tech'}`}
+                                                            >
+                                                                {block.engineerName?.split(' ')[0] || 'Tech'}
+                                                            </span>
+                                                        )}
+                                                        <span className="font-mono text-[10px] bg-black/25 px-1 rounded">{block.hours}h</span>
+                                                    </div>
                                                 </div>
-                                                <div className={`text-[10px] truncate font-bold relative z-10 ${block.isDeadWeight ? 'text-amber-900' : 'text-blue-100'}`}>
+                                                <div className={`text-[10px] truncate font-bold relative z-10 ${block.isDeadWeight ? 'text-amber-900' : 'text-slate-300'}`}>
                                                     {block.isDeadWeight ? '⚠️ STALLED: Awaiting Parts' : block.title}
                                                 </div>
                                             </div>
@@ -392,41 +568,64 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                 {/* BOTTOM SECTION: LABOUR POOL (ENGINEER WRENCH TIME ROWS - E)  */}
                 {/* ============================================================ */}
                 <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
-                    <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-100">
+                    <div className="flex flex-wrap items-center justify-between mb-3 pb-2 border-b border-slate-100 gap-3">
                         <div className="flex items-center gap-2">
                             <Wrench size={16} className="text-indigo-600" />
                             <h3 className="text-xs font-black uppercase tracking-widest text-slate-900">
                                 Labour Pool: Engineer Wrench Time ($E$)
                             </h3>
                         </div>
-                        <div className="flex items-center gap-4 text-[10px] font-bold">
-                            <span className="flex items-center gap-1.5 text-indigo-700">
-                                <span className="w-2.5 h-2.5 rounded-xs bg-indigo-600 block"></span> Active Wrench Time
-                            </span>
-                            <span className="flex items-center gap-1.5 text-emerald-700">
-                                <span className="w-2.5 h-2.5 rounded-xs bg-emerald-100 border border-emerald-500 block"></span> Available / Freed Engineer
-                            </span>
+
+                        {/* Engineer Signature Color Palette Legend */}
+                        <div className="flex items-center gap-2 overflow-x-auto max-w-2xl py-0.5">
+                            <span className="text-[10px] font-black uppercase tracking-wider text-slate-600 shrink-0">Tech Colors:</span>
+                            {matrix.engineerRows.map(r => {
+                                const t = getEngineerTheme(r.engineer.id);
+                                return (
+                                    <div 
+                                        key={r.engineer.id}
+                                        className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold border shrink-0 shadow-2xs"
+                                        style={{ backgroundColor: t.lightHex, borderColor: `${t.hex}50`, color: t.hex }}
+                                    >
+                                        <span className="w-2.5 h-2.5 rounded-full shrink-0 shadow-xs" style={{ backgroundColor: t.hex }} />
+                                        <span className="truncate max-w-[85px] font-black">{r.engineer.name}</span>
+                                    </div>
+                                );
+                            })}
                         </div>
                     </div>
 
                     <div className="space-y-3">
                         {matrix.engineerRows.map(row => {
                             const isVirtual = row.engineer.id.startsWith('sim_');
+                            const engTheme = getEngineerTheme(row.engineer.id);
 
                             return (
                                 <div key={row.engineer.id} className="flex items-center gap-4 group">
-                                    {/* Row Label */}
-                                    <div className={`w-44 shrink-0 p-2.5 rounded-xl border shadow-xs ${
+                                    {/* Row Label with Engineer Signature Theme */}
+                                    <div className={`w-44 shrink-0 p-2.5 rounded-xl border shadow-xs transition-all ${
                                         isVirtual 
                                             ? 'bg-purple-50 border-purple-200 text-purple-950' 
-                                            : 'bg-slate-50 border border-slate-200 text-slate-900'
+                                            : 'bg-white border-slate-200 text-slate-900 hover:border-slate-300'
                                     }`}>
-                                        <div className="flex items-center justify-between">
-                                            <span className="font-black text-xs truncate">{row.engineer.name}</span>
+                                        <div className="flex items-center justify-between gap-1.5">
+                                            <div className="flex items-center gap-1.5 min-w-0">
+                                                <span 
+                                                    className="w-3 h-3 rounded-full shrink-0 shadow-xs border border-white"
+                                                    style={{ backgroundColor: engTheme.hex }}
+                                                    title={`Assigned signature color: ${engTheme.name}`}
+                                                />
+                                                <span className="font-black text-xs truncate">{row.engineer.name}</span>
+                                            </div>
                                             {isVirtual ? (
-                                                <span className="text-[8px] font-black uppercase bg-purple-600 text-white px-1.5 py-0.5 rounded">Simulated</span>
+                                                <span className="text-[8px] font-black uppercase bg-purple-600 text-white px-1.5 py-0.5 rounded shadow-xs">Simulated</span>
                                             ) : (
-                                                <span className="text-[9px] font-black text-slate-600 uppercase bg-slate-200 px-1.5 py-0.5 rounded">Tech</span>
+                                                <span 
+                                                    className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded shrink-0 shadow-xs text-white"
+                                                    style={{ backgroundColor: engTheme.hex }}
+                                                >
+                                                    Tech
+                                                </span>
                                             )}
                                         </div>
                                         <span className="text-[10px] text-slate-500 font-semibold block mt-0.5">
@@ -460,18 +659,20 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                                                     onClick={() => onEditJob(block.jobId)}
                                                     style={{
                                                         left: `${block.startPercent}%`,
-                                                        width: `${block.durationPercent}%`
+                                                        width: `${block.durationPercent}%`,
+                                                        background: block.isSimulated 
+                                                            ? 'linear-gradient(135deg, #7c3aed, #4f46e5)'
+                                                            : `linear-gradient(135deg, ${engTheme.gradientFrom}, ${engTheme.gradientTo})`,
+                                                        borderColor: block.isSimulated ? '#a78bfa' : engTheme.border
                                                     }}
-                                                    className={`absolute top-1.5 bottom-1.5 rounded-lg px-2.5 py-1 flex flex-col justify-center cursor-pointer transition-all duration-200 z-10 ${
-                                                        block.isSimulated
-                                                            ? 'bg-gradient-to-r from-purple-700 to-indigo-600 text-white border border-purple-400 shadow-md'
-                                                            : 'bg-gradient-to-r from-indigo-600 to-emerald-600 text-white border border-indigo-400/30 shadow-md'
-                                                    } ${isHovered ? 'ring-2 ring-purple-500 scale-[1.02] z-20 shadow-lg' : ''} ${isDimmed ? 'opacity-35' : ''}`}
-                                                    title={`Wrench Time for Job #${block.jobId}: ${block.title} (${block.hours}h)`}
+                                                    className={`absolute top-1.5 bottom-1.5 rounded-lg px-2.5 py-1 flex flex-col justify-center cursor-pointer transition-all duration-200 z-10 text-white border shadow-md ${
+                                                        isHovered ? 'ring-2 ring-white scale-[1.02] z-20 shadow-xl' : ''
+                                                    } ${isDimmed ? 'opacity-35' : ''}`}
+                                                    title={`Wrench Time for Job #${block.jobId}: ${block.title} (${block.hours}h) • Tech: ${row.engineer.name}`}
                                                 >
                                                     <div className="flex items-center justify-between text-[11px] font-black leading-tight">
                                                         <span className="font-mono uppercase tracking-tight truncate">{block.vehicleRegistration || `#${block.jobId}`}</span>
-                                                        <span className="shrink-0">{block.hours}h</span>
+                                                        <span className="shrink-0 font-mono text-[10px] bg-black/25 px-1 rounded">{block.hours}h</span>
                                                     </div>
                                                     <div className="text-[10px] truncate opacity-95 font-bold">
                                                         {block.title}
@@ -498,8 +699,13 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                     purchaseOrders={purchaseOrders}
                     customers={customers}
                     vehicles={vehicles}
+                    estimates={estimates}
+                    unallocatedJobs={unallocatedJobs}
                     onBookJob={(newJob) => {
                         onSaveJob(newJob);
+                    }}
+                    onSaveEstimate={(est) => {
+                        if (onSaveEstimate) onSaveEstimate(est);
                     }}
                 />
             )}

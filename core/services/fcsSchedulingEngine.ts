@@ -250,12 +250,16 @@ export function calculateFCSMatrix({
         const startPct = calculatePercentOffset(ap.scheduledStartDate, startDateStr, windowDays);
         const durationPct = calculatePercentDuration(ap.remainingHours, windowDays);
 
+        const engName = activeEngineers.find(e => e.id === engineerId)?.name || 'Engineer';
+
         const rampBlock: FCSGanttBlock = {
             id: rampBlockId,
             jobId: ap.job.id,
             resourceType: 'ramp',
             resourceId: rampId,
             resourceName: ramps.find(r => r.id === rampId)?.name || 'Ramp',
+            engineerId,
+            engineerName: engName,
             title: ap.job.description || 'Active Job',
             vehicleRegistration: ap.vehicle?.registration,
             fcsState: 'ACTIVE',
@@ -276,7 +280,9 @@ export function calculateFCSMatrix({
             jobId: ap.job.id,
             resourceType: 'engineer',
             resourceId: engineerId,
-            resourceName: activeEngineers.find(e => e.id === engineerId)?.name || 'Engineer',
+            resourceName: engName,
+            engineerId,
+            engineerName: engName,
             title: ap.job.description || 'Wrench Time',
             vehicleRegistration: ap.vehicle?.registration,
             fcsState: 'ACTIVE',
@@ -307,6 +313,7 @@ export function calculateFCSMatrix({
             jobId: ap.job.id,
             rampBlockId,
             engineerBlockId: engBlockId,
+            engineerId,
             fcsState: 'ACTIVE'
         });
     });
@@ -322,6 +329,7 @@ export function calculateFCSMatrix({
         const queuedStartDate = addDaysToDateStr(startDateStr, estimatedStartDays);
         rollingOffsetHours += qp.remainingHours;
         const isSim = engineerId.startsWith('sim_');
+        const queuedEngName = effectiveEngineers.find(e => e.id === engineerId)?.name || 'Engineer';
 
         const rampBlockId = `ramp_block_queued_${qp.job.id}`;
         const engBlockId = `eng_block_queued_${qp.job.id}`;
@@ -335,6 +343,8 @@ export function calculateFCSMatrix({
             resourceType: 'ramp',
             resourceId: rampId,
             resourceName: effectiveRamps.find(r => r.id === rampId)?.name || 'Ramp',
+            engineerId,
+            engineerName: queuedEngName,
             title: qp.job.description || 'Queued Job',
             vehicleRegistration: qp.vehicle?.registration,
             fcsState: 'QUEUED',
@@ -355,7 +365,9 @@ export function calculateFCSMatrix({
             jobId: qp.job.id,
             resourceType: 'engineer',
             resourceId: engineerId,
-            resourceName: effectiveEngineers.find(e => e.id === engineerId)?.name || 'Engineer',
+            resourceName: queuedEngName,
+            engineerId,
+            engineerName: queuedEngName,
             title: qp.job.description || 'Queued Wrench Time',
             vehicleRegistration: qp.vehicle?.registration,
             fcsState: 'QUEUED',
@@ -382,6 +394,7 @@ export function calculateFCSMatrix({
             jobId: qp.job.id,
             rampBlockId,
             engineerBlockId: engBlockId,
+            engineerId,
             fcsState: 'QUEUED'
         });
     });

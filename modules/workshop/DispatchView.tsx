@@ -61,7 +61,7 @@ const DispatchView: React.FC<DispatchViewProps> = ({
     onCreateInvoice,
     onEngineerComplete
 }) => {
-    const { jobs, setJobs, lifts, engineers, customers, vehicles, purchaseOrders, absenceRequests, businessEntities, estimates, parts, forceRefresh, saveRecord } = useData();
+    const { jobs, setJobs, lifts, engineers, customers, vehicles, purchaseOrders, absenceRequests, businessEntities, estimates, setEstimates, parts, forceRefresh, saveRecord } = useData();
     
     // Auto-refresh data every 30 seconds to keep all users in sync
     useEffect(() => {
@@ -296,6 +296,8 @@ const DispatchView: React.FC<DispatchViewProps> = ({
                     vehicles={vehicles || []}
                     customers={customers || []}
                     currentUser={currentUser}
+                    estimates={estimates || []}
+                    unallocatedJobs={unallocatedJobs || []}
                     onEditJob={handleEditJob}
                     onSaveJob={async (jobData) => {
                         const savedJob = {
@@ -305,6 +307,14 @@ const DispatchView: React.FC<DispatchViewProps> = ({
                         setJobs(prev => [...prev.filter(j => j.id !== savedJob.id), savedJob]);
                         if (saveRecord) {
                             await saveRecord('jobs', savedJob);
+                        }
+                    }}
+                    onSaveEstimate={async (estData) => {
+                        if (estData.id) {
+                            setEstimates(prev => prev.map(e => e.id === estData.id ? { ...e, ...estData } as any : e));
+                        }
+                        if (saveRecord) {
+                            await saveRecord('estimates', estData);
                         }
                     }}
                 />
