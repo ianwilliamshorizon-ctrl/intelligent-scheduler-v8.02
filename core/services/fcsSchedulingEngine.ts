@@ -117,6 +117,10 @@ export function calculateFCSMatrix({
         });
     }
 
+    // Ensure effective ramps and engineers fallbacks so empty entity selections never divide by zero or index with NaN
+    const effectiveRamps: Lift[] = (ramps && ramps.length > 0) ? ramps : [{ id: 'bay_default', name: 'Workshop Bay 1', type: 'Standard' as const }];
+    const effectiveEngineers: Engineer[] = activeEngineers.length > 0 ? activeEngineers : [{ id: 'tech_default', name: 'Technician 1', hourlyRate: 35 }];
+
     // Filter relevant non-completed jobs
     const eligibleJobs = jobs.filter(j => 
         !['Closed', 'Invoiced', 'Cancelled', 'Archived'].includes(j.status) &&
@@ -137,7 +141,7 @@ export function calculateFCSMatrix({
 
         // Find existing assigned ramp & engineer from segments
         const firstSegment = (job.segments || [])[0];
-        const assignedRamp = firstSegment?.allocatedLift ? ramps.find(r => r.name === firstSegment.allocatedLift || r.id === firstSegment.allocatedLift) : undefined;
+        const assignedRamp = firstSegment?.allocatedLift ? effectiveRamps.find(r => r.name === firstSegment.allocatedLift || r.id === firstSegment.allocatedLift) : undefined;
         const assignedEngineerId = firstSegment?.engineerId || null;
 
         return {
@@ -149,7 +153,7 @@ export function calculateFCSMatrix({
             remainingHours,
             priority: job.priority || 3,
             isMovable: job.isMovable ?? false,
-            assignedRampId: assignedRamp?.id || (ramps[0]?.id || null),
+            assignedRampId: assignedRamp?.id || effectiveRamps[0]?.id || null,
             assignedEngineerId,
             scheduledStartDate: job.scheduledDate || startDateStr,
             scheduledEndDate: job.scheduledDate || addDaysToDateStr(startDateStr, Math.ceil(remainingHours / 8))
@@ -188,10 +192,10 @@ export function calculateFCSMatrix({
 
     // Initialize row blocks
     const rampBlocksMap = new Map<string, FCSGanttBlock[]>();
-    ramps.forEach(r => rampBlocksMap.set(r.id, []));
+    effectiveRamps.forEach(r => rampBlocksMap.set(r.id, []));
 
     const engineerBlocksMap = new Map<string, FCSGanttBlock[]>();
-    activeEngineers.forEach(e => engineerBlocksMap.set(e.id, []));
+    effectiveEngineers.forEach(e => engineerBlocksMap.set(e.id, []));
 
     const dependencyLinks: FCSDependencyLink[] = [];
 
@@ -200,7 +204,7 @@ export function calculateFCSMatrix({
 
     // Place STALLED jobs on Ramps (Dead Weight Space, 0 Engineer wrench time)
     stalledPlans.forEach((sp, idx) => {
-        const rampId = sp.assignedRampId || ramps[idx % ramps.length]?.id;
+        const rampId = sp.assignedRampId || effectiveRamps[idx % effectiveRamps.length]?.id;
         if (!rampId) return;
 
         const blockId = `ramp_block_stalled_${sp.job.id}`;
@@ -211,7 +215,7 @@ export function calculateFCSMatrix({
             jobId: sp.job.id,
             resourceType: 'ramp',
             resourceId: rampId,
-            resourceName: ramps.find(r => r.id === rampId)?.name || 'Ramp',
+            resourceName: effectiveRamps.find(r => r.id === rampId)?.name || 'Ramp',
             title: sp.job.description || 'Stalled Job',
             vehicleRegistration: sp.vehicle?.registration,
             fcsState: 'STALLED',
@@ -232,8 +236,8 @@ export function calculateFCSMatrix({
 
     // Place ACTIVE jobs (Consumes 1 Ramp AND 1 Engineer, draws interactive linkage)
     activePlans.forEach((ap, idx) => {
-        const rampId = ap.assignedRampId || ramps[idx % ramps.length]?.id;
-        const engineerId = ap.assignedEngineerId || activeEngineers[idx % activeEngineers.length]?.id;
+        const rampId = ap.assignedRampId || effectiveRamps[idx % effectiveRamps.length]?.id;
+        const engineerId = ap.assignedEngineerId || effectiveEngineers[idx % effectiveEngineers.length]?.id;
 
         if (!rampId || !engineerId) return;
 
@@ -308,10 +312,10 @@ export function calculateFCSMatrix({
     });
 
     // Place Remaining QUEUED jobs sequentially onto the earliest available slots
-    let rollingOffsetHours = activeWrenchHours / Math.max(1, activeEngineers.length);
+    let rollingOffsetHours = activeWrenchHours / Math.max(1, effectiveEngineers.length);
     queuedPlans.filter(qp => qp.fcsState === 'QUEUED').forEach((qp, idx) => {
-        const rampId = ramps[idx % ramps.length]?.id;
-        const engineerId = activeEngineers[idx % activeEngineers.length]?.id;
+        const rampId = effectiveRamps[idx % effectiveRamps.length]?.id;
+        const engineerId = effectiveEngineers[idx % effectiveEngineers.length]?.id;
         if (!rampId || !engineerId) return;
 
         const estimatedStartDays = Math.floor(rollingOffsetHours / 8);
@@ -330,7 +334,7 @@ export function calculateFCSMatrix({
             jobId: qp.job.id,
             resourceType: 'ramp',
             resourceId: rampId,
-            resourceName: ramps.find(r => r.id === rampId)?.name || 'Ramp',
+            resourceName: effectiveRamps.find(r => r.id === rampId)?.name || 'Ramp',
             title: qp.job.description || 'Queued Job',
             vehicleRegistration: qp.vehicle?.registration,
             fcsState: 'QUEUED',
@@ -351,7 +355,7 @@ export function calculateFCSMatrix({
             jobId: qp.job.id,
             resourceType: 'engineer',
             resourceId: engineerId,
-            resourceName: activeEngineers.find(e => e.id === engineerId)?.name || 'Engineer',
+            resourceName: effectiveEngineers.find(e => e.id === engineerId)?.name || 'Engineer',
             title: qp.job.description || 'Queued Wrench Time',
             vehicleRegistration: qp.vehicle?.registration,
             fcsState: 'QUEUED',
@@ -384,13 +388,13 @@ export function calculateFCSMatrix({
 
     // Compute metrics
     const totalBacklogHours = jobPlans.reduce((acc, p) => acc + p.remainingHours, 0);
-    const totalDailyCapacity = activeEngineers.length * 8;
+    const totalDailyCapacity = effectiveEngineers.length * 8;
     const totalBacklogDays = totalDailyCapacity > 0 ? parseFloat((totalBacklogHours / totalDailyCapacity).toFixed(1)) : 0;
     const earliestBacklogClearDate = addDaysToDateStr(startDateStr, Math.ceil(totalBacklogDays));
 
     const totalWindowHours = windowDays * 8;
-    const engineerUtilizationPercent = Math.min(100, Math.round((activeWrenchHours / (activeEngineers.length * totalWindowHours || 1)) * 100));
-    const totalRampCapacityHours = ramps.length * totalWindowHours;
+    const engineerUtilizationPercent = Math.min(100, Math.round((activeWrenchHours / (effectiveEngineers.length * totalWindowHours || 1)) * 100));
+    const totalRampCapacityHours = effectiveRamps.length * totalWindowHours;
     const rampUtilizationPercent = Math.min(100, Math.round(((activeWrenchHours + stalledDeadWeightHours) / (totalRampCapacityHours || 1)) * 100));
 
     // Compute simulation difference if extra engineer is simulated
@@ -398,7 +402,7 @@ export function calculateFCSMatrix({
     let simulatedDaysSaved: number | undefined;
     if (simulateExtraEngineers > 0 && engineers.length > 0) {
         const baseCapacity = engineers.length * 8;
-        const simCapacity = activeEngineers.length * 8;
+        const simCapacity = effectiveEngineers.length * 8;
         const baseDays = totalBacklogHours / baseCapacity;
         const simDays = totalBacklogHours / simCapacity;
         simulatedDaysSaved = parseFloat(Math.max(0, baseDays - simDays).toFixed(1));
@@ -406,11 +410,11 @@ export function calculateFCSMatrix({
     }
 
     return {
-        rampRows: ramps.map(r => ({
+        rampRows: effectiveRamps.map(r => ({
             ramp: r,
             blocks: rampBlocksMap.get(r.id) || []
         })),
-        engineerRows: activeEngineers.map(e => ({
+        engineerRows: effectiveEngineers.map(e => ({
             engineer: e,
             blocks: engineerBlocksMap.get(e.id) || [],
             idleSlots: []

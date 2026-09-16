@@ -71,25 +71,7 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
         });
     }, [jobs, ramps, engineers, purchaseOrders, vehicles, windowDays, startDateStr, simulateExtraEngineers]);
 
-    // Register block DOM positions for SVG vector linking
-    const registerBlockRef = (blockId: string, el: HTMLDivElement | null) => {
-        if (!el || !containerRef.current) return;
-        const containerRect = containerRef.current.getBoundingClientRect();
-        const blockRect = el.getBoundingClientRect();
-
-        setBlockPositions(prev => {
-            const next = new Map(prev);
-            next.set(blockId, {
-                x: blockRect.left - containerRect.left + blockRect.width / 2,
-                y: blockRect.top - containerRect.top + blockRect.height / 2,
-                width: blockRect.width,
-                height: blockRect.height
-            });
-            return next;
-        });
-    };
-
-    // Recalculate block positions on resize or data update
+    // Recalculate block positions for SVG vector linkages on resize or data update
     useEffect(() => {
         const updatePositions = () => {
             if (!containerRef.current) return;
@@ -111,13 +93,13 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
             setBlockPositions(newMap);
         };
 
-        const timer = setTimeout(updatePositions, 100);
+        const timer = setTimeout(updatePositions, 80);
         window.addEventListener('resize', updatePositions);
         return () => {
             clearTimeout(timer);
             window.removeEventListener('resize', updatePositions);
         };
-    }, [matrix, windowDays]);
+    }, [matrix, windowDays, startDateStr]);
 
     return (
         <div className="flex flex-col flex-grow min-h-0 bg-slate-100 text-slate-800 font-sans select-none overflow-hidden">
@@ -370,7 +352,6 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                                             <div
                                                 key={block.id}
                                                 data-block-id={block.id}
-                                                ref={(el) => registerBlockRef(block.id, el)}
                                                 onMouseEnter={() => setHoveredJobId(block.jobId)}
                                                 onMouseLeave={() => setHoveredJobId(null)}
                                                 onClick={() => onEditJob(block.jobId)}
@@ -474,7 +455,6 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                                                 <div
                                                     key={block.id}
                                                     data-block-id={block.id}
-                                                    ref={(el) => registerBlockRef(block.id, el)}
                                                     onMouseEnter={() => setHoveredJobId(block.jobId)}
                                                     onMouseLeave={() => setHoveredJobId(null)}
                                                     onClick={() => onEditJob(block.jobId)}
