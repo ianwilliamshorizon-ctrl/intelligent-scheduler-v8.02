@@ -118,7 +118,7 @@ export function calculateFCSMatrix({
     }
 
     // Ensure effective ramps and engineers fallbacks so empty entity selections never divide by zero or index with NaN
-    const effectiveRamps: Lift[] = (ramps && ramps.length > 0) ? ramps : [{ id: 'bay_default', name: 'Workshop Bay 1', type: 'Standard' as const }];
+    const effectiveRamps: Lift[] = (ramps && ramps.length > 0) ? ramps : [{ id: 'bay_default', name: 'Workshop Bay 1', entityId: 'default', type: 'Standard' as const }];
     const effectiveEngineers: Engineer[] = activeEngineers.length > 0 ? activeEngineers : [{ id: 'tech_default', name: 'Technician 1', hourlyRate: 35 }];
 
     // Filter relevant non-completed jobs
