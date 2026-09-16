@@ -10,6 +10,7 @@ import { BookingCalendarView } from '../../components/BookingCalendarView';
 import AssignEngineerModal from '../../components/AssignEngineerModal';
 import { TimelineView } from '../../components/dispatch/TimelineView';
 import { WeeklyView } from '../../components/dispatch/WeeklyView';
+import { ResourceGanttView } from '../../components/dispatch/fcs/ResourceGanttView';
 import { fetchBankHolidays } from '../../services/bankHolidayService';
 import { useWorkshopActions } from '../../core/hooks/useWorkshopActions';
 
@@ -60,7 +61,7 @@ const DispatchView: React.FC<DispatchViewProps> = ({
     onCreateInvoice,
     onEngineerComplete
 }) => {
-    const { jobs, setJobs, lifts, engineers, customers, vehicles, purchaseOrders, absenceRequests, businessEntities, estimates, parts, forceRefresh } = useData();
+    const { jobs, setJobs, lifts, engineers, customers, vehicles, purchaseOrders, absenceRequests, businessEntities, estimates, parts, forceRefresh, saveRecord } = useData();
     
     // Auto-refresh data every 30 seconds to keep all users in sync
     useEffect(() => {
@@ -75,7 +76,7 @@ const DispatchView: React.FC<DispatchViewProps> = ({
     const { selectedEntityId, currentUser, users } = useApp();
     
     // -- View State --
-    const [viewMode, setViewMode] = useState<'timeline' | 'week' | 'calendar'>('timeline');
+    const [viewMode, setViewMode] = useState<'timeline' | 'week' | 'calendar' | 'fcs-gantt'>('timeline');
     const [currentDate, setCurrentDate] = useState(getRelativeDate(0));
     const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
     const [unallocatedDateFilter, setUnallocatedDateFilter] = useState<'all' | 'today' | '7days' | '14days'>('all');
@@ -283,6 +284,29 @@ const DispatchView: React.FC<DispatchViewProps> = ({
                     onRestart={onRestart}
                     onQcApprove={() => {}} // Not applicable in this view
                     onEngineerComplete={onEngineerComplete}
+                />
+            )}
+            
+            {viewMode === 'fcs-gantt' && (
+                <ResourceGanttView
+                    jobs={jobs.filter(j => selectedEntityId === 'all' || j.entityId === selectedEntityId)}
+                    ramps={entityLifts}
+                    engineers={entityEngineers}
+                    purchaseOrders={purchaseOrders || []}
+                    vehicles={vehicles || []}
+                    customers={customers || []}
+                    currentUser={currentUser}
+                    onEditJob={handleEditJob}
+                    onSaveJob={async (jobData) => {
+                        const savedJob = {
+                            id: jobData.id || `job_${Date.now()}`,
+                            ...jobData
+                        } as Job;
+                        setJobs(prev => [...prev.filter(j => j.id !== savedJob.id), savedJob]);
+                        if (saveRecord) {
+                            await saveRecord('jobs', savedJob);
+                        }
+                    }}
                 />
             )}
             

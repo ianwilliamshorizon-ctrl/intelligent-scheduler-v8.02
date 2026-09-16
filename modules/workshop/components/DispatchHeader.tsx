@@ -3,8 +3,8 @@ import { ChevronLeft, ChevronRight, Clock, PlusCircle, Printer } from 'lucide-re
 import { formatReadableDate, formatDate, addDays } from '../../../core/utils/dateUtils';
 
 interface DispatchHeaderProps {
-    viewMode: 'timeline' | 'week' | 'calendar';
-    setViewMode: (mode: 'timeline' | 'week' | 'calendar') => void;
+    viewMode: 'timeline' | 'week' | 'calendar' | 'fcs-gantt';
+    setViewMode: (mode: 'timeline' | 'week' | 'calendar' | 'fcs-gantt') => void;
     currentDate: string;
     setCurrentDate: (date: string) => void;
     weekStart: Date;
@@ -61,6 +61,10 @@ export const DispatchHeader: React.FC<DispatchHeaderProps> = ({
                     <button onClick={() => setViewMode('timeline')} className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-md font-semibold text-[10px] sm:text-sm transition whitespace-nowrap ${viewMode === 'timeline' ? 'bg-white shadow text-indigo-700' : 'text-gray-600 hover:text-gray-800'}`}>Day Timeline</button>
                     <button onClick={() => setViewMode('week')} className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-md font-semibold text-[10px] sm:text-sm transition whitespace-nowrap ${viewMode === 'week' ? 'bg-white shadow text-indigo-700' : 'text-gray-600 hover:text-gray-800'}`}>Week View</button>
                     <button onClick={() => setViewMode('calendar')} className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-md font-semibold text-[10px] sm:text-sm transition whitespace-nowrap ${viewMode === 'calendar' ? 'bg-white shadow text-indigo-700' : 'text-gray-600 hover:text-gray-800'}`}>Month Calendar</button>
+                    <button onClick={() => setViewMode('fcs-gantt')} className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-md font-bold text-[10px] sm:text-sm transition whitespace-nowrap flex items-center gap-1.5 ${viewMode === 'fcs-gantt' ? 'bg-indigo-950 shadow-md text-white border border-indigo-700' : 'text-indigo-900 hover:text-indigo-950'}`}>
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                        <span>Resource Gantt (FCS)</span>
+                    </button>
                 </div>
 
                 <div className="flex items-center gap-1 sm:gap-2 w-full sm:w-auto justify-between sm:justify-start">

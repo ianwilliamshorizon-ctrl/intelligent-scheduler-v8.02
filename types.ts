@@ -222,6 +222,59 @@ export interface Job {
     isSalesPrep?: boolean;
     tyreDepths?: any;
     inspectionFindings?: InspectionFinding[];
+    
+    // Finite Capacity Scheduling (FCS) Engine Fields
+    fcsState?: 'ACTIVE' | 'STALLED' | 'QUEUED';
+    materialsStatus?: 'Not Ordered' | 'Ordered' | 'Delivered';
+    isMovable?: boolean; // If false, locks physical ramp space continuously when stalled
+    priority?: number; // 1 (Highest/Urgent) to 5 (Lowest)
+    remainingHours?: number; // Estimated labour hours (H) left to work
+    rampLockId?: string; // Assigned physical ramp locking space
+}
+
+export type FCSState = 'ACTIVE' | 'STALLED' | 'QUEUED';
+export type MaterialsStatus = 'Not Ordered' | 'Ordered' | 'Delivered';
+
+export interface FCSGanttBlock {
+    id: string;
+    jobId: string;
+    segmentId?: string;
+    resourceType: 'ramp' | 'engineer';
+    resourceId: string; // Ramp ID or Engineer ID
+    resourceName: string;
+    title: string;
+    vehicleRegistration?: string;
+    fcsState: FCSState;
+    startDate: string; // YYYY-MM-DD
+    startTime: string; // HH:mm
+    endDate: string; // YYYY-MM-DD
+    endTime: string; // HH:mm
+    startPercent: number; // 0 to 100 within current view window
+    durationPercent: number; // width %
+    hours: number;
+    isDeadWeight?: boolean; // If STALLED on a ramp
+    isSimulated?: boolean; // If from +1 engineer simulation
+    linkedBlockId?: string; // Links Ramp block to Engineer block
+}
+
+export interface FCSDependencyLink {
+    id: string;
+    jobId: string;
+    rampBlockId: string;
+    engineerBlockId: string;
+    fcsState: FCSState;
+}
+
+export interface FCSSimulationMetrics {
+    totalBacklogHours: number;
+    totalBacklogDays: number;
+    earliestBacklogClearDate: string;
+    stalledDeadWeightRampHours: number;
+    activeWrenchHours: number;
+    engineerUtilizationPercent: number;
+    rampUtilizationPercent: number;
+    simulatedHoursSaved?: number;
+    simulatedDaysSaved?: number;
 }
 export type VehicleStatus = 'On Site' | 'Off-Site (Partner)' | 'Awaiting Arrival' | 'Awaiting Collection' | 'Collected' | 'Cancelled';
 
