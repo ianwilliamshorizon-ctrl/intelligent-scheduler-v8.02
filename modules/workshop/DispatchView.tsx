@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useApp } from '../../core/state/AppContext';
 import { useData } from '../../core/state/DataContext';
-import { Job, JobSegment, Lift, PurchaseOrder } from '../../types';
+import { Job, JobSegment, Lift, PurchaseOrder, Estimate } from '../../types';
 import { dateStringToDate, getRelativeDate, addDays, getStartOfWeek, formatDate } from '../../core/utils/dateUtils';
 import { calculateJobStatus } from '../../core/utils/jobUtils';
 import { TIME_SEGMENTS, SEGMENT_DURATION_MINUTES } from '../../constants';
@@ -312,9 +312,9 @@ const DispatchView: React.FC<DispatchViewProps> = ({
                     onSaveEstimate={async (estData) => {
                         if (estData.id) {
                             setEstimates(prev => prev.map(e => e.id === estData.id ? { ...e, ...estData } as any : e));
-                        }
-                        if (saveRecord) {
-                            await saveRecord('estimates', estData);
+                            if (saveRecord) {
+                                await saveRecord('estimates', estData as { id: string } & Partial<Estimate>);
+                            }
                         }
                     }}
                 />
