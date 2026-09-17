@@ -481,6 +481,9 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
 
     const [isLookupModalOpen, setIsLookupModalOpen] = useState(false);
     const [lookupTarget, setLookupTarget] = useState<'customer' | 'vehicle' | null>(null);
+    const [vehicleSearchTerm, setVehicleSearchTerm] = useState('');
+    const [customerSearchTerm, setCustomerSearchTerm] = useState('');
+    const [lookupInitialValue, setLookupInitialValue] = useState('');
     const [initialVehicleData, setInitialVehicleData] = useState<Partial<Vehicle> | null>(null);
     const [initialCustomerData, setInitialCustomerData] = useState<Partial<Customer> | null>(null);
 
@@ -1131,8 +1134,10 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
         motDue: currentVehicle?.nextMotDate || currentVehicle?.motExpiryDate || linkedInquiry?.vehicleMotExpiry,
     } : {};
 
-    const handleOpenLookup = (target: 'customer' | 'vehicle') => {
+    const handleOpenLookup = (target: 'customer' | 'vehicle', initialQuery?: string) => {
         setLookupTarget(target);
+        const query = initialQuery ?? (target === 'vehicle' ? vehicleSearchTerm : customerSearchTerm);
+        setLookupInitialValue(query ? query.trim().toUpperCase() : '');
         setIsLookupModalOpen(true);
     };
 
@@ -1162,10 +1167,10 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
     const handleManualEntry = () => {
         setIsLookupModalOpen(false);
         if (lookupTarget === 'customer') {
-            setInitialCustomerData(null);
+            setInitialCustomerData(lookupInitialValue ? { postcode: lookupInitialValue } as any : null);
             setIsAddingCustomer(true);
         } else if (lookupTarget === 'vehicle') {
-            setInitialVehicleData(null);
+            setInitialVehicleData(lookupInitialValue ? { registration: lookupInitialValue } as any : null);
             setIsAddingVehicle(true);
         }
     };
@@ -1207,10 +1212,14 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                                         defaultValue={formData.customerId}
                                         placeholder="Search name, phone or postcode..."
                                         uppercase={true}
+                                        onSearchChange={setCustomerSearchTerm}
+                                        emptyActionLabel={customerSearchTerm ? `Look up "${customerSearchTerm}" via Postcode` : undefined}
+                                        emptyActionIcon={<MapPin size={14} />}
+                                        onEmptyAction={(term) => handleOpenLookup('customer', term)}
                                     />
                                     <button 
                                         type="button" 
-                                        onClick={() => handleOpenLookup('customer')} 
+                                        onClick={() => handleOpenLookup('customer', customerSearchTerm)} 
                                         className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-xs flex items-center gap-1 flex-shrink-0 shadow-xs cursor-pointer"
                                         title="Add New Customer via Postcode Lookup"
                                     >
@@ -1252,10 +1261,14 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                                             defaultValue={formData.vehicleId}
                                             placeholder="Search registration or make..."
                                             uppercase={true}
+                                            onSearchChange={setVehicleSearchTerm}
+                                            emptyActionLabel={vehicleSearchTerm ? `Look up "${vehicleSearchTerm}" via DVLA` : undefined}
+                                            emptyActionIcon={<Car size={14} />}
+                                            onEmptyAction={(term) => handleOpenLookup('vehicle', term)}
                                         />
                                         <button 
                                             type="button" 
-                                            onClick={() => handleOpenLookup('vehicle')} 
+                                            onClick={() => handleOpenLookup('vehicle', vehicleSearchTerm)} 
                                             className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-xs flex items-center gap-1 flex-shrink-0 shadow-xs cursor-pointer"
                                             title="Add New Vehicle via DVLA Registration Lookup"
                                         >
@@ -1515,6 +1528,7 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                     onAddressFound={handleAddressFound}
                     onManualEntry={handleManualEntry}
                     lookupType={lookupTarget === 'customer' ? 'postcode' : 'vrm'}
+                    initialValue={lookupInitialValue}
                 />
             )}
 

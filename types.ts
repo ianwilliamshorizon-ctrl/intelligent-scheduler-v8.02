@@ -294,6 +294,7 @@ export interface Vehicle {
     fuelType?: string;
     engineNumber?: string;
     cc?: number;
+    engineCapacityCc?: number;
     transmissionType?: 'Manual' | 'Automatic' | 'Other';
     nextMotDate?: string; 
     motExpiryDate?: string; 

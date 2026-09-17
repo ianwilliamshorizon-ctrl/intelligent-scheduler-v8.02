@@ -13,6 +13,7 @@ interface LookupModalProps {
     onAddressFound: (addresses: AddressDetails[]) => void;
     onManualEntry: () => void;
     lookupType: 'vrm' | 'postcode';
+    initialValue?: string;
 }
 
 const LookupModal: React.FC<LookupModalProps> = ({ 
@@ -21,10 +22,11 @@ const LookupModal: React.FC<LookupModalProps> = ({
     onVehicleFound, 
     onAddressFound, 
     onManualEntry,
-    lookupType
+    lookupType,
+    initialValue
 }) => {
     const { vehicles = [], customers = [] } = useData();
-    const [inputValue, setInputValue] = useState('');
+    const [inputValue, setInputValue] = useState(initialValue ? initialValue.trim().toUpperCase() : '');
     const [isLoading, setIsLoading] = useState(false);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const [addressList, setAddressList] = useState<AddressDetails[] | null>(null);
@@ -48,14 +50,14 @@ const LookupModal: React.FC<LookupModalProps> = ({
 
     useEffect(() => {
         if (isOpen) {
-            // Reset state when modal is opened
-            setInputValue('');
+            // Reset state when modal is opened, pre-filling initialValue if provided
+            setInputValue(initialValue ? initialValue.trim().toUpperCase() : '');
             setErrorMessage(null);
             setIsLoading(false);
             setAddressList(null);
             setIncludeMotHistory(false); 
         }
-    }, [isOpen]);
+    }, [isOpen, initialValue]);
 
     const handleLookup = async (forceExternal: boolean = false) => {
         setIsLoading(true);
@@ -160,6 +162,12 @@ const LookupModal: React.FC<LookupModalProps> = ({
                         type="text" 
                         value={inputValue} 
                         onChange={e => setInputValue(e.target.value.toUpperCase())} 
+                        onKeyDown={e => {
+                            if (e.key === 'Enter' && inputValue.trim() && !isLoading) {
+                                e.preventDefault();
+                                handleLookup();
+                            }
+                        }}
                         placeholder={lookupType === 'vrm' ? 'e.g. AB12 CDE' : 'e.g. SW1A 0AA'}
                         className="block w-full px-4 py-3 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-lg font-mono uppercase font-bold tracking-wider border-gray-300 transition-all"
                         autoFocus

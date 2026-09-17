@@ -27,6 +27,9 @@ interface SearchableSelectProps {
   dropdownClassName?: string; // New prop for custom width/alignment
   onSearchChange?: (value: string) => void;
   uppercase?: boolean;
+  emptyActionLabel?: string;
+  emptyActionIcon?: React.ReactNode;
+  onEmptyAction?: (searchTerm: string) => void;
 }
 
 const SearchableSelect: React.FC<SearchableSelectProps> = ({
@@ -43,6 +46,9 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
   dropdownClassName = "w-full left-0", // Default to full width of parent
   onSearchChange,
   uppercase = false,
+  emptyActionLabel,
+  emptyActionIcon,
+  onEmptyAction,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -240,7 +246,23 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
                 )}
               </>
             ) : (
-              <div className="px-4 py-6 text-center text-gray-500 text-sm">No results found</div>
+              <div className="px-4 py-6 text-center text-gray-500 text-sm space-y-2.5">
+                <p className="font-medium text-gray-500">No results found{searchTerm ? ` for "${searchTerm}"` : ''}</p>
+                {onEmptyAction && searchTerm.trim() && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsOpen(false);
+                      onEmptyAction(searchTerm.trim());
+                    }}
+                    className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold shadow-sm transition-all hover:scale-105 active:scale-95 cursor-pointer mx-auto"
+                  >
+                    {emptyActionIcon}
+                    <span>{emptyActionLabel || `Look up "${searchTerm}"`}</span>
+                  </button>
+                )}
+              </div>
             )}
           </div>
         </div>

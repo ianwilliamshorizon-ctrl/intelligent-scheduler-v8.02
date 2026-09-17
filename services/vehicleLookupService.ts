@@ -95,6 +95,15 @@ export const lookupVehicleByVRM = async (vrm: string, includeMotHistory: boolean
 
   const wheelbaseType = extractWheelbaseType(res, model);
 
+  const rawCc = findValue(res, 'EngineCapacityCc') || 
+                findValue(res, 'EngineCapacity') || 
+                findValue(res, 'CylinderCapacity') || 
+                findValue(res, 'CubicCapacity') || 
+                findValue(res, 'EngineSize') || 
+                findValue(res, 'EngineCc') || 
+                findValue(res, 'cc');
+  const parsedCc = rawCc ? parseInt(String(rawCc).replace(/[^\d]/g, ''), 10) : undefined;
+
   const mapped: Partial<Vehicle> & { motHistory?: MotTest[] } = {
     registration: cleanVrm.toUpperCase(),
     make: formatTitleCase(make),
@@ -105,7 +114,8 @@ export const lookupVehicleByVRM = async (vrm: string, includeMotHistory: boolean
     vin: findValue(res, 'Vin') === "Permission Required" ? "" : (findValue(res, 'Vin') || ''),
     colour: findValue(res, 'CurrentColour') || findValue(res, 'Colour') || '',
     fuelType: findValue(res, 'DvlaFuelType') || findValue(res, 'FuelType') || '',
-    cc: findValue(res, 'EngineCapacityCc') || undefined,
+    cc: parsedCc || undefined,
+    engineCapacityCc: parsedCc || undefined,
     transmissionType: findValue(res, 'TransmissionType') || 'Other',
     wheelbaseType: wheelbaseType || undefined,
     nextMotDate: '',
