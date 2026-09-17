@@ -26,7 +26,7 @@ export const useDispatchFilters = ({
     users
 }: UseDispatchFiltersProps) => {
 
-    // Filter and sort engineers with dynamic synchronization to live user profiles
+    // Filter and sort engineers with dynamic synchronization, strict technician role restriction, and inter-workshop transfers
     const entityEngineers = useMemo(() => {
         // 1. Build lookup maps for users
         const userByEngId = new Map<string, any>();
@@ -38,34 +38,72 @@ export const useDispatchFilters = ({
             if (u.name) userByName.set(u.name.toLowerCase().trim(), u);
         });
 
-        // 2. Filter engineers by entity and synchronize with live user profile details
+        // 2. Filter engineers: strictly techs/engineers only, allotted to this entity unless transferred
         const resolvedEngineers = (engineers || [])
-            .filter(e => selectedEntityId === 'all' || !e.entityId || e.entityId === selectedEntityId)
+            .filter(e => {
+                const matchedUser = userByEngId.get(e.id) || userById.get(e.id) || (e.name ? userByName.get(e.name.toLowerCase().trim()) : undefined);
+
+                // STRICT: Labour pool can ONLY be techs/engineers (no Dispatchers, Sales, Admins, etc.)
+                if (matchedUser && matchedUser.role && matchedUser.role !== 'Engineer') {
+                    return false;
+                }
+                if (e.specialization === 'Dispatcher') {
+                    return false;
+                }
+
+                // Entity allocation logic
+                const allottedEntityId = e.entityId || matchedUser?.preferredEntityId || '';
+                const activeTransferEntityId = e.transferredToEntityId ?? matchedUser?.transferredToEntityId ?? null;
+                const effectiveEntityId = activeTransferEntityId || allottedEntityId;
+
+                if (selectedEntityId === 'all') {
+                    return true;
+                }
+
+                // Default strictly to allotted entity unless specifically transferred to this entity
+                return effectiveEntityId === selectedEntityId;
+            })
             .map(e => {
                 const matchedUser = userByEngId.get(e.id) || userById.get(e.id) || (e.name ? userByName.get(e.name.toLowerCase().trim()) : undefined);
-                if (matchedUser && matchedUser.name && matchedUser.name !== e.name) {
-                    return {
-                        ...e,
-                        name: matchedUser.name,
-                        hourlyRate: matchedUser.hourlyRate !== undefined ? matchedUser.hourlyRate : e.hourlyRate,
-                        entityId: matchedUser.preferredEntityId || e.entityId
-                    };
-                }
-                return e;
+                const allottedEntityId = e.entityId || matchedUser?.preferredEntityId || '';
+                const activeTransferEntityId = e.transferredToEntityId ?? matchedUser?.transferredToEntityId ?? null;
+                const isTransferred = !!activeTransferEntityId && activeTransferEntityId !== allottedEntityId;
+
+                return {
+                    ...e,
+                    name: (matchedUser && matchedUser.name) ? matchedUser.name : e.name,
+                    hourlyRate: (matchedUser && matchedUser.hourlyRate !== undefined) ? matchedUser.hourlyRate : e.hourlyRate,
+                    entityId: allottedEntityId,
+                    transferredToEntityId: activeTransferEntityId,
+                    transferredFromEntityId: isTransferred ? allottedEntityId : undefined,
+                    isTransferred,
+                    specialization: 'Engineer'
+                };
             });
         
-        // 3. Find users with role 'Engineer' or 'Dispatcher' who aren't already represented in engineers
+        // 3. Find registered staff users with role 'Engineer' ONLY who aren't already represented in engineers
         const staffAsEngineers = (users || [])
-            .filter(u => (u.role === 'Engineer' || u.role === 'Dispatcher') && 
-                         (selectedEntityId === 'all' || !u.preferredEntityId || u.preferredEntityId === selectedEntityId))
+            .filter(u => {
+                if (u.role !== 'Engineer') return false;
+                const activeTransferEntityId = u.transferredToEntityId || null;
+                const effectiveEntityId = activeTransferEntityId || u.preferredEntityId || '';
+                if (selectedEntityId === 'all') return true;
+                return effectiveEntityId === selectedEntityId;
+            })
             .filter(u => !resolvedEngineers.some(e => e.id === u.id || (u.engineerId && e.id === u.engineerId) || (u.name && e.name && e.name.toLowerCase().trim() === u.name.toLowerCase().trim())))
-            .map(u => ({
-                id: u.engineerId || u.id,
-                name: u.name || u.email || (u.role === 'Dispatcher' ? 'Dispatcher' : 'Technician'),
-                entityId: u.preferredEntityId || (selectedEntityId === 'all' ? '' : selectedEntityId),
-                hourlyRate: u.hourlyRate || 35,
-                specialization: u.role
-            } as Engineer));
+            .map(u => {
+                const isTransferred = !!u.transferredToEntityId && u.transferredToEntityId !== u.preferredEntityId;
+                return {
+                    id: u.engineerId || u.id,
+                    name: u.name || u.email || 'Technician',
+                    entityId: u.preferredEntityId || (selectedEntityId === 'all' ? '' : selectedEntityId),
+                    transferredToEntityId: u.transferredToEntityId || null,
+                    transferredFromEntityId: isTransferred ? u.preferredEntityId : undefined,
+                    isTransferred,
+                    hourlyRate: u.hourlyRate || 35,
+                    specialization: 'Engineer'
+                } as Engineer;
+            });
 
         return [...resolvedEngineers, ...staffAsEngineers]
             .sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { numeric: true }));

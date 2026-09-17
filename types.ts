@@ -83,6 +83,7 @@ export interface User {
     holidayEntitlement?: number;
     backupEmail?: string;
     hourlyRate?: number;
+    transferredToEntityId?: string | null;
 }
 
 export interface Role {
@@ -747,6 +748,11 @@ export interface Engineer {
     entityId?: string;
     specialization?: string;
     hourlyRate?: number;
+    transferredToEntityId?: string | null;
+    transferredFromEntityId?: string;
+    isTransferred?: boolean;
+    transferReason?: string;
+    transferredAt?: string;
 }
 
 export interface ServicePackage {

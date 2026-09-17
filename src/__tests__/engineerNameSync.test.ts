@@ -108,4 +108,94 @@ describe('Engineer Name Synchronization', () => {
         expect(engBlocks.length).toBe(1);
         expect(engBlocks[0].engineerName).toBe('Lewis Hamilton');
     });
+
+    it('strictly excludes dispatchers and non-engineers from the labour pool', () => {
+        const engineers: Engineer[] = [
+            { id: 'eng_1', name: 'Lewis', hourlyRate: 35, entityId: 'ent_porsche' }
+        ];
+
+        const users: Partial<User>[] = [
+            { id: 'user_phil', name: 'Phil (Dispatcher)', email: 'phil@example.com', role: 'Dispatcher' },
+            { id: 'user_sales', name: 'Sammy Sales', email: 'sales@example.com', role: 'Sales' },
+            { id: 'user_1', name: 'Lewis', email: 'lewis@example.com', role: 'Engineer', engineerId: 'eng_1' }
+        ];
+
+        const { result } = renderHook(() => useDispatchFilters({
+            jobs: [],
+            lifts: mockLifts,
+            engineers,
+            businessEntities: [],
+            selectedEntityId: 'ent_porsche',
+            currentDate: '2026-09-17',
+            unallocatedDateFilter: 'all',
+            showOnSiteOnly: false,
+            users: users as User[]
+        }));
+
+        expect(result.current.entityEngineers.length).toBe(1);
+        expect(result.current.entityEngineers[0].name).toBe('Lewis');
+        expect(result.current.entityEngineers.some(e => e.name.includes('Phil'))).toBe(false);
+        expect(result.current.entityEngineers.some(e => e.name.includes('Sammy'))).toBe(false);
+    });
+
+    it('defaults engineers strictly to their allotted business entity unless transferred', () => {
+        const engineers: Engineer[] = [
+            { id: 'eng_porsche_1', name: 'Lewis', hourlyRate: 35, entityId: 'ent_porsche' },
+            { id: 'eng_audi_1', name: 'Mike', hourlyRate: 36, entityId: 'ent_audi' }
+        ];
+
+        // 1. Porsche workshop selected: only Lewis should appear
+        const { result: porscheResult } = renderHook(() => useDispatchFilters({
+            jobs: [],
+            lifts: mockLifts,
+            engineers,
+            businessEntities: [],
+            selectedEntityId: 'ent_porsche',
+            currentDate: '2026-09-17',
+            unallocatedDateFilter: 'all',
+            showOnSiteOnly: false,
+            users: []
+        }));
+
+        expect(porscheResult.current.entityEngineers.map(e => e.id)).toEqual(['eng_porsche_1']);
+
+        // 2. Mike is transferred from Audi to Porsche to help recover backlog
+        const engineersWithTransfer: Engineer[] = [
+            { id: 'eng_porsche_1', name: 'Lewis', hourlyRate: 35, entityId: 'ent_porsche' },
+            { id: 'eng_audi_1', name: 'Mike', hourlyRate: 36, entityId: 'ent_audi', transferredToEntityId: 'ent_porsche' }
+        ];
+
+        const { result: transferredResult } = renderHook(() => useDispatchFilters({
+            jobs: [],
+            lifts: mockLifts,
+            engineers: engineersWithTransfer,
+            businessEntities: [],
+            selectedEntityId: 'ent_porsche',
+            currentDate: '2026-09-17',
+            unallocatedDateFilter: 'all',
+            showOnSiteOnly: false,
+            users: []
+        }));
+
+        // Both Lewis and transferred Mike appear in Porsche
+        expect(transferredResult.current.entityEngineers.map(e => e.id).sort()).toEqual(['eng_audi_1', 'eng_porsche_1'].sort());
+        const mike = transferredResult.current.entityEngineers.find(e => e.id === 'eng_audi_1');
+        expect(mike?.isTransferred).toBe(true);
+        expect(mike?.transferredFromEntityId).toBe('ent_audi');
+
+        // 3. When Audi is selected, Mike is not in Audi while transferred to Porsche
+        const { result: audiResult } = renderHook(() => useDispatchFilters({
+            jobs: [],
+            lifts: mockLifts,
+            engineers: engineersWithTransfer,
+            businessEntities: [],
+            selectedEntityId: 'ent_audi',
+            currentDate: '2026-09-17',
+            unallocatedDateFilter: 'all',
+            showOnSiteOnly: false,
+            users: []
+        }));
+
+        expect(audiResult.current.entityEngineers.length).toBe(0);
+    });
 });

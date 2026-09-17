@@ -293,6 +293,9 @@ const DispatchView: React.FC<DispatchViewProps> = ({
                     jobs={jobs.filter(j => selectedEntityId === 'all' || j.entityId === selectedEntityId)}
                     ramps={entityLifts}
                     engineers={entityEngineers}
+                    allEngineers={engineers}
+                    businessEntities={businessEntities}
+                    selectedEntityId={selectedEntityId}
                     purchaseOrders={purchaseOrders || []}
                     vehicles={vehicles || []}
                     customers={customers || []}
@@ -343,6 +346,41 @@ const DispatchView: React.FC<DispatchViewProps> = ({
                         );
                         if (matchingUser && setUsers) {
                             const updatedUser = { ...matchingUser, name: newName, engineerId };
+                            setUsers(prev => (prev || []).map(u => u.id === matchingUser.id ? updatedUser : u));
+                            await saveDocument('brooks_users', updatedUser);
+                        }
+                    }}
+                    onUpdateEngineerTransfer={async (engineerId: string, toEntityId: string | null, reason?: string) => {
+                        // 1. Update in engineers state and persist to brooks_engineers
+                        const targetEng = (engineers || []).find(e => e.id === engineerId);
+                        if (!targetEng) return;
+                        const updatedEng: Engineer = {
+                            ...targetEng,
+                            transferredToEntityId: toEntityId || null,
+                            transferReason: toEntityId ? (reason || 'Recovering workshop backlog') : undefined,
+                            transferredAt: toEntityId ? new Date().toISOString() : undefined,
+                            isTransferred: !!toEntityId && toEntityId !== targetEng.entityId
+                        };
+                        if (setEngineers) {
+                            setEngineers(prev => (prev || []).map(e => e.id === engineerId ? updatedEng : e));
+                        }
+                        if (saveRecord) {
+                            await saveRecord('engineers', updatedEng);
+                        } else {
+                            await saveDocument('brooks_engineers', updatedEng);
+                        }
+
+                        // 2. Synchronize user profile
+                        const matchingUser = (users || []).find(u => 
+                            u.engineerId === engineerId || 
+                            u.id === engineerId || 
+                            (targetEng.name && u.name?.trim().toLowerCase() === targetEng.name.trim().toLowerCase())
+                        );
+                        if (matchingUser && setUsers) {
+                            const updatedUser = { 
+                                ...matchingUser, 
+                                transferredToEntityId: toEntityId || null 
+                            };
                             setUsers(prev => (prev || []).map(u => u.id === matchingUser.id ? updatedUser : u));
                             await saveDocument('brooks_users', updatedUser);
                         }

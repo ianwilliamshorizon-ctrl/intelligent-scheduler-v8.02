@@ -1,9 +1,10 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { Job, Lift, Engineer, PurchaseOrder, Vehicle, Customer, User, Estimate, FCSGanttBlock, FCSDependencyLink } from '../../../types';
+import { Job, Lift, Engineer, PurchaseOrder, Vehicle, Customer, User, Estimate, FCSGanttBlock, FCSDependencyLink, BusinessEntity } from '../../../types';
 import { calculateFCSMatrix, FCSMatrixResult } from '../../../core/services/fcsSchedulingEngine';
 import { ServiceAdvisorBookingBufferModal } from './ServiceAdvisorBookingBufferModal';
 import { FCSOptimizerModal } from './FCSOptimizerModal';
-import { Sparkles, Wrench, Layers, AlertTriangle, CheckCircle, Clock, Calendar, Users, RefreshCw, Plus, ChevronLeft, ChevronRight, Activity, ArrowRight, Zap, Info, Edit3 } from 'lucide-react';
+import { TechnicianTransferModal } from './TechnicianTransferModal';
+import { Sparkles, Wrench, Layers, AlertTriangle, CheckCircle, Clock, Calendar, Users, RefreshCw, Plus, ChevronLeft, ChevronRight, Activity, ArrowRight, Zap, Info, Edit3, ArrowRightLeft } from 'lucide-react';
 import { getRelativeDate, addDays, formatDate } from '../../../core/utils/dateUtils';
 
 export interface EngineerTheme {
@@ -172,16 +173,23 @@ interface ResourceGanttViewProps {
     currentUser: User;
     estimates?: Estimate[];
     unallocatedJobs?: Job[];
+    allEngineers?: Engineer[];
+    businessEntities?: BusinessEntity[];
+    selectedEntityId?: string;
     onEditJob: (jobId: string, initialTab?: string) => void;
     onSaveJob: (job: Partial<Job>) => void;
     onSaveEstimate?: (estimate: Partial<Estimate>) => void;
     onUpdateEngineer?: (engineerId: string, newName: string) => Promise<void>;
+    onUpdateEngineerTransfer?: (engineerId: string, toEntityId: string | null, reason?: string) => Promise<void>;
 }
 
 export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
     jobs,
     ramps,
     engineers,
+    allEngineers = [],
+    businessEntities = [],
+    selectedEntityId = 'all',
     purchaseOrders,
     vehicles,
     customers,
@@ -191,12 +199,14 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
     onEditJob,
     onSaveJob,
     onSaveEstimate,
-    onUpdateEngineer
+    onUpdateEngineer,
+    onUpdateEngineerTransfer
 }) => {
     const [windowDays, setWindowDays] = useState<number>(7);
     const [simulateExtraEngineers, setSimulateExtraEngineers] = useState<number>(0);
     const [isBufferModalOpen, setIsBufferModalOpen] = useState<boolean>(false);
     const [isOptimizerOpen, setIsOptimizerOpen] = useState<boolean>(false);
+    const [isTransferModalOpen, setIsTransferModalOpen] = useState<boolean>(false);
     const [hoveredJobId, setHoveredJobId] = useState<string | null>(null);
     const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
     const [startDateOffset, setStartDateOffset] = useState<number>(0);
@@ -613,11 +623,28 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                 {/* ============================================================ */}
                 <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
                     <div className="flex flex-wrap items-center justify-between mb-3 pb-2 border-b border-slate-100 gap-3">
-                        <div className="flex items-center gap-2">
-                            <Wrench size={16} className="text-indigo-600" />
-                            <h3 className="text-xs font-black uppercase tracking-widest text-slate-900">
-                                Labour Pool: Engineer Wrench Time ($E$)
-                            </h3>
+                        <div className="flex items-center gap-2.5">
+                            <div className="flex items-center gap-2">
+                                <Wrench size={16} className="text-indigo-600" />
+                                <h3 className="text-xs font-black uppercase tracking-widest text-slate-900">
+                                    Labour Pool: Engineer Wrench Time ($E$)
+                                </h3>
+                            </div>
+                            {onUpdateEngineerTransfer && (
+                                <button
+                                    onClick={() => setIsTransferModalOpen(true)}
+                                    className="px-2.5 py-1 bg-white hover:bg-indigo-50 border border-slate-300 hover:border-indigo-400 text-slate-700 hover:text-indigo-700 rounded-lg text-[10px] font-black uppercase tracking-wider shadow-2xs flex items-center gap-1.5 transition-all cursor-pointer"
+                                    title="Transfer or borrow technicians from another workshop to recover backlogs"
+                                >
+                                    <ArrowRightLeft size={11} className="text-indigo-600" />
+                                    <span>Transfer / Borrow Tech</span>
+                                    {engineers.filter(e => e.isTransferred).length > 0 && (
+                                        <span className="bg-amber-500 text-white text-[9px] px-1.5 rounded-full font-black">
+                                            {engineers.filter(e => e.isTransferred).length}
+                                        </span>
+                                    )}
+                                </button>
+                            )}
                         </div>
 
                         {/* Engineer Signature Color Palette Legend */}
@@ -711,16 +738,31 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                                                         </button>
                                                     )}
                                                 </div>
-                                                {isVirtual ? (
-                                                    <span className="text-[8px] font-black uppercase bg-purple-600 text-white px-1.5 py-0.5 rounded shadow-xs">Simulated</span>
-                                                ) : (
-                                                    <span 
-                                                        className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded shrink-0 shadow-xs text-white"
-                                                        style={{ backgroundColor: engTheme.hex }}
-                                                    >
-                                                        Tech
-                                                    </span>
-                                                )}
+                                                <div className="flex items-center gap-1 shrink-0">
+                                                    {row.engineer.isTransferred && (
+                                                        <span 
+                                                            className="text-[8px] font-black uppercase px-1.5 py-0.5 rounded shadow-xs bg-amber-500 text-white flex items-center gap-1 shrink-0 cursor-pointer"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setIsTransferModalOpen(true);
+                                                            }}
+                                                            title={`Borrowed technician from another workshop to assist with backlog`}
+                                                        >
+                                                            <ArrowRightLeft size={8} />
+                                                            Borrowed
+                                                        </span>
+                                                    )}
+                                                    {isVirtual ? (
+                                                        <span className="text-[8px] font-black uppercase bg-purple-600 text-white px-1.5 py-0.5 rounded shadow-xs">Simulated</span>
+                                                    ) : (
+                                                        <span 
+                                                            className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded shrink-0 shadow-xs text-white"
+                                                            style={{ backgroundColor: engTheme.hex }}
+                                                        >
+                                                            Tech
+                                                        </span>
+                                                    )}
+                                                </div>
                                             </div>
                                         )}
                                         <span className="text-[10px] text-slate-500 font-semibold block mt-0.5">
@@ -823,6 +865,19 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                             await onSaveJob(job);
                         }
                     }}
+                />
+            )}
+
+            {/* Inter-Workshop Technician Transfer Modal */}
+            {isTransferModalOpen && onUpdateEngineerTransfer && (
+                <TechnicianTransferModal
+                    isOpen={isTransferModalOpen}
+                    onClose={() => setIsTransferModalOpen(false)}
+                    allEngineers={allEngineers.length > 0 ? allEngineers : engineers}
+                    currentEngineers={engineers}
+                    businessEntities={businessEntities}
+                    selectedEntityId={selectedEntityId}
+                    onUpdateEngineerTransfer={onUpdateEngineerTransfer}
                 />
             )}
         </div>
