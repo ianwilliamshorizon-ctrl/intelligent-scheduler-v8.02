@@ -186,8 +186,9 @@ export const ServiceAdvisorBookingBufferModal: React.FC<ServiceAdvisorBookingBuf
                 value: v.id,
                 label: `${v.registration || 'No Reg'} - ${v.make || ''} ${v.model || ''}`,
                 description: [
-                    v.derivative,
-                    v.color,
+                    v.type,
+                    v.colour,
+                    v.year ? `Year: ${v.year}` : null,
                     v.vin ? `VIN: ${v.vin}` : null,
                     ownerName ? `Owner: ${ownerName}` : null
                 ].filter(Boolean).join(' • ')
