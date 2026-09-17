@@ -1,6 +1,7 @@
 import { Job, JobSegment, Lift, Engineer, PurchaseOrder, Vehicle, FCSState, MaterialsStatus, FCSGanttBlock, FCSDependencyLink, FCSSimulationMetrics } from '../../types';
 import { TIME_SEGMENTS } from '../../constants';
 import { addDays, formatDate, getRelativeDate } from '../utils/dateUtils';
+import { isJobAllocated, isJobUnallocated } from '../utils/jobUtils';
 
 export interface FCSJobPlan {
     job: Job;
@@ -34,6 +35,7 @@ export interface FCSMatrixResult {
     activeJobPlans: FCSJobPlan[];
     queuedJobPlans: FCSJobPlan[];
     stalledJobPlans: FCSJobPlan[];
+    unallocatedJobPlans?: FCSJobPlan[];
 }
 
 /**
@@ -80,13 +82,13 @@ export function deriveFCSState(job: Job, materialsStatus: MaterialsStatus): FCSS
     }
 
     if (materialsStatus === 'Delivered') {
-        if (job.status === 'In Progress' || job.status === 'Allocated') {
+        if (job.status === 'In Progress' || job.status === 'Allocated' || job.status === 'Booked In' || (job.segments || []).some(s => s.status === 'Allocated')) {
             return 'ACTIVE';
         }
         return 'QUEUED';
     }
 
-    if (job.status === 'In Progress') return 'ACTIVE';
+    if (job.status === 'In Progress' || job.status === 'Allocated') return 'ACTIVE';
     return 'QUEUED';
 }
 
@@ -101,7 +103,9 @@ export function calculateFCSMatrix({
     vehicles = [],
     windowDays = 7,
     startDateStr = getRelativeDate(0),
-    simulateExtraEngineers = 0
+    simulateExtraEngineers = 0,
+    includeSuggestedAllocations = false,
+    suggestedAllocations = []
 }: {
     jobs: Job[];
     ramps: Lift[];
@@ -111,6 +115,14 @@ export function calculateFCSMatrix({
     windowDays?: number;
     startDateStr?: string;
     simulateExtraEngineers?: number;
+    includeSuggestedAllocations?: boolean;
+    suggestedAllocations?: {
+        jobId: string;
+        rampId: string;
+        engineerId: string;
+        date: string;
+        hours: number;
+    }[];
 }): FCSMatrixResult {
     const vehiclesMap = new Map<string, Vehicle>();
     vehicles.forEach(v => vehiclesMap.set(v.id, v));
@@ -171,40 +183,31 @@ export function calculateFCSMatrix({
             remainingHours,
             priority: job.priority || 3,
             isMovable: job.isMovable ?? false,
-            assignedRampId: assignedRamp?.id || effectiveRamps[0]?.id || null,
+            assignedRampId: assignedRamp?.id || (isJobAllocated(job) ? effectiveRamps[0]?.id : null),
             assignedEngineerId,
             scheduledStartDate: effectiveStartDate,
             scheduledEndDate: effectiveStartDate || addDaysToDateStr(startDateStr, Math.ceil(remainingHours / 8))
         };
     });
 
-    // 1. Separate into STALLED, ACTIVE, and QUEUED
-    const stalledPlans = jobPlans.filter(p => p.fcsState === 'STALLED');
-    const activePlans = jobPlans.filter(p => p.fcsState === 'ACTIVE');
-    const queuedPlans = jobPlans.filter(p => p.fcsState === 'QUEUED')
-        .sort((a, b) => (a.priority - b.priority) || (b.remainingHours - a.remainingHours));
+    // 1. Separate into Allocated (booked work) vs Unallocated plans
+    // Allocated jobs by default appear on the Gantt as booked work
+    // Unallocated jobs remain in queued plans and only appear if includeSuggestedAllocations is active
+    const allocatedPlans = jobPlans.filter(p => isJobAllocated(p.job));
+    const unallocatedPlans = jobPlans.filter(p => isJobUnallocated(p.job));
 
-    // DYNAMIC CASCADE:
+    const stalledPlans = allocatedPlans.filter(p => p.fcsState === 'STALLED');
+    const activePlans = allocatedPlans.filter(p => p.fcsState !== 'STALLED');
+    const queuedPlans = [...unallocatedPlans].sort((a, b) => (a.priority - b.priority) || (b.remainingHours - a.remainingHours));
+
+    // DYNAMIC CASCADE FOR COMMITTED WORK:
     // When stalled: The job's physical ramp is locked (unless movable), but its engineer is immediately released.
-    // Scan queued plans with Delivered materials and pull forward into any freed engineer + available ramp.
     const freedEngineerIds = new Set<string>();
     stalledPlans.forEach(sp => {
         if (sp.assignedEngineerId) {
             freedEngineerIds.add(sp.assignedEngineerId);
             // Release engineer from stalled job
             sp.assignedEngineerId = null;
-        }
-    });
-
-    // Match freed engineers to top priority queued jobs with Delivered parts
-    queuedPlans.forEach(qp => {
-        if (qp.materialsStatus === 'Delivered' && freedEngineerIds.size > 0) {
-            const availableEngId = Array.from(freedEngineerIds)[0];
-            freedEngineerIds.delete(availableEngId);
-            qp.assignedEngineerId = availableEngId;
-            qp.fcsState = 'ACTIVE';
-            qp.scheduledStartDate = startDateStr; // Pull forward to Right Now
-            activePlans.push(qp);
         }
     });
 
@@ -268,14 +271,14 @@ export function calculateFCSMatrix({
         const startPct = calculatePercentOffset(ap.scheduledStartDate, startDateStr, windowDays);
         const durationPct = calculatePercentDuration(ap.remainingHours, windowDays);
 
-        const engName = activeEngineers.find(e => e.id === engineerId || (e.name && engineerId && e.name.toLowerCase() === engineerId.toLowerCase()))?.name || 'Engineer';
+        const engName = effectiveEngineers.find(e => e.id === engineerId || (e.name && engineerId && e.name.toLowerCase() === engineerId.toLowerCase()))?.name || 'Engineer';
 
         const rampBlock: FCSGanttBlock = {
             id: rampBlockId,
             jobId: ap.job.id,
             resourceType: 'ramp',
             resourceId: rampId,
-            resourceName: ramps.find(r => r.id === rampId)?.name || 'Ramp',
+            resourceName: effectiveRamps.find(r => r.id === rampId)?.name || 'Ramp',
             engineerId,
             engineerName: engName,
             title: ap.job.description || 'Active Job',
@@ -336,86 +339,92 @@ export function calculateFCSMatrix({
         });
     });
 
-    // Place Remaining QUEUED jobs sequentially onto the earliest available slots
-    let rollingOffsetHours = activeWrenchHours / Math.max(1, effectiveEngineers.length);
-    queuedPlans.filter(qp => qp.fcsState === 'QUEUED').forEach((qp, idx) => {
-        const rampId = effectiveRamps[idx % effectiveRamps.length]?.id;
-        const engineerId = effectiveEngineers[idx % effectiveEngineers.length]?.id;
-        if (!rampId || !engineerId) return;
+    // 2. SUGGESTED WORK ALLOCATIONS (For Unallocated Jobs):
+    // By default: Allocated jobs appear on the Gantt as booked work.
+    // Unallocated jobs do NOT appear on the Gantt timeline rows unless includeSuggestedAllocations is explicitly true.
+    if (includeSuggestedAllocations && queuedPlans.length > 0) {
+        queuedPlans.forEach((qp, idx) => {
+            const suggested = suggestedAllocations?.find(s => s.jobId === qp.job.id);
+            const rampId = suggested?.rampId || effectiveRamps[idx % effectiveRamps.length]?.id;
+            const engineerId = suggested?.engineerId || effectiveEngineers[idx % effectiveEngineers.length]?.id;
+            const scheduledDate = suggested?.date || qp.scheduledStartDate;
+            const hours = suggested?.hours || qp.remainingHours;
+            if (!rampId || !engineerId) return;
 
-        const estimatedStartDays = Math.floor(rollingOffsetHours / 8);
-        const queuedStartDate = addDaysToDateStr(startDateStr, estimatedStartDays);
-        rollingOffsetHours += qp.remainingHours;
-        const isSim = engineerId.startsWith('sim_');
-        const queuedEngName = effectiveEngineers.find(e => e.id === engineerId || (e.name && engineerId && e.name.toLowerCase() === engineerId.toLowerCase()))?.name || 'Engineer';
+            const isSim = engineerId.startsWith('sim_');
+            const engName = effectiveEngineers.find(e => e.id === engineerId || (e.name && engineerId && e.name.toLowerCase() === engineerId.toLowerCase()))?.name || 'Engineer';
+            const rampName = effectiveRamps.find(r => r.id === rampId)?.name || 'Ramp';
 
-        const rampBlockId = `ramp_block_queued_${qp.job.id}`;
-        const engBlockId = `eng_block_queued_${qp.job.id}`;
+            const rampBlockId = `ramp_block_suggested_${qp.job.id}`;
+            const engBlockId = `eng_block_suggested_${qp.job.id}`;
 
-        const startPct = calculatePercentOffset(queuedStartDate, startDateStr, windowDays);
-        const durationPct = calculatePercentDuration(qp.remainingHours, windowDays);
+            const startPct = calculatePercentOffset(scheduledDate, startDateStr, windowDays);
+            const durationPct = calculatePercentDuration(hours, windowDays);
 
-        const rampBlock: FCSGanttBlock = {
-            id: rampBlockId,
-            jobId: qp.job.id,
-            resourceType: 'ramp',
-            resourceId: rampId,
-            resourceName: effectiveRamps.find(r => r.id === rampId)?.name || 'Ramp',
-            engineerId,
-            engineerName: queuedEngName,
-            title: qp.job.description || 'Queued Job',
-            vehicleRegistration: qp.vehicle?.registration,
-            fcsState: 'QUEUED',
-            startDate: queuedStartDate,
-            startTime: '08:30',
-            endDate: addDaysToDateStr(queuedStartDate, Math.max(1, Math.ceil(qp.remainingHours / 8))),
-            endTime: '17:30',
-            startPercent: startPct,
-            durationPercent: durationPct,
-            hours: qp.remainingHours,
-            isDeadWeight: false,
-            isSimulated: isSim,
-            linkedBlockId: engBlockId
-        };
+            const rampBlock: FCSGanttBlock = {
+                id: rampBlockId,
+                jobId: qp.job.id,
+                resourceType: 'ramp',
+                resourceId: rampId,
+                resourceName: rampName,
+                engineerId,
+                engineerName: engName,
+                title: qp.job.description || 'Suggested Work Allocation',
+                vehicleRegistration: qp.vehicle?.registration,
+                fcsState: 'SUGGESTED',
+                startDate: scheduledDate,
+                startTime: '08:30',
+                endDate: addDaysToDateStr(scheduledDate, Math.max(1, Math.ceil(hours / 8))),
+                endTime: '17:30',
+                startPercent: startPct,
+                durationPercent: durationPct,
+                hours,
+                isDeadWeight: false,
+                isSimulated: isSim,
+                isSuggested: true,
+                linkedBlockId: engBlockId
+            };
 
-        const engBlock: FCSGanttBlock = {
-            id: engBlockId,
-            jobId: qp.job.id,
-            resourceType: 'engineer',
-            resourceId: engineerId,
-            resourceName: queuedEngName,
-            engineerId,
-            engineerName: queuedEngName,
-            title: qp.job.description || 'Queued Wrench Time',
-            vehicleRegistration: qp.vehicle?.registration,
-            fcsState: 'QUEUED',
-            startDate: queuedStartDate,
-            startTime: '08:30',
-            endDate: addDaysToDateStr(queuedStartDate, Math.max(1, Math.ceil(qp.remainingHours / 8))),
-            endTime: '17:30',
-            startPercent: startPct,
-            durationPercent: durationPct,
-            hours: qp.remainingHours,
-            isDeadWeight: false,
-            isSimulated: isSim,
-            linkedBlockId: rampBlockId
-        };
+            const engBlock: FCSGanttBlock = {
+                id: engBlockId,
+                jobId: qp.job.id,
+                resourceType: 'engineer',
+                resourceId: engineerId,
+                resourceName: engName,
+                engineerId,
+                engineerName: engName,
+                title: qp.job.description || 'Suggested Wrench Time',
+                vehicleRegistration: qp.vehicle?.registration,
+                fcsState: 'SUGGESTED',
+                startDate: scheduledDate,
+                startTime: '08:30',
+                endDate: addDaysToDateStr(scheduledDate, Math.max(1, Math.ceil(hours / 8))),
+                endTime: '17:30',
+                startPercent: startPct,
+                durationPercent: durationPct,
+                hours,
+                isDeadWeight: false,
+                isSimulated: isSim,
+                isSuggested: true,
+                linkedBlockId: rampBlockId
+            };
 
-        qp.rampBlock = rampBlock;
-        qp.engineerBlock = engBlock;
+            qp.rampBlock = rampBlock;
+            qp.engineerBlock = engBlock;
 
-        rampBlocksMap.get(rampId)?.push(rampBlock);
-        engineerBlocksMap.get(engineerId)?.push(engBlock);
+            rampBlocksMap.get(rampId)?.push(rampBlock);
+            engineerBlocksMap.get(engineerId)?.push(engBlock);
 
-        dependencyLinks.push({
-            id: `link_${qp.job.id}`,
-            jobId: qp.job.id,
-            rampBlockId,
-            engineerBlockId: engBlockId,
-            engineerId,
-            fcsState: 'QUEUED'
+            dependencyLinks.push({
+                id: `link_suggested_${qp.job.id}`,
+                jobId: qp.job.id,
+                rampBlockId,
+                engineerBlockId: engBlockId,
+                engineerId,
+                fcsState: 'SUGGESTED'
+            });
         });
-    });
+    }
 
     // Compute metrics
     const totalBacklogHours = jobPlans.reduce((acc, p) => acc + p.remainingHours, 0);
@@ -464,7 +473,8 @@ export function calculateFCSMatrix({
         },
         activeJobPlans: activePlans,
         queuedJobPlans: queuedPlans,
-        stalledJobPlans: stalledPlans
+        stalledJobPlans: stalledPlans,
+        unallocatedJobPlans: unallocatedPlans
     };
 }
 

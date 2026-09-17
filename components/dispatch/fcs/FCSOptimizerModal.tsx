@@ -25,6 +25,7 @@ export interface FCSOptimizerModalProps {
     onApplyOptimizedPlan: (updatedJobs: Job[], convertedEstimates?: Estimate[], updatedPurchaseOrders?: PurchaseOrder[]) => Promise<void> | void;
     onSaveEstimate?: (est: Partial<Estimate>) => Promise<void> | void;
     onSavePurchaseOrder?: (po: Partial<PurchaseOrder>) => Promise<void> | void;
+    onPreviewOnGantt?: (plan: OptimizedAssignment[]) => void;
 }
 
 export interface OptimizedAssignment {
@@ -70,7 +71,8 @@ export const FCSOptimizerModal: React.FC<FCSOptimizerModalProps> = ({
     startDateStr = getRelativeDate(0),
     onApplyOptimizedPlan,
     onSaveEstimate,
-    onSavePurchaseOrder
+    onSavePurchaseOrder,
+    onPreviewOnGantt
 }) => {
     const [activeTab, setActiveTab] = useState<'packing' | 'allocations' | 'estimates' | 'parts'>('packing');
     const [isApplying, setIsApplying] = useState(false);
@@ -484,7 +486,7 @@ export const FCSOptimizerModal: React.FC<FCSOptimizerModalProps> = ({
                 return {
                     ...item.job,
                     scheduledDate: item.scheduledDate,
-                    status: 'Booked In',
+                    status: 'Allocated',
                     fcsState: item.partsLeadDays > 0 ? 'STALLED' : 'ACTIVE',
                     materialsStatus: item.partsLeadDays > 0 ? 'Ordered' : 'Delivered',
                     segments: item.job.segments && item.job.segments.length > 0
@@ -509,7 +511,7 @@ export const FCSOptimizerModal: React.FC<FCSOptimizerModalProps> = ({
                                 scheduledStartSegment: 1
                             }
                         ],
-                    notes: (item.job.notes ? `${item.job.notes}\n` : '') + `[FCS Auto-Optimizer]: Scheduled for ${item.scheduledDate} on ${assignedRampName} (${engineers.find(e => e.id === item.recommendedEngineerId)?.name || 'Tech'}).`
+                    notes: (item.job.notes ? `${item.job.notes}\n` : '') + `[FCS Auto-Optimizer]: Agreed and allocated to ${assignedRampName} (${engineers.find(e => e.id === item.recommendedEngineerId)?.name || 'Tech'}) for ${item.scheduledDate}.`
                 };
             });
 
@@ -528,7 +530,7 @@ export const FCSOptimizerModal: React.FC<FCSOptimizerModalProps> = ({
                         vehicleId: sim.job.vehicleId,
                         customerId: sim.job.customerId,
                         scheduledDate: sim.scheduledDate,
-                        status: 'Booked In',
+                        status: 'Allocated',
                         estimatedHours: sim.hours,
                         estimateId: sim.estimateId,
                         segments: [
@@ -615,7 +617,7 @@ export const FCSOptimizerModal: React.FC<FCSOptimizerModalProps> = ({
                     </h2>
 
                     <p className="text-indigo-200 text-xs mt-1 max-w-3xl leading-relaxed">
-                        Balances booked commitments, unallocated queue jobs, parts delivery timelines, and estimate pipeline simulations into a high-efficiency day-by-day workshop plan.
+                        Committed booked work is locked into the foundation first. Any unallocated jobs are optimized as suggested work allocations to balance technician wrench time and pack ramps. Review the plan and agree to allocate the work.
                     </p>
 
                     {/* Quick Stats Grid */}
@@ -625,7 +627,7 @@ export const FCSOptimizerModal: React.FC<FCSOptimizerModalProps> = ({
                             <span className="text-base font-black text-white">{bookedJobs.length} Jobs</span>
                         </div>
                         <div className="bg-white/10 backdrop-blur-md rounded-2xl p-2.5 border border-white/15 text-center">
-                            <span className="text-[9px] uppercase font-black text-indigo-200 block">Queue to Allocate</span>
+                            <span className="text-[9px] uppercase font-black text-indigo-200 block">Unallocated to Allocate</span>
                             <span className="text-base font-black text-white">{unallocatedJobs.length} Jobs</span>
                         </div>
                         <div className="bg-white/10 backdrop-blur-md rounded-2xl p-2.5 border border-white/15 text-center">
@@ -665,7 +667,7 @@ export const FCSOptimizerModal: React.FC<FCSOptimizerModalProps> = ({
                             }`}
                         >
                             <Layers size={13} />
-                            <span>Allocations Table ({optimizedPlan.length})</span>
+                            <span>Suggested Allocations ({optimizedPlan.length})</span>
                         </button>
 
                         <button
@@ -874,9 +876,9 @@ export const FCSOptimizerModal: React.FC<FCSOptimizerModalProps> = ({
                                                                     <span className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase ${
                                                                         opt.isEstimateSimulation
                                                                             ? 'bg-amber-200 text-amber-900'
-                                                                            : 'bg-emerald-200 text-emerald-900'
+                                                                            : 'bg-purple-200 text-purple-900'
                                                                     }`}>
-                                                                        {opt.isEstimateSimulation ? 'Estimate Pipeline Simulation' : 'Auto-Optimized'}
+                                                                        {opt.isEstimateSimulation ? 'Estimate Pipeline Simulation' : 'Suggested Work Allocation'}
                                                                     </span>
                                                                     <span className="font-mono font-bold text-slate-900">
                                                                         {opt.vehicle?.registration || opt.job.jobNumber || opt.job.id.substring(0, 8)}
@@ -908,7 +910,7 @@ export const FCSOptimizerModal: React.FC<FCSOptimizerModalProps> = ({
                             <div className="flex items-center justify-between">
                                 <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
                                     <Layers size={14} className="text-indigo-600" />
-                                    <span>Proposed Job Allocations ({optimizedPlan.length})</span>
+                                    <span>Suggested Work Allocations ({optimizedPlan.length})</span>
                                 </h3>
                                 <span className="text-[11px] text-indigo-700 font-bold bg-indigo-50 px-2.5 py-1 rounded-full border border-indigo-200">
                                     💡 You can manually override the assigned technician, ramp, or scheduled date
@@ -918,7 +920,7 @@ export const FCSOptimizerModal: React.FC<FCSOptimizerModalProps> = ({
                             {optimizedPlan.length === 0 ? (
                                 <div className="p-8 text-center bg-white rounded-2xl border border-slate-200 text-slate-500">
                                     <CheckCircle size={32} className="mx-auto text-emerald-500 mb-2" />
-                                    <p className="text-sm font-bold text-slate-700">No jobs in queue to allocate!</p>
+                                    <p className="text-sm font-bold text-slate-700">No unallocated jobs to optimize!</p>
                                     <p className="text-xs text-slate-400 mt-1">All workshop jobs are already fully booked or select estimates from the pipeline simulator.</p>
                                 </div>
                             ) : (
@@ -953,8 +955,8 @@ export const FCSOptimizerModal: React.FC<FCSOptimizerModalProps> = ({
                                                                         Estimate Sim
                                                                     </span>
                                                                 ) : (
-                                                                    <span className="bg-emerald-100 text-emerald-800 border border-emerald-200 font-black text-[9px] px-2 py-0.5 rounded-full uppercase tracking-wider whitespace-nowrap">
-                                                                        Queue Job
+                                                                    <span className="bg-purple-100 text-purple-800 border border-purple-200 font-black text-[9px] px-2 py-0.5 rounded-full uppercase tracking-wider whitespace-nowrap">
+                                                                        Unallocated
                                                                     </span>
                                                                 )}
                                                             </td>
@@ -1293,7 +1295,7 @@ export const FCSOptimizerModal: React.FC<FCSOptimizerModalProps> = ({
                         Cancel
                     </button>
 
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2.5">
                         <button
                             type="button"
                             onClick={() => setOverrides({})}
@@ -1303,21 +1305,37 @@ export const FCSOptimizerModal: React.FC<FCSOptimizerModalProps> = ({
                             Reset Overrides
                         </button>
 
+                        {onPreviewOnGantt && (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    onPreviewOnGantt(optimizedPlan);
+                                    onClose();
+                                }}
+                                disabled={optimizedPlan.length === 0}
+                                className="px-4 py-2.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-300 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-40 shadow-xs"
+                                title="Preview suggested allocations on the Gantt timeline before agreeing"
+                            >
+                                <Sparkles size={14} className="text-purple-600" />
+                                <span>Preview on Gantt</span>
+                            </button>
+                        )}
+
                         <button
                             type="button"
                             onClick={handleApplyPlan}
                             disabled={optimizedPlan.length === 0 || isApplying}
-                            className="px-6 py-2.5 bg-gradient-to-r from-indigo-600 via-indigo-500 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md hover:shadow-lg transition-all active:scale-95 flex items-center gap-2 disabled:opacity-50 cursor-pointer"
+                            className="px-6 py-2.5 bg-gradient-to-r from-emerald-600 via-emerald-500 to-indigo-600 hover:from-emerald-500 hover:to-indigo-500 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md hover:shadow-lg transition-all active:scale-95 flex items-center gap-2 disabled:opacity-50 cursor-pointer"
                         >
                             {isApplying ? (
                                 <>
                                     <RefreshCw size={14} className="animate-spin" />
-                                    <span>Applying Plan...</span>
+                                    <span>Allocating Work...</span>
                                 </>
                             ) : (
                                 <>
-                                    <Sparkles size={14} className="text-amber-300" />
-                                    <span>Commit & Apply Optimized Plan</span>
+                                    <CheckCircle size={15} className="text-emerald-200" />
+                                    <span>Agree & Allocate Work as Suggested ({optimizedPlan.length})</span>
                                     <ChevronRight size={16} />
                                 </>
                             )}

@@ -225,7 +225,7 @@ export interface Job {
     inspectionFindings?: InspectionFinding[];
     
     // Finite Capacity Scheduling (FCS) Engine Fields
-    fcsState?: 'ACTIVE' | 'STALLED' | 'QUEUED';
+    fcsState?: 'ACTIVE' | 'STALLED' | 'QUEUED' | 'SUGGESTED';
     materialsStatus?: 'Not Ordered' | 'Ordered' | 'Delivered';
     isMovable?: boolean; // If false, locks physical ramp space continuously when stalled
     priority?: number; // 1 (Highest/Urgent) to 5 (Lowest)
@@ -234,7 +234,7 @@ export interface Job {
     expectedDeliveryDate?: string; // Optional expected delivery date for purchases/parts (YYYY-MM-DD)
 }
 
-export type FCSState = 'ACTIVE' | 'STALLED' | 'QUEUED';
+export type FCSState = 'ACTIVE' | 'STALLED' | 'QUEUED' | 'SUGGESTED';
 export type MaterialsStatus = 'Not Ordered' | 'Ordered' | 'Delivered';
 
 export interface FCSGanttBlock {
@@ -258,6 +258,7 @@ export interface FCSGanttBlock {
     hours: number;
     isDeadWeight?: boolean; // If STALLED on a ramp
     isSimulated?: boolean; // If from +1 engineer simulation
+    isSuggested?: boolean; // If from suggested work allocation for unallocated jobs
     linkedBlockId?: string; // Links Ramp block to Engineer block
 }
 

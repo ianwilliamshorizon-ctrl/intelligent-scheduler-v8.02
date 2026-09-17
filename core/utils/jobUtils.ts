@@ -130,3 +130,44 @@ export const applyStorageRateToJob = (job: Job, location: StorageLocation): Job 
     updatedJob.lineItems = lineItems;
     return updatedJob;
 };
+
+/**
+ * Determines whether a job is considered allocated and ready to appear as booked work on the Gantt.
+ * An allocated job has status Allocated, Booked In, In Progress, or active segments with an assigned technician/ramp.
+ */
+export const isJobAllocated = (job: Job): boolean => {
+    if (!job) return false;
+    if (['Cancelled', 'Complete', 'Invoiced', 'Closed', 'Archived'].includes(job.status)) return false;
+    if (job.status === 'Unallocated') return false;
+
+    const segments = job.segments || [];
+    if (segments.length > 0) {
+        // Any segment that is allocated, in progress, waiting, paused, or engineer complete
+        const hasAllocatedSegment = segments.some(s => 
+            s.status === 'Allocated' || 
+            s.status === 'In Progress' || 
+            s.status === 'Waiting' || 
+            s.status === 'Paused' || 
+            s.status === 'Engineer Complete' ||
+            s.status === 'QC Complete'
+        );
+        if (hasAllocatedSegment) return true;
+
+        // If any segment has an allocated lift or engineer explicitly assigned
+        if (segments.some(s => s.allocatedLift || s.engineerId)) {
+            return true;
+        }
+    }
+
+    // Explicit allocated / booked in status with a scheduled date
+    return job.status === 'Allocated' || (job.status === 'Booked In' && !!job.scheduledDate) || job.status === 'In Progress';
+};
+
+/**
+ * Determines whether a job is unallocated and eligible for suggested work optimization.
+ */
+export const isJobUnallocated = (job: Job): boolean => {
+    if (!job) return false;
+    if (['Cancelled', 'Complete', 'Invoiced', 'Closed', 'Archived'].includes(job.status)) return false;
+    return !isJobAllocated(job);
+};
