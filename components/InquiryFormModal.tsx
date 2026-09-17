@@ -501,7 +501,7 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
         }
 
         setFormData(p => {
-            const val = name === 'vehicleRegistration' ? value.toUpperCase() : value;
+            const val = (name === 'vehicleRegistration' || name === 'postcode') ? value.toUpperCase() : value;
             const nextData = { ...p, [name]: val };
 
             if (name === 'subject') {
@@ -895,7 +895,9 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
     const linkedCustomer = customers.find(c => c.id === formData.linkedCustomerId);
     const customerVehicles = formData.linkedCustomerId ? vehicles.filter(v => v.customerId === formData.linkedCustomerId) : [];
     const linkedVehicle = vehicles.find(v => v.id === formData.linkedVehicleId);
-    const linkedEstimate = formData.linkedEstimateId ? estimates.find(e => e.id === formData.linkedEstimateId) : null;
+    const linkedEstimate = (formData.linkedEstimateId ? estimates.find(e => e.id === formData.linkedEstimateId) : null) 
+        || (inquiry?.id ? estimates.find(e => e.linkedInquiryId === inquiry.id) : null) 
+        || null;
 
     return (
         <FormModal
@@ -1655,7 +1657,7 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                                         title="Lookup address by UK postcode"
                                                     >
                                                         {isLookingUpAddress ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
-                                                        <span>Lookup</span>
+                                                        <span>LOOKUP</span>
                                                     </button>
                                                 </div>
                                             </div>

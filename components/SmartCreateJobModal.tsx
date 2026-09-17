@@ -822,7 +822,8 @@ User Request: ${JSON.stringify(userText)}`;
                 lineItems: lineItems.map(li => ({ ...li, isCourtesyCar: isStandaloneMOT })),
                 notes: notes,
                 createdByUserId: currentUser.id,
-                jobId: isEstimateMode ? undefined : 'pending_creation' // Will be updated below
+                jobId: isEstimateMode ? undefined : 'pending_creation', // Will be updated below
+                linkedInquiryId: inquiryId || undefined,
             };
 
             if (isEstimateMode) {
@@ -920,7 +921,8 @@ User Request: ${JSON.stringify(userText)}`;
                 status: isEstimateMode ? 'Draft' : 'Converted to Job',
                 lineItems: lineItems.map(li => ({ ...li, isCourtesyCar: isStandaloneMOT })),
                 notes: notes,
-                createdByUserId: currentUser.id
+                createdByUserId: currentUser.id,
+                linkedInquiryId: inquiryId || undefined,
             };
 
             if (isEstimateMode) {

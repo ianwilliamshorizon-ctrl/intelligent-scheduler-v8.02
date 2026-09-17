@@ -2,7 +2,7 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import { useData } from '../../../core/state/DataContext';
 import { EstimateLineItem, TaxRate, Part, PurchaseOrder, ServicePackage, Estimate, Vehicle, Supplier, Customer } from '../../../types';
-import { Trash2, PlusCircle, FileText, Clock, ChevronDown, ChevronUp, Plus, Image as ImageIcon, Search, ShoppingCart, Edit, Wand2, Info, Loader2 } from 'lucide-react';
+import { Trash2, PlusCircle, FileText, Clock, ChevronDown, ChevronUp, Plus, Image as ImageIcon, Search, ShoppingCart, Edit, Wand2, Info, Loader2, Package } from 'lucide-react';
 import { formatCurrency } from '../../../core/utils/formatUtils';
 import SearchableSelect from '../../SearchableSelect';
 import { getScoredServicePackages } from '../../../utils/servicePackageScoring';
@@ -10,6 +10,7 @@ import SupplierSelectionModal from '../../SupplierSelectionModal';
 import FormModal from '../../FormModal';
 import { calculatePackagePrices } from '../../../core/utils/packageUtils';
 import { HoverInfo } from '../../shared/HoverInfo';
+import { ServicePackageSelectionModal } from '../../ServicePackageSelectionModal';
 
 const PartsStatusBadge: React.FC<{ status: string }> = ({ status }) => {
     const statusStyles: { [key: string]: string } = {
@@ -384,6 +385,7 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
     const [isSupplierSelectionOpen, setIsSupplierSelectionOpen] = useState(false);
     const [lineItemForSupplier, setLineItemForSupplier] = useState<string | null>(null);
     const [selectedPackage, setSelectedPackage] = useState<ServicePackage | null>(null);
+    const [isPackageSelectionModalOpen, setIsPackageSelectionModalOpen] = useState(false);
     const [showAllEntities, setShowAllEntities] = useState(false);
 
     const { businessEntities } = useData();
@@ -771,22 +773,14 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
                                         <button onClick={onCreatePackage} className="flex items-center text-xs py-1 px-2 bg-teal-100 text-teal-700 rounded-md hover:bg-teal-200"><Wand2 size={14} className="mr-1" /> Create Package</button>
                                     </div>
                                     <div className="flex items-center gap-2">
-                                        <SearchableSelect
-                                            options={sortedPackages}
-                                            onSelect={(packageId) => { if (packageId) handlePackageSelect(packageId); }}
-                                            placeholder="Add Existing Package..."
-                                            dropdownClassName="min-w-[450px] right-0"
-                                            onSearchChange={setPackageSearchTerm}
-                                        />
-                                        <label className="flex items-center gap-1.5 whitespace-nowrap text-[10px] text-gray-500 cursor-pointer select-none">
-                                            <input 
-                                                type="checkbox" 
-                                                checked={showAllEntities} 
-                                                onChange={(e) => setShowAllEntities(e.target.checked)}
-                                                className="w-3 h-3 rounded text-indigo-600 focus:ring-indigo-500 border-gray-300"
-                                            />
-                                            Show All Branches
-                                        </label>
+                                        <button 
+                                            type="button"
+                                            onClick={() => setIsPackageSelectionModalOpen(true)} 
+                                            className="flex items-center text-xs py-1 px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold shadow-xs transition cursor-pointer"
+                                            title="Open service packages modal"
+                                        >
+                                            <Package size={14} className="mr-1.5" /> Add Service Package
+                                        </button>
                                     </div>
                                 </div>
                             )}
@@ -831,31 +825,20 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
                 )}
             </div>
 
-            {selectedPackage && (
-                <FormModal
-                    isOpen={!!selectedPackage}
-                    onClose={() => setSelectedPackage(null)}
-                    onSave={confirmAddPackage}
-                    title="Confirm Add Package"
-                    saveText="Confirm & Add"
-                    maxWidth="max-w-lg"
-                >
-                    <div className="space-y-4 p-2">
-                        <h3 className="text-lg font-bold">{selectedPackage.name}</h3>
-                        <p className="text-sm text-gray-600">{selectedPackage.description}</p>
-                        <div className="grid grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg border">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-500">Package Gross Price</label>
-                                <p className="text-2xl font-bold">{formatCurrency(selectedPackage.totalPrice || 0)}</p>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-500">Package Net Price</label>
-                                <p className="text-2xl font-bold">{formatCurrency(calculatePackagePrices(selectedPackage, taxRates).net)}</p>
-                            </div>
-                        </div>
-                    </div>
-                </FormModal>
-            )}
+            <ServicePackageSelectionModal
+                isOpen={isPackageSelectionModalOpen}
+                onClose={() => setIsPackageSelectionModalOpen(false)}
+                servicePackages={servicePackages}
+                vehicle={vehicle}
+                narrative={editableEstimate?.notes || ''}
+                taxRates={taxRates}
+                onSelectPackages={(selectedPkgs) => {
+                    selectedPkgs.forEach(pkg => {
+                        const { net, vat } = calculatePackagePrices(pkg, taxRates);
+                        onAddPackage(pkg, net, vat);
+                    });
+                }}
+            />
         </>
     );
 };

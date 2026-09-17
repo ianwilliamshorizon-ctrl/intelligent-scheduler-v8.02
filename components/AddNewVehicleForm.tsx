@@ -192,7 +192,8 @@ const AddNewVehicleForm: React.FC<AddNewVehicleFormProps> = ({
         if (type === 'checkbox') {
              setCustomerData(prev => ({ ...prev, [name]: (e.target as HTMLInputElement).checked }));
         } else {
-            setCustomerData(prev => ({ ...prev, [name]: value }));
+            const val = name === 'postcode' ? value.toUpperCase() : value;
+            setCustomerData(prev => ({ ...prev, [name]: val }));
         }
     };
 
@@ -807,7 +808,7 @@ const AddNewVehicleForm: React.FC<AddNewVehicleFormProps> = ({
                     <div className="relative">
                         <label className="block text-sm font-medium text-gray-700 mb-1">Postcode</label>
                         <div className="relative">
-                            <input name="postcode" value={customerData.postcode} onChange={handleCustomerChange} className="w-full p-2 border border-gray-300 rounded-lg pr-10"/>
+                            <input name="postcode" value={customerData.postcode} onChange={handleCustomerChange} className="w-full p-2 border border-gray-300 rounded-lg pr-10 uppercase font-bold tracking-wider" placeholder="e.g. SW1A 0AA"/>
                             <button
                                 type="button"
                                 onClick={handleAddressLookup}

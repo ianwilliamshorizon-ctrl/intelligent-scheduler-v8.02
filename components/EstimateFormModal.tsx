@@ -1243,7 +1243,15 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                                             defaultValue={formData.vehicleId}
                                             placeholder="Search registration or make..."
                                         />
-                                        <button type="button" onClick={() => handleOpenLookup('vehicle')} className="p-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 flex-shrink-0"><Plus size={20} /></button>
+                                        <button 
+                                            type="button" 
+                                            onClick={() => handleOpenLookup('vehicle')} 
+                                            className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-xs flex items-center gap-1 flex-shrink-0 shadow-xs cursor-pointer"
+                                            title="Add New Vehicle via DVLA Registration Lookup"
+                                        >
+                                            <Car size={14} />
+                                            <span>+ REG / DVLA</span>
+                                        </button>
                                     </div>
                                     {linkedVehicles.length > 0 && (
                                         <div className="p-2 bg-blue-50 border border-blue-100 rounded">
@@ -1424,32 +1432,16 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                                       )}
                                    </div>
                                  <div className="flex items-center gap-2">
-                                     <button
-                                         type="button"
-                                         onClick={() => setIsPackageSelectionModalOpen(true)}
-                                         className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-bold flex items-center gap-1.5 border border-indigo-200 shadow-sm transition whitespace-nowrap"
-                                         title="Open selectable modal to pick and match service packages"
-                                     >
-                                         <Package size={14} />
-                                         Pick Packages
-                                     </button>
-                                     <SearchableSelect 
-                                         options={sortedPackages}
-                                         onSelect={handlePackageSelect}
-                                         placeholder="Search & Add Package..." 
-                                         dropdownClassName="min-w-[450px] right-0" 
-                                         onSearchChange={setPackageSearchTerm}
-                                     />
-                                     <label className="flex items-center gap-1.5 whitespace-nowrap text-[10px] text-gray-500 cursor-pointer select-none">
-                                        <input 
-                                            type="checkbox" 
-                                            checked={showAllEntities} 
-                                            onChange={(e) => setShowAllEntities(e.target.checked)}
-                                            className="w-3 h-3 rounded text-indigo-600 focus:ring-indigo-500 border-gray-300"
-                                        />
-                                        Show All
-                                     </label>
-                                 </div>
+                                      <button
+                                          type="button"
+                                          onClick={() => setIsPackageSelectionModalOpen(true)}
+                                          className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm transition whitespace-nowrap cursor-pointer"
+                                          title="Open selectable modal to pick and match service packages"
+                                      >
+                                          <Package size={14} />
+                                          Add Service Package
+                                      </button>
+                                  </div>
                             </div>
                         </div>
                     </Section>
@@ -1489,32 +1481,7 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                 </div>
             </div>
 
-            {selectedPackage && (
-                <FormModal
-                    isOpen={!!selectedPackage}
-                    onClose={() => setSelectedPackage(null)}
-                    onSave={confirmAddPackage}
-                    title="Confirm Add Package"
-                    saveText="Confirm & Add"
-                    maxWidth="max-w-lg"
-                    zIndex="z-[80]"
-                >
-                    <div className="space-y-4 p-2">
-                        <h3 className="text-lg font-bold">{selectedPackage.name}</h3>
-                        <p className="text-sm text-gray-600">{selectedPackage.description}</p>
-                        <div className="grid grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg border">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-500">Package Gross Price</label>
-                                <p className="text-2xl font-bold">{formatCurrency(selectedPackage.totalPrice || 0)}</p>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-500">Package Net Price</label>
-                                <p className="text-2xl font-bold">{formatCurrency(calculatePackagePrices(selectedPackage, taxRates).net)}</p>
-                            </div>
-                        </div>
-                    </div>
-                </FormModal>
-            )}
+
 
             <LiveAssistant 
                 isOpen={isAssistantOpen} 
@@ -1637,7 +1604,7 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                 taxRates={taxRates}
                 onSelectPackages={(selectedPkgs) => {
                     selectedPkgs.forEach(pkg => {
-                        handlePackageSelect(pkg.id);
+                        addPackage(pkg);
                     });
                 }}
             />

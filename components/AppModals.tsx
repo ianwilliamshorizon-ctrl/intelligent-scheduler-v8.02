@@ -554,12 +554,13 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                             setters.setIsSmartCreateOpen(false); 
                         }}
                         onEstimateCreate={async (estData) => { 
-                            const estWithInquiry = { ...estData, linkedInquiryId: modals.smartCreateInquiryId || estData.linkedInquiryId };
+                            const targetInquiryId = modals.smartCreateInquiryId || estData.linkedInquiryId;
+                            const estWithInquiry = { ...estData, linkedInquiryId: targetInquiryId || estData.linkedInquiryId };
                             await handleSaveItem(data.setEstimates, estWithInquiry, 'brooks_estimates'); 
                             if (estWithInquiry.jobId) await workshopActions.syncPurchaseOrdersFromEstimate(estWithInquiry, { forceNew: true });
                             
-                            if (modals.smartCreateInquiryId) {
-                                const inq = data.inquiries.find(i => i.id === modals.smartCreateInquiryId);
+                            if (targetInquiryId) {
+                                const inq = data.inquiries.find(i => i.id === targetInquiryId);
                                 if (inq) await handleSaveItem(data.setInquiries, { ...inq, status: 'Quoted or Responded', linkedEstimateId: estWithInquiry.id }, 'brooks_inquiries');
                                 setters.setSmartCreateInquiryId(null);
                             }
@@ -568,12 +569,13 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                         onVehicleAndEstimateCreate={async (c, v, e) => { 
                             await handleSaveItem(actions.setCustomers, c, 'brooks_customers'); 
                             await handleSaveItem(actions.setVehicles, v, 'brooks_vehicles'); 
-                            const estWithInquiry = { ...e, linkedInquiryId: modals.smartCreateInquiryId || e.linkedInquiryId };
+                            const targetInquiryId = modals.smartCreateInquiryId || e.linkedInquiryId;
+                            const estWithInquiry = { ...e, linkedInquiryId: targetInquiryId || e.linkedInquiryId };
                             await handleSaveItem(data.setEstimates, estWithInquiry, 'brooks_estimates'); 
                             if (estWithInquiry.jobId) await workshopActions.syncPurchaseOrdersFromEstimate(estWithInquiry, { forceNew: true });
 
-                            if (modals.smartCreateInquiryId) {
-                                const inq = data.inquiries.find(i => i.id === modals.smartCreateInquiryId);
+                            if (targetInquiryId) {
+                                const inq = data.inquiries.find(i => i.id === targetInquiryId);
                                 if (inq) await handleSaveItem(data.setInquiries, { 
                                     ...inq, 
                                     status: 'Quoted or Responded', 
@@ -587,12 +589,13 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                         }}
                         onCustomerAndEstimateCreate={async (c, e) => { 
                             await handleSaveItem(actions.setCustomers, c, 'brooks_customers'); 
-                            const estWithInquiry = { ...e, linkedInquiryId: modals.smartCreateInquiryId || e.linkedInquiryId };
+                            const targetInquiryId = modals.smartCreateInquiryId || e.linkedInquiryId;
+                            const estWithInquiry = { ...e, linkedInquiryId: targetInquiryId || e.linkedInquiryId };
                             await handleSaveItem(data.setEstimates, estWithInquiry, 'brooks_estimates'); 
                             if (estWithInquiry.jobId) await workshopActions.syncPurchaseOrdersFromEstimate(estWithInquiry, { forceNew: true });
 
-                            if (modals.smartCreateInquiryId) {
-                                const inq = data.inquiries.find(i => i.id === modals.smartCreateInquiryId);
+                            if (targetInquiryId) {
+                                const inq = data.inquiries.find(i => i.id === targetInquiryId);
                                 if (inq) await handleSaveItem(data.setInquiries, { 
                                     ...inq, 
                                     status: 'Quoted or Responded', 

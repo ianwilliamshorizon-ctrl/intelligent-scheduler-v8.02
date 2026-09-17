@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Invoice, Customer, Vehicle, BusinessEntity, TaxRate, ServicePackage, Part, EstimateLineItem as InvoiceLineItem, Job, DiscountCode } from '../types';
-import { Save, PlusCircle, Gauge, Info, FileText, ChevronUp, ChevronDown, Trash2, X, TrendingUp, Plus, Tag } from 'lucide-react';
+import { Save, PlusCircle, Gauge, Info, FileText, ChevronUp, ChevronDown, Trash2, X, TrendingUp, Plus, Tag, Package } from 'lucide-react';
 import { formatDate, addDays } from '../core/utils/dateUtils';
 import { generateInvoiceId } from '../core/utils/numberGenerators';
 import { formatCurrency } from '../utils/formatUtils';
@@ -10,6 +10,7 @@ import SearchableSelect from './SearchableSelect';
 import FormModal from './FormModal';
 import { useData } from '../core/state/DataContext';
 import { calculatePackagePrices } from '../core/utils/packageUtils';
+import { ServicePackageSelectionModal } from './ServicePackageSelectionModal';
 
 interface EditableLineItemRowProps {
     item: InvoiceLineItem;
@@ -156,6 +157,7 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
     const { estimates } = useData();
     const [formData, setFormData] = useState<Partial<Invoice>>({});
     const [selectedPackage, setSelectedPackage] = useState<ServicePackage | null>(null);
+    const [isPackageSelectionModalOpen, setIsPackageSelectionModalOpen] = useState(false);
 
     const [isAddingCustomer, setIsAddingCustomer] = useState(false);
     const [isAddingVehicle, setIsAddingVehicle] = useState(false);
@@ -662,10 +664,13 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
                                 <button type="button" onClick={() => addLineItem(false)} className="flex items-center gap-2 px-3 py-1 bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 text-sm font-medium">
                                     <Plus size={14} /> Add Part
                                 </button>
-                                <select onChange={(e) => { if (e.target.value) { handlePackageSelect(e.target.value); e.target.value = ''; } }} className="px-3 py-1 bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 text-sm font-medium border-none outline-none">
-                                    <option value="">+ Add Package</option>
-                                    {(servicePackages || []).map(pkg => <option key={pkg.id} value={pkg.id}>{pkg.name}</option>)}
-                                </select>
+                                <button 
+                                    type="button" 
+                                    onClick={() => setIsPackageSelectionModalOpen(true)} 
+                                    className="flex items-center gap-2 px-3 py-1 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg text-sm font-medium cursor-pointer"
+                                >
+                                    <Package size={14} /> Add Service Package
+                                </button>
                             </div>
                         </div>
                     </Section>
@@ -709,32 +714,17 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
                 </div>
             </div>
 
-            {selectedPackage && (
-                <FormModal
-                    isOpen={!!selectedPackage}
-                    onClose={() => setSelectedPackage(null)}
-                    onSave={confirmAddPackage}
-                    title="Confirm Add Package"
-                    saveText="Confirm & Add"
-                    maxWidth="max-w-lg"
-                    zIndex="z-[80]"
-                >
-                    <div className="space-y-4 p-2">
-                        <h3 className="text-lg font-bold">{selectedPackage.name}</h3>
-                        <p className="text-sm text-gray-600">{selectedPackage.description}</p>
-                        <div className="grid grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg border">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-500">Package Gross Price</label>
-                                <p className="text-2xl font-bold">{formatCurrency(selectedPackage.totalPrice || 0)}</p>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-500">Package Net Price</label>
-                                <p className="text-2xl font-bold">{formatCurrency(calculatePackagePrices(selectedPackage, taxRates).net)}</p>
-                            </div>
-                        </div>
-                    </div>
-                </FormModal>
-            )}
+            <ServicePackageSelectionModal
+                isOpen={isPackageSelectionModalOpen}
+                onClose={() => setIsPackageSelectionModalOpen(false)}
+                servicePackages={servicePackages}
+                vehicle={vehicle}
+                narrative={formData.notes || ''}
+                taxRates={taxRates}
+                onSelectPackages={(selectedPkgs) => {
+                    selectedPkgs.forEach(pkg => addPackage(pkg));
+                }}
+            />
 
             {isAddingCustomer && (
                 <CustomerFormModal

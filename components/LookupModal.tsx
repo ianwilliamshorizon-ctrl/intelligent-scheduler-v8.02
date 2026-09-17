@@ -112,7 +112,7 @@ const LookupModal: React.FC<LookupModalProps> = ({
             onClose={onClose} 
             onSave={!addressList ? handleLookup : undefined}
             title={!addressList ? (lookupType === 'vrm' ? 'VRM Lookup' : 'Postcode Lookup') : "Select Address"}
-            saveText={isLoading ? 'Searching...' : 'Search'}
+            saveText={isLoading ? 'SEARCHING...' : 'SEARCH'}
             saveDisabled={!inputValue.trim() || isLoading}
         >
             {addressList ? (
@@ -161,7 +161,7 @@ const LookupModal: React.FC<LookupModalProps> = ({
                         value={inputValue} 
                         onChange={e => setInputValue(e.target.value.toUpperCase())} 
                         placeholder={lookupType === 'vrm' ? 'e.g. AB12 CDE' : 'e.g. SW1A 0AA'}
-                        className="block w-full px-4 py-3 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-lg font-mono border-gray-300 transition-all"
+                        className="block w-full px-4 py-3 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-lg font-mono uppercase font-bold tracking-wider border-gray-300 transition-all"
                         autoFocus
                     />
 

@@ -122,12 +122,14 @@ const InquiryCard: React.FC<{
     
     const takenBy = users.find(u => u.id === inquiry.takenByUserId);
     const customer = inquiry.linkedCustomerId ? customers.find(c => c.id === inquiry.linkedCustomerId) : null;
-    const vehicle = inquiry.linkedVehicleId ? vehicles.find(v => v.id === inquiry.linkedVehicleId) : null;
-    const estimate = inquiry.linkedEstimateId ? estimates.find(e => e.id === inquiry.linkedEstimateId) : null;
+    const estimate = (inquiry.linkedEstimateId ? estimates.find(e => e.id === inquiry.linkedEstimateId) : null)
+        || estimates.find(e => e.linkedInquiryId === inquiry.id)
+        || null;
     const job = inquiry.linkedJobId 
         ? jobs.find(j => j.id === inquiry.linkedJobId) 
         : (jobs.find(j => (j as any).associatedInquiryId === inquiry.id)
            || (estimate?.jobId ? jobs.find(j => j.id === estimate.jobId) : null)
+           || (estimate ? jobs.find(j => j.estimateId === estimate.id) : null)
            || (inquiry.linkedEstimateId ? jobs.find(j => j.estimateId === inquiry.linkedEstimateId) : null));
     const estimateVehicle = estimate?.vehicleId ? vehicles.find(v => v.id === estimate.vehicleId) : null;
     const extractedReg = extractUKRegistration(`${inquiry.subject || ''} ${inquiry.message || ''}`);
@@ -1090,13 +1092,15 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
         today.setHours(0, 0, 0, 0);
 
         const toClose = inquiries.filter(i => {
-            if (i.status !== 'Closed' && (i.linkedEstimateId || i.linkedJobId)) {
+            const est = (i.linkedEstimateId ? estimates.find(e => e.id === i.linkedEstimateId) : null) || estimates.find(e => e.linkedInquiryId === i.id) || null;
+            if (i.status !== 'Closed' && (est || i.linkedJobId)) {
                 let jobToUse = i.linkedJobId ? jobs.find(j => j.id === i.linkedJobId) : null;
                 
-                if (!jobToUse && i.linkedEstimateId) {
-                    const est = estimates.find(e => e.id === i.linkedEstimateId);
-                    if (est?.jobId) {
+                if (!jobToUse && est) {
+                    if (est.jobId) {
                         jobToUse = jobs.find(j => j.id === est.jobId);
+                    } else {
+                        jobToUse = jobs.find(j => j.estimateId === est.id) || null;
                     }
                 }
 
@@ -1385,8 +1389,8 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
 
         if (healthFilter !== 'all') {
             filtered = filtered.filter(i => {
-                const est = i.linkedEstimateId ? estimates.find(e => e.id === i.linkedEstimateId) : null;
-                const jb = i.linkedJobId ? jobs.find(j => j.id === i.linkedJobId) : (est?.jobId ? jobs.find(j => j.id === est.jobId) : null);
+                const est = (i.linkedEstimateId ? estimates.find(e => e.id === i.linkedEstimateId) : null) || estimates.find(e => e.linkedInquiryId === i.id) || null;
+                const jb = i.linkedJobId ? jobs.find(j => j.id === i.linkedJobId) : (est?.jobId ? jobs.find(j => j.id === est.jobId) : (est ? jobs.find(j => j.estimateId === est.id) : null));
                 const isSched = isScheduledInquiry(i, jb);
                 if (healthFilter === 'scheduled') return isSched;
                 return getInquiryHealth(i, isSched) === healthFilter;
@@ -1398,7 +1402,7 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
             const cleanLow = low.replace(/\s/g, '');
             filtered = filtered.filter(i => {
                 const vehicle = i.linkedVehicleId ? vehicles.find(v => v.id === i.linkedVehicleId) : null;
-                const estimate = i.linkedEstimateId ? estimates.find(e => e.id === i.linkedEstimateId) : null;
+                const estimate = (i.linkedEstimateId ? estimates.find(e => e.id === i.linkedEstimateId) : null) || estimates.find(e => e.linkedInquiryId === i.id) || null;
                 const estimateVehicle = estimate?.vehicleId ? vehicles.find(v => v.id === estimate.vehicleId) : null;
                 const reg = vehicle?.registration || i.vehicleRegistration || estimateVehicle?.registration || (estimate as any)?.vehicleRegistration || '';
                 const cleanReg = reg.toLowerCase().replace(/\s/g, '');
@@ -1515,7 +1519,7 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
             } else if (sortField === 'registration') {
                 const getReg = (inq: Inquiry) => {
                     const v = inq.linkedVehicleId ? vehicles.find(veh => veh.id === inq.linkedVehicleId) : null;
-                    const est = inq.linkedEstimateId ? estimates.find(e => e.id === inq.linkedEstimateId) : null;
+                    const est = (inq.linkedEstimateId ? estimates.find(e => e.id === inq.linkedEstimateId) : null) || estimates.find(e => e.linkedInquiryId === inq.id) || null;
                     const estVeh = est?.vehicleId ? vehicles.find(veh => veh.id === est.vehicleId) : null;
                     return (v?.registration || inq.vehicleRegistration || estVeh?.registration || (est as any)?.vehicleRegistration || '').toLowerCase();
                 };
@@ -1523,11 +1527,12 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                 valB = getReg(b);
             } else if (sortField === 'scheduledDate') {
                 const getSchedDate = (inq: Inquiry) => {
-                    const est = inq.linkedEstimateId ? estimates.find(e => e.id === inq.linkedEstimateId) : null;
+                    const est = (inq.linkedEstimateId ? estimates.find(e => e.id === inq.linkedEstimateId) : null) || estimates.find(e => e.linkedInquiryId === inq.id) || null;
                     const jb = inq.linkedJobId 
                         ? jobs.find(j => j.id === inq.linkedJobId) 
                         : (jobs.find(j => (j as any).associatedInquiryId === inq.id)
                            || (est?.jobId ? jobs.find(j => j.id === est.jobId) : null)
+                           || (est ? jobs.find(j => j.estimateId === est.id) : null)
                            || (inq.linkedEstimateId ? jobs.find(j => j.estimateId === inq.linkedEstimateId) : null));
                     const effectiveDate = getEffectiveInquiryScheduledDate(inq, jb);
                     if (effectiveDate) {
@@ -1947,7 +1952,7 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                                          displayInquiries.map(i => {
                                             const customer = i.linkedCustomerId ? customers.find(c => c.id === i.linkedCustomerId) : null;
                                             const vehicle = i.linkedVehicleId ? vehicles.find(v => v.id === i.linkedVehicleId) : null;
-                                            const estimate = i.linkedEstimateId ? estimates.find(e => e.id === i.linkedEstimateId) : null;
+                                            const estimate = (i.linkedEstimateId ? estimates.find(e => e.id === i.linkedEstimateId) : null) || estimates.find(e => e.linkedInquiryId === i.id) || null;
                                             const estVeh = estimate?.vehicleId ? vehicles.find(v => v.id === estimate.vehicleId) : null;
                                             const effectiveReg = vehicle?.registration || i.vehicleRegistration || estVeh?.registration || (estimate as any)?.vehicleRegistration || '';
                                             const isSelected = selectedInquiryIds.includes(i.id);
