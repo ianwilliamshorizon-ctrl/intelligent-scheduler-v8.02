@@ -195,6 +195,21 @@ const LookupModal: React.FC<LookupModalProps> = ({
                                     {localOwner?.phone || localOwner?.mobile ? ` • 📞 ${localOwner.phone || localOwner.mobile}` : ''}
                                     {localOwner?.email ? ` • ✉️ ${localOwner.email}` : ''}
                                 </div>
+                                {(localVehicle.nextMotDate || localVehicle.taxDueDate) && (
+                                    <div className="mt-1.5 flex flex-wrap items-center gap-3 text-[11px]">
+                                        {localVehicle.nextMotDate && (
+                                            <span className="bg-white/80 px-2 py-0.5 rounded border border-amber-200 text-amber-950 font-medium">
+                                                MOT: <strong className="font-bold">{localVehicle.nextMotDate}</strong>
+                                            </span>
+                                        )}
+                                        {localVehicle.taxDueDate && (
+                                            <span className="bg-white/80 px-2 py-0.5 rounded border border-amber-200 text-amber-950 font-medium">
+                                                Tax: <strong className="font-bold">{localVehicle.taxDueDate}</strong>
+                                                {localVehicle.taxStatus ? ` • ${localVehicle.taxStatus}` : ''}
+                                            </span>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                             <div className="flex items-center gap-2 pt-1">
                                 <button

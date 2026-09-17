@@ -245,6 +245,8 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
                     vin: details.vin || prev.vin,
                     wheelbaseType: details.wheelbaseType || prev.wheelbaseType,
                     nextMotDate: details.nextMotDate || prev.nextMotDate,
+                    taxDueDate: details.taxDueDate || prev.taxDueDate,
+                    taxStatus: details.taxStatus || prev.taxStatus,
                     manufactureDate: details.manufactureDate || (details.monthOfFirstRegistration ? `${details.monthOfFirstRegistration}-01` : prev.manufactureDate),
                     motHistory: details.motHistory || [],
                     images: updatedImages
@@ -261,6 +263,12 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
         const currentMot = formData.nextMotDate ? dateStringToDate(formData.nextMotDate) : new global.Date();
         const nextYear = new global.Date(currentMot.setFullYear(currentMot.getFullYear() + 1));
         setFormData((prev: any) => ({ ...prev, nextMotDate: formatDate(nextYear) }));
+    };
+
+    const handleTaxIncrement = () => {
+        const currentTax = formData.taxDueDate ? dateStringToDate(formData.taxDueDate) : new global.Date();
+        const nextYear = new global.Date(currentTax.setFullYear(currentTax.getFullYear() + 1));
+        setFormData((prev: any) => ({ ...prev, taxDueDate: formatDate(nextYear) }));
     };
 
     const handleSave = () => {
@@ -456,7 +464,9 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
                                                             fuelType: duplicateVehicle.fuelType || prev.fuelType,
                                                             colour: duplicateVehicle.colour || prev.colour,
                                                             cc: duplicateVehicle.cc || prev.cc,
-                                                            nextMotDate: duplicateVehicle.nextMotDate || prev.nextMotDate
+                                                            nextMotDate: duplicateVehicle.nextMotDate || prev.nextMotDate,
+                                                            taxDueDate: duplicateVehicle.taxDueDate || prev.taxDueDate,
+                                                            taxStatus: duplicateVehicle.taxStatus || prev.taxStatus
                                                         }));
                                                     }}
                                                     className="px-2.5 py-1 bg-white border border-amber-300 hover:bg-amber-100 text-amber-900 font-bold rounded text-[11px] transition cursor-pointer"
@@ -515,6 +525,34 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
                                         <input name="nextMotDate" type="date" value={formData.nextMotDate || ''} onChange={handleChange} className="w-full p-2 border rounded" />
                                         <button type="button" onClick={handleMotIncrement} className="p-2 bg-green-100 text-green-700 rounded-lg text-xs font-bold border border-green-200">+1 Yr</button>
                                     </div>
+                                </div>
+                                <div>
+                                    <div className="flex items-center justify-between mb-1">
+                                        <label className="block text-sm font-medium text-gray-700">Tax Renewal Due</label>
+                                        {formData.taxStatus && (
+                                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                                                formData.taxStatus?.toLowerCase().includes('taxed') && !formData.taxStatus?.toLowerCase().includes('un')
+                                                    ? 'bg-green-100 text-green-800'
+                                                    : formData.taxStatus?.toLowerCase().includes('sorn')
+                                                    ? 'bg-amber-100 text-amber-800'
+                                                    : 'bg-red-100 text-red-800'
+                                            }`}>
+                                                {formData.taxStatus}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div className="flex gap-1">
+                                        <input name="taxDueDate" type="date" value={formData.taxDueDate || ''} onChange={handleChange} className="w-full p-2 border rounded" />
+                                        <button type="button" onClick={handleTaxIncrement} className="p-2 bg-amber-100 text-amber-700 rounded-lg text-xs font-bold border border-amber-200">+1 Yr</button>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Tax Status</label>
+                                    <select name="taxStatus" value={formData.taxStatus || 'Taxed'} onChange={handleChange} className="w-full p-2 border rounded bg-white font-medium">
+                                        <option value="Taxed">Taxed</option>
+                                        <option value="Untaxed">Untaxed</option>
+                                        <option value="SORN">SORN</option>
+                                    </select>
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Next Service</label>

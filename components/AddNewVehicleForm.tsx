@@ -73,6 +73,8 @@ const AddNewVehicleForm: React.FC<AddNewVehicleFormProps> = ({
         wheelbaseType: '',
         nextServiceDate: '',
         nextMotDate: '',
+        taxDueDate: '',
+        taxStatus: '',
         winterCheckDate: '',
         fleetNumber: '',
         manufactureDate: '',
@@ -214,6 +216,8 @@ const AddNewVehicleForm: React.FC<AddNewVehicleFormProps> = ({
             wheelbaseType: v.wheelbaseType || prev.wheelbaseType,
             nextServiceDate: v.nextServiceDate || prev.nextServiceDate,
             nextMotDate: v.nextMotDate || prev.nextMotDate,
+            taxDueDate: v.taxDueDate || prev.taxDueDate,
+            taxStatus: v.taxStatus || prev.taxStatus,
             winterCheckDate: v.winterCheckDate || prev.winterCheckDate,
             fleetNumber: v.fleetNumber || prev.fleetNumber,
             manufactureDate: v.manufactureDate || prev.manufactureDate,
@@ -266,6 +270,8 @@ const AddNewVehicleForm: React.FC<AddNewVehicleFormProps> = ({
                 engineCapacity: details.cc ? details.cc.toString() : prev.engineCapacity,
                 wheelbaseType: details.wheelbaseType || prev.wheelbaseType,
                 nextMotDate: details.nextMotDate || prev.nextMotDate,
+                taxDueDate: details.taxDueDate || prev.taxDueDate,
+                taxStatus: details.taxStatus || prev.taxStatus,
                 vin: details.vin || prev.vin,
                 manufactureDate: details.manufactureDate || prev.manufactureDate,
                 transmissionType: (details.transmissionType as any) || prev.transmissionType
@@ -399,6 +405,8 @@ const AddNewVehicleForm: React.FC<AddNewVehicleFormProps> = ({
             wheelbaseType: vehicleData.wheelbaseType || undefined,
             nextServiceDate: vehicleData.nextServiceDate || undefined,
             nextMotDate: vehicleData.nextMotDate || undefined,
+            taxDueDate: vehicleData.taxDueDate || undefined,
+            taxStatus: vehicleData.taxStatus || undefined,
             winterCheckDate: vehicleData.winterCheckDate || undefined,
             fleetNumber: vehicleData.fleetNumber || undefined,
             manufactureDate: vehicleData.manufactureDate || undefined,
@@ -531,6 +539,23 @@ const AddNewVehicleForm: React.FC<AddNewVehicleFormProps> = ({
                      <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Next MOT Due</label>
                         <input type="date" name="nextMotDate" value={vehicleData.nextMotDate} onChange={handleVehicleChange} className="w-full p-2 border border-gray-300 rounded-lg" />
+                    </div>
+                     <div>
+                        <div className="flex items-center justify-between mb-1">
+                            <label className="block text-sm font-medium text-gray-700">Tax Renewal Due</label>
+                            {vehicleData.taxStatus && (
+                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                                    vehicleData.taxStatus.toLowerCase().includes('taxed') && !vehicleData.taxStatus.toLowerCase().includes('un')
+                                        ? 'bg-green-100 text-green-800'
+                                        : vehicleData.taxStatus.toLowerCase().includes('sorn')
+                                        ? 'bg-amber-100 text-amber-800'
+                                        : 'bg-red-100 text-red-800'
+                                }`}>
+                                    {vehicleData.taxStatus}
+                                </span>
+                            )}
+                        </div>
+                        <input type="date" name="taxDueDate" value={vehicleData.taxDueDate} onChange={handleVehicleChange} className="w-full p-2 border border-gray-300 rounded-lg" />
                     </div>
                      <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Winter Check Due</label>
@@ -751,6 +776,8 @@ const AddNewVehicleForm: React.FC<AddNewVehicleFormProps> = ({
                                             wheelbaseType: v.wheelbaseType || '',
                                             nextServiceDate: v.nextServiceDate || '',
                                             nextMotDate: v.nextMotDate || '',
+                                            taxDueDate: v.taxDueDate || '',
+                                            taxStatus: v.taxStatus || '',
                                             winterCheckDate: v.winterCheckDate || '',
                                             fleetNumber: v.fleetNumber || '',
                                             manufactureDate: v.manufactureDate || '',

@@ -104,6 +104,18 @@ export const lookupVehicleByVRM = async (vrm: string, includeMotHistory: boolean
                 findValue(res, 'cc');
   const parsedCc = rawCc ? parseInt(String(rawCc).replace(/[^\d]/g, ''), 10) : undefined;
 
+  const rawTaxDate = findValue(res, 'TaxDueDate') || 
+                     findValue(res, 'DateOfTaxExpiry') || 
+                     findValue(res, 'TaxExpiryDate') ||
+                     findValue(res, 'TaxExpiry') ||
+                     findValue(res, 'VehicleTaxDueDate');
+  const formattedTaxDate = formatToISODate(rawTaxDate);
+  const rawTaxStatus = findValue(res, 'TaxStatus') || 
+                       findValue(res, 'VehicleTaxStatus') || 
+                       findValue(res, 'DvlaTaxStatus') || 
+                       (findValue(res, 'Taxed') === true ? 'Taxed' : findValue(res, 'Taxed') === false ? 'Untaxed' : '');
+  const taxStatus = typeof rawTaxStatus === 'string' && rawTaxStatus ? formatTitleCase(rawTaxStatus) : (rawTaxStatus || undefined);
+
   const mapped: Partial<Vehicle> & { motHistory?: MotTest[] } = {
     registration: cleanVrm.toUpperCase(),
     make: formatTitleCase(make),
@@ -119,6 +131,8 @@ export const lookupVehicleByVRM = async (vrm: string, includeMotHistory: boolean
     transmissionType: findValue(res, 'TransmissionType') || 'Other',
     wheelbaseType: wheelbaseType || undefined,
     nextMotDate: '',
+    taxDueDate: formattedTaxDate || '',
+    taxStatus: taxStatus || '',
   };
 
   if (!mapped.make && !mapped.model) {

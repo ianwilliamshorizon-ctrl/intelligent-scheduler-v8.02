@@ -302,6 +302,8 @@ export interface Vehicle {
     transmissionType?: 'Manual' | 'Automatic' | 'Other';
     nextMotDate?: string; 
     motExpiryDate?: string; 
+    taxDueDate?: string;
+    taxStatus?: string;
     nextServiceDate?: string; 
     winterCheckDate?: string; 
     fleetNumber?: string;
@@ -718,6 +720,8 @@ export interface BusinessEntity {
     // Reminder Templates
     motReminderEmailTemplate?: string;
     motReminderSmsTemplate?: string;
+    taxReminderEmailTemplate?: string;
+    taxReminderSmsTemplate?: string;
     serviceReminderEmailTemplate?: string;
     serviceReminderSmsTemplate?: string;
     winterCheckReminderEmailTemplate?: string;
@@ -1141,8 +1145,23 @@ export interface AuditLogEntry {
     entityId?: string;
 }
 
-export type ReminderType = 'MOT' | 'Service' | 'Winter Check' | 'Marketing' | 'Other';
+export type ReminderType = 'MOT' | 'Tax' | 'Service' | 'Winter Check' | 'Marketing' | 'Other';
 export type ReminderStatus = 'Pending' | 'Sent' | 'Failed' | 'Dismissed';
+
+export type RollingCommsFrequency = 'Daily' | 'Weekly' | 'Monthly';
+
+export interface RollingCommsConfig {
+    enabled: boolean;
+    leadTimeDays: number; // e.g. 60 days
+    frequency: RollingCommsFrequency;
+    includeMot: boolean;
+    includeTax: boolean;
+    includeService?: boolean;
+    lastRunDate?: string;
+    nextRunDate?: string;
+    channelPreference: 'Email' | 'SMS' | 'Both';
+    autoSend: boolean;
+}
 
 export interface Reminder {
     id: string;

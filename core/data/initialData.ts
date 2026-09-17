@@ -158,16 +158,16 @@ export const getInitialCustomers = (): Customer[] => {
 
 // --- Vehicles ---
 export const getInitialVehicles = (): Vehicle[] => ([
-    { id: 'veh_1', customerId: 'OCON0001', registration: 'GT3 RS', make: 'Porsche', model: '911 GT3 RS', nextMotDate: getRelativeDate(28), nextServiceDate: getRelativeDate(50) },
-    { id: 'veh_2', customerId: 'ROSS0001', registration: 'RS6 V10', make: 'Audi', model: 'RS6 Avant', nextMotDate: getRelativeDate(15), winterCheckDate: getRelativeDate(25) },
-    { id: 'veh_3', customerId: 'CART0001', registration: 'T6 BEN', make: 'Volkswagen', model: 'Transporter', nextMotDate: getRelativeDate(90), nextServiceDate: getRelativeDate(90) },
-    { id: 'veh_4', customerId: 'DUBO0001', registration: 'GT4 CJD', make: 'Porsche', model: 'Cayman GT4', nextMotDate: getRelativeDate(180) },
-    { id: 'veh_5', customerId: 'THOR0001', registration: 'M720 S', make: 'McLaren', model: '720S', nextServiceDate: getRelativeDate(45) },
-    { id: 'veh_6', customerId: 'RACI0001', registration: 'CUP 1', make: 'Porsche', model: '911 Cup Car', vin: 'WP0ZZZ99ZHS7XXXXX' },
-    { id: 'veh_7', customerId: 'CHEN0001', registration: 'R56 HGF', make: 'Honda', model: 'Civic', nextMotDate: getRelativeDate(10) },
-    { id: 'veh_8', customerId: 'VINT0001', registration: 'E TYPE', make: 'Jaguar', model: 'E-Type Series 1', vin: 'J61XXXXXX' },
-    { id: 'veh_9', customerId: 'WRIG0001', registration: 'WR16 HTE', make: 'Ford', model: 'Transit Custom', nextMotDate: getRelativeDate(120), nextServiceDate: getRelativeDate(150) },
-    { id: 'veh_10', customerId: 'PETR0001', registration: 'M4 OLP', make: 'BMW', model: 'M4 Competition', nextServiceDate: getRelativeDate(200) },
+    { id: 'veh_1', customerId: 'OCON0001', registration: 'GT3 RS', make: 'Porsche', model: '911 GT3 RS', nextMotDate: getRelativeDate(28), taxDueDate: getRelativeDate(45), taxStatus: 'Taxed', nextServiceDate: getRelativeDate(50) },
+    { id: 'veh_2', customerId: 'ROSS0001', registration: 'RS6 V10', make: 'Audi', model: 'RS6 Avant', nextMotDate: getRelativeDate(15), taxDueDate: getRelativeDate(30), taxStatus: 'Taxed', winterCheckDate: getRelativeDate(25) },
+    { id: 'veh_3', customerId: 'CART0001', registration: 'GN19 KBV', make: 'Volkswagen', model: 'Transporter', year: 2019, nextMotDate: getRelativeDate(7), taxDueDate: getRelativeDate(14), taxStatus: 'Taxed', nextServiceDate: getRelativeDate(90) },
+    { id: 'veh_4', customerId: 'DUBO0001', registration: 'GT4 CJD', make: 'Porsche', model: 'Cayman GT4', nextMotDate: getRelativeDate(180), taxDueDate: getRelativeDate(120), taxStatus: 'Taxed' },
+    { id: 'veh_5', customerId: 'THOR0001', registration: 'M720 S', make: 'McLaren', model: '720S', nextServiceDate: getRelativeDate(45), taxDueDate: getRelativeDate(60), taxStatus: 'Taxed' },
+    { id: 'veh_6', customerId: 'RACI0001', registration: 'CUP 1', make: 'Porsche', model: '911 Cup Car', vin: 'WP0ZZZ99ZHS7XXXXX', taxStatus: 'SORN' },
+    { id: 'veh_7', customerId: 'CHEN0001', registration: 'R56 HGF', make: 'Honda', model: 'Civic', nextMotDate: getRelativeDate(10), taxDueDate: getRelativeDate(20), taxStatus: 'Taxed' },
+    { id: 'veh_8', customerId: 'VINT0001', registration: 'E TYPE', make: 'Jaguar', model: 'E-Type Series 1', vin: 'J61XXXXXX', taxDueDate: getRelativeDate(95), taxStatus: 'Taxed' },
+    { id: 'veh_9', customerId: 'WRIG0001', registration: 'WR16 HTE', make: 'Ford', model: 'Transit Custom', nextMotDate: getRelativeDate(120), taxDueDate: getRelativeDate(80), taxStatus: 'Taxed', nextServiceDate: getRelativeDate(150) },
+    { id: 'veh_10', customerId: 'PETR0001', registration: 'M4 OLP', make: 'BMW', model: 'M4 Competition', nextServiceDate: getRelativeDate(200), taxDueDate: getRelativeDate(110), taxStatus: 'Taxed' },
 ]);
 
 // --- Lifts & Engineers ---

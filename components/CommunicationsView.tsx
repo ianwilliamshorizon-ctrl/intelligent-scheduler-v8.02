@@ -3,11 +3,13 @@ import React, { useState, useMemo } from 'react';
 import { useApp } from '../core/state/AppContext';
 import { useData } from '../core/state/DataContext';
 import { Reminder, ReminderStatus, Customer, Vehicle, BusinessEntity, ReminderType } from '../types';
-import { Search, History, Bell, Check, X as XIcon, Mail, MessageSquare, Send, Trash2, PlusCircle, Wand2, Filter } from 'lucide-react';
+import { Search, History, Bell, Check, X as XIcon, Mail, MessageSquare, Send, Trash2, PlusCircle, Wand2, Filter, Clock, ExternalLink, Sparkles } from 'lucide-react';
 import { getCustomerDisplayName } from '../core/utils/customerUtils';
 import SendReminderModal from './SendReminderModal';
 import CreateMarketingReminderModal from './CreateMarketingReminderModal';
 import GenerateRemindersModal from './GenerateRemindersModal';
+import RollingCommsModal from './RollingCommsModal';
+import NotificationsHubCard from './comms/NotificationsHubCard';
 import { saveDocument } from '../core/db';
 
 const CommunicationsView: React.FC = () => {
@@ -20,13 +22,15 @@ const CommunicationsView: React.FC = () => {
     const [campaignFilter, setCampaignFilter] = useState<string>('all');
     const [isMarketingModalOpen, setIsMarketingModalOpen] = useState(false);
     const [isGenerateModalOpen, setIsGenerateModalOpen] = useState(false);
+    const [isRollingCommsModalOpen, setIsRollingCommsModalOpen] = useState(false);
+    const [hubPreviewData, setHubPreviewData] = useState<{ vehicle: Vehicle; customer: Customer } | null>(null);
 
     const [sendModalData, setSendModalData] = useState<{
         isOpen: boolean;
         reminder: Reminder | null;
         customer: Customer | null;
         vehicle: Vehicle | null;
-        method: 'Email' | 'SMS' | null;
+        method: 'Email' | 'SMS' | 'WhatsApp' | null;
         entity: BusinessEntity | null;
     }>({ isOpen: false, reminder: null, customer: null, vehicle: null, method: null, entity: null });
 
@@ -41,7 +45,7 @@ const CommunicationsView: React.FC = () => {
         );
     };
 
-    const reminderTypes: ReminderType[] = ['MOT', 'Service', 'Winter Check', 'Marketing'];
+    const reminderTypes: ReminderType[] = ['MOT', 'Tax', 'Service', 'Winter Check', 'Marketing'];
 
     // Get unique campaign names (eventNames) from reminders
     const campaigns = useMemo(() => {
@@ -89,7 +93,7 @@ const CommunicationsView: React.FC = () => {
         }
     };
 
-    const openSendModal = (reminder: Reminder, customer: Customer, vehicle: Vehicle | null, method: 'Email' | 'SMS') => {
+    const openSendModal = (reminder: Reminder, customer: Customer, vehicle: Vehicle | null, method: 'Email' | 'SMS' | 'WhatsApp') => {
         const lastJob = vehicle ? jobs
             .filter(j => j.vehicleId === vehicle.id)
             .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0] : undefined;
@@ -369,6 +373,28 @@ const CommunicationsView: React.FC = () => {
                                     </p>
                                 </div>
                                 <div className="flex items-center gap-2">
+                                    {(reminder.type === 'MOT' || reminder.type === 'Tax') && vehicle && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setHubPreviewData({ vehicle, customer })}
+                                            className="flex items-center gap-1.5 py-2 px-3 bg-blue-50 text-blue-700 hover:bg-blue-100 font-semibold rounded-lg border border-blue-200 transition text-xs"
+                                            title="Preview Notifications Hub Card"
+                                        >
+                                            <Bell size={14} className="text-blue-600" /> Hub Card
+                                        </button>
+                                    )}
+                                    {reminder.type === 'Tax' && (
+                                        <a
+                                            href="https://www.gov.uk/vehicle-tax"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="flex items-center gap-1 py-2 px-2.5 bg-gray-900 text-white font-semibold rounded-lg hover:bg-black text-xs transition"
+                                            title="Open official UK Govt Tax / SORN website"
+                                        >
+                                            <span>Gov Tax</span>
+                                            <ExternalLink size={12} />
+                                        </a>
+                                    )}
                                     <button
                                         onClick={() => handleAction(reminder.id, 'Dismissed')}
                                         className="p-2 bg-gray-200 text-gray-700 rounded-full hover:bg-gray-300"
@@ -379,10 +405,18 @@ const CommunicationsView: React.FC = () => {
                                     <button
                                         onClick={() => openSendModal(reminder, customer, vehicle, 'SMS')}
                                         disabled={!hasSms}
-                                        className="flex items-center gap-1.5 py-2 px-4 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        className="flex items-center gap-1.5 py-2 px-3 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-xs transition"
                                         title={hasSms ? 'Send SMS' : 'No mobile/phone number available'}
                                     >
-                                        <MessageSquare size={16} /> SMS
+                                        <MessageSquare size={14} /> SMS
+                                    </button>
+                                    <button
+                                        onClick={() => openSendModal(reminder, customer, vehicle, 'WhatsApp')}
+                                        disabled={!hasSms}
+                                        className="flex items-center gap-1.5 py-2 px-3 bg-emerald-600 text-white font-semibold rounded-lg hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-xs transition shadow-xs"
+                                        title={hasSms ? 'Send WhatsApp' : 'No mobile/phone number available'}
+                                    >
+                                        <span>💬</span> WhatsApp
                                     </button>
                                     <button
                                         onClick={() => openSendModal(reminder, customer, vehicle, 'Email')}
@@ -405,7 +439,14 @@ const CommunicationsView: React.FC = () => {
         <div className="w-full h-full flex flex-col p-6 bg-gray-50">
             <header className="flex justify-between items-center mb-4 flex-shrink-0">
                 <h2 className="text-2xl font-bold text-gray-800">Reminders & Communications</h2>
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-3">
+                    <button 
+                        onClick={() => setIsRollingCommsModalOpen(true)}
+                        className="flex items-center gap-2 py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-md transition"
+                        title="Configure automated rolling programme for MOT & Road Tax"
+                    >
+                        <Clock size={16}/> Rolling Comms Programme
+                    </button>
                     <button 
                         onClick={() => setIsGenerateModalOpen(true)}
                         className="flex items-center gap-2 py-2 px-4 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700"
@@ -514,6 +555,43 @@ const CommunicationsView: React.FC = () => {
                     vehicles={vehicles}
                     customers={customers}
                 />
+            )}
+
+            {isRollingCommsModalOpen && (
+                <RollingCommsModal
+                    isOpen={isRollingCommsModalOpen}
+                    onClose={() => setIsRollingCommsModalOpen(false)}
+                    vehicles={vehicles}
+                    customers={customers}
+                    existingReminders={reminders}
+                    onGenerated={handleGeneratedReminders}
+                />
+            )}
+
+            {hubPreviewData && (
+                <div className="fixed inset-0 bg-gray-900/75 z-[80] flex justify-center items-center p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl p-4 max-w-lg w-full max-h-[92vh] overflow-y-auto">
+                        <div className="flex justify-between items-center mb-3 pb-2 border-b">
+                            <span className="font-extrabold text-sm text-gray-900">Notifications Hub Preview</span>
+                            <button
+                                type="button"
+                                onClick={() => setHubPreviewData(null)}
+                                className="p-1 rounded-lg hover:bg-gray-100 text-gray-500 font-bold"
+                            >
+                                ✕
+                            </button>
+                        </div>
+                        <NotificationsHubCard
+                            vehicle={hubPreviewData.vehicle}
+                            customer={hubPreviewData.customer}
+                            onBack={() => setHubPreviewData(null)}
+                            onOpenSettings={() => {
+                                setHubPreviewData(null);
+                                setIsRollingCommsModalOpen(true);
+                            }}
+                        />
+                    </div>
+                </div>
             )}
         </div>
     );
