@@ -65,6 +65,11 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
     );
   }, [options, searchTerm]);
 
+  // Limit rendered items in DOM for instant performance on 2500+ items
+  const displayedOptions = useMemo(() => {
+    return filteredOptions.slice(0, 80);
+  }, [filteredOptions]);
+
   // Outside click listener
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -188,38 +193,45 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
           </div>
           
           <div ref={listRef} className="max-h-80 overflow-y-auto py-1">
-            {filteredOptions.length > 0 ? (
-              filteredOptions.map((option, index) => (
-                <div
-                  key={`${option.value}-${index}`}
-                  className={`
-                    px-4 py-3 text-sm cursor-pointer transition-all flex items-center justify-between gap-4
-                    ${index === activeIndex ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50'}
-                  `}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleSelect(option);
-                  }}
-                  onMouseEnter={() => setActiveIndex(index)}
-                >
-                  <div className="flex flex-col flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      {option.icon}
-                      <span className="font-semibold whitespace-normal leading-tight">{option.label}</span>
+            {displayedOptions.length > 0 ? (
+              <>
+                {displayedOptions.map((option, index) => (
+                  <div
+                    key={`${option.value}-${index}`}
+                    className={`
+                      px-4 py-3 text-sm cursor-pointer transition-all flex items-center justify-between gap-4
+                      ${index === activeIndex ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50'}
+                    `}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleSelect(option);
+                    }}
+                    onMouseEnter={() => setActiveIndex(index)}
+                  >
+                    <div className="flex flex-col flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        {option.icon}
+                        <span className="font-semibold whitespace-normal leading-tight">{option.label}</span>
+                      </div>
+                      {option.description && (
+                        <span className={`text-xs mt-1 whitespace-normal leading-relaxed ${index === activeIndex ? 'text-blue-500' : 'text-gray-400'}`}>
+                          {option.description}
+                        </span>
+                      )}
                     </div>
-                    {option.description && (
-                      <span className={`text-xs mt-1 whitespace-normal leading-relaxed ${index === activeIndex ? 'text-blue-500' : 'text-gray-400'}`}>
-                        {option.description}
+                    {option.badge && (
+                      <span className={`flex-shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase self-start mt-0.5 ${option.badge.className}`}>
+                        {option.badge.text}
                       </span>
                     )}
                   </div>
-                  {option.badge && (
-                    <span className={`flex-shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase self-start mt-0.5 ${option.badge.className}`}>
-                      {option.badge.text}
-                    </span>
-                  )}
-                </div>
-              ))
+                ))}
+                {filteredOptions.length > 80 && (
+                  <div className="px-4 py-2 text-center text-xs text-slate-500 font-medium bg-slate-50 border-t border-slate-100">
+                    Showing top 80 of {filteredOptions.length} matches • Type to narrow search
+                  </div>
+                )}
+              </>
             ) : (
               <div className="px-4 py-6 text-center text-gray-500 text-sm">No results found</div>
             )}

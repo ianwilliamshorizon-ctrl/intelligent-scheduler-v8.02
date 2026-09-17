@@ -2,6 +2,7 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Job, Lift, Engineer, PurchaseOrder, Vehicle, Customer, User, Estimate, FCSGanttBlock, FCSDependencyLink } from '../../../types';
 import { calculateFCSMatrix, FCSMatrixResult } from '../../../core/services/fcsSchedulingEngine';
 import { ServiceAdvisorBookingBufferModal } from './ServiceAdvisorBookingBufferModal';
+import { FCSOptimizerModal } from './FCSOptimizerModal';
 import { Sparkles, Wrench, Layers, AlertTriangle, CheckCircle, Clock, Calendar, Users, RefreshCw, Plus, ChevronLeft, ChevronRight, Activity, ArrowRight, Zap, Info } from 'lucide-react';
 import { getRelativeDate, addDays, formatDate } from '../../../core/utils/dateUtils';
 
@@ -130,7 +131,7 @@ export const ENGINEER_COLOR_PALETTES: EngineerTheme[] = [
     }
 ];
 
-const SIMULATED_TECH_THEME: EngineerTheme = {
+export const SIMULATED_TECH_THEME: EngineerTheme = {
     id: 'simulated',
     name: 'Simulated Master Tech',
     gradientFrom: '#9333ea',
@@ -140,6 +141,25 @@ const SIMULATED_TECH_THEME: EngineerTheme = {
     lightHex: '#faf5ff',
     badgeBg: 'bg-purple-100',
     badgeText: 'text-purple-800'
+};
+
+// Deterministic engineer color theme mapping helper
+export const getEngineerTheme = (engId: string, engineersList?: Engineer[]): EngineerTheme => {
+    if (!engId) return ENGINEER_COLOR_PALETTES[0];
+    if (engId.startsWith('sim_')) return SIMULATED_TECH_THEME;
+    if (engineersList && engineersList.length > 0) {
+        const idx = engineersList.findIndex(e => e.id === engId);
+        if (idx >= 0) {
+            return ENGINEER_COLOR_PALETTES[idx % ENGINEER_COLOR_PALETTES.length];
+        }
+    }
+    // Fallback hash by string
+    let hash = 0;
+    for (let i = 0; i < engId.length; i++) {
+        hash = engId.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const safeIdx = Math.abs(hash) % ENGINEER_COLOR_PALETTES.length;
+    return ENGINEER_COLOR_PALETTES[safeIdx];
 };
 
 interface ResourceGanttViewProps {
@@ -174,6 +194,7 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
     const [windowDays, setWindowDays] = useState<number>(7);
     const [simulateExtraEngineers, setSimulateExtraEngineers] = useState<number>(0);
     const [isBufferModalOpen, setIsBufferModalOpen] = useState<boolean>(false);
+    const [isOptimizerOpen, setIsOptimizerOpen] = useState<boolean>(false);
     const [hoveredJobId, setHoveredJobId] = useState<string | null>(null);
     const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
     const [startDateOffset, setStartDateOffset] = useState<number>(0);
@@ -181,22 +202,8 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
     const containerRef = useRef<HTMLDivElement>(null);
     const [blockPositions, setBlockPositions] = useState<Map<string, { x: number; y: number; width: number; height: number }>>(new Map());
 
-    // Deterministic engineer color theme mapping
-    const getEngineerTheme = (engId: string): EngineerTheme => {
-        if (!engId) return ENGINEER_COLOR_PALETTES[0];
-        if (engId.startsWith('sim_')) return SIMULATED_TECH_THEME;
-        const idx = engineers.findIndex(e => e.id === engId);
-        if (idx >= 0) {
-            return ENGINEER_COLOR_PALETTES[idx % ENGINEER_COLOR_PALETTES.length];
-        }
-        // Fallback hash by string
-        let hash = 0;
-        for (let i = 0; i < engId.length; i++) {
-            hash = engId.charCodeAt(i) + ((hash << 5) - hash);
-        }
-        const safeIdx = Math.abs(hash) % ENGINEER_COLOR_PALETTES.length;
-        return ENGINEER_COLOR_PALETTES[safeIdx];
-    };
+    // Local convenience wrapper for technician theme
+    const getTechTheme = (engId: string) => getEngineerTheme(engId, engineers);
 
     const startDateStr = useMemo(() => {
         return getRelativeDate(startDateOffset);
@@ -363,6 +370,16 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                                 -{matrix.metrics.simulatedDaysSaved}d Backlog
                             </span>
                         )}
+                    </button>
+
+                    {/* FCS Auto-Optimize Allocations Button */}
+                    <button
+                        onClick={() => setIsOptimizerOpen(true)}
+                        className="px-3 py-1.5 bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md hover:shadow-purple-400/30 transition-all flex items-center gap-1.5 active:scale-95"
+                        title="Intelligently balance unallocated jobs across all technicians"
+                    >
+                        <Zap size={14} className="text-amber-300 fill-amber-300" />
+                        <span>Auto-Optimize</span>
                     </button>
 
                     {/* Service Advisor Booking Buffer Modal Trigger */}
@@ -706,6 +723,27 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                     }}
                     onSaveEstimate={(est) => {
                         if (onSaveEstimate) onSaveEstimate(est);
+                    }}
+                />
+            )}
+
+            {/* FCS Schedule Auto-Optimizer Modal */}
+            {isOptimizerOpen && (
+                <FCSOptimizerModal
+                    isOpen={isOptimizerOpen}
+                    onClose={() => setIsOptimizerOpen(false)}
+                    jobs={jobs}
+                    ramps={ramps}
+                    engineers={engineers}
+                    purchaseOrders={purchaseOrders}
+                    vehicles={vehicles}
+                    customers={customers}
+                    windowDays={windowDays}
+                    startDateStr={startDateStr}
+                    onApplyOptimizedPlan={async (updatedJobs) => {
+                        for (const job of updatedJobs) {
+                            await onSaveJob(job);
+                        }
                     }}
                 />
             )}

@@ -1,9 +1,11 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Job, Customer, Vehicle, Lift, Engineer, PurchaseOrder, Estimate } from '../../../types';
-import { Calendar, Clock, AlertTriangle, CheckCircle, Wrench, ShieldAlert, Sparkles, X, ChevronRight, PackageCheck, Layers, FileText, Check, ArrowRight, BookmarkCheck } from 'lucide-react';
+import { Calendar, Clock, AlertTriangle, CheckCircle, Wrench, ShieldAlert, Sparkles, X, ChevronRight, PackageCheck, Layers, FileText, Check, ArrowRight, BookmarkCheck, Search, UserCheck } from 'lucide-react';
 import { calculateEarliestRealisticStart } from '../../../core/services/fcsSchedulingEngine';
 import { getCustomerDisplayName } from '../../../core/utils/customerUtils';
 import { getRelativeDate } from '../../../core/utils/dateUtils';
+import SearchableSelect, { Option } from '../../SearchableSelect';
+import { getEngineerTheme } from './ResourceGanttView';
 
 interface ServiceAdvisorBookingBufferModalProps {
     isOpen: boolean;
@@ -52,6 +54,7 @@ export const ServiceAdvisorBookingBufferModal: React.FC<ServiceAdvisorBookingBuf
     const [estimatedHours, setEstimatedHours] = useState<number>(8);
     const [partsLeadDays, setPartsLeadDays] = useState<number>(2);
     const [preferredRampId, setPreferredRampId] = useState<string>('');
+    const [targetEngineerId, setTargetEngineerId] = useState<string>('');
     const [isMovable, setIsMovable] = useState<boolean>(false);
     const [priority, setPriority] = useState<number>(2); // 1 = Urgent, 2 = High, 3 = Normal
 
@@ -63,11 +66,17 @@ export const ServiceAdvisorBookingBufferModal: React.FC<ServiceAdvisorBookingBuf
         return estimates.filter(e => e.status !== 'Converted to Job' && e.status !== 'Closed');
     }, [estimates]);
 
-    // Active unallocated jobs from queue
+    // Active unallocated jobs from queue (jobs without assigned technician on segments or status Unallocated)
     const queueUnallocatedJobs = useMemo(() => {
-        if (unallocatedJobs.length > 0) return unallocatedJobs;
-        return jobs.filter(j => j.status === 'Unallocated' || !j.scheduledDate);
-    }, [unallocatedJobs, jobs]);
+        return jobs.filter(j => {
+            if (j.status === 'Cancelled' || j.status === 'Complete' || j.status === 'Invoiced' || j.status === 'Closed') {
+                return false;
+            }
+            if (j.status === 'Unallocated') return true;
+            if (!j.segments || j.segments.length === 0) return true;
+            return j.segments.some(s => !s.engineerId || s.status === 'Unallocated');
+        });
+    }, [jobs]);
 
     // Initialize selection on open or mode change
     useEffect(() => {
@@ -129,16 +138,110 @@ export const ServiceAdvisorBookingBufferModal: React.FC<ServiceAdvisorBookingBuf
         setPartsLeadDays(hasUndeliveredParts ? 2 : 0);
         setIsMovable(!!job.isMovable);
         setPriority(job.priority || 2);
+
+        // Check if there is an existing ramp on the segment
+        const existingRampName = job.segments?.[0]?.allocatedLift;
+        if (existingRampName) {
+            const matchedR = ramps.find(r => r.name === existingRampName);
+            if (matchedR) setPreferredRampId(matchedR.id);
+        }
+
         setStatusToast(null);
     };
 
-    // Filter vehicles by customer if selected
-    const customerVehicles = useMemo(() => {
-        if (!selectedCustomerId) return vehicles;
-        return vehicles.filter(v => v.customerId === selectedCustomerId);
-    }, [vehicles, selectedCustomerId]);
+    // Customer search options (2,000+ records)
+    const customerOptions: Option[] = useMemo(() => {
+        return customers.map(c => {
+            const name = getCustomerDisplayName(c);
+            const contactParts = [
+                c.companyName,
+                c.phone || c.mobile,
+                c.email,
+                c.postcode
+            ].filter(Boolean);
 
-    // Live reactive simulation of the earliest realistic start
+            return {
+                value: c.id,
+                label: name,
+                description: contactParts.join(' • ') || 'No contact details',
+                badge: c.category ? {
+                    text: c.category,
+                    className: c.category === 'Trade' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'
+                } : undefined
+            };
+        });
+    }, [customers]);
+
+    // Vehicle search options (2,500+ records)
+    const vehicleOptions: Option[] = useMemo(() => {
+        const list = selectedCustomerId 
+            ? vehicles.filter(v => v.customerId === selectedCustomerId)
+            : vehicles;
+
+        return list.map(v => {
+            const owner = customers.find(c => c.id === v.customerId);
+            const ownerName = owner ? getCustomerDisplayName(owner) : '';
+
+            return {
+                value: v.id,
+                label: `${v.registration || 'No Reg'} - ${v.make || ''} ${v.model || ''}`,
+                description: [
+                    v.derivative,
+                    v.color,
+                    v.vin ? `VIN: ${v.vin}` : null,
+                    ownerName ? `Owner: ${ownerName}` : null
+                ].filter(Boolean).join(' • ')
+            };
+        });
+    }, [vehicles, selectedCustomerId, customers]);
+
+    // Estimate search options: Name search, Reg search, and Estimate Number as fallback
+    const estimateOptions: Option[] = useMemo(() => {
+        return schedulableEstimates.map(est => {
+            const cust = customers.find(c => c.id === est.customerId);
+            const veh = vehicles.find(v => v.id === est.vehicleId);
+            const custName = cust ? getCustomerDisplayName(cust) : 'Customer';
+            const reg = veh?.registration || 'Unknown Reg';
+            const vehModel = veh ? `${veh.make} ${veh.model}` : '';
+            const hours = est.lineItems
+                ? est.lineItems.filter(li => li.isLabor || li.type === 'labor').reduce((acc, li) => acc + (Number(li.quantity) || 1), 0)
+                : 0;
+
+            return {
+                value: est.id,
+                label: `${custName} • ${reg} (${vehModel})`,
+                description: `${est.description || 'Estimate Package'} • ${hours} hrs • Est Ref: #${est.estimateNumber || est.id.substring(0, 7)}`,
+                badge: {
+                    text: est.status || 'Draft',
+                    className: est.status === 'Approved' ? 'bg-emerald-100 text-emerald-800' : 'bg-indigo-100 text-indigo-800'
+                }
+            };
+        });
+    }, [schedulableEstimates, customers, vehicles]);
+
+    // Unallocated job search options: Name search, Reg search, Description, Job Number
+    const unallocatedJobOptions: Option[] = useMemo(() => {
+        return queueUnallocatedJobs.map(j => {
+            const cust = customers.find(c => c.id === j.customerId);
+            const veh = vehicles.find(v => v.id === j.vehicleId);
+            const custName = cust ? getCustomerDisplayName(cust) : 'Customer';
+            const reg = veh?.registration || 'Unknown Reg';
+            const vehModel = veh ? `${veh.make} ${veh.model}` : '';
+            const hours = j.estimatedHours || (j.segments ? j.segments.reduce((acc, s) => acc + (s.duration || 0), 0) : 4);
+
+            return {
+                value: j.id,
+                label: `${custName} • ${reg} (${vehModel})`,
+                description: `${j.description || 'Workshop Job'} • Date: ${j.scheduledDate || 'Not set'} • ${hours} hrs • Job #${j.jobNumber || j.id.substring(0, 7)}`,
+                badge: {
+                    text: 'Unassigned Tech',
+                    className: 'bg-amber-100 text-amber-800'
+                }
+            };
+        });
+    }, [queueUnallocatedJobs, customers, vehicles]);
+
+    // Live reactive simulation of earliest realistic start
     const simulation = useMemo(() => {
         if (estimatedHours <= 0) return null;
         return calculateEarliestRealisticStart({
@@ -155,11 +258,14 @@ export const ServiceAdvisorBookingBufferModal: React.FC<ServiceAdvisorBookingBuf
 
     if (!isOpen) return null;
 
-    // Action 1: Commit Schedule Date to Unallocated Job
+    // Action 1: Commit Schedule Date & Allocate Tech to Unallocated Job
     const handleCommitUnallocatedJob = () => {
         if (!simulation) return;
         const job = queueUnallocatedJobs.find(j => j.id === selectedUnallocatedJobId);
         if (!job) return;
+
+        const assignedEng = engineers.find(e => e.id === targetEngineerId);
+        const assignedEngName = assignedEng?.name;
 
         const updatedJob: Partial<Job> = {
             ...job,
@@ -173,23 +279,26 @@ export const ServiceAdvisorBookingBufferModal: React.FC<ServiceAdvisorBookingBuf
             segments: (job.segments && job.segments.length > 0) 
                 ? job.segments.map((s, idx) => ({
                     ...s,
+                    engineerId: targetEngineerId || s.engineerId,
                     allocatedLift: simulation.compatibleRampName,
                     date: simulation.earliestStartDate,
-                    duration: idx === 0 ? estimatedHours : s.duration
+                    duration: idx === 0 ? estimatedHours : s.duration,
+                    status: 'Allocated' as const
                 }))
                 : [
                     {
                         id: `seg_${Date.now()}`,
                         segmentId: `seg_${Date.now()}`,
                         description,
-                        status: 'Allocated',
+                        status: 'Allocated' as const,
+                        engineerId: targetEngineerId || undefined,
                         allocatedLift: simulation.compatibleRampName,
                         duration: estimatedHours,
                         date: simulation.earliestStartDate,
                         scheduledStartSegment: 1
                     }
                 ],
-            notes: (job.notes ? `${job.notes}\n` : '') + `[FCS Buffer Schedule]: Scheduled for ${simulation.earliestStartDate} @ ${simulation.earliestStartTime} on ${simulation.compatibleRampName}. Projected Completion: ${simulation.projectedCompletionDate}.`
+            notes: (job.notes ? `${job.notes}\n` : '') + `[FCS Schedule Buffer]: Allocated${assignedEngName ? ` to ${assignedEngName}` : ''} on ${simulation.compatibleRampName} for ${simulation.earliestStartDate} @ ${simulation.earliestStartTime}. Handover: ${simulation.projectedCompletionDate}.`
         };
 
         onBookJob(updatedJob);
@@ -219,6 +328,7 @@ export const ServiceAdvisorBookingBufferModal: React.FC<ServiceAdvisorBookingBuf
                     segmentId: `seg_${Date.now()}`,
                     description,
                     status: 'Allocated',
+                    engineerId: targetEngineerId || undefined,
                     allocatedLift: simulation.compatibleRampName,
                     duration: estimatedHours,
                     date: simulation.earliestStartDate,
@@ -228,10 +338,8 @@ export const ServiceAdvisorBookingBufferModal: React.FC<ServiceAdvisorBookingBuf
             notes: `Converted from Estimate ${est?.estimateNumber || selectedEstimateId} via FCS Booking Buffer. Earliest slot: ${simulation.earliestStartDate} @ ${simulation.earliestStartTime}. Handover: ${simulation.projectedCompletionDate}.`
         };
 
-        // Book job
         onBookJob(newJob);
 
-        // Update estimate status if callback provided
         if (onSaveEstimate && est) {
             onSaveEstimate({
                 ...est,
@@ -284,6 +392,7 @@ export const ServiceAdvisorBookingBufferModal: React.FC<ServiceAdvisorBookingBuf
                     segmentId: `seg_${Date.now()}`,
                     description,
                     status: 'Allocated',
+                    engineerId: targetEngineerId || undefined,
                     allocatedLift: simulation.compatibleRampName,
                     duration: estimatedHours,
                     date: simulation.earliestStartDate,
@@ -302,9 +411,9 @@ export const ServiceAdvisorBookingBufferModal: React.FC<ServiceAdvisorBookingBuf
 
     return (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 animate-fade-in font-sans">
-            <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-2xl w-full overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-2xl w-full overflow-hidden flex flex-col max-h-[92vh]">
                 {/* Header */}
-                <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-5 relative border-b border-indigo-900/50">
+                <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-5 relative border-b border-indigo-900/50 shrink-0">
                     <button 
                         onClick={onClose}
                         className="absolute top-4 right-4 text-indigo-300 hover:text-white bg-white/10 hover:bg-white/20 rounded-full p-1.5 transition-colors shadow-xs"
@@ -319,7 +428,7 @@ export const ServiceAdvisorBookingBufferModal: React.FC<ServiceAdvisorBookingBuf
                         Pre-Booking Feasibility Simulator
                     </h2>
                     <p className="text-indigo-200 text-xs mt-1">
-                        Test master schedule lead time and parts arrival feasibility before committing customer handover promises.
+                        Search across 2,500+ vehicles & 2,000+ customers to test schedule feasibility and assign technicians without creating bottlenecks.
                     </p>
 
                     {/* Mode Navigation Tabs */}
@@ -352,7 +461,7 @@ export const ServiceAdvisorBookingBufferModal: React.FC<ServiceAdvisorBookingBuf
                             }`}
                         >
                             <Layers size={14} />
-                            <span>Unallocated Queue</span>
+                            <span>Unallocated Tech Queue</span>
                             {queueUnallocatedJobs.length > 0 && (
                                 <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${mode === 'unallocated' ? 'bg-indigo-800 text-indigo-100' : 'bg-slate-700 text-slate-300'}`}>
                                     {queueUnallocatedJobs.length}
@@ -370,13 +479,13 @@ export const ServiceAdvisorBookingBufferModal: React.FC<ServiceAdvisorBookingBuf
                             }`}
                         >
                             <Wrench size={14} />
-                            <span>Custom / What-If</span>
+                            <span>Custom Lookup</span>
                         </button>
                     </div>
                 </div>
 
                 {/* Body Form */}
-                <div className="p-5 overflow-y-auto space-y-4 text-slate-800">
+                <div className="p-5 overflow-y-auto space-y-4 text-slate-800 flex-grow">
                     {/* Toast Notification */}
                     {statusToast && (
                         <div className="bg-emerald-50 border border-emerald-300 text-emerald-900 p-3 rounded-xl flex items-center gap-2 text-xs font-bold animate-fade-in shadow-xs">
@@ -385,13 +494,13 @@ export const ServiceAdvisorBookingBufferModal: React.FC<ServiceAdvisorBookingBuf
                         </div>
                     )}
 
-                    {/* MODE 1: FROM ESTIMATE SELECTOR */}
+                    {/* MODE 1: FROM ESTIMATE SEARCHABLE LOOKUP */}
                     {mode === 'estimate' && (
                         <div className="bg-indigo-50/70 border border-indigo-200 rounded-xl p-3.5 space-y-3">
                             <div className="flex items-center justify-between">
                                 <label className="text-xs font-black uppercase tracking-wider text-indigo-950 flex items-center gap-1.5">
-                                    <FileText size={14} className="text-indigo-600" />
-                                    <span>Select Customer Estimate to Test</span>
+                                    <Search size={14} className="text-indigo-600" />
+                                    <span>Search Estimate by Name, Registration, or Estimate #</span>
                                 </label>
                                 <span className="text-[10px] text-indigo-700 font-bold">
                                     {schedulableEstimates.length} active estimate(s)
@@ -403,30 +512,16 @@ export const ServiceAdvisorBookingBufferModal: React.FC<ServiceAdvisorBookingBuf
                                     No pending customer estimates found. Switch to Custom mode to simulate new work.
                                 </p>
                             ) : (
-                                <select
-                                    value={selectedEstimateId}
-                                    onChange={(e) => handleSelectEstimate(e.target.value)}
-                                    className="w-full bg-white border border-indigo-300 rounded-xl px-3 py-2 text-xs font-bold text-indigo-950 focus:ring-2 focus:ring-indigo-500 focus:outline-hidden shadow-xs"
-                                >
-                                    {schedulableEstimates.map(est => {
-                                        const cust = customers.find(c => c.id === est.customerId);
-                                        const veh = vehicles.find(v => v.id === est.vehicleId);
-                                        const custName = cust ? getCustomerDisplayName(cust) : 'Customer';
-                                        const reg = veh?.registration || 'Unknown Reg';
-                                        const hours = est.lineItems
-                                            ? est.lineItems.filter(li => li.isLabor || li.type === 'labor').reduce((acc, li) => acc + (Number(li.quantity) || 1), 0)
-                                            : 0;
-
-                                        return (
-                                            <option key={est.id} value={est.id}>
-                                                [#{est.estimateNumber || est.id.substring(0, 7)}] {reg} • {custName} • {est.description || 'Estimate'} ({hours}h)
-                                            </option>
-                                        );
-                                    })}
-                                </select>
+                                <SearchableSelect
+                                    options={estimateOptions}
+                                    defaultValue={selectedEstimateId}
+                                    onSelect={(val) => handleSelectEstimate(val)}
+                                    placeholder="Type customer name or reg (e.g. 'Sarah' or 'WF21')..."
+                                    className="w-full text-xs font-bold"
+                                />
                             )}
 
-                            {/* Active Estimate Quick Card */}
+                            {/* Active Estimate Summary Card */}
                             {selectedEstimateId && (
                                 <div className="bg-white p-3 rounded-lg border border-indigo-200 text-xs space-y-1.5 shadow-2xs">
                                     <div className="flex items-center justify-between text-slate-600">
@@ -441,46 +536,34 @@ export const ServiceAdvisorBookingBufferModal: React.FC<ServiceAdvisorBookingBuf
                         </div>
                     )}
 
-                    {/* MODE 2: FROM UNALLOCATED JOB QUEUE */}
+                    {/* MODE 2: UNALLOCATED TECH QUEUE SEARCHABLE LOOKUP */}
                     {mode === 'unallocated' && (
                         <div className="bg-blue-50/70 border border-blue-200 rounded-xl p-3.5 space-y-3">
                             <div className="flex items-center justify-between">
                                 <label className="text-xs font-black uppercase tracking-wider text-blue-950 flex items-center gap-1.5">
-                                    <Layers size={14} className="text-blue-600" />
-                                    <span>Select Unallocated Job from Queue</span>
+                                    <Search size={14} className="text-blue-600" />
+                                    <span>Search Unallocated Job by Customer, Reg, or Job #</span>
                                 </label>
                                 <span className="text-[10px] text-blue-700 font-bold">
-                                    {queueUnallocatedJobs.length} job(s) awaiting scheduling
+                                    {queueUnallocatedJobs.length} job(s) awaiting technician
                                 </span>
                             </div>
 
                             {queueUnallocatedJobs.length === 0 ? (
                                 <p className="text-xs text-slate-500 italic p-2 bg-white rounded-lg border border-slate-200">
-                                    No unallocated jobs currently waiting in queue.
+                                    All workshop jobs currently have an assigned technician.
                                 </p>
                             ) : (
-                                <select
-                                    value={selectedUnallocatedJobId}
-                                    onChange={(e) => handleSelectUnallocatedJob(e.target.value)}
-                                    className="w-full bg-white border border-blue-300 rounded-xl px-3 py-2 text-xs font-bold text-blue-950 focus:ring-2 focus:ring-blue-500 focus:outline-hidden shadow-xs"
-                                >
-                                    {queueUnallocatedJobs.map(j => {
-                                        const cust = customers.find(c => c.id === j.customerId);
-                                        const veh = vehicles.find(v => v.id === j.vehicleId);
-                                        const custName = cust ? getCustomerDisplayName(cust) : 'Customer';
-                                        const reg = veh?.registration || 'Unknown Reg';
-                                        const hours = j.estimatedHours || (j.segments ? j.segments.reduce((acc, s) => acc + (s.duration || 0), 0) : 4);
-
-                                        return (
-                                            <option key={j.id} value={j.id}>
-                                                [#{j.jobNumber || j.id.substring(0, 7)}] {reg} • {custName} • {j.description || 'Workshop Job'} ({hours}h)
-                                            </option>
-                                        );
-                                    })}
-                                </select>
+                                <SearchableSelect
+                                    options={unallocatedJobOptions}
+                                    defaultValue={selectedUnallocatedJobId}
+                                    onSelect={(val) => handleSelectUnallocatedJob(val)}
+                                    placeholder="Type customer name, reg, or job #..."
+                                    className="w-full text-xs font-bold"
+                                />
                             )}
 
-                            {/* Active Job Quick Card */}
+                            {/* Active Job Summary Card */}
                             {selectedUnallocatedJobId && (
                                 <div className="bg-white p-3 rounded-lg border border-blue-200 text-xs space-y-1.5 shadow-2xs">
                                     <div className="flex items-center justify-between text-slate-600">
@@ -492,48 +575,75 @@ export const ServiceAdvisorBookingBufferModal: React.FC<ServiceAdvisorBookingBuf
                                     </div>
                                 </div>
                             )}
+
+                            {/* Allocate Specific Technician Option */}
+                            <div className="bg-white p-3 rounded-lg border border-blue-200">
+                                <label className="block text-[10px] font-black uppercase tracking-wider text-slate-600 mb-1.5 flex items-center gap-1.5">
+                                    <UserCheck size={12} className="text-blue-600" />
+                                    <span>Allocate to Specific Technician (Optional)</span>
+                                </label>
+                                <select
+                                    value={targetEngineerId}
+                                    onChange={(e) => setTargetEngineerId(e.target.value)}
+                                    className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-800"
+                                >
+                                    <option value="">Auto-Assign Optimal Free Tech</option>
+                                    {engineers.map(eng => {
+                                        const t = getEngineerTheme(eng.id);
+                                        return (
+                                            <option key={eng.id} value={eng.id}>
+                                                {eng.name} ({t.name})
+                                            </option>
+                                        );
+                                    })}
+                                </select>
+                            </div>
                         </div>
                     )}
 
-                    {/* MODE 3: CUSTOM / WHAT-IF FORM */}
+                    {/* MODE 3: CUSTOM SEARCHABLE LOOKUPS FOR 2000+ CUSTOMERS & 2500+ VEHICLES */}
                     {mode === 'manual' && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                        <div className="space-y-3 bg-slate-50 p-3.5 rounded-xl border border-slate-200">
                             <div>
-                                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Customer</label>
-                                <select 
-                                    value={selectedCustomerId}
-                                    onChange={(e) => {
-                                        setSelectedCustomerId(e.target.value);
-                                        const matchingV = vehicles.find(v => v.customerId === e.target.value);
+                                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
+                                    Search Customer (2,000+ records)
+                                </label>
+                                <SearchableSelect
+                                    options={customerOptions}
+                                    defaultValue={selectedCustomerId}
+                                    onSelect={(val) => {
+                                        setSelectedCustomerId(val);
+                                        const matchingV = vehicles.find(v => v.customerId === val);
                                         if (matchingV) setSelectedVehicleId(matchingV.id);
                                     }}
-                                    className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-semibold focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
-                                >
-                                    {customers.map(c => (
-                                        <option key={c.id} value={c.id}>{getCustomerDisplayName(c)}</option>
-                                    ))}
-                                </select>
+                                    placeholder="Search by name, company, phone, email..."
+                                    className="w-full text-xs font-semibold"
+                                />
                             </div>
+
                             <div>
-                                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Vehicle</label>
-                                <select 
-                                    value={selectedVehicleId}
-                                    onChange={(e) => setSelectedVehicleId(e.target.value)}
-                                    className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-semibold focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
-                                >
-                                    {customerVehicles.map(v => (
-                                        <option key={v.id} value={v.id}>{v.registration} ({v.make} {v.model})</option>
-                                    ))}
-                                </select>
+                                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
+                                    Search Vehicle (2,500+ records)
+                                </label>
+                                <SearchableSelect
+                                    options={vehicleOptions}
+                                    defaultValue={selectedVehicleId}
+                                    onSelect={(val) => setSelectedVehicleId(val)}
+                                    placeholder="Search by registration (e.g. WF21), make, model, VIN..."
+                                    className="w-full text-xs font-semibold"
+                                />
                             </div>
-                            <div className="md:col-span-2">
-                                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Description</label>
+
+                            <div>
+                                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
+                                    Package / Job Scope Description
+                                </label>
                                 <input 
                                     type="text"
                                     value={description}
                                     onChange={(e) => setDescription(e.target.value)}
-                                    placeholder="e.g. Multi-day engine overhaul"
-                                    className="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-semibold focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
+                                    placeholder="e.g. Engine Rebuild / Clutch Replacement"
+                                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-semibold focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
                                 />
                             </div>
                         </div>
@@ -601,7 +711,7 @@ export const ServiceAdvisorBookingBufferModal: React.FC<ServiceAdvisorBookingBuf
                         </div>
                     </div>
 
-                    {/* Simulation Result Card */}
+                    {/* Simulation Feasibility Result Card */}
                     {simulation && (
                         <div className="p-4 rounded-xl border-2 border-indigo-500/30 bg-gradient-to-br from-indigo-50 via-white to-blue-50 relative overflow-hidden shadow-xs">
                             <div className="flex items-center justify-between mb-2">
@@ -666,7 +776,7 @@ export const ServiceAdvisorBookingBufferModal: React.FC<ServiceAdvisorBookingBuf
                 </div>
 
                 {/* Footer Controls */}
-                <div className="p-4 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2">
+                <div className="p-4 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2 shrink-0">
                     <button
                         type="button"
                         onClick={onClose}
@@ -676,7 +786,7 @@ export const ServiceAdvisorBookingBufferModal: React.FC<ServiceAdvisorBookingBuf
                     </button>
 
                     <div className="flex items-center gap-2">
-                        {/* Action buttons depending on mode */}
+                        {/* Mode 1: From Estimate Actions */}
                         {mode === 'estimate' && (
                             <>
                                 <button
@@ -702,6 +812,7 @@ export const ServiceAdvisorBookingBufferModal: React.FC<ServiceAdvisorBookingBuf
                             </>
                         )}
 
+                        {/* Mode 2: Unallocated Queue Actions */}
                         {mode === 'unallocated' && (
                             <button
                                 type="button"
@@ -714,6 +825,7 @@ export const ServiceAdvisorBookingBufferModal: React.FC<ServiceAdvisorBookingBuf
                             </button>
                         )}
 
+                        {/* Mode 3: Manual Actions */}
                         {mode === 'manual' && (
                             <button
                                 type="button"
