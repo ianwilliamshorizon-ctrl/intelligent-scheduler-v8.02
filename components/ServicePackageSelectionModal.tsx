@@ -55,7 +55,7 @@ export const ServicePackageSelectionModal: React.FC<ServicePackageSelectionModal
 
     // Check narrative keywords against packages
     const narrativeKeywords = useMemo(() => {
-        const text = narrative.toLowerCase();
+        const text = String(narrative || '').toLowerCase();
         const keywords = [
             'minor service', 'major service', 'interim service', 'full service', 
             'mot', 'brake fluid', 'winter check', 'air con', 'oil change', 'diagnostic',
@@ -65,16 +65,17 @@ export const ServicePackageSelectionModal: React.FC<ServicePackageSelectionModal
     }, [narrative]);
 
     const isNarrativeMatch = (pkg: ServicePackage): boolean => {
-        if (narrativeKeywords.length === 0 && !narrative.trim()) return false;
-        const pName = (pkg.name || '').toLowerCase();
-        const pDesc = (pkg.description || '').toLowerCase();
+        const narrativeStr = String(narrative || '');
+        if (narrativeKeywords.length === 0 && !narrativeStr.trim()) return false;
+        const pName = String(pkg.name || '').toLowerCase();
+        const pDesc = String(pkg.description || '').toLowerCase();
         
         // Match specific narrative keywords
         if (narrativeKeywords.some(kw => pName.includes(kw) || pDesc.includes(kw))) {
             return true;
         }
         // General text overlap if narrative is short
-        const shortNarrative = narrative.toLowerCase().trim();
+        const shortNarrative = narrativeStr.toLowerCase().trim();
         if (shortNarrative.length >= 3 && (pName.includes(shortNarrative) || shortNarrative.includes(pName))) {
             return true;
         }
@@ -83,10 +84,11 @@ export const ServicePackageSelectionModal: React.FC<ServicePackageSelectionModal
 
     // Filter and sort display items by LIKELIHOOD (Narrative match + Vehicle compatibility score)
     const filteredPackages = useMemo(() => {
+        const searchLow = String(searchTerm || '').toLowerCase().trim();
         const filtered = scoredPackages.filter(item => {
-            const matchesSearch = !searchTerm.trim() || 
-                (item.pkg.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                (item.pkg.description || '').toLowerCase().includes(searchTerm.toLowerCase());
+            const matchesSearch = !searchLow || 
+                String(item.pkg.name || '').toLowerCase().includes(searchLow) ||
+                String(item.pkg.description || '').toLowerCase().includes(searchLow);
             
             if (!matchesSearch) return false;
 

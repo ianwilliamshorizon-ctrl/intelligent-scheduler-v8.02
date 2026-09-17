@@ -661,7 +661,7 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
 
     // Compute matches for current branch vs other branches
     const matchingPackagesResult = useMemo(() => {
-        const term = packageSearchTerm.toLowerCase().trim();
+        const term = String(packageSearchTerm || '').toLowerCase().trim();
         const allPkgs = Array.isArray(servicePackages) ? servicePackages : [];
         const currentPkgs = allPkgs.filter(p => !p.entityId || p.entityId === formData.entityId);
         const otherPkgs = allPkgs.filter(p => p.entityId && p.entityId !== formData.entityId);
@@ -701,8 +701,8 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
         }
         
         const matchedCurrent = currentPkgs.filter(p => 
-            (p.name || '').toLowerCase().includes(term) ||
-            (p.description || '').toLowerCase().includes(term)
+            String(p.name || '').toLowerCase().includes(term) ||
+            String(p.description || '').toLowerCase().includes(term)
         );
         
         if (matchedCurrent.length > 0) {
@@ -713,8 +713,8 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
         }
         
         const matchedOthers = otherPkgs.filter(p => 
-            (p.name || '').toLowerCase().includes(term) ||
-            (p.description || '').toLowerCase().includes(term)
+            String(p.name || '').toLowerCase().includes(term) ||
+            String(p.description || '').toLowerCase().includes(term)
         );
         
         if (matchedOthers.length > 0) {

@@ -12,8 +12,11 @@ export const getScoredServicePackages = (
     servicePackages: ServicePackage[], 
     vehicle?: Partial<Vehicle> | null
 ): ScoredPackage[] => {
+    const clean = (str: any) => 
+        String(str ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
     if (!vehicle || !vehicle.make) {
-        return servicePackages.map(pkg => ({ 
+        return (servicePackages || []).map(pkg => ({ 
             pkg, 
             score: pkg.applicableMake || pkg.applicableModel ? 0 : 1,
             matchType: pkg.applicableMake || pkg.applicableModel ? 'Other' : 'Generic', 
@@ -22,27 +25,24 @@ export const getScoredServicePackages = (
         }));
     }
 
-    const clean = (str: string | undefined | null) => 
-        (str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-
     const vMake = clean(vehicle.make);
     const vModel = clean(vehicle.model);
-    const vEngineSize = vehicle.cc;
+    const vEngineSize = vehicle.cc ? Number(vehicle.cc) : undefined;
 
-    const scored: ScoredPackage[] = servicePackages.map(pkg => {
+    const scored: ScoredPackage[] = (servicePackages || []).map(pkg => {
         const pName = clean(pkg.name);
         const pMake = clean(pkg.applicableMake);
         const pModel = clean(pkg.applicableModel);
-        const pEngineSize = pkg.applicableEngineSize;
+        const pEngineSize = pkg.applicableEngineSize ? Number(pkg.applicableEngineSize) : undefined;
         
         let score = 0; 
         let matchType = 'Other';
         let status: ScoredPackage['status'] = 'other';
         let color = 'bg-gray-50 text-gray-400';
 
-        const isMakeMatch = pMake && (vMake.includes(pMake) || pMake.includes(vMake));
-        const isModelMatch = pModel && (vModel.includes(pModel) || pModel.includes(vModel));
-        const isEngineSizeMatch = pEngineSize && vEngineSize && pEngineSize === vEngineSize;
+        const isMakeMatch = Boolean(pMake && vMake && (vMake.includes(pMake) || pMake.includes(vMake)));
+        const isModelMatch = Boolean(pModel && vModel && (vModel.includes(pModel) || pModel.includes(vModel)));
+        const isEngineSizeMatch = Boolean(pEngineSize && vEngineSize && pEngineSize === vEngineSize);
 
         if (isMakeMatch && isModelMatch && isEngineSizeMatch) {
             score = 5;
@@ -69,7 +69,7 @@ export const getScoredServicePackages = (
             matchType = 'Generic';
             status = 'generic';
             color = 'bg-slate-100 text-slate-700';
-        } else if (pName.includes(vMake) && pName.includes(vModel)) {
+        } else if (vMake && vModel && pName.includes(vMake) && pName.includes(vModel)) {
             score = 2;
             matchType = 'Name Match';
             status = 'other';
