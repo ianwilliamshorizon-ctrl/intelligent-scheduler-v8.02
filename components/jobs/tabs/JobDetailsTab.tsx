@@ -1,7 +1,7 @@
 import { cloudSpeechSynthesis, CloudSpeechSynthesisUtterance } from '../../../core/utils/cloudSpeech';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import * as T from '../../../types';
-import { Car, User, KeyRound, Edit, Phone, Mail, MapPin, Building, Briefcase, Expand, ImageIcon, X, Gauge, Info, Wrench, DollarSign, Printer, CheckCircle, Volume2 } from 'lucide-react';
+import { Car, User, KeyRound, Edit, Phone, Mail, MapPin, Building, Briefcase, Expand, ImageIcon, X, Gauge, Info, Wrench, DollarSign, Printer, CheckCircle, Volume2, Truck } from 'lucide-react';
 import { HoverInfo } from '../../shared/HoverInfo';
 import SpeechToTextButton from '../../shared/SpeechToTextButton';
 import LiveAssistant from '../../LiveAssistant';
@@ -309,7 +309,7 @@ const JobDetailsTab: React.FC<JobDetailsTabProps> = ({
             </TabSection>
 
             <TabSection title="Purchase Orders" icon={Briefcase}>
-                <div className="space-y-2">
+                <div className="space-y-3">
                     {jobPOs.length > 0 ? (
                         <div className="space-y-1">
                             {jobPOs.map(po => (
@@ -319,7 +319,12 @@ const JobDetailsTab: React.FC<JobDetailsTabProps> = ({
                                             #{po.id}
                                             <Wrench size={10} className="hidden group-hover:block" />
                                         </span>
-                                        <span className="text-[10px] text-gray-500 font-medium">Supplier {po.supplierId || 'N/A'}</span>
+                                        <span className="text-[10px] text-gray-500 font-medium">
+                                            Supplier {po.supplierId || 'N/A'}
+                                            {po.expectedDeliveryDate && (
+                                                <span className="ml-1 text-indigo-600 font-semibold">• Due: {po.expectedDeliveryDate}</span>
+                                            )}
+                                        </span>
                                     </div>
                                     <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
                                         po.status === 'Received' ? 'bg-green-100 text-green-700' :
@@ -337,6 +342,37 @@ const JobDetailsTab: React.FC<JobDetailsTabProps> = ({
                             No orders raised yet
                         </div>
                     )}
+
+                    <div className="pt-2 border-t border-gray-100 space-y-1.5">
+                        <div className="flex items-center justify-between">
+                            <label htmlFor="expectedDeliveryDate" className="text-[10px] font-bold text-gray-600 uppercase tracking-wider flex items-center gap-1.5">
+                                <Truck size={12} className="text-indigo-600" />
+                                Expected Purchases Delivery
+                            </label>
+                            {editableJob.expectedDeliveryDate && (
+                                <button
+                                    type="button"
+                                    onClick={() => onChange({ target: { name: 'expectedDeliveryDate', value: '' } } as any)}
+                                    className="text-[10px] text-gray-400 hover:text-red-600 underline font-medium"
+                                    disabled={isReadOnly}
+                                >
+                                    Clear
+                                </button>
+                            )}
+                        </div>
+                        <input 
+                            type="date" 
+                            id="expectedDeliveryDate"
+                            name="expectedDeliveryDate"
+                            value={editableJob.expectedDeliveryDate || ''} 
+                            onChange={onChange} 
+                            className="w-full p-2 border border-gray-200 rounded-lg bg-white text-sm font-semibold text-gray-800 focus:ring-2 focus:ring-indigo-500 transition-all shadow-2xs" 
+                            disabled={isReadOnly}
+                        />
+                        <p className="text-[10px] text-gray-400 italic">
+                            Used by FCS planning and auto-scheduling so the job starts on or after parts arrive.
+                        </p>
+                    </div>
                 </div>
             </TabSection>
 

@@ -238,7 +238,12 @@ export const DraggableJobCard: React.FC<{
                 )}
 
                 <div className="flex justify-between items-center pt-2 border-t mt-2 border-gray-100">
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2 flex-wrap">
+                        {job.expectedDeliveryDate && (
+                            <span className="text-[10px] font-black text-amber-900 bg-amber-200/90 border border-amber-300 px-1.5 py-0.5 rounded flex items-center gap-1 shadow-2xs" title={`Expected Purchases Delivery: ${job.expectedDeliveryDate}`}>
+                                🚚 {job.expectedDeliveryDate}
+                            </span>
+                        )}
                         {partsStatusInfo && <span title={partsStatusInfo.title} className={`flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider ${isVibrant ? 'text-white/80' : partsStatusInfo.color}`}>{partsStatusInfo.icon && <partsStatusInfo.icon size={12}/>} {partsStatus}</span>}
                         <span title={`Vehicle Status: ${currentVehicleStatus.text}`} className={`flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider ${job.vehicleStatus === 'Off-Site (Partner)' ? 'text-amber-600' : 'text-gray-500'}`}>
                             <currentVehicleStatus.icon size={12}/> {currentVehicleStatus.text}

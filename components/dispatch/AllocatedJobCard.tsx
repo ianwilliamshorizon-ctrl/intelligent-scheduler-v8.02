@@ -220,14 +220,19 @@ export const AllocatedJobCard: React.FC<{
                             <p className="text-[10px] truncate leading-tight opacity-70 font-semibold">{getCustomerDisplayName(customer)}</p>
                         </HoverInfo>
                     )}
-                    {!isSmallCard && associatedPOs.length > 0 && (
+                    {!isSmallCard && (associatedPOs.length > 0 || job.expectedDeliveryDate) && (
                         <div className="flex flex-wrap gap-1 mt-1">
+                            {job.expectedDeliveryDate && (
+                                <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-black bg-amber-200 text-amber-900 border border-amber-300" title={`Expected Purchases Delivery: ${job.expectedDeliveryDate}`}>
+                                    🚚 {job.expectedDeliveryDate}
+                                </span>
+                            )}
                             {associatedPOs.map(po => (
                                 <button
                                     key={po.id}
                                     onClick={(e) => handleAction(e, () => onOpenPurchaseOrder(po))}
                                     className={`flex items-center gap-0.5 px-1 py-0.5 rounded text-[10px] font-black border border-white/20 transition-all hover:scale-105 ${getPoStatusColor(po.status, 'bg')} ${getPoStatusColor(po.status, 'text')}`}
-                                    title={`PO #${po.id} (${po.status})`}
+                                    title={`PO #${po.id} (${po.status})${po.expectedDeliveryDate ? ` - Due ${po.expectedDeliveryDate}` : ''}`}
                                 >
                                     <PackageIcon size={10} />
                                     {po.id}

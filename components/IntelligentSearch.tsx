@@ -50,14 +50,14 @@ const IntelligentSearch: React.FC<IntelligentSearchProps> = ({ onResultClick }) 
                 
                 searchResults.push(...vehicles.filter(v =>
                     // Registration Match
-                    v.registration.toLowerCase().replace(/\s/g, '').includes(termNoSpace) ||
+                    String(v.registration || '').toLowerCase().replace(/\s/g, '').includes(termNoSpace) ||
                     // VIN Match (Robust)
-                    (v.vin && v.vin.toLowerCase().includes(lowerTerm)) ||
+                    (v.vin && String(v.vin).toLowerCase().includes(lowerTerm)) ||
                     // Make/Model Match
-                    v.make.toLowerCase().includes(lowerTerm) ||
-                    v.model.toLowerCase().includes(lowerTerm) ||
+                    String(v.make || '').toLowerCase().includes(lowerTerm) ||
+                    String(v.model || '').toLowerCase().includes(lowerTerm) ||
                     // Previous Registration Match
-                    (v.previousRegistrations && v.previousRegistrations.some(pr => pr.registration.toLowerCase().replace(/\s/g, '').includes(termNoSpace)))
+                    (v.previousRegistrations && v.previousRegistrations.some(pr => String(pr.registration || '').toLowerCase().replace(/\s/g, '').includes(termNoSpace)))
                 ));
             }
 

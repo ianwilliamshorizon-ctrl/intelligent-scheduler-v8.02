@@ -73,10 +73,10 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({
     const matchedLibraryDiagram = useMemo(() => {
         if (!vehicle || !inspectionDiagrams || vehicleImage) return null;
         return inspectionDiagrams.find(d => 
-            d.make?.toLowerCase() === vehicle.make?.toLowerCase() && 
-            d.model?.toLowerCase() === vehicle.model?.toLowerCase()
+            String(d.make || '').toLowerCase() === String(vehicle.make || '').toLowerCase() && 
+            String(d.model || '').toLowerCase() === String(vehicle.model || '').toLowerCase()
         ) || inspectionDiagrams.find(d => 
-            d.make?.toLowerCase() === vehicle.make?.toLowerCase()
+            String(d.make || '').toLowerCase() === String(vehicle.make || '').toLowerCase()
         ) || null;
     }, [vehicle, inspectionDiagrams, vehicleImage]);
 

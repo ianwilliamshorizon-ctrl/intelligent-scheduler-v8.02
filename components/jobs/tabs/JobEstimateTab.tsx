@@ -808,7 +808,15 @@ export const JobEstimateTab: React.FC<JobEstimateTabProps> = ({
                             return (
                                 <button key={poId} type="button" onClick={() => onOpenPurchaseOrder(po)} className="w-full text-left border rounded-md bg-gray-50 text-xs hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
                                     <div className="p-2 flex justify-between items-center">
-                                        <div><p><strong>{poId}</strong> - {po?.supplierId ? (supplierMap.get(po.supplierId) || 'Unknown Supplier') : 'N/A'}</p><p>{po.supplierReference && <span className="font-semibold text-indigo-700 mr-2">Ref: {po.supplierReference}</span>}Status: <span className="font-semibold">{po.status}</span>{canViewPricing && <> - Total: <span className="font-semibold">{formatCurrency(poTotal)}</span></>} </p></div>
+                                        <div>
+                                            <p><strong>{poId}</strong> - {po?.supplierId ? (supplierMap.get(po.supplierId) || 'Unknown Supplier') : 'N/A'}</p>
+                                            <p>
+                                                {po.supplierReference && <span className="font-semibold text-indigo-700 mr-2">Ref: {po.supplierReference}</span>}
+                                                Status: <span className="font-semibold">{po.status}</span>
+                                                {po.expectedDeliveryDate && <span className="font-semibold text-indigo-700 ml-2">🚚 Due: {po.expectedDeliveryDate}</span>}
+                                                {canViewPricing && <> - Total: <span className="font-semibold">{formatCurrency(poTotal)}</span></>} 
+                                            </p>
+                                        </div>
                                     </div>
                                 </button>
                             );

@@ -11,9 +11,7 @@ describe('getScoredServicePackages', () => {
             applicableMake: 'PORSCHE',
             applicableModel: '911',
             applicableEngineSize: 3000,
-            entityId: 'ent_porsche',
-            active: true,
-            items: []
+            entityId: 'ent_porsche'
         },
         {
             id: 'pkg-2',
@@ -21,9 +19,7 @@ describe('getScoredServicePackages', () => {
             description: 'Annual MOT test',
             applicableMake: '',
             applicableModel: '',
-            entityId: 'ent_porsche',
-            active: true,
-            items: []
+            entityId: 'ent_porsche'
         }
     ];
 

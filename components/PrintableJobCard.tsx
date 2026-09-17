@@ -448,6 +448,12 @@ const PrintableJobCard: React.FC<PrintableJobCardProps> = ({
                                             {block.title || 'Parts & Materials'}
                                         </div>
                                     </div>
+                                    {job.expectedDeliveryDate && (
+                                        <div className="mx-3 mt-2 mb-1 p-1.5 rounded bg-amber-50 border border-amber-200/80 flex items-center justify-between text-[11px] font-semibold text-amber-900">
+                                            <span>Expected Purchases Delivery:</span>
+                                            <span className="font-mono font-bold">{job.expectedDeliveryDate}</span>
+                                        </div>
+                                    )}
                                     <div className="p-0 overflow-x-auto">
                                         <table className="w-full text-xs text-left" style={cs.textStyle}>
                                             <thead className="bg-slate-50/60 border-b text-[10px] uppercase" style={cs.subtextStyle}>

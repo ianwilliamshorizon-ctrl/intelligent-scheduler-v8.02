@@ -125,9 +125,9 @@ const VanTopView = () => (
     </svg>
 );
 
-const getVehicleType = (model?: string): '911' | 'convertible' | 'estate' | 'saloon' | 'suv' | 'van' => {
+const getVehicleType = (model?: string | number): '911' | 'convertible' | 'estate' | 'saloon' | 'suv' | 'van' => {
     if (!model) return 'saloon';
-    const m = model.toLowerCase();
+    const m = String(model).toLowerCase();
 
     if (m.includes('boxster') || m.includes('convertible') || m.includes('cabrio') || m.includes('spider') || m.includes('spyder') || m.includes('718') || m.includes('mx-5') || m.includes('z4')) return 'convertible';
     if (m.includes('911') || m.includes('cayman') || m.includes('coupe') || m.includes('gt3') || m.includes('gt2') || m.includes('carrera') || m.includes('targa') || m.includes('tt') || m.includes('r8')) return '911';

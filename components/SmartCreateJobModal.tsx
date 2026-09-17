@@ -294,8 +294,8 @@ const SmartCreateJobModal: React.FC<SmartCreateJobModalProps> = ({
                 }));
         }
 
-        const vMake = (foundVehicle.make || '').toLowerCase().trim();
-        const vModel = (foundVehicle.model || '').toLowerCase().trim();
+        const vMake = String(foundVehicle.make || '').toLowerCase().trim();
+        const vModel = String(foundVehicle.model || '').toLowerCase().trim();
 
         const scored = servicePackages
             .filter(p => p.entityId === selectedEntity.id)

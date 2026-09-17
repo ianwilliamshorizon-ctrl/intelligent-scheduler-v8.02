@@ -393,8 +393,8 @@ const InquiryCard: React.FC<{
                             </button>
                         )}
                         {vehicle ? (() => {
-                            const make = (vehicle.make && vehicle.make.toLowerCase() !== 'unknown') ? vehicle.make : (inquiry.vehicleMake && inquiry.vehicleMake.toLowerCase() !== 'unknown' ? inquiry.vehicleMake : '');
-                            const model = (vehicle.model && vehicle.model.toLowerCase() !== 'unknown') ? vehicle.model : (inquiry.vehicleModel && inquiry.vehicleModel.toLowerCase() !== 'unknown' ? inquiry.vehicleModel : '');
+                            const make = (vehicle.make && String(vehicle.make).toLowerCase() !== 'unknown') ? String(vehicle.make) : (inquiry.vehicleMake && String(inquiry.vehicleMake).toLowerCase() !== 'unknown' ? String(inquiry.vehicleMake) : '');
+                            const model = (vehicle.model && String(vehicle.model).toLowerCase() !== 'unknown') ? String(vehicle.model) : (inquiry.vehicleModel && String(inquiry.vehicleModel).toLowerCase() !== 'unknown' ? String(inquiry.vehicleModel) : '');
                             const spec = make ? ` - ${make} ${model}`.trim() : '';
                             return (
                                 <button
@@ -660,8 +660,8 @@ const InquiryCard: React.FC<{
                 )}
                 
                 {vehicle ? (() => {
-                    const make = (vehicle.make && vehicle.make.toLowerCase() !== 'unknown') ? vehicle.make : (inquiry.vehicleMake && inquiry.vehicleMake.toLowerCase() !== 'unknown' ? inquiry.vehicleMake : '');
-                    const model = (vehicle.model && vehicle.model.toLowerCase() !== 'unknown') ? vehicle.model : (inquiry.vehicleModel && inquiry.vehicleModel.toLowerCase() !== 'unknown' ? inquiry.vehicleModel : '');
+                    const make = (vehicle.make && String(vehicle.make).toLowerCase() !== 'unknown') ? String(vehicle.make) : (inquiry.vehicleMake && String(inquiry.vehicleMake).toLowerCase() !== 'unknown' ? String(inquiry.vehicleMake) : '');
+                    const model = (vehicle.model && String(vehicle.model).toLowerCase() !== 'unknown') ? String(vehicle.model) : (inquiry.vehicleModel && String(inquiry.vehicleModel).toLowerCase() !== 'unknown' ? String(inquiry.vehicleModel) : '');
                     const displaySpecs = make ? `(${make} ${model})`.trim() : '';
                     return (
                         <button
@@ -680,7 +680,7 @@ const InquiryCard: React.FC<{
                 })() : effectiveReg ? (
                     <div className="flex items-center gap-2 text-xs text-amber-800 bg-amber-50 px-2 py-1 rounded border border-amber-200/60 w-fit font-semibold font-mono" title={`Vehicle Registration: ${effectiveReg}`}>
                         <Car size={14} className="text-amber-600 shrink-0"/>
-                        <span>{effectiveReg} {inquiry.vehicleMake && inquiry.vehicleMake.toLowerCase() !== 'unknown' ? `(${inquiry.vehicleMake} ${inquiry.vehicleModel && inquiry.vehicleModel.toLowerCase() !== 'unknown' ? inquiry.vehicleModel : ''})`.trim() : ''}</span>
+                        <span>{effectiveReg} {inquiry.vehicleMake && String(inquiry.vehicleMake).toLowerCase() !== 'unknown' ? `(${inquiry.vehicleMake} ${inquiry.vehicleModel && String(inquiry.vehicleModel).toLowerCase() !== 'unknown' ? inquiry.vehicleModel : ''})`.trim() : ''}</span>
                     </div>
                 ) : null}
                 
@@ -2008,8 +2008,8 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                                                 {/* Vehicle */}
                                                 <td className="py-1.5 px-3 whitespace-nowrap">
                                                     {vehicle ? (() => {
-                                                        const make = (vehicle.make && vehicle.make.toLowerCase() !== 'unknown') ? vehicle.make : (i.vehicleMake && i.vehicleMake.toLowerCase() !== 'unknown' ? i.vehicleMake : '');
-                                                        const model = (vehicle.model && vehicle.model.toLowerCase() !== 'unknown') ? vehicle.model : (i.vehicleModel && i.vehicleModel.toLowerCase() !== 'unknown' ? i.vehicleModel : '');
+                                                        const make = (vehicle.make && String(vehicle.make).toLowerCase() !== 'unknown') ? String(vehicle.make) : (i.vehicleMake && String(i.vehicleMake).toLowerCase() !== 'unknown' ? String(i.vehicleMake) : '');
+                                                        const model = (vehicle.model && String(vehicle.model).toLowerCase() !== 'unknown') ? String(vehicle.model) : (i.vehicleModel && String(i.vehicleModel).toLowerCase() !== 'unknown' ? String(i.vehicleModel) : '');
                                                         const spec = make ? ` - ${make} ${model}`.trim() : '';
                                                         return (
                                                             <button

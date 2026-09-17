@@ -28,6 +28,7 @@ interface OptimizedAssignment {
     recommendedRampId: string;
     scheduledDate: string;
     partsLeadDays: number;
+    expectedDeliveryDate?: string;
     isOverridden?: boolean;
 }
 
@@ -104,13 +105,41 @@ export const FCSOptimizerModal: React.FC<FCSOptimizerModalProps> = ({
         sortedJobs.forEach((job, idx) => {
             const hours = job.estimatedHours || (job.segments ? job.segments.reduce((acc, s) => acc + (s.duration || 0), 0) : 4);
 
-            // Check linked PO parts lead days
-            const linkedPos = purchaseOrders.filter(po => po.jobId === job.id);
-            const hasUndelivered = linkedPos.some(po => po.status !== 'Received');
-            const partsLeadDays = hasUndelivered ? 2 : 0;
+            // Check linked PO parts lead days and expected delivery dates
+            const linkedPos = purchaseOrders.filter(po => 
+                po.jobId === job.id || (job.purchaseOrderIds && job.purchaseOrderIds.includes(po.id))
+            );
+            const hasUndelivered = linkedPos.some(po => po.status !== 'Received' && po.status !== 'Finalized');
 
-            // Earliest date considering parts lead days
-            const targetDate = addDays(new Date(startDateStr.includes('T') ? startDateStr : `${startDateStr}T00:00:00`), partsLeadDays);
+            const baseDate = new Date(startDateStr.includes('T') ? startDateStr : `${startDateStr}T00:00:00`);
+            let earliestDate = new Date(baseDate.getTime());
+            let partsLeadDays = 0;
+
+            // Check if job or linked PO has explicit expectedDeliveryDate
+            let latestExpectedDelivery: string | undefined = job.expectedDeliveryDate;
+            linkedPos.forEach(po => {
+                if (po.expectedDeliveryDate && po.status !== 'Received' && po.status !== 'Finalized') {
+                    if (!latestExpectedDelivery || po.expectedDeliveryDate > latestExpectedDelivery) {
+                        latestExpectedDelivery = po.expectedDeliveryDate;
+                    }
+                }
+            });
+
+            if (latestExpectedDelivery) {
+                const delD = new Date(latestExpectedDelivery.includes('T') ? latestExpectedDelivery : `${latestExpectedDelivery}T00:00:00`);
+                if (!isNaN(delD.getTime())) {
+                    if (delD > earliestDate) {
+                        earliestDate = delD;
+                    }
+                    const diffDays = Math.max(0, Math.ceil((delD.getTime() - baseDate.getTime()) / (1000 * 60 * 60 * 24)));
+                    partsLeadDays = diffDays;
+                }
+            } else if (hasUndelivered) {
+                partsLeadDays = 2;
+                earliestDate = addDays(baseDate, 2);
+            }
+
+            const targetDate = earliestDate;
             const scheduledDate = job.scheduledDate && new Date(job.scheduledDate) >= targetDate 
                 ? job.scheduledDate 
                 : formatDate(targetDate);
@@ -142,7 +171,8 @@ export const FCSOptimizerModal: React.FC<FCSOptimizerModalProps> = ({
                 recommendedEngineerId: bestEngId,
                 recommendedRampId,
                 scheduledDate,
-                partsLeadDays
+                partsLeadDays,
+                expectedDeliveryDate: latestExpectedDelivery
             });
         });
 
@@ -382,11 +412,15 @@ export const FCSOptimizerModal: React.FC<FCSOptimizerModalProps> = ({
                                                             <div className="text-[10px] text-slate-500 flex items-center gap-1 mt-0.5">
                                                                 <Clock size={10} className="text-slate-400" />
                                                                 <strong className="text-slate-700">{item.hours}h</strong>
-                                                                {item.partsLeadDays > 0 && (
+                                                                {item.expectedDeliveryDate ? (
+                                                                    <span className="text-amber-800 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded text-[9px] font-bold">
+                                                                        🚚 Due {item.expectedDeliveryDate}
+                                                                    </span>
+                                                                ) : item.partsLeadDays > 0 ? (
                                                                     <span className="text-amber-700 bg-amber-50 border border-amber-200 px-1 rounded text-[9px] font-bold">
                                                                         +{item.partsLeadDays}d parts
                                                                     </span>
-                                                                )}
+                                                                ) : null}
                                                             </div>
                                                         </td>
 

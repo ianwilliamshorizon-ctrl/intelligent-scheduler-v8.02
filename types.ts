@@ -230,6 +230,7 @@ export interface Job {
     priority?: number; // 1 (Highest/Urgent) to 5 (Lowest)
     remainingHours?: number; // Estimated labour hours (H) left to work
     rampLockId?: string; // Assigned physical ramp locking space
+    expectedDeliveryDate?: string; // Optional expected delivery date for purchases/parts (YYYY-MM-DD)
 }
 
 export type FCSState = 'ACTIVE' | 'STALLED' | 'QUEUED';
@@ -549,6 +550,7 @@ export interface PurchaseOrder {
     pdfUrl?: string;
     pdfGeneratedAt?: string;
     createdByUserId?: string;
+    expectedDeliveryDate?: string; // Optional expected delivery date (YYYY-MM-DD)
 }
 
 export interface ChargingEvent {

@@ -34,9 +34,9 @@ const SalesView: React.FC<SalesViewProps> = ({ entity, onManageSaleVehicle, onAd
             const vehicle = vehiclesById.get(sv.vehicleId);
             if (!vehicle) return false;
             return (
-                vehicle.registration.toLowerCase().replace(/\s/g, '').includes(lowerSearch.replace(/\s/g, '')) ||
-                vehicle.make.toLowerCase().includes(lowerSearch) ||
-                vehicle.model.toLowerCase().includes(lowerSearch)
+                String(vehicle.registration || '').toLowerCase().replace(/\s/g, '').includes(lowerSearch.replace(/\s/g, '')) ||
+                String(vehicle.make || '').toLowerCase().includes(lowerSearch) ||
+                String(vehicle.model || '').toLowerCase().includes(lowerSearch)
             );
         });
     }, [saleVehicles, lowerSearch, vehiclesById, activeTab]);

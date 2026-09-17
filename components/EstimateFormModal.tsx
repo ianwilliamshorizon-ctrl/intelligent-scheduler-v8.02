@@ -1115,12 +1115,12 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
         address: `${linkedInquiry.addressLine1 || ''}${linkedInquiry.city ? `, ${linkedInquiry.city}` : ''}${linkedInquiry.postcode ? `, ${linkedInquiry.postcode}` : ''}`.replace(/^[\s,]+|[\s,]+$/g, '').trim() || 'N/A',
     } : {});
 
-    const effectiveMake = (currentVehicle?.make && currentVehicle.make.toLowerCase() !== 'unknown')
-        ? currentVehicle.make
-        : (linkedInquiry?.vehicleMake && linkedInquiry.vehicleMake.toLowerCase() !== 'unknown' ? linkedInquiry.vehicleMake : '');
-    const effectiveModel = (currentVehicle?.model && currentVehicle.model.toLowerCase() !== 'unknown')
-        ? currentVehicle.model
-        : (linkedInquiry?.vehicleModel && linkedInquiry.vehicleModel.toLowerCase() !== 'unknown' ? linkedInquiry.vehicleModel : '');
+    const effectiveMake = (currentVehicle?.make && String(currentVehicle.make).toLowerCase() !== 'unknown')
+        ? String(currentVehicle.make)
+        : (linkedInquiry?.vehicleMake && String(linkedInquiry.vehicleMake).toLowerCase() !== 'unknown' ? String(linkedInquiry.vehicleMake) : '');
+    const effectiveModel = (currentVehicle?.model && String(currentVehicle.model).toLowerCase() !== 'unknown')
+        ? String(currentVehicle.model)
+        : (linkedInquiry?.vehicleModel && String(linkedInquiry.vehicleModel).toLowerCase() !== 'unknown' ? String(linkedInquiry.vehicleModel) : '');
     const effectiveYear = currentVehicle?.year || (linkedInquiry?.vehicleYear ? parseInt(linkedInquiry.vehicleYear) : '');
 
     const vehicleInfoData = (currentVehicle || linkedInquiry?.vehicleRegistration) ? {

@@ -89,17 +89,17 @@ export const PrintableInquirySheet: React.FC<PrintableInquirySheetProps> = ({
             || (inquiry.linkedEstimateId && (estimatesById.get(inquiry.linkedEstimateId) as any)?.vehicleRegistration)
             || '';
 
-        const make = (v?.make && v.make.toLowerCase() !== 'unknown')
-            ? v.make
-            : (inquiry.vehicleMake && inquiry.vehicleMake.toLowerCase() !== 'unknown' ? inquiry.vehicleMake : '');
+        const make = (v?.make && String(v.make).toLowerCase() !== 'unknown')
+            ? String(v.make)
+            : (inquiry.vehicleMake && String(inquiry.vehicleMake).toLowerCase() !== 'unknown' ? String(inquiry.vehicleMake) : '');
 
-        const model = (v?.model && v.model.toLowerCase() !== 'unknown')
-            ? v.model
-            : (inquiry.vehicleModel && inquiry.vehicleModel.toLowerCase() !== 'unknown' ? inquiry.vehicleModel : '');
+        const model = (v?.model && String(v.model).toLowerCase() !== 'unknown')
+            ? String(v.model)
+            : (inquiry.vehicleModel && String(inquiry.vehicleModel).toLowerCase() !== 'unknown' ? String(inquiry.vehicleModel) : '');
 
-        const type = (v?.type && v.type.toLowerCase() !== 'unknown')
-            ? v.type
-            : ((inquiry as any).vehicleType && (inquiry as any).vehicleType.toLowerCase() !== 'unknown' ? (inquiry as any).vehicleType : '');
+        const type = (v?.type && String(v.type).toLowerCase() !== 'unknown')
+            ? String(v.type)
+            : ((inquiry as any).vehicleType && String((inquiry as any).vehicleType).toLowerCase() !== 'unknown' ? String((inquiry as any).vehicleType) : '');
 
         const makeModel = [make, model].filter(Boolean).join(' ').trim();
         let details = makeModel;

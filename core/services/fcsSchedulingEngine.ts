@@ -42,6 +42,14 @@ export interface FCSMatrixResult {
 export function deriveMaterialsStatus(job: Job, purchaseOrders: PurchaseOrder[]): MaterialsStatus {
     if (job.materialsStatus) return job.materialsStatus;
 
+    // Check if job has an explicit expected delivery date for purchases that is in the future
+    if (job.expectedDeliveryDate) {
+        const todayStr = new Date().toISOString().split('T')[0];
+        if (job.expectedDeliveryDate > todayStr) {
+            return 'Ordered';
+        }
+    }
+
     const linkedPos = (purchaseOrders || []).filter(po => 
         (job.purchaseOrderIds && job.purchaseOrderIds.includes(po.id)) || po.jobId === job.id
     );
@@ -55,7 +63,7 @@ export function deriveMaterialsStatus(job: Job, purchaseOrders: PurchaseOrder[])
     const hasDeliveredOnly = linkedPos.every(po => po.status === 'Received' || po.status === 'Finalized');
     if (hasDeliveredOnly) return 'Delivered';
 
-    const hasOrdered = linkedPos.some(po => po.status === 'Ordered' || po.status === 'Partially Received');
+    const hasOrdered = linkedPos.some(po => po.status === 'Ordered' || po.status === 'Partially Received' || !!po.expectedDeliveryDate);
     if (hasOrdered) return 'Ordered';
 
     return 'Not Ordered';
@@ -144,6 +152,14 @@ export function calculateFCSMatrix({
         const assignedRamp = firstSegment?.allocatedLift ? effectiveRamps.find(r => r.name === firstSegment.allocatedLift || r.id === firstSegment.allocatedLift) : undefined;
         const assignedEngineerId = firstSegment?.engineerId || null;
 
+        // Factor in expected delivery date for purchases if undelivered
+        let effectiveStartDate = job.scheduledDate || startDateStr;
+        if (job.expectedDeliveryDate && materialsStatus !== 'Delivered') {
+            if (job.expectedDeliveryDate > effectiveStartDate) {
+                effectiveStartDate = job.expectedDeliveryDate;
+            }
+        }
+
         return {
             job,
             vehicle,
@@ -155,8 +171,8 @@ export function calculateFCSMatrix({
             isMovable: job.isMovable ?? false,
             assignedRampId: assignedRamp?.id || effectiveRamps[0]?.id || null,
             assignedEngineerId,
-            scheduledStartDate: job.scheduledDate || startDateStr,
-            scheduledEndDate: job.scheduledDate || addDaysToDateStr(startDateStr, Math.ceil(remainingHours / 8))
+            scheduledStartDate: effectiveStartDate,
+            scheduledEndDate: effectiveStartDate || addDaysToDateStr(startDateStr, Math.ceil(remainingHours / 8))
         };
     });
 
@@ -458,6 +474,7 @@ export function calculateEarliestRealisticStart({
     estimatedHours,
     preferredRampId,
     partsLeadDays = 0,
+    expectedDeliveryDate,
     jobs,
     ramps,
     engineers,
@@ -467,6 +484,7 @@ export function calculateEarliestRealisticStart({
     estimatedHours: number;
     preferredRampId?: string;
     partsLeadDays?: number;
+    expectedDeliveryDate?: string;
     jobs: Job[];
     ramps: Lift[];
     engineers: Engineer[];
@@ -491,7 +509,19 @@ export function calculateEarliestRealisticStart({
         startDateStr
     });
 
-    const minDaysFromParts = partsLeadDays > 0 ? partsLeadDays : 0;
+    let minDaysFromParts = partsLeadDays > 0 ? partsLeadDays : 0;
+    if (expectedDeliveryDate) {
+        try {
+            const startD = new Date(startDateStr.includes('T') ? startDateStr : `${startDateStr}T00:00:00`);
+            const delD = new Date(expectedDeliveryDate.includes('T') ? expectedDeliveryDate : `${expectedDeliveryDate}T00:00:00`);
+            const diffDays = Math.ceil((delD.getTime() - startD.getTime()) / (1000 * 60 * 60 * 24));
+            if (diffDays > minDaysFromParts) {
+                minDaysFromParts = Math.max(0, diffDays);
+            }
+        } catch {
+            // fallback
+        }
+    }
 
     // Look for ramp with the least load
     let targetRamp = ramps.find(r => r.id === preferredRampId);
@@ -512,9 +542,9 @@ export function calculateEarliestRealisticStart({
     let bottleneckReason: 'NONE' | 'RAMP_OCCUPIED' | 'ENGINEER_UNAVAILABLE' | 'PARTS_HOLD' = 'NONE';
     let delayDays = minDaysFromParts;
 
-    if (partsLeadDays > 0 && partsLeadDays >= totalBacklogDays) {
+    if (minDaysFromParts > 0 && minDaysFromParts >= totalBacklogDays) {
         bottleneckReason = 'PARTS_HOLD';
-        delayDays = partsLeadDays;
+        delayDays = minDaysFromParts;
     } else if (matrix.metrics.rampUtilizationPercent >= 85) {
         bottleneckReason = 'RAMP_OCCUPIED';
         delayDays = Math.max(delayDays, Math.ceil(totalBacklogDays * 0.75));
@@ -523,12 +553,16 @@ export function calculateEarliestRealisticStart({
         delayDays = Math.max(delayDays, Math.ceil(totalBacklogDays));
     }
 
-    const calculatedStart = addDaysToDateStr(startDateStr, delayDays);
+    const calculatedStart = (bottleneckReason === 'PARTS_HOLD' && expectedDeliveryDate && expectedDeliveryDate > startDateStr)
+        ? expectedDeliveryDate
+        : addDaysToDateStr(startDateStr, delayDays);
     const calculatedCompletion = addDaysToDateStr(calculatedStart, requiredDays);
 
     let explanation = `Earliest slot starts on ${calculatedStart} with ${requiredDays} working day(s) required.`;
     if (bottleneckReason === 'PARTS_HOLD') {
-        explanation = `Parts delivery lead time of ${partsLeadDays} day(s) dictates earliest start date.`;
+        explanation = expectedDeliveryDate
+            ? `Expected purchases delivery on ${expectedDeliveryDate} dictates earliest start date.`
+            : `Parts delivery lead time of ${partsLeadDays} day(s) dictates earliest start date.`;
     } else if (bottleneckReason === 'RAMP_OCCUPIED') {
         explanation = `Heavy-duty ramps are at ${matrix.metrics.rampUtilizationPercent}% capacity. Earliest continuous bay opens on ${calculatedStart}.`;
     } else if (bottleneckReason === 'ENGINEER_UNAVAILABLE') {
@@ -550,7 +584,11 @@ export function calculateEarliestRealisticStart({
 function addDaysToDateStr(dateStr: string, daysToAdd: number): string {
     if (!dateStr) return getRelativeDate(daysToAdd);
     try {
-        const d = new Date(dateStr.includes('T') ? dateStr : `${dateStr}T00:00:00`);
+        const parts = dateStr.split('T')[0].split('-');
+        const year = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10) - 1;
+        const day = parseInt(parts[2], 10);
+        const d = new Date(Date.UTC(year, month, day));
         const result = addDays(d, daysToAdd);
         return formatDate(result);
     } catch {

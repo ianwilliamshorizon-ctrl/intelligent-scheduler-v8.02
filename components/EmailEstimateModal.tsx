@@ -31,8 +31,8 @@ const EmailEstimateModal: React.FC<EmailEstimateModalProps> = ({ isOpen, onClose
 
     useEffect(() => {
         if (isOpen) {
-            const make = vehicle?.make && vehicle.make.toLowerCase() !== 'unknown' ? vehicle.make : 'Vehicle';
-            const model = vehicle?.model && vehicle.model.toLowerCase() !== 'unknown' ? vehicle.model : '';
+            const make = vehicle?.make && String(vehicle.make).toLowerCase() !== 'unknown' ? String(vehicle.make) : 'Vehicle';
+            const model = vehicle?.model && String(vehicle.model).toLowerCase() !== 'unknown' ? String(vehicle.model) : '';
             const vehicleDesc = `${make} ${model}`.trim();
             setCustomMessage(`Dear ${customer?.forename || 'Customer'},\n\nThank you for choosing Brookspeed. Please find below the details of your estimate for the work on your ${vehicleDesc} (${vehicle?.registration || 'TBA'}).`);
         }

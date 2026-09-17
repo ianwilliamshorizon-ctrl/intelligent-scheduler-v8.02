@@ -68,10 +68,10 @@ const RentalCheckInCheckOutModal: React.FC<RentalCheckInCheckOutModalProps> = ({
         
         // Lookup from library if no primary image
         const libraryDiagram = (inspectionDiagrams || []).find(d => 
-            d.make?.toLowerCase() === vehicle.make?.toLowerCase() && 
-            d.model?.toLowerCase() === vehicle.model?.toLowerCase()
+            String(d.make || '').toLowerCase() === String(vehicle.make || '').toLowerCase() && 
+            String(d.model || '').toLowerCase() === String(vehicle.model || '').toLowerCase()
         ) || (inspectionDiagrams || []).find(d => 
-            d.make?.toLowerCase() === vehicle.make?.toLowerCase()
+            String(d.make || '').toLowerCase() === String(vehicle.make || '').toLowerCase()
         );
         
         if (libraryDiagram) return libraryDiagram.imageId;

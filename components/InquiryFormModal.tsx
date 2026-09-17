@@ -411,8 +411,8 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                     city: inquiry.city || linkedCustomer?.city || '',
                     county: inquiry.county || linkedCustomer?.county || '',
                     postcode: inquiry.postcode || extracted.postcode || linkedCustomer?.postcode || '',
-                    vehicleMake: (inquiry.vehicleMake && inquiry.vehicleMake.toLowerCase() !== 'unknown') ? inquiry.vehicleMake : (extracted.vehicleMake || (linkedVehicle?.make && linkedVehicle.make.toLowerCase() !== 'unknown' ? linkedVehicle.make : '')),
-                    vehicleModel: (inquiry.vehicleModel && inquiry.vehicleModel.toLowerCase() !== 'unknown') ? inquiry.vehicleModel : (extracted.vehicleModel || (linkedVehicle?.model && linkedVehicle.model.toLowerCase() !== 'unknown' ? linkedVehicle.model : '')),
+                    vehicleMake: (inquiry.vehicleMake && String(inquiry.vehicleMake).toLowerCase() !== 'unknown') ? inquiry.vehicleMake : (extracted.vehicleMake || (linkedVehicle?.make && String(linkedVehicle.make).toLowerCase() !== 'unknown' ? linkedVehicle.make : '')),
+                    vehicleModel: (inquiry.vehicleModel && String(inquiry.vehicleModel).toLowerCase() !== 'unknown') ? inquiry.vehicleModel : (extracted.vehicleModel || (linkedVehicle?.model && String(linkedVehicle.model).toLowerCase() !== 'unknown' ? linkedVehicle.model : '')),
                     vehicleRegistration: inquiry.vehicleRegistration || extracted.vehicleRegistration || linkedVehicle?.registration || '',
                     vehicleYear: inquiry.vehicleYear || linkedVehicle?.year?.toString() || '',
                     vehicleVin: inquiry.vehicleVin || linkedVehicle?.vin || '',
@@ -674,17 +674,17 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
         const targetReg = (formData.vehicleRegistration || '').toUpperCase().replace(/\s/g, '');
         const rawMake = formData.vehicleMake || '';
         const rawModel = formData.vehicleModel || '';
-        const cleanMake = (rawMake && rawMake.toLowerCase() !== 'unknown') ? formatTitleCase(rawMake) : '';
-        const cleanModel = (rawModel && rawModel.toLowerCase() !== 'unknown') ? formatTitleCase(rawModel) : '';
+        const cleanMake = (rawMake && String(rawMake).toLowerCase() !== 'unknown') ? formatTitleCase(String(rawMake)) : '';
+        const cleanModel = (rawModel && String(rawModel).toLowerCase() !== 'unknown') ? formatTitleCase(String(rawModel)) : '';
         const targetYear = formData.vehicleYear ? parseInt(formData.vehicleYear) : undefined;
 
         if (resolvedVehicleId) {
             const existingVehicle = vehicles.find(v => v.id === resolvedVehicleId);
             if (existingVehicle) {
-                const newMake = (existingVehicle.make && existingVehicle.make.toLowerCase() !== 'unknown')
+                const newMake = (existingVehicle.make && String(existingVehicle.make).toLowerCase() !== 'unknown')
                     ? existingVehicle.make
                     : (cleanMake || existingVehicle.make || '');
-                const newModel = (existingVehicle.model && existingVehicle.model.toLowerCase() !== 'unknown')
+                const newModel = (existingVehicle.model && String(existingVehicle.model).toLowerCase() !== 'unknown')
                     ? existingVehicle.model
                     : (cleanModel || existingVehicle.model || '');
                 const newYear = existingVehicle.year || targetYear;
@@ -716,10 +716,10 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
             ) : null;
 
             if (matchedVehicle) {
-                const newMake = (matchedVehicle.make && matchedVehicle.make.toLowerCase() !== 'unknown')
+                const newMake = (matchedVehicle.make && String(matchedVehicle.make).toLowerCase() !== 'unknown')
                     ? matchedVehicle.make
                     : (cleanMake || matchedVehicle.make || '');
-                const newModel = (matchedVehicle.model && matchedVehicle.model.toLowerCase() !== 'unknown')
+                const newModel = (matchedVehicle.model && String(matchedVehicle.model).toLowerCase() !== 'unknown')
                     ? matchedVehicle.model
                     : (cleanModel || matchedVehicle.model || '');
                 const newYear = matchedVehicle.year || targetYear;
@@ -773,8 +773,8 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
             ...formData,
             linkedCustomerId: resolvedCustomerId,
             linkedVehicleId: resolvedVehicleId,
-            vehicleMake: cleanMake || (formData.vehicleMake && formData.vehicleMake.toLowerCase() !== 'unknown' ? formData.vehicleMake : ''),
-            vehicleModel: cleanModel || (formData.vehicleModel && formData.vehicleModel.toLowerCase() !== 'unknown' ? formData.vehicleModel : ''),
+            vehicleMake: cleanMake || (formData.vehicleMake && String(formData.vehicleMake).toLowerCase() !== 'unknown' ? formData.vehicleMake : ''),
+            vehicleModel: cleanModel || (formData.vehicleModel && String(formData.vehicleModel).toLowerCase() !== 'unknown' ? formData.vehicleModel : ''),
             logs: updatedLogs,
             followUpDate: updatedFollowUpDate,
             hasNewReply: false

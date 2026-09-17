@@ -124,20 +124,20 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
      */
     const resolveVehicleFromInquiry = (inq: T.Inquiry): string => {
         const inquiryReg = (inq.vehicleRegistration || '').toUpperCase().replace(/\s/g, '');
-        const cleanInqMake = (inq.vehicleMake && inq.vehicleMake.toLowerCase() !== 'unknown') ? inq.vehicleMake : '';
-        const cleanInqModel = (inq.vehicleModel && inq.vehicleModel.toLowerCase() !== 'unknown') ? inq.vehicleModel : '';
+        const cleanInqMake = (inq.vehicleMake && String(inq.vehicleMake).toLowerCase() !== 'unknown') ? inq.vehicleMake : '';
+        const cleanInqModel = (inq.vehicleModel && String(inq.vehicleModel).toLowerCase() !== 'unknown') ? inq.vehicleModel : '';
 
         // Case 1: Inquiry has a linked vehicle
         if (inq.linkedVehicleId) {
             const existingVehicle = data.vehicles.find(v => v.id === inq.linkedVehicleId);
             if (existingVehicle) {
                 const yearNum = inq.vehicleYear ? parseInt(inq.vehicleYear) : existingVehicle.year;
-                const newMake = (existingVehicle.make && existingVehicle.make.toLowerCase() !== 'unknown')
-                    ? existingVehicle.make
-                    : (cleanInqMake || existingVehicle.make || '');
-                const newModel = (existingVehicle.model && existingVehicle.model.toLowerCase() !== 'unknown')
-                    ? existingVehicle.model
-                    : (cleanInqModel || existingVehicle.model || '');
+                const newMake = (existingVehicle.make && String(existingVehicle.make).toLowerCase() !== 'unknown')
+                    ? String(existingVehicle.make)
+                    : (cleanInqMake || String(existingVehicle.make || ''));
+                const newModel = (existingVehicle.model && String(existingVehicle.model).toLowerCase() !== 'unknown')
+                    ? String(existingVehicle.model)
+                    : (cleanInqModel || String(existingVehicle.model || ''));
                 const updatedVehicle: T.Vehicle = {
                     ...existingVehicle,
                     make: newMake,
@@ -173,12 +173,12 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
             if (matchedVehicle) {
                 // Backfill details if missing
                 const yearNum = inq.vehicleYear ? parseInt(inq.vehicleYear) : matchedVehicle.year;
-                const newMake = (matchedVehicle.make && matchedVehicle.make.toLowerCase() !== 'unknown')
-                    ? matchedVehicle.make
-                    : (cleanInqMake || matchedVehicle.make || '');
-                const newModel = (matchedVehicle.model && matchedVehicle.model.toLowerCase() !== 'unknown')
-                    ? matchedVehicle.model
-                    : (cleanInqModel || matchedVehicle.model || '');
+                const newMake = (matchedVehicle.make && String(matchedVehicle.make).toLowerCase() !== 'unknown')
+                    ? String(matchedVehicle.make)
+                    : (cleanInqMake || String(matchedVehicle.make || ''));
+                const newModel = (matchedVehicle.model && String(matchedVehicle.model).toLowerCase() !== 'unknown')
+                    ? String(matchedVehicle.model)
+                    : (cleanInqModel || String(matchedVehicle.model || ''));
                 const updatedVehicle: T.Vehicle = {
                     ...matchedVehicle,
                     make: newMake,
