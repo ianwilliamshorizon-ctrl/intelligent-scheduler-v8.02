@@ -158,34 +158,36 @@ const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
     const liveCustomerMatches = useMemo(() => {
         if (customer?.id || (formData.id && formData.id !== 'NEW')) return []; // Only in Add New mode
         
-        const cleanPhone = (formData.phone || '').replace(/\D/g, '');
-        const cleanMobile = (formData.mobile || '').replace(/\D/g, '');
-        const cleanEmail = (formData.email || '').trim().toLowerCase();
-        const forename = (formData.forename || '').trim().toLowerCase();
-        const surname = (formData.surname || '').trim().toLowerCase();
-        const company = (formData.companyName || '').trim().toLowerCase();
+        const cleanPhone = String(formData.phone || '').replace(/\D/g, '');
+        const cleanMobile = String(formData.mobile || '').replace(/\D/g, '');
+        const cleanEmail = String(formData.email || '').trim().toLowerCase();
+        const forename = String(formData.forename || '').trim().toLowerCase();
+        const surname = String(formData.surname || '').trim().toLowerCase();
+        const company = String(formData.companyName || '').trim().toLowerCase();
 
         if (!cleanPhone && !cleanMobile && cleanEmail.length < 4 && (!forename || !surname) && company.length < 3) {
             return [];
         }
 
         return existingCustomers.filter(c => {
-            if (cleanEmail.length >= 4 && c.email && c.email.trim().toLowerCase() === cleanEmail) return true;
-            const cPhone = (c.phone || '').replace(/\D/g, '');
-            const cMobile = (c.mobile || '').replace(/\D/g, '');
+            if (!c) return false;
+            const cEmail = String(c.email || '').trim().toLowerCase();
+            if (cleanEmail.length >= 4 && cEmail && cEmail === cleanEmail) return true;
+            const cPhone = String(c.phone || '').replace(/\D/g, '');
+            const cMobile = String(c.mobile || '').replace(/\D/g, '');
             if (cleanPhone.length >= 7 && (cPhone.includes(cleanPhone) || cleanPhone.includes(cPhone))) return true;
             if (cleanPhone.length >= 7 && (cMobile.includes(cleanPhone) || cleanPhone.includes(cMobile))) return true;
             if (cleanMobile.length >= 7 && (cMobile.includes(cleanMobile) || cleanMobile.includes(cMobile))) return true;
             if (cleanMobile.length >= 7 && (cPhone.includes(cleanMobile) || cleanPhone.includes(cPhone))) return true;
 
             if (forename.length >= 2 && surname.length >= 2) {
-                const cForename = (c.forename || '').trim().toLowerCase();
-                const cSurname = (c.surname || '').trim().toLowerCase();
+                const cForename = String(c.forename || '').trim().toLowerCase();
+                const cSurname = String(c.surname || '').trim().toLowerCase();
                 if (cForename === forename && cSurname === surname) return true;
             }
 
             if (company.length >= 3 && c.companyName) {
-                const cCompany = c.companyName.trim().toLowerCase();
+                const cCompany = String(c.companyName || '').trim().toLowerCase();
                 if (cCompany === company || (company.length >= 4 && cCompany.includes(company))) return true;
             }
 

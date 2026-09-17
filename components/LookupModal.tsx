@@ -33,17 +33,17 @@ const LookupModal: React.FC<LookupModalProps> = ({
     const [includeMotHistory, setIncludeMotHistory] = useState(false);
 
     const cleanVrm = useMemo(() => {
-        return (inputValue || '').toUpperCase().replace(/\s/g, '');
+        return String(inputValue || '').toUpperCase().replace(/\s/g, '');
     }, [inputValue]);
 
     const localVehicle = useMemo(() => {
         if (lookupType !== 'vrm' || cleanVrm.length < 2) return null;
-        return vehicles.find(v => v.registration.toUpperCase().replace(/\s/g, '') === cleanVrm) || null;
+        return vehicles.find(v => v && String(v.registration || '').toUpperCase().replace(/\s/g, '') === cleanVrm) || null;
     }, [lookupType, cleanVrm, vehicles]);
 
     const localOwner = useMemo(() => {
         if (!localVehicle?.customerId) return null;
-        return customers.find(c => c.id === localVehicle.customerId) || null;
+        return customers.find(c => c && c.id === localVehicle.customerId) || null;
     }, [localVehicle, customers]);
 
     useEffect(() => {

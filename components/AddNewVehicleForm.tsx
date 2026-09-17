@@ -95,52 +95,54 @@ const AddNewVehicleForm: React.FC<AddNewVehicleFormProps> = ({
 
     const liveMatchedVehicle = useMemo(() => {
         if (!cleanReg || cleanReg.length < 2) return null;
-        return vehicles.find(v => v.registration.toUpperCase().replace(/\s/g, '') === cleanReg) || null;
+        return vehicles.find(v => v && String(v.registration || '').toUpperCase().replace(/\s/g, '') === cleanReg) || null;
     }, [cleanReg, vehicles]);
 
     const liveMatchedOwner = useMemo(() => {
         if (!liveMatchedVehicle?.customerId) return null;
-        return customers.find(c => c.id === liveMatchedVehicle.customerId) || null;
+        return customers.find(c => c && c.id === liveMatchedVehicle.customerId) || null;
     }, [liveMatchedVehicle, customers]);
 
     // Real-time live customer duplicate & match detection
     const liveCustomerMatches = useMemo(() => {
         if (selectedCustomerId) return []; // Already linked to an existing customer
         
-        const cleanPhone = (customerData.phone || '').replace(/\D/g, '');
-        const cleanMobile = (customerData.mobile || '').replace(/\D/g, '');
-        const cleanEmail = (customerData.email || '').trim().toLowerCase();
-        const forename = (customerData.forename || '').trim().toLowerCase();
-        const surname = (customerData.surname || '').trim().toLowerCase();
-        const company = (customerData.companyName || '').trim().toLowerCase();
+        const cleanPhone = String(customerData.phone || '').replace(/\D/g, '');
+        const cleanMobile = String(customerData.mobile || '').replace(/\D/g, '');
+        const cleanEmail = String(customerData.email || '').trim().toLowerCase();
+        const forename = String(customerData.forename || '').trim().toLowerCase();
+        const surname = String(customerData.surname || '').trim().toLowerCase();
+        const company = String(customerData.companyName || '').trim().toLowerCase();
 
         if (!cleanPhone && !cleanMobile && cleanEmail.length < 4 && (!forename || !surname) && company.length < 3) {
             return [];
         }
 
         return customers.filter(c => {
+            if (!c) return false;
             // Check email match
-            if (cleanEmail.length >= 4 && c.email && c.email.trim().toLowerCase() === cleanEmail) {
+            const cEmail = String(c.email || '').trim().toLowerCase();
+            if (cleanEmail.length >= 4 && cEmail && cEmail === cleanEmail) {
                 return true;
             }
             // Check phone / mobile match (7+ digits)
-            const cPhone = (c.phone || '').replace(/\D/g, '');
-            const cMobile = (c.mobile || '').replace(/\D/g, '');
+            const cPhone = String(c.phone || '').replace(/\D/g, '');
+            const cMobile = String(c.mobile || '').replace(/\D/g, '');
             if (cleanPhone.length >= 7 && (cPhone.includes(cleanPhone) || (cPhone.length >= 7 && cleanPhone.includes(cPhone)))) return true;
             if (cleanPhone.length >= 7 && (cMobile.includes(cleanPhone) || (cMobile.length >= 7 && cleanPhone.includes(cMobile)))) return true;
             if (cleanMobile.length >= 7 && (cMobile.includes(cleanMobile) || (cMobile.length >= 7 && cleanMobile.includes(cMobile)))) return true;
-            if (cleanMobile.length >= 7 && (cPhone.includes(cleanMobile) || (cPhone.length >= 7 && cleanMobile.includes(cPhone)))) return true;
+            if (cleanMobile.length >= 7 && (cPhone.includes(cleanMobile) || (cPhone.length >= 7 && cleanPhone.includes(cPhone)))) return true;
 
             // Check full name match
             if (forename.length >= 2 && surname.length >= 2) {
-                const cForename = (c.forename || '').trim().toLowerCase();
-                const cSurname = (c.surname || '').trim().toLowerCase();
+                const cForename = String(c.forename || '').trim().toLowerCase();
+                const cSurname = String(c.surname || '').trim().toLowerCase();
                 if (cForename === forename && cSurname === surname) return true;
             }
 
             // Check company match
             if (company.length >= 3 && c.companyName) {
-                const cCompany = c.companyName.trim().toLowerCase();
+                const cCompany = String(c.companyName || '').trim().toLowerCase();
                 if (cCompany === company || (company.length >= 4 && cCompany.includes(company))) return true;
             }
 

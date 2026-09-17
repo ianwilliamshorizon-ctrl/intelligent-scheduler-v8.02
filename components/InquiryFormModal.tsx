@@ -204,16 +204,18 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
         }
 
         const matches = customers.filter(c => {
-            if (cleanEmail.length >= 4 && c.email && c.email.trim().toLowerCase() === cleanEmail) return true;
-            const cPhone = (c.phone || '').replace(/\D/g, '');
-            const cMobile = (c.mobile || '').replace(/\D/g, '');
+            if (!c) return false;
+            const cEmail = String(c.email || '').trim().toLowerCase();
+            if (cleanEmail.length >= 4 && cEmail && cEmail === cleanEmail) return true;
+            const cPhone = String(c.phone || '').replace(/\D/g, '');
+            const cMobile = String(c.mobile || '').replace(/\D/g, '');
             if (cleanPhone.length >= 7 && (cPhone.includes(cleanPhone) || cleanPhone.includes(cPhone))) return true;
             if (cleanPhone.length >= 7 && (cMobile.includes(cleanPhone) || cleanPhone.includes(cMobile))) return true;
 
-            const cFirst = (c.forename || '').trim().toLowerCase();
-            const cLast = (c.surname || '').trim().toLowerCase();
-            const cFull = `${c.title || ''} ${c.forename || ''} ${c.surname || ''}`.toLowerCase().trim();
-            const cCompany = (c.companyName || '').toLowerCase().trim();
+            const cFirst = String(c.forename || '').trim().toLowerCase();
+            const cLast = String(c.surname || '').trim().toLowerCase();
+            const cFull = `${String(c.title || '')} ${cFirst} ${cLast}`.toLowerCase().trim();
+            const cCompany = String(c.companyName || '').toLowerCase().trim();
 
             if (combined && (cFull === combined || cCompany === combined)) return true;
             if (trimmedFirst && trimmedLast) {
@@ -244,9 +246,9 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
     };
 
     const checkVehicleMatch = (reg: string) => {
-        const cleanReg = reg.toUpperCase().replace(/\s/g, '');
+        const cleanReg = String(reg || '').toUpperCase().replace(/\s/g, '');
         if (cleanReg.length >= 2) {
-            const existingVehicle = vehicles.find(v => v.registration.toUpperCase().replace(/\s/g, '') === cleanReg);
+            const existingVehicle = vehicles.find(v => v && String(v.registration || '').toUpperCase().replace(/\s/g, '') === cleanReg);
             if (existingVehicle) {
                 setSuggestedVehicle(existingVehicle);
             } else {

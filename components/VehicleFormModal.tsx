@@ -189,15 +189,15 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
         }
     };
 
-    const cleanReg = (formData.registration || '').toUpperCase().replace(/\s/g, '');
+    const cleanReg = String(formData.registration || '').toUpperCase().replace(/\s/g, '');
     const duplicateVehicle = useMemo(() => {
         if (!cleanReg || cleanReg.length < 2) return null;
-        return vehicles.find(v => v.id !== formData.id && v.registration?.toUpperCase().replace(/\s/g, '') === cleanReg) || null;
+        return vehicles.find(v => v && v.id !== formData.id && String(v.registration || '').toUpperCase().replace(/\s/g, '') === cleanReg) || null;
     }, [cleanReg, formData.id, vehicles]);
 
     const duplicateOwner = useMemo(() => {
         if (!duplicateVehicle?.customerId) return null;
-        return customers.find(c => c.id === duplicateVehicle.customerId) || null;
+        return customers.find(c => c && c.id === duplicateVehicle.customerId) || null;
     }, [duplicateVehicle, customers]);
 
     const handleLookup = async (lookupValue: string) => {
@@ -205,8 +205,8 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
         setIsLookingUp(true);
         setLookupError('');
 
-        const cleanVrm = lookupValue.trim().toUpperCase().replace(/\s/g, '');
-        const existingInDb = vehicles.find(v => v.id !== formData.id && v.registration.toUpperCase().replace(/\s/g, '') === cleanVrm);
+        const cleanVrm = String(lookupValue || '').trim().toUpperCase().replace(/\s/g, '');
+        const existingInDb = vehicles.find(v => v && v.id !== formData.id && String(v.registration || '').toUpperCase().replace(/\s/g, '') === cleanVrm);
         if (existingInDb && !formData.customerId && existingInDb.customerId) {
             setFormData((prev: any) => ({ ...prev, customerId: existingInDb.customerId }));
         }
