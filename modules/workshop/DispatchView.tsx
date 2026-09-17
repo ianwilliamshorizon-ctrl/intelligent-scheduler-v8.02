@@ -102,6 +102,7 @@ const DispatchView: React.FC<DispatchViewProps> = ({
     // -- Derived Data via Hooks --
     const { 
         entityEngineers, 
+        allValidEngineers,
         entityLifts,
         unallocatedJobs, 
         allocatedSegmentsByLift 
@@ -293,7 +294,7 @@ const DispatchView: React.FC<DispatchViewProps> = ({
                     jobs={jobs.filter(j => selectedEntityId === 'all' || j.entityId === selectedEntityId)}
                     ramps={entityLifts}
                     engineers={entityEngineers}
-                    allEngineers={engineers}
+                    allEngineers={allValidEngineers}
                     businessEntities={businessEntities}
                     selectedEntityId={selectedEntityId}
                     purchaseOrders={purchaseOrders || []}

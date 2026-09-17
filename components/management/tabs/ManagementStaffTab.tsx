@@ -5,7 +5,13 @@ import { User as UserType } from '../../../types';
 import { PlusCircle, User, Mail, ShieldCheck, Edit3, Trash2, Users, ShieldAlert } from 'lucide-react';
 import UserFormModal from '../../UserFormModal';
 import { useManagementTable } from '../hooks/useManagementTable';
-import { saveDocument } from '../../../core/db/index';
+import { saveDocument, deleteDocument } from '../../../core/db/index';
+
+const isTechRole = (role?: string): boolean => {
+    if (!role) return false;
+    const r = role.toLowerCase().trim();
+    return r === 'engineer' || r === 'technician' || r === 'tech' || r === 'mechanic';
+};
 
 interface ManagementStaffTabProps {
     searchTerm: string;
@@ -24,6 +30,34 @@ export const ManagementStaffTab: React.FC<ManagementStaffTabProps> = ({ searchTe
         }
     }, [users]);
 
+    // Purge any lingering orphan engineers whose user profile was previously removed (e.g. Olly)
+    useEffect(() => {
+        if (!setEngineers || !Array.isArray(engineers) || engineers.length === 0 || !Array.isArray(localUsers) || localUsers.length === 0) {
+            return;
+        }
+
+        const orphanEngineers = engineers.filter(eng => {
+            if (eng.id.startsWith('sim_')) return false;
+            const matchedUser = localUsers.find(u => 
+                (u.engineerId && u.engineerId === eng.id) || 
+                (u.id === eng.id) || 
+                (eng.id === `eng_${u.id}`) || 
+                (u.name && eng.name && u.name.trim().toLowerCase() === eng.name.trim().toLowerCase())
+            );
+            return !matchedUser;
+        });
+
+        if (orphanEngineers.length > 0) {
+            const orphanIds = new Set(orphanEngineers.map(e => e.id));
+            setEngineers(prev => (prev || []).filter(e => !orphanIds.has(e.id)));
+            orphanEngineers.forEach(eng => {
+                deleteDocument('brooks_engineers', eng.id).catch(err => 
+                    console.error('Failed to clean up orphan engineer document:', err)
+                );
+            });
+        }
+    }, [localUsers, engineers, setEngineers]);
+
     const syncUsers = (updater: any) => {
         setLocalUsers(updater);
         if (setUsers) setUsers(updater);
@@ -38,6 +72,41 @@ export const ManagementStaffTab: React.FC<ManagementStaffTabProps> = ({ searchTe
         (user.email || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         (user.role || '').toLowerCase().includes(searchTerm.toLowerCase())
     );
+
+    const handleDeleteUser = async (u: UserType) => {
+        if (!window.confirm(`Remove ${u.name}? This will revoke their database access and remove them from all workshop schedules.`)) {
+            return;
+        }
+
+        // 1. Delete user record
+        await deleteItem(u.id);
+
+        // 2. Cascade delete from brooks_engineers if linked or matching engineer exists
+        if (setEngineers) {
+            const targetEngId = u.engineerId;
+            const uName = (u.name || '').trim().toLowerCase();
+            
+            const matchingEngs = (engineers || []).filter(e => 
+                (targetEngId && e.id === targetEngId) ||
+                (e.id === u.id) ||
+                (e.id === `eng_${u.id}`) ||
+                (e.name && uName && e.name.trim().toLowerCase() === uName)
+            );
+
+            if (matchingEngs.length > 0) {
+                const idsToDelete = new Set(matchingEngs.map(e => e.id));
+                setEngineers(prev => (prev || []).filter(e => !idsToDelete.has(e.id)));
+                for (const eng of matchingEngs) {
+                    try {
+                        await deleteDocument('brooks_engineers', eng.id);
+                    } catch (err) {
+                        console.error('Failed to delete engineer document:', err);
+                    }
+                }
+            }
+        }
+        onShowStatus(`Removed ${u.name} and synced workshop labour pool.`, 'info');
+    };
 
     const handleSave = async (updatedUser: UserType) => {
         const isNewUser = !localUsers.find(u => u.id === updatedUser.id);
@@ -69,6 +138,7 @@ export const ManagementStaffTab: React.FC<ManagementStaffTabProps> = ({ searchTe
             if (setEngineers) {
                 const targetEngId = updatedUser.engineerId || prevUser?.engineerId;
                 const prevName = prevUser?.name?.trim().toLowerCase();
+                const defaultEntity = businessEntities[0]?.id || '';
                 
                 const engMatch = (engineers || []).find(e => 
                     (targetEngId && e.id === targetEngId) || 
@@ -82,7 +152,7 @@ export const ManagementStaffTab: React.FC<ManagementStaffTabProps> = ({ searchTe
                         ...engMatch,
                         name: updatedUser.name || engMatch.name,
                         hourlyRate: updatedUser.hourlyRate !== undefined ? updatedUser.hourlyRate : engMatch.hourlyRate,
-                        entityId: updatedUser.preferredEntityId || engMatch.entityId
+                        entityId: updatedUser.preferredEntityId || engMatch.entityId || defaultEntity
                     };
                     setEngineers(prev => (prev || []).map(e => e.id === engMatch.id ? updatedEng : e));
                     await saveDocument('brooks_engineers', updatedEng);
@@ -95,14 +165,14 @@ export const ManagementStaffTab: React.FC<ManagementStaffTabProps> = ({ searchTe
                             engineerId: updatedEng.id
                         });
                     }
-                } else if (updatedUser.role === 'Engineer') {
-                    // Create new engineer if staff role is Engineer
+                } else if (isTechRole(updatedUser.role)) {
+                    // Create new engineer if staff role is Engineer/Technician
                     const newEngId = updatedUser.engineerId || `eng_${updatedUser.id}`;
                     const newEng = {
                         id: newEngId,
                         name: updatedUser.name,
                         hourlyRate: updatedUser.hourlyRate || 35,
-                        entityId: updatedUser.preferredEntityId || ''
+                        entityId: updatedUser.preferredEntityId || defaultEntity
                     };
                     setEngineers(prev => [...(prev || []).filter(e => e.id !== newEngId), newEng]);
                     await saveDocument('brooks_engineers', newEng);
@@ -242,10 +312,8 @@ export const ManagementStaffTab: React.FC<ManagementStaffTabProps> = ({ searchTe
                                                     <Edit3 size={18} />
                                                 </button>
                                                 
-                                                <button 
-                                                    onClick={() => {
-                                                        if(window.confirm(`Remove ${u.name}? This will revoke their database access.`)) deleteItem(u.id);
-                                                    }} 
+                                                 <button 
+                                                    onClick={() => handleDeleteUser(u)} 
                                                     className="p-2 text-slate-200 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all"
                                                     title="Remove Access"
                                                 >

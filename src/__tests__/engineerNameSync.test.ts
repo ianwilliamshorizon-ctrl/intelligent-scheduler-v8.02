@@ -198,4 +198,88 @@ describe('Engineer Name Synchronization', () => {
 
         expect(audiResult.current.entityEngineers.length).toBe(0);
     });
+
+    it('excludes deleted staff (e.g. Olly) from entityEngineers and allValidEngineers even if engineer record is present', () => {
+        // Engineer records still contain Olly, Lewis, and Gary
+        const engineers: Engineer[] = [
+            { id: 'eng_lewis', name: 'Lewis', hourlyRate: 35, entityId: 'ent_porsche' },
+            { id: 'eng_gary', name: 'Gary', hourlyRate: 32.5, entityId: 'ent_porsche' },
+            { id: 'eng_olly', name: 'Olly', hourlyRate: 30, entityId: 'ent_porsche' }
+        ];
+
+        // Olly has been deleted from users; only Lewis and Gary exist in users
+        const users: Partial<User>[] = [
+            { id: 'user_lewis', name: 'Lewis', email: 'lewis@example.com', role: 'Engineer', engineerId: 'eng_lewis' },
+            { id: 'user_gary', name: 'Gary', email: 'gary@example.com', role: 'Engineer', engineerId: 'eng_gary' }
+        ];
+
+        const { result } = renderHook(() => useDispatchFilters({
+            jobs: [],
+            lifts: mockLifts,
+            engineers,
+            businessEntities: [{ id: 'ent_porsche', name: 'Brookspeed Porsche', type: 'Workshop' } as any],
+            selectedEntityId: 'ent_porsche',
+            currentDate: '2026-09-17',
+            unallocatedDateFilter: 'all',
+            showOnSiteOnly: false,
+            users: users as User[]
+        }));
+
+        // Olly MUST NOT appear in entityEngineers or allValidEngineers
+        expect(result.current.entityEngineers.some(e => e.name === 'Olly' || e.id === 'eng_olly')).toBe(false);
+        expect(result.current.allValidEngineers.some(e => e.name === 'Olly' || e.id === 'eng_olly')).toBe(false);
+
+        // Lewis and Gary should be present
+        expect(result.current.entityEngineers.map(e => e.name).sort()).toEqual(['Gary', 'Lewis']);
+    });
+
+    it('immediately surfaces newly added technician (e.g. Chris) into active workshop even without preferredEntityId', () => {
+        const engineers: Engineer[] = [
+            { id: 'eng_lewis', name: 'Lewis', hourlyRate: 35, entityId: 'ent_porsche' }
+        ];
+
+        // Chris added as Engineer with no preferredEntityId assigned
+        const users: Partial<User>[] = [
+            { id: 'user_lewis', name: 'Lewis', email: 'lewis@example.com', role: 'Engineer', engineerId: 'eng_lewis' },
+            { id: 'user_chris', name: 'Chris', email: 'chris@example.com', role: 'Engineer', preferredEntityId: '' }
+        ];
+
+        const { result } = renderHook(() => useDispatchFilters({
+            jobs: [],
+            lifts: mockLifts,
+            engineers,
+            businessEntities: [{ id: 'ent_porsche', name: 'Brookspeed Porsche', type: 'Workshop' } as any],
+            selectedEntityId: 'ent_porsche',
+            currentDate: '2026-09-17',
+            unallocatedDateFilter: 'all',
+            showOnSiteOnly: false,
+            users: users as User[]
+        }));
+
+        const chrisEng = result.current.entityEngineers.find(e => e.name === 'Chris');
+        expect(chrisEng).toBeDefined();
+        expect(chrisEng?.entityId).toBe('ent_porsche');
+        expect(result.current.allValidEngineers.some(e => e.name === 'Chris')).toBe(true);
+    });
+
+    it('accepts Technician as a valid technician role in addition to Engineer', () => {
+        const users: Partial<User>[] = [
+            { id: 'user_tech_chris', name: 'Chris (Master Tech)', email: 'chris.tech@example.com', role: 'Technician' as any }
+        ];
+
+        const { result } = renderHook(() => useDispatchFilters({
+            jobs: [],
+            lifts: mockLifts,
+            engineers: [],
+            businessEntities: [{ id: 'ent_porsche', name: 'Brookspeed Porsche', type: 'Workshop' } as any],
+            selectedEntityId: 'ent_porsche',
+            currentDate: '2026-09-17',
+            unallocatedDateFilter: 'all',
+            showOnSiteOnly: false,
+            users: users as User[]
+        }));
+
+        expect(result.current.entityEngineers.length).toBe(1);
+        expect(result.current.entityEngineers[0].name).toBe('Chris (Master Tech)');
+    });
 });

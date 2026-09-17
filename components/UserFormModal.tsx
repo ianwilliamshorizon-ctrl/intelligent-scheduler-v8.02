@@ -40,6 +40,7 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, 
         const finalUser = {
             ...formData,
             id: formData.id || `User_${firstName}_${Date.now()}`,
+            preferredEntityId: formData.preferredEntityId || (businessEntities.length > 0 ? businessEntities[0].id : '')
         } as T.User;
 
         try {
