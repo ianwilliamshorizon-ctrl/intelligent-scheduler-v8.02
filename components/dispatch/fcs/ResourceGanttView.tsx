@@ -179,6 +179,7 @@ interface ResourceGanttViewProps {
     onEditJob: (jobId: string, initialTab?: string) => void;
     onSaveJob: (job: Partial<Job>) => void;
     onSaveEstimate?: (estimate: Partial<Estimate>) => void;
+    onSavePurchaseOrder?: (po: Partial<PurchaseOrder>) => void;
     onUpdateEngineer?: (engineerId: string, newName: string) => Promise<void>;
     onUpdateEngineerTransfer?: (engineerId: string, toEntityId: string | null, reason?: string) => Promise<void>;
 }
@@ -199,6 +200,7 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
     onEditJob,
     onSaveJob,
     onSaveEstimate,
+    onSavePurchaseOrder,
     onUpdateEngineer,
     onUpdateEngineerTransfer
 }) => {
@@ -858,11 +860,24 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                     purchaseOrders={purchaseOrders}
                     vehicles={vehicles}
                     customers={customers}
+                    estimates={estimates}
                     windowDays={windowDays}
                     startDateStr={startDateStr}
-                    onApplyOptimizedPlan={async (updatedJobs) => {
+                    onSaveEstimate={onSaveEstimate}
+                    onSavePurchaseOrder={onSavePurchaseOrder}
+                    onApplyOptimizedPlan={async (updatedJobs, convertedEstimates, updatedPos) => {
                         for (const job of updatedJobs) {
                             await onSaveJob(job);
+                        }
+                        if (convertedEstimates && onSaveEstimate) {
+                            for (const est of convertedEstimates) {
+                                await onSaveEstimate(est);
+                            }
+                        }
+                        if (updatedPos && onSavePurchaseOrder) {
+                            for (const po of updatedPos) {
+                                await onSavePurchaseOrder(po);
+                            }
                         }
                     }}
                 />

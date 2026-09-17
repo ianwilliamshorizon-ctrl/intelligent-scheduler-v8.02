@@ -50,6 +50,35 @@ export const getFutureDateISOString = (daysToAdd: number): string => {
     return `${year}-${month}-${day}`;
 };
 
+/**
+ * Returns the following working day (skipping Saturday and Sunday) as YYYY-MM-DD.
+ * e.g. Monday -> Tuesday, Friday -> Monday, Saturday -> Monday, Sunday -> Monday
+ */
+export const getNextWorkingDay = (fromDate?: Date | string): string => {
+    let d: Date;
+    if (!fromDate) {
+        d = new Date();
+    } else if (typeof fromDate === 'string') {
+        d = dateStringToDate(fromDate.split('T')[0]);
+    } else {
+        d = new Date(fromDate.getTime());
+    }
+
+    if (isNaN(d.getTime())) {
+        d = new Date();
+    }
+
+    // Advance to next calendar day
+    d.setUTCDate(d.getUTCDate() + 1);
+
+    // Skip Saturday (6) and Sunday (0)
+    while (d.getUTCDay() === 0 || d.getUTCDay() === 6) {
+        d.setUTCDate(d.getUTCDate() + 1);
+    }
+
+    return formatDate(d);
+};
+
 /** * Formats a date string (YYYY-MM-DD) into a more readable format.
  * FIXED: Added safety check to prevent crash on undefined.
  */
@@ -148,17 +177,6 @@ export const addDays = (date: Date, days: number): Date => {
 export const daysBetween = (startDate: Date, endDate: Date): number => {
     const oneDay = 1000 * 60 * 60 * 24;
     return Math.floor((endDate.getTime() - startDate.getTime()) / oneDay);
-};
-
-/** Gets the next working day (Mon-Sat) as a YYYY-MM-DD string, skipping Sunday */
-export const getNextWorkingDay = (dateString: string): string => {
-    const date = dateStringToDate(dateString);
-    date.setUTCDate(date.getUTCDate() + 1); 
-
-    if (date.getUTCDay() === 0) { 
-        date.setUTCDate(date.getUTCDate() + 1); 
-    }
-    return formatDate(date);
 };
 
 /** Gets the next valid working date, skipping Sundays and specified Bank Holidays. */

@@ -62,7 +62,7 @@ const DispatchView: React.FC<DispatchViewProps> = ({
     onCreateInvoice,
     onEngineerComplete
 }) => {
-    const { jobs, setJobs, lifts, engineers, setEngineers, customers, vehicles, purchaseOrders, absenceRequests, businessEntities, estimates, setEstimates, parts, forceRefresh, saveRecord } = useData();
+    const { jobs, setJobs, lifts, engineers, setEngineers, customers, vehicles, purchaseOrders, setPurchaseOrders, absenceRequests, businessEntities, estimates, setEstimates, parts, forceRefresh, saveRecord } = useData();
     
     // Auto-refresh data every 30 seconds to keep all users in sync
     useEffect(() => {
@@ -319,6 +319,16 @@ const DispatchView: React.FC<DispatchViewProps> = ({
                             setEstimates(prev => prev.map(e => e.id === estData.id ? { ...e, ...estData } as any : e));
                             if (saveRecord) {
                                 await saveRecord('estimates', estData as { id: string } & Partial<Estimate>);
+                            }
+                        }
+                    }}
+                    onSavePurchaseOrder={async (poData) => {
+                        if (poData.id) {
+                            if (setPurchaseOrders) {
+                                setPurchaseOrders(prev => prev.map(p => p.id === poData.id ? { ...p, ...poData } as any : p));
+                            }
+                            if (saveRecord) {
+                                await saveRecord('purchaseOrders', poData as { id: string } & Partial<PurchaseOrder>);
                             }
                         }
                     }}
