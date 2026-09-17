@@ -893,6 +893,14 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
         return () => unsubscribe();
     }, []);
 
+    // Automatically trigger email sync if not run in the last 5 minutes
+    React.useEffect(() => {
+        const lastRun = syncStatus?.lastRunTime ? new Date(syncStatus.lastRunTime).getTime() : 0;
+        if (Date.now() - lastRun > 5 * 60 * 1000) {
+            triggerEmailSync().catch(err => console.error("Auto email sync error:", err));
+        }
+    }, [syncStatus?.lastRunTime]);
+
     // Auto-fix missing inquiry numbers
     React.useEffect(() => {
         if (!inquiries || inquiries.length === 0) return;
