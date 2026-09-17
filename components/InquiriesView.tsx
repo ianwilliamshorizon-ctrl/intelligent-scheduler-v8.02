@@ -875,9 +875,15 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
             if (status === 'Waiting on Customer' && i.hasNewReply) {
                 status = 'Our Action';
             }
-            return { ...i, status };
+
+            // Effective Entity ID resolution:
+            // If the inquiry is linked to an estimate, adopt that estimate's entityId if available
+            const linkedEstimate = (i.linkedEstimateId ? estimates.find(e => e.id === i.linkedEstimateId) : null) || estimates.find(e => e.linkedInquiryId === i.id);
+            const entityId = linkedEstimate?.entityId || i.entityId || 'ent_porsche';
+
+            return { ...i, status, entityId };
         });
-    }, [inquiries, customers]);
+    }, [inquiries, customers, estimates]);
 
     const { selectedEntityId, users, currentUser, businessEntities: entities, setCurrentView } = useApp();
 

@@ -602,6 +602,7 @@ exports.inboundEmailWebhook = onRequest({
     let matchedCustomerId = null;
     let matchedVehicleId = null;
     let matchedEstimateId = null;
+    let entityId = null;
 
     const db = admin.firestore();
 
@@ -645,6 +646,7 @@ exports.inboundEmailWebhook = onRequest({
         matchedEstimateId = estDoc.id;
         matchedCustomerId = matchedCustomerId || estDoc.data().customerId;
         matchedVehicleId = estDoc.data().vehicleId;
+        entityId = entityId || estDoc.data().entityId;
         logger.info(`Matched estimate ID: ${matchedEstimateId}`);
       } else {
         // Try exact document ID match for estimate
@@ -653,6 +655,7 @@ exports.inboundEmailWebhook = onRequest({
           matchedEstimateId = estDocById.id;
           matchedCustomerId = matchedCustomerId || estDocById.data().customerId;
           matchedVehicleId = estDocById.data().vehicleId;
+          entityId = entityId || estDocById.data().entityId;
           logger.info(`Matched estimate ID by document ID: ${matchedEstimateId}`);
         }
       }
@@ -742,19 +745,23 @@ exports.inboundEmailWebhook = onRequest({
       const existingLogs = existingInquiryData.logs || [];
       existingLogs.push(newLog);
 
-      await db.collection("brooks_inquiries").doc(matchedInquiryId).update({
+      const updateData = {
         logs: existingLogs,
         hasNewReply: !isOutbound,
         status: isOutbound ? 'Quoted or Responded' : 'Our Action',
         actionStatus: isOutbound ? 'Email Sent' : 'Email Responded',
         followUpDate: null
-      });
+      };
+      if (entityId) {
+        updateData.entityId = entityId;
+      }
+
+      await db.collection("brooks_inquiries").doc(matchedInquiryId).update(updateData);
       
       logger.info(`Updated existing Inquiry Card: ${matchedInquiryId} with new reply (isOutbound: ${isOutbound})`);
       return res.status(200).json({ success: true, inquiryId: matchedInquiryId, threaded: true });
     }
 
-    let entityId = null;
     let classificationReason = "";
     let isQuoteRequest = false;
     let isEscalated = false;
@@ -1190,6 +1197,7 @@ async function performEmailSync(microsoftClientId, microsoftClientSecret, micros
       let matchedCustomerId = null;
       let matchedVehicleId = null;
       let matchedEstimateId = null;
+      let entityId = null;
 
       // 1. Look up customer by email (case-insensitive)
       if (fromEmail) {
@@ -1230,6 +1238,7 @@ async function performEmailSync(microsoftClientId, microsoftClientSecret, micros
           matchedEstimateId = estDoc.id;
           matchedCustomerId = matchedCustomerId || estDoc.data().customerId;
           matchedVehicleId = estDoc.data().vehicleId;
+          entityId = entityId || estDoc.data().entityId;
           logger.info(`Matched estimate ID: ${matchedEstimateId}`);
         } else {
           // Try exact document ID match for estimate
@@ -1238,6 +1247,7 @@ async function performEmailSync(microsoftClientId, microsoftClientSecret, micros
             matchedEstimateId = estDocById.id;
             matchedCustomerId = matchedCustomerId || estDocById.data().customerId;
             matchedVehicleId = estDocById.data().vehicleId;
+            entityId = entityId || estDocById.data().entityId;
             logger.info(`Matched estimate ID by document ID: ${matchedEstimateId}`);
           }
         }
@@ -1339,14 +1349,19 @@ async function performEmailSync(microsoftClientId, microsoftClientSecret, micros
 
         const updatedMedia = [...(existingInquiryData.media || []), ...mediaItems];
 
-        await db.collection("brooks_inquiries").doc(matchedInquiryId).update({
+        const updatePayload = {
           logs: existingLogs,
           media: updatedMedia,
           hasNewReply: !isOutbound,
           status: isOutbound ? 'Quoted or Responded' : 'Our Action',
           actionStatus: isOutbound ? 'Email Sent' : 'Email Responded',
           followUpDate: null
-        });
+        };
+        if (entityId) {
+          updatePayload.entityId = entityId;
+        }
+
+        await db.collection("brooks_inquiries").doc(matchedInquiryId).update(updatePayload);
         
         logger.info(`Updated existing Inquiry Card: ${matchedInquiryId} with new reply (isOutbound: ${isOutbound})`);
         await markEmailAsRead(accessToken, microsoftEmailSender, messageId);
@@ -1354,7 +1369,6 @@ async function performEmailSync(microsoftClientId, microsoftClientSecret, micros
         continue;
       }
 
-      let entityId = null;
       let classificationReason = "";
       let isQuoteRequest = false;
       let isEscalated = false;
