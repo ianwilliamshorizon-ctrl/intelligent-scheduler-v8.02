@@ -146,7 +146,6 @@ export const isJobAllocated = (job: Job): boolean => {
         const hasAllocatedSegment = segments.some(s => 
             s.status === 'Allocated' || 
             s.status === 'In Progress' || 
-            s.status === 'Waiting' || 
             s.status === 'Paused' || 
             s.status === 'Engineer Complete' ||
             s.status === 'QC Complete'

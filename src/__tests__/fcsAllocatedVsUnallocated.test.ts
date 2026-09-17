@@ -1,18 +1,18 @@
 import { describe, it, expect } from 'vitest';
 import { isJobAllocated, isJobUnallocated } from '../../core/utils/jobUtils';
 import { calculateFCSMatrix } from '../../core/services/fcsSchedulingEngine';
-import { Job, Lift, Engineer, PurchaseOrder, Estimate } from '../../types';
+import { Job, Lift, Engineer, PurchaseOrder } from '../../types';
 
 describe('FCS Allocated vs Unallocated Jobs Architecture', () => {
 
     const mockLifts: Lift[] = [
-        { id: 'ramp_1', name: 'Ramp 1 - 2-Post', type: '2-Post Lift', capacityTons: 4, status: 'Operational' },
-        { id: 'ramp_2', name: 'Ramp 2 - 4-Post Alignment', type: '4-Post Alignment', capacityTons: 5, status: 'Operational' }
+        { id: 'ramp_1', name: 'Ramp 1 - 2-Post', type: '2-Post Lift', entityId: 'ent_1' },
+        { id: 'ramp_2', name: 'Ramp 2 - 4-Post Alignment', type: '4-Post Alignment', entityId: 'ent_1' }
     ];
 
     const mockEngineers: Engineer[] = [
-        { id: 'eng_1', name: 'Lewis Hamilton', email: 'lewis@workshop.com', role: 'Senior Tech', status: 'Available', skills: ['Mechanical'] },
-        { id: 'eng_2', name: 'George Russell', email: 'george@workshop.com', role: 'Technician', status: 'Available', skills: ['Diagnostics'] }
+        { id: 'eng_1', name: 'Lewis Hamilton', specialization: 'Senior Tech', entityId: 'ent_1' },
+        { id: 'eng_2', name: 'George Russell', specialization: 'Technician', entityId: 'ent_1' }
     ];
 
     describe('isJobAllocated and isJobUnallocated Classification', () => {
@@ -105,8 +105,7 @@ describe('FCS Allocated vs Unallocated Jobs Architecture', () => {
                 ramps: mockLifts,
                 engineers: mockEngineers,
                 purchaseOrders: [],
-                estimates: [],
-                targetDate: '2026-09-18',
+                startDateStr: '2026-09-18',
                 includeSuggestedAllocations: false
             });
 
@@ -137,8 +136,7 @@ describe('FCS Allocated vs Unallocated Jobs Architecture', () => {
                 ramps: mockLifts,
                 engineers: mockEngineers,
                 purchaseOrders: [],
-                estimates: [],
-                targetDate: '2026-09-18',
+                startDateStr: '2026-09-18',
                 includeSuggestedAllocations: true // User requested preview
             });
 
@@ -177,8 +175,7 @@ describe('FCS Allocated vs Unallocated Jobs Architecture', () => {
                 ramps: mockLifts,
                 engineers: mockEngineers,
                 purchaseOrders: [],
-                estimates: [],
-                targetDate: '2026-09-18',
+                startDateStr: '2026-09-18',
                 includeSuggestedAllocations: false
             });
 

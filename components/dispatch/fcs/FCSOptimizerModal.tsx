@@ -9,6 +9,7 @@ import {
 import { getCustomerDisplayName } from '../../../core/utils/customerUtils';
 import { getRelativeDate, addDays, formatDate, getNextWorkingDay, formatReadableDate } from '../../../core/utils/dateUtils';
 import { getEngineerTheme } from './ResourceGanttView';
+import { isJobAllocated, isJobUnallocated } from '../../../core/utils/jobUtils';
 
 export interface FCSOptimizerModalProps {
     isOpen: boolean;
@@ -114,12 +115,7 @@ export const FCSOptimizerModal: React.FC<FCSOptimizerModalProps> = ({
 
     // 1. COMMITTED / BOOKED JOBS (Fixed baseline foundation)
     const { bookedJobs, bookedByDate } = useMemo(() => {
-        const booked = jobs.filter(j => {
-            if (['Cancelled', 'Complete', 'Invoiced', 'Closed'].includes(j.status)) return false;
-            if (j.status === 'Unallocated') return false;
-            const hasActiveSegments = (j.segments || []).some(s => s.status === 'Allocated' || s.status === 'In Progress' || s.status === 'Waiting');
-            return hasActiveSegments || (j.scheduledDate && j.status === 'Booked In');
-        });
+        const booked = jobs.filter(j => isJobAllocated(j));
 
         const byDate = new Map<string, Job[]>();
         booked.forEach(j => {
@@ -133,12 +129,7 @@ export const FCSOptimizerModal: React.FC<FCSOptimizerModalProps> = ({
 
     // 2. UNALLOCATED QUEUE JOBS
     const unallocatedJobs = useMemo(() => {
-        return jobs.filter(j => {
-            if (['Cancelled', 'Complete', 'Invoiced', 'Closed'].includes(j.status)) return false;
-            if (j.status === 'Unallocated') return true;
-            if (!j.segments || j.segments.length === 0) return true;
-            return j.segments.some(s => !s.engineerId || s.status === 'Unallocated');
-        });
+        return jobs.filter(j => isJobUnallocated(j));
     }, [jobs]);
 
     // 3. CANDIDATE ESTIMATES (Pipeline Simulator)
