@@ -605,25 +605,34 @@ exports.inboundEmailWebhook = onRequest({
 
     const db = admin.firestore();
 
-    // 1. Look up customer by email
+    // 1. Look up customer by email (case-insensitive)
     if (fromEmail) {
-      const customerSnap = await db.collection("brooks_customers")
-        .where("email", "==", fromEmail)
+      const cleanFromEmail = fromEmail.toLowerCase().trim();
+      let customerSnap = await db.collection("brooks_customers")
+        .where("email", "==", fromEmail.trim())
         .limit(1)
         .get();
       
+      if (customerSnap.empty && cleanFromEmail !== fromEmail.trim()) {
+        customerSnap = await db.collection("brooks_customers")
+          .where("email", "==", cleanFromEmail)
+          .limit(1)
+          .get();
+      }
+
       if (!customerSnap.empty) {
         matchedCustomerId = customerSnap.docs[0].id;
         logger.info(`Matched customer ID: ${matchedCustomerId}`);
       }
     }
 
-    // 2. Look up estimate/document reference in subject line
-    // Matches patterns like "Estimate #1024", "Estimate 1024", "Invoice #3090"
-    const refMatch = subject.match(/(?:Estimate|Invoice|Purchase\s*Order|Job)\s*#?\s*([a-zA-Z0-9_-]+)/i);
+    // 2. Look up estimate/document reference in subject line and body
+    // Matches patterns like "Estimate #1024", "Estimate 1024", "Estimate: 1024", "Quote #1024", "Est #1024"
+    const refMatch = subject.match(/(?:Estimate|Invoice|Purchase\s*Order|Job|Quote|Quotation|Est\.?)\s*[:#-]?\s*([a-zA-Z0-9_-]+)/i)
+      || textBody.match(/(?:Estimate|Invoice|Purchase\s*Order|Job|Quote|Quotation|Est\.?)\s*[:#-]?\s*([a-zA-Z0-9_-]+)/i);
     if (refMatch) {
       const refId = refMatch[1].trim();
-      logger.info(`Found reference ID in subject: ${refId}`);
+      logger.info(`Found reference ID in subject or body: ${refId}`);
 
       // Try searching for estimate number or ID
       const estimateSnap = await db.collection("brooks_estimates")
@@ -649,6 +658,31 @@ exports.inboundEmailWebhook = onRequest({
       }
     }
 
+    // 2.2 Fallback: If no estimate found in subject/body, check for recent estimates for this customer
+    if (!matchedEstimateId && (matchedCustomerId || fromEmail)) {
+      try {
+        let candidateEstimates = [];
+        if (matchedCustomerId) {
+          const estCustSnap = await db.collection("brooks_estimates")
+            .where("customerId", "==", matchedCustomerId)
+            .get();
+          estCustSnap.forEach(d => candidateEstimates.push({ id: d.id, ...d.data() }));
+        }
+        if (candidateEstimates.length > 0) {
+          candidateEstimates.sort((a, b) => new Date(b.issueDate || b.createdAt || 0).getTime() - new Date(a.issueDate || a.createdAt || 0).getTime());
+          const recentEst = candidateEstimates.find(e => e.status === 'Sent' || e.status === 'Draft' || e.status === 'Approved') || candidateEstimates[0];
+          if (recentEst) {
+            matchedEstimateId = recentEst.id;
+            matchedVehicleId = matchedVehicleId || recentEst.vehicleId;
+            entityId = entityId || recentEst.entityId;
+            logger.info(`Matched recent estimate ID ${matchedEstimateId} for customer ${matchedCustomerId || fromEmail}`);
+          }
+        }
+      } catch (estFallbackErr) {
+        logger.error("Error in estimate fallback lookup:", estFallbackErr.message);
+      }
+    }
+
     let matchedInquiryId = null;
     let existingInquiryData = null;
 
@@ -665,6 +699,28 @@ exports.inboundEmailWebhook = onRequest({
         matchedInquiryId = inqSnap.docs[0].id;
         existingInquiryData = inqSnap.docs[0].data();
         logger.info(`Matched existing inquiry ID: ${matchedInquiryId}`);
+      }
+    }
+
+    // 2.6 Fallback: Look up existing inquiry by matchedEstimateId (without composite index)
+    if (!matchedInquiryId && matchedEstimateId) {
+      try {
+        logger.info(`No inquiry number found, falling back to linkedEstimateId: ${matchedEstimateId}`);
+        const estInqSnap = await db.collection("brooks_inquiries")
+          .where("linkedEstimateId", "==", matchedEstimateId)
+          .get();
+        if (!estInqSnap.empty) {
+          const sortedDocs = estInqSnap.docs.sort((a, b) => {
+            const tA = new Date(a.data().createdAt || 0).getTime();
+            const tB = new Date(b.data().createdAt || 0).getTime();
+            return tB - tA;
+          });
+          matchedInquiryId = sortedDocs[0].id;
+          existingInquiryData = sortedDocs[0].data();
+          logger.info(`Matched existing inquiry ID by linkedEstimateId: ${matchedInquiryId}`);
+        }
+      } catch (err) {
+        logger.error("Error looking up inquiry by linkedEstimateId:", err.message);
       }
     }
 
@@ -689,7 +745,9 @@ exports.inboundEmailWebhook = onRequest({
       await db.collection("brooks_inquiries").doc(matchedInquiryId).update({
         logs: existingLogs,
         hasNewReply: !isOutbound,
-        status: isOutbound ? 'Quoted or Responded' : 'Customer Responded'
+        status: isOutbound ? 'Quoted or Responded' : 'Our Action',
+        actionStatus: isOutbound ? 'Email Sent' : 'Email Responded',
+        followUpDate: null
       });
       
       logger.info(`Updated existing Inquiry Card: ${matchedInquiryId} with new reply (isOutbound: ${isOutbound})`);
@@ -700,6 +758,9 @@ exports.inboundEmailWebhook = onRequest({
     let classificationReason = "";
     let isQuoteRequest = false;
     let isEscalated = false;
+
+    let cPhone = "";
+    let cReg = "";
 
     const geminiApiKey = process.env.GEMINI_API_KEY;
     if (geminiApiKey) {
@@ -756,8 +817,8 @@ ${textBody}
         // Extract new fields if present
         if (classification.customerName) fromName = classification.customerName;
         const newSummary = classification.summary || "";
-        const cPhone = classification.customerPhone || "";
-        const cReg = classification.vehicleRegistration || "";
+        cPhone = classification.customerPhone || "";
+        cReg = classification.vehicleRegistration || "";
         
         if (newSummary) {
           classificationReason = `Summary: ${newSummary}\nPhone: ${cPhone || 'N/A'}, Vehicle Reg: ${cReg || 'N/A'}\nReasoning: ${classificationReason}`;
@@ -788,6 +849,8 @@ ${textBody}
     let status = "New Requests";
     if (isEscalated) {
       status = "Escalated/Urgent";
+    } else if (matchedEstimateId) {
+      status = "Our Action";
     } else if (isQuoteRequest) {
       status = "Immediate Quote";
     }
@@ -829,6 +892,8 @@ ${textBody}
       message: textBody.trim() || "Received email with empty text body.",
       takenByUserId: "system",
       status: status,
+      actionStatus: matchedEstimateId ? "Email Responded" : "New Mail",
+      hasNewReply: matchedEstimateId ? true : false,
       linkedCustomerId: matchedCustomerId,
       linkedVehicleId: matchedVehicleId,
       linkedEstimateId: matchedEstimateId,
@@ -893,7 +958,8 @@ async function performEmailSync(microsoftClientId, microsoftClientSecret, micros
 
   if (messages.length > 0) {
     for (const message of messages) {
-      const messageId = message.id;
+      try {
+        const messageId = message.id;
       const internetMessageId = message.internetMessageId || messageId;
       
       // Check if duplicate inquiry exists for this internetMessageId
@@ -1125,24 +1191,33 @@ async function performEmailSync(microsoftClientId, microsoftClientSecret, micros
       let matchedVehicleId = null;
       let matchedEstimateId = null;
 
-      // 1. Look up customer by email
+      // 1. Look up customer by email (case-insensitive)
       if (fromEmail) {
-        const customerSnap = await db.collection("brooks_customers")
-          .where("email", "==", fromEmail)
+        const cleanFromEmail = fromEmail.toLowerCase().trim();
+        let customerSnap = await db.collection("brooks_customers")
+          .where("email", "==", fromEmail.trim())
           .limit(1)
           .get();
         
+        if (customerSnap.empty && cleanFromEmail !== fromEmail.trim()) {
+          customerSnap = await db.collection("brooks_customers")
+            .where("email", "==", cleanFromEmail)
+            .limit(1)
+            .get();
+        }
+
         if (!customerSnap.empty) {
           matchedCustomerId = customerSnap.docs[0].id;
           logger.info(`Matched customer ID: ${matchedCustomerId}`);
         }
       }
 
-      // 2. Look up estimate/document reference in subject line
-      const refMatch = subject.match(/(?:Estimate|Invoice|Purchase\s*Order|Job)\s*#?\s*([a-zA-Z0-9_-]+)/i);
+      // 2. Look up estimate/document reference in subject line and body
+      const refMatch = subject.match(/(?:Estimate|Invoice|Purchase\s*Order|Job|Quote|Quotation|Est\.?)\s*[:#-]?\s*([a-zA-Z0-9_-]+)/i)
+        || textBody.match(/(?:Estimate|Invoice|Purchase\s*Order|Job|Quote|Quotation|Est\.?)\s*[:#-]?\s*([a-zA-Z0-9_-]+)/i);
       if (refMatch) {
         const refId = refMatch[1].trim();
-        logger.info(`Found reference ID in subject: ${refId}`);
+        logger.info(`Found reference ID in subject or body: ${refId}`);
 
         // Try searching for estimate number or ID
         const estimateSnap = await db.collection("brooks_estimates")
@@ -1168,6 +1243,31 @@ async function performEmailSync(microsoftClientId, microsoftClientSecret, micros
         }
       }
 
+      // 2.2 Fallback: If no estimate found in subject/body, check for recent estimates for this customer
+      if (!matchedEstimateId && (matchedCustomerId || fromEmail)) {
+        try {
+          let candidateEstimates = [];
+          if (matchedCustomerId) {
+            const estCustSnap = await db.collection("brooks_estimates")
+              .where("customerId", "==", matchedCustomerId)
+              .get();
+            estCustSnap.forEach(d => candidateEstimates.push({ id: d.id, ...d.data() }));
+          }
+          if (candidateEstimates.length > 0) {
+            candidateEstimates.sort((a, b) => new Date(b.issueDate || b.createdAt || 0).getTime() - new Date(a.issueDate || a.createdAt || 0).getTime());
+            const recentEst = candidateEstimates.find(e => e.status === 'Sent' || e.status === 'Draft' || e.status === 'Approved') || candidateEstimates[0];
+            if (recentEst) {
+              matchedEstimateId = recentEst.id;
+              matchedVehicleId = matchedVehicleId || recentEst.vehicleId;
+              entityId = entityId || recentEst.entityId;
+              logger.info(`Matched recent estimate ID ${matchedEstimateId} for customer ${matchedCustomerId || fromEmail}`);
+            }
+          }
+        } catch (estFallbackErr) {
+          logger.error("Error in estimate fallback lookup:", estFallbackErr.message);
+        }
+      }
+
       let matchedInquiryId = null;
       let existingInquiryData = null;
 
@@ -1187,18 +1287,25 @@ async function performEmailSync(microsoftClientId, microsoftClientSecret, micros
         }
       }
 
-      // 2.6 Fallback: Look up existing inquiry by matchedEstimateId
+      // 2.6 Fallback: Look up existing inquiry by matchedEstimateId (WITHOUT composite index)
       if (!matchedInquiryId && matchedEstimateId) {
-        logger.info(`No inquiry number found, falling back to linkedEstimateId: ${matchedEstimateId}`);
-        const estInqSnap = await db.collection("brooks_inquiries")
-          .where("linkedEstimateId", "==", matchedEstimateId)
-          .orderBy("createdAt", "desc")
-          .limit(1)
-          .get();
-        if (!estInqSnap.empty) {
-          matchedInquiryId = estInqSnap.docs[0].id;
-          existingInquiryData = estInqSnap.docs[0].data();
-          logger.info(`Matched existing inquiry ID by linkedEstimateId: ${matchedInquiryId}`);
+        try {
+          logger.info(`No inquiry number found, falling back to linkedEstimateId: ${matchedEstimateId}`);
+          const estInqSnap = await db.collection("brooks_inquiries")
+            .where("linkedEstimateId", "==", matchedEstimateId)
+            .get();
+          if (!estInqSnap.empty) {
+            const sortedDocs = estInqSnap.docs.sort((a, b) => {
+              const tA = new Date(a.data().createdAt || 0).getTime();
+              const tB = new Date(b.data().createdAt || 0).getTime();
+              return tB - tA;
+            });
+            matchedInquiryId = sortedDocs[0].id;
+            existingInquiryData = sortedDocs[0].data();
+            logger.info(`Matched existing inquiry ID by linkedEstimateId: ${matchedInquiryId}`);
+          }
+        } catch (err) {
+          logger.error("Error looking up inquiry by linkedEstimateId:", err.message);
         }
       }
 
@@ -1236,7 +1343,7 @@ async function performEmailSync(microsoftClientId, microsoftClientSecret, micros
           logs: existingLogs,
           media: updatedMedia,
           hasNewReply: !isOutbound,
-          status: isOutbound ? 'Quoted or Responded' : 'Customer Responded',
+          status: isOutbound ? 'Quoted or Responded' : 'Our Action',
           actionStatus: isOutbound ? 'Email Sent' : 'Email Responded',
           followUpDate: null
         });
@@ -1390,6 +1497,8 @@ ${textBody}
       let status = "New Requests";
       if (isEscalated) {
         status = "Escalated/Urgent";
+      } else if (matchedEstimateId) {
+        status = "Our Action";
       } else if (isQuoteRequest) {
         status = "Immediate Quote";
       }
@@ -1437,7 +1546,8 @@ ${textBody}
         message: textBody.trim() || "Received email with empty text body.",
         takenByUserId: "system",
         status: status,
-        actionStatus: "New Mail",
+        actionStatus: matchedEstimateId ? "Email Responded" : "New Mail",
+        hasNewReply: matchedEstimateId ? true : false,
         linkedCustomerId: matchedCustomerId,
         linkedVehicleId: matchedVehicleId,
         linkedEstimateId: matchedEstimateId,
@@ -1462,8 +1572,11 @@ ${textBody}
       await markEmailAsRead(accessToken, microsoftEmailSender, messageId);
 
       processedCount++;
+    } catch (msgErr) {
+      logger.error(`[Email Sync] Error processing message ${message.id} from ${message.from?.emailAddress?.address || 'unknown'}: ${msgErr.message}`, msgErr);
     }
   }
+}
 
   // 5. Escalate old Immediate Quotes (older than 24 hours)
   const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();

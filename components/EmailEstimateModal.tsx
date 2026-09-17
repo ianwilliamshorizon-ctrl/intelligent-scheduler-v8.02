@@ -60,7 +60,8 @@ const EmailEstimateModal: React.FC<EmailEstimateModalProps> = ({ isOpen, onClose
     const handleSend = async () => {
         setIsSending(true);
         try {
-            const subject = `Your Estimate #${estimate.estimateNumber} from Brookspeed`;
+            const vehicleRegStr = vehicle?.registration && vehicle.registration.toLowerCase() !== 'unknown' ? ` - ${vehicle.registration}` : '';
+            const subject = `Your Estimate #${estimate.estimateNumber}${vehicleRegStr} from Brookspeed`;
             const onlineViewLink = `${window.location.origin}/?estimateId=${estimate.id}&view=customer&v=${new Date().getTime()}`;
             const formattedMessage = customMessage.replace(/\n/g, '<br/>');
             const body = `${formattedMessage}<br/><br/>You can view, approve, or decline your detailed estimate online by clicking the link below:<br/><br/>
@@ -113,7 +114,7 @@ The Brookspeed Team`;
                     </div>
                     <div className="flex items-center p-2 bg-gray-50 rounded-md border border-gray-100">
                         <span className="font-bold text-gray-400 w-20 uppercase text-[10px]">Subject:</span>
-                        <span className="text-gray-800 font-semibold tracking-tight">Your Estimate #{estimate.estimateNumber} from Brookspeed</span>
+                        <span className="text-gray-800 font-semibold tracking-tight">{`Your Estimate #${estimate.estimateNumber}${vehicle?.registration && vehicle.registration.toLowerCase() !== 'unknown' ? ' - ' + vehicle.registration : ''} from Brookspeed`}</span>
                     </div>
 
                     <div className="flex flex-col p-4 border border-gray-200 rounded-lg mt-4 bg-gray-50 shadow-inner">

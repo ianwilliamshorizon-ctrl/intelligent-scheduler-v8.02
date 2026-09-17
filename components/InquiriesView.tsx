@@ -1394,13 +1394,19 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                 const estimateVehicle = estimate?.vehicleId ? vehicles.find(v => v.id === estimate.vehicleId) : null;
                 const reg = vehicle?.registration || i.vehicleRegistration || estimateVehicle?.registration || (estimate as any)?.vehicleRegistration || '';
                 const cleanReg = reg.toLowerCase().replace(/\s/g, '');
+                const linkedCust = i.linkedCustomerId ? customers.find(c => c.id === i.linkedCustomerId) : null;
+                const custName = linkedCust ? `${linkedCust.forename || ''} ${linkedCust.surname || ''}`.toLowerCase() : '';
+                const custEmail = (linkedCust?.email || '').toLowerCase();
                 
                 return (
                     i.fromName.toLowerCase().includes(low) || 
+                    (i.fromEmail && i.fromEmail.toLowerCase().includes(low)) ||
                     (i.subject && i.subject.toLowerCase().includes(low)) ||
                     i.message.toLowerCase().includes(low) ||
                     (i.inquiryNumber && i.inquiryNumber.toLowerCase().includes(low)) ||
-                    (cleanReg && cleanReg.includes(cleanLow))
+                    (cleanReg && cleanReg.includes(cleanLow)) ||
+                    (custName && custName.includes(low)) ||
+                    (custEmail && custEmail.includes(low))
                 );
             });
         }
@@ -1423,7 +1429,7 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
             const bTime = getLatestActivityTime(b);
             return bTime - aTime;
         });
-    }, [normalizedInquiries, selectedEntityId, searchTerm, dateFilter, assignedUserFilter, healthFilter, currentUser.id, vehicles, estimates]);
+    }, [normalizedInquiries, selectedEntityId, searchTerm, dateFilter, assignedUserFilter, healthFilter, currentUser.id, vehicles, estimates, customers]);
 
     const activeInquiries = useMemo(() => {
         const columns: { [key in Inquiry['status']]?: Inquiry[] } = {
@@ -1444,7 +1450,12 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
             }
             
             // Find the proper cased key if it exists, otherwise default to Inbox
-            const properKey = Object.keys(columns).find(k => k.toLowerCase() === lowerStatus) as Inquiry['status'];
+            let properKey = Object.keys(columns).find(k => k.toLowerCase() === lowerStatus) as Inquiry['status'] | undefined;
+            
+            // Customer replies or customer responses belong in 'Our Action'
+            if (lowerStatus === 'customer responded' || lowerStatus === 'responded' || (lowerStatus === 'waiting on customer' && i.hasNewReply)) {
+                properKey = 'Our Action';
+            }
             
             if (properKey && columns[properKey]) {
                 columns[properKey]!.push(i);
