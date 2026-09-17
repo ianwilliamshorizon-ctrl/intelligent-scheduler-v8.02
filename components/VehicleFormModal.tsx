@@ -455,7 +455,7 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
                                                             year: duplicateVehicle.year || prev.year,
                                                             fuelType: duplicateVehicle.fuelType || prev.fuelType,
                                                             colour: duplicateVehicle.colour || prev.colour,
-                                                            engineCapacityCc: duplicateVehicle.cc || duplicateVehicle.engineCapacityCc || prev.engineCapacityCc,
+                                                            cc: duplicateVehicle.cc || prev.cc,
                                                             nextMotDate: duplicateVehicle.nextMotDate || prev.nextMotDate
                                                         }));
                                                     }}
