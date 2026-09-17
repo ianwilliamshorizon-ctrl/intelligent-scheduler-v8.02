@@ -26,22 +26,48 @@ export const useDispatchFilters = ({
     users
 }: UseDispatchFiltersProps) => {
 
-    // Filter and sort engineers
+    // Filter and sort engineers with dynamic synchronization to live user profiles
     const entityEngineers = useMemo(() => {
-        const filteredEngineers = engineers.filter(e => selectedEntityId === 'all' || e.entityId === selectedEntityId);
-        
-        // Find users with role 'Dispatcher' who aren't already represented in engineers
-        const dispatchersAsEngineers = users
-            .filter(u => u.role === 'Dispatcher' && (selectedEntityId === 'all' || u.preferredEntityId === selectedEntityId))
-            .filter(u => !filteredEngineers.some(e => e.id === u.id || (u.engineerId && e.id === u.engineerId)))
-            .map(u => ({
-                id: u.id,
-                name: u.name || u.email || 'Dispatcher',
-                entityId: u.preferredEntityId || selectedEntityId,
-                specialization: 'Dispatcher'
-            }));
+        // 1. Build lookup maps for users
+        const userByEngId = new Map<string, any>();
+        const userById = new Map<string, any>();
+        const userByName = new Map<string, any>();
+        (users || []).forEach(u => {
+            if (u.engineerId) userByEngId.set(u.engineerId, u);
+            userById.set(u.id, u);
+            if (u.name) userByName.set(u.name.toLowerCase().trim(), u);
+        });
 
-        return [...filteredEngineers, ...dispatchersAsEngineers]
+        // 2. Filter engineers by entity and synchronize with live user profile details
+        const resolvedEngineers = (engineers || [])
+            .filter(e => selectedEntityId === 'all' || !e.entityId || e.entityId === selectedEntityId)
+            .map(e => {
+                const matchedUser = userByEngId.get(e.id) || userById.get(e.id) || (e.name ? userByName.get(e.name.toLowerCase().trim()) : undefined);
+                if (matchedUser && matchedUser.name && matchedUser.name !== e.name) {
+                    return {
+                        ...e,
+                        name: matchedUser.name,
+                        hourlyRate: matchedUser.hourlyRate !== undefined ? matchedUser.hourlyRate : e.hourlyRate,
+                        entityId: matchedUser.preferredEntityId || e.entityId
+                    };
+                }
+                return e;
+            });
+        
+        // 3. Find users with role 'Engineer' or 'Dispatcher' who aren't already represented in engineers
+        const staffAsEngineers = (users || [])
+            .filter(u => (u.role === 'Engineer' || u.role === 'Dispatcher') && 
+                         (selectedEntityId === 'all' || !u.preferredEntityId || u.preferredEntityId === selectedEntityId))
+            .filter(u => !resolvedEngineers.some(e => e.id === u.id || (u.engineerId && e.id === u.engineerId) || (u.name && e.name && e.name.toLowerCase().trim() === u.name.toLowerCase().trim())))
+            .map(u => ({
+                id: u.engineerId || u.id,
+                name: u.name || u.email || (u.role === 'Dispatcher' ? 'Dispatcher' : 'Technician'),
+                entityId: u.preferredEntityId || (selectedEntityId === 'all' ? '' : selectedEntityId),
+                hourlyRate: u.hourlyRate || 35,
+                specialization: u.role
+            } as Engineer));
+
+        return [...resolvedEngineers, ...staffAsEngineers]
             .sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { numeric: true }));
     }, [engineers, selectedEntityId, users]);
     

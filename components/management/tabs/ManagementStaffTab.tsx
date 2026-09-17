@@ -54,6 +54,7 @@ export const ManagementStaffTab: React.FC<ManagementStaffTabProps> = ({ searchTe
             setUsers(updateLogic);
         }
 
+        const prevUser = selectedUser;
         setIsModalOpen(false);
         setSelectedUser(null);
 
@@ -64,16 +65,55 @@ export const ManagementStaffTab: React.FC<ManagementStaffTabProps> = ({ searchTe
                 updatedAt: new Date().toISOString()
             });
 
-            // Sync hourly rate to engineers collection if applicable
-            if (updatedUser.hourlyRate !== undefined && setEngineers) {
+            // Synchronize engineer profile in brooks_engineers if user is an engineer or linked to one
+            if (setEngineers) {
+                const targetEngId = updatedUser.engineerId || prevUser?.engineerId;
+                const prevName = prevUser?.name?.trim().toLowerCase();
+                
                 const engMatch = (engineers || []).find(e => 
-                    (updatedUser.engineerId && e.id === updatedUser.engineerId) || 
-                    (e.name && updatedUser.name && e.name.toLowerCase() === updatedUser.name.toLowerCase())
+                    (targetEngId && e.id === targetEngId) || 
+                    (e.id === updatedUser.id) ||
+                    (prevName && e.name && e.name.trim().toLowerCase() === prevName) ||
+                    (e.name && updatedUser.name && e.name.trim().toLowerCase() === updatedUser.name.trim().toLowerCase())
                 );
+
                 if (engMatch) {
-                    const updatedEng = { ...engMatch, hourlyRate: updatedUser.hourlyRate };
+                    const updatedEng = {
+                        ...engMatch,
+                        name: updatedUser.name || engMatch.name,
+                        hourlyRate: updatedUser.hourlyRate !== undefined ? updatedUser.hourlyRate : engMatch.hourlyRate,
+                        entityId: updatedUser.preferredEntityId || engMatch.entityId
+                    };
                     setEngineers(prev => (prev || []).map(e => e.id === engMatch.id ? updatedEng : e));
                     await saveDocument('brooks_engineers', updatedEng);
+
+                    // Ensure user document has engineerId persisted if missing
+                    if (updatedUser.engineerId !== updatedEng.id) {
+                        updatedUser.engineerId = updatedEng.id;
+                        await saveDocument('brooks_users', {
+                            ...updatedUser,
+                            engineerId: updatedEng.id
+                        });
+                    }
+                } else if (updatedUser.role === 'Engineer') {
+                    // Create new engineer if staff role is Engineer
+                    const newEngId = updatedUser.engineerId || `eng_${updatedUser.id}`;
+                    const newEng = {
+                        id: newEngId,
+                        name: updatedUser.name,
+                        hourlyRate: updatedUser.hourlyRate || 35,
+                        entityId: updatedUser.preferredEntityId || ''
+                    };
+                    setEngineers(prev => [...(prev || []).filter(e => e.id !== newEngId), newEng]);
+                    await saveDocument('brooks_engineers', newEng);
+
+                    if (updatedUser.engineerId !== newEngId) {
+                        updatedUser.engineerId = newEngId;
+                        await saveDocument('brooks_users', {
+                            ...updatedUser,
+                            engineerId: newEngId
+                        });
+                    }
                 }
             }
 

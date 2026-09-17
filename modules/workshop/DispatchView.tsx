@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useApp } from '../../core/state/AppContext';
 import { useData } from '../../core/state/DataContext';
-import { Job, JobSegment, Lift, PurchaseOrder, Estimate } from '../../types';
+import { Job, JobSegment, Lift, PurchaseOrder, Estimate, Engineer } from '../../types';
+import { saveDocument } from '../../core/db';
 import { dateStringToDate, getRelativeDate, addDays, getStartOfWeek, formatDate } from '../../core/utils/dateUtils';
 import { calculateJobStatus } from '../../core/utils/jobUtils';
 import { TIME_SEGMENTS, SEGMENT_DURATION_MINUTES } from '../../constants';
@@ -61,7 +62,7 @@ const DispatchView: React.FC<DispatchViewProps> = ({
     onCreateInvoice,
     onEngineerComplete
 }) => {
-    const { jobs, setJobs, lifts, engineers, customers, vehicles, purchaseOrders, absenceRequests, businessEntities, estimates, setEstimates, parts, forceRefresh, saveRecord } = useData();
+    const { jobs, setJobs, lifts, engineers, setEngineers, customers, vehicles, purchaseOrders, absenceRequests, businessEntities, estimates, setEstimates, parts, forceRefresh, saveRecord } = useData();
     
     // Auto-refresh data every 30 seconds to keep all users in sync
     useEffect(() => {
@@ -73,7 +74,7 @@ const DispatchView: React.FC<DispatchViewProps> = ({
         }, 30000); 
         return () => clearInterval(interval);
     }, [forceRefresh]);
-    const { selectedEntityId, currentUser, users } = useApp();
+    const { selectedEntityId, currentUser, users, setUsers } = useApp();
     
     // -- View State --
     const [viewMode, setViewMode] = useState<'timeline' | 'week' | 'calendar' | 'fcs-gantt'>('timeline');
@@ -315,6 +316,35 @@ const DispatchView: React.FC<DispatchViewProps> = ({
                             if (saveRecord) {
                                 await saveRecord('estimates', estData as { id: string } & Partial<Estimate>);
                             }
+                        }
+                    }}
+                    onUpdateEngineer={async (engineerId: string, newName: string) => {
+                        // 1. Update in engineers state and persist to brooks_engineers
+                        const targetEng = (engineers || []).find(e => e.id === engineerId) || (entityEngineers || []).find(e => e.id === engineerId);
+                        const updatedEng: Engineer = {
+                            ...(targetEng || { id: engineerId, hourlyRate: 35, entityId: selectedEntityId === 'all' ? '' : selectedEntityId }),
+                            id: engineerId,
+                            name: newName
+                        };
+                        if (setEngineers) {
+                            setEngineers(prev => [...(prev || []).filter(e => e.id !== engineerId), updatedEng]);
+                        }
+                        if (saveRecord) {
+                            await saveRecord('engineers', updatedEng);
+                        } else {
+                            await saveDocument('brooks_engineers', updatedEng);
+                        }
+
+                        // 2. Also update corresponding user profile in users if exists
+                        const matchingUser = (users || []).find(u => 
+                            u.engineerId === engineerId || 
+                            u.id === engineerId || 
+                            (targetEng && targetEng.name && u.name?.trim().toLowerCase() === targetEng.name.trim().toLowerCase())
+                        );
+                        if (matchingUser && setUsers) {
+                            const updatedUser = { ...matchingUser, name: newName, engineerId };
+                            setUsers(prev => (prev || []).map(u => u.id === matchingUser.id ? updatedUser : u));
+                            await saveDocument('brooks_users', updatedUser);
                         }
                     }}
                 />

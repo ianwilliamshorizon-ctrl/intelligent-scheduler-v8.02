@@ -150,7 +150,9 @@ export function calculateFCSMatrix({
         // Find existing assigned ramp & engineer from segments
         const firstSegment = (job.segments || [])[0];
         const assignedRamp = firstSegment?.allocatedLift ? effectiveRamps.find(r => r.name === firstSegment.allocatedLift || r.id === firstSegment.allocatedLift) : undefined;
-        const assignedEngineerId = firstSegment?.engineerId || null;
+        const assignedEngineerId = firstSegment?.engineerId 
+            ? (effectiveEngineers.find(e => e.id === firstSegment.engineerId || (e.name && e.name.toLowerCase() === firstSegment.engineerId?.toLowerCase()))?.id || firstSegment.engineerId)
+            : null;
 
         // Factor in expected delivery date for purchases if undelivered
         let effectiveStartDate = job.scheduledDate || startDateStr;
@@ -266,7 +268,7 @@ export function calculateFCSMatrix({
         const startPct = calculatePercentOffset(ap.scheduledStartDate, startDateStr, windowDays);
         const durationPct = calculatePercentDuration(ap.remainingHours, windowDays);
 
-        const engName = activeEngineers.find(e => e.id === engineerId)?.name || 'Engineer';
+        const engName = activeEngineers.find(e => e.id === engineerId || (e.name && engineerId && e.name.toLowerCase() === engineerId.toLowerCase()))?.name || 'Engineer';
 
         const rampBlock: FCSGanttBlock = {
             id: rampBlockId,
@@ -345,7 +347,7 @@ export function calculateFCSMatrix({
         const queuedStartDate = addDaysToDateStr(startDateStr, estimatedStartDays);
         rollingOffsetHours += qp.remainingHours;
         const isSim = engineerId.startsWith('sim_');
-        const queuedEngName = effectiveEngineers.find(e => e.id === engineerId)?.name || 'Engineer';
+        const queuedEngName = effectiveEngineers.find(e => e.id === engineerId || (e.name && engineerId && e.name.toLowerCase() === engineerId.toLowerCase()))?.name || 'Engineer';
 
         const rampBlockId = `ramp_block_queued_${qp.job.id}`;
         const engBlockId = `eng_block_queued_${qp.job.id}`;

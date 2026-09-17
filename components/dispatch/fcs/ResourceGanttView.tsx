@@ -3,7 +3,7 @@ import { Job, Lift, Engineer, PurchaseOrder, Vehicle, Customer, User, Estimate, 
 import { calculateFCSMatrix, FCSMatrixResult } from '../../../core/services/fcsSchedulingEngine';
 import { ServiceAdvisorBookingBufferModal } from './ServiceAdvisorBookingBufferModal';
 import { FCSOptimizerModal } from './FCSOptimizerModal';
-import { Sparkles, Wrench, Layers, AlertTriangle, CheckCircle, Clock, Calendar, Users, RefreshCw, Plus, ChevronLeft, ChevronRight, Activity, ArrowRight, Zap, Info } from 'lucide-react';
+import { Sparkles, Wrench, Layers, AlertTriangle, CheckCircle, Clock, Calendar, Users, RefreshCw, Plus, ChevronLeft, ChevronRight, Activity, ArrowRight, Zap, Info, Edit3 } from 'lucide-react';
 import { getRelativeDate, addDays, formatDate } from '../../../core/utils/dateUtils';
 
 export interface EngineerTheme {
@@ -175,6 +175,7 @@ interface ResourceGanttViewProps {
     onEditJob: (jobId: string, initialTab?: string) => void;
     onSaveJob: (job: Partial<Job>) => void;
     onSaveEstimate?: (estimate: Partial<Estimate>) => void;
+    onUpdateEngineer?: (engineerId: string, newName: string) => Promise<void>;
 }
 
 export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
@@ -189,7 +190,8 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
     unallocatedJobs = [],
     onEditJob,
     onSaveJob,
-    onSaveEstimate
+    onSaveEstimate,
+    onUpdateEngineer
 }) => {
     const [windowDays, setWindowDays] = useState<number>(7);
     const [simulateExtraEngineers, setSimulateExtraEngineers] = useState<number>(0);
@@ -198,6 +200,31 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
     const [hoveredJobId, setHoveredJobId] = useState<string | null>(null);
     const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
     const [startDateOffset, setStartDateOffset] = useState<number>(0);
+    const [editingEngineerId, setEditingEngineerId] = useState<string | null>(null);
+    const [editingEngineerName, setEditingEngineerName] = useState<string>('');
+    const [isSavingEngineerName, setIsSavingEngineerName] = useState<boolean>(false);
+
+    const handleStartRename = (eng: Engineer) => {
+        setEditingEngineerId(eng.id);
+        setEditingEngineerName(eng.name);
+    };
+
+    const handleSaveRename = async (engineerId: string) => {
+        const trimmed = editingEngineerName.trim();
+        if (!trimmed || !onUpdateEngineer) {
+            setEditingEngineerId(null);
+            return;
+        }
+        setIsSavingEngineerName(true);
+        try {
+            await onUpdateEngineer(engineerId, trimmed);
+        } catch (err) {
+            console.error("Failed to update engineer name:", err);
+        } finally {
+            setIsSavingEngineerName(false);
+            setEditingEngineerId(null);
+        }
+    };
 
     const containerRef = useRef<HTMLDivElement>(null);
     const [blockPositions, setBlockPositions] = useState<Map<string, { x: number; y: number; width: number; height: number }>>(new Map());
@@ -625,26 +652,77 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                                             ? 'bg-purple-50 border-purple-200 text-purple-950' 
                                             : 'bg-white border-slate-200 text-slate-900 hover:border-slate-300'
                                     }`}>
-                                        <div className="flex items-center justify-between gap-1.5">
-                                            <div className="flex items-center gap-1.5 min-w-0">
-                                                <span 
-                                                    className="w-3 h-3 rounded-full shrink-0 shadow-xs border border-white"
-                                                    style={{ backgroundColor: engTheme.hex }}
-                                                    title={`Assigned signature color: ${engTheme.name}`}
+                                        {editingEngineerId === row.engineer.id ? (
+                                            <div className="flex items-center gap-1 w-full">
+                                                <input
+                                                    type="text"
+                                                    autoFocus
+                                                    value={editingEngineerName}
+                                                    onChange={(e) => setEditingEngineerName(e.target.value)}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter') handleSaveRename(row.engineer.id);
+                                                        if (e.key === 'Escape') setEditingEngineerId(null);
+                                                    }}
+                                                    className="w-full text-xs font-black bg-white border border-indigo-500 rounded px-1.5 py-0.5 outline-none ring-1 ring-indigo-400"
+                                                    disabled={isSavingEngineerName}
                                                 />
-                                                <span className="font-black text-xs truncate">{row.engineer.name}</span>
-                                            </div>
-                                            {isVirtual ? (
-                                                <span className="text-[8px] font-black uppercase bg-purple-600 text-white px-1.5 py-0.5 rounded shadow-xs">Simulated</span>
-                                            ) : (
-                                                <span 
-                                                    className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded shrink-0 shadow-xs text-white"
-                                                    style={{ backgroundColor: engTheme.hex }}
+                                                <button
+                                                    onClick={() => handleSaveRename(row.engineer.id)}
+                                                    disabled={isSavingEngineerName}
+                                                    className="text-[9px] bg-indigo-600 hover:bg-indigo-700 text-white font-black px-1.5 py-1 rounded shadow-2xs shrink-0 cursor-pointer"
                                                 >
-                                                    Tech
-                                                </span>
-                                            )}
-                                        </div>
+                                                    {isSavingEngineerName ? '...' : 'Save'}
+                                                </button>
+                                                <button
+                                                    onClick={() => setEditingEngineerId(null)}
+                                                    disabled={isSavingEngineerName}
+                                                    className="text-[10px] text-slate-400 hover:text-slate-600 px-0.5 shrink-0 cursor-pointer"
+                                                >
+                                                    ✕
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <div className="flex items-center justify-between gap-1.5">
+                                                <div className="flex items-center gap-1.5 min-w-0">
+                                                    <span 
+                                                        className="w-3 h-3 rounded-full shrink-0 shadow-xs border border-white"
+                                                        style={{ backgroundColor: engTheme.hex }}
+                                                        title={`Assigned signature color: ${engTheme.name}`}
+                                                    />
+                                                    <span 
+                                                        className="font-black text-xs truncate cursor-pointer hover:text-indigo-700" 
+                                                        title={onUpdateEngineer && !isVirtual ? "Click to rename technician" : row.engineer.name}
+                                                        onClick={() => {
+                                                            if (onUpdateEngineer && !isVirtual) handleStartRename(row.engineer);
+                                                        }}
+                                                    >
+                                                        {row.engineer.name}
+                                                    </span>
+                                                    {!isVirtual && onUpdateEngineer && (
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleStartRename(row.engineer);
+                                                            }}
+                                                            className="opacity-0 group-hover:opacity-100 hover:bg-slate-100 p-0.5 rounded text-slate-400 hover:text-indigo-600 transition-all shrink-0 cursor-pointer"
+                                                            title="Rename technician"
+                                                        >
+                                                            <Edit3 size={11} />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                                {isVirtual ? (
+                                                    <span className="text-[8px] font-black uppercase bg-purple-600 text-white px-1.5 py-0.5 rounded shadow-xs">Simulated</span>
+                                                ) : (
+                                                    <span 
+                                                        className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded shrink-0 shadow-xs text-white"
+                                                        style={{ backgroundColor: engTheme.hex }}
+                                                    >
+                                                        Tech
+                                                    </span>
+                                                )}
+                                            </div>
+                                        )}
                                         <span className="text-[10px] text-slate-500 font-semibold block mt-0.5">
                                             {row.blocks.length} wrench task(s)
                                         </span>
