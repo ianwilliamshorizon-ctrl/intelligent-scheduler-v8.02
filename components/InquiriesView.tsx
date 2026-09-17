@@ -125,6 +125,9 @@ const InquiryCard: React.FC<{
     const estimate = (inquiry.linkedEstimateId ? estimates.find(e => e.id === inquiry.linkedEstimateId) : null)
         || estimates.find(e => e.linkedInquiryId === inquiry.id)
         || null;
+    const vehicle = inquiry.linkedVehicleId 
+        ? vehicles.find(v => v.id === inquiry.linkedVehicleId) 
+        : (estimate?.vehicleId ? vehicles.find(v => v.id === estimate.vehicleId) : null);
     const job = inquiry.linkedJobId 
         ? jobs.find(j => j.id === inquiry.linkedJobId) 
         : (jobs.find(j => (j as any).associatedInquiryId === inquiry.id)
