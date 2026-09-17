@@ -4,6 +4,7 @@ import { calculateFCSMatrix, FCSMatrixResult } from '../../../core/services/fcsS
 import { ServiceAdvisorBookingBufferModal } from './ServiceAdvisorBookingBufferModal';
 import { FCSOptimizerModal, OptimizedAssignment } from './FCSOptimizerModal';
 import { TechnicianTransferModal } from './TechnicianTransferModal';
+import { AdjustSuggestedAllocationModal } from './AdjustSuggestedAllocationModal';
 import { Sparkles, Wrench, Layers, AlertTriangle, CheckCircle, Clock, Calendar, Users, RefreshCw, Plus, ChevronLeft, ChevronRight, Activity, ArrowRight, Zap, Info, Edit3, ArrowRightLeft } from 'lucide-react';
 import { getRelativeDate, addDays, formatDate } from '../../../core/utils/dateUtils';
 import { isJobAllocated, isJobUnallocated } from '../../../core/utils/jobUtils';
@@ -220,6 +221,7 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
     // Suggested Work Allocations Preview State
     const [showSuggestedGanttPreview, setShowSuggestedGanttPreview] = useState<boolean>(false);
     const [ganttSuggestedPlan, setGanttSuggestedPlan] = useState<OptimizedAssignment[]>([]);
+    const [adjustingSuggestedBlock, setAdjustingSuggestedBlock] = useState<FCSGanttBlock | null>(null);
 
     const usableRamps = useMemo(() => {
         const active = ramps.filter(r => r.type !== 'Virtual' && !r.name.toLowerCase().includes('storage'));
@@ -329,7 +331,7 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
         setShowSuggestedGanttPreview(true);
     };
 
-    // Agree and allocate suggested work plan directly
+    // Lock and allocate suggested work plan directly into confirmed schedule
     const handleCommitSuggestedPlan = async () => {
         if (!ganttSuggestedPlan || ganttSuggestedPlan.length === 0) return;
         for (const item of ganttSuggestedPlan) {
@@ -337,25 +339,21 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
             const assignedRampName = assignedRamp?.name || 'Ramp';
             const techName = engineers.find(e => e.id === item.recommendedEngineerId)?.name || 'Tech';
 
-            const updatedJob: Job = {
-                ...item.job,
-                scheduledDate: item.scheduledDate,
-                status: 'Allocated',
-                fcsState: item.partsLeadDays > 0 ? 'STALLED' : 'ACTIVE',
-                materialsStatus: item.partsLeadDays > 0 ? 'Ordered' : 'Delivered',
-                segments: (item.job.segments && item.job.segments.length > 0)
-                    ? item.job.segments.map((s, sIdx) => ({
-                        ...s,
-                        engineerId: item.recommendedEngineerId,
-                        allocatedLift: assignedRampName,
-                        date: item.scheduledDate,
-                        status: 'Allocated' as const,
-                        duration: sIdx === 0 ? item.hours : s.duration
-                    }))
-                    : [
+            const isEstimateSim = Boolean(item.isEstimateSimulation || item.job.id.startsWith('sim_est_'));
+
+            if (isEstimateSim) {
+                const newJobId = `job_from_est_${item.estimateId || Date.now()}_${Date.now()}`;
+                const newJob: Job = {
+                    ...item.job,
+                    id: newJobId,
+                    jobNumber: `JOB-${item.job.jobNumber || newJobId.substring(0, 6)}`,
+                    status: 'Allocated',
+                    scheduledDate: item.scheduledDate,
+                    estimateId: item.estimateId,
+                    segments: [
                         {
-                            id: `seg_${Date.now()}_${item.job.id}`,
-                            segmentId: `seg_${Date.now()}_${item.job.id}`,
+                            id: `seg_${Date.now()}_${newJobId}`,
+                            segmentId: `seg_${Date.now()}_${newJobId}`,
                             description: item.job.description,
                             status: 'Allocated' as const,
                             engineerId: item.recommendedEngineerId,
@@ -365,12 +363,73 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                             scheduledStartSegment: 1
                         }
                     ],
-                notes: (item.job.notes ? `${item.job.notes}\n` : '') + `[FCS Auto-Optimizer]: Agreed and allocated to ${assignedRampName} (${techName}) for ${item.scheduledDate}.`
-            };
-            await onSaveJob(updatedJob);
+                    notes: (item.job.notes ? `${item.job.notes}\n` : '') + `[FCS Agreed Plan]: Converted from Estimate #${item.job.jobNumber || item.estimateId} and locked to ${assignedRampName} (${techName}) for ${item.scheduledDate}.`
+                };
+                await onSaveJob(newJob);
+
+                if (item.estimateId && onSaveEstimate) {
+                    const origEst = estimates.find(e => e.id === item.estimateId);
+                    if (origEst) {
+                        await onSaveEstimate({
+                            ...origEst,
+                            status: 'Converted to Job',
+                            jobId: newJobId
+                        });
+                    }
+                }
+            } else {
+                const updatedJob: Job = {
+                    ...item.job,
+                    scheduledDate: item.scheduledDate,
+                    status: 'Allocated',
+                    fcsState: item.partsLeadDays > 0 ? 'STALLED' : 'ACTIVE',
+                    materialsStatus: item.partsLeadDays > 0 ? 'Ordered' : 'Delivered',
+                    segments: (item.job.segments && item.job.segments.length > 0)
+                        ? item.job.segments.map((s, sIdx) => ({
+                            ...s,
+                            engineerId: item.recommendedEngineerId,
+                            allocatedLift: assignedRampName,
+                            date: item.scheduledDate,
+                            status: 'Allocated' as const,
+                            duration: sIdx === 0 ? item.hours : s.duration
+                        }))
+                        : [
+                            {
+                                id: `seg_${Date.now()}_${item.job.id}`,
+                                segmentId: `seg_${Date.now()}_${item.job.id}`,
+                                description: item.job.description,
+                                status: 'Allocated' as const,
+                                engineerId: item.recommendedEngineerId,
+                                allocatedLift: assignedRampName,
+                                duration: item.hours,
+                                date: item.scheduledDate,
+                                scheduledStartSegment: 1
+                            }
+                        ],
+                    notes: (item.job.notes ? `${item.job.notes}\n` : '') + `[FCS Agreed Plan]: Locked and allocated to ${assignedRampName} (${techName}) for ${item.scheduledDate}.`
+                };
+                await onSaveJob(updatedJob);
+            }
         }
         setShowSuggestedGanttPreview(false);
         setGanttSuggestedPlan([]);
+    };
+
+    // Quick move / adjustment helper for suggested blocks directly on the Gantt
+    const handleMoveSuggestedBlock = (jobId: string, newDate: string, newRampId: string, newEngineerId: string) => {
+        setGanttSuggestedPlan(prev => prev.map(item => {
+            if (item.job.id === jobId) {
+                return {
+                    ...item,
+                    scheduledDate: newDate,
+                    recommendedRampId: newRampId,
+                    recommendedEngineerId: newEngineerId,
+                    isOverridden: true
+                };
+            }
+            return item;
+        }));
+        setAdjustingSuggestedBlock(null);
     };
 
     const handleStartRename = (eng: Engineer) => {
@@ -420,10 +479,20 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
         });
     }, [startDateStr, windowDays]);
 
+    // Merge simulated jobs into effectiveJobs so calculateFCSMatrix renders them on the Gantt
+    const effectiveJobsForMatrix = useMemo(() => {
+        if (!showSuggestedGanttPreview || ganttSuggestedPlan.length === 0) return jobs;
+        const existingJobIds = new Set(jobs.map(j => j.id));
+        const extraSimJobs = ganttSuggestedPlan
+            .filter(item => !existingJobIds.has(item.job.id))
+            .map(item => item.job);
+        return [...jobs, ...extraSimJobs];
+    }, [jobs, showSuggestedGanttPreview, ganttSuggestedPlan]);
+
     // Calculate FCS matrix
     const matrix: FCSMatrixResult = useMemo(() => {
         return calculateFCSMatrix({
-            jobs,
+            jobs: effectiveJobsForMatrix,
             ramps,
             engineers,
             purchaseOrders,
@@ -440,7 +509,7 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                 hours: item.hours
             }))
         });
-    }, [jobs, ramps, engineers, purchaseOrders, vehicles, windowDays, startDateStr, simulateExtraEngineers, showSuggestedGanttPreview, ganttSuggestedPlan]);
+    }, [effectiveJobsForMatrix, ramps, engineers, purchaseOrders, vehicles, windowDays, startDateStr, simulateExtraEngineers, showSuggestedGanttPreview, ganttSuggestedPlan]);
 
     // Recalculate block positions for SVG vector linkages on resize or data update
     useEffect(() => {
@@ -635,30 +704,31 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
             <div ref={containerRef} className="relative flex-grow flex flex-col min-h-0 overflow-y-auto overflow-x-hidden p-4 space-y-4">
                 {/* Suggested Work Allocation Preview Banner */}
                 {showSuggestedGanttPreview && (
-                    <div className="bg-gradient-to-r from-purple-900 via-indigo-900 to-slate-900 text-white px-5 py-3 rounded-2xl shadow-lg border border-purple-400/50 flex flex-wrap items-center justify-between gap-4 animate-fade-in shrink-0 z-40">
+                    <div className="bg-gradient-to-r from-purple-950 via-indigo-950 to-slate-900 text-white px-5 py-3.5 rounded-2xl shadow-xl border border-purple-400/50 flex flex-wrap items-center justify-between gap-4 animate-fade-in shrink-0 z-40">
                         <div className="flex items-center gap-3">
                             <div className="w-9 h-9 rounded-xl bg-purple-600/50 border border-purple-400/40 flex items-center justify-center text-amber-300 shadow-inner">
                                 <Sparkles size={20} className="animate-pulse" />
                             </div>
                             <div>
                                 <h4 className="text-xs font-black uppercase tracking-wider text-white flex items-center gap-2">
-                                    <span>Suggested Work Allocation Preview</span>
+                                    <span>Plan Preview & Interactive Moving</span>
                                     <span className="bg-purple-500/50 border border-purple-400/40 text-purple-200 text-[10px] px-2 py-0.5 rounded-full font-mono">
-                                        {ganttSuggestedPlan.length || (unallocatedJobs || []).length} Jobs
+                                        {ganttSuggestedPlan.length || (unallocatedJobs || []).length} Jobs & Estimates
                                     </span>
                                 </h4>
                                 <p className="text-[11px] text-purple-200 mt-0.5">
-                                    Dashed purple blocks indicate suggested allocations for unallocated work. Review their placement across ramps & technicians, then agree to allocate.
+                                    Dashed blocks indicate simulated placements. <strong className="text-amber-300">Click any block to adjust/move its date, ramp, or technician</strong>, then lock into an agreed plan when ready.
                                 </p>
                             </div>
                         </div>
                         <div className="flex items-center gap-2.5">
                             <button
                                 onClick={handleCommitSuggestedPlan}
-                                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md hover:shadow-emerald-500/30 flex items-center gap-2 transition-all cursor-pointer active:scale-95"
+                                className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md hover:shadow-emerald-500/30 flex items-center gap-2 transition-all cursor-pointer active:scale-95"
+                                title="Locks this plan into confirmed workshop bookings. Always editable afterwards."
                             >
                                 <CheckCircle size={14} />
-                                <span>Agree & Allocate Work</span>
+                                <span>Lock into Agreed Plan ({ganttSuggestedPlan.length || (unallocatedJobs || []).length})</span>
                             </button>
                             <button
                                 onClick={() => setShowSuggestedGanttPreview(false)}
@@ -803,6 +873,7 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                                         const isDimmed = hoveredJobId && !isHovered;
                                         const engTheme = block.engineerId ? getEngineerTheme(block.engineerId) : null;
                                         const isSuggested = block.isSuggested || block.fcsState === 'SUGGESTED';
+                                        const isEstSim = Boolean(block.isEstimateSimulation || block.jobId.startsWith('sim_est_'));
 
                                         return (
                                             <div
@@ -810,22 +881,30 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                                                 data-block-id={block.id}
                                                 onMouseEnter={() => setHoveredJobId(block.jobId)}
                                                 onMouseLeave={() => setHoveredJobId(null)}
-                                                onClick={() => onEditJob(block.jobId)}
+                                                onClick={() => {
+                                                    if (isSuggested || isEstSim) {
+                                                        setAdjustingSuggestedBlock(block);
+                                                    } else {
+                                                        onEditJob(block.jobId);
+                                                    }
+                                                }}
                                                 style={{
                                                     left: `${block.startPercent}%`,
                                                     width: `${block.durationPercent}%`,
-                                                    ...(engTheme && !block.isDeadWeight && !isSuggested ? {
+                                                    ...(engTheme && !block.isDeadWeight && !isSuggested && !isEstSim ? {
                                                         borderLeft: `5px solid ${engTheme.hex}`
                                                     } : {})
                                                 }}
                                                 className={`absolute top-1.5 bottom-1.5 rounded-lg px-2.5 py-1 flex flex-col justify-center cursor-pointer transition-all duration-200 z-10 ${
                                                     block.isDeadWeight
                                                         ? 'bg-amber-100 border-2 border-amber-500 text-amber-950 shadow-sm'
-                                                        : isSuggested
-                                                            ? 'bg-purple-950/85 border-2 border-dashed border-purple-400 text-white shadow-md'
-                                                            : 'bg-gradient-to-r from-slate-900 to-indigo-950 text-white shadow-md border border-slate-700/60'
+                                                        : isEstSim
+                                                            ? 'bg-amber-950/90 border-2 border-dashed border-amber-400 text-white shadow-md'
+                                                            : isSuggested
+                                                                ? 'bg-purple-950/85 border-2 border-dashed border-purple-400 text-white shadow-md'
+                                                                : 'bg-gradient-to-r from-slate-900 to-indigo-950 text-white shadow-md border border-slate-700/60'
                                                 } ${isHovered ? 'ring-2 ring-purple-500 scale-[1.02] z-20 shadow-lg' : ''} ${isDimmed ? 'opacity-35' : ''}`}
-                                                title={`Job #${block.jobId}: ${block.title} (${block.hours}h)${isSuggested ? ' • [Suggested Work Allocation]' : ''}${block.engineerName ? ` • Assigned Tech: ${block.engineerName}` : ''} - Click to inspect`}
+                                                title={`Job #${block.jobId}: ${block.title} (${block.hours}h)${isEstSim ? ' • [Simulated Estimate - Click to Move/Adjust]' : isSuggested ? ' • [Suggested Allocation - Click to Move/Adjust]' : ''}${block.engineerName ? ` • Assigned Tech: ${block.engineerName}` : ''} - Click to ${isSuggested || isEstSim ? 'adjust / move' : 'inspect'}`}
                                             >
                                                 {block.isDeadWeight && (
                                                     <div 
@@ -835,12 +914,16 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                                                 )}
                                                 <div className="flex items-center justify-between text-[11px] font-black leading-tight relative z-10">
                                                     <span className="font-mono uppercase tracking-tight truncate flex items-center gap-1">
-                                                        {isSuggested && <Sparkles size={11} className="text-amber-300 shrink-0" />}
+                                                        {(isSuggested || isEstSim) && <Sparkles size={11} className={isEstSim ? "text-amber-400 shrink-0" : "text-purple-300 shrink-0"} />}
                                                         {block.vehicleRegistration || `#${block.jobId}`}
                                                     </span>
                                                     <div className="flex items-center gap-1.5 shrink-0">
-                                                        {isSuggested ? (
-                                                            <span className="text-[8px] font-black uppercase px-1.5 py-0.2 rounded bg-purple-600 text-white shadow-2xs">
+                                                        {isEstSim ? (
+                                                            <span className="text-[8px] font-black uppercase px-1.5 py-0.2 rounded bg-amber-600 text-white shadow-2xs font-sans">
+                                                                Est Sim
+                                                            </span>
+                                                        ) : isSuggested ? (
+                                                            <span className="text-[8px] font-black uppercase px-1.5 py-0.2 rounded bg-purple-600 text-white shadow-2xs font-sans">
                                                                 Suggested
                                                             </span>
                                                         ) : engTheme && !block.isDeadWeight && (
@@ -855,8 +938,8 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                                                         <span className="font-mono text-[10px] bg-black/25 px-1 rounded">{block.hours}h</span>
                                                     </div>
                                                 </div>
-                                                <div className={`text-[10px] truncate font-bold relative z-10 ${block.isDeadWeight ? 'text-amber-900' : (isSuggested ? 'text-purple-200' : 'text-slate-300')}`}>
-                                                    {block.isDeadWeight ? '⚠️ STALLED: Awaiting Parts' : (isSuggested ? `Suggested: ${block.title}` : block.title)}
+                                                <div className={`text-[10px] truncate font-bold relative z-10 ${block.isDeadWeight ? 'text-amber-900' : isEstSim ? 'text-amber-200' : isSuggested ? 'text-purple-200' : 'text-slate-300'}`}>
+                                                    {block.isDeadWeight ? '⚠️ STALLED: Awaiting Parts' : isEstSim ? `Estimate: ${block.title}` : (isSuggested ? `Suggested: ${block.title}` : block.title)}
                                                 </div>
                                             </div>
                                         );
@@ -1036,6 +1119,7 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                                             const isHovered = hoveredJobId === block.jobId;
                                             const isDimmed = hoveredJobId && !isHovered;
                                             const isSuggested = block.isSuggested || block.fcsState === 'SUGGESTED';
+                                            const isEstSim = Boolean(block.isEstimateSimulation || block.jobId.startsWith('sim_est_'));
 
                                             return (
                                                 <div
@@ -1043,32 +1127,44 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                                                     data-block-id={block.id}
                                                     onMouseEnter={() => setHoveredJobId(block.jobId)}
                                                     onMouseLeave={() => setHoveredJobId(null)}
-                                                    onClick={() => onEditJob(block.jobId)}
+                                                    onClick={() => {
+                                                        if (isSuggested || isEstSim) {
+                                                            setAdjustingSuggestedBlock(block);
+                                                        } else {
+                                                            onEditJob(block.jobId);
+                                                        }
+                                                    }}
                                                     style={{
                                                         left: `${block.startPercent}%`,
                                                         width: `${block.durationPercent}%`,
-                                                        background: isSuggested
-                                                            ? 'linear-gradient(135deg, rgba(88, 28, 135, 0.9), rgba(49, 46, 129, 0.9))'
-                                                            : block.isSimulated 
-                                                                ? 'linear-gradient(135deg, #7c3aed, #4f46e5)'
-                                                                : `linear-gradient(135deg, ${engTheme.gradientFrom}, ${engTheme.gradientTo})`,
-                                                        borderColor: isSuggested ? '#c084fc' : (block.isSimulated ? '#a78bfa' : engTheme.border),
-                                                        borderStyle: isSuggested ? 'dashed' : 'solid',
-                                                        borderWidth: isSuggested ? '2px' : '1px'
+                                                        background: isEstSim
+                                                            ? 'linear-gradient(135deg, rgba(120, 53, 15, 0.9), rgba(180, 83, 9, 0.9))'
+                                                            : isSuggested
+                                                                ? 'linear-gradient(135deg, rgba(88, 28, 135, 0.9), rgba(49, 46, 129, 0.9))'
+                                                                : block.isSimulated 
+                                                                    ? 'linear-gradient(135deg, #7c3aed, #4f46e5)'
+                                                                    : `linear-gradient(135deg, ${engTheme.gradientFrom}, ${engTheme.gradientTo})`,
+                                                        borderColor: isEstSim ? '#f59e0b' : isSuggested ? '#c084fc' : (block.isSimulated ? '#a78bfa' : engTheme.border),
+                                                        borderStyle: (isSuggested || isEstSim) ? 'dashed' : 'solid',
+                                                        borderWidth: (isSuggested || isEstSim) ? '2px' : '1px'
                                                     }}
                                                     className={`absolute top-1.5 bottom-1.5 rounded-lg px-2.5 py-1 flex flex-col justify-center cursor-pointer transition-all duration-200 z-10 text-white shadow-md ${
                                                         isHovered ? 'ring-2 ring-white scale-[1.02] z-20 shadow-xl' : ''
                                                     } ${isDimmed ? 'opacity-35' : ''}`}
-                                                    title={`Wrench Time for Job #${block.jobId}: ${block.title} (${block.hours}h)${isSuggested ? ' • [Suggested Work Allocation]' : ''} • Tech: ${row.engineer.name}`}
+                                                    title={`Wrench Time for Job #${block.jobId}: ${block.title} (${block.hours}h)${isEstSim ? ' • [Simulated Estimate - Click to Move/Adjust]' : isSuggested ? ' • [Suggested Work Allocation - Click to Move/Adjust]' : ''} • Tech: ${row.engineer.name}`}
                                                 >
                                                     <div className="flex items-center justify-between text-[11px] font-black leading-tight">
                                                         <span className="font-mono uppercase tracking-tight truncate flex items-center gap-1">
-                                                            {isSuggested && <Sparkles size={11} className="text-amber-300 shrink-0" />}
+                                                            {(isSuggested || isEstSim) && <Sparkles size={11} className={isEstSim ? "text-amber-400 shrink-0" : "text-purple-300 shrink-0"} />}
                                                             {block.vehicleRegistration || `#${block.jobId}`}
                                                         </span>
                                                         <div className="flex items-center gap-1 shrink-0">
-                                                            {isSuggested && (
-                                                                <span className="text-[8px] font-black uppercase px-1 py-0.2 rounded bg-purple-500/80 text-white">
+                                                            {isEstSim ? (
+                                                                <span className="text-[8px] font-black uppercase px-1 py-0.2 rounded bg-amber-600 text-white font-sans">
+                                                                    Est Sim
+                                                                </span>
+                                                            ) : isSuggested && (
+                                                                <span className="text-[8px] font-black uppercase px-1 py-0.2 rounded bg-purple-500/80 text-white font-sans">
                                                                     Suggested
                                                                 </span>
                                                             )}
@@ -1076,7 +1172,7 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                                                         </div>
                                                     </div>
                                                     <div className="text-[10px] truncate opacity-95 font-bold">
-                                                        {isSuggested ? `Suggested: ${block.title}` : block.title}
+                                                        {isEstSim ? `Estimate: ${block.title}` : isSuggested ? `Suggested: ${block.title}` : block.title}
                                                     </div>
                                                 </div>
                                             );
@@ -1163,6 +1259,19 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                     businessEntities={businessEntities}
                     selectedEntityId={selectedEntityId}
                     onUpdateEngineerTransfer={onUpdateEngineerTransfer}
+                />
+            )}
+
+            {/* Suggested / Simulated Block Move & Adjust Modal */}
+            {adjustingSuggestedBlock && (
+                <AdjustSuggestedAllocationModal
+                    isOpen={Boolean(adjustingSuggestedBlock)}
+                    block={adjustingSuggestedBlock}
+                    planItem={ganttSuggestedPlan.find(p => p.job.id === adjustingSuggestedBlock.jobId)}
+                    usableRamps={usableRamps}
+                    engineers={engineers}
+                    onClose={() => setAdjustingSuggestedBlock(null)}
+                    onApply={handleMoveSuggestedBlock}
                 />
             )}
         </div>

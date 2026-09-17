@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { getNextWorkingDay, formatDate, dateStringToDate } from '../../core/utils/dateUtils';
 import { Job, Lift, Engineer, PurchaseOrder, Estimate } from '../../types';
+import { calculateFCSMatrix } from '../../core/services/fcsSchedulingEngine';
 
 describe('FCS Auto-Optimizer Simulation & Enhancements', () => {
 
@@ -134,6 +135,158 @@ describe('FCS Auto-Optimizer Simulation & Enhancements', () => {
             const oversizedJobHours = 5.0;
             const canFitOversized = (bookedHours + oversizedJobHours) <= rampCapacity;
             expect(canFitOversized).toBe(false);
+        });
+    });
+
+    describe('Interactive Moving & Estimate Simulation Matrix Integration', () => {
+        const mockRamps: Lift[] = [
+            { id: 'ramp_1', name: 'Ramp 1', type: '2-Post Lift', entityId: 'ent_1' },
+            { id: 'ramp_2', name: 'Ramp 2', type: '4-Post Alignment', entityId: 'ent_1' }
+        ];
+
+        const mockEngineers: Engineer[] = [
+            { id: 'eng_1', name: 'Lewis Hamilton', specialization: 'Senior Tech', entityId: 'ent_1' },
+            { id: 'eng_2', name: 'George Russell', specialization: 'Technician', entityId: 'ent_1' }
+        ];
+
+        const simulatedEstimateJob: Job = {
+            id: 'sim_est_EST_100',
+            jobNumber: 'EST-100',
+            description: 'Major Engine Service Simulation',
+            vehicleId: 'veh_test_1',
+            customerId: 'cust_test_1',
+            estimatedHours: 3.5,
+            status: 'Unallocated',
+            isEstimateSimulation: true,
+            estimateId: 'EST_100'
+        } as any;
+
+        it('renders estimate simulation blocks on both ramp and engineer rows with isEstimateSimulation flags', () => {
+            const matrix = calculateFCSMatrix({
+                jobs: [simulatedEstimateJob],
+                ramps: mockRamps,
+                engineers: mockEngineers,
+                purchaseOrders: [],
+                startDateStr: '2026-09-18',
+                includeSuggestedAllocations: true,
+                suggestedAllocations: [{
+                    jobId: simulatedEstimateJob.id,
+                    rampId: 'ramp_1',
+                    engineerId: 'eng_1',
+                    date: '2026-09-18',
+                    hours: 3.5
+                }]
+            });
+
+            // Check ramp row
+            const ramp1Blocks = matrix.rampRows.find(r => r.ramp.id === 'ramp_1')?.blocks || [];
+            expect(ramp1Blocks.length).toBe(1);
+            expect(ramp1Blocks[0].jobId).toBe('sim_est_EST_100');
+            expect(ramp1Blocks[0].isEstimateSimulation).toBe(true);
+            expect(ramp1Blocks[0].estimateId).toBe('EST_100');
+            expect(ramp1Blocks[0].isSuggested).toBe(true);
+
+            // Check engineer row
+            const eng1Blocks = matrix.engineerRows.find(r => r.engineer.id === 'eng_1')?.blocks || [];
+            expect(eng1Blocks.length).toBe(1);
+            expect(eng1Blocks[0].jobId).toBe('sim_est_EST_100');
+            expect(eng1Blocks[0].isEstimateSimulation).toBe(true);
+            expect(eng1Blocks[0].estimateId).toBe('EST_100');
+        });
+
+        it('allows interactive moving: moving a job to another date, ramp, or tech reflects instantly in matrix', () => {
+            // Move from Ramp 1 / Eng 1 / 2026-09-18 -> Ramp 2 / Eng 2 / 2026-09-19
+            const matrixMoved = calculateFCSMatrix({
+                jobs: [simulatedEstimateJob],
+                ramps: mockRamps,
+                engineers: mockEngineers,
+                purchaseOrders: [],
+                startDateStr: '2026-09-18',
+                windowDays: 5,
+                includeSuggestedAllocations: true,
+                suggestedAllocations: [{
+                    jobId: simulatedEstimateJob.id,
+                    rampId: 'ramp_2',
+                    engineerId: 'eng_2',
+                    date: '2026-09-19',
+                    hours: 3.5
+                }]
+            });
+
+            // Ramp 1 should now be empty; Ramp 2 has the block
+            const ramp1Blocks = matrixMoved.rampRows.find(r => r.ramp.id === 'ramp_1')?.blocks || [];
+            const ramp2Blocks = matrixMoved.rampRows.find(r => r.ramp.id === 'ramp_2')?.blocks || [];
+            expect(ramp1Blocks.length).toBe(0);
+            expect(ramp2Blocks.length).toBe(1);
+            expect(ramp2Blocks[0].startDate).toBe('2026-09-19');
+
+            // Eng 1 should be empty; Eng 2 has the wrench time
+            const eng1Blocks = matrixMoved.engineerRows.find(r => r.engineer.id === 'eng_1')?.blocks || [];
+            const eng2Blocks = matrixMoved.engineerRows.find(r => r.engineer.id === 'eng_2')?.blocks || [];
+            expect(eng1Blocks.length).toBe(0);
+            expect(eng2Blocks.length).toBe(1);
+            expect(eng2Blocks[0].startDate).toBe('2026-09-19');
+        });
+
+        it('locks into agreed plan: converting simulated estimate produces confirmed Allocated job editable later', () => {
+            // When user clicks "Lock into Agreed Plan":
+            const newJobId = `job_from_est_${simulatedEstimateJob.estimateId}_12345`;
+            const confirmedJob: Job = {
+                ...simulatedEstimateJob,
+                id: newJobId,
+                status: 'Allocated',
+                scheduledDate: '2026-09-19',
+                segments: [{
+                    id: 'seg_1',
+                    segmentId: 'seg_1',
+                    description: simulatedEstimateJob.description,
+                    status: 'Allocated',
+                    engineerId: 'eng_2',
+                    allocatedLift: 'Ramp 2',
+                    duration: 3.5,
+                    date: '2026-09-19',
+                    scheduledStartSegment: 1
+                }]
+            };
+
+            const origEstimate: Estimate = {
+                id: 'EST_100',
+                estimateNumber: 'EST-100',
+                status: 'Approved',
+                issueDate: '2026-09-17',
+                expiryDate: '2026-10-17',
+                customerId: 'cust_test_1',
+                vehicleId: 'veh_test_1',
+                description: 'Major Engine Service Simulation',
+                lineItems: []
+            };
+
+            const updatedEstimate: Estimate = {
+                ...origEstimate,
+                status: 'Converted to Job',
+                jobId: newJobId
+            };
+
+            expect(confirmedJob.status).toBe('Allocated');
+            expect(confirmedJob.scheduledDate).toBe('2026-09-19');
+            expect(updatedEstimate.status).toBe('Converted to Job');
+            expect(updatedEstimate.jobId).toBe(newJobId);
+
+            // Now in normal Gantt mode (without suggested preview), this job displays as confirmed booked work
+            const standardMatrix = calculateFCSMatrix({
+                jobs: [confirmedJob],
+                ramps: mockRamps,
+                engineers: mockEngineers,
+                purchaseOrders: [],
+                startDateStr: '2026-09-18',
+                windowDays: 5,
+                includeSuggestedAllocations: false
+            });
+
+            const ramp2Blocks = standardMatrix.rampRows.find(r => r.ramp.id === 'ramp_2')?.blocks || [];
+            expect(ramp2Blocks.length).toBe(1);
+            expect(ramp2Blocks[0].jobId).toBe(newJobId);
+            expect(ramp2Blocks[0].isSuggested).toBeFalsy(); // Confirmed booked work!
         });
     });
 });

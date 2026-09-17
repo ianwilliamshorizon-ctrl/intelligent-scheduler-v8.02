@@ -441,6 +441,51 @@ export const FCSOptimizerModal: React.FC<FCSOptimizerModalProps> = ({
             .reduce((acc, p) => acc + p.hours, 0);
     }, [optimizedPlan]);
 
+    const simulatedTotalRevenue = useMemo(() => {
+        return candidateEstimates
+            .filter(est => selectedEstimateIds.has(est.id))
+            .reduce((sum, est) => {
+                const estTotal = (est.lineItems || []).reduce((s, li) => s + ((li.unitPrice || 0) * (li.quantity || 1)), 0);
+                return sum + (estTotal || 0);
+            }, 0);
+    }, [candidateEstimates, selectedEstimateIds]);
+
+    const baselineTotalHours = useMemo(() => {
+        const bookedH = Array.from(bookedByDate.values()).flat().reduce((acc, j) => acc + (j.estimatedHours || 2), 0);
+        const unallocH = unallocatedJobs.reduce((acc, j) => acc + (j.estimatedHours || 2), 0);
+        return bookedH + unallocH;
+    }, [bookedByDate, unallocatedJobs]);
+
+    const totalCapacityHours = (engineers.length * 8) * windowDays;
+    const baselineUtilizationPercent = totalCapacityHours > 0 ? Math.min(100, Math.round((baselineTotalHours / totalCapacityHours) * 100)) : 0;
+    const simulatedUtilizationPercent = totalCapacityHours > 0 ? Math.min(100, Math.round(((baselineTotalHours + simulatedEstimateHours) / totalCapacityHours) * 100)) : 0;
+
+    const shiftJobDate = (jobId: string, currentDateStr: string, direction: -1 | 1) => {
+        const currentIndex = daysList.indexOf(currentDateStr);
+        let newDate = currentDateStr;
+        if (currentIndex !== -1) {
+            const nextIndex = currentIndex + direction;
+            if (nextIndex >= 0 && nextIndex < daysList.length) {
+                newDate = daysList[nextIndex];
+            } else {
+                const d = new Date(currentDateStr.includes('T') ? currentDateStr : `${currentDateStr}T00:00:00`);
+                d.setDate(d.getDate() + direction);
+                newDate = formatDate(d);
+            }
+        } else {
+            const d = new Date(currentDateStr.includes('T') ? currentDateStr : `${currentDateStr}T00:00:00`);
+            d.setDate(d.getDate() + direction);
+            newDate = formatDate(d);
+        }
+        setOverrides(prev => ({
+            ...prev,
+            [jobId]: {
+                ...prev[jobId],
+                scheduledDate: newDate
+            }
+        }));
+    };
+
     if (!isOpen) return null;
 
     // Multi-select helpers
@@ -857,34 +902,152 @@ export const FCSOptimizerModal: React.FC<FCSOptimizerModalProps> = ({
                                                             </div>
                                                         ))}
 
-                                                        {day.optimizedJobs.map(opt => (
-                                                            <div key={opt.job.id} className={`p-2.5 rounded-xl border flex items-center justify-between text-xs ${
-                                                                opt.isEstimateSimulation 
-                                                                    ? 'bg-amber-50/60 border-amber-300' 
-                                                                    : 'bg-emerald-50/60 border-emerald-300'
-                                                            }`}>
-                                                                <div className="flex items-center gap-2">
-                                                                    <span className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase ${
-                                                                        opt.isEstimateSimulation
-                                                                            ? 'bg-amber-200 text-amber-900'
-                                                                            : 'bg-purple-200 text-purple-900'
-                                                                    }`}>
-                                                                        {opt.isEstimateSimulation ? 'Estimate Pipeline Simulation' : 'Suggested Work Allocation'}
-                                                                    </span>
-                                                                    <span className="font-mono font-bold text-slate-900">
-                                                                        {opt.vehicle?.registration || opt.job.jobNumber || opt.job.id.substring(0, 8)}
-                                                                    </span>
-                                                                    <span className="text-slate-700 font-medium truncate max-w-sm">{opt.job.description}</span>
+                                                        {day.optimizedJobs.map(opt => {
+                                                            const isOverridden = Boolean(overrides[opt.job.id]);
+                                                            const currentTech = engineers.find(e => e.id === opt.recommendedEngineerId);
+
+                                                            return (
+                                                                <div 
+                                                                    key={opt.job.id} 
+                                                                    className={`p-3 rounded-2xl border transition-all text-xs flex flex-col lg:flex-row lg:items-center justify-between gap-3 shadow-xs ${
+                                                                        opt.isEstimateSimulation 
+                                                                            ? 'bg-amber-50/70 border-amber-300/80 hover:border-amber-400' 
+                                                                            : 'bg-purple-50/70 border-purple-300/80 hover:border-purple-400'
+                                                                    }`}
+                                                                >
+                                                                    {/* Left: Type, Identity & Scope */}
+                                                                    <div className="flex items-start sm:items-center gap-2.5 min-w-0 flex-grow">
+                                                                        <div className="flex flex-col gap-1 shrink-0">
+                                                                            <span className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider text-center ${
+                                                                                opt.isEstimateSimulation
+                                                                                    ? 'bg-amber-200 text-amber-950 border border-amber-300'
+                                                                                    : 'bg-purple-200 text-purple-950 border border-purple-300'
+                                                                            }`}>
+                                                                                {opt.isEstimateSimulation ? '📋 Estimate Sim' : '✨ Suggested Work'}
+                                                                            </span>
+                                                                            {isOverridden && (
+                                                                                <span className="text-[8px] font-black px-1.5 py-0.2 rounded-full uppercase tracking-wider bg-blue-100 text-blue-800 border border-blue-200 text-center">
+                                                                                    ✏️ Moved / Edited
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+
+                                                                        <div className="min-w-0">
+                                                                            <div className="flex items-center gap-2">
+                                                                                <span className="font-mono font-black text-slate-900 text-xs uppercase">
+                                                                                    {opt.vehicle?.registration || opt.job.jobNumber || opt.job.id.substring(0, 8)}
+                                                                                </span>
+                                                                                <span className="text-[11px] font-bold text-slate-500">
+                                                                                    {opt.customer ? getCustomerDisplayName(opt.customer) : 'Customer'}
+                                                                                </span>
+                                                                                <span className="text-[10px] bg-slate-200/80 text-slate-700 px-1.5 py-0.2 rounded font-black">
+                                                                                    {opt.hours}h
+                                                                                </span>
+                                                                            </div>
+                                                                            <p className="text-slate-700 font-medium truncate max-w-md mt-0.5" title={opt.job.description}>
+                                                                                {opt.job.description || 'Workshop Service Work'}
+                                                                            </p>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    {/* Right: Interactive Move Controls */}
+                                                                    <div className="flex flex-wrap items-center gap-2 shrink-0 bg-white/80 backdrop-blur-xs p-1.5 rounded-xl border border-slate-200/90 shadow-2xs">
+                                                                        {/* Day Shift Controls */}
+                                                                        <div className="flex items-center gap-1">
+                                                                            <span className="text-[10px] uppercase font-black text-slate-400 mr-0.5">Move:</span>
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    shiftJobDate(opt.job.id, opt.scheduledDate, -1);
+                                                                                }}
+                                                                                className="w-6 h-6 rounded-lg bg-slate-100 hover:bg-indigo-100 text-slate-700 hover:text-indigo-700 font-black text-xs flex items-center justify-center transition-colors cursor-pointer border border-slate-200"
+                                                                                title="Move job to previous day"
+                                                                            >
+                                                                                ‹
+                                                                            </button>
+                                                                            <input
+                                                                                type="date"
+                                                                                value={opt.scheduledDate}
+                                                                                onClick={(e) => e.stopPropagation()}
+                                                                                onChange={(e) => setOverrides(prev => ({
+                                                                                    ...prev,
+                                                                                    [opt.job.id]: { ...prev[opt.job.id], scheduledDate: e.target.value }
+                                                                                }))}
+                                                                                className="bg-white border border-slate-200 rounded-lg px-2 py-0.5 text-xs font-bold text-slate-800 outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+                                                                                title="Select specific scheduled date"
+                                                                            />
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    shiftJobDate(opt.job.id, opt.scheduledDate, 1);
+                                                                                }}
+                                                                                className="w-6 h-6 rounded-lg bg-slate-100 hover:bg-indigo-100 text-slate-700 hover:text-indigo-700 font-black text-xs flex items-center justify-center transition-colors cursor-pointer border border-slate-200"
+                                                                                title="Move job to next day"
+                                                                            >
+                                                                                ›
+                                                                            </button>
+                                                                        </div>
+
+                                                                        {/* Ramp Reassignment */}
+                                                                        <div className="flex items-center gap-1">
+                                                                            <select
+                                                                                value={opt.recommendedRampId}
+                                                                                onClick={(e) => e.stopPropagation()}
+                                                                                onChange={(e) => setOverrides(prev => ({
+                                                                                    ...prev,
+                                                                                    [opt.job.id]: { ...prev[opt.job.id], rampId: e.target.value }
+                                                                                }))}
+                                                                                className="bg-white border border-slate-200 rounded-lg px-2 py-0.5 text-xs font-bold text-slate-800 outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer max-w-[130px] truncate"
+                                                                                title="Reassign to a different Ramp / Bay"
+                                                                            >
+                                                                                {usableRamps.map(r => (
+                                                                                    <option key={r.id} value={r.id}>{r.name}</option>
+                                                                                ))}
+                                                                            </select>
+                                                                        </div>
+
+                                                                        {/* Tech Reassignment */}
+                                                                        <div className="flex items-center gap-1">
+                                                                            <select
+                                                                                value={opt.recommendedEngineerId}
+                                                                                onClick={(e) => e.stopPropagation()}
+                                                                                onChange={(e) => setOverrides(prev => ({
+                                                                                    ...prev,
+                                                                                    [opt.job.id]: { ...prev[opt.job.id], engineerId: e.target.value }
+                                                                                }))}
+                                                                                className="bg-white border border-slate-200 rounded-lg px-2 py-0.5 text-xs font-bold text-slate-800 outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer max-w-[130px] truncate"
+                                                                                title="Reassign to a different Technician"
+                                                                            >
+                                                                                {engineers.map(eng => (
+                                                                                    <option key={eng.id} value={eng.id}>{eng.name}</option>
+                                                                                ))}
+                                                                            </select>
+                                                                        </div>
+
+                                                                        {/* Reset button if overridden */}
+                                                                        {isOverridden && (
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    setOverrides(prev => {
+                                                                                        const next = { ...prev };
+                                                                                        delete next[opt.job.id];
+                                                                                        return next;
+                                                                                    });
+                                                                                }}
+                                                                                className="text-[10px] text-red-600 hover:text-red-700 font-bold px-1.5 py-0.5 rounded hover:bg-red-50 transition-colors cursor-pointer"
+                                                                                title="Reset manual overrides for this job"
+                                                                            >
+                                                                                Reset
+                                                                            </button>
+                                                                        )}
+                                                                    </div>
                                                                 </div>
-                                                                <div className="flex items-center gap-3 font-bold text-slate-800">
-                                                                    <span>{usableRamps.find(r => r.id === opt.recommendedRampId)?.name || 'Ramp'}</span>
-                                                                    <span>•</span>
-                                                                    <span>{engineers.find(e => e.id === opt.recommendedEngineerId)?.name || 'Tech'}</span>
-                                                                    <span>•</span>
-                                                                    <span className="text-emerald-700">{opt.hours}h</span>
-                                                                </div>
-                                                            </div>
-                                                        ))}
+                                                            );
+                                                        })}
                                                     </div>
                                                 </div>
                                             )}
@@ -980,15 +1143,33 @@ export const FCSOptimizerModal: React.FC<FCSOptimizerModalProps> = ({
 
                                                             {/* Date Picker / Scheduled Date Override */}
                                                             <td className="px-3.5 py-3">
-                                                                <input
-                                                                    type="date"
-                                                                    value={item.scheduledDate}
-                                                                    onChange={(e) => setOverrides(prev => ({
-                                                                        ...prev,
-                                                                        [item.job.id]: { ...prev[item.job.id], scheduledDate: e.target.value }
-                                                                    }))}
-                                                                    className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none"
-                                                                />
+                                                                <div className="flex items-center gap-1">
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => shiftJobDate(item.job.id, item.scheduledDate, -1)}
+                                                                        className="w-5 h-5 rounded bg-slate-100 hover:bg-indigo-100 text-slate-700 hover:text-indigo-700 font-black text-xs flex items-center justify-center transition-colors cursor-pointer border border-slate-200"
+                                                                        title="Shift -1 day"
+                                                                    >
+                                                                        ‹
+                                                                    </button>
+                                                                    <input
+                                                                        type="date"
+                                                                        value={item.scheduledDate}
+                                                                        onChange={(e) => setOverrides(prev => ({
+                                                                            ...prev,
+                                                                            [item.job.id]: { ...prev[item.job.id], scheduledDate: e.target.value }
+                                                                        }))}
+                                                                        className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer"
+                                                                    />
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => shiftJobDate(item.job.id, item.scheduledDate, 1)}
+                                                                        className="w-5 h-5 rounded bg-slate-100 hover:bg-indigo-100 text-slate-700 hover:text-indigo-700 font-black text-xs flex items-center justify-center transition-colors cursor-pointer border border-slate-200"
+                                                                        title="Shift +1 day"
+                                                                    >
+                                                                        ›
+                                                                    </button>
+                                                                </div>
                                                             </td>
 
                                                             {/* Ramp Select */}
@@ -1074,6 +1255,85 @@ export const FCSOptimizerModal: React.FC<FCSOptimizerModalProps> = ({
                                     </button>
                                 </div>
                             </div>
+
+                            {/* Live Simulation Impact on Schedule & Quick Navigation */}
+                            {selectedEstimateIds.size > 0 ? (
+                                <div className="bg-gradient-to-r from-amber-500/15 via-indigo-500/10 to-emerald-500/15 border border-amber-300/80 rounded-2xl p-4 shadow-sm space-y-3 animate-fade-in">
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center font-black shadow-sm shrink-0">
+                                                <Sparkles size={20} className="fill-white" />
+                                            </div>
+                                            <div>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-xs font-black uppercase tracking-wider text-slate-900">
+                                                        Live Simulation Impact on Schedule
+                                                    </span>
+                                                    <span className="bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-black px-2 py-0.5 rounded-full">
+                                                        {selectedEstimateIds.size} Selected
+                                                    </span>
+                                                </div>
+                                                <p className="text-[11px] text-slate-600 mt-0.5">
+                                                    These estimates have been slotted into optimal dates, ramps, and technicians without accepting or converting them yet.
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-2 shrink-0">
+                                            <button
+                                                type="button"
+                                                onClick={() => setActiveTab('packing')}
+                                                className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-sm hover:shadow-indigo-400/30 flex items-center gap-1.5 transition-all cursor-pointer"
+                                            >
+                                                <Calendar size={13} />
+                                                <span>View Plan & Move Jobs →</span>
+                                            </button>
+                                            {onPreviewOnGantt && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        onPreviewOnGantt(optimizedPlan);
+                                                        onClose();
+                                                    }}
+                                                    className="px-3.5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-sm hover:shadow-purple-400/30 flex items-center gap-1.5 transition-all cursor-pointer"
+                                                >
+                                                    <Sparkles size={13} />
+                                                    <span>Preview on Gantt</span>
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Metric Chips */}
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-2 border-t border-amber-200/60">
+                                        <div className="bg-white/80 rounded-xl p-2.5 border border-amber-200 text-center">
+                                            <span className="text-[9px] uppercase font-black text-slate-500 block">Simulated Labor Added</span>
+                                            <span className="text-sm font-black text-amber-900">+{simulatedEstimateHours} hrs</span>
+                                        </div>
+                                        <div className="bg-white/80 rounded-xl p-2.5 border border-amber-200 text-center">
+                                            <span className="text-[9px] uppercase font-black text-slate-500 block">Pipeline Revenue</span>
+                                            <span className="text-sm font-black text-emerald-700">£{simulatedTotalRevenue.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                        </div>
+                                        <div className="bg-white/80 rounded-xl p-2.5 border border-amber-200 text-center">
+                                            <span className="text-[9px] uppercase font-black text-slate-500 block">Workshop Utilization</span>
+                                            <span className="text-sm font-black text-slate-900">
+                                                {baselineUtilizationPercent}% ➔ <span className="text-indigo-700">{simulatedUtilizationPercent}%</span>
+                                            </span>
+                                        </div>
+                                        <div className="bg-white/80 rounded-xl p-2.5 border border-amber-200 text-center">
+                                            <span className="text-[9px] uppercase font-black text-slate-500 block">Total Plan Scope</span>
+                                            <span className="text-sm font-black text-purple-900">{optimizedPlan.length} Jobs / Ests</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="bg-amber-50/70 border border-amber-200/80 rounded-2xl p-3 flex items-center gap-3 text-amber-900 text-xs font-medium">
+                                    <Info size={16} className="text-amber-600 shrink-0" />
+                                    <span>
+                                        Select estimates using the checkboxes below to immediately simulate their impact on workshop loading, labor capacity, and day-by-day packing without accepting the job.
+                                    </span>
+                                </div>
+                            )}
 
                             {candidateEstimates.length === 0 ? (
                                 <div className="p-8 text-center bg-white rounded-2xl border border-slate-200 text-slate-500">
@@ -1317,16 +1577,17 @@ export const FCSOptimizerModal: React.FC<FCSOptimizerModalProps> = ({
                             onClick={handleApplyPlan}
                             disabled={optimizedPlan.length === 0 || isApplying}
                             className="px-6 py-2.5 bg-gradient-to-r from-emerald-600 via-emerald-500 to-indigo-600 hover:from-emerald-500 hover:to-indigo-500 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md hover:shadow-lg transition-all active:scale-95 flex items-center gap-2 disabled:opacity-50 cursor-pointer"
+                            title="Locks the plan into confirmed work. You can edit, drag, or reassign jobs at any later time."
                         >
                             {isApplying ? (
                                 <>
                                     <RefreshCw size={14} className="animate-spin" />
-                                    <span>Allocating Work...</span>
+                                    <span>Locking into Plan...</span>
                                 </>
                             ) : (
                                 <>
                                     <CheckCircle size={15} className="text-emerald-200" />
-                                    <span>Agree & Allocate Work as Suggested ({optimizedPlan.length})</span>
+                                    <span>Lock into Agreed Plan ({optimizedPlan.length} Jobs)</span>
                                     <ChevronRight size={16} />
                                 </>
                             )}

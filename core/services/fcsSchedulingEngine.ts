@@ -352,6 +352,8 @@ export function calculateFCSMatrix({
             if (!rampId || !engineerId) return;
 
             const isSim = engineerId.startsWith('sim_');
+            const isEstSim = Boolean((qp.job as any).isEstimateSimulation || qp.job.id.startsWith('sim_est_'));
+            const estId = (qp.job as any).estimateId;
             const engName = effectiveEngineers.find(e => e.id === engineerId || (e.name && engineerId && e.name.toLowerCase() === engineerId.toLowerCase()))?.name || 'Engineer';
             const rampName = effectiveRamps.find(r => r.id === rampId)?.name || 'Ramp';
 
@@ -369,7 +371,7 @@ export function calculateFCSMatrix({
                 resourceName: rampName,
                 engineerId,
                 engineerName: engName,
-                title: qp.job.description || 'Suggested Work Allocation',
+                title: qp.job.description || (isEstSim ? 'Estimate Pipeline Simulation' : 'Suggested Work Allocation'),
                 vehicleRegistration: qp.vehicle?.registration,
                 fcsState: 'SUGGESTED',
                 startDate: scheduledDate,
@@ -382,6 +384,8 @@ export function calculateFCSMatrix({
                 isDeadWeight: false,
                 isSimulated: isSim,
                 isSuggested: true,
+                isEstimateSimulation: isEstSim,
+                estimateId: estId,
                 linkedBlockId: engBlockId
             };
 
@@ -393,7 +397,7 @@ export function calculateFCSMatrix({
                 resourceName: engName,
                 engineerId,
                 engineerName: engName,
-                title: qp.job.description || 'Suggested Wrench Time',
+                title: qp.job.description || (isEstSim ? 'Estimate Pipeline Simulation' : 'Suggested Wrench Time'),
                 vehicleRegistration: qp.vehicle?.registration,
                 fcsState: 'SUGGESTED',
                 startDate: scheduledDate,
@@ -406,6 +410,8 @@ export function calculateFCSMatrix({
                 isDeadWeight: false,
                 isSimulated: isSim,
                 isSuggested: true,
+                isEstimateSimulation: isEstSim,
+                estimateId: estId,
                 linkedBlockId: rampBlockId
             };
 

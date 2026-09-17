@@ -259,6 +259,8 @@ export interface FCSGanttBlock {
     isDeadWeight?: boolean; // If STALLED on a ramp
     isSimulated?: boolean; // If from +1 engineer simulation
     isSuggested?: boolean; // If from suggested work allocation for unallocated jobs
+    isEstimateSimulation?: boolean; // If simulated from estimate pipeline
+    estimateId?: string; // Original estimate ID if simulated
     linkedBlockId?: string; // Links Ramp block to Engineer block
 }
 
