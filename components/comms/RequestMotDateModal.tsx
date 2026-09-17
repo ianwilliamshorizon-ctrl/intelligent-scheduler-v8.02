@@ -32,7 +32,6 @@ const RequestMotDateModal: React.FC<RequestMotDateModalProps> = ({
 
     const [requestedDate, setRequestedDate] = useState(defaultDate);
     const [timeSlot, setTimeSlot] = useState<'Morning (08:30 - 12:00)' | 'Afternoon (12:00 - 17:00)' | 'All Day / Flexible'>('Morning (08:30 - 12:00)');
-    const [needsCourtesyCar, setNeedsCourtesyCar] = useState(false);
     const [additionalNotes, setAdditionalNotes] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -55,7 +54,7 @@ const RequestMotDateModal: React.FC<RequestMotDateModalProps> = ({
                 fromEmail: customerEmail || undefined,
                 fromPhone: customerPhone || undefined,
                 subject: `MOT Booking Request for ${vehicle.registration}`,
-                message: `[MOT Booking Request]\nPreferred Date: ${requestedDate}\nTime Window: ${timeSlot}\nCourtesy Car: ${needsCourtesyCar ? 'YES' : 'NO'}\nCurrent MOT Expiry: ${vehicle.nextMotDate || 'Unknown'}\n${additionalNotes ? `Notes: ${additionalNotes}` : ''}`,
+                message: `[MOT Booking Request]\nPreferred Date: ${requestedDate}\nTime Window: ${timeSlot}\nCurrent MOT Expiry: ${vehicle.nextMotDate || 'Unknown'}\n${additionalNotes ? `Notes: ${additionalNotes}` : ''}`,
                 takenByUserId: 'system',
                 status: 'New Requests',
                 vehicleRegistration: vehicle.registration,
@@ -167,23 +166,6 @@ const RequestMotDateModal: React.FC<RequestMotDateModalProps> = ({
                             </button>
                         ))}
                     </div>
-                </div>
-
-                {/* Courtesy Car */}
-                <div className="p-3 bg-gray-50 border rounded-lg flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                        <Car size={18} className="text-gray-600" />
-                        <div>
-                            <p className="text-xs font-bold text-gray-800">Courtesy Car Required?</p>
-                            <p className="text-[11px] text-gray-500">Subject to availability on the selected date</p>
-                        </div>
-                    </div>
-                    <input
-                        type="checkbox"
-                        checked={needsCourtesyCar}
-                        onChange={e => setNeedsCourtesyCar(e.target.checked)}
-                        className="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                    />
                 </div>
 
                 {/* Additional Notes */}

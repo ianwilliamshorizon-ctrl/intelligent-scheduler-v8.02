@@ -442,12 +442,19 @@ const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
                             ) : (
                                 customerInquiries.map((inq: any) => (
                                     <div key={inq.id} className="p-3 bg-white border rounded shadow-sm hover:border-indigo-300 transition-colors cursor-pointer" onClick={() => onViewInquiry?.(inq)}>
-                                        <div className="flex justify-between">
-                                            <p className="font-bold text-sm text-indigo-600 line-clamp-1">{inq.fromName}</p>
+                                        <div className="flex justify-between items-center">
+                                            <p className="font-bold text-sm text-indigo-600 line-clamp-1">{inq.subject || inq.fromName}</p>
                                             <span className="text-xs text-gray-500 whitespace-nowrap ml-2">{new Date(inq.createdAt).toLocaleDateString()}</span>
                                         </div>
-                                        <p className="text-xs text-gray-700 mt-1 line-clamp-2">{inq.message}</p>
-                                        <div className="mt-2 flex">
+                                        {inq.vehicleRegistration && (
+                                            <div className="mt-1">
+                                                <span className="text-[10px] font-mono font-extrabold bg-yellow-400 text-black px-1.5 py-0.5 rounded border border-yellow-500">
+                                                    {inq.vehicleRegistration}
+                                                </span>
+                                            </div>
+                                        )}
+                                        <p className="text-xs text-gray-700 mt-1.5 line-clamp-2">{inq.message || inq.actionNotes}</p>
+                                        <div className="mt-2 flex items-center gap-2">
                                             <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${
                                                 inq.status === 'New' ? 'bg-red-100 text-red-700' :
                                                 inq.status === 'Closed' ? 'bg-green-100 text-green-700' :
@@ -455,6 +462,11 @@ const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
                                             }`}>
                                                 {inq.status}
                                             </span>
+                                            {inq.fromName === 'Brookspeed' && (
+                                                <span className="text-[10px] font-semibold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
+                                                    Outbound (info@brookspeed.com)
+                                                </span>
+                                            )}
                                         </div>
                                     </div>
                                 ))

@@ -4,9 +4,37 @@ import { formatTitleCase } from '../core/utils/formatUtils';
 const API_KEY = import.meta.env.VITE_VEHICLE_DATA_GLOBAL_API_KEY;
 const API_BASE_URL = '/api/r2/lookup';
 
-// Robust date formatter
-const formatToISODate = (val: any): string => {
-  if (!val || val === "null") return '';
+// Robust date formatter supporting ISO, UK formats (DD/MM/YYYY), YYYY-MM, and Month YYYY
+export const formatToISODate = (val: any): string => {
+  if (!val || val === "null" || val === "undefined") return '';
+  const str = String(val).trim();
+
+  // Match DD/MM/YYYY or DD-MM-YYYY or DD.MM.YYYY
+  const ukMatch = str.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})/);
+  if (ukMatch) {
+    const day = ukMatch[1].padStart(2, '0');
+    const month = ukMatch[2].padStart(2, '0');
+    const year = ukMatch[3];
+    return `${year}-${month}-${day}`;
+  }
+
+  // Match YYYY-MM (e.g. DVLA VES tax due month "2026-10")
+  const ymMatch = str.match(/^(\d{4})[\/\-](\d{2})$/);
+  if (ymMatch) {
+    return `${ymMatch[1]}-${ymMatch[2]}-01`;
+  }
+
+  // Match Month YYYY (e.g. "October 2026" or "Oct 2026")
+  const monthNames = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+  const monthMatch = str.match(/^([a-zA-Z]+)\s+(\d{4})$/);
+  if (monthMatch) {
+    const mIndex = monthNames.findIndex(m => monthMatch[1].toLowerCase().startsWith(m));
+    if (mIndex !== -1) {
+      const month = String(mIndex + 1).padStart(2, '0');
+      return `${monthMatch[2]}-${month}-01`;
+    }
+  }
+
   try {
     const d = new Date(val);
     if (isNaN(d.getTime())) return '';
@@ -108,8 +136,12 @@ export const lookupVehicleByVRM = async (vrm: string, includeMotHistory: boolean
                      findValue(res, 'DateOfTaxExpiry') || 
                      findValue(res, 'TaxExpiryDate') ||
                      findValue(res, 'TaxExpiry') ||
-                     findValue(res, 'VehicleTaxDueDate');
-  const formattedTaxDate = formatToISODate(rawTaxDate);
+                     findValue(res, 'VehicleTaxDueDate') ||
+                     findValue(res, 'TaxDue') ||
+                     findValue(res, 'DateTaxDue') ||
+                     findValue(res, 'TaxStatusDate') ||
+                     findValue(res, 'DvlaTaxDueDate');
+  let formattedTaxDate = formatToISODate(rawTaxDate);
   const rawTaxStatus = findValue(res, 'TaxStatus') || 
                        findValue(res, 'VehicleTaxStatus') || 
                        findValue(res, 'DvlaTaxStatus') || 
@@ -159,6 +191,17 @@ export const lookupVehicleByVRM = async (vrm: string, includeMotHistory: boolean
     const motRes = motJson?.Results?.MotHistoryDetails || {};
     if (motRes.MotDueDate) {
       mapped.nextMotDate = formatToISODate(motRes.MotDueDate);
+    }
+
+    if (!mapped.taxDueDate) {
+      const fallbackTax = findValue(motJson?.Results, 'TaxDueDate') || 
+                          findValue(motJson?.Results, 'DateOfTaxExpiry') || 
+                          findValue(motJson?.Results, 'TaxExpiryDate') ||
+                          findValue(motJson?.Results, 'VehicleTaxDueDate') ||
+                          findValue(motJson?.Results, 'TaxDue');
+      if (fallbackTax) {
+        mapped.taxDueDate = formatToISODate(fallbackTax);
+      }
     }
 
     const list = motRes.MotTestDetailsList || [];

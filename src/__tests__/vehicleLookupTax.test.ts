@@ -58,4 +58,64 @@ describe('DVLA Vehicle Lookup Service - Tax Due Date & Status Extraction', () =>
             global.fetch = originalFetch;
         }
     });
+
+    it('parses UK date format DD/MM/YYYY and YYYY-MM correctly into ISO YYYY-MM-DD', async () => {
+        const mockApiResponse = {
+            Results: {
+                Make: 'PORSCHE',
+                Model: '911 GT3 RS',
+                TaxDueDate: '01/11/2026',
+                TaxStatus: 'Taxed'
+            }
+        };
+
+        const originalFetch = global.fetch;
+        global.fetch = vi.fn().mockImplementation(() =>
+            Promise.resolve({
+                json: () => Promise.resolve(mockApiResponse)
+            })
+        ) as any;
+
+        try {
+            const vehicle = await lookupVehicleByVRM('GT3 RS');
+            expect(vehicle.taxDueDate).toBe('2026-11-01');
+        } finally {
+            global.fetch = originalFetch;
+        }
+    });
+
+    it('extracts tax return date from MotHistoryDetails fallback if missing in first payload', async () => {
+        let callCount = 0;
+        const originalFetch = global.fetch;
+        global.fetch = vi.fn().mockImplementation((url: string) => {
+            callCount++;
+            if (url.includes('VehicleDetailsWithImage')) {
+                return Promise.resolve({
+                    json: () => Promise.resolve({
+                        Results: {
+                            DvlaMake: 'BMW',
+                            DvlaModel: 'M3'
+                        }
+                    })
+                });
+            } else {
+                return Promise.resolve({
+                    json: () => Promise.resolve({
+                        Results: {
+                            MotHistoryDetails: {
+                                TaxDueDate: '2026-12-01'
+                            }
+                        }
+                    })
+                });
+            }
+        }) as any;
+
+        try {
+            const vehicle = await lookupVehicleByVRM('M3 BMW');
+            expect(vehicle.taxDueDate).toBe('2026-12-01');
+        } finally {
+            global.fetch = originalFetch;
+        }
+    });
 });

@@ -20,10 +20,15 @@ export const generateReminderMessage = (
     let fallbackBody = '';
     let fallbackSubject = `A Reminder from ${entity?.name || 'Brookspeed'}`;
 
+    const origin = typeof window !== 'undefined' && window.location?.origin 
+        ? window.location.origin 
+        : 'https://intelligent-scheduling-v801.web.app';
+    const interactiveBookingLink = `${origin}/?view=mot&vrm=${encodeURIComponent(vehicle?.registration || '')}&vehicleId=${vehicle?.id || ''}&customerId=${customer?.id || ''}`;
+
     if (method === 'WhatsApp') {
         switch (reminder.type) {
             case 'MOT':
-                fallbackBody = `🔔 *${entity?.name || 'Brookspeed'} Notifications Hub*\n\nHi [CustomerName],\nThis is an MOT reminder for your *[Make] [Model]* ([Registration]).\n\n📅 *MOT Expiry:* [DueDate]\n📍 *Action Required:* MOT test required before expiry date.\n\n👉 Reply to this message with your preferred booking date or call us to reserve your slot.\n\nThanks,\n*${entity?.name || 'Brookspeed'} Team*`;
+                fallbackBody = `🔔 *${entity?.name || 'Brookspeed'} Notifications Hub*\n\nHi [CustomerName],\nThis is an MOT reminder for your *[Make] [Model]* ([Registration]).\n\n📅 *MOT Expiry:* [DueDate]\n📍 *Action Required:* MOT test required before expiry date.\n\n👉 *Select your preferred MOT date & time online:*\n${interactiveBookingLink}\n\nOr reply directly to this message to reserve your slot.\n\nThanks,\n*${entity?.name || 'Brookspeed'} Team*`;
                 break;
             case 'Tax':
                 fallbackBody = `🔔 *${entity?.name || 'Brookspeed'} Notifications Hub*\n\nHi [CustomerName],\nThis is a Road Tax renewal reminder for your *[Make] [Model]* ([Registration]).\n\n📅 *Tax Due Date:* [DueDate]\n📍 *Action Required:* Renew vehicle tax or declare SORN.\n\n👉 *Renew directly online with Gov.uk:*\nhttps://www.gov.uk/vehicle-tax\n\nThanks,\n*${entity?.name || 'Brookspeed'} Team*`;
@@ -39,7 +44,9 @@ export const generateReminderMessage = (
         switch (reminder.type) {
             case 'MOT':
                 templateKey = method === 'Email' ? 'motReminderEmailTemplate' : 'motReminderSmsTemplate';
-                fallbackBody = `Hi [CustomerName], this is a reminder from ${entity?.name || 'Brookspeed'}. Your [Registration] MOT is due on [DueDate]. Please call us to book. Thanks.`;
+                fallbackBody = method === 'Email'
+                    ? `Hi [CustomerName], this is an MOT reminder from ${entity?.name || 'Brookspeed'}. Your [Registration] MOT is due on [DueDate].\n\nYou can request your preferred MOT booking date and time online by clicking below:\n${interactiveBookingLink}\n\nThanks.`
+                    : `Hi [CustomerName], ${entity?.name || 'Brookspeed'} MOT reminder for [Registration] due [DueDate]. Choose your preferred booking date & time online: ${interactiveBookingLink}`;
                 fallbackSubject = `Your MOT Reminder for ${vehicle?.registration}`;
                 break;
             case 'Tax':

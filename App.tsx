@@ -13,6 +13,7 @@ import LoginView from './components/LoginView';
 import EstimateViewModal from './components/EstimateViewModal';
 import PrintableInvoice from './components/PrintableInvoice';
 import VersionChecker from './components/VersionChecker';
+import CustomerMotBookingView from './components/comms/CustomerMotBookingView';
 
 // Trigger background prefetch for the authenticated app
 const AuthenticatedAppPromise = import('./AuthenticatedApp');
@@ -36,14 +37,18 @@ const App = () => {
         parts: T.Part[];
         inspectionTemplates: T.InspectionTemplate[];
         inspectionDiagrams: T.InspectionDiagram[];
+        isMotBooking?: boolean;
         loading: boolean;
         error: string | null;
     }>(() => {
         const searchParams = new URLSearchParams(window.location.search);
         const urlEstimateId = searchParams.get('estimateId');
         const urlInvoiceId = searchParams.get('invoiceId');
+        const urlVehicleId = searchParams.get('vehicleId');
+        const urlVrm = searchParams.get('vrm');
         const isCustomerView = searchParams.get('view') === 'customer' && urlEstimateId;
         const isInvoiceView = searchParams.get('view') === 'invoice' && urlInvoiceId;
+        const isMotView = (searchParams.get('view') === 'mot' || searchParams.get('view') === 'mot-booking') && (!!urlVehicleId || !!urlVrm);
         return {
             estimate: null,
             invoice: null,
@@ -56,7 +61,8 @@ const App = () => {
             parts: [],
             inspectionTemplates: [],
             inspectionDiagrams: [],
-            loading: !!(isCustomerView || isInvoiceView),
+            isMotBooking: !!isMotView,
+            loading: !!(isCustomerView || isInvoiceView || isMotView),
             error: null
         };
     });
@@ -65,13 +71,63 @@ const App = () => {
         const searchParams = new URLSearchParams(window.location.search);
         const urlEstimateId = searchParams.get('estimateId');
         const urlInvoiceId = searchParams.get('invoiceId');
+        const urlVehicleId = searchParams.get('vehicleId');
+        const urlVrm = searchParams.get('vrm');
         const isCustomerView = searchParams.get('view') === 'customer' && urlEstimateId;
         const isInvoiceView = searchParams.get('view') === 'invoice' && urlInvoiceId;
+        const isMotView = (searchParams.get('view') === 'mot' || searchParams.get('view') === 'mot-booking') && (!!urlVehicleId || !!urlVrm);
         
-        if (!isCustomerView && !isInvoiceView) return;
+        if (!isCustomerView && !isInvoiceView && !isMotView) return;
 
         const loadCustomerData = async () => {
             try {
+                if (isMotView) {
+                    let vehicleDoc: T.Vehicle | null = null;
+                    if (urlVehicleId) {
+                        vehicleDoc = await getDocument<T.Vehicle>('brooks_vehicles', urlVehicleId);
+                    }
+                    if (!vehicleDoc) {
+                        const partsModule = await import('./core/data/initialData');
+                        const initialVehicles = partsModule.getInitialVehicles();
+                        vehicleDoc = initialVehicles.find(v => 
+                            (urlVehicleId && v.id === urlVehicleId) || 
+                            (urlVrm && v.registration.replace(/\s+/g, '').toUpperCase() === urlVrm.replace(/\s+/g, '').toUpperCase())
+                        ) || null;
+                    }
+                    if (!vehicleDoc && urlVrm) {
+                        vehicleDoc = {
+                            id: urlVehicleId || `veh_guest_${Date.now()}`,
+                            registration: urlVrm.toUpperCase(),
+                            make: 'Vehicle',
+                            model: urlVrm.toUpperCase(),
+                            customerId: searchParams.get('customerId') || ''
+                        };
+                    }
+
+                    let customerDoc: T.Customer | null = null;
+                    const custId = searchParams.get('customerId') || vehicleDoc?.customerId;
+                    if (custId) {
+                        customerDoc = await getDocument<T.Customer>('brooks_customers', custId);
+                        if (!customerDoc) {
+                            const partsModule = await import('./core/data/initialData');
+                            customerDoc = partsModule.getInitialCustomers().find(c => c.id === custId) || null;
+                        }
+                    }
+
+                    let entityDoc = businessEntities.find(e => e.id === (searchParams.get('entityId') || (vehicleDoc as any)?.entityId)) || businessEntities[0] || null;
+
+                    setCustomerViewData(prev => ({
+                        ...prev,
+                        vehicle: vehicleDoc,
+                        customer: customerDoc,
+                        entity: entityDoc,
+                        isMotBooking: true,
+                        loading: false,
+                        error: vehicleDoc ? null : 'Vehicle details not found.'
+                    }));
+                    return;
+                }
+
                 if (isCustomerView && urlEstimateId) {
                     const estimateDoc = await getDocument<T.Estimate>('brooks_estimates', urlEstimateId);
                     if (!estimateDoc) {
@@ -406,6 +462,23 @@ const App = () => {
                         printOptions={customerViewData.invoice.printOptions}
                     />
                 </div>
+                <ToastContainer aria-label="Notifications" />
+            </div>
+        );
+    }
+
+    if (customerViewData.isMotBooking && customerViewData.vehicle) {
+        return (
+            <div className="min-h-screen bg-slate-100">
+                <VersionChecker />
+                <CustomerMotBookingView
+                    vehicle={customerViewData.vehicle}
+                    customer={customerViewData.customer}
+                    entity={customerViewData.entity}
+                    onClose={() => {
+                        window.location.href = window.location.origin;
+                    }}
+                />
                 <ToastContainer aria-label="Notifications" />
             </div>
         );

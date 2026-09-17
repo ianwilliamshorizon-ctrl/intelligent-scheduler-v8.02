@@ -14,7 +14,7 @@ interface NotificationsHubCardProps {
 }
 
 // Helper to format date nicely (e.g., "24 Sept 2026")
-const formatDisplayDate = (dateStr?: string): string => {
+export const formatDisplayDate = (dateStr?: string): string => {
     if (!dateStr) return 'Not recorded';
     try {
         const [y, m, d] = dateStr.split('-').map(Number);
@@ -260,8 +260,11 @@ export const generateNotificationsHubEmailHtml = (
     const taxDate = vehicle.taxDueDate ? formatDisplayDate(vehicle.taxDueDate) : '1 Oct 2026';
     const motDays = vehicle.nextMotDate ? calculateDaysRemaining(vehicle.nextMotDate) : 7;
     const taxDays = vehicle.taxDueDate ? calculateDaysRemaining(vehicle.taxDueDate) : 14;
-
-    const motActionUrl = bookingUrl || `mailto:service@brookspeed.com?subject=MOT%20Booking%20Request%20-%20${encodeURIComponent(reg)}&body=Hi%20Brookspeed%20Team%2C%0A%0AI%20would%20like%20to%20request%20an%20MOT%20booking%20for%20my%20vehicle%20${encodeURIComponent(reg)}%20(${encodeURIComponent(make)}%20${encodeURIComponent(model)}).%0AMy%20preferred%20date%20is%3A%20_____%0A%0AThank%20you%2C%0A${encodeURIComponent(customer ? `${customer.forename} ${customer.surname}` : '')}`;
+    const origin = typeof window !== 'undefined' && window.location?.origin 
+        ? window.location.origin 
+        : 'https://intelligent-scheduling-v801.web.app';
+    const defaultBookingUrl = `${origin}/?view=mot&vrm=${encodeURIComponent(reg)}&vehicleId=${vehicle.id || ''}&customerId=${customer?.id || ''}`;
+    const motActionUrl = bookingUrl || defaultBookingUrl;
 
     return `<!DOCTYPE html>
 <html lang="en">

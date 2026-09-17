@@ -3,14 +3,20 @@ import React, { useState, useMemo } from 'react';
 import { useApp } from '../core/state/AppContext';
 import { useData } from '../core/state/DataContext';
 import { Reminder, ReminderStatus, Customer, Vehicle, BusinessEntity, ReminderType } from '../types';
-import { Search, History, Bell, Check, X as XIcon, Mail, MessageSquare, Send, Trash2, PlusCircle, Wand2, Filter, Clock, ExternalLink, Sparkles } from 'lucide-react';
+import { Search, History, Bell, Check, X as XIcon, Mail, MessageSquare, Send, Trash2, PlusCircle, Wand2, Filter, Clock, ExternalLink, Sparkles, Calendar, Edit, Edit3, Eye, Zap } from 'lucide-react';
 import { getCustomerDisplayName } from '../core/utils/customerUtils';
 import SendReminderModal from './SendReminderModal';
 import CreateMarketingReminderModal from './CreateMarketingReminderModal';
 import GenerateRemindersModal from './GenerateRemindersModal';
 import RollingCommsModal from './RollingCommsModal';
-import NotificationsHubCard from './comms/NotificationsHubCard';
-import { saveDocument } from '../core/db';
+import NotificationsHubCard, { generateNotificationsHubEmailHtml } from './comms/NotificationsHubCard';
+import SendMotRequestModal from './comms/SendMotRequestModal';
+import MessageVisualiserModal from './comms/MessageVisualiserModal';
+import { saveDocument, deleteDocument } from '../core/db';
+import { sendOutboundEmail } from '../core/services/emailService';
+import { logOutboundCorrespondence } from '../core/services/commsCorrespondenceService';
+import { generateReminderMessage } from '../core/utils/templateUtils';
+import { toast } from 'react-toastify';
 
 const CommunicationsView: React.FC = () => {
     const { users, setConfirmation } = useApp();
@@ -24,6 +30,24 @@ const CommunicationsView: React.FC = () => {
     const [isGenerateModalOpen, setIsGenerateModalOpen] = useState(false);
     const [isRollingCommsModalOpen, setIsRollingCommsModalOpen] = useState(false);
     const [hubPreviewData, setHubPreviewData] = useState<{ vehicle: Vehicle; customer: Customer } | null>(null);
+    const [motModalData, setMotModalData] = useState<{
+        isOpen: boolean;
+        vehicle: Vehicle | null;
+        customer: Customer | null;
+        reminder: Reminder | null;
+    }>({ isOpen: false, vehicle: null, customer: null, reminder: null });
+
+    const [visualiserData, setVisualiserData] = useState<{
+        isOpen: boolean;
+        reminder: Reminder | null;
+        customer: Customer | null;
+        vehicle: Vehicle | null;
+    }>({ isOpen: false, reminder: null, customer: null, vehicle: null });
+
+    const [autoSendQueued, setAutoSendQueued] = useState<boolean>(() => {
+        return localStorage.getItem('brookspeed_auto_send_queued') === 'true';
+    });
+    const [isAutoSending, setIsAutoSending] = useState(false);
 
     const [sendModalData, setSendModalData] = useState<{
         isOpen: boolean;
@@ -196,44 +220,227 @@ const CommunicationsView: React.FC = () => {
         }
     };
 
+    const handleDeleteSingleReminder = async (id: string, e?: React.MouseEvent) => {
+        if (e) e.stopPropagation();
+        if (!window.confirm("Are you sure you want to permanently delete this reminder message?")) {
+            return;
+        }
+        setReminders(prev => prev.filter(r => r.id !== id));
+        setSelectedReminderIds(prev => {
+            const next = new Set(prev);
+            next.delete(id);
+            return next;
+        });
+        try {
+            await deleteDocument('brooks_reminders', id);
+            toast.success("Reminder deleted.");
+        } catch (error) {
+            console.error("Failed to delete reminder from Firestore:", error);
+            toast.error("Failed to delete reminder.");
+        }
+    };
+
+    const handleBulkDelete = async () => {
+        if (selectedReminderIds.size === 0) return;
+        if (!window.confirm(`Are you sure you want to permanently delete ${selectedReminderIds.size} selected reminder(s)?`)) {
+            return;
+        }
+        const idsToDelete = Array.from(selectedReminderIds);
+        setReminders(prev => prev.filter(r => !selectedReminderIds.has(r.id)));
+        setSelectedReminderIds(new Set());
+        try {
+            await Promise.all(idsToDelete.map(id => deleteDocument('brooks_reminders', id)));
+            toast.success(`${idsToDelete.length} reminder(s) deleted permanently.`);
+        } catch (error) {
+            console.error("Failed to bulk delete reminders:", error);
+            toast.error("Failed to delete all selected reminders.");
+        }
+    };
+
+    const handleToggleAutoSend = () => {
+        const next = !autoSendQueued;
+        setAutoSendQueued(next);
+        localStorage.setItem('brookspeed_auto_send_queued', String(next));
+        toast.info(next ? 'Auto-send queued messages enabled' : 'Auto-send queued messages disabled');
+    };
+
+    const handleAutoSendAllQueued = async () => {
+        if (pendingReminders.length === 0) {
+            toast.info("No pending reminders to auto-send.");
+            return;
+        }
+        if (!window.confirm(`Auto-send all ${pendingReminders.length} queued reminder(s) from info@brookspeed.com according to customer preferences?`)) {
+            return;
+        }
+
+        setIsAutoSending(true);
+        let sentCount = 0;
+        let skippedCount = 0;
+        const updatedList: Reminder[] = [];
+        const nowIso = new Date().toISOString();
+
+        for (const reminder of pendingReminders) {
+            const customer = customerMap.get(reminder.customerId);
+            const vehicle = reminder.vehicleId ? vehicleMap.get(reminder.vehicleId) : null;
+            if (!customer) {
+                skippedCount++;
+                continue;
+            }
+
+            const pref = customer.communicationPreference || (customer.email ? 'Email' : 'SMS');
+            const entity = businessEntities[0] || null;
+
+            try {
+                if (pref === 'Email' && customer.email) {
+                    const origin = typeof window !== 'undefined' && window.location?.origin 
+                        ? window.location.origin 
+                        : 'https://intelligent-scheduling-v801.web.app';
+                    const bookingUrl = `${origin}/?view=mot&vrm=${encodeURIComponent(vehicle?.registration || '')}&vehicleId=${vehicle?.id || ''}&customerId=${customer.id}`;
+                    
+                    const html = vehicle 
+                        ? generateNotificationsHubEmailHtml(vehicle, customer, 60, bookingUrl)
+                        : `<p>Reminder: ${reminder.type} is due on ${reminder.dueDate || 'soon'}.</p>`;
+
+                    await sendOutboundEmail({
+                        to: customer.email,
+                        fromName: 'Brookspeed',
+                        fromEmail: 'info@brookspeed.com',
+                        subject: `${reminder.type} Reminder - ${vehicle?.registration || 'Brookspeed'}`,
+                        body: html
+                    });
+
+                    await logOutboundCorrespondence(
+                        customer,
+                        vehicle || null,
+                        `${reminder.type} Reminder - ${vehicle?.registration || 'Brookspeed'}`,
+                        `[Auto-Send] Outbound Email reminder sent from info@brookspeed.com for ${reminder.type}.`,
+                        'Email',
+                        entity,
+                        customer.email
+                    );
+                    sentCount++;
+                } else if ((pref === 'SMS' || pref === 'WhatsApp') && (customer.mobile || customer.phone)) {
+                    await logOutboundCorrespondence(
+                        customer,
+                        vehicle || null,
+                        `${reminder.type} Reminder - ${vehicle?.registration || 'Brookspeed'}`,
+                        `[Auto-Send] Outbound ${pref} reminder queued for ${reminder.type}.`,
+                        pref as 'SMS' | 'WhatsApp',
+                        entity,
+                        customer.mobile || customer.phone
+                    );
+                    sentCount++;
+                } else {
+                    skippedCount++;
+                    continue;
+                }
+
+                const updated: Reminder = {
+                    ...reminder,
+                    status: 'Sent',
+                    actionedAt: nowIso
+                };
+                updatedList.push(updated);
+            } catch (err) {
+                console.error(`Error auto-sending reminder ${reminder.id}:`, err);
+                skippedCount++;
+            }
+        }
+
+        if (updatedList.length > 0) {
+            const updatedMap = new Map(updatedList.map(r => [r.id, r]));
+            setReminders(prev => prev.map(r => updatedMap.get(r.id) || r));
+            try {
+                await Promise.all(updatedList.map(r => saveDocument('brooks_reminders', r)));
+            } catch (err) {
+                console.error("Failed to update sent reminders in DB:", err);
+            }
+        }
+
+        setIsAutoSending(false);
+        toast.success(`Auto-send completed: ${sentCount} sent, ${skippedCount} skipped.`);
+    };
+
     const handleBulkSend = async () => {
         let sentCount = { email: 0, sms: 0 };
         let skippedCount = 0;
         const remindersToUpdate = new Set(selectedReminderIds);
         const updatedList: Reminder[] = [];
+        const nowIso = new Date().toISOString();
 
-        const updatedReminders = reminders.map(r => {
-            if (remindersToUpdate.has(r.id)) {
-                const customer = customerMap.get(r.customerId);
-                if (customer) {
-                    const preference = customer.communicationPreference;
-                    if (preference === 'Email' && customer.email) {
-                        sentCount.email++;
-                        const updated = { ...r, status: 'Sent' as ReminderStatus, actionedAt: new Date().toISOString() };
-                        updatedList.push(updated);
-                        return updated;
-                    }
-                    if (preference === 'SMS' && (customer.mobile || customer.phone)) {
-                        sentCount.sms++;
-                        const updated = { ...r, status: 'Sent' as ReminderStatus, actionedAt: new Date().toISOString() };
-                        updatedList.push(updated);
-                        return updated;
-                    }
+        for (const reminder of reminders) {
+            if (!remindersToUpdate.has(reminder.id)) continue;
+            const customer = customerMap.get(reminder.customerId);
+            const vehicle = reminder.vehicleId ? vehicleMap.get(reminder.vehicleId) : null;
+            if (!customer) {
+                skippedCount++;
+                continue;
+            }
+            const entity = businessEntities[0] || null;
+            const preference = customer.communicationPreference || (customer.email ? 'Email' : 'SMS');
+
+            if (preference === 'Email' && customer.email) {
+                try {
+                    const origin = typeof window !== 'undefined' && window.location?.origin 
+                        ? window.location.origin 
+                        : 'https://intelligent-scheduling-v801.web.app';
+                    const bookingUrl = `${origin}/?view=mot&vrm=${encodeURIComponent(vehicle?.registration || '')}&vehicleId=${vehicle?.id || ''}&customerId=${customer.id}`;
+                    const html = vehicle 
+                        ? generateNotificationsHubEmailHtml(vehicle, customer, 60, bookingUrl)
+                        : `<p>Reminder for ${vehicle?.registration || 'your vehicle'}: ${reminder.type} is due on ${reminder.dueDate}.</p>`;
+
+                    await sendOutboundEmail({
+                        to: customer.email,
+                        fromName: 'Brookspeed',
+                        fromEmail: 'info@brookspeed.com',
+                        subject: `${reminder.type} Reminder - ${vehicle?.registration || 'Brookspeed'}`,
+                        body: html
+                    });
+
+                    await logOutboundCorrespondence(
+                        customer,
+                        vehicle,
+                        `${reminder.type} Reminder - ${vehicle?.registration || 'Brookspeed'}`,
+                        `[Bulk Send] Sent outbound email from info@brookspeed.com for ${reminder.type}`,
+                        'Email',
+                        entity,
+                        customer.email
+                    );
+                    sentCount.email++;
+                    const updated = { ...reminder, status: 'Sent' as ReminderStatus, actionedAt: nowIso };
+                    updatedList.push(updated);
+                } catch (err) {
+                    console.error("Bulk email error:", err);
+                    skippedCount++;
                 }
+            } else if ((preference === 'SMS' || preference === 'WhatsApp') && (customer.mobile || customer.phone)) {
+                await logOutboundCorrespondence(
+                    customer,
+                    vehicle,
+                    `${reminder.type} Reminder - ${vehicle?.registration || 'Brookspeed'}`,
+                    `[Bulk Send] Outbound ${preference} queued for ${reminder.type}`,
+                    preference as 'SMS' | 'WhatsApp',
+                    entity,
+                    customer.mobile || customer.phone
+                );
+                sentCount.sms++;
+                const updated = { ...reminder, status: 'Sent' as ReminderStatus, actionedAt: nowIso };
+                updatedList.push(updated);
+            } else {
                 skippedCount++;
             }
-            return r;
-        });
+        }
 
-        setReminders(updatedReminders);
+        const updatedMap = new Map(updatedList.map(u => [u.id, u]));
+        setReminders(prev => prev.map(r => updatedMap.get(r.id) || r));
         setSelectedReminderIds(new Set());
 
         let messageParts: string[] = [];
-        messageParts.push(`Sent ${sentCount.email + sentCount.sms} reminders.`);
+        messageParts.push(`Sent ${sentCount.email + sentCount.sms} reminders from info@brookspeed.com.`);
         if (sentCount.email > 0) messageParts.push(`- ${sentCount.email} via Email`);
         if (sentCount.sms > 0) messageParts.push(`- ${sentCount.sms} via SMS`);
         if (skippedCount > 0) {
-            messageParts.push(`${skippedCount} reminders were skipped due to missing contact info or preference.`);
+            messageParts.push(`${skippedCount} reminders were skipped due to missing contact info.`);
         }
     
         setConfirmation({
@@ -260,16 +467,23 @@ const CommunicationsView: React.FC = () => {
                 <span className="font-semibold text-indigo-800">{selectedReminderIds.size} reminder(s) selected</span>
                 <div className="flex items-center gap-2">
                     <button
-                        onClick={handleBulkDismiss}
-                        className="flex items-center gap-1.5 text-sm py-1.5 px-3 bg-red-100 text-red-700 font-semibold rounded-lg hover:bg-red-200"
+                        onClick={handleBulkDelete}
+                        className="flex items-center gap-1.5 text-sm py-1.5 px-3 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 shadow-xs transition"
+                        title="Permanently delete selected reminders"
                     >
-                        <Trash2 size={14} /> Dismiss Selected
+                        <Trash2 size={14} /> Delete Selected
+                    </button>
+                    <button
+                        onClick={handleBulkDismiss}
+                        className="flex items-center gap-1.5 text-sm py-1.5 px-3 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300 transition"
+                    >
+                        <XIcon size={14} /> Dismiss Selected
                     </button>
                     <button
                         onClick={handleBulkSend}
-                        className="flex items-center gap-1.5 text-sm py-1.5 px-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700"
+                        className="flex items-center gap-1.5 text-sm py-1.5 px-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 shadow-xs transition"
                     >
-                        <Send size={14} /> Send Selected (by preference)
+                        <Send size={14} /> Send Selected (from info@brookspeed.com)
                     </button>
                 </div>
             </div>
@@ -290,9 +504,13 @@ const CommunicationsView: React.FC = () => {
                         if (!customer) return null;
 
                         return (
-                            <div key={reminder.id} className="p-4 bg-white rounded-lg shadow-sm border flex justify-between items-center">
-                                <div>
-                                    <p className="font-bold text-gray-800">{getCustomerDisplayName(customer)}</p>
+                            <div key={reminder.id} className="p-4 bg-white rounded-lg shadow-sm border flex justify-between items-center hover:border-indigo-300 transition-colors">
+                                <div 
+                                    className="cursor-pointer flex-grow pr-4"
+                                    onClick={() => setVisualiserData({ isOpen: true, reminder, customer, vehicle })}
+                                    title="Click to visualise message in all formats"
+                                >
+                                    <p className="font-bold text-gray-800 hover:text-indigo-600 transition">{getCustomerDisplayName(customer)}</p>
                                     <p className="text-sm text-gray-600">
                                         {reminder.eventName ? <span className="font-semibold text-indigo-600">[{reminder.eventName}] </span> : ''}
                                         {reminder.type === 'Marketing' 
@@ -301,13 +519,31 @@ const CommunicationsView: React.FC = () => {
                                         }
                                     </p>
                                 </div>
-                                <div className="text-right">
-                                    <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                                        reminder.status === 'Sent' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-700'
-                                    }`}>{reminder.status}</span>
-                                    <p className="text-xs text-gray-500 mt-1">
-                                        {reminder.actionedAt ? `on ${new Date(reminder.actionedAt).toLocaleDateString()}` : ''}
-                                    </p>
+                                <div className="flex items-center gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => setVisualiserData({ isOpen: true, reminder, customer, vehicle })}
+                                        className="flex items-center gap-1.5 py-1.5 px-3 bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold rounded-lg border border-blue-200 transition text-xs shadow-xs"
+                                        title="Visualise message types (Email card, SMS, WhatsApp)"
+                                    >
+                                        <Eye size={13} className="text-blue-600" /> Visualise
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={(e) => handleDeleteSingleReminder(reminder.id, e)}
+                                        className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition"
+                                        title="Delete reminder history record"
+                                    >
+                                        <Trash2 size={15} />
+                                    </button>
+                                    <div className="text-right">
+                                        <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                                            reminder.status === 'Sent' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-700'
+                                        }`}>{reminder.status}</span>
+                                        <p className="text-xs text-gray-500 mt-1">
+                                            {reminder.actionedAt ? `on ${new Date(reminder.actionedAt).toLocaleDateString()}` : ''}
+                                        </p>
+                                    </div>
                                 </div>
                             </div>
                         );
@@ -330,7 +566,7 @@ const CommunicationsView: React.FC = () => {
                                 checked={isAllSelected}
                                 ref={el => { if (el) { el.indeterminate = isSomeSelected; } }}
                                 onChange={handleSelectAll}
-                                className="h-5 w-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mr-4"
+                                className="h-5 w-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mr-4 cursor-pointer"
                                 aria-label="Select all pending reminders"
                             />
                             <label className="font-semibold text-sm cursor-pointer" onClick={handleSelectAll}>
@@ -351,16 +587,23 @@ const CommunicationsView: React.FC = () => {
                         const isSelected = selectedReminderIds.has(reminder.id);
 
                         return (
-                            <div key={reminder.id} className={`p-4 bg-white rounded-lg shadow-sm border flex items-center transition-colors ${isSelected ? 'bg-indigo-50 border-indigo-300' : ''}`}>
+                            <div key={reminder.id} className={`p-4 bg-white rounded-lg shadow-sm border flex items-center transition-colors hover:border-indigo-300 ${isSelected ? 'bg-indigo-50 border-indigo-300' : ''}`}>
                                 <input
                                     type="checkbox"
                                     checked={isSelected}
                                     onChange={() => handleSelect(reminder.id)}
-                                    className="h-5 w-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mr-4 flex-shrink-0"
+                                    className="h-5 w-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mr-4 flex-shrink-0 cursor-pointer"
                                     aria-label={`Select reminder for ${getCustomerDisplayName(customer)}`}
                                 />
-                                <div className="flex-grow">
-                                    <p className="font-bold text-gray-800">{getCustomerDisplayName(customer)}</p>
+                                <div 
+                                    className="flex-grow cursor-pointer" 
+                                    onClick={() => setVisualiserData({ isOpen: true, reminder, customer, vehicle })}
+                                    title="Click to visualise message types and edit"
+                                >
+                                    <p className="font-bold text-gray-800 hover:text-indigo-600 transition flex items-center gap-2">
+                                        <span>{getCustomerDisplayName(customer)}</span>
+                                        <span className="text-[11px] font-normal text-gray-400 bg-gray-100 px-2 py-0.5 rounded">Click to visualise</span>
+                                    </p>
                                     <p className="text-sm text-gray-600">
                                         {reminder.eventName ? <span className="font-semibold text-indigo-600">[{reminder.eventName}] </span> : ''}
                                         {reminder.type === 'Marketing'
@@ -373,6 +616,46 @@ const CommunicationsView: React.FC = () => {
                                     </p>
                                 </div>
                                 <div className="flex items-center gap-2">
+                                    {/* Message Visualiser Button */}
+                                    <button
+                                        type="button"
+                                        onClick={() => setVisualiserData({ isOpen: true, reminder, customer, vehicle })}
+                                        className="flex items-center gap-1.5 py-2 px-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-lg transition text-xs shadow-xs"
+                                        title="Visualise message across Email card, SMS, and WhatsApp mockups"
+                                    >
+                                        <Eye size={13} /> Visualise
+                                    </button>
+
+                                    {/* Edit Reminder */}
+                                    <button
+                                        type="button"
+                                        onClick={() => setVisualiserData({ isOpen: true, reminder, customer, vehicle })}
+                                        className="p-2 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded-lg transition"
+                                        title="Edit reminder text, date, and status"
+                                    >
+                                        <Edit3 size={15} />
+                                    </button>
+
+                                    {/* Delete Reminder */}
+                                    <button
+                                        type="button"
+                                        onClick={(e) => handleDeleteSingleReminder(reminder.id, e)}
+                                        className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition"
+                                        title="Permanently delete reminder"
+                                    >
+                                        <Trash2 size={15} />
+                                    </button>
+
+                                    {reminder.type === 'MOT' && vehicle && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setMotModalData({ isOpen: true, vehicle, customer, reminder })}
+                                            className="flex items-center gap-1.5 py-2 px-3 bg-[#0066FF] hover:bg-blue-600 text-white font-bold rounded-lg transition text-xs shadow-xs"
+                                            title="Send interactive MOT booking request to customer"
+                                        >
+                                            <Calendar size={13} /> Send MOT Request
+                                        </button>
+                                    )}
                                     {(reminder.type === 'MOT' || reminder.type === 'Tax') && vehicle && (
                                         <button
                                             type="button"
@@ -422,7 +705,7 @@ const CommunicationsView: React.FC = () => {
                                         onClick={() => openSendModal(reminder, customer, vehicle, 'Email')}
                                         disabled={!hasEmail}
                                         className="flex items-center gap-1.5 py-2 px-4 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                                        title={hasEmail ? 'Send Email' : 'No email address available'}
+                                        title={hasEmail ? 'Send Email from info@brookspeed.com' : 'No email address available'}
                                     >
                                         <Mail size={16} /> Email
                                     </button>
@@ -437,9 +720,43 @@ const CommunicationsView: React.FC = () => {
 
     return (
         <div className="w-full h-full flex flex-col p-6 bg-gray-50">
-            <header className="flex justify-between items-center mb-4 flex-shrink-0">
-                <h2 className="text-2xl font-bold text-gray-800">Reminders & Communications</h2>
-                <div className="flex items-center gap-3">
+            <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4 flex-shrink-0">
+                <div>
+                    <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                        <span>Reminders & Communications</span>
+                    </h2>
+                    <p className="text-xs text-gray-500 mt-0.5">Outbound notifications delivered via info@brookspeed.com & registered to customer correspondence</p>
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                    {/* Auto-Send Queued Switch */}
+                    <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-gray-200 shadow-xs">
+                        <span className="text-xs font-bold text-gray-700 flex items-center gap-1.5">
+                            <Zap size={14} className={autoSendQueued ? 'text-amber-500 fill-amber-400' : 'text-gray-400'} />
+                            Auto-Send Queued
+                        </span>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={autoSendQueued}
+                                onChange={handleToggleAutoSend}
+                                className="sr-only peer"
+                            />
+                            <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
+                        </label>
+                        {autoSendQueued && pendingReminders.length > 0 && (
+                            <button
+                                type="button"
+                                onClick={handleAutoSendAllQueued}
+                                disabled={isAutoSending}
+                                className="ml-1 py-1 px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded shadow-xs flex items-center gap-1 disabled:opacity-50 transition cursor-pointer"
+                                title="Dispatch all queued reminders now via info@brookspeed.com"
+                            >
+                                <Send size={12} className={isAutoSending ? 'animate-spin' : ''} />
+                                {isAutoSending ? 'Sending...' : `Send Queued (${pendingReminders.length})`}
+                            </button>
+                        )}
+                    </div>
+
                     <button 
                         onClick={() => setIsRollingCommsModalOpen(true)}
                         className="flex items-center gap-2 py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-md transition"
@@ -592,6 +909,45 @@ const CommunicationsView: React.FC = () => {
                         />
                     </div>
                 </div>
+            )}
+
+            {motModalData.isOpen && motModalData.vehicle && (
+                <SendMotRequestModal
+                    isOpen={motModalData.isOpen}
+                    onClose={() => setMotModalData({ isOpen: false, vehicle: null, customer: null, reminder: null })}
+                    vehicle={motModalData.vehicle}
+                    customer={motModalData.customer}
+                    reminder={motModalData.reminder}
+                    entity={businessEntities[0] || null}
+                    onSent={() => {
+                        if (motModalData.reminder) {
+                            handleAction(motModalData.reminder.id, 'Sent');
+                        }
+                    }}
+                />
+            )}
+
+            {/* Live Message Visualiser Modal for any selected reminder */}
+            {visualiserData.isOpen && visualiserData.reminder && visualiserData.customer && (
+                <MessageVisualiserModal
+                    isOpen={visualiserData.isOpen}
+                    onClose={() => setVisualiserData({ isOpen: false, reminder: null, customer: null, vehicle: null })}
+                    reminder={visualiserData.reminder}
+                    customer={visualiserData.customer}
+                    vehicle={visualiserData.vehicle}
+                    entity={businessEntities[0] || null}
+                    onUpdated={(updated) => {
+                        setReminders(prev => prev.map(r => r.id === updated.id ? updated : r));
+                    }}
+                    onDeleted={(deletedId) => {
+                        setReminders(prev => prev.filter(r => r.id !== deletedId));
+                        setSelectedReminderIds(prev => {
+                            const next = new Set(prev);
+                            next.delete(deletedId);
+                            return next;
+                        });
+                    }}
+                />
             )}
         </div>
     );

@@ -2,7 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { Reminder, Customer, Vehicle, BusinessEntity } from '../types';
 import { generateReminderMessage } from '../utils/templateUtils';
 import { X, Send, Mail, MessageSquare, ExternalLink } from 'lucide-react';
-import NotificationsHubCard from './comms/NotificationsHubCard';
+import NotificationsHubCard, { generateNotificationsHubEmailHtml } from './comms/NotificationsHubCard';
+import { sendOutboundEmail } from '../core/services/emailService';
+import { logOutboundCorrespondence } from '../core/services/commsCorrespondenceService';
 
 interface SendReminderModalProps {
     isOpen: boolean;
@@ -53,11 +55,37 @@ const SendReminderModal: React.FC<SendReminderModalProps> = ({
     
     if (!isOpen) return null;
 
-    const handleSend = () => {
-        if (currentMethod === 'WhatsApp') {
-            const cleanPhone = recipient.replace(/[^\d+]/g, '');
-            const waUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(body)}`;
-            window.open(waUrl, '_blank');
+    const handleSend = async () => {
+        try {
+            if (currentMethod === 'Email' && recipient) {
+                const htmlBody = viewMode === 'card' && vehicle
+                    ? generateNotificationsHubEmailHtml(vehicle, customer, 60)
+                    : body.replace(/\n/g, '<br/>');
+
+                await sendOutboundEmail({
+                    to: recipient,
+                    fromName: 'Brookspeed',
+                    fromEmail: 'info@brookspeed.com',
+                    subject: subject,
+                    body: htmlBody
+                });
+            } else if (currentMethod === 'WhatsApp') {
+                const cleanPhone = recipient.replace(/[^\d+]/g, '');
+                const waUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(body)}`;
+                window.open(waUrl, '_blank');
+            }
+
+            await logOutboundCorrespondence(
+                customer,
+                vehicle,
+                subject || `${reminder.type} Reminder - ${vehicle?.registration || 'Vehicle'}`,
+                viewMode === 'card' && currentMethod === 'Email' ? `[Notifications Hub Card Email Sent]\nSubject: ${subject}` : body,
+                currentMethod,
+                entity,
+                recipient
+            );
+        } catch (err) {
+            console.error('Error in handleSend:', err);
         }
         onSend();
     };

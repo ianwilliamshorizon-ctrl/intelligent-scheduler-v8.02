@@ -7,7 +7,7 @@ import {
     Loader2, Search, Briefcase, History,
     Eye, ArrowRightLeft, ShieldCheck, AlertCircle,
     Printer, Car, Shield, XCircle, AlertTriangle,
-    Database, User, ExternalLink, Plus, RefreshCw, MessageSquare
+    Database, User, ExternalLink, Plus, RefreshCw, MessageSquare, Send
 } from 'lucide-react';
 import SearchableSelect from './SearchableSelect';
 import { useAuditLogger } from '../core/hooks/useAuditLogger';
@@ -20,6 +20,7 @@ import { formatDate, dateStringToDate } from '../core/utils/dateUtils';
 import { getWheelbaseAlertInfo } from '../core/utils/vehicleUtils';
 import AddNewVehicleForm from './AddNewVehicleForm';
 import CustomerFormModal from './CustomerFormModal';
+import SendMotRequestModal from './comms/SendMotRequestModal';
 
 type LocalInvoice = any;
 type LocalPrevReg = { registration: string; changedAt: string; changedByUserId: string };
@@ -87,6 +88,7 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
     const [isTransferMode, setIsTransferMode] = useState(false);
     const [includeMotHistory, setIncludeMotHistory] = useState(false);
     const [isAddingCustomer, setIsAddingCustomer] = useState(false);
+    const [isSendMotModalOpen, setIsSendMotModalOpen] = useState(false);
 
     const hasAutoLookedUp = useRef(false);
 
@@ -525,6 +527,16 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
                                         <input name="nextMotDate" type="date" value={formData.nextMotDate || ''} onChange={handleChange} className="w-full p-2 border rounded" />
                                         <button type="button" onClick={handleMotIncrement} className="p-2 bg-green-100 text-green-700 rounded-lg text-xs font-bold border border-green-200">+1 Yr</button>
                                     </div>
+                                    {formData.registration && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsSendMotModalOpen(true)}
+                                            className="mt-1.5 w-full py-1.5 px-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition shadow-xs cursor-pointer"
+                                            title="Send interactive MOT booking request to customer (Email, SMS, or WhatsApp)"
+                                        >
+                                            <Send size={12} /> Send MOT Date Request
+                                        </button>
+                                    )}
                                 </div>
                                 <div>
                                     <div className="flex items-center justify-between mb-1">
