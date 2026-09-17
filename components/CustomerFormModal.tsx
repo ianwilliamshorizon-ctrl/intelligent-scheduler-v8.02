@@ -87,7 +87,7 @@ const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value, type } = e.target;
-        const val = type === 'checkbox' ? (e.target as HTMLInputElement).checked : value;
+        const val = type === 'checkbox' ? (e.target as HTMLInputElement).checked : (name === 'postcode' ? value.toUpperCase() : value);
         setFormData((prev: any) => {
             let updated = { ...prev, [name]: val };
             if (type === 'checkbox') {

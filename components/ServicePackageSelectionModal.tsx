@@ -1,11 +1,11 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { ServicePackage, Vehicle, TaxRate } from '../types';
 import { getScoredServicePackages, ScoredPackage } from '../utils/servicePackageScoring';
 import { calculatePackagePrices } from '../core/utils/packageUtils';
 import { formatCurrency } from '../utils/formatUtils';
 import { 
     X, Package, CheckSquare, Square, Search, Filter, Sparkles, 
-    CheckCircle2, AlertCircle, Car, ChevronDown, ChevronUp, ShieldCheck, Wrench, AlertTriangle 
+    CheckCircle2, AlertCircle, Car, ChevronDown, ChevronUp, ShieldCheck, Wrench, AlertTriangle, Plus 
 } from 'lucide-react';
 
 interface ServicePackageSelectionModalProps {
@@ -31,23 +31,27 @@ export const ServicePackageSelectionModal: React.FC<ServicePackageSelectionModal
 }) => {
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set(initialSelectedPackageIds));
     const [searchTerm, setSearchTerm] = useState('');
-    const [filterMode, setFilterMode] = useState<'all' | 'compatible' | 'narrative'>('compatible');
+    const [filterMode, setFilterMode] = useState<'all' | 'compatible' | 'narrative'>('all');
     const [expandedPackageIds, setExpandedPackageIds] = useState<Set<string>>(new Set());
     const [sortBy, setSortBy] = useState<'likelihood' | 'name' | 'price_asc' | 'price_desc'>('likelihood');
-
-    useEffect(() => {
-        if (isOpen) {
-            setSelectedIds(new Set(initialSelectedPackageIds));
-            setSearchTerm('');
-            setFilterMode(vehicle ? 'compatible' : 'all');
-            setSortBy('likelihood');
-        }
-    }, [isOpen, initialSelectedPackageIds, vehicle]);
+    const prevIsOpenRef = useRef(false);
 
     // Score all packages against vehicle
     const scoredPackages = useMemo(() => {
         return getScoredServicePackages(servicePackages, vehicle);
     }, [servicePackages, vehicle]);
+
+    useEffect(() => {
+        if (isOpen && !prevIsOpenRef.current) {
+            setSelectedIds(new Set(initialSelectedPackageIds || []));
+            setSearchTerm('');
+            // Check if there are vehicle compatible packages
+            const hasCompatible = !!vehicle && scoredPackages.some(s => s.score >= 1);
+            setFilterMode(hasCompatible ? 'compatible' : 'all');
+            setSortBy('likelihood');
+        }
+        prevIsOpenRef.current = isOpen;
+    }, [isOpen, initialSelectedPackageIds, vehicle, scoredPackages]);
 
     // Check narrative keywords against packages
     const narrativeKeywords = useMemo(() => {
@@ -173,6 +177,11 @@ export const ServicePackageSelectionModal: React.FC<ServicePackageSelectionModal
         });
     };
 
+    const handleSelectSingle = (pkg: ServicePackage) => {
+        onSelectPackages([pkg]);
+        onClose();
+    };
+
     const handleSubmit = () => {
         const selected = servicePackages.filter(p => selectedIds.has(p.id));
         onSelectPackages(selected);
@@ -267,7 +276,7 @@ export const ServicePackageSelectionModal: React.FC<ServicePackageSelectionModal
                                 }`}
                             >
                                 <ShieldCheck size={14} />
-                                Compatible for Vehicle
+                                Compatible ({scoredPackages.filter(s => s.score >= 1).length})
                             </button>
                             {narrativeKeywords.length > 0 && (
                                 <button
@@ -395,7 +404,9 @@ export const ServicePackageSelectionModal: React.FC<ServicePackageSelectionModal
                                     {/* Card Header Row */}
                                     <div
                                         onClick={() => handleToggleSelect(pkg.id)}
+                                        onDoubleClick={() => handleSelectSingle(pkg)}
                                         className="p-4 sm:p-5 flex items-start gap-4 cursor-pointer select-none"
+                                        title="Click to toggle selection, or double-click to add immediately"
                                     >
                                         <div className="pt-0.5 flex-shrink-0">
                                             <button
@@ -477,17 +488,32 @@ export const ServicePackageSelectionModal: React.FC<ServicePackageSelectionModal
                                                 </div>
                                             </div>
 
-                                            <button
-                                                type="button"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    handleToggleExpand(pkg.id);
-                                                }}
-                                                className="mt-2 text-xs text-indigo-600 hover:text-indigo-800 font-semibold flex items-center gap-1 p-1 hover:bg-indigo-50 rounded-lg transition"
-                                            >
-                                                <span>{laborItems.length + partItems.length} items</span>
-                                                {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                                            </button>
+                                            <div className="flex items-center gap-2 mt-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleToggleExpand(pkg.id);
+                                                    }}
+                                                    className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold flex items-center gap-1 p-1 hover:bg-indigo-50 rounded-lg transition cursor-pointer"
+                                                >
+                                                    <span>{laborItems.length + partItems.length} items</span>
+                                                    {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                                                </button>
+
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleSelectSingle(pkg);
+                                                    }}
+                                                    className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-1 cursor-pointer"
+                                                    title="Add this package directly to estimate"
+                                                >
+                                                    <Plus size={14} />
+                                                    <span>Select</span>
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
 

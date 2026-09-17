@@ -4,6 +4,7 @@ export interface Option {
   label: string;
   value: any;
   description?: string;
+  searchField?: string;
   icon?: React.ReactNode;
   badge?: {
     text: string;
@@ -25,6 +26,7 @@ interface SearchableSelectProps {
   initialValue?: any;
   dropdownClassName?: string; // New prop for custom width/alignment
   onSearchChange?: (value: string) => void;
+  uppercase?: boolean;
 }
 
 const SearchableSelect: React.FC<SearchableSelectProps> = ({
@@ -40,6 +42,7 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
   initialValue,
   dropdownClassName = "w-full left-0", // Default to full width of parent
   onSearchChange,
+  uppercase = false,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -54,14 +57,15 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
     return options.find(opt => opt.value === effectiveValue) || null;
   }, [options, effectiveValue]);
 
-  // Aggressive filtering including labels and descriptions
+  // Aggressive filtering including labels, descriptions and custom search fields
   const filteredOptions = useMemo(() => {
     const lowerSearch = searchTerm.toLowerCase().trim();
     if (!lowerSearch) return options;
     
     return options.filter(opt => 
-      opt.label.toLowerCase().includes(lowerSearch) || 
-      (opt.description && opt.description.toLowerCase().includes(lowerSearch))
+      (opt.label && opt.label.toLowerCase().includes(lowerSearch)) || 
+      (opt.description && opt.description.toLowerCase().includes(lowerSearch)) ||
+      (opt.searchField && opt.searchField.toLowerCase().includes(lowerSearch))
     );
   }, [options, searchTerm]);
 
@@ -149,8 +153,8 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
         <div className="flex justify-between items-center gap-3">
           <div className="flex items-center gap-2 overflow-hidden">
             {selectedOption?.icon && <span className="flex-shrink-0">{selectedOption.icon}</span>}
-            <span className={`block truncate ${!selectedOption ? "text-gray-400" : "text-gray-900 font-medium"}`}>
-              {loading ? "Loading..." : (selectedOption ? selectedOption.label : placeholder)}
+            <span className={`block truncate ${!selectedOption ? "text-gray-400" : "text-gray-900 font-medium"} ${uppercase && selectedOption ? "uppercase font-mono font-bold tracking-wider" : ""}`}>
+              {loading ? "Loading..." : (selectedOption ? (uppercase ? String(selectedOption.label).toUpperCase() : selectedOption.label) : placeholder)}
             </span>
           </div>
           
@@ -177,15 +181,18 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
           <div className="p-2 border-b border-gray-100 bg-gray-50/50">
             <input
               type="text"
-              className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-              placeholder="Search..."
+              className={`w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 ${
+                uppercase ? 'uppercase font-mono font-bold tracking-wider' : ''
+              }`}
+              placeholder={uppercase ? (placeholder ? `SEARCH ${placeholder.toUpperCase()}` : 'SEARCH...') : (placeholder || 'Search...')}
               autoFocus
               value={searchTerm}
               onChange={(e) => {
-                setSearchTerm(e.target.value);
+                const val = uppercase ? e.target.value.toUpperCase() : e.target.value;
+                setSearchTerm(val);
                 setActiveIndex(0);
                 if (onSearchChange) {
-                  onSearchChange(e.target.value);
+                  onSearchChange(val);
                 }
               }}
               onClick={(e) => e.stopPropagation()}

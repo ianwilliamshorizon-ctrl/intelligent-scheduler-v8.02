@@ -2,7 +2,7 @@ import { cloudSpeechSynthesis, CloudSpeechSynthesisUtterance } from '../core/uti
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { toast } from 'react-toastify';
 import { Estimate, Customer, Vehicle, BusinessEntity, TaxRate, ServicePackage, Part, EstimateLineItem, Job, User, CheckInPhoto, Supplier, DiscountCode } from '../types';
-import { Save, PlusCircle, Gauge, Info, FileText, ChevronUp, ChevronDown, Trash2, X, TrendingUp, Plus, Image as ImageIcon, History, Car, Wand2, Expand, Edit, Volume2, Tag, Film } from 'lucide-react';
+import { Save, PlusCircle, Gauge, Info, FileText, ChevronUp, ChevronDown, Trash2, X, TrendingUp, Plus, Image as ImageIcon, History, Car, Wand2, Expand, Edit, Volume2, Tag, Film, MapPin } from 'lucide-react';
 import { formatDate, getTodayISOString, getFutureDateISOString } from '../core/utils/dateUtils';
 import { generateEstimateNumber } from '../core/utils/numberGenerators';
 import { formatCurrency } from '../utils/formatUtils';
@@ -647,16 +647,16 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
         return {
             label: fullName,
             value: c.id,
-            description: c.postcode || 'No postcode',
-            searchField: `${fullName} ${c.forename || ''} ${c.surname || ''} ${c.companyName || ''} ${c.phone || ''} ${c.postcode || ''}`.toLowerCase()
+            description: (c.postcode || 'No postcode').toUpperCase(),
+            searchField: `${fullName} ${c.forename || ''} ${c.surname || ''} ${c.companyName || ''} ${c.phone || ''} ${c.postcode || ''}`.toUpperCase()
         };
     });
 
     const vehicleOptions = vehicles.map(v => ({
-        label: v.registration,
+        label: (v.registration || '').toUpperCase(),
         value: v.id,
         description: `${v.make} ${v.model}`,
-        searchField: `${v.registration} ${v.make} ${v.model}`.toLowerCase()
+        searchField: `${v.registration} ${v.make} ${v.model}`.toUpperCase()
     }));
 
     // Compute matches for current branch vs other branches
@@ -1206,8 +1206,17 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                                         onSelect={handleCustomerSelect}
                                         defaultValue={formData.customerId}
                                         placeholder="Search name, phone or postcode..."
+                                        uppercase={true}
                                     />
-                                    <button type="button" onClick={() => handleOpenLookup('customer')} className="p-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 flex-shrink-0"><Plus size={20} /></button>
+                                    <button 
+                                        type="button" 
+                                        onClick={() => handleOpenLookup('customer')} 
+                                        className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-xs flex items-center gap-1 flex-shrink-0 shadow-xs cursor-pointer"
+                                        title="Add New Customer via Postcode Lookup"
+                                    >
+                                        <MapPin size={14} />
+                                        <span>+ POSTCODE</span>
+                                    </button>
                                 </div>
                                 {recentCustomers.length > 0 && !formData.customerId && (
                                     <div className="mt-2 flex flex-wrap gap-1">
@@ -1215,24 +1224,24 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                                             <History size={10}/> Recent:
                                         </span>
                                         {recentCustomers.map(c => (
-                                            <button 
-                                                key={c.id} 
-                                                type="button" 
-                                                onClick={() => handleCustomerSelect(c)} 
-                                                className="text-[10px] bg-white border border-gray-200 px-2 py-1 rounded hover:bg-indigo-50"
-                                            >
-                                                {c.companyName || `${c.forename || ''} ${c.surname || ''}`.trim() || 'Unnamed'}
-                                            </button>
-                                        ))}
-                                    </div>
-                                )}
+                                             <button 
+                                                 key={c.id} 
+                                                 type="button" 
+                                                 onClick={() => handleCustomerSelect(c)} 
+                                                 className="text-[10px] bg-white border border-gray-200 px-2 py-1 rounded hover:bg-indigo-50 font-bold uppercase"
+                                             >
+                                                 {c.companyName || `${c.forename || ''} ${c.surname || ''}`.trim() || 'Unnamed'}
+                                             </button>
+                                         ))}
+                                     </div>
+                                 )}
                             </div>
                             <div>
                                 <label className="font-semibold flex items-center gap-2">Vehicle (Optional)
                                     {currentVehicle && (
                                         <HoverInfo title="Vehicle Info" data={vehicleInfoData}>
-                                            <Info size={14} className="text-indigo-500 cursor-help" />
-                                        </HoverInfo>
+                                             <Info size={14} className="text-indigo-500 cursor-help" />
+                                         </HoverInfo>
                                     )}
                                 </label>
                                 <div className="flex flex-col gap-2 mt-1">
@@ -1242,6 +1251,7 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
                                             onSelect={handleVehicleSelect}
                                             defaultValue={formData.vehicleId}
                                             placeholder="Search registration or make..."
+                                            uppercase={true}
                                         />
                                         <button 
                                             type="button" 
