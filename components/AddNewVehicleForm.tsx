@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Customer, Vehicle } from '../types';
-import { User, Car, Save, Search, Loader2 } from 'lucide-react';
+import { User, Car, Save, Search, Loader2, UserCheck, Check, AlertTriangle, ArrowRightLeft } from 'lucide-react';
 import { formatDate } from '../core/utils/dateUtils';
 import { generateCustomerId } from '../core/utils/customerUtils';
 import { getWheelbaseAlertInfo } from '../core/utils/vehicleUtils';
@@ -88,6 +88,66 @@ const AddNewVehicleForm: React.FC<AddNewVehicleFormProps> = ({
     const [duplicateVehicle, setDuplicateVehicle] = useState<Vehicle | null>(null);
     const [showDuplicatePrompt, setShowDuplicatePrompt] = useState(false);
 
+    // Real-time normalized VRM database lookup
+    const cleanReg = useMemo(() => {
+        return (vehicleData.registration || '').toUpperCase().replace(/\s/g, '');
+    }, [vehicleData.registration]);
+
+    const liveMatchedVehicle = useMemo(() => {
+        if (!cleanReg || cleanReg.length < 2) return null;
+        return vehicles.find(v => v.registration.toUpperCase().replace(/\s/g, '') === cleanReg) || null;
+    }, [cleanReg, vehicles]);
+
+    const liveMatchedOwner = useMemo(() => {
+        if (!liveMatchedVehicle?.customerId) return null;
+        return customers.find(c => c.id === liveMatchedVehicle.customerId) || null;
+    }, [liveMatchedVehicle, customers]);
+
+    // Real-time live customer duplicate & match detection
+    const liveCustomerMatches = useMemo(() => {
+        if (selectedCustomerId) return []; // Already linked to an existing customer
+        
+        const cleanPhone = (customerData.phone || '').replace(/\D/g, '');
+        const cleanMobile = (customerData.mobile || '').replace(/\D/g, '');
+        const cleanEmail = (customerData.email || '').trim().toLowerCase();
+        const forename = (customerData.forename || '').trim().toLowerCase();
+        const surname = (customerData.surname || '').trim().toLowerCase();
+        const company = (customerData.companyName || '').trim().toLowerCase();
+
+        if (!cleanPhone && !cleanMobile && cleanEmail.length < 4 && (!forename || !surname) && company.length < 3) {
+            return [];
+        }
+
+        return customers.filter(c => {
+            // Check email match
+            if (cleanEmail.length >= 4 && c.email && c.email.trim().toLowerCase() === cleanEmail) {
+                return true;
+            }
+            // Check phone / mobile match (7+ digits)
+            const cPhone = (c.phone || '').replace(/\D/g, '');
+            const cMobile = (c.mobile || '').replace(/\D/g, '');
+            if (cleanPhone.length >= 7 && (cPhone.includes(cleanPhone) || (cPhone.length >= 7 && cleanPhone.includes(cPhone)))) return true;
+            if (cleanPhone.length >= 7 && (cMobile.includes(cleanPhone) || (cMobile.length >= 7 && cleanPhone.includes(cMobile)))) return true;
+            if (cleanMobile.length >= 7 && (cMobile.includes(cleanMobile) || (cMobile.length >= 7 && cleanMobile.includes(cMobile)))) return true;
+            if (cleanMobile.length >= 7 && (cPhone.includes(cleanMobile) || (cPhone.length >= 7 && cleanMobile.includes(cPhone)))) return true;
+
+            // Check full name match
+            if (forename.length >= 2 && surname.length >= 2) {
+                const cForename = (c.forename || '').trim().toLowerCase();
+                const cSurname = (c.surname || '').trim().toLowerCase();
+                if (cForename === forename && cSurname === surname) return true;
+            }
+
+            // Check company match
+            if (company.length >= 3 && c.companyName) {
+                const cCompany = c.companyName.trim().toLowerCase();
+                if (cCompany === company || (company.length >= 4 && cCompany.includes(company))) return true;
+            }
+
+            return false;
+        }).slice(0, 3);
+    }, [customerData, selectedCustomerId, customers]);
+
     useEffect(() => {
         if (selectedCustomerId) {
             const customer = customers.find(c => c.id === selectedCustomerId);
@@ -107,9 +167,9 @@ const AddNewVehicleForm: React.FC<AddNewVehicleFormProps> = ({
                     category: customer.category || 'Retail',
                     isCashCustomer: customer.isCashCustomer || false,
                     marketingConsent: customer.marketingConsent || false,
-                    isBusinessCustomer: customer.isBusinessCustomer || false,
+                    isBusinessCustomer: customer.isBusinessCustomer || !!customer.companyName,
                     companyName: customer.companyName || '',
-                    serviceReminderConsent: customer.serviceReminderConsent || true,
+                    serviceReminderConsent: customer.serviceReminderConsent ?? true,
                     communicationPreference: customer.communicationPreference || 'Email',
                 });
             }
@@ -125,7 +185,6 @@ const AddNewVehicleForm: React.FC<AddNewVehicleFormProps> = ({
         }
     }, [selectedCustomerId, customers]);
 
-
     const handleCustomerChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value, type } = e.target;
         if (type === 'checkbox') {
@@ -140,6 +199,37 @@ const AddNewVehicleForm: React.FC<AddNewVehicleFormProps> = ({
         setVehicleData(prev => ({ ...prev, [name]: name === 'registration' ? value.toUpperCase() : value }));
     };
 
+    const handleApplyExistingVehicle = (v: Vehicle, linkOwner: boolean = true) => {
+        setVehicleData(prev => ({
+            ...prev,
+            id: v.id,
+            registration: v.registration,
+            make: v.make || prev.make,
+            model: v.model || prev.model,
+            type: v.type || prev.type,
+            vin: v.vin || prev.vin,
+            wheelbaseType: v.wheelbaseType || prev.wheelbaseType,
+            nextServiceDate: v.nextServiceDate || prev.nextServiceDate,
+            nextMotDate: v.nextMotDate || prev.nextMotDate,
+            winterCheckDate: v.winterCheckDate || prev.winterCheckDate,
+            fleetNumber: v.fleetNumber || prev.fleetNumber,
+            manufactureDate: v.manufactureDate || prev.manufactureDate,
+            transmissionType: v.transmissionType || prev.transmissionType,
+            engineCapacity: v.cc ? v.cc.toString() : prev.engineCapacity,
+            fuelType: v.fuelType || prev.fuelType,
+            colour: v.colour || prev.colour,
+        }));
+        
+        if (linkOwner && v.customerId) {
+            setSelectedCustomerId(v.customerId);
+        }
+        setShowDuplicatePrompt(false);
+    };
+
+    const handleApplyExistingCustomer = (c: Customer) => {
+        setSelectedCustomerId(c.id);
+    };
+
     const handleLookup = async (lookupValue: string) => {
         if (!lookupValue) {
             setLookupError('Please enter a registration or VIN to look up.');
@@ -151,7 +241,7 @@ const AddNewVehicleForm: React.FC<AddNewVehicleFormProps> = ({
         
         if (existing) {
             setDuplicateVehicle(existing);
-            setShowDuplicatePrompt(true);
+            handleApplyExistingVehicle(existing, true);
             return;
         }
 
@@ -193,14 +283,14 @@ const AddNewVehicleForm: React.FC<AddNewVehicleFormProps> = ({
 
     useEffect(() => {
         if (initialRegistration) {
-            const cleanReg = initialRegistration.trim().toUpperCase().replace(/\s/g, '');
-            if (cleanReg) {
-                const existing = vehicles.find(v => v.registration.toUpperCase().replace(/\s/g, '') === cleanReg);
+            const clean = initialRegistration.trim().toUpperCase().replace(/\s/g, '');
+            if (clean) {
+                const existing = vehicles.find(v => v.registration.toUpperCase().replace(/\s/g, '') === clean);
                 if (existing) {
                     setDuplicateVehicle(existing);
-                    setShowDuplicatePrompt(true);
+                    handleApplyExistingVehicle(existing, !initialCustomerId);
                 } else {
-                    performLookup(cleanReg);
+                    performLookup(clean);
                 }
             }
         }
@@ -208,12 +298,7 @@ const AddNewVehicleForm: React.FC<AddNewVehicleFormProps> = ({
 
     const handleUseExisting = () => {
         if (duplicateVehicle) {
-            setVehicleData(prev => ({
-                ...prev,
-                ...duplicateVehicle,
-                engineCapacity: duplicateVehicle.cc ? duplicateVehicle.cc.toString() : prev.engineCapacity,
-            }));
-            setSelectedCustomerId(duplicateVehicle.customerId);
+            handleApplyExistingVehicle(duplicateVehicle, true);
             // Also refresh from API to get latest MOT/VIN
             performLookup(duplicateVehicle.registration, duplicateVehicle.id);
         }
@@ -371,6 +456,12 @@ const AddNewVehicleForm: React.FC<AddNewVehicleFormProps> = ({
                                 name="registration" 
                                 value={vehicleData.registration} 
                                 onChange={handleVehicleChange} 
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        handleLookup(vehicleData.registration);
+                                    }
+                                }}
                                 placeholder="e.g. AB12 CDE"
                                 className="w-full p-2 border border-gray-300 rounded-lg font-bold uppercase tracking-wider pr-10"
                                 required 
@@ -448,6 +539,54 @@ const AddNewVehicleForm: React.FC<AddNewVehicleFormProps> = ({
                         <input type="date" name="manufactureDate" value={vehicleData.manufactureDate} onChange={handleVehicleChange} className="w-full p-2 border border-gray-300 rounded-lg" />
                     </div>
 
+                    {/* Live Existing Vehicle Match Alert */}
+                    {liveMatchedVehicle && (
+                        <div className="md:col-span-3 p-3.5 bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 border-2 border-amber-300 rounded-xl shadow-sm animate-fade-in">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                <div className="space-y-1">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <span className="font-mono font-black bg-yellow-400 text-black px-2 py-0.5 rounded border border-yellow-500 uppercase tracking-widest text-xs">
+                                            {liveMatchedVehicle.registration}
+                                        </span>
+                                        <span className="font-bold text-amber-950 text-sm">
+                                            {liveMatchedVehicle.make} {liveMatchedVehicle.model}
+                                        </span>
+                                        <span className="text-[10px] bg-amber-200 text-amber-900 font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider">
+                                            Found in Database
+                                        </span>
+                                    </div>
+                                    <div className="text-xs text-amber-900 leading-relaxed">
+                                        Registered Owner: <strong className="font-bold text-amber-950">{liveMatchedOwner ? `${liveMatchedOwner.forename} ${liveMatchedOwner.surname}${liveMatchedOwner.companyName ? ` (${liveMatchedOwner.companyName})` : ''}` : 'Unassigned'}</strong>
+                                        {liveMatchedOwner?.phone || liveMatchedOwner?.mobile ? ` • 📞 ${liveMatchedOwner.phone || liveMatchedOwner.mobile}` : ''}
+                                        {liveMatchedOwner?.email ? ` • ✉️ ${liveMatchedOwner.email}` : ''}
+                                        {liveMatchedOwner?.postcode ? ` • 📍 ${liveMatchedOwner.postcode}` : ''}
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2 flex-wrap shrink-0">
+                                    {liveMatchedOwner && selectedCustomerId !== liveMatchedOwner.id && (
+                                        <button
+                                            type="button"
+                                            onClick={() => handleApplyExistingVehicle(liveMatchedVehicle, true)}
+                                            className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg shadow-sm transition flex items-center gap-1.5 cursor-pointer"
+                                        >
+                                            <UserCheck size={14} />
+                                            Link to Owner ({liveMatchedOwner.forename})
+                                        </button>
+                                    )}
+                                    <button
+                                        type="button"
+                                        onClick={() => handleApplyExistingVehicle(liveMatchedVehicle, false)}
+                                        className="px-3 py-2 bg-white hover:bg-amber-100 text-amber-900 border border-amber-300 font-bold text-xs rounded-lg transition flex items-center gap-1.5 cursor-pointer"
+                                        title="Keep vehicle specs and assign to a different or new customer"
+                                    >
+                                        <ArrowRightLeft size={14} />
+                                        Transfer Vehicle
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     {/* Wheelbase / Lift Restriction Alert */}
                     {(() => {
                         const wb = getWheelbaseAlertInfo(vehicleData.wheelbaseType);
@@ -485,7 +624,6 @@ const AddNewVehicleForm: React.FC<AddNewVehicleFormProps> = ({
                             if (value === 'CREATE_NEW') {
                                 setSelectedCustomerId(null);
                                 setCustomerData({
-                                    id: generateCustomerId(),
                                     title: '',
                                     forename: '',
                                     surname: '',
@@ -510,7 +648,6 @@ const AddNewVehicleForm: React.FC<AddNewVehicleFormProps> = ({
                                 const existingCustomer = customers.find(c => c.id === value);
                                 if (existingCustomer) {
                                     setCustomerData({
-                                        id: existingCustomer.id,
                                         title: existingCustomer.title || '',
                                         forename: existingCustomer.forename || '',
                                         surname: existingCustomer.surname || '',
@@ -538,13 +675,65 @@ const AddNewVehicleForm: React.FC<AddNewVehicleFormProps> = ({
                     />
                 </div>
 
+                {/* Live Customer Match Suggestions */}
+                {liveCustomerMatches.length > 0 && !selectedCustomerId && (
+                    <div className="p-3.5 bg-indigo-50/90 border border-indigo-200 rounded-xl space-y-2 mb-4 animate-fade-in">
+                        <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-indigo-950 flex items-center gap-1.5 uppercase tracking-wider">
+                                <UserCheck size={14} className="text-indigo-600" />
+                                Matching Customer(s) Found in Database ({liveCustomerMatches.length})
+                            </span>
+                            <span className="text-[11px] text-indigo-700 font-medium">Click to use existing customer record</span>
+                        </div>
+                        <div className="space-y-2">
+                            {liveCustomerMatches.map(c => {
+                                const custVehicles = vehicles.filter(v => v.customerId === c.id);
+                                return (
+                                    <div key={c.id} className="p-2.5 bg-white border border-indigo-100 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-2xs">
+                                        <div className="space-y-0.5 text-xs text-gray-800">
+                                            <div className="font-bold text-indigo-950 flex items-center gap-1.5">
+                                                {c.forename} {c.surname}
+                                                {c.companyName && <span className="text-gray-500 font-normal">({c.companyName})</span>}
+                                                {c.postcode && <span className="text-gray-400 font-mono text-[11px]">• {c.postcode}</span>}
+                                            </div>
+                                            <div className="text-[11px] text-gray-600 flex items-center gap-2 flex-wrap">
+                                                {c.phone || c.mobile ? <span>📞 {c.phone || c.mobile}</span> : null}
+                                                {c.email ? <span>✉️ {c.email}</span> : null}
+                                            </div>
+                                            {custVehicles.length > 0 && (
+                                                <div className="flex items-center gap-1 flex-wrap pt-1">
+                                                    <span className="text-[10px] uppercase font-bold text-gray-400">Vehicles:</span>
+                                                    {custVehicles.map(v => (
+                                                        <span key={v.id} className={`px-1.5 py-0.2 rounded font-mono font-bold text-[10px] border ${v.registration.toUpperCase().replace(/\s/g, '') === cleanReg ? 'bg-emerald-100 text-emerald-900 border-emerald-300' : 'bg-yellow-100 text-yellow-900 border-yellow-300'}`}>
+                                                            {v.registration} {v.registration.toUpperCase().replace(/\s/g, '') === cleanReg ? '✓' : ''}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleApplyExistingCustomer(c)}
+                                            className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-md shadow-xs transition flex items-center justify-center gap-1 shrink-0 cursor-pointer"
+                                        >
+                                            <UserCheck size={13} /> Use This Customer
+                                        </button>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
+
                 {selectedCustomerId && vehicles.filter(v => v.customerId === selectedCustomerId).length > 0 && (
                     <div className="mb-4 p-3 border border-blue-100 rounded-lg bg-blue-50/50">
                         <label className="block text-xs font-bold text-blue-700 uppercase tracking-wider mb-2">
                             Use Customer's Existing Vehicle
                         </label>
                         <div className="flex flex-col gap-1.5 max-h-40 overflow-y-auto">
-                            {vehicles.filter(v => v.customerId === selectedCustomerId).map(v => (
+                            {vehicles.filter(v => v.customerId === selectedCustomerId).map(v => {
+                                const isCurrent = v.registration.toUpperCase().replace(/\s/g, '') === cleanReg;
+                                return (
                                 <button
                                     key={v.id}
                                     type="button"
@@ -568,12 +757,20 @@ const AddNewVehicleForm: React.FC<AddNewVehicleFormProps> = ({
                                             colour: v.colour || '',
                                         });
                                     }}
-                                    className="w-full text-left p-2 rounded border border-blue-200 bg-white hover:bg-blue-50 text-xs font-semibold text-blue-800 flex justify-between items-center transition-colors animate-fade-in"
+                                    className={`w-full text-left p-2 rounded border text-xs font-semibold flex justify-between items-center transition-colors animate-fade-in ${isCurrent ? 'bg-blue-100 border-blue-300 text-blue-900' : 'border-blue-200 bg-white hover:bg-blue-50 text-blue-800'}`}
                                 >
-                                    <span className="font-bold tracking-wide">{v.registration}</span>
-                                    <span className="text-gray-500 font-normal">{v.make} {v.model}</span>
+                                    <div className="flex items-center gap-2">
+                                        <span className="font-bold tracking-wide">{v.registration}</span>
+                                        <span className="text-gray-500 font-normal">{v.make} {v.model}</span>
+                                    </div>
+                                    {isCurrent && (
+                                        <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded">
+                                            ✓ Selected
+                                        </span>
+                                    )}
                                 </button>
-                            ))}
+                                );
+                            })}
                         </div>
                     </div>
                 )}

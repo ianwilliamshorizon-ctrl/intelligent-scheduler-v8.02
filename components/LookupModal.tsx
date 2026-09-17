@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import FormModal from './FormModal';
 import { lookupVehicleByVRM } from '../services/vehicleLookupService';
 import { lookupAddressByPostcode, AddressDetails } from '../services/postcodeLookupService';
 import { Vehicle } from '../types';
-import { History, Car, MapPin, AlertCircle } from 'lucide-react';
+import { History, Car, MapPin, AlertCircle, UserCheck } from 'lucide-react';
+import { useData } from '../core/state/DataContext';
 
 interface LookupModalProps {
     isOpen: boolean;
@@ -22,6 +23,7 @@ const LookupModal: React.FC<LookupModalProps> = ({
     onManualEntry,
     lookupType
 }) => {
+    const { vehicles = [], customers = [] } = useData();
     const [inputValue, setInputValue] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -29,6 +31,20 @@ const LookupModal: React.FC<LookupModalProps> = ({
     
     // Flag to determine if we should fetch full MOT history
     const [includeMotHistory, setIncludeMotHistory] = useState(false);
+
+    const cleanVrm = useMemo(() => {
+        return (inputValue || '').toUpperCase().replace(/\s/g, '');
+    }, [inputValue]);
+
+    const localVehicle = useMemo(() => {
+        if (lookupType !== 'vrm' || cleanVrm.length < 2) return null;
+        return vehicles.find(v => v.registration.toUpperCase().replace(/\s/g, '') === cleanVrm) || null;
+    }, [lookupType, cleanVrm, vehicles]);
+
+    const localOwner = useMemo(() => {
+        if (!localVehicle?.customerId) return null;
+        return customers.find(c => c.id === localVehicle.customerId) || null;
+    }, [localVehicle, customers]);
 
     useEffect(() => {
         if (isOpen) {
@@ -41,12 +57,17 @@ const LookupModal: React.FC<LookupModalProps> = ({
         }
     }, [isOpen]);
 
-    const handleLookup = async () => {
+    const handleLookup = async (forceExternal: boolean = false) => {
         setIsLoading(true);
         setErrorMessage(null);
         setAddressList(null);
         try {
             if (lookupType === 'vrm') {
+                if (localVehicle && !forceExternal) {
+                    onVehicleFound(localVehicle);
+                    onClose();
+                    return;
+                }
                 // Pass the inputValue and the boolean flag to the service
                 const vehicle = await lookupVehicleByVRM(inputValue, includeMotHistory);
                 
@@ -143,6 +164,54 @@ const LookupModal: React.FC<LookupModalProps> = ({
                         className="block w-full px-4 py-3 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-lg font-mono border-gray-300 transition-all"
                         autoFocus
                     />
+
+                    {/* Local Vehicle in Database Card */}
+                    {localVehicle && (
+                        <div className="mt-3 p-3.5 bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-300 rounded-xl shadow-xs animate-fade-in space-y-2.5">
+                            <div className="flex items-center justify-between">
+                                <span className="text-xs font-bold text-amber-950 flex items-center gap-1.5 uppercase tracking-wider">
+                                    <Car size={15} className="text-amber-600" />
+                                    Found in Local Database
+                                </span>
+                                <span className="text-[10px] bg-amber-200 text-amber-900 font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider">
+                                    Ready to Link
+                                </span>
+                            </div>
+                            <div className="text-xs text-gray-800">
+                                <div className="font-extrabold text-sm text-gray-900 font-mono flex items-center gap-2">
+                                    <span className="bg-yellow-400 text-black px-2 py-0.5 rounded border border-yellow-500 uppercase">{localVehicle.registration}</span>
+                                    <span>{localVehicle.make} {localVehicle.model}</span>
+                                </div>
+                                <div className="mt-1 text-gray-600">
+                                    Registered Owner: <strong className="text-gray-900">{localOwner ? `${localOwner.forename} ${localOwner.surname}${localOwner.companyName ? ` (${localOwner.companyName})` : ''}` : 'Unassigned'}</strong>
+                                    {localOwner?.phone || localOwner?.mobile ? ` • 📞 ${localOwner.phone || localOwner.mobile}` : ''}
+                                    {localOwner?.email ? ` • ✉️ ${localOwner.email}` : ''}
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2 pt-1">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        onVehicleFound(localVehicle);
+                                        onClose();
+                                    }}
+                                    className="flex-1 py-2 px-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg shadow-sm transition flex items-center justify-center gap-1.5 cursor-pointer"
+                                >
+                                    <UserCheck size={14} />
+                                    Use Existing Vehicle & Link Owner
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => handleLookup(true)}
+                                    disabled={isLoading}
+                                    className="py-2 px-3 bg-white hover:bg-amber-100 text-amber-900 border border-amber-300 font-bold text-xs rounded-lg transition flex items-center gap-1 cursor-pointer"
+                                    title="Query DVLA API to fetch fresh specifications"
+                                >
+                                    Query DVLA API
+                                </button>
+                            </div>
+                        </div>
+                    )}
 
                     {/* MOT History Toggle - Only visible for VRM Lookups */}
                     {lookupType === 'vrm' && (

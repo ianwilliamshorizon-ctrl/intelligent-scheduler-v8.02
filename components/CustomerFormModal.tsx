@@ -4,7 +4,7 @@ import FormModal from './FormModal';
 import { generateCustomerId } from '../core/utils/customerUtils';
 import { formatDate } from '../core/utils/dateUtils';
 import { lookupAddressByPostcode, AddressDetails } from '../services/postcodeLookupService';
-import { Loader2, Search, Briefcase, Car, ChevronDown, ChevronUp, RefreshCw, MessageSquare, PlusCircle } from 'lucide-react';
+import { Loader2, Search, Briefcase, Car, ChevronDown, ChevronUp, RefreshCw, MessageSquare, PlusCircle, UserCheck } from 'lucide-react';
 import { useAuditLogger } from '../core/hooks/useAuditLogger';
 import { useData } from '../core/state/DataContext';
 import { toast } from 'react-toastify';
@@ -155,6 +155,44 @@ const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
         onSave(finalCustomer);
     };
 
+    const liveCustomerMatches = useMemo(() => {
+        if (customer?.id || (formData.id && formData.id !== 'NEW')) return []; // Only in Add New mode
+        
+        const cleanPhone = (formData.phone || '').replace(/\D/g, '');
+        const cleanMobile = (formData.mobile || '').replace(/\D/g, '');
+        const cleanEmail = (formData.email || '').trim().toLowerCase();
+        const forename = (formData.forename || '').trim().toLowerCase();
+        const surname = (formData.surname || '').trim().toLowerCase();
+        const company = (formData.companyName || '').trim().toLowerCase();
+
+        if (!cleanPhone && !cleanMobile && cleanEmail.length < 4 && (!forename || !surname) && company.length < 3) {
+            return [];
+        }
+
+        return existingCustomers.filter(c => {
+            if (cleanEmail.length >= 4 && c.email && c.email.trim().toLowerCase() === cleanEmail) return true;
+            const cPhone = (c.phone || '').replace(/\D/g, '');
+            const cMobile = (c.mobile || '').replace(/\D/g, '');
+            if (cleanPhone.length >= 7 && (cPhone.includes(cleanPhone) || cleanPhone.includes(cPhone))) return true;
+            if (cleanPhone.length >= 7 && (cMobile.includes(cleanPhone) || cleanPhone.includes(cMobile))) return true;
+            if (cleanMobile.length >= 7 && (cMobile.includes(cleanMobile) || cleanMobile.includes(cMobile))) return true;
+            if (cleanMobile.length >= 7 && (cPhone.includes(cleanMobile) || cleanPhone.includes(cPhone))) return true;
+
+            if (forename.length >= 2 && surname.length >= 2) {
+                const cForename = (c.forename || '').trim().toLowerCase();
+                const cSurname = (c.surname || '').trim().toLowerCase();
+                if (cForename === forename && cSurname === surname) return true;
+            }
+
+            if (company.length >= 3 && c.companyName) {
+                const cCompany = c.companyName.trim().toLowerCase();
+                if (cCompany === company || (company.length >= 4 && cCompany.includes(company))) return true;
+            }
+
+            return false;
+        }).slice(0, 3);
+    }, [formData, customer, existingCustomers]);
+
     const customerVehicles = useMemo(() => {
         const id = customer?.id || formData.id;
         if (!id) return [];
@@ -174,6 +212,62 @@ const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
         <FormModal isOpen={isOpen} onClose={onClose} onSave={handleSave} title={customer ? 'Customer 360° Profile' : 'Add New Customer'} maxWidth="max-w-5xl">
             <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
                 <div className="md:col-span-3 space-y-4">
+                    {liveCustomerMatches.length > 0 && !customer?.id && (
+                        <div className="p-3.5 bg-indigo-50 border border-indigo-200 rounded-xl space-y-2.5 animate-fade-in shadow-xs">
+                            <div className="flex items-center justify-between">
+                                <span className="text-xs font-bold text-indigo-950 flex items-center gap-1.5 uppercase tracking-wider">
+                                    <UserCheck size={14} className="text-indigo-600" />
+                                    Existing Customer(s) Found in Database ({liveCustomerMatches.length})
+                                </span>
+                                <span className="text-[11px] text-indigo-700 font-medium">Click to load existing record instead of creating duplicate</span>
+                            </div>
+                            <div className="space-y-2">
+                                {liveCustomerMatches.map(c => {
+                                    const custVehicles = (vehicles || []).filter(v => v.customerId === c.id);
+                                    return (
+                                        <div key={c.id} className="p-2.5 bg-white border border-indigo-100 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-2xs">
+                                            <div className="space-y-0.5 text-xs text-gray-800">
+                                                <div className="font-bold text-indigo-950 flex items-center gap-1.5">
+                                                    {c.forename} {c.surname}
+                                                    {c.companyName && <span className="text-gray-500 font-normal">({c.companyName})</span>}
+                                                    {c.postcode && <span className="text-gray-400 font-mono text-[11px]">• {c.postcode}</span>}
+                                                </div>
+                                                <div className="text-[11px] text-gray-600 flex items-center gap-2 flex-wrap">
+                                                    {c.phone || c.mobile ? <span>📞 {c.phone || c.mobile}</span> : null}
+                                                    {c.email ? <span>✉️ {c.email}</span> : null}
+                                                </div>
+                                                {custVehicles.length > 0 && (
+                                                    <div className="flex items-center gap-1 flex-wrap pt-1">
+                                                        <span className="text-[10px] uppercase font-bold text-gray-400">Registered Vehicles:</span>
+                                                        {custVehicles.map(v => (
+                                                            <span key={v.id} className="px-1.5 py-0.2 rounded font-mono font-bold text-[10px] bg-yellow-100 text-yellow-900 border border-yellow-300">
+                                                                {v.registration}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setFormData({
+                                                        ...c,
+                                                        marketingConsent: c.marketingConsent || false,
+                                                        serviceReminderConsent: c.serviceReminderConsent || false,
+                                                        declinedCommunication: c.declinedCommunication || false,
+                                                    });
+                                                }}
+                                                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-md shadow-xs transition flex items-center justify-center gap-1 shrink-0 cursor-pointer"
+                                            >
+                                                <UserCheck size={13} /> Load This Record
+                                            </button>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         
                         <div className="md:col-span-3">

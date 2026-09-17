@@ -185,23 +185,31 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
         }
     }, [formData.fromName, firstNameInput, surnameInput]);
 
-    const checkCustomerMatch = (first: string, last: string) => {
+    const checkCustomerMatch = (first: string, last: string, email?: string, phone?: string) => {
         if (customerMode === 'existing' || dismissedMatchSuggestions || formData.linkedCustomerId) {
             setSuggestedCustomers([]);
             return;
         }
-        const trimmedFirst = first.trim().toLowerCase();
-        const trimmedLast = last.trim().toLowerCase();
+        const trimmedFirst = (first || '').trim().toLowerCase();
+        const trimmedLast = (last || '').trim().toLowerCase();
         const combined = `${trimmedFirst} ${trimmedLast}`.trim();
+        const cleanEmail = (email !== undefined ? email : (formData.fromEmail || '')).trim().toLowerCase();
+        const cleanPhone = (phone !== undefined ? phone : (formData.fromPhone || '')).replace(/\D/g, '');
 
         // Only suggest if we have at least 3 characters and either a full name (both first & last) 
-        // or a distinct name of at least 4 chars to avoid nuisance matches on common short prefixes
-        if (combined.length < 3) {
+        // or a distinct name of at least 4 chars or email/phone match to avoid nuisance matches
+        if (combined.length < 3 && cleanEmail.length < 4 && cleanPhone.length < 7) {
             setSuggestedCustomers([]);
             return;
         }
 
         const matches = customers.filter(c => {
+            if (cleanEmail.length >= 4 && c.email && c.email.trim().toLowerCase() === cleanEmail) return true;
+            const cPhone = (c.phone || '').replace(/\D/g, '');
+            const cMobile = (c.mobile || '').replace(/\D/g, '');
+            if (cleanPhone.length >= 7 && (cPhone.includes(cleanPhone) || cleanPhone.includes(cPhone))) return true;
+            if (cleanPhone.length >= 7 && (cMobile.includes(cleanPhone) || cleanPhone.includes(cMobile))) return true;
+
             const cFirst = (c.forename || '').trim().toLowerCase();
             const cLast = (c.surname || '').trim().toLowerCase();
             const cFull = `${c.title || ''} ${c.forename || ''} ${c.surname || ''}`.toLowerCase().trim();
@@ -239,7 +247,7 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
         const cleanReg = reg.toUpperCase().replace(/\s/g, '');
         if (cleanReg.length >= 2) {
             const existingVehicle = vehicles.find(v => v.registration.toUpperCase().replace(/\s/g, '') === cleanReg);
-            if (existingVehicle && !formData.linkedVehicleId) {
+            if (existingVehicle) {
                 setSuggestedVehicle(existingVehicle);
             } else {
                 setSuggestedVehicle(null);
@@ -482,6 +490,12 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
         
         if (name === 'vehicleRegistration') {
             checkVehicleMatch(value);
+        }
+        if (name === 'fromEmail') {
+            checkCustomerMatch(firstNameInput, surnameInput, value, formData.fromPhone);
+        }
+        if (name === 'fromPhone') {
+            checkCustomerMatch(firstNameInput, surnameInput, formData.fromEmail, value);
         }
 
         setFormData(p => {
@@ -796,8 +810,25 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
         setFirstNameInput(customer.forename || '');
         setSurnameInput(customer.surname || '');
 
+        const custVehicles = vehicles.filter(v => v.customerId === customer.id);
+        let extraVeh: any = {};
+        if (!formData.linkedVehicleId && custVehicles.length === 1) {
+            const v = custVehicles[0];
+            extraVeh = {
+                linkedVehicleId: v.id,
+                vehicleMake: v.make ? formatTitleCase(v.make) : formData.vehicleMake,
+                vehicleModel: v.model ? formatTitleCase(v.model) : formData.vehicleModel,
+                vehicleRegistration: (v.registration || '').toUpperCase().trim(),
+                vehicleYear: v.year?.toString() || formData.vehicleYear,
+                vehicleVin: v.vin || formData.vehicleVin,
+                vehicleMotExpiry: v.nextMotDate || v.motExpiryDate || formData.vehicleMotExpiry,
+                vehicleManufactureDate: v.manufactureDate || formData.vehicleManufactureDate
+            };
+        }
+
         setFormData(p => ({ 
             ...p, 
+            ...extraVeh,
             linkedCustomerId: customer.id,
             fromName: displayName,
             fromEmail: updatedCustomer.email || p.fromEmail || '',
@@ -811,9 +842,31 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
         setSuggestedCustomers([]);
     };
 
-    const handleLinkVehicle = (vehicle: Vehicle) => {
+    const handleLinkVehicle = (vehicle: Vehicle, linkOwner: boolean = true) => {
+        let extraCust: any = {};
+        if (linkOwner && vehicle.customerId) {
+            const owner = customers.find(c => c.id === vehicle.customerId);
+            if (owner) {
+                setCustomerMode('existing');
+                setFirstNameInput(owner.forename || '');
+                setSurnameInput(owner.surname || '');
+                extraCust = {
+                    linkedCustomerId: owner.id,
+                    fromName: getCustomerDisplayName(owner),
+                    fromEmail: owner.email || formData.fromEmail || '',
+                    fromPhone: owner.mobile || owner.phone || formData.fromPhone || '',
+                    addressLine1: owner.addressLine1 || formData.addressLine1 || '',
+                    addressLine2: owner.addressLine2 || formData.addressLine2 || '',
+                    city: owner.city || formData.city || '',
+                    county: owner.county || formData.county || '',
+                    postcode: owner.postcode || formData.postcode || ''
+                };
+            }
+        }
+
         setFormData(p => ({ 
             ...p, 
+            ...extraCust,
             linkedVehicleId: vehicle.id,
             vehicleMake: vehicle.make ? formatTitleCase(vehicle.make) : p.vehicleMake,
             vehicleModel: vehicle.model ? formatTitleCase(vehicle.model) : p.vehicleModel,
@@ -1332,47 +1385,98 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                             Existing customer(s) found with a matching name. Would you like to link one or continue adding a brand new customer?
                                         </p>
                                         <div className="flex flex-col gap-1.5">
-                                            {suggestedCustomers.map(cust => (
-                                                <div key={cust.id} className="flex justify-between items-center text-xs p-2 bg-white rounded-lg border border-amber-200 shadow-2xs">
-                                                    <div className="flex items-center gap-1.5 truncate">
-                                                        <UserIcon size={14} className="text-blue-500 shrink-0" />
-                                                        <span className="font-bold text-gray-800 truncate">{getCustomerDisplayName(cust)}</span>
-                                                        {cust.email && <span className="text-[11px] text-gray-500 truncate">({cust.email})</span>}
+                                            {suggestedCustomers.map(cust => {
+                                                const custVehicles = vehicles.filter(v => v.customerId === cust.id);
+                                                return (
+                                                    <div key={cust.id} className="flex flex-col sm:flex-row justify-between sm:items-center gap-2 text-xs p-2 bg-white rounded-lg border border-amber-200 shadow-2xs">
+                                                        <div className="flex flex-col min-w-0">
+                                                            <div className="flex items-center gap-1.5 truncate">
+                                                                <UserIcon size={14} className="text-blue-500 shrink-0" />
+                                                                <span className="font-bold text-gray-800 truncate">{getCustomerDisplayName(cust)}</span>
+                                                                {cust.email && <span className="text-[11px] text-gray-500 truncate">({cust.email})</span>}
+                                                            </div>
+                                                            {custVehicles.length > 0 && (
+                                                                <div className="flex flex-wrap gap-1 mt-1 pl-5">
+                                                                    {custVehicles.slice(0, 3).map(v => (
+                                                                        <span key={v.id} className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-gray-100 text-gray-700 text-[10px] font-mono font-semibold rounded border border-gray-200">
+                                                                            <Car size={10} className="text-gray-500" />
+                                                                            {v.registration} {v.make ? `(${v.make})` : ''}
+                                                                        </span>
+                                                                    ))}
+                                                                    {custVehicles.length > 3 && (
+                                                                        <span className="text-[10px] text-gray-500 self-center">+{custVehicles.length - 3} more</span>
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                        <button 
+                                                            type="button" 
+                                                            onClick={() => handleLinkCustomer(cust)} 
+                                                            className="flex items-center gap-1 py-1 px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-md shadow-2xs transition shrink-0 cursor-pointer text-xs self-end sm:self-center"
+                                                        >
+                                                            <LinkIcon size={12}/> Link Customer
+                                                        </button>
                                                     </div>
-                                                    <button 
-                                                        type="button" 
-                                                        onClick={() => handleLinkCustomer(cust)} 
-                                                        className="flex items-center gap-1 py-1 px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-md shadow-2xs transition shrink-0 cursor-pointer text-xs"
-                                                    >
-                                                        <LinkIcon size={12}/> Link Customer
-                                                    </button>
-                                                </div>
-                                            ))}
+                                                );
+                                            })}
                                         </div>
                                     </div>
                                 )}
 
-                                {suggestedVehicle && !formData.linkedVehicleId && (
-                                    <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-xl space-y-2 animate-fade-in shadow-2xs">
-                                        <h4 className="font-bold text-indigo-900 text-xs flex items-center gap-1.5">
-                                            <Car size={14} className="text-indigo-600"/> Vehicle Match
-                                        </h4>
-                                        <div className="flex justify-between items-center text-xs p-2 bg-white rounded-lg border border-indigo-100 shadow-2xs">
-                                            <div className="flex items-center gap-1.5 truncate">
-                                                <Car size={14} className="text-emerald-500 shrink-0" />
-                                                <span className="font-black text-gray-900 uppercase font-mono">{suggestedVehicle.registration}</span>
-                                                <span className="text-gray-600 truncate">({suggestedVehicle.make} {suggestedVehicle.model})</span>
+                                {suggestedVehicle && !formData.linkedVehicleId && (() => {
+                                    const matchedOwner = suggestedVehicle.customerId ? customers.find(c => c.id === suggestedVehicle.customerId) : null;
+                                    return (
+                                        <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-xl space-y-2 animate-fade-in shadow-2xs">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <h4 className="font-bold text-indigo-900 text-xs flex items-center gap-1.5">
+                                                    <Car size={14} className="text-indigo-600"/> Vehicle Found in Database
+                                                </h4>
+                                                <span className="text-[10px] font-semibold text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-full">
+                                                    Matches Existing Record
+                                                </span>
                                             </div>
-                                            <button 
-                                                type="button" 
-                                                onClick={() => handleLinkVehicle(suggestedVehicle)} 
-                                                className="flex items-center gap-1 py-1 px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-md shadow-2xs transition shrink-0 cursor-pointer text-xs"
-                                            >
-                                                <LinkIcon size={12}/> Link Vehicle
-                                            </button>
+                                            <div className="p-2.5 bg-white rounded-lg border border-indigo-100 shadow-2xs space-y-2">
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-1.5 truncate">
+                                                        <Car size={14} className="text-emerald-500 shrink-0" />
+                                                        <span className="font-black text-gray-900 uppercase font-mono">{suggestedVehicle.registration}</span>
+                                                        <span className="text-gray-600 truncate">({suggestedVehicle.make} {suggestedVehicle.model}{suggestedVehicle.year ? ` - ${suggestedVehicle.year}` : ''})</span>
+                                                    </div>
+                                                </div>
+                                                {matchedOwner && (
+                                                    <div className="flex items-center gap-1.5 text-xs text-gray-600 bg-gray-50 p-1.5 rounded border border-gray-100">
+                                                        <UserIcon size={12} className="text-indigo-500 shrink-0" />
+                                                        <span className="text-gray-500 font-medium">Registered Owner:</span>
+                                                        <span className="font-bold text-gray-800">{getCustomerDisplayName(matchedOwner)}</span>
+                                                        {(matchedOwner.phone || matchedOwner.mobile) && (
+                                                            <span className="text-[11px] text-gray-500">({matchedOwner.phone || matchedOwner.mobile})</span>
+                                                        )}
+                                                    </div>
+                                                )}
+                                                <div className="flex items-center justify-end gap-2 pt-1 border-t border-gray-100">
+                                                    {matchedOwner && (
+                                                        <button 
+                                                            type="button" 
+                                                            onClick={() => handleLinkVehicle(suggestedVehicle, true)} 
+                                                            className="flex items-center gap-1 py-1 px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-md shadow-2xs transition shrink-0 cursor-pointer text-xs"
+                                                            title="Link both the vehicle and populate customer contact details"
+                                                        >
+                                                            <LinkIcon size={12}/> Link Vehicle & Owner
+                                                        </button>
+                                                    )}
+                                                    <button 
+                                                        type="button" 
+                                                        onClick={() => handleLinkVehicle(suggestedVehicle, false)} 
+                                                        className={`flex items-center gap-1 py-1 px-2.5 font-bold rounded-md shadow-2xs transition shrink-0 cursor-pointer text-xs ${matchedOwner ? 'bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300' : 'bg-emerald-600 hover:bg-emerald-700 text-white'}`}
+                                                        title="Link vehicle specifications only without overwriting customer"
+                                                    >
+                                                        <LinkIcon size={12}/> {matchedOwner ? 'Vehicle Only' : 'Link Vehicle'}
+                                                    </button>
+                                                </div>
+                                            </div>
                                         </div>
-                                    </div>
-                                )}
+                                    );
+                                })()}
 
                                 {aiError && (
                                     <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700">
@@ -1695,6 +1799,43 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                                     <span>DVLA</span>
                                                 </button>
                                             </div>
+                                            {suggestedVehicle && !formData.linkedVehicleId && (() => {
+                                                const matchedOwner = suggestedVehicle.customerId ? customers.find(c => c.id === suggestedVehicle.customerId) : null;
+                                                return (
+                                                    <div className="mt-2 p-2.5 bg-indigo-50 border border-indigo-200 rounded-lg text-xs space-y-1.5 animate-fade-in shadow-2xs">
+                                                        <div className="flex items-center justify-between">
+                                                            <div className="flex items-center gap-1.5 font-bold text-indigo-900">
+                                                                <Check size={13} className="text-emerald-600" />
+                                                                <span>Found in Database: {suggestedVehicle.make} {suggestedVehicle.model}{suggestedVehicle.year ? ` (${suggestedVehicle.year})` : ''}</span>
+                                                            </div>
+                                                        </div>
+                                                        {matchedOwner && (
+                                                            <div className="text-[11px] text-gray-600">
+                                                                Owner: <strong className="text-gray-800">{getCustomerDisplayName(matchedOwner)}</strong>
+                                                                {(matchedOwner.phone || matchedOwner.mobile) ? ` • ${matchedOwner.phone || matchedOwner.mobile}` : ''}
+                                                            </div>
+                                                        )}
+                                                        <div className="flex items-center gap-1.5 pt-1">
+                                                            {matchedOwner && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleLinkVehicle(suggestedVehicle, true)}
+                                                                    className="flex items-center gap-1 px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded text-[11px] shadow-2xs transition cursor-pointer"
+                                                                >
+                                                                    <LinkIcon size={11} /> Link Vehicle & Owner
+                                                                </button>
+                                                            )}
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleLinkVehicle(suggestedVehicle, false)}
+                                                                className={`flex items-center gap-1 px-2 py-1 font-bold rounded text-[11px] shadow-2xs transition cursor-pointer ${matchedOwner ? 'bg-white hover:bg-gray-100 text-gray-700 border border-gray-300' : 'bg-emerald-600 hover:bg-emerald-700 text-white'}`}
+                                                            >
+                                                                <LinkIcon size={11} /> {matchedOwner ? 'Vehicle Only' : 'Link Vehicle'}
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })()}
                                         </div>
 
                                         {/* Editable Make, Model, Year */}

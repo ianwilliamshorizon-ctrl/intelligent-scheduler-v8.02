@@ -189,10 +189,28 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
         }
     };
 
+    const cleanReg = (formData.registration || '').toUpperCase().replace(/\s/g, '');
+    const duplicateVehicle = useMemo(() => {
+        if (!cleanReg || cleanReg.length < 2) return null;
+        return vehicles.find(v => v.id !== formData.id && v.registration?.toUpperCase().replace(/\s/g, '') === cleanReg) || null;
+    }, [cleanReg, formData.id, vehicles]);
+
+    const duplicateOwner = useMemo(() => {
+        if (!duplicateVehicle?.customerId) return null;
+        return customers.find(c => c.id === duplicateVehicle.customerId) || null;
+    }, [duplicateVehicle, customers]);
+
     const handleLookup = async (lookupValue: string) => {
         if (!lookupValue || lookupValue.trim().length < 2 || isLookingUp) return;
         setIsLookingUp(true);
         setLookupError('');
+
+        const cleanVrm = lookupValue.trim().toUpperCase().replace(/\s/g, '');
+        const existingInDb = vehicles.find(v => v.id !== formData.id && v.registration.toUpperCase().replace(/\s/g, '') === cleanVrm);
+        if (existingInDb && !formData.customerId && existingInDb.customerId) {
+            setFormData((prev: any) => ({ ...prev, customerId: existingInDb.customerId }));
+        }
+
         try {
             const details = await lookupVehicleByVRM(lookupValue, includeMotHistory) as any;
             if (details.AccountBalance !== undefined) setRemainingQuota(details.AccountBalance);
@@ -405,6 +423,47 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
                                             >
                                                 {isLookingUp ? <Loader2 size={10} className="animate-spin" /> : <RefreshCw size={10} />} Refresh Specs
                                             </button>
+                                        </div>
+                                    )}
+                                    {duplicateVehicle && (
+                                        <div className="mt-2 p-3 bg-amber-50 border border-amber-300 rounded-lg text-xs space-y-1.5 animate-fade-in">
+                                            <div className="flex items-center gap-1.5 font-bold text-amber-900">
+                                                <AlertCircle size={14} className="text-amber-600" />
+                                                <span>Vehicle Already in Database</span>
+                                            </div>
+                                            <div className="text-amber-800">
+                                                Registration <strong>{duplicateVehicle.registration}</strong> ({duplicateVehicle.make} {duplicateVehicle.model}) is currently registered to <strong>{duplicateOwner ? `${duplicateOwner.forename} ${duplicateOwner.surname}${duplicateOwner.companyName ? ` (${duplicateOwner.companyName})` : ''}` : 'Another Customer'}</strong>.
+                                            </div>
+                                            <div className="flex items-center gap-2 pt-1 flex-wrap">
+                                                {duplicateOwner && formData.customerId !== duplicateOwner.id && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setFormData((prev: any) => ({ ...prev, customerId: duplicateOwner.id }))}
+                                                        className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded text-[11px] transition cursor-pointer"
+                                                    >
+                                                        Link Owner ({duplicateOwner.forename})
+                                                    </button>
+                                                )}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setFormData((prev: any) => ({
+                                                            ...prev,
+                                                            make: duplicateVehicle.make || prev.make,
+                                                            model: duplicateVehicle.model || prev.model,
+                                                            vin: duplicateVehicle.vin || prev.vin,
+                                                            year: duplicateVehicle.year || prev.year,
+                                                            fuelType: duplicateVehicle.fuelType || prev.fuelType,
+                                                            colour: duplicateVehicle.colour || prev.colour,
+                                                            engineCapacityCc: duplicateVehicle.cc || duplicateVehicle.engineCapacityCc || prev.engineCapacityCc,
+                                                            nextMotDate: duplicateVehicle.nextMotDate || prev.nextMotDate
+                                                        }));
+                                                    }}
+                                                    className="px-2.5 py-1 bg-white border border-amber-300 hover:bg-amber-100 text-amber-900 font-bold rounded text-[11px] transition cursor-pointer"
+                                                >
+                                                    Copy Existing Specs
+                                                </button>
+                                            </div>
                                         </div>
                                     )}
                                 </div>
