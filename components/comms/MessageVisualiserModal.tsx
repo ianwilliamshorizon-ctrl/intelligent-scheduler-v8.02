@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Mail, MessageSquare, Send, Trash2, Edit3, X, Check, ExternalLink, Calendar, Copy, Eye, Clock, Phone, AlertCircle, Shield, Wrench, ChevronRight, Car, CheckCircle2, Sparkles, Image as ImageIcon } from 'lucide-react';
 import { Reminder, Customer, Vehicle, BusinessEntity } from '../../types';
+import { getCustomerDisplayName } from '../../core/utils/customerUtils';
 import { generateReminderMessage } from '../../core/utils/templateUtils';
 import NotificationsHubCard, { generateNotificationsHubEmailHtml, formatDisplayDate } from './NotificationsHubCard';
 import { sendOutboundEmail } from '../../core/services/emailService';
@@ -464,7 +465,7 @@ export const MessageVisualiserModal: React.FC<MessageVisualiserModalProps> = ({
                                 <div className="text-xs">
                                     <span className="font-bold text-gray-700">Recipient: </span>
                                     <span className="font-semibold text-indigo-700">{customer.mobile || customer.phone || '07123 456789'}</span>
-                                    <span className="text-gray-400 ml-2">({getCustomerDisplayName ? customer.forename + ' ' + customer.surname : 'Customer'})</span>
+                                    <span className="text-gray-400 ml-2">({getCustomerDisplayName(customer)})</span>
                                 </div>
                                 <div className="flex gap-1.5 p-1 bg-gray-200 rounded-lg">
                                     <button
@@ -638,7 +639,7 @@ export const MessageVisualiserModal: React.FC<MessageVisualiserModalProps> = ({
                                 <div className="text-xs">
                                     <span className="font-bold text-gray-700">Recipient: </span>
                                     <span className="font-semibold text-emerald-700">{customer.mobile || customer.phone || '07123 456789'}</span>
-                                    <span className="text-gray-400 ml-2">({customer.forename} {customer.surname})</span>
+                                    <span className="text-gray-400 ml-2">({getCustomerDisplayName(customer)})</span>
                                 </div>
                                 <div className="flex gap-1.5 p-1 bg-gray-200 rounded-lg">
                                     <button
