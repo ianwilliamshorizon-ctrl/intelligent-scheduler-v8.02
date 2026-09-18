@@ -765,12 +765,17 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
             }
         }
 
+        const effectiveEntityId = formData.entityId || formData.assignedToEntityId || (selectedEntityId === 'all' ? (entities && entities.length > 0 ? entities[0].id : 'ent_porsche') : selectedEntityId);
+
         const inquiryToSave: Inquiry = {
             id: formData.id || crypto.randomUUID(),
             createdAt: formData.createdAt || new Date().toISOString(),
             takenByUserId: formData.takenByUserId || currentUser.id,
             inquiryNumber: formData.inquiryNumber || generateInquiryNumber(inquiries),
             ...formData,
+            entityId: effectiveEntityId,
+            assignedToEntityId: formData.assignedToEntityId || (formData.assignedToUserId ? '' : effectiveEntityId),
+            assignedToUserId: formData.assignedToUserId || '',
             linkedCustomerId: resolvedCustomerId,
             linkedVehicleId: resolvedVehicleId,
             vehicleMake: cleanMake || (formData.vehicleMake && String(formData.vehicleMake).toLowerCase() !== 'unknown' ? formData.vehicleMake : ''),
@@ -2056,8 +2061,31 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                     
                                     <div className="space-y-2.5">
                                         <div>
-                                            <label className="block text-[11px] font-bold text-gray-700 mb-1">Branch / Entity</label>
-                                            <select name="entityId" value={formData.entityId || ''} onChange={handleChange} className="w-full p-2 border border-gray-300 rounded-lg text-xs bg-gray-50 font-medium">
+                                            <label className="block text-[11px] font-bold text-gray-700 mb-1">Branch / Department</label>
+                                            <select 
+                                                name="entityId" 
+                                                value={formData.entityId || ''} 
+                                                onChange={(e) => {
+                                                    const newEntityId = e.target.value;
+                                                    if (newEntityId !== formData.entityId) {
+                                                        const entityName = entities?.find(ent => ent.id === newEntityId)?.name || newEntityId;
+                                                        const newLog = {
+                                                            id: crypto.randomUUID(),
+                                                            timestamp: new Date().toISOString(),
+                                                            userId: currentUser.id,
+                                                            actionType: 'Reassigned',
+                                                            notes: `Department / Branch reassigned to: ${entityName}`
+                                                        };
+                                                        setFormData(p => ({
+                                                            ...p,
+                                                            entityId: newEntityId,
+                                                            assignedToEntityId: p.assignedToUserId ? p.assignedToEntityId : newEntityId,
+                                                            logs: [...(p.logs || []), newLog]
+                                                        }));
+                                                    }
+                                                }} 
+                                                className="w-full p-2 border border-gray-300 rounded-lg text-xs bg-gray-50 font-medium"
+                                            >
                                                 {entities?.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
                                             </select>
                                         </div>
@@ -2158,13 +2186,14 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                                             id: crypto.randomUUID(),
                                                             timestamp: new Date().toISOString(),
                                                             userId: currentUser.id,
-                                                            actionType: 'Assigned',
-                                                            notes: `Assigned To changed to: ${assignName}`
+                                                            actionType: isUser ? 'Assigned' : 'Reassigned',
+                                                            notes: isUser ? `Assigned To changed to: ${assignName}` : `Reassigned to Department: ${assignName}`
                                                         };
                                                         setFormData(p => ({ 
                                                             ...p, 
-                                                            assignedToUserId: isUser ? id : undefined,
-                                                            assignedToEntityId: !isUser ? id : undefined,
+                                                            assignedToUserId: isUser ? id : '',
+                                                            assignedToEntityId: !isUser ? id : '',
+                                                            entityId: !isUser ? id : p.entityId,
                                                             logs: [...(p.logs || []), newLog] 
                                                         }));
                                                     }

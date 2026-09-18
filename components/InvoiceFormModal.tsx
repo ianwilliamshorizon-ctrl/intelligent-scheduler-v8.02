@@ -495,6 +495,10 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
         searchField: `${v.registration} ${v.make} ${v.model}`.toLowerCase()
     })), [filteredVehicles]);
 
+    const selectedVehicle = useMemo(() => 
+        (vehicles || []).find(v => v.id === formData.vehicleId) || null,
+    [vehicles, formData.vehicleId]);
+
     const invoiceBreakdown = useMemo(() => {
         const packages: { header: InvoiceLineItem, children: InvoiceLineItem[] }[] = [];
         const customLabor: InvoiceLineItem[] = [];
@@ -718,7 +722,7 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
                 isOpen={isPackageSelectionModalOpen}
                 onClose={() => setIsPackageSelectionModalOpen(false)}
                 servicePackages={servicePackages}
-                vehicle={vehicle}
+                vehicle={selectedVehicle}
                 narrative={formData.notes || ''}
                 taxRates={taxRates}
                 onSelectPackages={(selectedPkgs) => {

@@ -159,7 +159,7 @@ const ConciergeView: React.FC<ConciergeViewProps> = (props) => {
             inq.status !== 'Closed' &&
             inq.linkedEstimateId &&
             !inq.linkedJobId &&
-            (selectedEntityId === 'all' || inq.entityId === selectedEntityId)
+            (selectedEntityId === 'all' || inq.entityId === selectedEntityId || inq.assignedToEntityId === selectedEntityId)
         );
     }, [inquiries, selectedEntityId]);
 

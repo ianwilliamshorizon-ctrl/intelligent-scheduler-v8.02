@@ -877,9 +877,9 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
             }
 
             // Effective Entity ID resolution:
-            // If the inquiry is linked to an estimate, adopt that estimate's entityId if available
+            // Inquiry's own entityId or assignedToEntityId takes precedence; fallback to linked estimate's entityId if unset
             const linkedEstimate = (i.linkedEstimateId ? estimates.find(e => e.id === i.linkedEstimateId) : null) || estimates.find(e => e.linkedInquiryId === i.id);
-            const entityId = linkedEstimate?.entityId || i.entityId || 'ent_porsche';
+            const entityId = i.entityId || i.assignedToEntityId || linkedEstimate?.entityId || 'ent_porsche';
 
             return { ...i, status, entityId };
         });
@@ -1375,7 +1375,11 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
     };
 
     const filteredInquiries = useMemo(() => {
-        let filtered = normalizedInquiries.filter(i => selectedEntityId === 'all' || i.entityId === selectedEntityId);
+        let filtered = normalizedInquiries.filter(i => {
+            if (selectedEntityId === 'all') return true;
+            const effectiveEntity = i.assignedToEntityId || i.entityId;
+            return effectiveEntity === selectedEntityId || i.entityId === selectedEntityId || i.assignedToEntityId === selectedEntityId;
+        });
         
         if (assignedUserFilter !== 'all') {
             if (assignedUserFilter === 'me') {
@@ -2221,7 +2225,7 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                 onClose={() => setShowDuplicateFinder(false)}
                 activeInquiries={(inquiries || []).filter(i => {
                     const s = (i.status || '').toLowerCase();
-                    const isEntityMatch = selectedEntityId === 'all' || i.entityId === selectedEntityId;
+                    const isEntityMatch = selectedEntityId === 'all' || i.entityId === selectedEntityId || i.assignedToEntityId === selectedEntityId;
                     return s !== 'closed' && s !== 'archived' && isEntityMatch;
                 })}
                 onViewInquiry={props.onOpenInquiryModal}
