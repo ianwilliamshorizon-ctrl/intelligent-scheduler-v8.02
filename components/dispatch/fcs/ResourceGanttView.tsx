@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { Job, Lift, Engineer, PurchaseOrder, Vehicle, Customer, User, Estimate, FCSGanttBlock, FCSDependencyLink, BusinessEntity } from '../../../types';
+import { Job, Lift, Engineer, PurchaseOrder, Vehicle, Customer, User, Estimate, FCSGanttBlock, FCSDependencyLink, BusinessEntity, JobSegment } from '../../../types';
 import { calculateFCSMatrix, FCSMatrixResult } from '../../../core/services/fcsSchedulingEngine';
 import { ServiceAdvisorBookingBufferModal } from './ServiceAdvisorBookingBufferModal';
 import { FCSOptimizerModal, OptimizedAssignment } from './FCSOptimizerModal';
@@ -141,30 +141,38 @@ export interface ResourceGanttViewProps {
     jobs: Job[];
     ramps: Lift[];
     engineers: Engineer[];
+    allEngineers?: Engineer[];
+    selectedEntityId?: string;
     purchaseOrders: PurchaseOrder[];
     vehicles?: Vehicle[];
     customers?: Customer[];
     users?: User[];
+    currentUser?: User;
     estimates?: Estimate[];
     businessEntities?: BusinessEntity[];
+    unallocatedJobs?: Job[];
     onEditJob: (jobId: string, initialTab?: any) => void;
     onSaveJob?: (job: Job) => Promise<void> | void;
     onSaveEstimate?: (est: Partial<Estimate>) => Promise<void> | void;
     onSavePurchaseOrder?: (po: Partial<PurchaseOrder>) => Promise<void> | void;
     onUpdateEngineer?: (engineerId: string, newName: string) => Promise<void> | void;
-    onUpdateEngineerTransfer?: (engineerId: string, isTransferred: boolean, sourceLocation?: string) => Promise<void> | void;
+    onUpdateEngineerTransfer?: (engineerId: string, toEntityId: string | null, reason?: string) => Promise<void> | void;
 }
 
 export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
     jobs = [],
     ramps = [],
     engineers = [],
+    allEngineers = [],
+    selectedEntityId = 'all',
     purchaseOrders = [],
     vehicles = [],
     customers = [],
     users = [],
+    currentUser,
     estimates = [],
     businessEntities = [],
+    unallocatedJobs: passedUnallocatedJobs,
     onEditJob,
     onSaveJob,
     onSaveEstimate,
@@ -175,7 +183,9 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
     // Interactive state
     const [hoveredJobId, setHoveredJobId] = useState<string | null>(null);
     const [windowDays, setWindowDays] = useState<number>(7);
-    const [simulateEngineers, setSimulateEngineers] = useState<number>(0);
+    const [simulateExtraEngineers, setSimulateExtraEngineers] = useState<number>(0);
+    const [showScheduledUnallocated, setShowScheduledUnallocated] = useState<boolean>(false);
+    const [isAssigningAllTrimming, setIsAssigningAllTrimming] = useState<boolean>(false);
     const [isBufferModalOpen, setIsBufferModalOpen] = useState<boolean>(false);
     const [isOptimizerOpen, setIsOptimizerOpen] = useState<boolean>(false);
     const [isTransferModalOpen, setIsTransferModalOpen] = useState<boolean>(false);
@@ -196,7 +206,10 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
     }, [ramps]);
 
     // Unallocated jobs pool
-    const unallocatedJobs = useMemo(() => jobs.filter(j => isJobUnallocated(j)), [jobs]);
+    const unallocatedJobs = useMemo(() => {
+        if (passedUnallocatedJobs && passedUnallocatedJobs.length > 0) return passedUnallocatedJobs;
+        return jobs.filter(j => isJobUnallocated(j));
+    }, [passedUnallocatedJobs, jobs]);
 
     const startDateStr = useMemo(() => {
         const today = new Date();
@@ -1726,7 +1739,9 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                     estimates={estimates}
                     unallocatedJobs={unallocatedJobs}
                     onBookJob={(newJob) => {
-                        onSaveJob(newJob);
+                        if (onSaveJob && newJob) {
+                            onSaveJob(newJob as Job);
+                        }
                     }}
                     onSaveEstimate={(est) => {
                         if (onSaveEstimate) onSaveEstimate(est);
@@ -1785,7 +1800,11 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                     currentEngineers={engineers}
                     businessEntities={businessEntities}
                     selectedEntityId={selectedEntityId}
-                    onUpdateEngineerTransfer={onUpdateEngineerTransfer}
+                    onUpdateEngineerTransfer={async (engineerId, toEntityId, reason) => {
+                        if (onUpdateEngineerTransfer) {
+                            await onUpdateEngineerTransfer(engineerId, toEntityId, reason);
+                        }
+                    }}
                 />
             )}
 
