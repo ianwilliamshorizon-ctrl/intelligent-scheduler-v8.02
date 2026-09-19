@@ -82,12 +82,13 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({
 
             const job = invoice.jobId ? jobsMap.get(invoice.jobId) : null;
             const saleVehicle = invoice.saleVehicleId ? saleVehiclesMap.get(invoice.saleVehicleId) : null;
-            const customer = customerMap.get(invoice.customerId) || 
-                (job?.customerId ? customerMap.get(job.customerId) : null) ||
-                (saleVehicle?.buyerCustomerId ? customerMap.get(saleVehicle.buyerCustomerId) : null);
             const vehicle = invoice.vehicleId ? vehicleMap.get(invoice.vehicleId) : 
                 (job?.vehicleId ? vehicleMap.get(job.vehicleId) : null) ||
                 (saleVehicle?.vehicleId ? vehicleMap.get(saleVehicle.vehicleId) : null);
+            const customer = customerMap.get(invoice.customerId) || 
+                (job?.customerId ? customerMap.get(job.customerId) : null) ||
+                (vehicle?.customerId ? customerMap.get(vehicle.customerId) : null) ||
+                (saleVehicle?.buyerCustomerId ? customerMap.get(saleVehicle.buyerCustomerId) : null);
             const lowerFilter = filter.toLowerCase();
 
             if (!isWithinDateRange(invoice.issueDate, startDate, endDate)) {
@@ -203,8 +204,12 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({
                          <tbody className="divide-y divide-gray-200">
                             {filteredInvoices.map(invoice => {
                                 const job = invoice.jobId ? jobsMap.get(invoice.jobId) : null;
-                                const customer = customerMap.get(invoice.customerId) || (job?.customerId ? customerMap.get(job.customerId) : null);
+                                const saleVehicle = invoice.saleVehicleId ? saleVehiclesMap.get(invoice.saleVehicleId) : null;
                                 const vehicle = invoice.vehicleId ? vehicleMap.get(invoice.vehicleId) : (job?.vehicleId ? vehicleMap.get(job.vehicleId) : null);
+                                const customer = customerMap.get(invoice.customerId) || 
+                                    (job?.customerId ? customerMap.get(job.customerId) : null) ||
+                                    (vehicle?.customerId ? customerMap.get(vehicle.customerId) : null) ||
+                                    (saleVehicle?.buyerCustomerId ? customerMap.get(saleVehicle.buyerCustomerId) : null);
                                 const displayCustomerName = getCustomerDisplayName(customer);
                                 const custAddress = [customer?.addressLine1, customer?.city, customer?.postcode].filter(Boolean).join(', ');
                                 return (
@@ -224,7 +229,20 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({
                                                 {displayCustomerName}
                                             </HoverInfo>
                                         ) : (
-                                            <span className="text-gray-400">Unknown Customer</span>
+                                            <div className="flex items-center gap-1.5">
+                                                <span className="text-amber-600 font-semibold text-xs">No Customer</span>
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        onEditInvoice(invoice);
+                                                    }}
+                                                    className="px-1.5 py-0.5 text-[10px] bg-amber-100 hover:bg-amber-200 text-amber-800 rounded font-bold cursor-pointer transition"
+                                                    title="Link Customer"
+                                                >
+                                                    + Link
+                                                </button>
+                                            </div>
                                         )}
                                     </td>
                                     <td className="p-3 font-mono">

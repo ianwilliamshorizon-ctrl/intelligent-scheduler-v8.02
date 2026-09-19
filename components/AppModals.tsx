@@ -722,26 +722,49 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                 </ModalSuspense>
             )}
 
-            {modals.viewInvoiceModal.isOpen && modals.viewInvoiceModal.invoice && (
-                <ModalSuspense>
-                    <InvoiceModal
-                        isOpen={modals.viewInvoiceModal.isOpen}
-                        onClose={() => setters.setViewInvoiceModal({isOpen: false, invoice: null})}
-                        invoice={modals.viewInvoiceModal.invoice}
-                        customer={data.customers.find(c => c.id === modals.viewInvoiceModal.invoice!.customerId)}
-                        vehicle={data.vehicles.find(v => v.id === modals.viewInvoiceModal.invoice!.vehicleId)}
-                        entity={data.businessEntities.find(e => e.id === modals.viewInvoiceModal.invoice!.entityId)}
-                        job={data.jobs.find(j => j.id === modals.viewInvoiceModal.invoice!.jobId)}
-                        taxRates={data.taxRates}
-                        servicePackages={data.servicePackages}
-                        inspectionTemplates={data.inspectionTemplates}
-                        inspectionDiagrams={data.inspectionDiagrams}
-                        onUpdateInvoice={(inv) => handleSaveItem(data.setInvoices, inv, 'brooks_invoices')}
-                        onInvoiceAction={(id) => actions.handleMarkJobAsAwaitingCollection(id)}
-                        onEdit={(inv) => setters.setInvoiceFormModal({ isOpen: true, invoice: inv, job: data.jobs.find(j => j.id === inv.jobId) || null })}
-                    />
-                </ModalSuspense>
-            )}
+            {modals.viewInvoiceModal.isOpen && modals.viewInvoiceModal.invoice && (() => {
+                const inv = modals.viewInvoiceModal.invoice;
+                const linkedJob = inv.jobId ? data.jobs.find(j => j.id === inv.jobId) : null;
+                const linkedVeh = inv.vehicleId 
+                    ? data.vehicles.find(v => v.id === inv.vehicleId) 
+                    : (linkedJob?.vehicleId ? data.vehicles.find(v => v.id === linkedJob.vehicleId) : null);
+                const resolvedCustomerId = inv.customerId || linkedJob?.customerId || linkedVeh?.customerId;
+                const customer = resolvedCustomerId ? data.customers.find(c => c.id === resolvedCustomerId) || null : null;
+
+                return (
+                    <ModalSuspense>
+                        <InvoiceModal
+                            isOpen={modals.viewInvoiceModal.isOpen}
+                            onClose={() => setters.setViewInvoiceModal({isOpen: false, invoice: null})}
+                            invoice={modals.viewInvoiceModal.invoice}
+                            customer={customer}
+                            vehicle={linkedVeh || null}
+                            entity={data.businessEntities.find(e => e.id === modals.viewInvoiceModal.invoice!.entityId)}
+                            job={linkedJob || null}
+                            taxRates={data.taxRates}
+                            servicePackages={data.servicePackages}
+                            inspectionTemplates={data.inspectionTemplates}
+                            inspectionDiagrams={data.inspectionDiagrams}
+                            customers={data.customers}
+                            vehicles={data.vehicles}
+                            onUpdateInvoice={(updatedInv) => handleSaveItem(data.setInvoices, updatedInv, 'brooks_invoices')}
+                            onAssignCustomer={async (invoiceId, customerId) => {
+                                const currentInv = modals.viewInvoiceModal.invoice;
+                                if (!currentInv) return;
+                                const updatedInvoice = { ...currentInv, customerId };
+                                await handleSaveItem(data.setInvoices, updatedInvoice, 'brooks_invoices');
+                                setters.setViewInvoiceModal({ isOpen: true, invoice: updatedInvoice });
+                                if (linkedVeh && !linkedVeh.customerId) {
+                                    await handleSaveItem(actions.setVehicles, { ...linkedVeh, customerId }, 'brooks_vehicles');
+                                }
+                            }}
+                            onSaveCustomer={(c) => handleSaveItem(actions.setCustomers, c, 'brooks_customers')}
+                            onInvoiceAction={(id) => actions.handleMarkJobAsAwaitingCollection(id)}
+                            onEdit={(invToEdit) => setters.setInvoiceFormModal({ isOpen: true, invoice: invToEdit, job: data.jobs.find(j => j.id === invToEdit.jobId) || null })}
+                        />
+                    </ModalSuspense>
+                );
+            })()}
 
             {modals.salesInvoiceModal.isOpen && modals.salesInvoiceModal.invoice && (() => {
                 const inv = modals.salesInvoiceModal.invoice;

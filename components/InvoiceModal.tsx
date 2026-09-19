@@ -1,9 +1,11 @@
 import React, { useState, useMemo } from 'react';
 import { Invoice, Customer, Vehicle, BusinessEntity, Job, TaxRate, ServicePackage, InspectionTemplate, InspectionDiagram } from '../types';
-import { X, Printer, CheckCircle, Mail, Edit, Sparkles, Loader2 } from 'lucide-react';
+import { X, Printer, CheckCircle, Mail, Edit, Sparkles, Loader2, User, UserPlus, UserCheck, AlertTriangle, Plus } from 'lucide-react';
 import { usePrint } from '../core/hooks/usePrint';
 import PrintableInvoice from './PrintableInvoice';
 import EmailInvoiceModal from './EmailInvoiceModal';
+import CustomerFormModal from './CustomerFormModal';
+import SearchableSelect from './SearchableSelect';
 import { sendOutboundEmail } from '../core/services/emailService';
 import { generateFinalInvoiceNotes } from '../core/services/geminiService';
 
@@ -19,16 +21,50 @@ interface InvoiceModalProps {
     servicePackages: ServicePackage[];
     inspectionTemplates: InspectionTemplate[];
     inspectionDiagrams: InspectionDiagram[];
+    customers?: Customer[];
+    vehicles?: Vehicle[];
     onUpdateInvoice: (invoice: Invoice) => void;
+    onAssignCustomer?: (invoiceId: string, customerId: string) => Promise<void>;
+    onSaveCustomer?: (customer: Customer) => Promise<any>;
     onInvoiceAction?: (jobId: string) => void;
     onEdit?: (invoice: Invoice) => void;
 }
 
-const InvoiceModal: React.FC<InvoiceModalProps> = ({ isOpen, onClose, invoice, customer, vehicle, entity, job, taxRates, servicePackages, inspectionTemplates, inspectionDiagrams, onUpdateInvoice, onInvoiceAction, onEdit }) => {
+const InvoiceModal: React.FC<InvoiceModalProps> = ({ 
+    isOpen, onClose, invoice, customer, vehicle, entity, job, 
+    taxRates, servicePackages, inspectionTemplates, inspectionDiagrams, 
+    customers = [], vehicles = [], onUpdateInvoice, onAssignCustomer, onSaveCustomer,
+    onInvoiceAction, onEdit 
+}) => {
     const print = usePrint();
     const [isEmailing, setIsEmailing] = useState(false);
     const [isGeneratingNotes, setIsGeneratingNotes] = useState(false);
     const [invoiceNotes, setInvoiceNotes] = useState('');
+    const [isChangingCustomer, setIsChangingCustomer] = useState(false);
+    const [isAddingCustomer, setIsAddingCustomer] = useState(false);
+
+    const vehicleOwner = useMemo(() => {
+        if (!vehicle?.customerId || !customers) return null;
+        return customers.find(c => c.id === vehicle.customerId) || null;
+    }, [vehicle?.customerId, customers]);
+
+    const customerOptions = useMemo(() => (customers || []).map(c => ({
+        label: c.companyName ? `${c.companyName} (${c.forename || ''} ${c.surname || ''})`.trim() : `${c.forename || ''} ${c.surname || ''}`.trim() || 'Unnamed Customer',
+        value: c.id,
+        description: [c.phone || c.mobile, c.email].filter(Boolean).join(' | ') || 'No contact info',
+        searchField: `${c.companyName || ''} ${c.forename || ''} ${c.surname || ''} ${c.phone || ''} ${c.email || ''} ${c.postcode || ''}`.toLowerCase()
+    })), [customers]);
+
+    const handleAssignCustomer = async (newCustomerId: string) => {
+        if (!newCustomerId || !invoice) return;
+        if (onAssignCustomer) {
+            await onAssignCustomer(invoice.id, newCustomerId);
+        } else {
+            onUpdateInvoice({ ...invoice, customerId: newCustomerId });
+        }
+        setIsChangingCustomer(false);
+    };
+
     const [printOptions, setPrintOptions] = useState(() => {
         if (invoice.printOptions) return invoice.printOptions;
         const isTrimming = entity?.id === 'ent_trimming' || entity?.name?.toLowerCase().includes('trimming');
@@ -163,6 +199,101 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ isOpen, onClose, invoice, c
                             </div>
                         </div>
 
+                        {/* Customer Status & Assignment Banner */}
+                        {!customer ? (
+                            <div className="mb-3 bg-amber-50 border border-amber-200 rounded-xl p-3 flex flex-wrap items-center justify-between gap-3 text-amber-900 shadow-2xs">
+                                <div className="flex items-center gap-2.5">
+                                    <AlertTriangle className="text-amber-600 shrink-0" size={20} />
+                                    <div>
+                                        <span className="font-bold text-sm block">No Customer Linked to this Invoice.</span>
+                                        <span className="text-xs text-amber-700 block">
+                                            {vehicle ? `Vehicle: ${vehicle.registration} (${vehicle.make} ${vehicle.model || ''})` : 'Link a customer to enable email dispatch, accounts, and contact records.'}
+                                        </span>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    {vehicleOwner && (
+                                        <button
+                                            type="button"
+                                            onClick={() => handleAssignCustomer(vehicleOwner.id)}
+                                            className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg shadow-2xs flex items-center gap-1.5 transition cursor-pointer"
+                                        >
+                                            <UserCheck size={14} /> Link Vehicle Owner ({vehicleOwner.companyName || `${vehicleOwner.forename || ''} ${vehicleOwner.surname || ''}`.trim()})
+                                        </button>
+                                    )}
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsChangingCustomer(prev => !prev)}
+                                        className="px-3 py-1.5 bg-white border border-amber-300 hover:bg-amber-100 text-amber-900 text-xs font-bold rounded-lg shadow-2xs flex items-center gap-1.5 transition cursor-pointer"
+                                    >
+                                        <UserPlus size={14} /> Select Existing Customer
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsAddingCustomer(true)}
+                                        className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg shadow-2xs flex items-center gap-1.5 transition cursor-pointer"
+                                    >
+                                        <Plus size={14} /> Add New Customer
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="mb-3 bg-indigo-50/70 border border-indigo-100 rounded-xl px-4 py-2 flex items-center justify-between text-xs text-slate-700">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    <User size={15} className="text-indigo-600 shrink-0" />
+                                    <span className="text-indigo-900 font-bold uppercase tracking-wider text-[10px]">Customer:</span>
+                                    <span className="font-bold text-slate-900 text-sm">
+                                        {customer.companyName || `${customer.forename || ''} ${customer.surname || ''}`.trim() || 'Customer Record'}
+                                    </span>
+                                    {customer.phone && <span className="text-slate-500 font-medium">({customer.phone})</span>}
+                                    {customer.email && <span className="text-slate-500">| {customer.email}</span>}
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsChangingCustomer(prev => !prev)}
+                                    className="text-indigo-600 hover:text-indigo-800 font-bold text-xs hover:underline flex items-center gap-1 cursor-pointer"
+                                >
+                                    <UserPlus size={13} /> Change Customer
+                                </button>
+                            </div>
+                        )}
+
+                        {isChangingCustomer && (
+                            <div className="mb-3 bg-white border border-indigo-200 rounded-xl p-3 flex flex-wrap items-center gap-3 shadow-2xs">
+                                <span className="text-xs font-bold text-indigo-900 whitespace-nowrap">Assign Customer:</span>
+                                <div className="min-w-[280px] flex-grow max-w-md">
+                                    <SearchableSelect
+                                        options={customerOptions}
+                                        initialValue={customer?.id}
+                                        onSelect={(opt) => {
+                                            const id = opt?.value || opt?.id;
+                                            if (id) {
+                                                handleAssignCustomer(id);
+                                            }
+                                        }}
+                                        placeholder="Search customers by name, phone, email..."
+                                    />
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setIsChangingCustomer(false);
+                                        setIsAddingCustomer(true);
+                                    }}
+                                    className="px-3 py-1.5 bg-indigo-600 text-white text-xs font-bold rounded-lg hover:bg-indigo-700 flex items-center gap-1 shadow-2xs cursor-pointer"
+                                >
+                                    <Plus size={14} /> Create New Customer
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsChangingCustomer(false)}
+                                    className="px-3 py-1.5 bg-gray-100 border border-gray-300 text-gray-700 text-xs font-bold rounded-lg hover:bg-gray-200 cursor-pointer"
+                                >
+                                    Cancel
+                                </button>
+                            </div>
+                        )}
+
                         {/* Print Options Selection */}
                         <div className="flex flex-col gap-3 px-4 py-3 bg-indigo-50/50 rounded-xl border border-indigo-100">
                             <div className="flex items-center gap-6">
@@ -226,6 +357,28 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ isOpen, onClose, invoice, c
                     customer={customer} 
                     vehicle={vehicle}
                     totalAmount={grandTotal}
+                />
+            )}
+
+            {isAddingCustomer && (
+                <CustomerFormModal
+                    isOpen={isAddingCustomer}
+                    onClose={() => setIsAddingCustomer(false)}
+                    onSave={async (newCust) => {
+                        if (onSaveCustomer) {
+                            await onSaveCustomer(newCust);
+                        }
+                        await handleAssignCustomer(newCust.id);
+                        setIsAddingCustomer(false);
+                    }}
+                    customer={{
+                        serviceReminderConsent: true
+                    }}
+                    existingCustomers={customers || []}
+                    vehicles={vehicles || []}
+                    jobs={job ? [job] : []}
+                    estimates={[]}
+                    invoices={[invoice]}
                 />
             )}
         </>

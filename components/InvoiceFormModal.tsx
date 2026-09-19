@@ -154,7 +154,7 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
     vehicles, onSaveVehicle, businessEntities, taxRates, servicePackages, parts, invoices, discountCodes,
     selectedEntityId 
 }) => {
-    const { estimates } = useData();
+    const { estimates, jobs } = useData();
     const [formData, setFormData] = useState<Partial<Invoice>>({});
     const [selectedPackage, setSelectedPackage] = useState<ServicePackage | null>(null);
     const [isPackageSelectionModalOpen, setIsPackageSelectionModalOpen] = useState(false);
@@ -170,13 +170,22 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
     const standardTaxRateId = useMemo(() => (taxRates || []).find(t => t.code === 'T1')?.id, [taxRates]);
     const t99RateId = useMemo(() => (taxRates || []).find(t => t.code === 'T99')?.id, [taxRates]);
 
+    const linkedJob = useMemo(() => {
+        if (job) return job;
+        if (invoice?.jobId && Array.isArray(jobs)) {
+            return jobs.find(j => j.id === invoice.jobId) || null;
+        }
+        return null;
+    }, [job, invoice?.jobId, jobs]);
+
     const mainEstimate = useMemo(() => {
-        if (!job || !Array.isArray(estimates)) return null;
-        if (job.estimateId) {
-            const byId = estimates.find(e => e.id === job.estimateId);
+        const activeJob = linkedJob;
+        if (!activeJob || !Array.isArray(estimates)) return null;
+        if (activeJob.estimateId) {
+            const byId = estimates.find(e => e.id === activeJob.estimateId);
             if (byId) return byId;
         }
-        const linked = estimates.filter(e => e.jobId === job.id);
+        const linked = estimates.filter(e => e.jobId === activeJob.id);
         if (linked.length === 1) return linked[0];
         const converted = linked.find(e => e.status === 'Converted to Job');
         if (converted) return converted;
@@ -185,7 +194,7 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
         const draft = linked.find(e => e.status === 'Draft');
         if (draft) return draft;
         return null;
-    }, [job, estimates]);
+    }, [linkedJob, estimates]);
 
     useEffect(() => { 
         if (!isOpen) return;
@@ -194,7 +203,20 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
             if (invoice) {
                 // Prevent background sync from overwriting local changes if we're already editing this invoice
                 if (prev && prev.id === invoice.id) return prev;
-                return { ...invoice };
+
+                let resolvedCustomerId = invoice.customerId || '';
+                if (!resolvedCustomerId && invoice.vehicleId) {
+                    const veh = (vehicles || []).find(v => v.id === invoice.vehicleId);
+                    if (veh?.customerId) resolvedCustomerId = veh.customerId;
+                }
+                if (!resolvedCustomerId && linkedJob?.customerId) {
+                    resolvedCustomerId = linkedJob.customerId;
+                }
+
+                return { 
+                    ...invoice,
+                    customerId: resolvedCustomerId || invoice.customerId || ''
+                };
             } else if (job) {
                 // Prevent background sync if we're already editing an invoice for this job
                 if (prev && prev.jobId === job.id) return prev;
@@ -468,6 +490,13 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
             } as InvoiceLineItem);
         }
 
+        if (formData.vehicleId && formData.customerId) {
+            const currentVeh = (vehicles || []).find(v => v.id === formData.vehicleId);
+            if (currentVeh && !currentVeh.customerId) {
+                onSaveVehicle({ ...currentVeh, customerId: formData.customerId });
+            }
+        }
+
         onSave({ 
             id: formData.id || generateInvoiceId(invoices || [], entityShortCode), 
             ...formData,
@@ -484,20 +513,26 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
         searchField: `${c.companyName || ''} ${c.forename || ''} ${c.surname || ''} ${c.phone || ''} ${c.postcode || ''}`.toLowerCase()
     })), [customers]);
 
-    const filteredVehicles = useMemo(() => 
-        (vehicles || []).filter(v => v.customerId === formData.customerId), 
-    [vehicles, formData.customerId]);
-
-    const vehicleOptions = useMemo(() => filteredVehicles.map(v => ({
-        label: v.registration,
-        value: v.id,
-        description: `${v.make} ${v.model}`,
-        searchField: `${v.registration} ${v.make} ${v.model}`.toLowerCase()
-    })), [filteredVehicles]);
-
     const selectedVehicle = useMemo(() => 
         (vehicles || []).find(v => v.id === formData.vehicleId) || null,
     [vehicles, formData.vehicleId]);
+
+    const vehicleOwner = useMemo(() => {
+        if (!selectedVehicle?.customerId || !customers) return null;
+        return customers.find(c => c.id === selectedVehicle.customerId) || null;
+    }, [selectedVehicle?.customerId, customers]);
+
+    const vehicleOptions = useMemo(() => {
+        const list = formData.customerId 
+            ? (vehicles || []).filter(v => v.customerId === formData.customerId || v.id === formData.vehicleId)
+            : (vehicles || []);
+        return list.map(v => ({
+            label: v.registration,
+            value: v.id,
+            description: `${v.make} ${v.model}${v.customerId && formData.customerId && v.customerId !== formData.customerId ? ' (Reassigned)' : ''}`,
+            searchField: `${v.registration} ${v.make} ${v.model}`.toLowerCase()
+        }));
+    }, [vehicles, formData.customerId, formData.vehicleId]);
 
     const invoiceBreakdown = useMemo(() => {
         const packages: { header: InvoiceLineItem, children: InvoiceLineItem[] }[] = [];
@@ -524,11 +559,11 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
         if (!customerId) return;
         setFormData(prev => {
             const customerVehicles = (vehicles || []).filter(v => v.customerId === customerId);
-            const isCurrentVehicleOwned = customerVehicles.some(v => v.id === prev.vehicleId);
+            const nextVehicleId = prev.vehicleId || (customerVehicles.length === 1 ? customerVehicles[0].id : '');
             return { 
                 ...prev, 
                 customerId: customerId, 
-                vehicleId: isCurrentVehicleOwned ? prev.vehicleId : (customerVehicles.length === 1 ? customerVehicles[0].id : '') 
+                vehicleId: nextVehicleId 
             };
         });
     };
@@ -549,16 +584,30 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
                                 <label className="font-semibold text-gray-700">Customer</label>
                                 <div className="flex items-center gap-2 mt-1">
                                     <SearchableSelect options={customerOptions} initialValue={formData.customerId} onSelect={handleCustomerSelect} placeholder="Search customers..." />
-                                    <button type="button" onClick={() => setIsAddingCustomer(true)} className="p-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 flex-shrink-0">
+                                    <button type="button" onClick={() => setIsAddingCustomer(true)} className="p-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 flex-shrink-0" title="Add New Customer">
                                         <Plus size={20} />
                                     </button>
                                 </div>
+                                {!formData.customerId && vehicleOwner && (
+                                    <div className="mt-2 p-2 bg-amber-50 rounded-lg border border-amber-200 flex items-center justify-between gap-2 text-xs text-amber-900">
+                                        <span>
+                                            Vehicle Owner: <strong>{vehicleOwner.companyName || `${vehicleOwner.forename || ''} ${vehicleOwner.surname || ''}`.trim()}</strong>
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleCustomerSelect(vehicleOwner)}
+                                            className="px-2 py-1 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded shadow-2xs cursor-pointer whitespace-nowrap"
+                                        >
+                                            Link Owner
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                             <div>
                                 <label className="font-semibold text-gray-700">Vehicle (Optional)</label>
                                 <div className="flex items-center gap-2 mt-1">
-                                    <SearchableSelect options={vehicleOptions} initialValue={formData.vehicleId} onSelect={(selection) => setFormData(prev => ({ ...prev, vehicleId: selection?.value || '' }))} placeholder="Search vehicles..." disabled={!formData.customerId} />
-                                    <button type="button" onClick={() => setIsAddingVehicle(true)} disabled={!formData.customerId} className="p-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0">
+                                    <SearchableSelect options={vehicleOptions} initialValue={formData.vehicleId} onSelect={(selection) => setFormData(prev => ({ ...prev, vehicleId: selection?.value || '' }))} placeholder="Search vehicles..." />
+                                    <button type="button" onClick={() => setIsAddingVehicle(true)} className="p-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 flex-shrink-0" title="Add New Vehicle">
                                         <Plus size={20} />
                                     </button>
                                 </div>
@@ -737,18 +786,24 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
                     onSave={(newCustomer) => {
                         onSaveCustomer(newCustomer);
                         handleCustomerSelect(newCustomer);
+                        if (formData.vehicleId) {
+                            const currVeh = (vehicles || []).find(v => v.id === formData.vehicleId);
+                            if (currVeh && !currVeh.customerId) {
+                                onSaveVehicle({ ...currVeh, customerId: newCustomer.id });
+                            }
+                        }
                         setIsAddingCustomer(false);
                     }}
-                    customer={null}
+                    customer={{ serviceReminderConsent: true }}
                     existingCustomers={customers}
-                    jobs={[]}
-                    vehicles={[]}
-                    estimates={[]}
-                    invoices={[]}
+                    jobs={linkedJob ? [linkedJob] : []}
+                    vehicles={vehicles || []}
+                    estimates={estimates || []}
+                    invoices={invoices || []}
                 />
             )}
 
-            {isAddingVehicle && formData.customerId && (
+            {isAddingVehicle && (
                 <VehicleFormModal
                     isOpen={isAddingVehicle}
                     onClose={() => setIsAddingVehicle(false)}
@@ -757,7 +812,7 @@ const InvoiceFormModal: React.FC<InvoiceFormModalProps> = ({
                         setFormData(prev => ({ ...prev, vehicleId: newVehicle.id }));
                         setIsAddingVehicle(false);
                     }}
-                    vehicle={{ customerId: formData.customerId }}
+                    vehicle={{ customerId: formData.customerId || '' }}
                     customers={customers}
                     vehicles={vehicles}
                     onSaveCustomer={onSaveCustomer}

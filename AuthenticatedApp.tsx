@@ -386,7 +386,7 @@ const AuthenticatedApp = () => {
                             setters.setViewInvoiceModal({ isOpen: true, invoice: inv });
                         }
                     }} 
-                    onEditInvoice={(inv) => setters.setInvoiceFormModal({isOpen: true, invoice: inv})} 
+                    onEditInvoice={(inv) => setters.setInvoiceFormModal({isOpen: true, invoice: inv, job: (jobs || []).find(j => j.id === inv.jobId) || null})} 
                     onOpenExportModal={(type, items) => setters.setExportModal({isOpen: true, type: type as any, items})} 
                     onCreateAdhocInvoice={() => setters.setInvoiceFormModal({isOpen: true, job: null, invoice: null })} 
                     onViewAgedDebtors={() => setCurrentView('aged-debtors')} 
