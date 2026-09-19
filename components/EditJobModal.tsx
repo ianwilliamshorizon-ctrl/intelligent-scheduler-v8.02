@@ -11,6 +11,8 @@ import { generateEstimateNumber } from '../core/utils/numberGenerators';
 import SearchableSelect from './SearchableSelect';
 import { JobEstimateTab } from './jobs/tabs/JobEstimateTab';
 import JobDetailsTab from './jobs/tabs/JobDetailsTab';
+import CustomerFormModal from './CustomerFormModal';
+import { toast } from 'react-toastify';
 import MediaManagerModal from './MediaManagerModal';
 import PartFormModal from './PartFormModal';
 import { useWorkshopActions } from '../core/hooks/useWorkshopActions';
@@ -206,9 +208,48 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
     const [assistNotes, setAssistNotes] = useState<string>('');
 
     const job = useMemo(() => (Array.isArray(jobs) ? jobs : []).find(j => j.id === selectedJobId), [jobs, selectedJobId]);
-    const vehicle = useMemo(() => job ? (Array.isArray(vehicles) ? vehicles : []).find(v => v.id === job.vehicleId) : undefined, [job, vehicles]);
-    const customer = useMemo(() => job ? (Array.isArray(customers) ? customers : []).find(c => c.id === job.customerId) : undefined, [job, customers]);
+    const vehicle = useMemo(() => {
+        const vId = editableJob?.vehicleId || job?.vehicleId;
+        return vId ? (Array.isArray(vehicles) ? vehicles : []).find(v => v.id === vId) : undefined;
+    }, [editableJob?.vehicleId, job?.vehicleId, vehicles]);
+    const customer = useMemo(() => {
+        const cId = editableJob?.customerId || job?.customerId || vehicle?.customerId;
+        return cId ? (Array.isArray(customers) ? customers : []).find(c => c.id === cId) : undefined;
+    }, [editableJob?.customerId, job?.customerId, vehicle?.customerId, customers]);
     const businessEntity = useMemo(() => (Array.isArray(businessEntities) ? businessEntities : []).find(e => e.id === editableJob?.entityId), [businessEntities, editableJob?.entityId]);
+
+    const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
+
+    const handleAssignCustomer = async (customerId: string) => {
+        const foundCustomer = safeCustomers.find(c => c.id === customerId);
+        if (!foundCustomer) return;
+
+        // 1. Update editableJob local state
+        setEditableJob(prev => prev ? ({ ...prev, customerId }) : null);
+
+        // 2. Persist to Firestore brooks_jobs
+        if (job) {
+            const updatedJob = { ...job, customerId };
+            await data.saveRecord('jobs', updatedJob);
+            setJobs(prev => (Array.isArray(prev) ? prev : []).map(j => j.id === updatedJob.id ? updatedJob : j));
+        }
+
+        // 3. If main estimate exists, update customerId on estimate
+        if (mainEstimate) {
+            const updatedEst = { ...mainEstimate, customerId };
+            await data.saveRecord('estimates', updatedEst);
+            setEstimates(prev => (Array.isArray(prev) ? prev : []).map(e => e.id === updatedEst.id ? updatedEst : e));
+        }
+
+        // 4. If vehicle exists and has no customer, link customer to vehicle too
+        if (vehicle && !vehicle.customerId) {
+            const updatedVeh = { ...vehicle, customerId };
+            await data.saveRecord('vehicles', updatedVeh);
+            data.setVehicles(prev => (Array.isArray(prev) ? prev : []).map(v => v.id === updatedVeh.id ? updatedVeh : v));
+        }
+
+        toast.success(`Customer ${foundCustomer.forename} ${foundCustomer.surname} linked to Job #${selectedJobId}`);
+    };
 
     useEffect(() => {
         if (businessEntity?.enableLaborTracking !== undefined) {
@@ -1071,6 +1112,8 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
                             onViewCustomer={() => customer && onViewCustomer(customer.id)}
                             onViewVehicle={() => vehicle && onViewVehicle(vehicle.id)}
                             allJobs={safeJobs}
+                            onAssignCustomer={handleAssignCustomer}
+                            onAddNewCustomer={() => setIsCustomerModalOpen(true)}
                             onUpdateLinkedJob={async (id, updates) => {
                                 const targetJob = safeJobs.find(j => j.id === id);
                                 if (targetJob) {
@@ -2084,6 +2127,31 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
                     onOpenJob={(jobId) => {
                         setIsMonthlyTallyOpen(false);
                     }}
+                />
+            )}
+
+            {isCustomerModalOpen && (
+                <CustomerFormModal
+                    isOpen={isCustomerModalOpen}
+                    onClose={() => setIsCustomerModalOpen(false)}
+                    onSave={async (newCustomer) => {
+                        await handleSaveItem(data.setCustomers, newCustomer, 'brooks_customers');
+                        await handleAssignCustomer(newCustomer.id);
+                        setIsCustomerModalOpen(false);
+                    }}
+                    customer={linkedInquiry ? {
+                        forename: linkedInquiry.fromName?.split(' ')[0] || '',
+                        surname: linkedInquiry.fromName?.split(' ').slice(1).join(' ') || '',
+                        email: linkedInquiry.fromEmail || '',
+                        phone: linkedInquiry.fromPhone || '',
+                        addressLine1: linkedInquiry.addressLine1 || '',
+                        city: linkedInquiry.city || '',
+                        postcode: linkedInquiry.postcode || '',
+                        serviceReminderConsent: true
+                    } : { serviceReminderConsent: true }}
+                    existingCustomers={safeCustomers}
+                    vehicles={safeVehicles}
+                    jobs={safeJobs}
                 />
             )}
         </div>

@@ -1,7 +1,7 @@
 import { cloudSpeechSynthesis, CloudSpeechSynthesisUtterance } from '../../../core/utils/cloudSpeech';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import * as T from '../../../types';
-import { Car, User, KeyRound, Edit, Phone, Mail, MapPin, Building, Briefcase, Expand, ImageIcon, X, Gauge, Info, Wrench, DollarSign, Printer, CheckCircle, Volume2, Truck } from 'lucide-react';
+import { Car, User, KeyRound, Edit, Phone, Mail, MapPin, Building, Briefcase, Expand, ImageIcon, X, Gauge, Info, Wrench, DollarSign, Printer, CheckCircle, Volume2, Truck, Plus, UserPlus, RefreshCw, UserCheck } from 'lucide-react';
 import { HoverInfo } from '../../shared/HoverInfo';
 import SpeechToTextButton from '../../shared/SpeechToTextButton';
 import LiveAssistant from '../../LiveAssistant';
@@ -13,6 +13,7 @@ import { useApp } from '../../../core/state/AppContext';
 import { useData } from '../../../core/state/DataContext';
 import SearchableSelect from '../../SearchableSelect';
 import { getWheelbaseAlertInfo } from '../../../core/utils/vehicleUtils';
+import CustomerFormModal from '../../CustomerFormModal';
 
 interface TabSectionProps {
     title: string;
@@ -43,17 +44,43 @@ interface JobDetailsTabProps {
     onViewVehicle: (vehicleId: string) => void;
     allJobs: T.Job[];
     onUpdateLinkedJob: (jobId: string, updates: Partial<T.Job>) => void;
+    onAssignCustomer?: (customerId: string) => void;
+    onAddNewCustomer?: () => void;
 }
 
 const JobDetailsTab: React.FC<JobDetailsTabProps> = ({ 
-    editableJob, vehicle, customer, isReadOnly, purchaseOrders, onOpenPurchaseOrder, onChange, onViewCustomer, onViewVehicle, allJobs, onUpdateLinkedJob 
+    editableJob, vehicle, customer, isReadOnly, purchaseOrders, onOpenPurchaseOrder, onChange, onViewCustomer, onViewVehicle, allJobs, onUpdateLinkedJob,
+    onAssignCustomer, onAddNewCustomer
 }) => {
-    const { saleVehicles, vehicles: allVehicles, inquiries } = useData();
+    const { saleVehicles, vehicles: allVehicles, inquiries, customers, setCustomers, saveRecord, setJobs, vehicles, setVehicles } = useData();
     const { preferredVoiceName } = useApp();
     const activeUtterance = useRef<SpeechSynthesisUtterance | CloudSpeechSynthesisUtterance | null>(null);
     const [isNotesModalOpen, setIsNotesModalOpen] = useState(false);
     const [isAssistantOpen, setIsAssistantOpen] = useState(false);
     const [hasDeposit, setHasDeposit] = useState(!!editableJob.depositAmount);
+    const [isChangingCustomer, setIsChangingCustomer] = useState(false);
+    const [selectedCustomerId, setSelectedCustomerId] = useState('');
+    const [isLocalCustomerModalOpen, setIsLocalCustomerModalOpen] = useState(false);
+
+    const vehicleOwner = useMemo(() => {
+        if (!vehicle?.customerId) return null;
+        return (customers || []).find(c => c.id === vehicle.customerId) || null;
+    }, [vehicle?.customerId, customers]);
+
+    const handleSelectCustomer = async (newCustomerId: string) => {
+        if (!newCustomerId) return;
+        if (onAssignCustomer) {
+            onAssignCustomer(newCustomerId);
+        } else {
+            onChange({ target: { name: 'customerId', value: newCustomerId } } as any);
+            if (editableJob?.id) {
+                const updated = { ...editableJob, customerId: newCustomerId };
+                await saveRecord('jobs', updated);
+                if (setJobs) setJobs((prev: T.Job[]) => (Array.isArray(prev) ? prev : []).map(j => j.id === updated.id ? updated : j));
+            }
+        }
+        setIsChangingCustomer(false);
+    };
     
     const printComponent = usePrint();
 
@@ -170,22 +197,150 @@ const JobDetailsTab: React.FC<JobDetailsTabProps> = ({
                 </div>
             </TabSection>
 
-            {customer && (
-                <TabSection 
-                    title="Customer" 
-                    icon={User}
-                    action={
-                        <HoverInfo title="Customer Info" data={customerInfoData}>
-                             <Info size={14} className="text-gray-400 cursor-pointer" />
-                        </HoverInfo>
-                    }
-                >
-                     <div className="flex items-center justify-between">
-                        <p className="font-bold text-base">{customer.forename} {customer.surname}</p>
-                        <button type="button" onClick={() => onViewCustomer(customer.id)} className="text-xs bg-white border border-gray-300 px-2 py-1 rounded hover:bg-gray-100 font-semibold shadow-sm">View Profile</button>
+            <TabSection 
+                title="Customer" 
+                icon={User}
+                action={
+                    customer ? (
+                        <div className="flex items-center gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setIsChangingCustomer(!isChangingCustomer)}
+                                className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold cursor-pointer"
+                            >
+                                {isChangingCustomer ? 'Cancel' : 'Change'}
+                            </button>
+                            <HoverInfo title="Customer Info" data={customerInfoData}>
+                                <Info size={14} className="text-gray-400 cursor-pointer" />
+                            </HoverInfo>
+                        </div>
+                    ) : (
+                        <span className="text-[11px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                            Unassigned
+                        </span>
+                    )
+                }
+            >
+                {customer && !isChangingCustomer ? (
+                    <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="font-bold text-base text-gray-900">{customer.forename} {customer.surname}</p>
+                                {customer.companyName && (
+                                    <p className="text-xs font-semibold text-gray-500">{customer.companyName}</p>
+                                )}
+                            </div>
+                            <button 
+                                type="button" 
+                                onClick={() => onViewCustomer(customer.id)} 
+                                className="text-xs bg-white border border-gray-300 px-2.5 py-1 rounded-lg hover:bg-gray-50 font-semibold shadow-xs transition"
+                            >
+                                View Profile
+                            </button>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-xs text-gray-600 pt-1 border-t border-gray-100">
+                            {(customer.mobile || customer.phone) && (
+                                <div className="flex items-center gap-1.5 truncate">
+                                    <Phone size={12} className="text-gray-400 shrink-0" />
+                                    <span className="truncate">{customer.mobile || customer.phone}</span>
+                                </div>
+                            )}
+                            {customer.email && (
+                                <div className="flex items-center gap-1.5 truncate">
+                                    <Mail size={12} className="text-gray-400 shrink-0" />
+                                    <span className="truncate">{customer.email}</span>
+                                </div>
+                            )}
+                        </div>
                     </div>
-                </TabSection>
-            )}
+                ) : (
+                    <div className="space-y-3">
+                        {!customer && (
+                            <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
+                                <span className="font-bold block">No customer record linked to this job.</span>
+                                <span>Assign an existing customer below or create a new profile.</span>
+                            </div>
+                        )}
+
+                        {/* Quick link: Vehicle Registered Owner */}
+                        {vehicleOwner && vehicleOwner.id !== customer?.id && (
+                            <div className="p-2.5 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between text-xs">
+                                <div>
+                                    <span className="font-bold text-blue-900 block">Vehicle Registered Owner:</span>
+                                    <span className="text-blue-700">{vehicleOwner.forename} {vehicleOwner.surname} {vehicleOwner.phone || vehicleOwner.email ? `(${vehicleOwner.phone || vehicleOwner.email})` : ''}</span>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => handleSelectCustomer(vehicleOwner.id)}
+                                    className="px-2.5 py-1 bg-blue-600 text-white font-bold rounded hover:bg-blue-700 transition flex items-center gap-1 shrink-0 cursor-pointer"
+                                >
+                                    <UserCheck size={12} /> Link Owner
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Quick link: Linked Inquiry */}
+                        {linkedInquiry && !customer && (linkedInquiry.fromName || linkedInquiry.fromEmail) && (
+                            <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center justify-between text-xs">
+                                <div>
+                                    <span className="font-bold text-emerald-900 block">Linked Inquiry Contact:</span>
+                                    <span className="text-emerald-700">{linkedInquiry.fromName || 'Inquiry Contact'} {linkedInquiry.fromEmail ? `(${linkedInquiry.fromEmail})` : ''}</span>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        if (onAddNewCustomer) {
+                                            onAddNewCustomer();
+                                        } else {
+                                            setIsLocalCustomerModalOpen(true);
+                                        }
+                                    }}
+                                    className="px-2.5 py-1 bg-emerald-600 text-white font-bold rounded hover:bg-emerald-700 transition flex items-center gap-1 shrink-0 cursor-pointer"
+                                >
+                                    <UserPlus size={12} /> Create from Inquiry
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Search & Assign existing customer */}
+                        <div>
+                            <label className="block text-[11px] font-bold text-gray-600 uppercase mb-1">
+                                Search Existing Customer
+                            </label>
+                            <SearchableSelect
+                                options={(customers || []).map(c => ({
+                                    value: c.id,
+                                    label: `${c.forename} ${c.surname}${c.companyName ? ` (${c.companyName})` : ''}${c.phone || c.mobile ? ` - ${c.phone || c.mobile}` : ''}${c.email ? ` - ${c.email}` : ''}${c.postcode ? ` [${c.postcode}]` : ''}`
+                                }))}
+                                value={selectedCustomerId}
+                                onChange={(val) => {
+                                    setSelectedCustomerId(val);
+                                    if (val) handleSelectCustomer(val);
+                                }}
+                                placeholder="Type name, phone, email, or postcode..."
+                            />
+                        </div>
+
+                        {/* Or create new customer */}
+                        <div className="pt-2 border-t border-gray-200 flex items-center justify-between">
+                            <span className="text-xs text-gray-500">Need a new customer record?</span>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    if (onAddNewCustomer) {
+                                        onAddNewCustomer();
+                                    } else {
+                                        setIsLocalCustomerModalOpen(true);
+                                    }
+                                }}
+                                className="px-3 py-1.5 bg-indigo-600 text-white font-bold text-xs rounded-lg hover:bg-indigo-700 flex items-center gap-1.5 shadow-xs transition cursor-pointer"
+                            >
+                                <Plus size={14} /> Add New Customer
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </TabSection>
             
             {vehicle && (
                 <TabSection 
@@ -560,6 +715,33 @@ const JobDetailsTab: React.FC<JobDetailsTabProps> = ({
                 jobId={editableJob.id} 
                 onAddNote={handleAddNoteFromAssistant} 
             />
+
+            {isLocalCustomerModalOpen && (
+                <CustomerFormModal
+                    isOpen={isLocalCustomerModalOpen}
+                    onClose={() => setIsLocalCustomerModalOpen(false)}
+                    onSave={async (newCust) => {
+                        if (saveRecord) {
+                            await saveRecord('customers', newCust);
+                        }
+                        await handleSelectCustomer(newCust.id);
+                        setIsLocalCustomerModalOpen(false);
+                    }}
+                    customer={linkedInquiry ? {
+                        forename: linkedInquiry.fromName?.split(' ')[0] || '',
+                        surname: linkedInquiry.fromName?.split(' ').slice(1).join(' ') || '',
+                        email: linkedInquiry.fromEmail || '',
+                        phone: linkedInquiry.fromPhone || '',
+                        addressLine1: linkedInquiry.addressLine1 || '',
+                        city: linkedInquiry.city || '',
+                        postcode: linkedInquiry.postcode || '',
+                        serviceReminderConsent: true
+                    } : { serviceReminderConsent: true }}
+                    existingCustomers={customers || []}
+                    vehicles={allVehicles || []}
+                    jobs={allJobs || []}
+                />
+            )}
         </div>
     );
 };

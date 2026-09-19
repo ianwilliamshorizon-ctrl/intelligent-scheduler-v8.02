@@ -77,7 +77,7 @@ const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
                     title: '', forename: '', surname: '', phone: '', mobile: '', email: '',
                     addressLine1: '', addressLine2: '', city: '', county: '', postcode: '',
                     category: 'Retail', isCashCustomer: false, marketingConsent: false,
-                    serviceReminderConsent: false, declinedCommunication: false, communicationPreference: 'None',
+                    serviceReminderConsent: true, declinedCommunication: false, communicationPreference: 'Email',
                     isBusinessCustomer: false, companyName: ''
                 });
                 lastProcessedId.current = 'NEW';
