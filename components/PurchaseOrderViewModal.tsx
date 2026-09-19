@@ -1,12 +1,13 @@
 import React, { useState, useMemo, useRef, useEffect, Dispatch, SetStateAction } from 'react';
 import * as T from '../types';
-import { X, Printer, Package, Send, Phone, Plus, Save } from 'lucide-react';
+import { X, Printer, Package, Send, Phone, Plus, Save, Mail } from 'lucide-react';
 import { useReactToPrint } from 'react-to-print';
 import { PurchaseOrderPrint } from './PurchaseOrderPrint';
 import { formatCurrency } from '../core/utils/formatUtils';
 import { useData } from '../core/state/DataContext';
 import EditableLineItemRow from './EditableLineItemRow';
 import { v4 as uuidv4 } from 'uuid';
+import EmailPurchaseOrderModal from './EmailPurchaseOrderModal';
 
 interface PurchaseOrderViewModalProps {
     isOpen: boolean;
@@ -37,6 +38,7 @@ const PurchaseOrderViewModal: React.FC<PurchaseOrderViewModalProps> = ({
     const { taxRates, suppliers, businessEntities } = useData();
     const componentToPrintRef = useRef<HTMLDivElement>(null);
     const [lineItems, setLineItems] = useState<T.PurchaseOrderLineItem[]>([]);
+    const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
 
     useEffect(() => {
         if (purchaseOrder.lineItems) {
@@ -205,8 +207,14 @@ const PurchaseOrderViewModal: React.FC<PurchaseOrderViewModalProps> = ({
                     <div className="font-bold text-lg">Total: {formatCurrency(poTotal)}</div>
                     <div className="flex items-center gap-2">
                         <button type="button" onClick={onClose} className="py-2 px-4 bg-gray-300 rounded-lg font-semibold hover:bg-gray-400">Close</button>
+                        <button type="button" onClick={triggerPrint} className="flex items-center gap-2 py-2 px-4 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 text-sm font-semibold">
+                            <Printer size={14}/> Print
+                        </button>
+                        <button type="button" onClick={() => setIsEmailModalOpen(true)} className="flex items-center gap-2 py-2 px-4 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 shadow-sm">
+                            <Mail size={16}/> Email Supplier
+                        </button>
                         
-                        {isDraft ? (
+                        {isDraft && (
                             <>
                                 <button type="button" onClick={handleSave} className="flex items-center gap-2 py-2 px-4 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700">
                                     <Save size={16}/> Save Changes
@@ -214,17 +222,24 @@ const PurchaseOrderViewModal: React.FC<PurchaseOrderViewModalProps> = ({
                                 <button type="button" onClick={handleOrderByPhone} className="flex items-center gap-2 py-2 px-4 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700">
                                     <Phone size={16}/> Order by Phone
                                 </button>
-                                <button onClick={() => onSend(purchaseOrder.id)} className="flex items-center gap-2 py-2 px-4 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700">
-                                    <Send size={16}/> Send via Email
-                                </button>
                             </>
-                        ) : (
-                            <button type="button" onClick={triggerPrint} className="flex items-center gap-2 py-2 px-4 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 text-sm font-semibold">
-                                <Printer size={14}/> Print
-                            </button>
                         )}
                     </div>
                 </footer>
+
+                {isEmailModalOpen && (
+                    <EmailPurchaseOrderModal
+                        isOpen={isEmailModalOpen}
+                        onClose={() => setIsEmailModalOpen(false)}
+                        purchaseOrder={{ ...purchaseOrder, lineItems }}
+                        supplier={printData.supplier}
+                        businessEntity={printData.entityDetails}
+                        onSuccess={async (updatedPO) => {
+                            await onUpdate(updatedPO);
+                            setIsEmailModalOpen(false);
+                        }}
+                    />
+                )}
 
                 <div className="hidden">
                     <div ref={componentToPrintRef}>

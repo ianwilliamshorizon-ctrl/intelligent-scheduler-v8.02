@@ -5,9 +5,10 @@ import ReactDOM from 'react-dom/client';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { PurchaseOrder, Supplier } from '../types';
-import { Edit, Trash2, Search, PlusCircle, Eye, Download, Printer } from 'lucide-react';
+import { Edit, Trash2, Search, PlusCircle, Eye, Download, Printer, Mail } from 'lucide-react';
 import { formatCurrency } from '../core/utils/formatUtils';
 import { formatDate, isWithinDateRange } from '../core/utils/dateUtils';
+import EmailPurchaseOrderModal from './EmailPurchaseOrderModal';
 
 const StatusFilter = ({ statuses, selectedStatuses, onToggle }: { statuses: readonly PurchaseOrder['status'][]; selectedStatuses: PurchaseOrder['status'][]; onToggle: (status: PurchaseOrder['status']) => void; }) => {
     return (
@@ -116,6 +117,7 @@ const PurchaseOrdersView = ({ purchaseOrders, suppliers, onOpenPurchaseOrderModa
     const [statusFilter, setStatusFilter] = useState<PurchaseOrder['status'][]>([]);
     const [startDate, setStartDate] = useState(() => formatDate(new Date(new Date().getFullYear(), new Date().getMonth(), 1)));
     const [endDate, setEndDate] = useState(() => formatDate(new Date()));
+    const [emailingPo, setEmailingPo] = useState<PurchaseOrder | null>(null);
 
     const supplierMap = useMemo(() => new Map(suppliers.map(s => [s.id, s.name])), [suppliers]);
 
@@ -319,6 +321,7 @@ const PurchaseOrdersView = ({ purchaseOrders, suppliers, onOpenPurchaseOrderModa
                                     <td className="p-3 text-right font-semibold">{formatCurrency(calculateTotal(po.lineItems))}</td>
                                     <td className="p-3">
                                          <div className="flex gap-1 justify-end">
+                                            <button onClick={() => setEmailingPo(po)} className="p-1.5 text-blue-600 hover:bg-blue-100 rounded-full" title="Email Supplier"><Mail size={16} /></button>
                                             <button onClick={() => onOpenPurchaseOrderModal(po)} className="p-1.5 text-indigo-600 hover:bg-indigo-100 rounded-full" title="Edit"><Edit size={16} /></button>
                                             <button onClick={() => onDeletePurchaseOrder(po.id)} className="p-1.5 text-red-600 hover:bg-red-100 rounded-full" title="Delete"><Trash2 size={16} /></button>
                                         </div>
@@ -329,6 +332,14 @@ const PurchaseOrdersView = ({ purchaseOrders, suppliers, onOpenPurchaseOrderModa
                     </table>
                 </div>
             </main>
+
+            {emailingPo && (
+                <EmailPurchaseOrderModal
+                    isOpen={!!emailingPo}
+                    onClose={() => setEmailingPo(null)}
+                    purchaseOrder={emailingPo}
+                />
+            )}
         </div>
     );
 };

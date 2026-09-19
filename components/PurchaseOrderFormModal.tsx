@@ -969,13 +969,19 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({
                         )}
                     </div>
                     <div className="flex gap-2">
-                         {formData.status === 'Draft' && formData.type !== 'Credit' && (
+                         {formData.type !== 'Credit' && (
                             <div className="flex items-center gap-2">
                                 <button onClick={handlePrint} disabled={isPrinting} className="px-3 py-2 bg-gray-600 text-white rounded-lg flex items-center gap-2 hover:bg-gray-700 font-semibold shadow-sm disabled:bg-gray-400">
                                     <Printer size={16}/> {isPrinting ? 'Printing...' : 'Print'}
                                 </button>
-                                <button onClick={() => setIsEmailModalOpen(true)} className="px-3 py-2 bg-gray-600 text-white rounded-lg flex items-center gap-2 hover:bg-gray-700 font-semibold shadow-sm"><Mail size={16}/> Email</button>
-                                <button onClick={handleOrderByPhone} className="px-3 py-2 bg-gray-600 text-white rounded-lg flex items-center gap-2 hover:bg-gray-700 font-semibold shadow-sm"><Phone size={16}/> Order by Phone</button>
+                                <button onClick={() => setIsEmailModalOpen(true)} className="px-3 py-2 bg-purple-600 text-white rounded-lg flex items-center gap-2 hover:bg-purple-700 font-semibold shadow-sm">
+                                    <Mail size={16}/> Email Supplier
+                                </button>
+                                {formData.status === 'Draft' && (
+                                    <button onClick={handleOrderByPhone} className="px-3 py-2 bg-blue-600 text-white rounded-lg flex items-center gap-2 hover:bg-blue-700 font-semibold shadow-sm">
+                                        <Phone size={16}/> Order by Phone
+                                    </button>
+                                )}
                             </div>
                         )}
                         {!isReceivingDisabled && formData.type !== 'Credit' && (
@@ -1006,48 +1012,17 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({
                 />
             )}
 
-            {isEmailModalOpen && currentEntity && currentSupplier && (
+            {isEmailModalOpen && (
                  <EmailPurchaseOrderModal
                     isOpen={isEmailModalOpen}
                     onClose={() => setIsEmailModalOpen(false)}
-                    onSend={async (recipients) => {
-                        try {
-                            const subject = `Purchase Order #${formData.id} from ${currentEntity.name}`;
-                            const body = `Dear ${currentSupplier?.name || 'Supplier'},
-
-Please find below our purchase order #${formData.id}.
-
-Vehicle Reference: ${formData.vehicleRegistrationRef || 'Stock'}
-${formData.supplierReference ? `Your Reference: ${formData.supplierReference}` : ''}
-
-Line Items:
-${(formData.lineItems || []).map(item => `- ${item.description || item.partNumber || 'Item'}: Qty ${item.quantity || 1} @ £${(item.unitPrice || 0).toFixed(2)}`).join('\n')}
-
-Total Amount: £${grandTotal.toFixed(2)}
-
-Please confirm receipt and provide an estimated delivery date.
-
-If you have any questions, please don't hesitate to contact us.
-
-Kind regards,
-The ${currentEntity.name} Team`;
-
-                            await sendOutboundEmail({
-                                to: recipients,
-                                fromName: currentEntity.name,
-                                fromEmail: currentEntity.email || 'info@brookspeed.com',
-                                subject: subject,
-                                body: body
-                            });
-                            setIsEmailModalOpen(false);
-                            showSuccess(`Email sent successfully to: ${recipients}`);
-                        } catch (error: any) {
-                            showError(`Failed to send email: ${error.message}`);
-                        }
-                    }}
                     purchaseOrder={formData as PurchaseOrder}
                     businessEntity={currentEntity}
                     supplier={currentSupplier}
+                    onSuccess={(updatedPO) => {
+                        setFormData(updatedPO);
+                        setIsEmailModalOpen(false);
+                    }}
                  />
             )}
         </div>

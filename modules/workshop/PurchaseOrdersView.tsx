@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { PurchaseOrder } from '../../types';
-import { Edit, Trash2, Search, PlusCircle, Download, Printer, RefreshCcw } from 'lucide-react';
+import { Edit, Trash2, Search, PlusCircle, Download, Printer, RefreshCcw, Mail, CalendarDays } from 'lucide-react';
 import { formatCurrency } from '../../core/utils/formatUtils';
 import { getRelativeDate, isWithinDateRange } from '../../core/utils/dateUtils';
 import { useData } from '../../core/state/DataContext';
@@ -10,7 +10,7 @@ import { usePrint } from '../../core/hooks/usePrint';
 import PrintablePurchaseOrderList from '../../components/PrintablePurchaseOrderList';
 import { StatusFilter } from '../../components/shared/StatusFilter';
 import { useWorkshopActions } from '../../core/hooks/useWorkshopActions';
-import { CalendarDays } from 'lucide-react';
+import EmailPurchaseOrderModal from '../../components/EmailPurchaseOrderModal';
 
 const dateFilterOptions = {
     'today': 'Today',
@@ -39,6 +39,7 @@ const PurchaseOrdersView = ({ onOpenPurchaseOrderModal, onExport, onOpenBatchUpd
     const [dateFilter, setDateFilter] = useState<DateFilterOption>('30days');
     const [startDate, setStartDate] = useState(() => getRelativeDate(-30));
     const [endDate, setEndDate] = useState(() => getRelativeDate(0));
+    const [emailingPo, setEmailingPo] = useState<PurchaseOrder | null>(null);
 
     React.useEffect(() => {
         if (dateFilter === 'today') {
@@ -209,6 +210,7 @@ const PurchaseOrdersView = ({ onOpenPurchaseOrderModal, onExport, onOpenBatchUpd
                                     <td className="p-3 text-right font-semibold">{formatCurrency(calculateTotal(po.lineItems))}</td>
                                     <td className="p-3">
                                          <div className="flex gap-1 justify-end">
+                                            <button onClick={() => setEmailingPo(po)} className="p-1.5 text-blue-600 hover:bg-blue-100 rounded-full" title="Email Supplier"><Mail size={16} /></button>
                                             <button onClick={() => onOpenPurchaseOrderModal(po)} className="p-1.5 text-indigo-600 hover:bg-indigo-100 rounded-full" title="Edit"><Edit size={16} /></button>
                                             <button onClick={() => handleDeletePurchaseOrder(po.id)} className="p-1.5 text-red-600 hover:bg-red-100 rounded-full" title="Delete"><Trash2 size={16} /></button>
                                          </div>
@@ -219,6 +221,14 @@ const PurchaseOrdersView = ({ onOpenPurchaseOrderModal, onExport, onOpenBatchUpd
                     </table>
                 </div>
             </main>
+
+            {emailingPo && (
+                <EmailPurchaseOrderModal
+                    isOpen={!!emailingPo}
+                    onClose={() => setEmailingPo(null)}
+                    purchaseOrder={emailingPo}
+                />
+            )}
         </div>
     );
 };
