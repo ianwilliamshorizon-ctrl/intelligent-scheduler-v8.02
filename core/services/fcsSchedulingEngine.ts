@@ -36,6 +36,8 @@ export interface FCSMatrixResult {
     queuedJobPlans: FCSJobPlan[];
     stalledJobPlans: FCSJobPlan[];
     unallocatedJobPlans?: FCSJobPlan[];
+    scheduledUnallocatedJobPlans?: FCSJobPlan[];
+    scheduledUnallocatedCount?: number;
 }
 
 /**
@@ -102,10 +104,11 @@ export function calculateFCSMatrix({
     purchaseOrders,
     vehicles = [],
     windowDays = 7,
-    startDateStr = getRelativeDate(0),
+    startDateStr = formatDate(new Date()),
     simulateExtraEngineers = 0,
     includeSuggestedAllocations = false,
-    suggestedAllocations = []
+    suggestedAllocations = [],
+    includeScheduledUnallocated = false
 }: {
     jobs: Job[];
     ramps: Lift[];
@@ -116,6 +119,7 @@ export function calculateFCSMatrix({
     startDateStr?: string;
     simulateExtraEngineers?: number;
     includeSuggestedAllocations?: boolean;
+    includeScheduledUnallocated?: boolean;
     suggestedAllocations?: {
         jobId: string;
         rampId: string;
@@ -339,6 +343,95 @@ export function calculateFCSMatrix({
         });
     });
 
+    // 1b. SCHEDULED UNALLOCATED WORK:
+    // Jobs that have a target scheduled date (even if technician or ramp bay has not yet been locked in)
+    const scheduledUnallocatedPlans = unallocatedPlans.filter(p => 
+        Boolean(p.job.scheduledDate || (p.job.segments && p.job.segments.some(s => !!s.date)))
+    );
+
+    if (includeScheduledUnallocated && scheduledUnallocatedPlans.length > 0) {
+        scheduledUnallocatedPlans.forEach((sup, idx) => {
+            const rampId = sup.assignedRampId || effectiveRamps[idx % effectiveRamps.length]?.id;
+            const engineerId = sup.assignedEngineerId || effectiveEngineers[idx % effectiveEngineers.length]?.id;
+
+            if (!rampId || !engineerId) return;
+
+            activeWrenchHours += sup.remainingHours;
+
+            const rampBlockId = `ramp_block_scheduled_${sup.job.id}`;
+            const engBlockId = `eng_block_scheduled_${sup.job.id}`;
+
+            const startPct = calculatePercentOffset(sup.scheduledStartDate, startDateStr, windowDays);
+            const durationPct = calculatePercentDuration(sup.remainingHours, windowDays);
+
+            const engName = effectiveEngineers.find(e => e.id === engineerId || (e.name && engineerId && e.name.toLowerCase() === engineerId.toLowerCase()))?.name || 'Engineer';
+
+            const rampBlock: FCSGanttBlock = {
+                id: rampBlockId,
+                jobId: sup.job.id,
+                resourceType: 'ramp',
+                resourceId: rampId,
+                resourceName: effectiveRamps.find(r => r.id === rampId)?.name || 'Ramp',
+                engineerId,
+                engineerName: engName,
+                title: sup.job.description || 'Scheduled Work',
+                vehicleRegistration: sup.vehicle?.registration,
+                fcsState: 'ACTIVE',
+                startDate: sup.scheduledStartDate,
+                startTime: '08:30',
+                endDate: addDaysToDateStr(sup.scheduledStartDate, Math.max(1, Math.ceil(sup.remainingHours / 8))),
+                endTime: '17:30',
+                startPercent: startPct,
+                durationPercent: durationPct,
+                hours: sup.remainingHours,
+                isDeadWeight: false,
+                isScheduledUnallocated: true,
+                linkedBlockId: engBlockId
+            };
+
+            const engBlock: FCSGanttBlock = {
+                id: engBlockId,
+                jobId: sup.job.id,
+                resourceType: 'engineer',
+                resourceId: engineerId,
+                resourceName: engName,
+                engineerId,
+                engineerName: engName,
+                title: sup.job.description || 'Scheduled Work',
+                vehicleRegistration: sup.vehicle?.registration,
+                fcsState: 'ACTIVE',
+                startDate: sup.scheduledStartDate,
+                startTime: '08:30',
+                endDate: addDaysToDateStr(sup.scheduledStartDate, Math.max(1, Math.ceil(sup.remainingHours / 8))),
+                endTime: '17:30',
+                startPercent: startPct,
+                durationPercent: durationPct,
+                hours: sup.remainingHours,
+                isDeadWeight: false,
+                isScheduledUnallocated: true,
+                linkedBlockId: rampBlockId
+            };
+
+            sup.rampBlock = rampBlock;
+            sup.engineerBlock = engBlock;
+
+            if (!rampBlocksMap.has(rampId)) rampBlocksMap.set(rampId, []);
+            rampBlocksMap.get(rampId)!.push(rampBlock);
+
+            if (!engineerBlocksMap.has(engineerId)) engineerBlocksMap.set(engineerId, []);
+            engineerBlocksMap.get(engineerId)!.push(engBlock);
+
+            dependencyLinks.push({
+                id: `link_scheduled_${sup.job.id}`,
+                jobId: sup.job.id,
+                rampBlockId,
+                engineerBlockId: engBlockId,
+                engineerId,
+                fcsState: 'ACTIVE'
+            });
+        });
+    }
+
     // 2. SUGGESTED WORK ALLOCATIONS (For Unallocated Jobs):
     // By default: Allocated jobs appear on the Gantt as booked work.
     // Unallocated jobs do NOT appear on the Gantt timeline rows unless includeSuggestedAllocations is explicitly true.
@@ -480,7 +573,9 @@ export function calculateFCSMatrix({
         activeJobPlans: activePlans,
         queuedJobPlans: queuedPlans,
         stalledJobPlans: stalledPlans,
-        unallocatedJobPlans: unallocatedPlans
+        unallocatedJobPlans: unallocatedPlans,
+        scheduledUnallocatedJobPlans: scheduledUnallocatedPlans,
+        scheduledUnallocatedCount: scheduledUnallocatedPlans.length
     };
 }
 

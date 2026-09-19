@@ -17,7 +17,19 @@ interface UseDispatchFiltersProps {
 export const isTechRole = (role?: string): boolean => {
     if (!role) return false;
     const r = role.toLowerCase().trim();
-    return r === 'engineer' || r === 'technician' || r === 'tech' || r === 'mechanic';
+    return (
+        r === 'engineer' ||
+        r === 'technician' ||
+        r === 'tech' ||
+        r === 'mechanic' ||
+        r === 'trimming' ||
+        r === 'trimmer' ||
+        r === 'upholsterer' ||
+        r === 'coachbuilder' ||
+        r === 'bodyshop' ||
+        r === 'bodywork' ||
+        r === 'mot tester'
+    );
 };
 
 export const useDispatchFilters = ({

@@ -16,7 +16,7 @@ import { fetchBankHolidays } from '../../services/bankHolidayService';
 import { useWorkshopActions } from '../../core/hooks/useWorkshopActions';
 
 // New Refactored Hooks & Components
-import { useDispatchFilters } from './hooks/useDispatchFilters';
+import { useDispatchFilters, isTechRole } from './hooks/useDispatchFilters';
 import { useDispatchDragDrop } from './hooks/useDispatchDragDrop';
 import { DispatchHeader } from './components/DispatchHeader';
 import MonthlyLaborTallyModal from '../../components/jobs/MonthlyLaborTallyModal';
@@ -333,15 +333,32 @@ const DispatchView: React.FC<DispatchViewProps> = ({
                         }
                     }}
                     onUpdateEngineer={async (engineerId: string, newName: string) => {
-                        // 1. Update in engineers state and persist to brooks_engineers
+                        // 1. Resolve real engineer ID if dummy fallback or virtual
                         const targetEng = (engineers || []).find(e => e.id === engineerId) || (entityEngineers || []).find(e => e.id === engineerId);
+                        
+                        let actualEngineerId = engineerId;
+                        if (engineerId === 'tech_default' || engineerId.startsWith('sim_')) {
+                            const matchingUser = (users || []).find(u => 
+                                (u.name && u.name.trim().toLowerCase() === newName.trim().toLowerCase()) ||
+                                (selectedEntityId !== 'all' && u.preferredEntityId === selectedEntityId && isTechRole(u.role))
+                            );
+                            if (matchingUser) {
+                                actualEngineerId = matchingUser.engineerId || `eng_${matchingUser.id}`;
+                            } else {
+                                actualEngineerId = `eng_${Date.now()}`;
+                            }
+                        }
+
+                        const targetEntity = targetEng?.entityId || (selectedEntityId === 'all' ? '' : selectedEntityId);
                         const updatedEng: Engineer = {
-                            ...(targetEng || { id: engineerId, hourlyRate: 35, entityId: selectedEntityId === 'all' ? '' : selectedEntityId }),
-                            id: engineerId,
-                            name: newName
+                            ...(targetEng || { id: actualEngineerId, hourlyRate: 35, entityId: targetEntity }),
+                            id: actualEngineerId,
+                            name: newName,
+                            entityId: targetEntity
                         };
+
                         if (setEngineers) {
-                            setEngineers(prev => [...(prev || []).filter(e => e.id !== engineerId), updatedEng]);
+                            setEngineers(prev => [...(prev || []).filter(e => e.id !== engineerId && e.id !== actualEngineerId), updatedEng]);
                         }
                         if (saveRecord) {
                             await saveRecord('engineers', updatedEng);
@@ -352,11 +369,15 @@ const DispatchView: React.FC<DispatchViewProps> = ({
                         // 2. Also update corresponding user profile in users if exists
                         const matchingUser = (users || []).find(u => 
                             u.engineerId === engineerId || 
+                            u.engineerId === actualEngineerId ||
                             u.id === engineerId || 
-                            (targetEng && targetEng.name && u.name?.trim().toLowerCase() === targetEng.name.trim().toLowerCase())
+                            u.id === actualEngineerId ||
+                            (targetEng && targetEng.name && u.name?.trim().toLowerCase() === targetEng.name.trim().toLowerCase()) ||
+                            (u.name && u.name.trim().toLowerCase() === newName.trim().toLowerCase()) ||
+                            (selectedEntityId !== 'all' && u.preferredEntityId === selectedEntityId && isTechRole(u.role))
                         );
                         if (matchingUser && setUsers) {
-                            const updatedUser = { ...matchingUser, name: newName, engineerId };
+                            const updatedUser = { ...matchingUser, name: newName, engineerId: actualEngineerId };
                             setUsers(prev => (prev || []).map(u => u.id === matchingUser.id ? updatedUser : u));
                             await saveDocument('brooks_users', updatedUser);
                         }

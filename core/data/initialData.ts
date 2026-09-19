@@ -56,7 +56,7 @@ export const getInitialUsers = (): User[] => ([
     { id: 'user_mike_audi', name: 'Mike', email: 'mike@example.com', role: 'Engineer', engineerId: 'eng_mike_audi' },
     { id: 'user_dan', name: 'Dan', email: 'dan@example.com', role: 'Engineer', engineerId: 'eng_dan' },
     { id: 'user_sam', name: 'Sam', email: 'sam@example.com', role: 'Engineer', engineerId: 'eng_sam' },
-    { id: 'user_vincent', name: 'Vincent', email: 'vincent@example.com', role: 'Engineer', engineerId: 'eng_vincent' },
+    { id: 'user_vincent', name: 'Vincent Gibson', email: 'vincent@example.com', role: 'Trimming', engineerId: 'eng_vincent' },
 ] as User[]).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 
 // --- Business Entities ---
@@ -195,7 +195,7 @@ export const getInitialEngineers = (): Engineer[] => ([
     { id: 'eng_mike_audi', entityId: 'ent_audi', name: 'Mike', hourlyRate: 36.00 },
     { id: 'eng_dan', entityId: 'ent_audi', name: 'Dan', hourlyRate: 34.00 },
     { id: 'eng_sam', entityId: 'ent_audi', name: 'Sam', hourlyRate: 31.00 },
-    { id: 'eng_vincent', entityId: 'ent_trimming', name: 'Vincent', hourlyRate: 40.00 },
+    { id: 'eng_vincent', entityId: 'ent_trimming', name: 'Vincent Gibson', hourlyRate: 40.00, specialization: 'Trimming Specialist' },
 ]);
 
 // --- Jobs & Finance ---

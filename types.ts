@@ -264,6 +264,7 @@ export interface FCSGanttBlock {
     isSuggested?: boolean; // If from suggested work allocation for unallocated jobs
     isEstimateSimulation?: boolean; // If simulated from estimate pipeline
     estimateId?: string; // Original estimate ID if simulated
+    isScheduledUnallocated?: boolean; // If unallocated job with scheduled date placed on Gantt
     linkedBlockId?: string; // Links Ramp block to Engineer block
 }
 
