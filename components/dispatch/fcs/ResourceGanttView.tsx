@@ -1411,9 +1411,10 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                     windowDays={windowDays}
                     startDateStr={startDateStr}
                     businessEntity={businessEntities.find(b => b.id === selectedEntityId) || null}
-                    ramps={ramps}
+                    ramps={usableRamps}
                     engineers={engineers}
                     jobs={jobs}
+                    purchaseOrders={purchaseOrders}
                     vehicles={vehicles}
                     customers={customers}
                 />
