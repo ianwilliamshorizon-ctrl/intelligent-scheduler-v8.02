@@ -6,7 +6,7 @@ import { FCSOptimizerModal, OptimizedAssignment } from './FCSOptimizerModal';
 import { TechnicianTransferModal } from './TechnicianTransferModal';
 import { AdjustSuggestedAllocationModal } from './AdjustSuggestedAllocationModal';
 import { PrintableFCSScheduleModal } from './PrintableFCSScheduleModal';
-import { Sparkles, Wrench, Layers, AlertTriangle, CheckCircle, Clock, Calendar, Users, RefreshCw, Plus, ChevronLeft, ChevronRight, Activity, ArrowRight, Zap, Info, Edit3, ArrowRightLeft, Printer } from 'lucide-react';
+import { Sparkles, Wrench, Layers, AlertTriangle, CheckCircle, Clock, Calendar, Users, RefreshCw, Plus, ChevronLeft, ChevronRight, Activity, ArrowRight, Zap, Info, Edit3, ArrowRightLeft, Printer, Move, ExternalLink, GripVertical } from 'lucide-react';
 import { getRelativeDate, addDays, formatDate } from '../../../core/utils/dateUtils';
 import { isJobAllocated, isJobUnallocated } from '../../../core/utils/jobUtils';
 
@@ -417,6 +417,163 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
         }
         setShowSuggestedGanttPreview(false);
         setGanttSuggestedPlan([]);
+    };
+
+    // Drag & Drop State on Gantt
+    const [draggingJobId, setDraggingJobId] = useState<string | null>(null);
+    const [dragOverTarget, setDragOverTarget] = useState<{ type: 'ramp' | 'engineer'; resourceId: string; dateStr: string } | null>(null);
+
+    // Universal Job Card Move / Adjustment Handler for ALL Gantt Blocks
+    const handleQuickAdjustJob = async (jobId: string, newDate: string, newRampId: string, newEngineerId: string) => {
+        // If it's a suggested allocation or estimate simulation:
+        const planItem = ganttSuggestedPlan.find(p => p.job.id === jobId);
+        if (planItem || showSuggestedGanttPreview || jobId.startsWith('sim_est_')) {
+            handleMoveSuggestedBlock(jobId, newDate, newRampId, newEngineerId);
+            return;
+        }
+
+        const job = jobs.find(j => j.id === jobId);
+        if (!job || !onSaveJob) return;
+
+        const assignedRamp = usableRamps.find(r => r.id === newRampId) || usableRamps[0];
+        const assignedRampName = assignedRamp?.name || 'Ramp Bay';
+        const assignedTech = engineers.find(e => e.id === newEngineerId) || engineers[0];
+
+        const updatedSegments = (job.segments && job.segments.length > 0)
+            ? job.segments.map(s => ({
+                ...s,
+                date: newDate,
+                allocatedLift: assignedRampName,
+                engineerId: newEngineerId || s.engineerId,
+                status: 'Allocated' as const
+            }))
+            : [{
+                id: `seg_${Date.now()}_${job.id}`,
+                segmentId: `seg_${Date.now()}_${job.id}`,
+                description: job.description,
+                status: 'Allocated' as const,
+                date: newDate,
+                allocatedLift: assignedRampName,
+                engineerId: newEngineerId,
+                duration: job.estimatedHours || 2,
+                scheduledStartSegment: 1
+            }];
+
+        const updatedJob: Job = {
+            ...job,
+            scheduledDate: newDate,
+            status: job.status === 'Unallocated' ? 'Allocated' : job.status,
+            segments: updatedSegments,
+            notes: (job.notes ? `${job.notes}\n` : '') + `[Gantt Adjusted]: Reallocated to ${assignedRampName} (${assignedTech?.name || 'Tech'}) for ${newDate}.`
+        };
+
+        await onSaveJob(updatedJob);
+        setAdjustingSuggestedBlock(null);
+    };
+
+    const handleDropOnRamp = async (e: React.DragEvent, targetRampId: string, targetDateStr: string) => {
+        try {
+            const raw = e.dataTransfer.getData('text/plain');
+            if (!raw) return;
+            const data = JSON.parse(raw);
+            const { jobId, isSuggested, isEstSim } = data;
+
+            if (isSuggested || isEstSim || showSuggestedGanttPreview || jobId.startsWith('sim_est_')) {
+                handleMoveSuggestedBlock(jobId, targetDateStr, targetRampId, data.sourceEngineerId || engineers[0]?.id || '');
+                return;
+            }
+
+            const job = jobs.find(j => j.id === jobId);
+            if (!job || !onSaveJob) return;
+
+            const targetRamp = usableRamps.find(r => r.id === targetRampId) || usableRamps[0];
+            const assignedRampName = targetRamp?.name || 'Ramp Bay';
+            const defaultTechId = data.sourceEngineerId || job.segments?.[0]?.engineerId || engineers[0]?.id || '';
+
+            const updatedSegments = (job.segments && job.segments.length > 0)
+                ? job.segments.map(s => ({
+                    ...s,
+                    date: targetDateStr,
+                    allocatedLift: assignedRampName,
+                    status: 'Allocated' as const,
+                    engineerId: s.engineerId || defaultTechId
+                }))
+                : [{
+                    id: `seg_${Date.now()}_${job.id}`,
+                    segmentId: `seg_${Date.now()}_${job.id}`,
+                    description: job.description,
+                    status: 'Allocated' as const,
+                    date: targetDateStr,
+                    allocatedLift: assignedRampName,
+                    engineerId: defaultTechId,
+                    duration: job.estimatedHours || 2,
+                    scheduledStartSegment: 1
+                }];
+
+            const updatedJob: Job = {
+                ...job,
+                scheduledDate: targetDateStr,
+                status: job.status === 'Unallocated' ? 'Allocated' : job.status,
+                segments: updatedSegments,
+                notes: (job.notes ? `${job.notes}\n` : '') + `[Gantt Drag-Drop]: Moved to ${assignedRampName} on ${targetDateStr}.`
+            };
+
+            await onSaveJob(updatedJob);
+        } catch (err) {
+            console.error('Error handling ramp drop:', err);
+        }
+    };
+
+    const handleDropOnEngineer = async (e: React.DragEvent, targetEngineerId: string, targetDateStr: string) => {
+        try {
+            const raw = e.dataTransfer.getData('text/plain');
+            if (!raw) return;
+            const data = JSON.parse(raw);
+            const { jobId, isSuggested, isEstSim } = data;
+
+            if (isSuggested || isEstSim || showSuggestedGanttPreview || jobId.startsWith('sim_est_')) {
+                handleMoveSuggestedBlock(jobId, targetDateStr, data.sourceRampId || usableRamps[0]?.id || '', targetEngineerId);
+                return;
+            }
+
+            const job = jobs.find(j => j.id === jobId);
+            if (!job || !onSaveJob) return;
+
+            const targetTech = engineers.find(eng => eng.id === targetEngineerId) || engineers[0];
+            const defaultRamp = data.sourceRampId ? (usableRamps.find(r => r.id === data.sourceRampId)?.name || 'Ramp Bay') : (job.segments?.[0]?.allocatedLift || usableRamps[0]?.name || 'Ramp Bay');
+
+            const updatedSegments = (job.segments && job.segments.length > 0)
+                ? job.segments.map(s => ({
+                    ...s,
+                    date: targetDateStr,
+                    engineerId: targetEngineerId,
+                    status: 'Allocated' as const,
+                    allocatedLift: s.allocatedLift || defaultRamp
+                }))
+                : [{
+                    id: `seg_${Date.now()}_${job.id}`,
+                    segmentId: `seg_${Date.now()}_${job.id}`,
+                    description: job.description,
+                    status: 'Allocated' as const,
+                    date: targetDateStr,
+                    engineerId: targetEngineerId,
+                    allocatedLift: defaultRamp,
+                    duration: job.estimatedHours || 2,
+                    scheduledStartSegment: 1
+                }];
+
+            const updatedJob: Job = {
+                ...job,
+                scheduledDate: targetDateStr,
+                status: job.status === 'Unallocated' ? 'Allocated' : job.status,
+                segments: updatedSegments,
+                notes: (job.notes ? `${job.notes}\n` : '') + `[Gantt Drag-Drop]: Reassigned to ${targetTech?.name || 'Tech'} on ${targetDateStr}.`
+            };
+
+            await onSaveJob(updatedJob);
+        } catch (err) {
+            console.error('Error handling engineer drop:', err);
+        }
     };
 
     // Quick move / adjustment helper for suggested blocks directly on the Gantt
@@ -970,20 +1127,45 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
 
                                 {/* Row Track */}
                                 <div className="relative flex-grow h-14 bg-slate-100/80 rounded-xl border border-slate-200 overflow-hidden">
-                                    {/* Column grid lines */}
+                                    {/* Column grid drop target cells */}
                                     <div 
-                                        className="absolute inset-0 grid pointer-events-none"
+                                        className="absolute inset-0 grid"
                                         style={{ gridTemplateColumns: `repeat(${windowDays}, minmax(0, 1fr))` }}
                                     >
-                                        {timelineDays.map(td => (
-                                            <div key={td.dateStr} className={`border-r border-slate-200/90 ${td.isToday ? 'bg-indigo-50/60' : ''}`} />
-                                        ))}
+                                        {timelineDays.map(td => {
+                                            const isDragOver = dragOverTarget?.type === 'ramp' && dragOverTarget.resourceId === row.ramp.id && dragOverTarget.dateStr === td.dateStr;
+                                            return (
+                                                <div 
+                                                    key={td.dateStr}
+                                                    onDragOver={(e) => {
+                                                        e.preventDefault();
+                                                        e.dataTransfer.dropEffect = 'move';
+                                                        setDragOverTarget({ type: 'ramp', resourceId: row.ramp.id, dateStr: td.dateStr });
+                                                    }}
+                                                    onDragLeave={() => {
+                                                        setDragOverTarget(null);
+                                                    }}
+                                                    onDrop={(e) => {
+                                                        e.preventDefault();
+                                                        setDragOverTarget(null);
+                                                        handleDropOnRamp(e, row.ramp.id, td.dateStr);
+                                                    }}
+                                                    className={`border-r border-slate-200/90 transition-all ${
+                                                        isDragOver 
+                                                            ? 'bg-blue-300/40 border-2 border-dashed border-blue-600 shadow-inner' 
+                                                            : td.isToday ? 'bg-indigo-50/60' : ''
+                                                    }`} 
+                                                    title={`Drop job here to assign to ${row.ramp.name} for ${td.dateStr}`}
+                                                />
+                                            );
+                                        })}
                                     </div>
 
                                     {/* Blocks on this Ramp */}
                                     {row.blocks.map(block => {
                                         const isHovered = hoveredJobId === block.jobId;
-                                        const isDimmed = hoveredJobId && !isHovered;
+                                        const isDimmed = (hoveredJobId && !isHovered) || (draggingJobId && draggingJobId !== block.jobId);
+                                        const isBeingDragged = draggingJobId === block.jobId;
                                         const engTheme = block.engineerId ? getEngineerTheme(block.engineerId) : null;
                                         const isSuggested = block.isSuggested || block.fcsState === 'SUGGESTED';
                                         const isEstSim = Boolean(block.isEstimateSimulation || block.jobId.startsWith('sim_est_'));
@@ -993,14 +1175,29 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                                             <div
                                                 key={block.id}
                                                 data-block-id={block.id}
+                                                draggable={true}
+                                                onDragStart={(e) => {
+                                                    e.dataTransfer.setData('text/plain', JSON.stringify({
+                                                        jobId: block.jobId,
+                                                        blockId: block.id,
+                                                        sourceType: 'ramp',
+                                                        sourceRampId: row.ramp.id,
+                                                        sourceEngineerId: block.engineerId,
+                                                        hours: block.hours,
+                                                        isSuggested,
+                                                        isEstSim
+                                                    }));
+                                                    e.dataTransfer.effectAllowed = 'move';
+                                                    setDraggingJobId(block.jobId);
+                                                }}
+                                                onDragEnd={() => {
+                                                    setDraggingJobId(null);
+                                                    setDragOverTarget(null);
+                                                }}
                                                 onMouseEnter={() => setHoveredJobId(block.jobId)}
                                                 onMouseLeave={() => setHoveredJobId(null)}
                                                 onClick={() => {
-                                                    if (isSuggested || isEstSim) {
-                                                        setAdjustingSuggestedBlock(block);
-                                                    } else {
-                                                        onEditJob(block.jobId);
-                                                    }
+                                                    setAdjustingSuggestedBlock(block);
                                                 }}
                                                 style={{
                                                     left: `${block.startPercent}%`,
@@ -1009,7 +1206,9 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                                                         borderLeft: `5px solid ${engTheme.hex}`
                                                     } : {})
                                                 }}
-                                                className={`absolute top-1.5 bottom-1.5 rounded-lg px-2.5 py-1 flex flex-col justify-center cursor-pointer transition-all duration-200 z-10 ${
+                                                className={`absolute top-1.5 bottom-1.5 rounded-lg px-2 py-0.5 flex flex-col justify-center cursor-grab active:cursor-grabbing transition-all duration-200 z-10 group/block ${
+                                                    isBeingDragged ? 'opacity-40 scale-95 ring-2 ring-indigo-400' : ''
+                                                } ${
                                                     block.isDeadWeight
                                                         ? 'bg-amber-100 border-2 border-amber-500 text-amber-950 shadow-sm'
                                                         : isEstSim
@@ -1020,7 +1219,7 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                                                                     ? 'bg-amber-950/85 border-2 border-dashed border-amber-400 text-amber-100 shadow-md'
                                                                     : 'bg-gradient-to-r from-slate-900 to-indigo-950 text-white shadow-md border border-slate-700/60'
                                                 } ${isHovered ? 'ring-2 ring-purple-500 scale-[1.02] z-20 shadow-lg' : ''} ${isDimmed ? 'opacity-35' : ''}`}
-                                                title={`Job #${block.jobId}: ${block.title} (${block.hours}h)${isEstSim ? ' • [Simulated Estimate - Click to Move/Adjust]' : isSuggested ? ' • [Suggested Allocation - Click to Move/Adjust]' : isSchedUnalloc ? ' • [Scheduled Work - Click to Inspect]' : ''}${block.engineerName ? ` • Assigned Tech: ${block.engineerName}` : ''} - Click to ${isSuggested || isEstSim ? 'adjust / move' : 'inspect'}`}
+                                                title={`Job #${block.jobId}: ${block.title} (${block.hours}h) • Drag to move date or bay • Click to adjust`}
                                             >
                                                 {block.isDeadWeight && (
                                                     <div 
@@ -1030,10 +1229,11 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                                                 )}
                                                 <div className="flex items-center justify-between text-[11px] font-black leading-tight relative z-10">
                                                     <span className="font-mono uppercase tracking-tight truncate flex items-center gap-1">
+                                                        <GripVertical size={9} className="opacity-60 shrink-0 cursor-grab" />
                                                         {(isSuggested || isEstSim) && <Sparkles size={11} className={isEstSim ? "text-amber-400 shrink-0" : "text-purple-300 shrink-0"} />}
                                                         {block.vehicleRegistration || `#${block.jobId}`}
                                                     </span>
-                                                    <div className="flex items-center gap-1.5 shrink-0">
+                                                    <div className="flex items-center gap-1 shrink-0">
                                                         {isEstSim ? (
                                                             <span className="text-[8px] font-black uppercase px-1.5 py-0.2 rounded bg-amber-600 text-white shadow-2xs font-sans">
                                                                 Est Sim
@@ -1056,6 +1256,19 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                                                             </span>
                                                         )}
                                                         <span className="font-mono text-[10px] bg-black/25 px-1 rounded">{block.hours}h</span>
+                                                        
+                                                        {/* Quick Adjust & Inspect Buttons on hover */}
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                onEditJob(block.jobId);
+                                                            }}
+                                                            className="opacity-0 group-hover/block:opacity-100 p-0.5 hover:bg-white/20 rounded text-slate-300 hover:text-white transition-opacity"
+                                                            title="Open full 360° Job Card"
+                                                        >
+                                                            <ExternalLink size={10} />
+                                                        </button>
                                                     </div>
                                                 </div>
                                                 <div className={`text-[10px] truncate font-bold relative z-10 ${block.isDeadWeight ? 'text-amber-900' : isEstSim ? 'text-amber-200' : isSuggested ? 'text-purple-200' : isSchedUnalloc ? 'text-amber-200' : 'text-slate-300'}`}>
@@ -1224,20 +1437,45 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
 
                                     {/* Row Track */}
                                     <div className="relative flex-grow h-14 bg-slate-100/80 rounded-xl border border-slate-200 overflow-hidden">
-                                        {/* Column grid lines */}
+                                        {/* Column grid drop target cells */}
                                         <div 
-                                            className="absolute inset-0 grid pointer-events-none"
+                                            className="absolute inset-0 grid"
                                             style={{ gridTemplateColumns: `repeat(${windowDays}, minmax(0, 1fr))` }}
                                         >
-                                            {timelineDays.map(td => (
-                                                <div key={td.dateStr} className={`border-r border-slate-200/90 ${td.isToday ? 'bg-indigo-50/60' : ''}`} />
-                                            ))}
+                                            {timelineDays.map(td => {
+                                                const isDragOver = dragOverTarget?.type === 'engineer' && dragOverTarget.resourceId === row.engineer.id && dragOverTarget.dateStr === td.dateStr;
+                                                return (
+                                                    <div 
+                                                        key={td.dateStr}
+                                                        onDragOver={(e) => {
+                                                            e.preventDefault();
+                                                            e.dataTransfer.dropEffect = 'move';
+                                                            setDragOverTarget({ type: 'engineer', resourceId: row.engineer.id, dateStr: td.dateStr });
+                                                        }}
+                                                        onDragLeave={() => {
+                                                            setDragOverTarget(null);
+                                                        }}
+                                                        onDrop={(e) => {
+                                                            e.preventDefault();
+                                                            setDragOverTarget(null);
+                                                            handleDropOnEngineer(e, row.engineer.id, td.dateStr);
+                                                        }}
+                                                        className={`border-r border-slate-200/90 transition-all ${
+                                                            isDragOver 
+                                                                ? 'bg-purple-300/40 border-2 border-dashed border-purple-600 shadow-inner' 
+                                                                : td.isToday ? 'bg-indigo-50/60' : ''
+                                                        }`} 
+                                                        title={`Drop job here to assign to ${row.engineer.name} for ${td.dateStr}`}
+                                                    />
+                                                );
+                                            })}
                                         </div>
 
                                         {/* Blocks on this Engineer */}
                                         {row.blocks.map(block => {
                                             const isHovered = hoveredJobId === block.jobId;
-                                            const isDimmed = hoveredJobId && !isHovered;
+                                            const isDimmed = (hoveredJobId && !isHovered) || (draggingJobId && draggingJobId !== block.jobId);
+                                            const isBeingDragged = draggingJobId === block.jobId;
                                             const isSuggested = block.isSuggested || block.fcsState === 'SUGGESTED';
                                             const isEstSim = Boolean(block.isEstimateSimulation || block.jobId.startsWith('sim_est_'));
                                             const isSchedUnalloc = Boolean(block.isScheduledUnallocated);
@@ -1246,14 +1484,29 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                                                 <div
                                                     key={block.id}
                                                     data-block-id={block.id}
+                                                    draggable={true}
+                                                    onDragStart={(e) => {
+                                                        e.dataTransfer.setData('text/plain', JSON.stringify({
+                                                            jobId: block.jobId,
+                                                            blockId: block.id,
+                                                            sourceType: 'engineer',
+                                                            sourceEngineerId: row.engineer.id,
+                                                            sourceRampId: block.resourceId,
+                                                            hours: block.hours,
+                                                            isSuggested,
+                                                            isEstSim
+                                                        }));
+                                                        e.dataTransfer.effectAllowed = 'move';
+                                                        setDraggingJobId(block.jobId);
+                                                    }}
+                                                    onDragEnd={() => {
+                                                        setDraggingJobId(null);
+                                                        setDragOverTarget(null);
+                                                    }}
                                                     onMouseEnter={() => setHoveredJobId(block.jobId)}
                                                     onMouseLeave={() => setHoveredJobId(null)}
                                                     onClick={() => {
-                                                        if (isSuggested || isEstSim) {
-                                                            setAdjustingSuggestedBlock(block);
-                                                        } else {
-                                                            onEditJob(block.jobId);
-                                                        }
+                                                        setAdjustingSuggestedBlock(block);
                                                     }}
                                                     style={{
                                                         left: `${block.startPercent}%`,
@@ -1271,13 +1524,16 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                                                         borderStyle: (isSuggested || isEstSim || isSchedUnalloc) ? 'dashed' : 'solid',
                                                         borderWidth: (isSuggested || isEstSim || isSchedUnalloc) ? '2px' : '1px'
                                                     }}
-                                                    className={`absolute top-1.5 bottom-1.5 rounded-lg px-2.5 py-1 flex flex-col justify-center cursor-pointer transition-all duration-200 z-10 text-white shadow-md ${
+                                                    className={`absolute top-1.5 bottom-1.5 rounded-lg px-2 py-0.5 flex flex-col justify-center cursor-grab active:cursor-grabbing transition-all duration-200 z-10 text-white shadow-md group/block ${
+                                                        isBeingDragged ? 'opacity-40 scale-95 ring-2 ring-indigo-400' : ''
+                                                    } ${
                                                         isHovered ? 'ring-2 ring-white scale-[1.02] z-20 shadow-xl' : ''
                                                     } ${isDimmed ? 'opacity-35' : ''}`}
-                                                    title={`Wrench Time for Job #${block.jobId}: ${block.title} (${block.hours}h)${isEstSim ? ' • [Simulated Estimate - Click to Move/Adjust]' : isSuggested ? ' • [Suggested Work Allocation - Click to Move/Adjust]' : isSchedUnalloc ? ' • [Scheduled Work - Click to Inspect]' : ''} • Tech: ${row.engineer.name}`}
+                                                    title={`Wrench Time for Job #${block.jobId}: ${block.title} (${block.hours}h) • Drag to move date or technician • Click to adjust`}
                                                 >
                                                     <div className="flex items-center justify-between text-[11px] font-black leading-tight">
                                                         <span className="font-mono uppercase tracking-tight truncate flex items-center gap-1">
+                                                            <GripVertical size={9} className="opacity-60 shrink-0 cursor-grab" />
                                                             {(isSuggested || isEstSim) && <Sparkles size={11} className={isEstSim ? "text-amber-400 shrink-0" : "text-purple-300 shrink-0"} />}
                                                             {block.vehicleRegistration || `#${block.jobId}`}
                                                         </span>
@@ -1296,6 +1552,19 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                                                                 </span>
                                                             ) : null}
                                                             <span className="font-mono text-[10px] bg-black/25 px-1 rounded">{block.hours}h</span>
+
+                                                            {/* Quick Inspect Button on hover */}
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    onEditJob(block.jobId);
+                                                                }}
+                                                                className="opacity-0 group-hover/block:opacity-100 p-0.5 hover:bg-white/20 rounded text-white/80 hover:text-white transition-opacity"
+                                                                title="Open full 360° Job Card"
+                                                            >
+                                                                <ExternalLink size={10} />
+                                                            </button>
                                                         </div>
                                                     </div>
                                                     <div className="text-[10px] truncate opacity-95 font-bold">
@@ -1389,16 +1658,20 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                 />
             )}
 
-            {/* Suggested / Simulated Block Move & Adjust Modal */}
+            {/* Move & Adjust Job Card Modal (Universal for ALL Gantt Blocks) */}
             {adjustingSuggestedBlock && (
                 <AdjustSuggestedAllocationModal
                     isOpen={Boolean(adjustingSuggestedBlock)}
                     block={adjustingSuggestedBlock}
+                    job={jobs.find(j => j.id === adjustingSuggestedBlock.jobId)}
                     planItem={ganttSuggestedPlan.find(p => p.job.id === adjustingSuggestedBlock.jobId)}
                     usableRamps={usableRamps}
                     engineers={engineers}
+                    customers={customers}
+                    vehicles={vehicles}
                     onClose={() => setAdjustingSuggestedBlock(null)}
-                    onApply={handleMoveSuggestedBlock}
+                    onApply={handleQuickAdjustJob}
+                    onOpenFullJobCard={onEditJob}
                 />
             )}
 
