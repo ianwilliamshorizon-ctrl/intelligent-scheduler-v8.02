@@ -225,9 +225,10 @@ export const PrintableEstimate: React.FC<PrintableEstimateProps> = ({ estimate, 
             marginBottom: '10px'
         }}>
             <h3 style={{ fontSize: '8px', fontWeight: 'bold', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '4px' }}>Customer</h3>
-            <p style={{ fontSize: '14px', fontWeight: 'bold', color: '#000' }}>{customer?.forename} {customer?.surname}</p>
+            {customer?.companyName && <p style={{ fontSize: '14px', fontWeight: 'bold', color: '#000' }}>{customer.companyName}</p>}
+            <p style={{ fontSize: customer?.companyName ? '12px' : '14px', fontWeight: customer?.companyName ? '600' : 'bold', color: customer?.companyName ? '#334155' : '#000' }}>{customer?.forename} {customer?.surname}</p>
             <p style={{ fontSize: '11px', color: '#64748b' }}>
-                {[customer?.addressLine1, customer?.addressLine2, customer?.city, customer?.county, customer?.postcode].filter(Boolean).join(', ')}
+                {[customer?.addressLine1 || (customer as any)?.addressline1, customer?.addressLine2 || (customer as any)?.addressline2, customer?.city, customer?.county, customer?.postcode].filter(Boolean).join(', ')}
             </p>
         </div>
     );
@@ -337,9 +338,10 @@ export const PrintableEstimate: React.FC<PrintableEstimateProps> = ({ estimate, 
                                     {(!resolvedEntity?.layoutSettings?.customerPosition || resolvedEntity.layoutSettings.customerPosition === 'none') && (
                                         <div>
                                             <h3 className="text-[8px] font-bold text-gray-400 uppercase tracking-widest mb-1">Customer</h3>
-                                            <p className="text-sm font-bold" style={{ color: '#000' }}>{customer?.forename} {customer?.surname}</p>
+                                            {customer?.companyName && <p className="text-sm font-bold" style={{ color: '#000' }}>{customer.companyName}</p>}
+                                            <p className={customer?.companyName ? "text-xs font-semibold text-slate-700" : "text-sm font-bold"} style={{ color: customer?.companyName ? '#334155' : '#000' }}>{customer?.forename} {customer?.surname}</p>
                                             <p className="text-gray-600 text-[11px]">
-                                                {[customer?.addressLine1, customer?.addressLine2, customer?.city, customer?.county, customer?.postcode].filter(Boolean).join(', ')}
+                                                {[customer?.addressLine1 || (customer as any)?.addressline1, customer?.addressLine2 || (customer as any)?.addressline2, customer?.city, customer?.county, customer?.postcode].filter(Boolean).join(', ')}
                                             </p>
                                         </div>
                                     )}

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Customer, Job, Vehicle, Estimate, Invoice } from '../types';
 import FormModal from './FormModal';
-import { generateCustomerId } from '../core/utils/customerUtils';
+import { generateCustomerId, normalizeCustomer } from '../core/utils/customerUtils';
 import { formatDate } from '../core/utils/dateUtils';
 import { lookupAddressByPostcode, AddressDetails } from '../services/postcodeLookupService';
 import { Loader2, Search, Briefcase, Car, ChevronDown, ChevronUp, RefreshCw, MessageSquare, PlusCircle, UserCheck } from 'lucide-react';
@@ -63,11 +63,12 @@ const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
 
         if (customer) {
             if (lastProcessedId.current !== customer.id) {
+                const norm = normalizeCustomer(customer);
                 setFormData({
                     marketingConsent: false,
                     serviceReminderConsent: false,
                     declinedCommunication: false,
-                    ...customer
+                    ...norm
                 });
                 lastProcessedId.current = customer.id;
             }
@@ -120,9 +121,10 @@ const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
     const handleAddressSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
         const selectedAddress = addressList[parseInt(e.target.value, 10)];
         if (selectedAddress) {
+            const line1 = selectedAddress.street || (selectedAddress.summaryAddress ? selectedAddress.summaryAddress.split(',')[0].trim() : '');
             setFormData((prev: any) => ({
                 ...prev,
-                addressLine1: selectedAddress.street || '',
+                addressLine1: line1,
                 addressLine2: selectedAddress.locality || '',
                 city: selectedAddress.postTown || '',
                 county: selectedAddress.county || '',
@@ -147,11 +149,11 @@ const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
             return;
         }
 
-        const finalCustomer: Customer = {
+        const finalCustomer: Customer = normalizeCustomer({
             ...formData,
             id: formData.id || generateCustomerId(formData.surname!, existingCustomers),
             createdDate: formData.createdDate || formatDate(new Date()),
-        } as Customer;
+        });
         onSave(finalCustomer);
     };
 

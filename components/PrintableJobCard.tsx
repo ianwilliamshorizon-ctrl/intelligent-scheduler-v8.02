@@ -309,8 +309,13 @@ const PrintableJobCard: React.FC<PrintableJobCardProps> = ({
                                     </div>
                                     <div className={cs.bodyClass}>
                                         <div className="text-xs space-y-0.5" style={cs.textStyle}>
-                                            <div className="font-bold text-sm">{displayName}</div>
-                                            {customer?.addressLine1 && <div>{customer.addressLine1}{customer.addressLine2 ? `, ${customer.addressLine2}` : ''}</div>}
+                                            {customer?.companyName && (
+                                                <div className="font-bold text-sm text-gray-900">{customer.companyName}</div>
+                                            )}
+                                            <div className={customer?.companyName ? "text-xs font-semibold text-gray-700" : "font-bold text-sm"}>{displayName}</div>
+                                            {(customer?.addressLine1 || (customer as any)?.addressline1) && (
+                                                <div>{customer.addressLine1 || (customer as any)?.addressline1}{(customer.addressLine2 || (customer as any)?.addressline2) ? `, ${customer.addressLine2 || (customer as any)?.addressline2}` : ''}</div>
+                                            )}
                                             {(customer?.city || customer?.postcode) && <div>{customer.city || ''} {customer.postcode ? <span className="font-semibold uppercase">{customer.postcode}</span> : ''}</div>}
                                             <div style={cs.subtextStyle}>
                                                 Phone: <span className="font-semibold">{customer?.mobile || customer?.phone || 'No Contact Number'}</span>

@@ -54,13 +54,69 @@ export const generateCustomerId = (surname: string, allCustomers: Customer[]): s
 };
 
 /**
+ * Detects if a string resembles a street address line (starts with number/flat/unit or contains street suffixes)
+ */
+export const isLikelyStreetAddress = (str?: string): boolean => {
+    if (!str || typeof str !== 'string') return false;
+    const trimmed = str.trim();
+    if (!trimmed) return false;
+    // Starts with number (e.g. "23 Warsash Road", "10A High Street", "148 Church Road")
+    if (/^\d+[A-Za-z]?\s+/i.test(trimmed)) return true;
+    // Starts with Flat, Unit, Suite, House, Cottage, etc.
+    if (/^(flat|unit|suite|apartment|apt|house|cottage|room|plot|building|floor)\b/i.test(trimmed)) return true;
+    // Contains common road/street keywords
+    if (/\b(road|street|avenue|ave|lane|drive|crescent|cres|gardens|gdn|close|cl|way|terrace|walk|court|ct|place|pl|hill|grove|rise|mews|row|parade|wharf)\b/i.test(trimmed)) return true;
+    return false;
+};
+
+/**
+ * Normalizes customer address and company fields, resolving legacy lowercase fields
+ * (addressline1, addressline2, companyname) and misallocated city/address values.
+ */
+export const normalizeCustomer = <T extends Partial<Customer>>(raw: T): T & Customer => {
+    if (!raw || typeof raw !== 'object') return raw as any;
+
+    let addressLine1 = String(raw.addressLine1 || (raw as any).addressline1 || (raw as any).address || '').trim();
+    let addressLine2 = String(raw.addressLine2 || (raw as any).addressline2 || '').trim();
+    let city = String(raw.city || '').trim();
+    let county = String(raw.county || '').trim();
+    let postcode = String(raw.postcode || '').trim().toUpperCase();
+    let companyName = String(raw.companyName || (raw as any).companyname || '').trim();
+
+    // If addressLine1 is empty but city looks like a street address, promote city to addressLine1
+    if (!addressLine1 && isLikelyStreetAddress(city)) {
+        addressLine1 = city;
+        city = addressLine2 && !isLikelyStreetAddress(addressLine2) ? addressLine2 : '';
+        if (city === addressLine2) {
+            addressLine2 = '';
+        }
+    }
+
+    return {
+        ...raw,
+        addressLine1,
+        addressLine2,
+        city,
+        county,
+        postcode,
+        companyName,
+        // Also keep lowercase aliases synced for two-way legacy compatibility
+        addressline1: addressLine1,
+        addressline2: addressLine2,
+        companyname: companyName,
+    } as T & Customer;
+};
+
+/**
  * Returns a formatted name for UI display.
  */
 export const getCustomerDisplayName = (customer?: Customer): string => {
     if (!customer) return 'Unknown Customer';
-    if (customer.isBusinessCustomer && customer.companyName) {
-        return `${customer.companyName} (${customer.forename} ${customer.surname})`;
+    const norm = normalizeCustomer(customer);
+    if (norm.isBusinessCustomer && norm.companyName) {
+        const contactName = `${norm.forename || ''} ${norm.surname || ''}`.trim();
+        return contactName ? `${norm.companyName} (${contactName})` : norm.companyName;
     }
-    const fullName = `${customer.title || ''} ${customer.forename} ${customer.surname}`.trim();
+    const fullName = `${norm.title || ''} ${norm.forename || ''} ${norm.surname || ''}`.replace(/\s+/g, ' ').trim();
     return fullName || 'Unnamed Customer';
 };

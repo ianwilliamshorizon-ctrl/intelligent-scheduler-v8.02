@@ -18,6 +18,7 @@ import {
 import { auth, db, storage } from '../config/firebaseConfig';
 import { ref, uploadString, getDownloadURL, listAll, deleteObject } from 'firebase/storage';
 import { idbSet, idbGet, idbKeys, idbDel } from './idb';
+import { normalizeCustomer } from '../utils/customerUtils';
 
 /**
  * COLLECTION NAMES
@@ -56,10 +57,13 @@ export const subscribeToCollection = <T>(
     return onSnapshot(q, { includeMetadataChanges: true }, (snapshot) => {
         if (snapshot.metadata.fromCache && snapshot.docs.length === 0) return; 
 
-        const items = snapshot.docs.map(doc => ({
-            ...doc.data(),
-            id: doc.id
-        })) as unknown as T[];
+        const items = snapshot.docs.map(doc => {
+            const data = {
+                ...doc.data(),
+                id: doc.id
+            };
+            return (collectionName === 'brooks_customers' ? normalizeCustomer(data) : data);
+        }) as unknown as T[];
         
         // Alphabetical sorting logic from your original file
         const sortedItems = items.sort((a: any, b: any) => {
@@ -84,7 +88,10 @@ export const getAll = async <T>(collectionName: string): Promise<T[]> => {
     if (!db) return [];
     try {
         const snapshot = await getDocs(collection(db, collectionName));
-        return snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as T[];
+        return snapshot.docs.map(doc => {
+            const data = { ...doc.data(), id: doc.id };
+            return (collectionName === 'brooks_customers' ? normalizeCustomer(data) : data);
+        }) as T[];
     } catch (err: any) {
         if (err?.code === 'unavailable') {
             console.warn(`[Firestore getAll Warning] ${collectionName} is unavailable offline.`);
@@ -103,7 +110,8 @@ export const getDocument = async <T>(collectionName: string, docId: string): Pro
     try {
         const snap = await getDoc(doc(db, collectionName, docId));
         if (snap.exists()) {
-            return { ...snap.data(), id: snap.id } as unknown as T;
+            const data = { ...snap.data(), id: snap.id };
+            return (collectionName === 'brooks_customers' ? normalizeCustomer(data) : data) as unknown as T;
         }
     } catch (err: any) {
         if (err?.code === 'unavailable') {
@@ -126,7 +134,8 @@ export const saveDocument = async <T extends { id: string }> (
     const docId = String(data.id);
     const docRef = doc(db, collectionName, docId);
     try {
-        const cleaned = cleanDataForFirestore(data);
+        const payload = collectionName === 'brooks_customers' ? normalizeCustomer(data as any) : data;
+        const cleaned = cleanDataForFirestore(payload);
         await setDoc(docRef, cleaned, { merge: true });
         console.log(`✅ [DB] Document Saved: ${collectionName}/${docId}`);
     } catch (err) {

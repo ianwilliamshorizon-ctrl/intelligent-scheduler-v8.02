@@ -2,11 +2,12 @@ import React, { useState, useMemo, useEffect, memo, useDeferredValue, useCallbac
 import { VList } from 'virtua';
 import { useData } from '../../../core/state/DataContext';
 import { Vehicle, Customer, Job, Estimate, Invoice, InspectionDiagram, PurchaseOrder } from '../../../types';
-import { PlusCircle, Trash2, Upload, RefreshCw, Search, Wand2 } from 'lucide-react';
+import { PlusCircle, Trash2, Upload, RefreshCw, Search, Wand2, Copy } from 'lucide-react';
 import { useManagementTable } from '../hooks/useManagementTable';
 import { parseCsv } from '../../../utils/csvUtils';
 import { getCustomerDisplayName } from '../../../core/utils/customerUtils';
 import VehicleFormModal from '../../VehicleFormModal';
+import DuplicateVehiclesModal from '../DuplicateVehiclesModal';
 import { db, saveDocument } from '../../../core/db';
 import { writeBatch, doc, collection } from 'firebase/firestore';
 import { findBestDiagramMatch } from '../../../core/utils/diagramUtils';
@@ -118,11 +119,12 @@ const HighlightText = memo(({ text, highlight }: { text: string; highlight: stri
 export const ManagementVehiclesTab: React.FC<ManagementVehiclesTabProps> = ({ 
     searchTerm, onShowStatus, onViewCustomer, onViewJob, onViewEstimate, onViewInvoice, onOpenPurchaseOrder 
 }) => {
-    const { vehicles, setVehicles, customers, jobs, estimates, invoices, inspectionDiagrams, forceRefresh } = useData();
+    const { vehicles, setVehicles, customers, jobs, estimates, invoices, inspectionDiagrams, inquiries, forceRefresh } = useData();
     const { selectedIds, updateItem, deleteItem, toggleSelection, toggleSelectAll, bulkDelete } = useManagementTable(vehicles, 'brooks_vehicles', setVehicles);
 
     const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isDuplicateModalOpen, setIsDuplicateModalOpen] = useState(false);
     const [isImporting, setIsImporting] = useState(false);
     const [isMatching, setIsMatching] = useState(false);
     const [isPending, startTransition] = useTransition();
@@ -312,7 +314,16 @@ export const ManagementVehiclesTab: React.FC<ManagementVehiclesTabProps> = ({
                     </div>
                 </div>
                 <div className="flex gap-2">
-                     <button 
+                    <button 
+                        type="button"
+                        onClick={() => setIsDuplicateModalOpen(true)}
+                        className="flex items-center gap-2 bg-white text-gray-700 border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50 shadow-sm text-sm font-semibold transition-all cursor-pointer"
+                        title="Find and merge duplicate vehicle records"
+                    >
+                        <Copy size={16} className="text-teal-600"/>
+                        Find Duplicates
+                    </button>
+                    <button 
                         onClick={handleBulkMatch}
                         disabled={isMatching}
                         className="bg-teal-600 text-white px-4 py-2 rounded-lg hover:bg-teal-700 shadow-md flex items-center gap-2 text-sm font-semibold disabled:opacity-50 transition-all"
@@ -396,6 +407,27 @@ export const ManagementVehiclesTab: React.FC<ManagementVehiclesTabProps> = ({
                     onSaveCustomer={async (c) => {
                         await saveDocument('brooks_customers', c);
                         await forceRefresh('brooks_customers');
+                    }}
+                />
+            )}
+
+            {isDuplicateModalOpen && (
+                <DuplicateVehiclesModal
+                    isOpen={isDuplicateModalOpen}
+                    onClose={() => setIsDuplicateModalOpen(false)}
+                    vehicles={vehicles}
+                    customers={customers}
+                    jobs={jobs}
+                    estimates={estimates}
+                    invoices={invoices}
+                    inquiries={inquiries}
+                    onViewVehicle={(id) => {
+                        setIsDuplicateModalOpen(false);
+                        const v = vehicles.find(item => item.id === id);
+                        if (v) {
+                            setSelectedVehicle(v);
+                            setIsModalOpen(true);
+                        }
                     }}
                 />
             )}

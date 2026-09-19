@@ -321,10 +321,19 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
         }
     };
 
-    const customerOptions = customers.map(c => ({
-        value: c.id,
-        label: `${c.forename} ${c.surname} ${c.companyName ? `(${c.companyName})` : ''} - ${c.postcode}`
-    }));
+    const customerOptions = useMemo(() => {
+        const opts = (customers || []).map(c => ({
+            value: c.id,
+            label: `${c.forename || ''} ${c.surname || ''} ${c.companyName ? `(${c.companyName})` : ''} ${c.postcode ? `- ${c.postcode}` : ''}`.trim()
+        }));
+        if (formData.customerId && !(customers || []).some(c => c.id === formData.customerId)) {
+            opts.unshift({
+                value: formData.customerId,
+                label: `⚠️ Legacy ID: ${formData.customerId} (No Profile - Click to Reassign)`
+            });
+        }
+        return opts;
+    }, [customers, formData.customerId]);
 
     const calculatePOTotal = (lineItems: any[]) => {
         return (lineItems || []).reduce((sum, item) => sum + ((item.quantity || 0) * (item.unitPrice || 0)), 0);
@@ -373,7 +382,7 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
                                         >
                                             <Plus size={20} />
                                         </button>
-                                        {formData.customerId && (
+                                        {formData.customerId && customers.some(c => c.id === formData.customerId) ? (
                                             <button
                                                 type="button"
                                                 onClick={handleCustomerClick}
@@ -383,7 +392,11 @@ const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
                                                 View Profile
                                                 <ExternalLink size={14} className="opacity-50" />
                                             </button>
-                                        )}
+                                        ) : formData.customerId ? (
+                                            <span className="px-2.5 py-1.5 bg-amber-50 border border-amber-200 rounded-lg text-amber-700 text-xs font-semibold flex items-center gap-1 shadow-sm whitespace-nowrap">
+                                                Legacy ID: {formData.customerId}
+                                            </span>
+                                        ) : null}
                                     </div>
                                 </div>
 

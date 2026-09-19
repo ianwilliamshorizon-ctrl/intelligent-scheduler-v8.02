@@ -88,9 +88,9 @@ const PrintableVehicleHistory: React.FC<PrintableVehicleHistoryProps> = ({
                                 <p><strong>VIN:</strong> {vehicle.vin || 'N/A'}</p>
                             </div>
                             <div>
-                                <p><strong>Owner:</strong> {owner?.forename} {owner?.surname}</p>
-                                <p><strong>Contact:</strong> {owner?.mobile || owner?.phone}</p>
-                                <p><strong>Address:</strong> {owner?.addressLine1}, {owner?.city}, {owner?.postcode}</p>
+                                <p><strong>Owner:</strong> {owner ? `${owner.forename || ''} ${owner.surname || ''} ${owner.companyName ? `(${owner.companyName})` : ''}`.trim() : 'Unassigned / Historic Record'}</p>
+                                <p><strong>Contact:</strong> {owner ? (owner.mobile || owner.phone || 'N/A') : 'N/A'}</p>
+                                <p><strong>Address:</strong> {owner ? ([owner.addressLine1, owner.addressLine2, owner.city, owner.postcode].filter(Boolean).join(', ') || 'N/A') : 'N/A'}</p>
                             </div>
                         </div>
                     </Section>

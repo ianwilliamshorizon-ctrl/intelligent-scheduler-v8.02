@@ -104,12 +104,15 @@ export interface Customer {
     surname: string;
     title?: string;
     companyName?: string;
+    companyname?: string;
     email?: string;
     phone?: string;
     mobile?: string;
     address?: string;
     addressLine1?: string;
     addressLine2?: string;
+    addressline1?: string;
+    addressline2?: string;
     city?: string;
     county?: string;
     postcode?: string;

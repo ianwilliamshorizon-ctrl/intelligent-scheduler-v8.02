@@ -2,11 +2,12 @@ import React, { useState, useMemo, useEffect, memo, useDeferredValue, useCallbac
 import { VList } from 'virtua';
 import { useData } from '../../../core/state/DataContext';
 import { Customer, Vehicle, Job, Estimate, Invoice } from '../../../types';
-import { PlusCircle, Trash2, Upload, RefreshCw, Search, Mail, Phone, MapPin } from 'lucide-react';
+import { PlusCircle, Trash2, Upload, RefreshCw, Search, Mail, Phone, MapPin, Copy } from 'lucide-react';
 import { useManagementTable } from '../hooks/useManagementTable';
 import { generateCustomerId, generateCustomerSearchField } from '../../../core/utils/customerUtils';
 import { parseCsv } from '../../../utils/csvUtils';
 import CustomerFormModal from '../../CustomerFormModal';
+import DuplicateCustomersModal from '../DuplicateCustomersModal';
 import { db } from '../../../core/db';
 import { writeBatch, doc, collection } from 'firebase/firestore';
 
@@ -115,11 +116,12 @@ const HighlightText = memo(({ text, highlight }: { text: string; highlight: stri
 });
 
 export const ManagementCustomersTab: React.FC<ManagementCustomersTabProps> = ({ searchTerm, onShowStatus, onViewVehicle }) => {
-    const { customers, setCustomers, vehicles, jobs, estimates, invoices } = useData();
+    const { customers, setCustomers, vehicles, jobs, estimates, invoices, inquiries } = useData();
     const { selectedIds, updateItem, deleteItem, toggleSelection, toggleSelectAll, bulkDelete } = useManagementTable(customers, 'brooks_customers', setCustomers);
     
     const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isDuplicateModalOpen, setIsDuplicateModalOpen] = useState(false);
     const [isImporting, setIsImporting] = useState(false);
     const [isPending, startTransition] = useTransition();
 
@@ -227,6 +229,15 @@ export const ManagementCustomersTab: React.FC<ManagementCustomersTabProps> = ({ 
                     </div>
                 </div>
                 <div className="flex gap-2">
+                    <button
+                        type="button"
+                        onClick={() => setIsDuplicateModalOpen(true)}
+                        className="flex items-center gap-2 bg-white text-gray-700 border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50 cursor-pointer shadow-sm text-sm font-semibold"
+                        title="Find and merge duplicate customer profiles"
+                    >
+                        <Copy size={16} className="text-indigo-600"/>
+                        Find Duplicates
+                    </button>
                     <label className={`flex items-center gap-2 bg-white text-gray-700 border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50 cursor-pointer shadow-sm text-sm font-semibold ${isImporting ? 'opacity-50' : ''}`}>
                         {isImporting ? <RefreshCw size={16} className="animate-spin text-blue-600" /> : <Upload size={16} className="text-blue-600"/>}
                         {isImporting ? 'Loading...' : 'Import CSV'}
@@ -301,6 +312,24 @@ export const ManagementCustomersTab: React.FC<ManagementCustomersTabProps> = ({ 
                     estimates={estimates}
                     invoices={invoices}
                     onViewVehicle={onViewVehicle}
+                />
+            )}
+
+            {isDuplicateModalOpen && (
+                <DuplicateCustomersModal
+                    isOpen={isDuplicateModalOpen}
+                    onClose={() => setIsDuplicateModalOpen(false)}
+                    customers={customers}
+                    vehicles={vehicles}
+                    jobs={jobs}
+                    estimates={estimates}
+                    invoices={invoices}
+                    inquiries={inquiries}
+                    onViewCustomer={(id) => {
+                        setIsDuplicateModalOpen(false);
+                        setSelectedCustomerId(id);
+                        setIsModalOpen(true);
+                    }}
                 />
             )}
         </div>
