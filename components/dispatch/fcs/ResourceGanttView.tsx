@@ -7,7 +7,7 @@ import { TechnicianTransferModal } from './TechnicianTransferModal';
 import { AdjustSuggestedAllocationModal } from './AdjustSuggestedAllocationModal';
 import { PrintableFCSScheduleModal } from './PrintableFCSScheduleModal';
 import { Sparkles, Wrench, Layers, AlertTriangle, CheckCircle, Clock, Calendar, Users, RefreshCw, Plus, ChevronLeft, ChevronRight, Activity, ArrowRight, Zap, Info, Edit3, ArrowRightLeft, Printer, Move, ExternalLink, GripVertical } from 'lucide-react';
-import { getRelativeDate, addDays, formatDate } from '../../../core/utils/dateUtils';
+import { getRelativeDate, addDays, formatDate, getWorkingDaySpan } from '../../../core/utils/dateUtils';
 import { isJobAllocated, isJobUnallocated } from '../../../core/utils/jobUtils';
 
 export interface EngineerTheme {
@@ -28,178 +28,143 @@ export const ENGINEER_COLOR_PALETTES: EngineerTheme[] = [
         name: 'Cobalt Blue',
         gradientFrom: '#2563eb', // blue-600
         gradientTo: '#1d4ed8',   // blue-700
-        border: '#60a5fa',       // blue-400
+        border: '#3b82f6',
         hex: '#2563eb',
         lightHex: '#eff6ff',
-        badgeBg: 'bg-blue-100',
-        badgeText: 'text-blue-800'
+        badgeBg: 'bg-blue-600',
+        badgeText: 'text-white'
     },
     {
         id: 'emerald',
         name: 'Emerald Green',
         gradientFrom: '#059669', // emerald-600
         gradientTo: '#047857',   // emerald-700
-        border: '#34d399',       // emerald-400
+        border: '#10b981',
         hex: '#059669',
         lightHex: '#ecfdf5',
-        badgeBg: 'bg-emerald-100',
-        badgeText: 'text-emerald-800'
-    },
-    {
-        id: 'purple',
-        name: 'Royal Purple',
-        gradientFrom: '#7c3aed', // violet-600
-        gradientTo: '#6d28d9',   // violet-700
-        border: '#a78bfa',       // violet-400
-        hex: '#7c3aed',
-        lightHex: '#f5f3ff',
-        badgeBg: 'bg-purple-100',
-        badgeText: 'text-purple-800'
+        badgeBg: 'bg-emerald-600',
+        badgeText: 'text-white'
     },
     {
         id: 'amber',
-        name: 'Amber Orange',
+        name: 'Amber Bronze',
         gradientFrom: '#d97706', // amber-600
         gradientTo: '#b45309',   // amber-700
-        border: '#fbbf24',       // amber-400
+        border: '#f59e0b',
         hex: '#d97706',
         lightHex: '#fffbeb',
-        badgeBg: 'bg-amber-100',
-        badgeText: 'text-amber-800'
+        badgeBg: 'bg-amber-600',
+        badgeText: 'text-white'
     },
     {
-        id: 'rose',
-        name: 'Ruby Rose',
-        gradientFrom: '#e11d48', // rose-600
-        gradientTo: '#be123c',   // rose-700
-        border: '#fb7185',       // rose-400
-        hex: '#e11d48',
-        lightHex: '#fff1f2',
-        badgeBg: 'bg-rose-100',
-        badgeText: 'text-rose-800'
+        id: 'crimson',
+        name: 'Crimson Red',
+        gradientFrom: '#dc2626', // red-600
+        gradientTo: '#b91c1c',   // red-700
+        border: '#ef4444',
+        hex: '#dc2626',
+        lightHex: '#fef2f2',
+        badgeBg: 'bg-red-600',
+        badgeText: 'text-white'
+    },
+    {
+        id: 'violet',
+        name: 'Royal Purple',
+        gradientFrom: '#7c3aed', // violet-600
+        gradientTo: '#6d28d9',   // violet-700
+        border: '#8b5cf6',
+        hex: '#7c3aed',
+        lightHex: '#f5f3ff',
+        badgeBg: 'bg-violet-600',
+        badgeText: 'text-white'
     },
     {
         id: 'cyan',
-        name: 'Teal Cyan',
+        name: 'Electric Cyan',
         gradientFrom: '#0891b2', // cyan-600
         gradientTo: '#0e7490',   // cyan-700
-        border: '#22d3ee',       // cyan-400
+        border: '#06b6d4',
         hex: '#0891b2',
         lightHex: '#ecfeff',
-        badgeBg: 'bg-cyan-100',
-        badgeText: 'text-cyan-800'
+        badgeBg: 'bg-cyan-600',
+        badgeText: 'text-white'
     },
     {
-        id: 'fuchsia',
-        name: 'Fuchsia Pink',
-        gradientFrom: '#c026d3', // fuchsia-600
-        gradientTo: '#a21caf',   // fuchsia-700
-        border: '#e879f9',       // fuchsia-400
-        hex: '#c026d3',
-        lightHex: '#fdf4ff',
-        badgeBg: 'bg-fuchsia-100',
-        badgeText: 'text-fuchsia-800'
+        id: 'indigo',
+        name: 'Deep Indigo',
+        gradientFrom: '#4f46e5', // indigo-600
+        gradientTo: '#4338ca',   // indigo-700
+        border: '#6366f1',
+        hex: '#4f46e5',
+        lightHex: '#eef2ff',
+        badgeBg: 'bg-indigo-600',
+        badgeText: 'text-white'
     },
     {
-        id: 'lime',
-        name: 'Vibrant Lime',
-        gradientFrom: '#65a30d', // lime-600
-        gradientTo: '#4d7c0f',   // lime-700
-        border: '#a3e635',       // lime-400
-        hex: '#65a30d',
-        lightHex: '#f7fee7',
-        badgeBg: 'bg-lime-100',
-        badgeText: 'text-lime-800'
-    },
-    {
-        id: 'sky',
-        name: 'Sky Blue',
-        gradientFrom: '#0284c7', // sky-600
-        gradientTo: '#0369a1',   // sky-700
-        border: '#38bdf8',       // sky-400
-        hex: '#0284c7',
-        lightHex: '#f0f9ff',
-        badgeBg: 'bg-sky-100',
-        badgeText: 'text-sky-800'
-    },
-    {
-        id: 'orange',
-        name: 'Sunset Orange',
-        gradientFrom: '#ea580c', // orange-600
-        gradientTo: '#c2410c',   // orange-700
-        border: '#fb923c',       // orange-400
-        hex: '#ea580c',
-        lightHex: '#fff7ed',
-        badgeBg: 'bg-orange-100',
-        badgeText: 'text-orange-800'
+        id: 'slate',
+        name: 'Gunmetal Slate',
+        gradientFrom: '#475569', // slate-600
+        gradientTo: '#334155',   // slate-700
+        border: '#64748b',
+        hex: '#475569',
+        lightHex: '#f8fafc',
+        badgeBg: 'bg-slate-600',
+        badgeText: 'text-white'
     }
 ];
 
-export const SIMULATED_TECH_THEME: EngineerTheme = {
-    id: 'simulated',
-    name: 'Simulated Master Tech',
-    gradientFrom: '#9333ea',
-    gradientTo: '#6b21a8',
-    border: '#c084fc',
-    hex: '#9333ea',
-    lightHex: '#faf5ff',
-    badgeBg: 'bg-purple-100',
-    badgeText: 'text-purple-800'
-};
-
-// Deterministic engineer color theme mapping helper
-export const getEngineerTheme = (engId: string, engineersList?: Engineer[]): EngineerTheme => {
-    if (!engId) return ENGINEER_COLOR_PALETTES[0];
-    if (engId.startsWith('sim_')) return SIMULATED_TECH_THEME;
-    if (engineersList && engineersList.length > 0) {
-        const idx = engineersList.findIndex(e => e.id === engId);
-        if (idx >= 0) {
-            return ENGINEER_COLOR_PALETTES[idx % ENGINEER_COLOR_PALETTES.length];
-        }
+export const getEngineerTheme = (engineerId: string, engineersList?: Engineer[]): EngineerTheme => {
+    if (!engineerId) return ENGINEER_COLOR_PALETTES[0];
+    if (engineerId.startsWith('sim_')) {
+        return {
+            id: 'virtual',
+            name: 'Virtual Tech',
+            gradientFrom: '#7c3aed',
+            gradientTo: '#4f46e5',
+            border: '#a78bfa',
+            hex: '#7c3aed',
+            lightHex: '#f5f3ff',
+            badgeBg: 'bg-purple-600',
+            badgeText: 'text-white'
+        };
     }
-    // Fallback hash by string
     let hash = 0;
-    for (let i = 0; i < engId.length; i++) {
-        hash = engId.charCodeAt(i) + ((hash << 5) - hash);
+    for (let i = 0; i < engineerId.length; i++) {
+        hash = (hash << 5) - hash + engineerId.charCodeAt(i);
+        hash |= 0;
     }
-    const safeIdx = Math.abs(hash) % ENGINEER_COLOR_PALETTES.length;
-    return ENGINEER_COLOR_PALETTES[safeIdx];
+    const idx = Math.abs(hash) % ENGINEER_COLOR_PALETTES.length;
+    return ENGINEER_COLOR_PALETTES[idx];
 };
 
-interface ResourceGanttViewProps {
+export interface ResourceGanttViewProps {
     jobs: Job[];
     ramps: Lift[];
     engineers: Engineer[];
     purchaseOrders: PurchaseOrder[];
-    vehicles: Vehicle[];
-    customers: Customer[];
-    currentUser: User;
+    vehicles?: Vehicle[];
+    customers?: Customer[];
+    users?: User[];
     estimates?: Estimate[];
-    unallocatedJobs?: Job[];
-    allEngineers?: Engineer[];
     businessEntities?: BusinessEntity[];
-    selectedEntityId?: string;
-    onEditJob: (jobId: string, initialTab?: string) => void;
-    onSaveJob: (job: Partial<Job>) => void;
-    onSaveEstimate?: (estimate: Partial<Estimate>) => void;
-    onSavePurchaseOrder?: (po: Partial<PurchaseOrder>) => void;
-    onUpdateEngineer?: (engineerId: string, newName: string) => Promise<void>;
-    onUpdateEngineerTransfer?: (engineerId: string, toEntityId: string | null, reason?: string) => Promise<void>;
+    onEditJob: (jobId: string, initialTab?: any) => void;
+    onSaveJob?: (job: Job) => Promise<void> | void;
+    onSaveEstimate?: (est: Partial<Estimate>) => Promise<void> | void;
+    onSavePurchaseOrder?: (po: Partial<PurchaseOrder>) => Promise<void> | void;
+    onUpdateEngineer?: (engineerId: string, newName: string) => Promise<void> | void;
+    onUpdateEngineerTransfer?: (engineerId: string, isTransferred: boolean, sourceLocation?: string) => Promise<void> | void;
 }
 
 export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
-    jobs,
-    ramps,
-    engineers,
-    allEngineers = [],
-    businessEntities = [],
-    selectedEntityId = 'all',
-    purchaseOrders,
-    vehicles,
-    customers,
-    currentUser,
+    jobs = [],
+    ramps = [],
+    engineers = [],
+    purchaseOrders = [],
+    vehicles = [],
+    customers = [],
+    users = [],
     estimates = [],
-    unallocatedJobs = [],
+    businessEntities = [],
     onEditJob,
     onSaveJob,
     onSaveEstimate,
@@ -207,16 +172,14 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
     onUpdateEngineer,
     onUpdateEngineerTransfer
 }) => {
-    const [windowDays, setWindowDays] = useState<number>(14);
-    const [simulateExtraEngineers, setSimulateExtraEngineers] = useState<number>(0);
+    // Interactive state
+    const [hoveredJobId, setHoveredJobId] = useState<string | null>(null);
+    const [windowDays, setWindowDays] = useState<number>(7);
+    const [simulateEngineers, setSimulateEngineers] = useState<number>(0);
     const [isBufferModalOpen, setIsBufferModalOpen] = useState<boolean>(false);
     const [isOptimizerOpen, setIsOptimizerOpen] = useState<boolean>(false);
     const [isTransferModalOpen, setIsTransferModalOpen] = useState<boolean>(false);
     const [isPrintModalOpen, setIsPrintModalOpen] = useState<boolean>(false);
-    const [showScheduledUnallocated, setShowScheduledUnallocated] = useState<boolean>(true);
-    const [isAssigningAllTrimming, setIsAssigningAllTrimming] = useState<boolean>(false);
-    const [hoveredJobId, setHoveredJobId] = useState<string | null>(null);
-    const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
     const [startDateOffset, setStartDateOffset] = useState<number>(0);
     const [editingEngineerId, setEditingEngineerId] = useState<string | null>(null);
     const [editingEngineerName, setEditingEngineerName] = useState<string>('');
@@ -231,6 +194,15 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
         const active = ramps.filter(r => r.type !== 'Virtual' && !r.name.toLowerCase().includes('storage'));
         return active.length > 0 ? active : ramps;
     }, [ramps]);
+
+    // Unallocated jobs pool
+    const unallocatedJobs = useMemo(() => jobs.filter(j => isJobUnallocated(j)), [jobs]);
+
+    const startDateStr = useMemo(() => {
+        const today = new Date();
+        const start = addDays(today, startDateOffset);
+        return formatDate(start);
+    }, [startDateOffset]);
 
     // Handle toggling or generating suggested work allocations on the Gantt
     const handleToggleSuggestedPreview = () => {
@@ -251,41 +223,66 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                 dayTechHours.set(d, new Map<string, number>());
                 usableRamps.forEach(r => dayRampHours.get(d)!.set(r.id, 0));
                 engineers.forEach(e => dayTechHours.get(d)!.set(e.id, 0));
+            });
 
-                const bookedForDate = jobs.filter(j => isJobAllocated(j) && (j.scheduledDate === d || (j.segments || [])[0]?.date === d));
-                bookedForDate.forEach(bj => {
-                    const bjHours = bj.estimatedHours || 2;
+            // Seed with booked jobs
+            const bookedJobs = jobs.filter(j => isJobAllocated(j));
+            bookedJobs.forEach(bj => {
+                const bjHours = bj.estimatedHours || 2;
+                if (bj.segments && bj.segments.length > 0 && bj.segments.some(s => !!s.date)) {
+                    bj.segments.forEach(s => {
+                        if (!s.date || s.status === 'Cancelled') return;
+                        const h = s.duration || 2;
+                        const rMap = dayRampHours.get(s.date);
+                        const tMap = dayTechHours.get(s.date);
+                        if (rMap) {
+                            const matchedRamp = usableRamps.find(r => r.name === s.allocatedLift || r.id === s.allocatedLift) || usableRamps[0];
+                            if (matchedRamp) rMap.set(matchedRamp.id, (rMap.get(matchedRamp.id) || 0) + h);
+                        }
+                        if (tMap) {
+                            const matchedTech = engineers.find(e => e.id === s.engineerId || (e.name && e.name.toLowerCase() === s.engineerId?.toLowerCase())) || engineers[0];
+                            if (matchedTech) tMap.set(matchedTech.id, (tMap.get(matchedTech.id) || 0) + h);
+                        }
+                    });
+                } else {
+                    const slices = getWorkingDaySpan(bj.scheduledDate || startDateStr, bjHours, 8);
                     const seg = bj.segments?.[0];
                     const matchedRamp = usableRamps.find(r => r.name === seg?.allocatedLift || r.id === seg?.allocatedLift) || usableRamps[0];
                     const matchedTech = engineers.find(e => e.id === seg?.engineerId || (e.name && e.name.toLowerCase() === seg?.engineerId?.toLowerCase())) || engineers[0];
-                    if (matchedRamp) {
-                        dayRampHours.get(d)!.set(matchedRamp.id, (dayRampHours.get(d)!.get(matchedRamp.id) || 0) + bjHours);
-                    }
-                    if (matchedTech) {
-                        dayTechHours.get(d)!.set(matchedTech.id, (dayTechHours.get(d)!.get(matchedTech.id) || 0) + bjHours);
-                    }
-                });
+                    slices.forEach(slice => {
+                        const rMap = dayRampHours.get(slice.date);
+                        const tMap = dayTechHours.get(slice.date);
+                        if (rMap && matchedRamp) rMap.set(matchedRamp.id, (rMap.get(matchedRamp.id) || 0) + slice.hours);
+                        if (tMap && matchedTech) tMap.set(matchedTech.id, (tMap.get(matchedTech.id) || 0) + slice.hours);
+                    });
+                }
             });
 
             const plan: OptimizedAssignment[] = [];
-            queueToAllocate.forEach((job, idx) => {
+            queueToAllocate.forEach((job) => {
                 const hours = job.estimatedHours || 2;
+                const slices = getWorkingDaySpan(startDateStr, hours, 8);
                 let chosenDate = startDateStr;
                 let chosenRampId = usableRamps[0]?.id || '';
                 let chosenTechId = engineers[0]?.id || '';
                 let placed = false;
 
                 for (const day of daysList) {
-                    const rMap = dayRampHours.get(day);
-                    const tMap = dayTechHours.get(day);
-                    if (!rMap || !tMap) continue;
-
+                    const candidateSlices = getWorkingDaySpan(day, hours, 8);
                     let bestRampId: string | null = null;
                     let lowestRamp = Infinity;
+
                     usableRamps.forEach(r => {
-                        const l = rMap.get(r.id) || 0;
-                        if (l + hours <= 8.5 && l < lowestRamp) {
-                            lowestRamp = l;
+                        let canFit = true;
+                        let totalLoad = 0;
+                        for (const slice of candidateSlices) {
+                            const rMap = dayRampHours.get(slice.date);
+                            const l = rMap ? (rMap.get(r.id) || 0) : 0;
+                            if (l + slice.hours > 8.5) { canFit = false; break; }
+                            totalLoad += l;
+                        }
+                        if (canFit && totalLoad < lowestRamp) {
+                            lowestRamp = totalLoad;
                             bestRampId = r.id;
                         }
                     });
@@ -293,9 +290,16 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                     let bestTechId: string | null = null;
                     let lowestTech = Infinity;
                     engineers.forEach(eng => {
-                        const l = tMap.get(eng.id) || 0;
-                        if (l + hours <= 8.5 && l < lowestTech) {
-                            lowestTech = l;
+                        let canFit = true;
+                        let totalLoad = 0;
+                        for (const slice of candidateSlices) {
+                            const tMap = dayTechHours.get(slice.date);
+                            const l = tMap ? (tMap.get(eng.id) || 0) : 0;
+                            if (l + slice.hours > 8.5) { canFit = false; break; }
+                            totalLoad += l;
+                        }
+                        if (canFit && totalLoad < lowestTech) {
+                            lowestTech = totalLoad;
                             bestTechId = eng.id;
                         }
                     });
@@ -304,27 +308,32 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                         chosenDate = day;
                         chosenRampId = bestRampId;
                         chosenTechId = bestTechId;
-                        rMap.set(bestRampId, (rMap.get(bestRampId) || 0) + hours);
-                        tMap.set(bestTechId, (tMap.get(bestTechId) || 0) + hours);
                         placed = true;
+                        candidateSlices.forEach(slice => {
+                            const rMap = dayRampHours.get(slice.date);
+                            const tMap = dayTechHours.get(slice.date);
+                            if (rMap) rMap.set(bestRampId!, (rMap.get(bestRampId!) || 0) + slice.hours);
+                            if (tMap) tMap.set(bestTechId!, (tMap.get(bestTechId!) || 0) + slice.hours);
+                        });
                         break;
                     }
                 }
 
                 if (!placed) {
-                    chosenDate = daysList[daysList.length - 1] || startDateStr;
-                    chosenRampId = usableRamps[idx % usableRamps.length]?.id || '';
-                    chosenTechId = engineers[idx % engineers.length]?.id || '';
+                    chosenDate = daysList[0] || startDateStr;
+                    chosenRampId = usableRamps[plan.length % usableRamps.length]?.id || '';
+                    chosenTechId = engineers[plan.length % engineers.length]?.id || '';
                 }
 
                 plan.push({
                     job,
-                    vehicle: vehicles.find(v => v.id === job.vehicleId),
-                    customer: customers.find(c => c.id === job.customerId),
                     hours,
                     recommendedEngineerId: chosenTechId,
                     recommendedRampId: chosenRampId,
                     scheduledDate: chosenDate,
+                    endDate: slices[slices.length - 1]?.date || chosenDate,
+                    totalWorkingDays: Math.round((hours / 8) * 10) / 10,
+                    dailyBreakdown: slices,
                     partsLeadDays: 0
                 });
             });
@@ -335,18 +344,60 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
         setShowSuggestedGanttPreview(true);
     };
 
+    // Move single suggested block
+    const handleMoveSuggestedBlock = (jobId: string, newDate: string, newRampId?: string, newTechId?: string) => {
+        setGanttSuggestedPlan(prev => prev.map(p => {
+            if (p.job.id !== jobId) return p;
+            const updatedBreakdown = getWorkingDaySpan(newDate, p.hours, 8);
+            return {
+                ...p,
+                scheduledDate: newDate,
+                endDate: updatedBreakdown[updatedBreakdown.length - 1]?.date || newDate,
+                dailyBreakdown: updatedBreakdown,
+                recommendedRampId: newRampId || p.recommendedRampId,
+                recommendedEngineerId: newTechId || p.recommendedEngineerId
+            };
+        }));
+        setAdjustingSuggestedBlock(null);
+    };
+
     // Lock and allocate suggested work plan directly into confirmed schedule
     const handleCommitSuggestedPlan = async () => {
-        if (!ganttSuggestedPlan || ganttSuggestedPlan.length === 0) return;
+        if (!ganttSuggestedPlan || ganttSuggestedPlan.length === 0 || !onSaveJob) return;
         for (const item of ganttSuggestedPlan) {
             const assignedRamp = usableRamps.find(r => r.id === item.recommendedRampId) || usableRamps[0];
             const assignedRampName = assignedRamp?.name || 'Ramp';
             const techName = engineers.find(e => e.id === item.recommendedEngineerId)?.name || 'Tech';
-
             const isEstimateSim = Boolean(item.isEstimateSimulation || item.job.id.startsWith('sim_est_'));
+
+            const slices = item.dailyBreakdown || getWorkingDaySpan(item.scheduledDate, item.hours, 8);
 
             if (isEstimateSim) {
                 const newJobId = `job_from_est_${item.estimateId || Date.now()}_${Date.now()}`;
+                const segments: JobSegment[] = (slices.length > 0)
+                    ? slices.map((slice, sIdx) => ({
+                        id: `seg_${Date.now()}_${newJobId}_${sIdx}`,
+                        segmentId: `seg_${Date.now()}_${newJobId}_${sIdx}`,
+                        description: slices.length > 1 ? `${item.job.description} (Day ${slice.dayIndex}/${slice.totalDays})` : item.job.description,
+                        status: 'Allocated' as const,
+                        engineerId: item.recommendedEngineerId,
+                        allocatedLift: assignedRampName,
+                        duration: slice.hours,
+                        date: slice.date,
+                        scheduledStartSegment: 1
+                    }))
+                    : [{
+                        id: `seg_${Date.now()}_${newJobId}`,
+                        segmentId: `seg_${Date.now()}_${newJobId}`,
+                        description: item.job.description,
+                        status: 'Allocated' as const,
+                        engineerId: item.recommendedEngineerId,
+                        allocatedLift: assignedRampName,
+                        duration: item.hours,
+                        date: item.scheduledDate,
+                        scheduledStartSegment: 1
+                    }];
+
                 const newJob: Job = {
                     ...item.job,
                     id: newJobId,
@@ -354,20 +405,8 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                     status: 'Allocated',
                     scheduledDate: item.scheduledDate,
                     estimateId: item.estimateId,
-                    segments: [
-                        {
-                            id: `seg_${Date.now()}_${newJobId}`,
-                            segmentId: `seg_${Date.now()}_${newJobId}`,
-                            description: item.job.description,
-                            status: 'Allocated' as const,
-                            engineerId: item.recommendedEngineerId,
-                            allocatedLift: assignedRampName,
-                            duration: item.hours,
-                            date: item.scheduledDate,
-                            scheduledStartSegment: 1
-                        }
-                    ],
-                    notes: (item.job.notes ? `${item.job.notes}\n` : '') + `[FCS Agreed Plan]: Converted from Estimate #${item.job.jobNumber || item.estimateId} and locked to ${assignedRampName} (${techName}) for ${item.scheduledDate}.`
+                    segments,
+                    notes: (item.job.notes ? `${item.job.notes}\n` : '') + `[FCS Agreed Plan]: Converted from Estimate #${item.job.jobNumber || item.estimateId} and locked to ${assignedRampName} (${techName}) starting ${item.scheduledDate}.`
                 };
                 await onSaveJob(newJob);
 
@@ -382,35 +421,38 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                     }
                 }
             } else {
+                const segments: JobSegment[] = (slices.length > 0)
+                    ? slices.map((slice, sIdx) => ({
+                        id: (item.job.segments && item.job.segments[sIdx]?.id) || `seg_${Date.now()}_${item.job.id}_${sIdx}`,
+                        segmentId: (item.job.segments && item.job.segments[sIdx]?.segmentId) || `seg_${Date.now()}_${item.job.id}_${sIdx}`,
+                        description: slices.length > 1 ? `${item.job.description} (Day ${slice.dayIndex}/${slice.totalDays})` : item.job.description,
+                        status: 'Allocated' as const,
+                        engineerId: item.recommendedEngineerId,
+                        allocatedLift: assignedRampName,
+                        duration: slice.hours,
+                        date: slice.date,
+                        scheduledStartSegment: 1
+                    }))
+                    : [{
+                        id: `seg_${Date.now()}_${item.job.id}`,
+                        segmentId: `seg_${Date.now()}_${item.job.id}`,
+                        description: item.job.description,
+                        status: 'Allocated' as const,
+                        engineerId: item.recommendedEngineerId,
+                        allocatedLift: assignedRampName,
+                        duration: item.hours,
+                        date: item.scheduledDate,
+                        scheduledStartSegment: 1
+                    }];
+
                 const updatedJob: Job = {
                     ...item.job,
                     scheduledDate: item.scheduledDate,
                     status: 'Allocated',
                     fcsState: item.partsLeadDays > 0 ? 'STALLED' : 'ACTIVE',
                     materialsStatus: item.partsLeadDays > 0 ? 'Ordered' : 'Delivered',
-                    segments: (item.job.segments && item.job.segments.length > 0)
-                        ? item.job.segments.map((s, sIdx) => ({
-                            ...s,
-                            engineerId: item.recommendedEngineerId,
-                            allocatedLift: assignedRampName,
-                            date: item.scheduledDate,
-                            status: 'Allocated' as const,
-                            duration: sIdx === 0 ? item.hours : s.duration
-                        }))
-                        : [
-                            {
-                                id: `seg_${Date.now()}_${item.job.id}`,
-                                segmentId: `seg_${Date.now()}_${item.job.id}`,
-                                description: item.job.description,
-                                status: 'Allocated' as const,
-                                engineerId: item.recommendedEngineerId,
-                                allocatedLift: assignedRampName,
-                                duration: item.hours,
-                                date: item.scheduledDate,
-                                scheduledStartSegment: 1
-                            }
-                        ],
-                    notes: (item.job.notes ? `${item.job.notes}\n` : '') + `[FCS Agreed Plan]: Locked and allocated to ${assignedRampName} (${techName}) for ${item.scheduledDate}.`
+                    segments,
+                    notes: (item.job.notes ? `${item.job.notes}\n` : '') + `[FCS Agreed Plan]: Locked and allocated to ${assignedRampName} (${techName}) starting ${item.scheduledDate}.`
                 };
                 await onSaveJob(updatedJob);
             }
@@ -419,13 +461,22 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
         setGanttSuggestedPlan([]);
     };
 
-    // Drag & Drop State on Gantt
+    // Drag & Drop State & Ref on Gantt
     const [draggingJobId, setDraggingJobId] = useState<string | null>(null);
     const [dragOverTarget, setDragOverTarget] = useState<{ type: 'ramp' | 'engineer'; resourceId: string; dateStr: string } | null>(null);
+    const activeDragDataRef = useRef<{
+        jobId: string;
+        blockId?: string;
+        sourceType: 'ramp' | 'engineer';
+        sourceRampId?: string;
+        sourceEngineerId?: string;
+        hours: number;
+        isSuggested?: boolean;
+        isEstSim?: boolean;
+    } | null>(null);
 
     // Universal Job Card Move / Adjustment Handler for ALL Gantt Blocks
     const handleQuickAdjustJob = async (jobId: string, newDate: string, newRampId: string, newEngineerId: string) => {
-        // If it's a suggested allocation or estimate simulation:
         const planItem = ganttSuggestedPlan.find(p => p.job.id === jobId);
         if (planItem || showSuggestedGanttPreview || jobId.startsWith('sim_est_')) {
             handleMoveSuggestedBlock(jobId, newDate, newRampId, newEngineerId);
@@ -439,13 +490,20 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
         const assignedRampName = assignedRamp?.name || 'Ramp Bay';
         const assignedTech = engineers.find(e => e.id === newEngineerId) || engineers[0];
 
-        const updatedSegments = (job.segments && job.segments.length > 0)
-            ? job.segments.map(s => ({
-                ...s,
-                date: newDate,
+        const jobHours = job.estimatedHours || (job.segments || []).reduce((s, seg) => s + (seg.duration || 0), 0) || 2;
+        const slices = getWorkingDaySpan(newDate, jobHours, 8);
+
+        const updatedSegments: JobSegment[] = (slices.length > 0)
+            ? slices.map((slice, sIdx) => ({
+                id: (job.segments && job.segments[sIdx]?.id) || `seg_${Date.now()}_${job.id}_${sIdx}`,
+                segmentId: (job.segments && job.segments[sIdx]?.segmentId) || `seg_${Date.now()}_${job.id}_${sIdx}`,
+                description: slices.length > 1 ? `${job.description} (Day ${slice.dayIndex}/${slice.totalDays})` : job.description,
+                status: 'Allocated' as const,
+                date: slice.date,
                 allocatedLift: assignedRampName,
-                engineerId: newEngineerId || s.engineerId,
-                status: 'Allocated' as const
+                engineerId: newEngineerId || (assignedTech?.id || ''),
+                duration: slice.hours,
+                scheduledStartSegment: 1
             }))
             : [{
                 id: `seg_${Date.now()}_${job.id}`,
@@ -454,8 +512,8 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                 status: 'Allocated' as const,
                 date: newDate,
                 allocatedLift: assignedRampName,
-                engineerId: newEngineerId,
-                duration: job.estimatedHours || 2,
+                engineerId: newEngineerId || (assignedTech?.id || ''),
+                duration: jobHours,
                 scheduledStartSegment: 1
             }];
 
@@ -464,18 +522,32 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
             scheduledDate: newDate,
             status: job.status === 'Unallocated' ? 'Allocated' : job.status,
             segments: updatedSegments,
-            notes: (job.notes ? `${job.notes}\n` : '') + `[Gantt Adjusted]: Reallocated to ${assignedRampName} (${assignedTech?.name || 'Tech'}) for ${newDate}.`
+            notes: (job.notes ? `${job.notes}\n` : '') + `[Gantt Adjusted]: Reallocated to ${assignedRampName} (${assignedTech?.name || 'Tech'}) starting ${newDate}.`
         };
 
         await onSaveJob(updatedJob);
         setAdjustingSuggestedBlock(null);
     };
 
+    // Calculate target date from mouse X coordinate relative to the row track container
+    const getTargetDateFromTrackX = (clientX: number, containerEl: HTMLDivElement, days: { dateStr: string }[]): string => {
+        const rect = containerEl.getBoundingClientRect();
+        const x = Math.max(0, Math.min(clientX - rect.left, rect.width - 1));
+        const dayIndex = Math.min(days.length - 1, Math.max(0, Math.floor((x / rect.width) * days.length)));
+        return days[dayIndex]?.dateStr || days[0]?.dateStr;
+    };
+
     const handleDropOnRamp = async (e: React.DragEvent, targetRampId: string, targetDateStr: string) => {
         try {
-            const raw = e.dataTransfer.getData('text/plain');
-            if (!raw) return;
-            const data = JSON.parse(raw);
+            let data = activeDragDataRef.current;
+            if (!data) {
+                try {
+                    const raw = e.dataTransfer.getData('text/plain') || e.dataTransfer.getData('application/json');
+                    if (raw) data = JSON.parse(raw);
+                } catch {}
+            }
+            if (!data || !data.jobId) return;
+
             const { jobId, isSuggested, isEstSim } = data;
 
             if (isSuggested || isEstSim || showSuggestedGanttPreview || jobId.startsWith('sim_est_')) {
@@ -489,14 +561,22 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
             const targetRamp = usableRamps.find(r => r.id === targetRampId) || usableRamps[0];
             const assignedRampName = targetRamp?.name || 'Ramp Bay';
             const defaultTechId = data.sourceEngineerId || job.segments?.[0]?.engineerId || engineers[0]?.id || '';
+            const techName = engineers.find(e => e.id === defaultTechId)?.name || 'Tech';
 
-            const updatedSegments = (job.segments && job.segments.length > 0)
-                ? job.segments.map(s => ({
-                    ...s,
-                    date: targetDateStr,
-                    allocatedLift: assignedRampName,
+            const jobHours = job.estimatedHours || (job.segments || []).reduce((s, seg) => s + (seg.duration || 0), 0) || 2;
+            const slices = getWorkingDaySpan(targetDateStr, jobHours, 8);
+
+            const updatedSegments: JobSegment[] = (slices.length > 0)
+                ? slices.map((slice, sIdx) => ({
+                    id: (job.segments && job.segments[sIdx]?.id) || `seg_${Date.now()}_${job.id}_${sIdx}`,
+                    segmentId: (job.segments && job.segments[sIdx]?.segmentId) || `seg_${Date.now()}_${job.id}_${sIdx}`,
+                    description: slices.length > 1 ? `${job.description} (Day ${slice.dayIndex}/${slice.totalDays})` : job.description,
                     status: 'Allocated' as const,
-                    engineerId: s.engineerId || defaultTechId
+                    date: slice.date,
+                    allocatedLift: assignedRampName,
+                    engineerId: defaultTechId,
+                    duration: slice.hours,
+                    scheduledStartSegment: 1
                 }))
                 : [{
                     id: `seg_${Date.now()}_${job.id}`,
@@ -506,7 +586,7 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                     date: targetDateStr,
                     allocatedLift: assignedRampName,
                     engineerId: defaultTechId,
-                    duration: job.estimatedHours || 2,
+                    duration: jobHours,
                     scheduledStartSegment: 1
                 }];
 
@@ -515,20 +595,30 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                 scheduledDate: targetDateStr,
                 status: job.status === 'Unallocated' ? 'Allocated' : job.status,
                 segments: updatedSegments,
-                notes: (job.notes ? `${job.notes}\n` : '') + `[Gantt Drag-Drop]: Moved to ${assignedRampName} on ${targetDateStr}.`
+                notes: (job.notes ? `${job.notes}\n` : '') + `[Gantt Drag-Drop]: Moved to ${assignedRampName} (${techName}) starting ${targetDateStr}.`
             };
 
             await onSaveJob(updatedJob);
         } catch (err) {
             console.error('Error handling ramp drop:', err);
+        } finally {
+            activeDragDataRef.current = null;
+            setDraggingJobId(null);
+            setDragOverTarget(null);
         }
     };
 
     const handleDropOnEngineer = async (e: React.DragEvent, targetEngineerId: string, targetDateStr: string) => {
         try {
-            const raw = e.dataTransfer.getData('text/plain');
-            if (!raw) return;
-            const data = JSON.parse(raw);
+            let data = activeDragDataRef.current;
+            if (!data) {
+                try {
+                    const raw = e.dataTransfer.getData('text/plain') || e.dataTransfer.getData('application/json');
+                    if (raw) data = JSON.parse(raw);
+                } catch {}
+            }
+            if (!data || !data.jobId) return;
+
             const { jobId, isSuggested, isEstSim } = data;
 
             if (isSuggested || isEstSim || showSuggestedGanttPreview || jobId.startsWith('sim_est_')) {
@@ -540,15 +630,24 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
             if (!job || !onSaveJob) return;
 
             const targetTech = engineers.find(eng => eng.id === targetEngineerId) || engineers[0];
-            const defaultRamp = data.sourceRampId ? (usableRamps.find(r => r.id === data.sourceRampId)?.name || 'Ramp Bay') : (job.segments?.[0]?.allocatedLift || usableRamps[0]?.name || 'Ramp Bay');
+            const defaultRamp = data.sourceRampId 
+                ? (usableRamps.find(r => r.id === data.sourceRampId)?.name || 'Ramp Bay') 
+                : (job.segments?.[0]?.allocatedLift || usableRamps[0]?.name || 'Ramp Bay');
 
-            const updatedSegments = (job.segments && job.segments.length > 0)
-                ? job.segments.map(s => ({
-                    ...s,
-                    date: targetDateStr,
-                    engineerId: targetEngineerId,
+            const jobHours = job.estimatedHours || (job.segments || []).reduce((s, seg) => s + (seg.duration || 0), 0) || 2;
+            const slices = getWorkingDaySpan(targetDateStr, jobHours, 8);
+
+            const updatedSegments: JobSegment[] = (slices.length > 0)
+                ? slices.map((slice, sIdx) => ({
+                    id: (job.segments && job.segments[sIdx]?.id) || `seg_${Date.now()}_${job.id}_${sIdx}`,
+                    segmentId: (job.segments && job.segments[sIdx]?.segmentId) || `seg_${Date.now()}_${job.id}_${sIdx}`,
+                    description: slices.length > 1 ? `${job.description} (Day ${slice.dayIndex}/${slice.totalDays})` : job.description,
                     status: 'Allocated' as const,
-                    allocatedLift: s.allocatedLift || defaultRamp
+                    date: slice.date,
+                    allocatedLift: defaultRamp,
+                    engineerId: targetEngineerId,
+                    duration: slice.hours,
+                    scheduledStartSegment: 1
                 }))
                 : [{
                     id: `seg_${Date.now()}_${job.id}`,
@@ -556,9 +655,9 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                     description: job.description,
                     status: 'Allocated' as const,
                     date: targetDateStr,
-                    engineerId: targetEngineerId,
                     allocatedLift: defaultRamp,
-                    duration: job.estimatedHours || 2,
+                    engineerId: targetEngineerId,
+                    duration: jobHours,
                     scheduledStartSegment: 1
                 }];
 
@@ -567,30 +666,13 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                 scheduledDate: targetDateStr,
                 status: job.status === 'Unallocated' ? 'Allocated' : job.status,
                 segments: updatedSegments,
-                notes: (job.notes ? `${job.notes}\n` : '') + `[Gantt Drag-Drop]: Reassigned to ${targetTech?.name || 'Tech'} on ${targetDateStr}.`
+                notes: (job.notes ? `${job.notes}\n` : '') + `[Gantt Drag-Drop]: Reassigned to ${targetTech.name} (${defaultRamp}) starting ${targetDateStr}.`
             };
 
             await onSaveJob(updatedJob);
         } catch (err) {
             console.error('Error handling engineer drop:', err);
         }
-    };
-
-    // Quick move / adjustment helper for suggested blocks directly on the Gantt
-    const handleMoveSuggestedBlock = (jobId: string, newDate: string, newRampId: string, newEngineerId: string) => {
-        setGanttSuggestedPlan(prev => prev.map(item => {
-            if (item.job.id === jobId) {
-                return {
-                    ...item,
-                    scheduledDate: newDate,
-                    recommendedRampId: newRampId,
-                    recommendedEngineerId: newEngineerId,
-                    isOverridden: true
-                };
-            }
-            return item;
-        }));
-        setAdjustingSuggestedBlock(null);
     };
 
     const handleStartRename = (eng: Engineer) => {
@@ -675,10 +757,6 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
 
     // Local convenience wrapper for technician theme
     const getTechTheme = (engId: string) => getEngineerTheme(engId, engineers);
-
-    const startDateStr = useMemo(() => {
-        return getRelativeDate(startDateOffset);
-    }, [startDateOffset]);
 
     // Timeline column headers
     const timelineDays = useMemo(() => {
@@ -1126,7 +1204,25 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                                 </div>
 
                                 {/* Row Track */}
-                                <div className="relative flex-grow h-14 bg-slate-100/80 rounded-xl border border-slate-200 overflow-hidden">
+                                <div 
+                                    className="relative flex-grow h-14 bg-slate-100/80 rounded-xl border border-slate-200 overflow-hidden"
+                                    onDragOver={(e) => {
+                                        e.preventDefault();
+                                        e.dataTransfer.dropEffect = 'move';
+                                        const dateStr = getTargetDateFromTrackX(e.clientX, e.currentTarget, timelineDays);
+                                        setDragOverTarget({ type: 'ramp', resourceId: row.ramp.id, dateStr });
+                                    }}
+                                    onDragLeave={(e) => {
+                                        if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+                                        setDragOverTarget(null);
+                                    }}
+                                    onDrop={(e) => {
+                                        e.preventDefault();
+                                        const dateStr = getTargetDateFromTrackX(e.clientX, e.currentTarget, timelineDays);
+                                        setDragOverTarget(null);
+                                        handleDropOnRamp(e, row.ramp.id, dateStr);
+                                    }}
+                                >
                                     {/* Column grid drop target cells */}
                                     <div 
                                         className="absolute inset-0 grid"
@@ -1177,20 +1273,26 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                                                 data-block-id={block.id}
                                                 draggable={true}
                                                 onDragStart={(e) => {
-                                                    e.dataTransfer.setData('text/plain', JSON.stringify({
+                                                    const payload = {
                                                         jobId: block.jobId,
                                                         blockId: block.id,
-                                                        sourceType: 'ramp',
+                                                        sourceType: 'ramp' as const,
                                                         sourceRampId: row.ramp.id,
                                                         sourceEngineerId: block.engineerId,
                                                         hours: block.hours,
                                                         isSuggested,
                                                         isEstSim
-                                                    }));
-                                                    e.dataTransfer.effectAllowed = 'move';
+                                                    };
+                                                    activeDragDataRef.current = payload;
+                                                    try {
+                                                        e.dataTransfer.setData('text/plain', JSON.stringify(payload));
+                                                        e.dataTransfer.setData('application/json', JSON.stringify(payload));
+                                                        e.dataTransfer.effectAllowed = 'move';
+                                                    } catch {}
                                                     setDraggingJobId(block.jobId);
                                                 }}
                                                 onDragEnd={() => {
+                                                    activeDragDataRef.current = null;
                                                     setDraggingJobId(null);
                                                     setDragOverTarget(null);
                                                 }}
@@ -1209,6 +1311,8 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                                                 className={`absolute top-1.5 bottom-1.5 rounded-lg px-2 py-0.5 flex flex-col justify-center cursor-grab active:cursor-grabbing transition-all duration-200 z-10 group/block ${
                                                     isBeingDragged ? 'opacity-40 scale-95 ring-2 ring-indigo-400' : ''
                                                 } ${
+                                                    draggingJobId && !isBeingDragged ? 'pointer-events-none' : ''
+                                                } ${
                                                     block.isDeadWeight
                                                         ? 'bg-amber-100 border-2 border-amber-500 text-amber-950 shadow-sm'
                                                         : isEstSim
@@ -1221,6 +1325,7 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                                                 } ${isHovered ? 'ring-2 ring-purple-500 scale-[1.02] z-20 shadow-lg' : ''} ${isDimmed ? 'opacity-35' : ''}`}
                                                 title={`Job #${block.jobId}: ${block.title} (${block.hours}h) • Drag to move date or bay • Click to adjust`}
                                             >
+
                                                 {block.isDeadWeight && (
                                                     <div 
                                                         className="absolute inset-0 rounded-lg pointer-events-none opacity-20" 
@@ -1436,7 +1541,25 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                                     </div>
 
                                     {/* Row Track */}
-                                    <div className="relative flex-grow h-14 bg-slate-100/80 rounded-xl border border-slate-200 overflow-hidden">
+                                    <div 
+                                        className="relative flex-grow h-14 bg-slate-100/80 rounded-xl border border-slate-200 overflow-hidden"
+                                        onDragOver={(e) => {
+                                            e.preventDefault();
+                                            e.dataTransfer.dropEffect = 'move';
+                                            const dateStr = getTargetDateFromTrackX(e.clientX, e.currentTarget, timelineDays);
+                                            setDragOverTarget({ type: 'engineer', resourceId: row.engineer.id, dateStr });
+                                        }}
+                                        onDragLeave={(e) => {
+                                            if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+                                            setDragOverTarget(null);
+                                        }}
+                                        onDrop={(e) => {
+                                            e.preventDefault();
+                                            const dateStr = getTargetDateFromTrackX(e.clientX, e.currentTarget, timelineDays);
+                                            setDragOverTarget(null);
+                                            handleDropOnEngineer(e, row.engineer.id, dateStr);
+                                        }}
+                                    >
                                         {/* Column grid drop target cells */}
                                         <div 
                                             className="absolute inset-0 grid"
@@ -1486,20 +1609,26 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                                                     data-block-id={block.id}
                                                     draggable={true}
                                                     onDragStart={(e) => {
-                                                        e.dataTransfer.setData('text/plain', JSON.stringify({
+                                                        const payload = {
                                                             jobId: block.jobId,
                                                             blockId: block.id,
-                                                            sourceType: 'engineer',
+                                                            sourceType: 'engineer' as const,
                                                             sourceEngineerId: row.engineer.id,
                                                             sourceRampId: block.resourceId,
                                                             hours: block.hours,
                                                             isSuggested,
                                                             isEstSim
-                                                        }));
-                                                        e.dataTransfer.effectAllowed = 'move';
+                                                        };
+                                                        activeDragDataRef.current = payload;
+                                                        try {
+                                                            e.dataTransfer.setData('text/plain', JSON.stringify(payload));
+                                                            e.dataTransfer.setData('application/json', JSON.stringify(payload));
+                                                            e.dataTransfer.effectAllowed = 'move';
+                                                        } catch {}
                                                         setDraggingJobId(block.jobId);
                                                     }}
                                                     onDragEnd={() => {
+                                                        activeDragDataRef.current = null;
                                                         setDraggingJobId(null);
                                                         setDragOverTarget(null);
                                                     }}
@@ -1526,6 +1655,8 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                                                     }}
                                                     className={`absolute top-1.5 bottom-1.5 rounded-lg px-2 py-0.5 flex flex-col justify-center cursor-grab active:cursor-grabbing transition-all duration-200 z-10 text-white shadow-md group/block ${
                                                         isBeingDragged ? 'opacity-40 scale-95 ring-2 ring-indigo-400' : ''
+                                                    } ${
+                                                        draggingJobId && !isBeingDragged ? 'pointer-events-none' : ''
                                                     } ${
                                                         isHovered ? 'ring-2 ring-white scale-[1.02] z-20 shadow-xl' : ''
                                                     } ${isDimmed ? 'opacity-35' : ''}`}

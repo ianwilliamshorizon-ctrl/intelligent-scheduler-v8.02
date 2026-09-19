@@ -334,3 +334,62 @@ export const isWithinDateRange = (itemDateString?: string, startDate?: string, e
     if (endDate && normalizedItemDate > endDate) return false;
     return true;
 };
+
+export interface WorkingDaySlice {
+    date: string;
+    hours: number;
+    dayIndex: number;
+    totalDays: number;
+}
+
+/**
+ * Splits total job hours across consecutive working days (skipping Saturday and Sunday)
+ * with a maximum of maxDailyHours (default 8h/day).
+ * E.g., 20h job starting Friday:
+ * - Day 1 (Friday): 8h
+ * - Day 2 (Monday): 8h
+ * - Day 3 (Tuesday): 4h
+ * Total: 20h across 3 working days (2.5 days working time).
+ */
+export const getWorkingDaySpan = (
+    startDateStr: string,
+    totalHours: number,
+    maxDailyHours: number = 8
+): WorkingDaySlice[] => {
+    const slices: WorkingDaySlice[] = [];
+    if (!startDateStr || totalHours <= 0) return slices;
+
+    let remainingHours = totalHours;
+    let currDate = dateStringToDate(startDateStr.split('T')[0]);
+
+    // If starting date falls on a weekend, advance to next working day
+    while (currDate.getUTCDay() === 0 || currDate.getUTCDay() === 6) {
+        currDate.setUTCDate(currDate.getUTCDate() + 1);
+    }
+
+    const tempDates: { date: string; hours: number }[] = [];
+    while (remainingHours > 0) {
+        // Skip Saturday (6) and Sunday (0)
+        if (currDate.getUTCDay() === 0 || currDate.getUTCDay() === 6) {
+            currDate.setUTCDate(currDate.getUTCDate() + 1);
+            continue;
+        }
+
+        const sliceHours = Math.min(remainingHours, maxDailyHours);
+        tempDates.push({
+            date: formatDate(currDate),
+            hours: sliceHours
+        });
+        remainingHours -= sliceHours;
+        currDate.setUTCDate(currDate.getUTCDate() + 1);
+    }
+
+    const totalDays = tempDates.length;
+    return tempDates.map((item, idx) => ({
+        date: item.date,
+        hours: item.hours,
+        dayIndex: idx + 1,
+        totalDays
+    }));
+};
+

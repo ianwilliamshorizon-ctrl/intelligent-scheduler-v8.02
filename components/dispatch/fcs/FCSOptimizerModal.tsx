@@ -7,7 +7,7 @@ import {
     ChevronDown, ChevronUp
 } from 'lucide-react';
 import { getCustomerDisplayName } from '../../../core/utils/customerUtils';
-import { getRelativeDate, addDays, formatDate, getNextWorkingDay, formatReadableDate } from '../../../core/utils/dateUtils';
+import { getRelativeDate, addDays, formatDate, getNextWorkingDay, formatReadableDate, getWorkingDaySpan, WorkingDaySlice } from '../../../core/utils/dateUtils';
 import { getEngineerTheme } from './ResourceGanttView';
 import { isJobAllocated, isJobUnallocated } from '../../../core/utils/jobUtils';
 
@@ -37,13 +37,20 @@ export interface OptimizedAssignment {
     recommendedEngineerId: string;
     recommendedRampId: string;
     scheduledDate: string;
+    endDate?: string;
+    totalWorkingDays?: number;
+    dailyBreakdown?: WorkingDaySlice[];
     partsLeadDays: number;
     expectedDeliveryDate?: string;
     isOverridden?: boolean;
     isEstimateSimulation?: boolean;
     estimateId?: string;
     estimateTotal?: number;
+    daySliceHours?: number;
+    daySliceIndex?: number;
+    daySliceTotalDays?: number;
 }
+
 
 export interface DailyAllocationSummary {
     dateStr: string;
@@ -187,31 +194,44 @@ export const FCSOptimizerModal: React.FC<FCSOptimizerModalProps> = ({
         const dayRampHours = new Map<string, Map<string, number>>();
         const dayTechHours = new Map<string, Map<string, number>>();
 
-        // Seed with BOOKED jobs commitments first!
+        // Seed day maps
         daysList.forEach(d => {
             dayRampHours.set(d, new Map<string, number>());
             dayTechHours.set(d, new Map<string, number>());
             usableRamps.forEach(r => dayRampHours.get(d)!.set(r.id, 0));
             engineers.forEach(e => dayTechHours.get(d)!.set(e.id, 0));
+        });
 
-            // Load booked jobs for this date
-            const bookedForDate = bookedByDate.get(d) || [];
-            bookedForDate.forEach(bj => {
-                const bjHours = bj.estimatedHours || 2;
-                // Find assigned ramp and tech from segments
+        // Seed with BOOKED jobs commitments first (accounting for multi-day slices)
+        bookedJobs.forEach(bj => {
+            const bjHours = bj.estimatedHours || 2;
+            if (bj.segments && bj.segments.length > 0 && bj.segments.some(s => !!s.date)) {
+                bj.segments.forEach(s => {
+                    if (!s.date || s.status === 'Cancelled') return;
+                    const h = s.duration || 2;
+                    const rMap = dayRampHours.get(s.date);
+                    const tMap = dayTechHours.get(s.date);
+                    if (rMap) {
+                        const matchedRamp = usableRamps.find(r => r.name === s.allocatedLift || r.id === s.allocatedLift) || usableRamps[0];
+                        if (matchedRamp) rMap.set(matchedRamp.id, (rMap.get(matchedRamp.id) || 0) + h);
+                    }
+                    if (tMap) {
+                        const matchedTech = engineers.find(e => e.id === s.engineerId || (e.name && e.name.toLowerCase() === s.engineerId?.toLowerCase())) || engineers[0];
+                        if (matchedTech) tMap.set(matchedTech.id, (tMap.get(matchedTech.id) || 0) + h);
+                    }
+                });
+            } else {
+                const slices = getWorkingDaySpan(bj.scheduledDate || startDateStr, bjHours, 8);
                 const seg = bj.segments?.[0];
                 const matchedRamp = usableRamps.find(r => r.name === seg?.allocatedLift || r.id === seg?.allocatedLift) || usableRamps[0];
                 const matchedTech = engineers.find(e => e.id === seg?.engineerId || (e.name && e.name.toLowerCase() === seg?.engineerId?.toLowerCase())) || engineers[0];
-
-                if (matchedRamp) {
-                    const current = dayRampHours.get(d)!.get(matchedRamp.id) || 0;
-                    dayRampHours.get(d)!.set(matchedRamp.id, current + bjHours);
-                }
-                if (matchedTech) {
-                    const current = dayTechHours.get(d)!.get(matchedTech.id) || 0;
-                    dayTechHours.get(d)!.set(matchedTech.id, current + bjHours);
-                }
-            });
+                slices.forEach(slice => {
+                    const rMap = dayRampHours.get(slice.date);
+                    const tMap = dayTechHours.get(slice.date);
+                    if (rMap && matchedRamp) rMap.set(matchedRamp.id, (rMap.get(matchedRamp.id) || 0) + slice.hours);
+                    if (tMap && matchedTech) tMap.set(matchedTech.id, (tMap.get(matchedTech.id) || 0) + slice.hours);
+                });
+            }
         });
 
         // Sort queue: Highest priority first (1=urgent), then largest jobs first (best fit bin packing)
@@ -265,46 +285,63 @@ export const FCSOptimizerModal: React.FC<FCSOptimizerModalProps> = ({
                 partsLeadDays = Math.max(0, Math.ceil((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24)));
             }
 
-            // Search for optimal day starting at earliestDateStr
-            let chosenDate = earliestDateStr;
-            let chosenRampId = usableRamps[0].id;
-            let chosenEngId = engineers[0].id;
-            let placed = false;
-
             // Is MOT Bay required?
             const isMotJob = (job.description || '').toLowerCase().includes('mot');
             const motBay = usableRamps.find(r => r.type === 'MOT') || usableRamps[0];
 
+            let chosenDate = earliestDateStr;
+            let chosenRampId = usableRamps[0].id;
+            let chosenEngId = engineers[0].id;
+            let chosenSlices = getWorkingDaySpan(earliestDateStr, hours, 8);
+            let placed = false;
+
+            // Search for optimal starting day where the consecutive working day span fits
             for (const day of daysList) {
                 if (day < earliestDateStr) continue;
 
-                const rampMap = dayRampHours.get(day);
-                const techMap = dayTechHours.get(day);
-                if (!rampMap || !techMap) continue;
+                const candidateSlices = getWorkingDaySpan(day, hours, 8);
 
-                // Check ramp availability (8.5h per ramp limit)
+                // Find candidate ramp that can fit all daily slices
                 let bestRampId: string | null = null;
-                if (isMotJob && (rampMap.get(motBay.id) || 0) + hours <= 8.5) {
-                    bestRampId = motBay.id;
-                } else {
-                    // Pick ramp with lowest current load that can fit this job
-                    let lowestRampLoad = Infinity;
-                    usableRamps.forEach(r => {
-                        const rLoad = rampMap.get(r.id) || 0;
-                        if (rLoad + hours <= 8.5 && rLoad < lowestRampLoad) {
-                            lowestRampLoad = rLoad;
-                            bestRampId = r.id;
-                        }
-                    });
-                }
+                let lowestRampTotalLoad = Infinity;
 
-                // Check tech availability (8.5h per tech target limit)
+                const candidateRamps = isMotJob ? [motBay] : usableRamps;
+                candidateRamps.forEach(r => {
+                    let canFit = true;
+                    let totalLoad = 0;
+                    for (const slice of candidateSlices) {
+                        const rMap = dayRampHours.get(slice.date);
+                        const currentLoad = rMap ? (rMap.get(r.id) || 0) : 0;
+                        if (currentLoad + slice.hours > 8.5) {
+                            canFit = false;
+                            break;
+                        }
+                        totalLoad += currentLoad;
+                    }
+                    if (canFit && totalLoad < lowestRampTotalLoad) {
+                        lowestRampTotalLoad = totalLoad;
+                        bestRampId = r.id;
+                    }
+                });
+
+                // Find candidate tech that can fit all daily slices
                 let bestTechId: string | null = null;
-                let lowestTechLoad = Infinity;
+                let lowestTechTotalLoad = Infinity;
+
                 engineers.forEach(eng => {
-                    const tLoad = techMap.get(eng.id) || 0;
-                    if (tLoad + hours <= 8.5 && tLoad < lowestTechLoad) {
-                        lowestTechLoad = tLoad;
+                    let canFit = true;
+                    let totalLoad = 0;
+                    for (const slice of candidateSlices) {
+                        const tMap = dayTechHours.get(slice.date);
+                        const currentLoad = tMap ? (tMap.get(eng.id) || 0) : 0;
+                        if (currentLoad + slice.hours > 8.5) {
+                            canFit = false;
+                            break;
+                        }
+                        totalLoad += currentLoad;
+                    }
+                    if (canFit && totalLoad < lowestTechTotalLoad) {
+                        lowestTechTotalLoad = totalLoad;
                         bestTechId = eng.id;
                     }
                 });
@@ -313,20 +350,26 @@ export const FCSOptimizerModal: React.FC<FCSOptimizerModalProps> = ({
                     chosenDate = day;
                     chosenRampId = bestRampId;
                     chosenEngId = bestTechId;
+                    chosenSlices = candidateSlices;
                     placed = true;
 
-                    // Update day's load
-                    rampMap.set(bestRampId, (rampMap.get(bestRampId) || 0) + hours);
-                    techMap.set(bestTechId, (techMap.get(bestTechId) || 0) + hours);
+                    // Update day loads across all consecutive working days
+                    candidateSlices.forEach(slice => {
+                        const rMap = dayRampHours.get(slice.date);
+                        const tMap = dayTechHours.get(slice.date);
+                        if (rMap) rMap.set(bestRampId!, (rMap.get(bestRampId!) || 0) + slice.hours);
+                        if (tMap) tMap.set(bestTechId!, (tMap.get(bestTechId!) || 0) + slice.hours);
+                    });
                     break;
                 }
             }
 
-            // If workshop is completely saturated across all days, overflow to the best balanced day
+            // Fallback if workshop is packed: place on best day with working span
             if (!placed) {
-                chosenDate = daysList[daysList.length - 1] || earliestDateStr;
+                chosenDate = daysList[0] || earliestDateStr;
                 chosenRampId = usableRamps[assignments.length % usableRamps.length].id;
                 chosenEngId = engineers[assignments.length % engineers.length].id;
+                chosenSlices = getWorkingDaySpan(chosenDate, hours, 8);
             }
 
             assignments.push({
@@ -337,6 +380,9 @@ export const FCSOptimizerModal: React.FC<FCSOptimizerModalProps> = ({
                 recommendedEngineerId: chosenEngId,
                 recommendedRampId: chosenRampId,
                 scheduledDate: chosenDate,
+                endDate: chosenSlices[chosenSlices.length - 1]?.date || chosenDate,
+                totalWorkingDays: Math.round((hours / 8) * 10) / 10,
+                dailyBreakdown: chosenSlices,
                 partsLeadDays,
                 expectedDeliveryDate: latestPartsDelivery,
                 isEstimateSimulation: isSimulated,
@@ -349,7 +395,7 @@ export const FCSOptimizerModal: React.FC<FCSOptimizerModalProps> = ({
     }, [
         unallocatedJobs, 
         simulatedJobsFromEstimates, 
-        bookedByDate, 
+        bookedJobs, 
         daysList, 
         usableRamps, 
         engineers, 
@@ -360,54 +406,92 @@ export const FCSOptimizerModal: React.FC<FCSOptimizerModalProps> = ({
         startDateStr
     ]);
 
-    // Apply manual overrides
+    // Apply manual overrides with multi-day breakdown recalculation
     const optimizedPlan = useMemo<OptimizedAssignment[]>(() => {
         return initialPlan.map(item => {
             const override = overrides[item.job.id];
             if (!override) return item;
 
+            const scheduledDate = override.scheduledDate || item.scheduledDate;
+            const dailyBreakdown = getWorkingDaySpan(scheduledDate, item.hours, 8);
+            const endDate = dailyBreakdown[dailyBreakdown.length - 1]?.date || scheduledDate;
+
             return {
                 ...item,
                 recommendedEngineerId: override.engineerId || item.recommendedEngineerId,
                 recommendedRampId: override.rampId || item.recommendedRampId,
-                scheduledDate: override.scheduledDate || item.scheduledDate,
+                scheduledDate,
+                endDate,
+                dailyBreakdown,
                 isOverridden: true
             };
         });
     }, [initialPlan, overrides]);
 
-    // 5. DAILY ALLOCATION SUMMARIES (For Day Packing View)
+    // 5. DAILY ALLOCATION SUMMARIES (For Day Packing View with Multi-Day Distribution)
     const dailySummaries = useMemo<DailyAllocationSummary[]>(() => {
         const rampCap = usableRamps.length * 8;
         const techCap = engineers.length * 8;
 
         return daysList.map(dateStr => {
-            const dayBooked = bookedByDate.get(dateStr) || [];
-            const dayOptimized = optimizedPlan.filter(item => item.scheduledDate === dateStr);
-
             const rLoad = new Map<string, number>();
             const tLoad = new Map<string, number>();
             usableRamps.forEach(r => rLoad.set(r.id, 0));
             engineers.forEach(e => tLoad.set(e.id, 0));
 
             let totalDayHours = 0;
+            const dayBookedList: Job[] = [];
 
-            // Add booked
-            dayBooked.forEach(bj => {
-                const h = bj.estimatedHours || 2;
-                totalDayHours += h;
-                const seg = bj.segments?.[0];
-                const r = usableRamps.find(ramp => ramp.name === seg?.allocatedLift || ramp.id === seg?.allocatedLift) || usableRamps[0];
-                const t = engineers.find(eng => eng.id === seg?.engineerId || (eng.name && eng.name.toLowerCase() === seg?.engineerId?.toLowerCase())) || engineers[0];
-                if (r) rLoad.set(r.id, (rLoad.get(r.id) || 0) + h);
-                if (t) tLoad.set(t.id, (tLoad.get(t.id) || 0) + h);
+            // Add booked jobs active on this date
+            bookedJobs.forEach(bj => {
+                const totalH = bj.estimatedHours || 2;
+                let dayHours = 0;
+
+                if (bj.segments && bj.segments.length > 0 && bj.segments.some(s => !!s.date)) {
+                    const matchingSegs = bj.segments.filter(s => s.date === dateStr && s.status !== 'Cancelled');
+                    matchingSegs.forEach(s => {
+                        const h = s.duration || 2;
+                        dayHours += h;
+                        const r = usableRamps.find(ramp => ramp.name === s.allocatedLift || ramp.id === s.allocatedLift) || usableRamps[0];
+                        const t = engineers.find(eng => eng.id === s.engineerId || (eng.name && eng.name.toLowerCase() === s.engineerId?.toLowerCase())) || engineers[0];
+                        if (r) rLoad.set(r.id, (rLoad.get(r.id) || 0) + h);
+                        if (t) tLoad.set(t.id, (tLoad.get(t.id) || 0) + h);
+                    });
+                } else {
+                    const slices = getWorkingDaySpan(bj.scheduledDate || startDateStr, totalH, 8);
+                    const matchingSlice = slices.find(s => s.date === dateStr);
+                    if (matchingSlice) {
+                        dayHours = matchingSlice.hours;
+                        const seg = bj.segments?.[0];
+                        const r = usableRamps.find(ramp => ramp.name === seg?.allocatedLift || ramp.id === seg?.allocatedLift) || usableRamps[0];
+                        const t = engineers.find(eng => eng.id === seg?.engineerId || (eng.name && eng.name.toLowerCase() === seg?.engineerId?.toLowerCase())) || engineers[0];
+                        if (r) rLoad.set(r.id, (rLoad.get(r.id) || 0) + dayHours);
+                        if (t) tLoad.set(t.id, (tLoad.get(t.id) || 0) + dayHours);
+                    }
+                }
+
+                if (dayHours > 0) {
+                    totalDayHours += dayHours;
+                    dayBookedList.push(bj);
+                }
             });
 
-            // Add optimized
-            dayOptimized.forEach(opt => {
-                totalDayHours += opt.hours;
-                rLoad.set(opt.recommendedRampId, (rLoad.get(opt.recommendedRampId) || 0) + opt.hours);
-                tLoad.set(opt.recommendedEngineerId, (tLoad.get(opt.recommendedEngineerId) || 0) + opt.hours);
+            // Add optimized jobs active on this date
+            const dayOptimizedList: OptimizedAssignment[] = [];
+            optimizedPlan.forEach(opt => {
+                const slices = opt.dailyBreakdown || getWorkingDaySpan(opt.scheduledDate, opt.hours, 8);
+                const matchingSlice = slices.find(s => s.date === dateStr);
+                if (matchingSlice) {
+                    totalDayHours += matchingSlice.hours;
+                    rLoad.set(opt.recommendedRampId, (rLoad.get(opt.recommendedRampId) || 0) + matchingSlice.hours);
+                    tLoad.set(opt.recommendedEngineerId, (tLoad.get(opt.recommendedEngineerId) || 0) + matchingSlice.hours);
+                    dayOptimizedList.push({
+                        ...opt,
+                        daySliceHours: matchingSlice.hours,
+                        daySliceIndex: matchingSlice.dayIndex,
+                        daySliceTotalDays: matchingSlice.totalDays
+                    });
+                }
             });
 
             // Efficiency rating: ratio of balanced utilized capacity without exceeding limits
@@ -418,8 +502,8 @@ export const FCSOptimizerModal: React.FC<FCSOptimizerModalProps> = ({
             return {
                 dateStr,
                 dayLabel: formatReadableDate(dateStr),
-                bookedJobs: dayBooked,
-                optimizedJobs: dayOptimized,
+                bookedJobs: dayBookedList,
+                optimizedJobs: dayOptimizedList,
                 totalHours: totalDayHours,
                 rampLoad: rLoad,
                 techLoad: tLoad,
@@ -428,7 +512,7 @@ export const FCSOptimizerModal: React.FC<FCSOptimizerModalProps> = ({
                 efficiencyRating: efficiency
             };
         });
-    }, [daysList, bookedByDate, optimizedPlan, usableRamps, engineers]);
+    }, [daysList, bookedJobs, optimizedPlan, usableRamps, engineers, startDateStr]);
 
     // Workload stats
     const totalAllocatedHours = useMemo(() => {

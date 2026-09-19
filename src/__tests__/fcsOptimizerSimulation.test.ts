@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getNextWorkingDay, formatDate, dateStringToDate } from '../../core/utils/dateUtils';
+import { getNextWorkingDay, getWorkingDaySpan, formatDate, dateStringToDate } from '../../core/utils/dateUtils';
 import { Job, Lift, Engineer, PurchaseOrder, Estimate } from '../../types';
 import { calculateFCSMatrix } from '../../core/services/fcsSchedulingEngine';
 
@@ -289,4 +289,40 @@ describe('FCS Auto-Optimizer Simulation & Enhancements', () => {
             expect(ramp2Blocks[0].isSuggested).toBeFalsy(); // Confirmed booked work!
         });
     });
+
+    describe('getWorkingDaySpan multi-day working day breakdown', () => {
+        it('correctly divides a 20-hour job across 3 working days at 8h/day', () => {
+            // Starting Friday 2026-09-18
+            const span = getWorkingDaySpan('2026-09-18', 20, 8);
+            expect(span).toHaveLength(3);
+
+            // Day 1: Friday 2026-09-18 (8h)
+            expect(span[0].date).toBe('2026-09-18');
+            expect(span[0].dayIndex).toBe(1);
+            expect(span[0].totalDays).toBe(3);
+            expect(span[0].hours).toBe(8);
+
+            // Day 2: Monday 2026-09-21 (8h) - Weekend skipped!
+            expect(span[1].date).toBe('2026-09-21');
+            expect(span[1].dayIndex).toBe(2);
+            expect(span[1].totalDays).toBe(3);
+            expect(span[1].hours).toBe(8);
+
+            // Day 3: Tuesday 2026-09-22 (4h)
+            expect(span[2].date).toBe('2026-09-22');
+            expect(span[2].dayIndex).toBe(3);
+            expect(span[2].totalDays).toBe(3);
+            expect(span[2].hours).toBe(4);
+        });
+
+        it('handles single-day job under or equal to maxHoursPerDay', () => {
+            const span = getWorkingDaySpan('2026-09-15', 6.5, 8);
+            expect(span).toHaveLength(1);
+            expect(span[0].date).toBe('2026-09-15');
+            expect(span[0].dayIndex).toBe(1);
+            expect(span[0].totalDays).toBe(1);
+            expect(span[0].hours).toBe(6.5);
+        });
+    });
 });
+
