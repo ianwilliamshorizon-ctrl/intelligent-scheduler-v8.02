@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
     Job, Vehicle, Customer, Invoice, Estimate, Inquiry, 
-    BusinessEntity, InspectionTemplate, InspectionDiagram, User, Engineer 
+    BusinessEntity, InspectionTemplate, InspectionDiagram, User, Engineer, JobSegment 
 } from '../../types';
 import { 
     Wrench, CalendarDays, AlertOctagon, ClipboardCheck, BarChart3, 
@@ -159,8 +159,7 @@ export const MobileAppShell: React.FC<MobileAppShellProps> = ({
         const complete = entityJobs.filter(j => j.status === 'Complete' || j.status === 'Pending QC');
         const readyInvoice = entityJobs.filter(j => 
             (j.status === 'Complete' || j.status === 'Pending QC') && 
-            !j.invoiceId && 
-            j.status !== 'Invoiced'
+            !j.invoiceId
         );
         const invoiced = entityJobs.filter(j => j.status === 'Invoiced' || Boolean(j.invoiceId));
 
@@ -301,12 +300,13 @@ export const MobileAppShell: React.FC<MobileAppShellProps> = ({
         if (!selectedAssessmentJob) return;
         setIsSavingAllocation(true);
         try {
-            const existingSegs = selectedAssessmentJob.segments && selectedAssessmentJob.segments.length > 0 
+            const existingSegs: JobSegment[] = selectedAssessmentJob.segments && selectedAssessmentJob.segments.length > 0 
                 ? [...selectedAssessmentJob.segments] 
                 : [{
                     id: `seg_${Date.now()}`,
-                    status: (allotTechId || allotRamp.trim() ? 'Allocated' : 'Unallocated') as any,
-                    segmentIndex: 0
+                    status: (allotTechId || allotRamp.trim() ? 'Allocated' : 'Unallocated'),
+                    date: allotDate || undefined,
+                    allocatedHours: Number(allotHours) || 1
                 }];
             
             existingSegs[0] = {
@@ -1890,7 +1890,7 @@ export const MobileAppShell: React.FC<MobileAppShellProps> = ({
                                             <option value="">-- Unassigned (Pool) --</option>
                                             {engineers.map(eng => (
                                                 <option key={eng.id} value={eng.id}>
-                                                    {eng.name} {eng.skillLevel ? `(${eng.skillLevel})` : ''}
+                                                    {eng.name} {eng.specialization ? `(${eng.specialization})` : ''}
                                                 </option>
                                             ))}
                                         </select>
