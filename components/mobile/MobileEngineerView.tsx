@@ -143,7 +143,7 @@ export const MobileEngineerView: React.FC<MobileEngineerViewProps> = ({
     };
 
     return (
-        <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans select-none">
+        <div className="h-full w-full flex-1 overflow-y-auto overscroll-y-contain -webkit-overflow-scrolling-touch bg-slate-950 text-slate-100 flex flex-col font-sans pb-28 touch-pan-y">
             {/* Top Bar / Offline Monitor */}
             <header className="bg-slate-900 border-b border-slate-800 px-4 py-3 sticky top-0 z-30 shadow-md">
                 <div className="flex items-center justify-between">

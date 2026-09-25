@@ -766,6 +766,9 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
 
     const containerRef = useRef<HTMLDivElement>(null);
     const [blockPositions, setBlockPositions] = useState<Map<string, { x: number; y: number; width: number; height: number }>>(new Map());
+    const [linkDisplayMode, setLinkDisplayMode] = useState<'hover' | 'all' | 'none'>('hover');
+    const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
+    const [containerDimensions, setContainerDimensions] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
 
     // Local convenience wrapper for technician theme
     const getTechTheme = (engId: string) => getEngineerTheme(engId, engineers);
@@ -819,33 +822,67 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
         });
     }, [effectiveJobsForMatrix, ramps, engineers, purchaseOrders, vehicles, windowDays, startDateStr, simulateExtraEngineers, showSuggestedGanttPreview, showScheduledUnallocated, ganttSuggestedPlan]);
 
-    // Recalculate block positions for SVG vector linkages on resize or data update
+    // Recalculate block positions for SVG vector linkages on resize, scroll, or data update
     useEffect(() => {
+        let animationFrameId: number;
         const updatePositions = () => {
             if (!containerRef.current) return;
-            const containerRect = containerRef.current.getBoundingClientRect();
-            const elements = containerRef.current.querySelectorAll<HTMLDivElement>('[data-block-id]');
+            const container = containerRef.current;
+            const containerRect = container.getBoundingClientRect();
+            const elements = container.querySelectorAll<HTMLDivElement>('[data-block-id]');
             const newMap = new Map<string, { x: number; y: number; width: number; height: number }>();
+            const scrollLeft = container.scrollLeft;
+            const scrollTop = container.scrollTop;
+
             elements.forEach(el => {
                 const id = el.getAttribute('data-block-id');
                 if (id) {
                     const rect = el.getBoundingClientRect();
                     newMap.set(id, {
-                        x: rect.left - containerRect.left + rect.width / 2,
-                        y: rect.top - containerRect.top + rect.height / 2,
+                        x: rect.left - containerRect.left + scrollLeft + rect.width / 2,
+                        y: rect.top - containerRect.top + scrollTop + rect.height / 2,
                         width: rect.width,
                         height: rect.height
                     });
                 }
             });
             setBlockPositions(newMap);
+            setContainerDimensions({
+                width: Math.max(container.scrollWidth, container.clientWidth),
+                height: Math.max(container.scrollHeight, container.clientHeight)
+            });
         };
 
-        const timer = setTimeout(updatePositions, 80);
-        window.addEventListener('resize', updatePositions);
+        const onScrollOrResize = () => {
+            cancelAnimationFrame(animationFrameId);
+            animationFrameId = requestAnimationFrame(updatePositions);
+        };
+
+        const timer = setTimeout(updatePositions, 60);
+        const container = containerRef.current;
+        if (container) {
+            container.addEventListener('scroll', onScrollOrResize, { passive: true });
+        }
+        window.addEventListener('resize', onScrollOrResize);
+
+        let resizeObserver: ResizeObserver | null = null;
+        if (container && typeof ResizeObserver !== 'undefined') {
+            resizeObserver = new ResizeObserver(() => {
+                onScrollOrResize();
+            });
+            resizeObserver.observe(container);
+        }
+
         return () => {
             clearTimeout(timer);
-            window.removeEventListener('resize', updatePositions);
+            cancelAnimationFrame(animationFrameId);
+            if (container) {
+                container.removeEventListener('scroll', onScrollOrResize);
+            }
+            if (resizeObserver) {
+                resizeObserver.disconnect();
+            }
+            window.removeEventListener('resize', onScrollOrResize);
         };
     }, [matrix, windowDays, startDateStr]);
 
@@ -909,6 +946,32 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                                 {days}d
                             </button>
                         ))}
+                    </div>
+
+                    {/* Relationship Lines Display Mode */}
+                    <div className="flex items-center bg-slate-100 rounded-xl border border-slate-200 p-0.5 text-xs font-bold" title="Ramp to Technician relationship drop lines">
+                        <span className="text-[10px] uppercase font-bold text-slate-400 px-1.5 hidden xl:inline">Lines:</span>
+                        <button
+                            onClick={() => setLinkDisplayMode('hover')}
+                            className={`px-2 py-1 rounded-lg transition-all ${linkDisplayMode === 'hover' ? 'bg-indigo-600 text-white shadow-xs font-black' : 'text-slate-600 hover:text-slate-900'}`}
+                            title="Show relationship lines only when hovering over or selecting a job (cleanest view)"
+                        >
+                            On Hover
+                        </button>
+                        <button
+                            onClick={() => setLinkDisplayMode('all')}
+                            className={`px-2 py-1 rounded-lg transition-all ${linkDisplayMode === 'all' ? 'bg-indigo-600 text-white shadow-xs font-black' : 'text-slate-600 hover:text-slate-900'}`}
+                            title="Show all relationship lines across all visible jobs"
+                        >
+                            All Lines
+                        </button>
+                        <button
+                            onClick={() => setLinkDisplayMode('none')}
+                            className={`px-2 py-1 rounded-lg transition-all ${linkDisplayMode === 'none' ? 'bg-indigo-600 text-white shadow-xs font-black' : 'text-slate-600 hover:text-slate-900'}`}
+                            title="Hide relationship lines"
+                        >
+                            Off
+                        </button>
                     </div>
                 </div>
 
@@ -1062,7 +1125,19 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
             </div>
 
             {/* Split-Row Gantt Visual Canvas */}
-            <div ref={containerRef} className="relative flex-grow flex flex-col min-h-0 overflow-y-auto overflow-x-hidden p-4 space-y-4">
+            <div 
+                ref={containerRef} 
+                onMouseLeave={() => {
+                    setHoveredJobId(null);
+                    setTooltipPos(null);
+                }}
+                onClick={(e) => {
+                    if (e.target === containerRef.current) {
+                        setSelectedJobId(null);
+                    }
+                }}
+                className="relative flex-grow flex flex-col min-h-0 overflow-y-auto overflow-x-hidden p-4 space-y-4"
+            >
                 {/* Suggested Work Allocation Preview Banner */}
                 {showSuggestedGanttPreview && (
                     <div className="bg-gradient-to-r from-purple-950 via-indigo-950 to-slate-900 text-white px-5 py-3.5 rounded-2xl shadow-xl border border-purple-400/50 flex flex-wrap items-center justify-between gap-4 animate-fade-in shrink-0 z-40">
@@ -1102,51 +1177,67 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                 )}
 
                 {/* SVG Vectors Linkage Overlay */}
-                <svg className="absolute inset-0 w-full h-full pointer-events-none z-30">
-                    <defs>
-                        <marker id="arrowhead" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
-                            <polygon points="0 0, 6 3, 0 6" fill="#4f46e5" />
-                        </marker>
-                        <marker id="arrowhead-hover" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
-                            <polygon points="0 0, 6 3, 0 6" fill="#9333ea" />
-                        </marker>
-                    </defs>
+                {linkDisplayMode !== 'none' && (
+                    <svg 
+                        className="absolute inset-0 pointer-events-none z-30 overflow-visible"
+                        style={{
+                            width: containerDimensions.width || '100%',
+                            height: containerDimensions.height || '100%'
+                        }}
+                    >
+                        <defs>
+                            <marker id="arrowhead" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+                                <polygon points="0 0, 6 3, 0 6" fill="#4f46e5" />
+                            </marker>
+                            <marker id="arrowhead-hover" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+                                <polygon points="0 0, 6 3, 0 6" fill="#9333ea" />
+                            </marker>
+                        </defs>
 
-                    {matrix.dependencyLinks.map(link => {
-                        const rampPos = blockPositions.get(link.rampBlockId);
-                        const engPos = blockPositions.get(link.engineerBlockId);
-                        if (!rampPos || !engPos) return null;
+                        {matrix.dependencyLinks.map(link => {
+                            const rampPos = blockPositions.get(link.rampBlockId);
+                            const engPos = blockPositions.get(link.engineerBlockId);
+                            if (!rampPos || !engPos) return null;
 
-                        const isHighlighted = hoveredJobId === link.jobId;
-                        const isSuggested = link.fcsState === 'SUGGESTED';
-                        const engTheme = link.engineerId ? getEngineerTheme(link.engineerId) : null;
-                        const strokeColor = isHighlighted ? '#9333ea' : (isSuggested ? '#c084fc' : (engTheme ? engTheme.hex : (link.fcsState === 'ACTIVE' ? '#4f46e5' : '#94a3b8')));
-                        const strokeWidth = isHighlighted ? 3.5 : (isSuggested ? 2.5 : 2);
-                        const strokeDash = isSuggested ? '6 3' : (link.fcsState === 'QUEUED' ? '4 4' : 'none');
+                            const isHighlighted = (hoveredJobId === link.jobId) || (selectedJobId === link.jobId);
+                            
+                            // In 'hover' mode (default), only render lines for the active/highlighted job
+                            if (linkDisplayMode === 'hover' && !isHighlighted) return null;
 
-                        // Draw smooth bezier vector connecting ramp block to engineer block
-                        const x1 = rampPos.x;
-                        const y1 = rampPos.y + rampPos.height / 2;
-                        const x2 = engPos.x;
-                        const y2 = engPos.y - engPos.height / 2;
-                        const cY1 = y1 + (y2 - y1) * 0.5;
-                        const cY2 = y2 - (y2 - y1) * 0.5;
+                            const isSuggested = link.fcsState === 'SUGGESTED';
+                            const engTheme = link.engineerId ? getEngineerTheme(link.engineerId) : null;
+                            const strokeColor = isHighlighted ? '#9333ea' : (isSuggested ? '#c084fc' : (engTheme ? engTheme.hex : (link.fcsState === 'ACTIVE' ? '#4f46e5' : '#94a3b8')));
+                            const strokeWidth = isHighlighted ? 3.5 : (isSuggested ? 2.5 : 2);
+                            const strokeDash = isSuggested ? '6 3' : (link.fcsState === 'QUEUED' ? '4 4' : 'none');
 
-                        return (
-                            <path
-                                key={link.id}
-                                d={`M ${x1} ${y1} C ${x1} ${cY1}, ${x2} ${cY2}, ${x2} ${y2}`}
-                                fill="none"
-                                stroke={strokeColor}
-                                strokeWidth={strokeWidth}
-                                strokeDasharray={strokeDash}
-                                opacity={hoveredJobId ? (isHighlighted ? 1 : 0.2) : 0.75}
-                                markerEnd={isHighlighted ? "url(#arrowhead-hover)" : "url(#arrowhead)"}
-                                className="transition-all duration-300"
-                            />
-                        );
-                    })}
-                </svg>
+                            // Draw smooth bezier vector connecting ramp block to engineer block
+                            const x1 = rampPos.x;
+                            const y1 = rampPos.y + rampPos.height / 2;
+                            const x2 = engPos.x;
+                            const y2 = engPos.y - engPos.height / 2;
+
+                            // Only draw drop line downwards towards technician row
+                            if (y2 <= y1) return null;
+
+                            const cY1 = y1 + (y2 - y1) * 0.5;
+                            const cY2 = y2 - (y2 - y1) * 0.5;
+
+                            return (
+                                <path
+                                    key={link.id}
+                                    d={`M ${x1} ${y1} C ${x1} ${cY1}, ${x2} ${cY2}, ${x2} ${y2}`}
+                                    fill="none"
+                                    stroke={strokeColor}
+                                    strokeWidth={strokeWidth}
+                                    strokeDasharray={strokeDash}
+                                    opacity={isHighlighted ? 1 : 0.6}
+                                    markerEnd={isHighlighted ? "url(#arrowhead-hover)" : "url(#arrowhead)"}
+                                    className="pointer-events-none transition-opacity duration-150"
+                                />
+                            );
+                        })}
+                    </svg>
+                )}
 
                 {/* Header Row: Days of Timeline Window (Aligned with row tracks) */}
                 <div className="flex items-center gap-4">
@@ -1303,6 +1394,8 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                                                         e.dataTransfer.effectAllowed = 'move';
                                                     } catch {}
                                                     setDraggingJobId(block.jobId);
+                                                    setHoveredJobId(null);
+                                                    setTooltipPos(null);
                                                 }}
                                                 onDragEnd={() => {
                                                     activeDragDataRef.current = null;
@@ -1313,6 +1406,7 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                                                 onMouseMove={(e) => setTooltipPos({ x: e.clientX, y: e.clientY })}
                                                 onMouseLeave={() => { setHoveredJobId(null); setTooltipPos(null); }}
                                                 onClick={() => {
+                                                    setSelectedJobId(prev => prev === block.jobId ? null : block.jobId);
                                                     setAdjustingSuggestedBlock(block);
                                                 }}
                                                 style={{
@@ -1639,6 +1733,8 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                                                             e.dataTransfer.effectAllowed = 'move';
                                                         } catch {}
                                                         setDraggingJobId(block.jobId);
+                                                        setHoveredJobId(null);
+                                                        setTooltipPos(null);
                                                     }}
                                                     onDragEnd={() => {
                                                         activeDragDataRef.current = null;
@@ -1649,6 +1745,7 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                                                     onMouseMove={(e) => setTooltipPos({ x: e.clientX, y: e.clientY })}
                                                     onMouseLeave={() => { setHoveredJobId(null); setTooltipPos(null); }}
                                                     onClick={() => {
+                                                        setSelectedJobId(prev => prev === block.jobId ? null : block.jobId);
                                                         setAdjustingSuggestedBlock(block);
                                                     }}
                                                     style={{

@@ -312,9 +312,9 @@ export const MobileAppShell: React.FC<MobileAppShellProps> = ({
     };
 
     return (
-        <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans select-none pb-24">
+        <div className="h-full w-full flex-1 overflow-y-auto overscroll-y-contain -webkit-overflow-scrolling-touch bg-slate-950 text-slate-100 flex flex-col font-sans pb-32 touch-pan-y">
             {/* Top Bar: Frosted Glass & Safe Area */}
-            <header className="sticky top-0 z-30 bg-slate-900/85 backdrop-blur-xl border-b border-slate-800/80 px-3.5 pt-[max(12px,calc(env(safe-area-inset-top,0px)+0.5rem))] pb-3 shadow-md">
+            <header className="sticky top-0 z-30 bg-slate-900/90 backdrop-blur-xl border-b border-slate-800/80 px-3.5 pt-[max(12px,calc(env(safe-area-inset-top,0px)+0.5rem))] pb-2.5 shadow-md">
                 <div className="flex items-center justify-between max-w-2xl mx-auto w-full">
                     {/* Brand & User Chip */}
                     <div className="flex items-center gap-2.5">
@@ -374,6 +374,46 @@ export const MobileAppShell: React.FC<MobileAppShellProps> = ({
                         </button>
                     </div>
                 </div>
+
+                {/* Universal Business Entity Switcher Strip - Available on ALL tabs past the landing page */}
+                {businessEntities.length > 0 && (
+                    <div className="mt-2.5 pt-2 border-t border-slate-800/80 max-w-2xl mx-auto w-full">
+                        <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide py-0.5 px-0.5">
+                            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1 shrink-0 mr-1">
+                                <Building2 size={12} className="text-amber-400" />
+                                Entity:
+                            </span>
+                            <button
+                                type="button"
+                                onClick={() => onSelectEntity('all')}
+                                className={`px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap transition border cursor-pointer shrink-0 ${
+                                    selectedEntityId === 'all' || !selectedEntityId
+                                        ? 'bg-gradient-to-r from-amber-500 to-indigo-600 text-white border-amber-400/60 shadow-xs'
+                                        : 'bg-slate-800/80 text-slate-300 hover:text-white border-slate-700/80'
+                                }`}
+                            >
+                                All Entities
+                            </button>
+                            {businessEntities.map(e => {
+                                const isSelected = selectedEntityId === e.id;
+                                return (
+                                    <button
+                                        key={e.id}
+                                        type="button"
+                                        onClick={() => onSelectEntity(e.id)}
+                                        className={`px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap transition border cursor-pointer shrink-0 flex items-center gap-1 ${
+                                            isSelected
+                                                ? 'bg-indigo-600 text-white border-indigo-400 shadow-xs'
+                                                : 'bg-slate-800/80 text-slate-300 hover:text-white border-slate-700/80'
+                                        }`}
+                                    >
+                                        <span>{e.name}</span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
 
                 {/* Offline Alert Strip */}
                 {!isOnline && (
@@ -936,7 +976,10 @@ export const MobileAppShell: React.FC<MobileAppShellProps> = ({
                             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-1">
                                 Select Vehicle / Job:
                             </span>
-                            {jobs.filter(j => j.status === 'In Progress' || j.status === 'Allocated').map(j => {
+                            {jobs.filter(j => {
+                                if (selectedEntityId && selectedEntityId !== 'all' && j.entityId !== selectedEntityId) return false;
+                                return j.status === 'In Progress' || j.status === 'Allocated';
+                            }).map(j => {
                                 const veh = vehicles.find(v => v.id === j.vehicleId);
                                 return (
                                     <button
@@ -978,7 +1021,10 @@ export const MobileAppShell: React.FC<MobileAppShellProps> = ({
                         </span>
                     </div>
 
-                    {jobs.filter(j => j.status !== 'Complete' && j.status !== 'Closed').map(j => {
+                    {jobs.filter(j => {
+                        if (selectedEntityId && selectedEntityId !== 'all' && j.entityId !== selectedEntityId) return false;
+                        return j.status !== 'Complete' && j.status !== 'Closed';
+                    }).map(j => {
                         const veh = vehicles.find(v => v.id === j.vehicleId);
                         const hasChecklist = (j.inspectionChecklist || []).length > 0;
                         const hasTyres = Boolean(j.tyreCheck);

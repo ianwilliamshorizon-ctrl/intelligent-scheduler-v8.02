@@ -230,6 +230,21 @@ export function calculateFCSMatrix({
     effectiveEngineers.forEach(e => engineerBlocksMap.set(e.id, []));
 
     const dependencyLinks: FCSDependencyLink[] = [];
+    const addedLinkJobIds = new Set<string>();
+    const addDependencyLink = (link: FCSDependencyLink) => {
+        if (!link.jobId || addedLinkJobIds.has(link.jobId)) return;
+        addedLinkJobIds.add(link.jobId);
+        dependencyLinks.push(link);
+    };
+
+    const windowEndStr = addDaysToDateStr(startDateStr, windowDays);
+    const isPlanInWindow = (startStr: string, endStr: string, isCurrentWork: boolean) => {
+        if (isCurrentWork) return true;
+        const s = (startStr || '').split('T')[0];
+        const e = (endStr || s).split('T')[0];
+        if (!s) return true;
+        return s <= windowEndStr && e >= startDateStr;
+    };
 
     let stalledDeadWeightHours = 0;
     let activeWrenchHours = 0;
@@ -272,6 +287,9 @@ export function calculateFCSMatrix({
         const engineerId = ap.assignedEngineerId || effectiveEngineers[idx % effectiveEngineers.length]?.id;
 
         if (!rampId || !engineerId) return;
+
+        const isCurrentWork = ap.job.status === 'In Progress' || ap.job.status === 'Paused' || ap.job.vehicleStatus === 'On Site';
+        if (!isPlanInWindow(ap.scheduledStartDate, ap.scheduledEndDate, isCurrentWork)) return;
 
         const isSim = engineerId.startsWith('sim_');
         activeWrenchHours += ap.remainingHours;
@@ -340,7 +358,7 @@ export function calculateFCSMatrix({
         engineerBlocksMap.get(engineerId)!.push(engBlock);
 
         // Vector linkage connecting Ramp space block to Engineer wrench time block
-        dependencyLinks.push({
+        addDependencyLink({
             id: `link_${ap.job.id}`,
             jobId: ap.job.id,
             rampBlockId,
@@ -362,6 +380,7 @@ export function calculateFCSMatrix({
             const engineerId = sup.assignedEngineerId || effectiveEngineers[idx % effectiveEngineers.length]?.id;
 
             if (!rampId || !engineerId) return;
+            if (!isPlanInWindow(sup.scheduledStartDate, sup.scheduledEndDate, false)) return;
 
             activeWrenchHours += sup.remainingHours;
 
@@ -428,7 +447,7 @@ export function calculateFCSMatrix({
             if (!engineerBlocksMap.has(engineerId)) engineerBlocksMap.set(engineerId, []);
             engineerBlocksMap.get(engineerId)!.push(engBlock);
 
-            dependencyLinks.push({
+            addDependencyLink({
                 id: `link_scheduled_${sup.job.id}`,
                 jobId: sup.job.id,
                 rampBlockId,
@@ -443,13 +462,21 @@ export function calculateFCSMatrix({
     // By default: Allocated jobs appear on the Gantt as booked work.
     // Unallocated jobs do NOT appear on the Gantt timeline rows unless includeSuggestedAllocations is explicitly true.
     if (includeSuggestedAllocations && queuedPlans.length > 0) {
-        queuedPlans.forEach((qp, idx) => {
+        const scheduledUnallocatedJobIds = new Set(scheduledUnallocatedPlans.map(p => p.job.id));
+        const queuedPlansToProcess = includeScheduledUnallocated
+            ? queuedPlans.filter(p => !scheduledUnallocatedJobIds.has(p.job.id))
+            : queuedPlans;
+
+        queuedPlansToProcess.forEach((qp, idx) => {
             const suggested = suggestedAllocations?.find(s => s.jobId === qp.job.id);
             const rampId = suggested?.rampId || effectiveRamps[idx % effectiveRamps.length]?.id;
             const engineerId = suggested?.engineerId || effectiveEngineers[idx % effectiveEngineers.length]?.id;
             const scheduledDate = suggested?.date || qp.scheduledStartDate;
             const hours = suggested?.hours || qp.remainingHours;
             if (!rampId || !engineerId) return;
+
+            const projectedEndDate = addDaysToDateStr(scheduledDate, Math.max(1, Math.ceil(hours / 8)));
+            if (!isPlanInWindow(scheduledDate, projectedEndDate, false)) return;
 
             const isSim = engineerId.startsWith('sim_');
             const isEstSim = Boolean((qp.job as any).isEstimateSimulation || qp.job.id.startsWith('sim_est_'));
@@ -476,7 +503,7 @@ export function calculateFCSMatrix({
                 fcsState: 'SUGGESTED',
                 startDate: scheduledDate,
                 startTime: '08:30',
-                endDate: addDaysToDateStr(scheduledDate, Math.max(1, Math.ceil(hours / 8))),
+                endDate: projectedEndDate,
                 endTime: '17:30',
                 startPercent: startPct,
                 durationPercent: durationPct,
@@ -502,7 +529,7 @@ export function calculateFCSMatrix({
                 fcsState: 'SUGGESTED',
                 startDate: scheduledDate,
                 startTime: '08:30',
-                endDate: addDaysToDateStr(scheduledDate, Math.max(1, Math.ceil(hours / 8))),
+                endDate: projectedEndDate,
                 endTime: '17:30',
                 startPercent: startPct,
                 durationPercent: durationPct,
@@ -521,7 +548,7 @@ export function calculateFCSMatrix({
             rampBlocksMap.get(rampId)?.push(rampBlock);
             engineerBlocksMap.get(engineerId)?.push(engBlock);
 
-            dependencyLinks.push({
+            addDependencyLink({
                 id: `link_suggested_${qp.job.id}`,
                 jobId: qp.job.id,
                 rampBlockId,

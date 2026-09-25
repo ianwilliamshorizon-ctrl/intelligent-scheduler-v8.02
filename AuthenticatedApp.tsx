@@ -39,8 +39,6 @@ const InquiriesView = lazy(() => import('./components/InquiriesView'));
 const FinancialReporting = lazy(() => import('./components/FinancialReporting'));
 const ManagementModal = lazy(() => import('./components/ManagementModal'));
 const HelpCentre = lazy(() => import('./components/HelpCentre'));
-const MobileEngineerView = lazy(() => import('./components/mobile/MobileEngineerView'));
-const MobileDirectorView = lazy(() => import('./components/mobile/MobileDirectorView'));
 const MobileAppShell = lazy(() => import('./components/mobile/MobileAppShell'));
 
 // --- INACTIVITY HOOK ---
@@ -513,37 +511,39 @@ const AuthenticatedApp = () => {
     if (isMobileMode) {
         return (
             <Router>
-                <Suspense fallback={
-                    <div className="min-h-screen bg-slate-950 flex items-center justify-center text-white font-bold p-4">
-                        <div className="flex flex-col items-center gap-3">
-                            <div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-                            <p className="text-slate-400 text-xs font-semibold animate-pulse">Loading Mobile Stream...</p>
+                <div className="h-full w-full flex flex-col min-h-0 overflow-hidden bg-slate-950">
+                    <Suspense fallback={
+                        <div className="h-full w-full bg-slate-950 flex items-center justify-center text-white font-bold p-4">
+                            <div className="flex flex-col items-center gap-3">
+                                <div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+                                <p className="text-slate-400 text-xs font-semibold animate-pulse">Loading Mobile Stream...</p>
+                            </div>
                         </div>
-                    </div>
-                }>
-                    <MobileAppShell
-                        currentUser={currentUser}
-                        jobs={jobs || []}
-                        vehicles={vehicles || []}
-                        customers={customers || []}
-                        engineers={engineers || []}
-                        invoices={invoices || []}
-                        estimates={estimates || []}
-                        inquiries={inquiries || []}
-                        businessEntities={businessEntities || []}
-                        selectedEntityId={selectedEntityId}
-                        onSelectEntity={setSelectedEntityId}
-                        inspectionTemplates={data.inspectionTemplates || []}
-                        inspectionDiagrams={data.inspectionDiagrams || []}
-                        onSaveJob={async (job) => {
-                            await handleSaveItem(setJobs, job, 'brooks_jobs');
-                        }}
-                        onSwitchToDesktop={() => handleToggleMobileMode(false)}
-                        onOpenInquiry={(inq) => setters.setInquiryModal({isOpen: true, inquiry: inq})}
-                    />
-                </Suspense>
-                <AppModals modals={modalsState} setters={setters} actions={modalActions} commonProps={commonProps} />
-                <ToastContainer aria-label="Notifications" />
+                    }>
+                        <MobileAppShell
+                            currentUser={currentUser}
+                            jobs={jobs || []}
+                            vehicles={vehicles || []}
+                            customers={customers || []}
+                            engineers={engineers || []}
+                            invoices={invoices || []}
+                            estimates={estimates || []}
+                            inquiries={inquiries || []}
+                            businessEntities={businessEntities || []}
+                            selectedEntityId={selectedEntityId}
+                            onSelectEntity={setSelectedEntityId}
+                            inspectionTemplates={data.inspectionTemplates || []}
+                            inspectionDiagrams={data.inspectionDiagrams || []}
+                            onSaveJob={async (job) => {
+                                await handleSaveItem(setJobs, job, 'brooks_jobs');
+                            }}
+                            onSwitchToDesktop={() => handleToggleMobileMode(false)}
+                            onOpenInquiry={(inq) => setters.setInquiryModal({isOpen: true, inquiry: inq})}
+                        />
+                    </Suspense>
+                    <AppModals modals={modalsState} setters={setters} actions={modalActions} commonProps={commonProps} />
+                    <ToastContainer aria-label="Notifications" />
+                </div>
             </Router>
         );
     }

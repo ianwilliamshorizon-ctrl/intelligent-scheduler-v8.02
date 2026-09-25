@@ -101,7 +101,7 @@ export const MobileDirectorView: React.FC<MobileDirectorViewProps> = ({
     const activeEntity = businessEntities.find(e => e.id === selectedEntityId) || businessEntities[0];
 
     return (
-        <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans select-none pb-20">
+        <div className="h-full w-full flex-1 overflow-y-auto overscroll-y-contain -webkit-overflow-scrolling-touch bg-slate-950 text-slate-100 flex flex-col font-sans pb-28 touch-pan-y">
             {/* Top Bar */}
             <header className="bg-slate-900 border-b border-slate-800 px-4 py-3 sticky top-0 z-30 shadow-md">
                 <div className="flex items-center justify-between">
