@@ -3,7 +3,7 @@ import { useReactToPrint } from 'react-to-print';
 import { Printer, X, Calendar, Wrench, Layers, Clock, CheckCircle, FileText, User, ChevronLeft, ChevronRight, Sparkles, Filter } from 'lucide-react';
 import { calculateFCSMatrix, FCSMatrixResult } from '../../../core/services/fcsSchedulingEngine';
 import { Lift, Engineer, Job, Vehicle, Customer, PurchaseOrder, BusinessEntity, FCSGanttBlock } from '../../../types';
-import { formatDate, addDays } from '../../../core/utils/dateUtils';
+import { formatDate, addDays, getTodayISOString, addDaysToDateStr } from '../../../core/utils/dateUtils';
 import { ENGINEER_COLOR_PALETTES } from './ResourceGanttView';
 
 interface PrintableFCSScheduleModalProps {
@@ -74,27 +74,50 @@ export const PrintableFCSScheduleModal: React.FC<PrintableFCSScheduleModalProps>
     // Compute weekly 7-day segments
     const weeklySegments: WeekScheduleSegment[] = useMemo(() => {
         const segments: WeekScheduleSegment[] = [];
-        const baseStart = new Date(startDateStr.includes('T') ? startDateStr : `${startDateStr}T00:00:00`);
+        const todayStr = getTodayISOString();
 
         for (let w = 0; w < totalWeeksToGenerate; w++) {
-            const weekStart = addDays(baseStart, w * 7);
-            const weekStartStr = formatDate(weekStart);
-            const weekEnd = addDays(weekStart, 6);
-            const weekEndStr = formatDate(weekEnd);
+            const weekStartStr = addDaysToDateStr(startDateStr, w * 7);
+            const weekEndStr = addDaysToDateStr(weekStartStr, 6);
 
             const timelineDays = Array.from({ length: 7 }).map((_, i) => {
-                const d = addDays(weekStart, i);
+                const dayStr = addDaysToDateStr(weekStartStr, i);
+                const d = new Date(dayStr + 'T12:00:00'); // noon to avoid DST edge issues in display
                 return {
-                    dateStr: formatDate(d),
+                    dateStr: dayStr,
                     dayName: d.toLocaleDateString('en-GB', { weekday: 'short' }),
                     dayNum: d.getDate(),
                     month: d.toLocaleDateString('en-GB', { month: 'short' }),
-                    isToday: formatDate(d) === formatDate(new Date())
+                    isToday: dayStr === todayStr
                 };
             });
 
+            // Filter jobs to only those relevant to this week's window.
+            // Include jobs that are:
+            // 1. Actively on a ramp (In Progress, Allocated, Booked In) — always show
+            // 2. Have a scheduledDate or segment date that overlaps this week
+            const weekEndPlusOneStr = addDaysToDateStr(weekStartStr, 7); // exclusive upper bound
+            const weekJobs = jobs.filter(j => {
+                // Always include active/in-progress work
+                if (j.status === 'In Progress' || j.status === 'Allocated' || j.status === 'Booked In') {
+                    // Check if scheduled date overlaps this week, or no date (show in first week)
+                    const jDate = j.scheduledDate || (j.segments?.[0]?.date);
+                    if (!jDate) return w === 0; // no date = show in first week only
+                    // Job starts before week end AND job isn't far past (allow overlap)
+                    const estEndDate = addDaysToDateStr(jDate, Math.max(1, Math.ceil((j.estimatedHours || 8) / 8)));
+                    return jDate < weekEndPlusOneStr && estEndDate > weekStartStr;
+                }
+                // For scheduled/queued work, check date overlap
+                const jDate = j.scheduledDate || (j.segments?.[0]?.date);
+                if (!jDate) return false; // unscheduled jobs don't appear in print
+                const estDays = Math.max(1, Math.ceil((j.estimatedHours || (j.segments || []).reduce((a, s) => a + (s.duration || 0), 0) || 2) / 8));
+                const estEndDate = addDaysToDateStr(jDate, estDays);
+                // Job overlaps this week if it starts before week end AND ends after week start
+                return jDate < weekEndPlusOneStr && estEndDate > weekStartStr;
+            });
+
             const weekMatrix = calculateFCSMatrix({
-                jobs,
+                jobs: weekJobs,
                 ramps: usableRamps,
                 engineers,
                 purchaseOrders,

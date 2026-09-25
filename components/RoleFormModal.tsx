@@ -33,6 +33,7 @@ const ALL_MANAGED_DATA_PERMISSIONS = {
     canManageTaxCodes: 'Tax Codes',
     canManageInspectionDiagrams: 'Inspection Diagrams',
     canManageInspectionTemplates: 'Inspection Templates',
+    canManageMobileApp: 'Mobile App & QR',
     canManageBackups: 'Backups'
 };
 
@@ -64,6 +65,7 @@ const RoleFormModal: React.FC<RoleFormModalProps> = ({ isOpen, onClose, onSave, 
                 canManageTaxCodes: false,
                 canManageInspectionDiagrams: false,
                 canManageInspectionTemplates: false,
+                canManageMobileApp: false,
                 canManageBackups: false
             }
         }

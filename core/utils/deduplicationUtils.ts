@@ -302,8 +302,8 @@ export const mergeVehicleData = (master: Vehicle, secondaryList: Vehicle[]): Veh
         }
         if (!result.transmissionType && sec.transmissionType) result.transmissionType = sec.transmissionType;
         if (!result.cc && sec.cc) result.cc = sec.cc;
-        if (!result.nextmotdate && sec.nextmotdate) result.nextmotdate = sec.nextmotdate;
-        if (!result.nextservicedate && sec.nextservicedate) result.nextservicedate = sec.nextservicedate;
+        if (!result.nextMotDate && (sec.nextMotDate || (sec as any).nextmotdate)) result.nextMotDate = sec.nextMotDate || (sec as any).nextmotdate;
+        if (!result.nextServiceDate && (sec.nextServiceDate || (sec as any).nextservicedate)) result.nextServiceDate = sec.nextServiceDate || (sec as any).nextservicedate;
         if (!result.manufactureDate && sec.manufactureDate) result.manufactureDate = sec.manufactureDate;
         if (!result.inspectionDiagramId && sec.inspectionDiagramId) result.inspectionDiagramId = sec.inspectionDiagramId;
         if ((!result.images || result.images.length === 0) && sec.images && sec.images.length > 0) {

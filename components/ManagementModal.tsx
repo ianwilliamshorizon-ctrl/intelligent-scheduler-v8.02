@@ -11,7 +11,8 @@ import {
 import { 
     X, Settings, Database, User as UserIcon, Car, Wrench, Package, Briefcase, 
     ShieldCheck, Users, Truck, AlertTriangle, RefreshCw, CarFront, List, Info, CheckCircle, Server, Save,
-    ArrowUpCircle, BatteryCharging, ClipboardCheck, Search, Banknote, Tag, Lock, Eye, BarChart2, Warehouse, Volume2, Mail
+    ArrowUpCircle, BatteryCharging, ClipboardCheck, Search, Banknote, Tag, Lock, Eye, BarChart2, Warehouse, Volume2, Mail,
+    Smartphone, QrCode
 } from 'lucide-react';
 
 // Extracted Tab Views
@@ -21,7 +22,8 @@ import {
     ManagementSuppliersTab, ManagementPartsTab, ManagementPackagesTab,
     ManagementNominalCodesTab, ManagementTaxCodesTab, ManagementLiftsTab, ManagementBatteryChargersTab,
     ManagementInspectionTemplatesTab,ManagementDiscountCodesTab,
-    ManagementStorageLocationsTab, ManagementVoiceTab, ManagementMailSettingsTab
+    ManagementStorageLocationsTab, ManagementVoiceTab, ManagementMailSettingsTab,
+    ManagementMobileAppTab
 } from './management/ManagementViews';
 import { ManagementBackupTab } from './management/tabs/ManagementBackupTab';
 
@@ -76,7 +78,7 @@ const ManagementModal: React.FC<ManagementModalProps> = ({
         const roleName = viewAs === 'Admin' ? currentUser.role : viewAs;
 
         if (roleName === 'Admin') {
-            return { isSuperAdmin: true, canSeeDirectorsDashboard: true };
+            return { isSuperAdmin: true, canSeeDirectorsDashboard: true, canManageMobileApp: true };
         }
         
         const userRole = roles.find(r => r.name === roleName);
@@ -85,6 +87,7 @@ const ManagementModal: React.FC<ManagementModalProps> = ({
 
     const allTabs = useMemo(() => [
         { id: 'directors-dashboard', label: "Director's Dashboard", icon: BarChart2, render: () => { setCurrentView('directors-dashboard'); onClose(); return null; }, permission: 'canSeeDirectorsDashboard' },
+        { id: 'mobileApp', label: 'Mobile App & QR Code', icon: Smartphone, render: () => <ManagementMobileAppTab onShowStatus={showStatus} />, permission: 'canSeeDirectorsDashboard' },
         { id: 'customers', label: 'Customers', icon: UserIcon, render: () => <ManagementCustomersTab searchTerm={searchTerm} onShowStatus={showStatus} onViewVehicle={onViewVehicle} />, permission: 'canManageCustomers' },
         // UPDATED BELOW: Added onViewCustomer prop
         { id: 'vehicles', label: 'Vehicles', icon: Car, render: () => <ManagementVehiclesTab searchTerm={searchTerm} onShowStatus={showStatus} onViewCustomer={onViewCustomer} onViewJob={onViewJob} onViewEstimate={onViewEstimate} onViewInvoice={onViewInvoice} onOpenPurchaseOrder={onOpenPurchaseOrder} />, permission: 'canManageVehicles' },
@@ -110,7 +113,12 @@ const ManagementModal: React.FC<ManagementModalProps> = ({
     const filteredTabs = useMemo(() => {
         if (!permissions) return [];
         if (permissions.isSuperAdmin) return allTabs;
-        return allTabs.filter(tab => permissions[tab.permission as keyof ManagedDataPermissions]);
+        return allTabs.filter(tab => {
+            if (tab.id === 'mobileApp') {
+                return permissions.canSeeDirectorsDashboard || permissions.canManageMobileApp;
+            }
+            return permissions[tab.permission as keyof ManagedDataPermissions];
+        });
     }, [permissions, allTabs]);
 
     useEffect(() => {

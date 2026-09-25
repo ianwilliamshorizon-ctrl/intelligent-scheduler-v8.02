@@ -7,7 +7,7 @@ import { TechnicianTransferModal } from './TechnicianTransferModal';
 import { AdjustSuggestedAllocationModal } from './AdjustSuggestedAllocationModal';
 import { PrintableFCSScheduleModal } from './PrintableFCSScheduleModal';
 import { Sparkles, Wrench, Layers, AlertTriangle, CheckCircle, Clock, Calendar, Users, RefreshCw, Plus, ChevronLeft, ChevronRight, Activity, ArrowRight, Zap, Info, Edit3, ArrowRightLeft, Printer, Move, ExternalLink, GripVertical } from 'lucide-react';
-import { getRelativeDate, addDays, formatDate, getWorkingDaySpan } from '../../../core/utils/dateUtils';
+import { getRelativeDate, addDays, formatDate, getWorkingDaySpan, getTodayISOString, addDaysToDateStr } from '../../../core/utils/dateUtils';
 import { isJobAllocated, isJobUnallocated } from '../../../core/utils/jobUtils';
 
 export interface EngineerTheme {
@@ -182,6 +182,7 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
 }) => {
     // Interactive state
     const [hoveredJobId, setHoveredJobId] = useState<string | null>(null);
+    const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
     const [windowDays, setWindowDays] = useState<number>(7);
     const [simulateExtraEngineers, setSimulateExtraEngineers] = useState<number>(0);
     const [showScheduledUnallocated, setShowScheduledUnallocated] = useState<boolean>(false);
@@ -212,9 +213,7 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
     }, [passedUnallocatedJobs, jobs]);
 
     const startDateStr = useMemo(() => {
-        const today = new Date();
-        const start = addDays(today, startDateOffset);
-        return formatDate(start);
+        return addDaysToDateStr(getTodayISOString(), startDateOffset);
     }, [startDateOffset]);
 
     // Handle toggling or generating suggested work allocations on the Gantt
@@ -773,15 +772,16 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
 
     // Timeline column headers
     const timelineDays = useMemo(() => {
-        const start = new Date(startDateStr.includes('T') ? startDateStr : `${startDateStr}T00:00:00`);
+        const todayStr = getTodayISOString();
         return Array.from({ length: windowDays }).map((_, i) => {
-            const d = addDays(start, i);
+            const dayStr = addDaysToDateStr(startDateStr, i);
+            const d = new Date(dayStr + 'T12:00:00'); // noon to avoid DST edge issues in display
             return {
-                dateStr: formatDate(d),
+                dateStr: dayStr,
                 dayName: d.toLocaleDateString('en-GB', { weekday: 'short' }),
                 dayNum: d.getDate(),
                 month: d.toLocaleDateString('en-GB', { month: 'short' }),
-                isToday: formatDate(d) === getRelativeDate(0)
+                isToday: dayStr === todayStr
             };
         });
     }, [startDateStr, windowDays]);
@@ -880,7 +880,7 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                             value={startDateStr}
                             onChange={(e) => {
                                 if (!e.target.value) return;
-                                const todayStr = getRelativeDate(0);
+                                const todayStr = getTodayISOString();
                                 const todayDate = new Date(`${todayStr}T00:00:00`);
                                 const chosenDate = new Date(`${e.target.value}T00:00:00`);
                                 const diffDays = Math.round((chosenDate.getTime() - todayDate.getTime()) / (1000 * 60 * 60 * 24));
@@ -1309,8 +1309,9 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                                                     setDraggingJobId(null);
                                                     setDragOverTarget(null);
                                                 }}
-                                                onMouseEnter={() => setHoveredJobId(block.jobId)}
-                                                onMouseLeave={() => setHoveredJobId(null)}
+                                                onMouseEnter={(e) => { setHoveredJobId(block.jobId); setTooltipPos({ x: e.clientX, y: e.clientY }); }}
+                                                onMouseMove={(e) => setTooltipPos({ x: e.clientX, y: e.clientY })}
+                                                onMouseLeave={() => { setHoveredJobId(null); setTooltipPos(null); }}
                                                 onClick={() => {
                                                     setAdjustingSuggestedBlock(block);
                                                 }}
@@ -1336,7 +1337,6 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                                                                     ? 'bg-amber-950/85 border-2 border-dashed border-amber-400 text-amber-100 shadow-md'
                                                                     : 'bg-gradient-to-r from-slate-900 to-indigo-950 text-white shadow-md border border-slate-700/60'
                                                 } ${isHovered ? 'ring-2 ring-purple-500 scale-[1.02] z-20 shadow-lg' : ''} ${isDimmed ? 'opacity-35' : ''}`}
-                                                title={`Job #${block.jobId}: ${block.title} (${block.hours}h) • Drag to move date or bay • Click to adjust`}
                                             >
 
                                                 {block.isDeadWeight && (
@@ -1645,8 +1645,9 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                                                         setDraggingJobId(null);
                                                         setDragOverTarget(null);
                                                     }}
-                                                    onMouseEnter={() => setHoveredJobId(block.jobId)}
-                                                    onMouseLeave={() => setHoveredJobId(null)}
+                                                    onMouseEnter={(e) => { setHoveredJobId(block.jobId); setTooltipPos({ x: e.clientX, y: e.clientY }); }}
+                                                    onMouseMove={(e) => setTooltipPos({ x: e.clientX, y: e.clientY })}
+                                                    onMouseLeave={() => { setHoveredJobId(null); setTooltipPos(null); }}
                                                     onClick={() => {
                                                         setAdjustingSuggestedBlock(block);
                                                     }}
@@ -1673,7 +1674,6 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                                                     } ${
                                                         isHovered ? 'ring-2 ring-white scale-[1.02] z-20 shadow-xl' : ''
                                                     } ${isDimmed ? 'opacity-35' : ''}`}
-                                                    title={`Wrench Time for Job #${block.jobId}: ${block.title} (${block.hours}h) • Drag to move date or technician • Click to adjust`}
                                                 >
                                                     <div className="flex items-center justify-between text-[11px] font-black leading-tight">
                                                         <span className="font-mono uppercase tracking-tight truncate flex items-center gap-1">
@@ -1842,6 +1842,113 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                     customers={customers}
                 />
             )}
+
+            {/* ============================================================ */}
+            {/* GANTT BAR HOVER TOOLTIP                                       */}
+            {/* ============================================================ */}
+            {(() => {
+                if (!hoveredJobId || !tooltipPos) return null;
+                const job = jobs.find(j => j.id === hoveredJobId);
+                if (!job) return null;
+                const customer = customers.find(c => c.id === job.customerId);
+                const vehicle = vehicles.find(v => v.id === job.vehicleId ||
+                    (job.vehicleRegistration && v.registration?.toLowerCase() === job.vehicleRegistration.toLowerCase()));
+
+                const statusColor = job.status === 'Complete' ? 'bg-green-500'
+                    : job.status === 'In Progress' ? 'bg-blue-500'
+                    : job.status === 'Awaiting Parts' ? 'bg-amber-500'
+                    : job.status === 'Cancelled' ? 'bg-red-500'
+                    : 'bg-slate-500';
+
+                // Position: keep inside viewport
+                const tipW = 300;
+                const tipH = 220;
+                const vw = window.innerWidth;
+                const vh = window.innerHeight;
+                let left = tooltipPos.x + 14;
+                let top = tooltipPos.y - 10;
+                if (left + tipW > vw - 8) left = tooltipPos.x - tipW - 14;
+                if (top + tipH > vh - 8) top = vh - tipH - 8;
+                if (top < 8) top = 8;
+
+                return (
+                    <div
+                        className="fixed z-[9999] pointer-events-none"
+                        style={{ left, top, width: tipW }}
+                    >
+                        <div className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden">
+                            {/* Header */}
+                            <div className="bg-indigo-950 px-3 py-2 flex items-center justify-between gap-2">
+                                <span className="text-xs font-black text-white font-mono uppercase tracking-wider truncate">
+                                    {job.vehicleRegistration || `Job #${job.id.slice(-6)}`}
+                                </span>
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                    <span className={`w-2 h-2 rounded-full ${statusColor} shrink-0`} />
+                                    <span className="text-[10px] font-bold text-slate-300">{job.status}</span>
+                                </div>
+                            </div>
+
+                            {/* Body */}
+                            <div className="px-3 py-2.5 space-y-1.5">
+                                {/* Job title */}
+                                <p className="text-xs font-bold text-white leading-snug line-clamp-2">
+                                    {job.description || 'No description'}
+                                </p>
+
+                                {/* Customer */}
+                                {customer && (
+                                    <div className="flex items-start gap-2 pt-1 border-t border-slate-700/60">
+                                        <span className="text-[10px] text-slate-400 w-14 shrink-0 pt-px">Customer</span>
+                                        <div className="min-w-0">
+                                            <p className="text-[11px] font-bold text-white truncate">{[customer.forename, customer.surname].filter(Boolean).join(' ') || customer.companyName || 'Unknown'}</p>
+                                            {customer.phone && (
+                                                <p className="text-[10px] text-indigo-300 font-mono">{customer.phone}</p>
+                                            )}
+                                            {customer.email && (
+                                                <p className="text-[10px] text-slate-400 truncate">{customer.email}</p>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Vehicle */}
+                                {vehicle && (
+                                    <div className="flex items-start gap-2 border-t border-slate-700/60 pt-1">
+                                        <span className="text-[10px] text-slate-400 w-14 shrink-0 pt-px">Vehicle</span>
+                                        <div className="min-w-0">
+                                            <p className="text-[11px] font-bold text-white">
+                                                {[vehicle.make, vehicle.model, vehicle.year].filter(Boolean).join(' ')}
+                                            </p>
+                                            <p className="text-[10px] font-mono text-indigo-300 uppercase tracking-wider">{vehicle.registration}</p>
+                                            {vehicle.colour && <p className="text-[10px] text-slate-400">{vehicle.colour}</p>}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Timing & Labour */}
+                                <div className="flex items-center gap-3 border-t border-slate-700/60 pt-1.5 flex-wrap">
+                                    <div className="flex items-center gap-1">
+                                        <Clock size={10} className="text-indigo-400 shrink-0" />
+                                        <span className="text-[10px] text-slate-300 font-bold">{job.estimatedHours || '?'}h estimated</span>
+                                    </div>
+                                    {job.scheduledDate && (
+                                        <div className="flex items-center gap-1">
+                                            <Calendar size={10} className="text-indigo-400 shrink-0" />
+                                            <span className="text-[10px] text-slate-300 font-mono">{job.scheduledDate}</span>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Hint */}
+                                <p className="text-[9px] text-slate-500 pt-0.5">
+                                    Click to move • Open card for full details
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                );
+            })()}
+
         </div>
     );
 };

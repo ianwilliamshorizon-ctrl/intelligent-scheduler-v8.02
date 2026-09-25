@@ -14,7 +14,9 @@ export interface Option {
 
 interface SearchableSelectProps {
   options?: Option[];
-  onSelect: (value: any) => void;
+  onSelect?: (value: any) => void;
+  value?: any;
+  onChange?: (value: any) => void;
   placeholder?: string;
   label?: string;
   error?: string;
@@ -35,6 +37,8 @@ interface SearchableSelectProps {
 const SearchableSelect: React.FC<SearchableSelectProps> = ({
   options = [],
   onSelect,
+  value,
+  onChange,
   placeholder = "Select an option...",
   label,
   error,
@@ -56,7 +60,7 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
   const wrapperRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
-  const effectiveValue = defaultValue ?? initialValue;
+  const effectiveValue = value !== undefined ? value : (defaultValue ?? initialValue);
 
   // memoized selection for performance
   const selectedOption = useMemo(() => {
@@ -126,6 +130,9 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
     setActiveIndex(-1);
     if (typeof onSelect === 'function') {
       onSelect(option.value);
+    }
+    if (typeof onChange === 'function') {
+      onChange(option.value);
     }
   };
 

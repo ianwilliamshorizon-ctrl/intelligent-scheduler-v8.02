@@ -46,6 +46,7 @@ export interface MotTest {
 export interface ManagedDataPermissions {
     isSuperAdmin: boolean;
     canSeeDirectorsDashboard?: boolean;
+    canManageMobileApp?: boolean;
     canManageCustomers?: boolean;
     canManageVehicles?: boolean;
     canManageInspectionDiagrams?: boolean;

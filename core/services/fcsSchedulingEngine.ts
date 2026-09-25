@@ -44,7 +44,22 @@ export interface FCSMatrixResult {
  * Derives materials status from linked purchase orders or job fields
  */
 export function deriveMaterialsStatus(job: Job, purchaseOrders: PurchaseOrder[]): MaterialsStatus {
-    if (job.materialsStatus) return job.materialsStatus;
+    // 1. Explicit check on job.partsStatus: if parts are received / in stock / not required, materials status is ALWAYS Delivered!
+    if (job.partsStatus === 'Fully Received' || job.partsStatus === 'Received' || job.partsStatus === 'In Stock' || job.partsStatus === 'Not Required') {
+        return 'Delivered';
+    }
+
+    const linkedPos = (purchaseOrders || []).filter(po => 
+        (job.purchaseOrderIds && job.purchaseOrderIds.includes(po.id)) || po.jobId === job.id
+    );
+
+    if (linkedPos.length > 0) {
+        const hasDeliveredOnly = linkedPos.every(po => po.status === 'Received' || po.status === 'Finalized');
+        if (hasDeliveredOnly) return 'Delivered';
+
+        const hasOrdered = linkedPos.some(po => po.status === 'Ordered' || po.status === 'Partially Received' || !!po.expectedDeliveryDate);
+        if (hasOrdered) return 'Ordered';
+    }
 
     // Check if job has an explicit expected delivery date for purchases that is in the future
     if (job.expectedDeliveryDate) {
@@ -54,41 +69,33 @@ export function deriveMaterialsStatus(job: Job, purchaseOrders: PurchaseOrder[])
         }
     }
 
-    const linkedPos = (purchaseOrders || []).filter(po => 
-        (job.purchaseOrderIds && job.purchaseOrderIds.includes(po.id)) || po.jobId === job.id
-    );
+    if (job.partsStatus === 'Awaiting Order') return 'Not Ordered';
+    if (job.partsStatus === 'Ordered') return 'Ordered';
 
-    if (linkedPos.length === 0) {
-        if (job.partsStatus === 'Awaiting Order') return 'Not Ordered';
-        if (job.partsStatus === 'Ordered') return 'Ordered';
-        return 'Delivered'; // No parts needed
+    // Fallback to stored status if present and consistent
+    if (job.materialsStatus && job.materialsStatus !== 'Not Ordered') {
+        return job.materialsStatus;
     }
 
-    const hasDeliveredOnly = linkedPos.every(po => po.status === 'Received' || po.status === 'Finalized');
-    if (hasDeliveredOnly) return 'Delivered';
-
-    const hasOrdered = linkedPos.some(po => po.status === 'Ordered' || po.status === 'Partially Received' || !!po.expectedDeliveryDate);
-    if (hasOrdered) return 'Ordered';
-
-    return 'Not Ordered';
+    return 'Delivered'; // Default no parts needed
 }
 
 /**
  * Derives the FCS State (ACTIVE, STALLED, QUEUED) based on materials, ramps, and status
  */
 export function deriveFCSState(job: Job, materialsStatus: MaterialsStatus): FCSState {
-    if (job.fcsState) return job.fcsState;
-
     if (materialsStatus === 'Ordered' || job.status === 'Paused' || job.status === 'Awaiting Parts') {
         return 'STALLED';
     }
 
     if (materialsStatus === 'Delivered') {
-        if (job.status === 'In Progress' || job.status === 'Allocated' || job.status === 'Booked In' || (job.segments || []).some(s => s.status === 'Allocated')) {
+        if (job.status === 'In Progress' || job.status === 'Allocated' || job.status === 'Booked In' || (job.segments || []).some(s => s.status === 'Allocated' || s.status === 'In Progress' || s.status === 'Engineer Complete' || s.status === 'QC Complete')) {
             return 'ACTIVE';
         }
         return 'QUEUED';
     }
+
+    if (job.fcsState && job.fcsState === 'SUGGESTED') return 'SUGGESTED';
 
     if (job.status === 'In Progress' || job.status === 'Allocated') return 'ACTIVE';
     return 'QUEUED';

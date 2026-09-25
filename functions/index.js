@@ -35,6 +35,75 @@ function extractLatestReply(text) {
 }
 
 /**
+ * Robustly matches an incoming email subject/body to an existing inquiry card.
+ * Handles formats like INQ26-04499, INQ26-4499, INQ-04499, INQ 26-04499, INQ2604499, doc ID, etc.
+ */
+async function findInquiryBySubjectOrRef(db, subject, textBody) {
+  if (!subject && !textBody) return null;
+
+  const fullText = `${subject || ''}\n${textBody || ''}`;
+  
+  // 1. Regex to catch all variations of INQ / Inquiry references
+  const regex = /(?:INQ|INQUIRY)[\s#:]*(\d{2})?[\s-]*(\d+)/gi;
+  const candidateNums = new Set();
+
+  let match;
+  while ((match = regex.exec(fullText)) !== null) {
+    const year = match[1]; // e.g. "26" or undefined
+    const numStr = match[2]; // e.g. "04499" or "4499"
+    const numInt = parseInt(numStr, 10);
+    
+    if (!isNaN(numInt)) {
+      const padded5 = String(numInt).padStart(5, '0');
+      const unpadded = String(numInt);
+      const currentYear = new Date().getFullYear().toString().slice(-2);
+
+      if (year) {
+        candidateNums.add(`INQ${year}-${padded5}`);
+        candidateNums.add(`INQ${year}-${unpadded}`);
+        candidateNums.add(`INQ${year}${padded5}`);
+        candidateNums.add(`INQ${year}${unpadded}`);
+      } else {
+        candidateNums.add(`INQ${currentYear}-${padded5}`);
+        candidateNums.add(`INQ${currentYear}-${unpadded}`);
+      }
+      candidateNums.add(`INQ-${padded5}`);
+      candidateNums.add(`INQ-${unpadded}`);
+      candidateNums.add(`INQ${padded5}`);
+    }
+  }
+
+  // Also check if raw INQ pattern is present e.g. INQ26-04499
+  const rawMatches = fullText.match(/\bINQ[0-9A-Z_-]+\b/gi);
+  if (rawMatches) {
+    rawMatches.forEach(rm => candidateNums.add(rm.toUpperCase().replace(/[\[\]]/g, '')));
+  }
+
+  logger.info(`Checking inquiry candidate numbers: ${Array.from(candidateNums).join(', ')}`);
+
+  for (const cand of candidateNums) {
+    // Check inquiryNumber field
+    const inqSnap = await db.collection("brooks_inquiries")
+      .where("inquiryNumber", "==", cand)
+      .limit(1)
+      .get();
+    if (!inqSnap.empty) {
+      logger.info(`Successfully matched existing inquiry by inquiryNumber '${cand}' (ID: ${inqSnap.docs[0].id})`);
+      return { id: inqSnap.docs[0].id, data: inqSnap.docs[0].data() };
+    }
+
+    // Check document ID directly
+    const docSnap = await db.collection("brooks_inquiries").doc(cand).get();
+    if (docSnap.exists) {
+      logger.info(`Successfully matched existing inquiry by doc ID '${cand}'`);
+      return { id: docSnap.id, data: docSnap.data() };
+    }
+  }
+
+  return null;
+}
+
+/**
  * Universal Proxy Function
  * Handles: Vehicle Details, MOT History, and Postcode Lookups
  */
@@ -647,7 +716,7 @@ exports.inboundEmailWebhook = onRequest({
         matchedCustomerId = matchedCustomerId || estDoc.data().customerId;
         matchedVehicleId = estDoc.data().vehicleId;
         entityId = entityId || estDoc.data().entityId;
-        logger.info(`Matched estimate ID: ${matchedEstimateId}`);
+        logger.info(`Matched explicit estimate ID: ${matchedEstimateId}`);
       } else {
         // Try exact document ID match for estimate
         const estDocById = await db.collection("brooks_estimates").doc(refId).get();
@@ -656,75 +725,20 @@ exports.inboundEmailWebhook = onRequest({
           matchedCustomerId = matchedCustomerId || estDocById.data().customerId;
           matchedVehicleId = estDocById.data().vehicleId;
           entityId = entityId || estDocById.data().entityId;
-          logger.info(`Matched estimate ID by document ID: ${matchedEstimateId}`);
+          logger.info(`Matched explicit estimate ID by document ID: ${matchedEstimateId}`);
         }
-      }
-    }
-
-    // 2.2 Fallback: If no estimate found in subject/body, check for recent estimates for this customer
-    if (!matchedEstimateId && (matchedCustomerId || fromEmail)) {
-      try {
-        let candidateEstimates = [];
-        if (matchedCustomerId) {
-          const estCustSnap = await db.collection("brooks_estimates")
-            .where("customerId", "==", matchedCustomerId)
-            .get();
-          estCustSnap.forEach(d => candidateEstimates.push({ id: d.id, ...d.data() }));
-        }
-        if (candidateEstimates.length > 0) {
-          candidateEstimates.sort((a, b) => new Date(b.issueDate || b.createdAt || 0).getTime() - new Date(a.issueDate || a.createdAt || 0).getTime());
-          const recentEst = candidateEstimates.find(e => e.status === 'Sent' || e.status === 'Draft' || e.status === 'Approved') || candidateEstimates[0];
-          if (recentEst) {
-            matchedEstimateId = recentEst.id;
-            matchedVehicleId = matchedVehicleId || recentEst.vehicleId;
-            entityId = entityId || recentEst.entityId;
-            logger.info(`Matched recent estimate ID ${matchedEstimateId} for customer ${matchedCustomerId || fromEmail}`);
-          }
-        }
-      } catch (estFallbackErr) {
-        logger.error("Error in estimate fallback lookup:", estFallbackErr.message);
       }
     }
 
     let matchedInquiryId = null;
     let existingInquiryData = null;
 
-    // 2.5 Look up inquiry number in subject line or body (INQ-XXXX or INQYY-XXXXX)
-    const inqMatch = subject.match(/(INQ(?:\d{2})?-\d+)/i) || textBody.match(/(INQ(?:\d{2})?-\d+)/i);
-    if (inqMatch) {
-      const inqNum = inqMatch[1].toUpperCase();
-      logger.info(`Found inquiry number in subject or body: ${inqNum}`);
-      const inqSnap = await db.collection("brooks_inquiries")
-        .where("inquiryNumber", "==", inqNum)
-        .limit(1)
-        .get();
-      if (!inqSnap.empty) {
-        matchedInquiryId = inqSnap.docs[0].id;
-        existingInquiryData = inqSnap.docs[0].data();
-        logger.info(`Matched existing inquiry ID: ${matchedInquiryId}`);
-      }
-    }
-
-    // 2.6 Fallback: Look up existing inquiry by matchedEstimateId (without composite index)
-    if (!matchedInquiryId && matchedEstimateId) {
-      try {
-        logger.info(`No inquiry number found, falling back to linkedEstimateId: ${matchedEstimateId}`);
-        const estInqSnap = await db.collection("brooks_inquiries")
-          .where("linkedEstimateId", "==", matchedEstimateId)
-          .get();
-        if (!estInqSnap.empty) {
-          const sortedDocs = estInqSnap.docs.sort((a, b) => {
-            const tA = new Date(a.data().createdAt || 0).getTime();
-            const tB = new Date(b.data().createdAt || 0).getTime();
-            return tB - tA;
-          });
-          matchedInquiryId = sortedDocs[0].id;
-          existingInquiryData = sortedDocs[0].data();
-          logger.info(`Matched existing inquiry ID by linkedEstimateId: ${matchedInquiryId}`);
-        }
-      } catch (err) {
-        logger.error("Error looking up inquiry by linkedEstimateId:", err.message);
-      }
+    // 2.5 Look up inquiry number in subject line or body (INQ-XXXX or INQYY-XXXXX, unpadded, doc ID)
+    const inqMatchResult = await findInquiryBySubjectOrRef(db, subject, textBody);
+    if (inqMatchResult) {
+      matchedInquiryId = inqMatchResult.id;
+      existingInquiryData = inqMatchResult.data;
+      logger.info(`Matched existing inquiry ID: ${matchedInquiryId}`);
     }
 
     if (matchedInquiryId) {
@@ -1199,8 +1213,11 @@ async function performEmailSync(microsoftClientId, microsoftClientSecret, micros
       let matchedEstimateId = null;
       let entityId = null;
 
-      // 1. Look up customer by email (case-insensitive)
-      if (fromEmail) {
+      // Do NOT match internal/company email addresses as customer profiles so forwarded emails are never bundled
+      const isInternalCompanyEmail = fromEmail.toLowerCase().includes("brookspeed.com");
+
+      // 1. Look up customer by email (case-insensitive, excluding company addresses)
+      if (fromEmail && !isInternalCompanyEmail) {
         const cleanFromEmail = fromEmail.toLowerCase().trim();
         let customerSnap = await db.collection("brooks_customers")
           .where("email", "==", fromEmail.trim())
@@ -1253,70 +1270,15 @@ async function performEmailSync(microsoftClientId, microsoftClientSecret, micros
         }
       }
 
-      // 2.2 Fallback: If no estimate found in subject/body, check for recent estimates for this customer
-      if (!matchedEstimateId && (matchedCustomerId || fromEmail)) {
-        try {
-          let candidateEstimates = [];
-          if (matchedCustomerId) {
-            const estCustSnap = await db.collection("brooks_estimates")
-              .where("customerId", "==", matchedCustomerId)
-              .get();
-            estCustSnap.forEach(d => candidateEstimates.push({ id: d.id, ...d.data() }));
-          }
-          if (candidateEstimates.length > 0) {
-            candidateEstimates.sort((a, b) => new Date(b.issueDate || b.createdAt || 0).getTime() - new Date(a.issueDate || a.createdAt || 0).getTime());
-            const recentEst = candidateEstimates.find(e => e.status === 'Sent' || e.status === 'Draft' || e.status === 'Approved') || candidateEstimates[0];
-            if (recentEst) {
-              matchedEstimateId = recentEst.id;
-              matchedVehicleId = matchedVehicleId || recentEst.vehicleId;
-              entityId = entityId || recentEst.entityId;
-              logger.info(`Matched recent estimate ID ${matchedEstimateId} for customer ${matchedCustomerId || fromEmail}`);
-            }
-          }
-        } catch (estFallbackErr) {
-          logger.error("Error in estimate fallback lookup:", estFallbackErr.message);
-        }
-      }
-
       let matchedInquiryId = null;
       let existingInquiryData = null;
 
-      // 2.5 Look up inquiry number in subject line or body (INQ-XXXX or INQYY-XXXXX)
-      const inqMatch = subject.match(/(INQ(?:\d{2})?-\d+)/i) || textBody.match(/(INQ(?:\d{2})?-\d+)/i);
-      if (inqMatch) {
-        const inqNum = inqMatch[1].toUpperCase();
-        logger.info(`Found inquiry number in subject or body: ${inqNum}`);
-        const inqSnap = await db.collection("brooks_inquiries")
-          .where("inquiryNumber", "==", inqNum)
-          .limit(1)
-          .get();
-        if (!inqSnap.empty) {
-          matchedInquiryId = inqSnap.docs[0].id;
-          existingInquiryData = inqSnap.docs[0].data();
-          logger.info(`Matched existing inquiry ID: ${matchedInquiryId}`);
-        }
-      }
-
-      // 2.6 Fallback: Look up existing inquiry by matchedEstimateId (WITHOUT composite index)
-      if (!matchedInquiryId && matchedEstimateId) {
-        try {
-          logger.info(`No inquiry number found, falling back to linkedEstimateId: ${matchedEstimateId}`);
-          const estInqSnap = await db.collection("brooks_inquiries")
-            .where("linkedEstimateId", "==", matchedEstimateId)
-            .get();
-          if (!estInqSnap.empty) {
-            const sortedDocs = estInqSnap.docs.sort((a, b) => {
-              const tA = new Date(a.data().createdAt || 0).getTime();
-              const tB = new Date(b.data().createdAt || 0).getTime();
-              return tB - tA;
-            });
-            matchedInquiryId = sortedDocs[0].id;
-            existingInquiryData = sortedDocs[0].data();
-            logger.info(`Matched existing inquiry ID by linkedEstimateId: ${matchedInquiryId}`);
-          }
-        } catch (err) {
-          logger.error("Error looking up inquiry by linkedEstimateId:", err.message);
-        }
+      // 2.5 Look up inquiry number in subject line or body (INQ-XXXX or INQYY-XXXXX, unpadded, doc ID)
+      const inqMatchResult = await findInquiryBySubjectOrRef(db, subject, textBody);
+      if (inqMatchResult) {
+        matchedInquiryId = inqMatchResult.id;
+        existingInquiryData = inqMatchResult.data;
+        logger.info(`Matched existing inquiry ID: ${matchedInquiryId}`);
       }
 
       if (matchedInquiryId) {
@@ -1501,12 +1463,36 @@ ${textBody}
         }
       }
 
-      // Default to Porsche if completely unmatched, unless the mailbox dictates otherwise
-      let defaultEntity = "ent_porsche";
-      if (microsoftEmailSender.toLowerCase() === "trimming@brookspeed.com") {
-        defaultEntity = "ent_trimming";
+      // Entity Resolution (Trimming, Audi, Porsche)
+      const textToClassify = `${subject} ${cleanTextBody}`.toLowerCase();
+      if (
+        (microsoftEmailSender && microsoftEmailSender.toLowerCase() === "trimming@brookspeed.com") ||
+        (recipientEmail && recipientEmail.toLowerCase().includes("trimming")) ||
+        textToClassify.includes("trimming") ||
+        textToClassify.includes("retrim") ||
+        textToClassify.includes("leather") ||
+        textToClassify.includes("upholstery") ||
+        textToClassify.includes("seat repair") ||
+        textToClassify.includes("hood")
+      ) {
+        entityId = "ent_trimming";
+      } else if (
+        textToClassify.includes("audi") ||
+        textToClassify.includes("vw") ||
+        textToClassify.includes("volkswagen")
+      ) {
+        entityId = "ent_audi";
+      } else if (
+        textToClassify.includes("porsche") ||
+        textToClassify.includes("taycan") ||
+        textToClassify.includes("911") ||
+        textToClassify.includes("boxster") ||
+        textToClassify.includes("cayman")
+      ) {
+        entityId = entityId || "ent_porsche";
+      } else {
+        entityId = entityId || "ent_porsche";
       }
-      entityId = entityId || defaultEntity;
 
       let status = "New Requests";
       if (isEscalated) {
@@ -1546,13 +1532,24 @@ ${textBody}
       const generatedInquiryNumber = `${prefix}${String(syncNextNum).padStart(5, '0')}`;
       syncNextNum++;
 
+      // Clean subject line for forwarded emails/WhatsApp
+      const cleanSubject = (subject || "").replace(/^(fwd|fw|re):\s*/i, '').trim();
+
+      // Derive display name for forwarded messages
+      let derivedFromName = fromName || finalEmail || "Unknown Sender";
+      if (isInternalCompanyEmail || derivedFromName.toLowerCase().includes("brookspeed")) {
+        if (cleanSubject && !cleanSubject.toLowerCase().includes("brookspeed")) {
+          derivedFromName = cleanSubject;
+        }
+      }
+
       // 3. Create Inquiry Card
       const newInquiry = {
         createdAt: message.receivedDateTime || new Date().toISOString(),
         inquiryNumber: generatedInquiryNumber,
-        subject: subject || null,
+        subject: cleanSubject || subject || null,
         internetMessageId: internetMessageId,
-        fromName: fromName || finalEmail || "Unknown Sender",
+        fromName: derivedFromName,
         fromContact: finalEmail || "No Email",
         fromEmail: finalEmail || null,
         fromPhone: finalPhone || null,
@@ -2080,5 +2077,208 @@ exports.forceSyncAttachments = onRequest({
   } catch (error) {
     logger.error("Retroactive sync error:", error);
     return res.status(500).send(`Error: ${error.message}`);
+  }
+});
+
+exports.unbundleInfoInquiries = onRequest({
+  region: "europe-west1",
+  cors: true,
+  timeoutSeconds: 300,
+  memory: "512MiB",
+  secrets: ["GEMINI_API_KEY", "MICROSOFT_CLIENT_ID", "MICROSOFT_CLIENT_SECRET", "MICROSOFT_TENANT_ID", "MICROSOFT_EMAIL_SENDER"]
+}, async (req, res) => {
+  try {
+    const db = admin.firestore();
+    const snap = await db.collection("brooks_inquiries").orderBy("createdAt", "desc").limit(100).get();
+    
+    let unbundledCount = 0;
+    const createdCards = [];
+
+    const yearSuffix = new Date().getFullYear().toString().slice(-2);
+    const prefix = `INQ${yearSuffix}-`;
+
+    let syncNextNum = 1;
+    try {
+      const highestInqSnap = await db.collection("brooks_inquiries")
+        .where("inquiryNumber", ">=", prefix)
+        .where("inquiryNumber", "<", prefix + "\uf8ff")
+        .orderBy("inquiryNumber", "desc")
+        .limit(1)
+        .get();
+
+      if (!highestInqSnap.empty) {
+        const highestId = highestInqSnap.docs[0].data().inquiryNumber;
+        const parts = highestId.split('-');
+        if (parts.length === 2) {
+           const numPart = parseInt(parts[1], 10);
+           if (!isNaN(numPart)) syncNextNum = numPart + 1;
+        }
+      }
+    } catch (err) {}
+
+    for (const doc of snap.docs) {
+      const data = doc.data();
+      const logs = data.logs || [];
+      if (logs.length <= 1) continue;
+
+      const remainingLogs = [logs[0]];
+      let isDocModified = false;
+
+      for (let i = 1; i < logs.length; i++) {
+        const log = logs[i];
+        const notes = log.notes || "";
+        
+        // Check if log contains an inbound email or reply
+        const isReceivedEmail = notes.includes("[Email Sync]") || notes.includes("[Webhook]") || notes.includes("Received reply");
+        
+        // Extract Subject if present
+        const subjectMatch = notes.match(/Subject:\s*"([^"]+)"/i) || notes.match(/Subject:\s*([^\n]+)/i);
+        const logSubject = subjectMatch ? subjectMatch[1].trim() : null;
+
+        // If it's a distinct forwarded email log or mentions Taycan/Grover/different subject, unbundle it into a new Inquiry Card!
+        if (isReceivedEmail && (logSubject || notes.toLowerCase().includes("taycan") || notes.toLowerCase().includes("grover"))) {
+          const cleanSubj = (logSubject || data.subject || "Forwarded Inquiry").replace(/^(fwd|fw|re):\s*/i, '').trim();
+
+          const textToClassify = `${cleanSubj} ${notes}`.toLowerCase();
+          let targetEntity = "ent_porsche";
+          if (textToClassify.includes("trimming") || textToClassify.includes("retrim") || textToClassify.includes("leather") || textToClassify.includes("upholstery")) {
+            targetEntity = "ent_trimming";
+          } else if (textToClassify.includes("audi") || textToClassify.includes("vw") || textToClassify.includes("volkswagen")) {
+            targetEntity = "ent_audi";
+          } else if (textToClassify.includes("porsche") || textToClassify.includes("taycan") || textToClassify.includes("911")) {
+            targetEntity = textToClassify.includes("trimming") ? "ent_trimming" : "ent_porsche";
+          }
+
+          let derivedName = data.fromName || "Unknown Sender";
+          if (cleanSubj && !cleanSubj.toLowerCase().includes("brookspeed")) {
+            derivedName = cleanSubj;
+          }
+
+          const generatedInquiryNumber = `${prefix}${String(syncNextNum).padStart(5, '0')}`;
+          syncNextNum++;
+
+          const newInquiryDoc = {
+            createdAt: log.timestamp || new Date().toISOString(),
+            inquiryNumber: generatedInquiryNumber,
+            subject: cleanSubj,
+            fromName: derivedName,
+            fromContact: data.fromContact || data.fromEmail || "No Email",
+            fromEmail: data.fromEmail || null,
+            fromPhone: data.fromPhone || null,
+            message: notes,
+            takenByUserId: "system",
+            status: "New Requests",
+            actionStatus: "New Mail",
+            hasNewReply: true,
+            entityId: targetEntity,
+            media: data.media || [],
+            logs: [
+              {
+                id: crypto.randomUUID(),
+                timestamp: log.timestamp || new Date().toISOString(),
+                userId: "system",
+                actionType: "Unbundled",
+                notes: `[Unbundled] Separated from Inquiry ${data.inquiryNumber || doc.id}.\n${notes}`
+              }
+            ]
+          };
+
+          const newDocRef = await db.collection("brooks_inquiries").add(newInquiryDoc);
+          createdCards.push({ id: newDocRef.id, inquiryNumber: generatedInquiryNumber, subject: cleanSubj, entityId: targetEntity });
+          unbundledCount++;
+          isDocModified = true;
+        } else {
+          remainingLogs.push(log);
+        }
+      }
+
+      if (isDocModified) {
+        await doc.ref.update({ logs: remainingLogs });
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `Successfully unbundled ${unbundledCount} inquiries into separate Inquiry Cards.`,
+      createdCards
+    });
+  } catch (error) {
+    logger.error("Unbundle inquiries error:", error);
+    return res.status(500).send(`Error: ${error.message}`);
+  }
+});
+
+exports.rethreadMisroutedInquiries = onRequest({
+  region: "europe-west1",
+  cors: true,
+  timeoutSeconds: 300,
+  memory: "512MiB",
+}, async (req, res) => {
+  try {
+    const db = admin.firestore();
+    const snap = await db.collection("brooks_inquiries").orderBy("createdAt", "desc").limit(300).get();
+    
+    let rethreadedCount = 0;
+    const details = [];
+
+    for (const doc of snap.docs) {
+      const data = doc.data();
+      const docId = doc.id;
+      const ownInqNum = (data.inquiryNumber || docId).toUpperCase();
+      const subject = data.subject || "";
+      const message = data.message || "";
+
+      // Check if this inquiry card references a DIFFERENT inquiry number in its subject or message
+      const targetMatch = await findInquiryBySubjectOrRef(db, subject, message);
+      if (targetMatch && targetMatch.id !== docId && (targetMatch.data.inquiryNumber || targetMatch.id).toUpperCase() !== ownInqNum) {
+        const targetId = targetMatch.id;
+        const targetData = targetMatch.data;
+        const targetInqNum = targetData.inquiryNumber || targetId;
+
+        logger.info(`Found misrouted inquiry card ${ownInqNum} (${docId}) referencing target ${targetInqNum} (${targetId})`);
+
+        // Create log entry to move into target parent inquiry
+        const newLog = {
+          id: crypto.randomUUID(),
+          timestamp: data.createdAt || new Date().toISOString(),
+          userId: 'system',
+          actionType: 'Customer Reply',
+          notes: `[Re-threaded from ${ownInqNum}]\nFrom: ${data.fromName || data.fromEmail || 'Customer'}\nSubject: "${subject}"\n${message}`
+        };
+
+        const targetLogs = targetData.logs || [];
+        // Avoid duplicate log if already attached
+        if (!targetLogs.some(l => l.notes && l.notes.includes(docId))) {
+          targetLogs.push(newLog);
+
+          await db.collection("brooks_inquiries").doc(targetId).update({
+            logs: targetLogs,
+            hasNewReply: true,
+            status: "Our Action",
+            actionStatus: "Email Responded"
+          });
+        }
+
+        // Delete the duplicate misrouted inquiry doc
+        await db.collection("brooks_inquiries").doc(docId).delete();
+
+        rethreadedCount++;
+        details.push({
+          removedInquiry: ownInqNum,
+          mergedInto: targetInqNum,
+          subject: subject
+        });
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `Successfully re-threaded and cleaned up ${rethreadedCount} duplicate inquiry cards.`,
+      rethreadedCount,
+      details
+    });
+  } catch (error) {
+    logger.error("Error in rethreadMisroutedInquiries:", error);
+    return res.status(500).json({ success: false, error: error.message });
   }
 });

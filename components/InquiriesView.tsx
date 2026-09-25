@@ -11,6 +11,7 @@ import { getCustomerDisplayName } from '../core/utils/customerUtils';
 import ConfirmationModal from './ConfirmationModal';
 import DuplicateInquiriesModal from './DuplicateInquiriesModal';
 import PrintableInquiryList from './PrintableInquiryList';
+import { InquiryMergeModal } from './inquiries/InquiryMergeModal';
 import { saveDocument, deleteDocument } from '../core/db';
 import { getImage } from '../utils/imageStore';
 import { toast } from 'react-toastify';
@@ -116,7 +117,9 @@ const InquiryCard: React.FC<{
     draggable?: boolean;
     isExpanded?: boolean;
     onMouseEnter?: () => void;
-}> = ({ inquiry, onOpenInquiryModal, onInitiateMerge, onInitiateBooking, onViewEstimate, onOpenPurchaseOrder, onViewCustomer, onViewVehicle, isCompact, onUpdateStatus, onConvert, draggable, isExpanded = false, onMouseEnter }) => {
+    isSelected?: boolean;
+    onToggleSelect?: (id: string, e: React.MouseEvent) => void;
+}> = ({ inquiry, onOpenInquiryModal, onInitiateMerge, onInitiateBooking, onViewEstimate, onOpenPurchaseOrder, onViewCustomer, onViewVehicle, isCompact, onUpdateStatus, onConvert, draggable, isExpanded = false, onMouseEnter, isSelected = false, onToggleSelect }) => {
     const { customers, vehicles, estimates, purchaseOrders, jobs } = useData();
     const { users, businessEntities: entities } = useApp();
     
@@ -268,13 +271,26 @@ const InquiryCard: React.FC<{
                     inquiry.status === 'Scheduled' || isScheduledJob ? 'border-purple-600' : 
                     inquiry.status === 'Waiting on Customer' ? (isStale72h(inquiry) ? 'border-red-500 text-red-800' : 'border-gray-200') : 
                     'border-gray-200'
-                } ${isExpanded ? 'shadow-md ring-1 ring-indigo-400' : ringClass} cursor-pointer transition-all mb-1.5`}
+                } ${isSelected ? 'ring-2 ring-indigo-500 bg-indigo-50/50 shadow-md' : isExpanded ? 'shadow-md ring-1 ring-indigo-400' : ringClass} cursor-pointer transition-all mb-1.5`}
                 onClick={() => onOpenInquiryModal(inquiry)}
                 title={cardExplanation}
             >
                 <div className="flex justify-between items-start gap-1">
                     <div className="min-w-0 flex-grow pr-1">
                         <div className="flex items-center gap-1 flex-wrap">
+                            {onToggleSelect && (
+                                <input 
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    onClick={(e) => e.stopPropagation()}
+                                    onChange={(e) => {
+                                        e.stopPropagation();
+                                        onToggleSelect(inquiry.id, e as any);
+                                    }}
+                                    className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer h-3.5 w-3.5 mr-0.5 shrink-0 self-center"
+                                    title="Select for bulk action"
+                                />
+                            )}
                             <p className="font-bold text-gray-800 text-[11px] truncate leading-tight" title={displayName}>{displayName}</p>
                             {effectiveReg && (
                                 <span className="inline-flex items-center gap-0.5 bg-blue-50 text-blue-800 border border-blue-200/80 px-1 py-0.2 rounded text-[9px] font-bold font-mono shrink-0" title={`Vehicle Reg: ${effectiveReg}`}>
@@ -544,21 +560,36 @@ const InquiryCard: React.FC<{
                 inquiry.status === 'Scheduled' || isScheduledJob ? 'border-purple-600' : 
                 inquiry.status === 'Waiting on Customer' ? (isStale72h(inquiry) ? 'border-red-500 text-red-800' : 'border-gray-200') : 
                 'border-gray-200'
-            } ${ringClass} cursor-pointer transition-all mb-3 relative`}
+            } ${isSelected ? 'ring-2 ring-indigo-500 bg-indigo-50/50 shadow-md' : ringClass} cursor-pointer transition-all mb-3 relative`}
             onClick={() => onOpenInquiryModal(inquiry)}
             title={cardExplanation}
         >
             <div className="flex justify-between items-start">
-                <div>
-                    <h3 className="font-bold text-gray-800 text-base" title={displayName}>{displayName}</h3>
-                    {contactInfoString && (
-                        <p className="text-xs text-gray-500">{contactInfoString}</p>
+                <div className="flex items-start gap-2">
+                    {onToggleSelect && (
+                        <input 
+                            type="checkbox"
+                            checked={isSelected}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) => {
+                                e.stopPropagation();
+                                onToggleSelect(inquiry.id, e as any);
+                            }}
+                            className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer h-4 w-4 mt-1 shrink-0"
+                            title="Select for bulk action"
+                        />
                     )}
-                    {displayAddress && (
-                        <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
-                            <MapPin size={10} className="shrink-0"/> {displayAddress}
-                        </p>
-                    )}
+                    <div>
+                        <h3 className="font-bold text-gray-800 text-base" title={displayName}>{displayName}</h3>
+                        {contactInfoString && (
+                            <p className="text-xs text-gray-500">{contactInfoString}</p>
+                        )}
+                        {displayAddress && (
+                            <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
+                                <MapPin size={10} className="shrink-0"/> {displayAddress}
+                            </p>
+                        )}
+                    </div>
                 </div>
                 <div className="text-right">
                     <span className="text-xs text-gray-400 font-medium block">{new Date(inquiry.createdAt).toLocaleDateString()}</span>
@@ -1202,9 +1233,11 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
     const [sortField, setSortField] = useState<'createdAt' | 'fromName' | 'registration' | 'status' | 'inquiryNumber' | 'scheduledDate'>('createdAt');
     const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
     const [selectedInquiryIds, setSelectedInquiryIds] = useState<string[]>([]);
+    const [targetBulkStatus, setTargetBulkStatus] = useState<Inquiry['status'] | ''>('');
     const [isSyncing, setIsSyncing] = useState(false);
     const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
     const [printFilterMode, setPrintFilterMode] = useState<'all' | 'scheduled'>('all');
+    const [showMergeModal, setShowMergeModal] = useState(false);
 
     const handleSyncEmails = async () => {
         setIsSyncing(true);
@@ -1222,12 +1255,32 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
             setIsSyncing(false);
         }
     };
+
+    const [isRethreading, setIsRethreading] = useState(false);
+
+    const handleRethreadInquiries = async () => {
+        setIsRethreading(true);
+        try {
+            const res = await fetch('https://europe-west1-intelligent-scheduling-v801.cloudfunctions.net/rethreadMisroutedInquiries', { method: 'POST' });
+            const data = await res.json();
+            if (data.success) {
+                toast.success(`Successfully re-threaded ${data.rethreadedCount} duplicate inquiry card(s).`);
+                await forceRefresh('brooks_inquiries' as any);
+            } else {
+                toast.error(data.error || "Failed to re-thread duplicate inquiries.");
+            }
+        } catch (err: any) {
+            toast.error(err.message || "Error running re-thread operation.");
+        } finally {
+            setIsRethreading(false);
+        }
+    };
     React.useEffect(() => {
         setSelectedInquiryIds([]);
     }, [activeTab, searchTerm, dateFilter, selectedEntityId, viewLayout, assignedUserFilter, healthFilter]);
 
     const handleBulkUpdateStatus = async (newStatus: Inquiry['status']) => {
-        if (selectedInquiryIds.length === 0) return;
+        if (selectedInquiryIds.length === 0 || !newStatus) return;
         
         const updatedInquiries = displayInquiries.filter(i => selectedInquiryIds.includes(i.id)).map(i => ({
             ...i,
@@ -1235,7 +1288,7 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
             logs: [...(i.logs || []), {
                 id: crypto.randomUUID(),
                 timestamp: new Date().toISOString(),
-                userId: 'System',
+                userId: currentUser?.name || 'System',
                 actionType: 'Status Update',
                 notes: `Status updated to ${newStatus} via bulk action.`
             }]
@@ -1259,11 +1312,14 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
         });
         try {
             await Promise.all(promises);
+            toast.success(`Successfully updated status of ${updatedInquiries.length} inquiry card(s) to "${newStatus}".`);
         } catch (err) {
             console.error("Bulk update status failed:", err);
+            toast.error("Failed to update status for some selected inquiries.");
         }
         
         setSelectedInquiryIds([]);
+        setTargetBulkStatus('');
     };
 
     const handleBulkDelete = () => {
@@ -1644,11 +1700,29 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                         </button>
 
                         <button 
+                            onClick={() => setShowMergeModal(true)} 
+                            className="flex items-center gap-2 py-2 px-4 bg-white border border-indigo-300 text-indigo-700 font-semibold rounded-lg shadow-sm hover:bg-indigo-50 transition"
+                            title="Open interactive inquiry merge tool to choose Master and Secondary cards"
+                        >
+                            <Copy size={16} /> Merge Inquiries
+                        </button>
+
+                        <button 
                             onClick={() => setShowDuplicateFinder(true)} 
                             className="flex items-center gap-2 py-2 px-4 bg-white border border-gray-300 text-gray-700 font-semibold rounded-lg shadow-sm hover:bg-gray-50 transition"
-                            title="Find and merge duplicate active inquiries"
+                            title="Find duplicate inquiries by Email, Name or Message content"
                         >
-                            <Copy size={16} /> Find Duplicates
+                            <Search size={16} /> Find Duplicates
+                        </button>
+
+                        <button 
+                            onClick={handleRethreadInquiries} 
+                            disabled={isRethreading}
+                            className="flex items-center gap-2 py-2 px-4 bg-white border border-gray-300 text-gray-700 font-semibold rounded-lg shadow-sm hover:bg-gray-50 transition disabled:opacity-50"
+                            title="Scan and automatically re-thread misrouted duplicate inquiry cards into their target parent inquiry"
+                        >
+                            {isRethreading ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+                            Auto Re-thread
                         </button>
 
                         <button onClick={() => props.onOpenInquiryModal({})} className="flex items-center gap-2 py-2 px-4 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition">
@@ -1834,47 +1908,106 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                 </div>
             </header>
 
+            {/* Universal Bulk Actions Bar (Works in both Kanban & List view) */}
+            {selectedInquiryIds.length > 0 && (
+                <div className="bg-gradient-to-r from-indigo-900 to-indigo-800 text-white px-4 py-3 rounded-xl shadow-lg mb-4 flex flex-wrap items-center justify-between gap-3 border border-indigo-700 animate-in fade-in duration-200 flex-shrink-0">
+                    <div className="flex items-center gap-3">
+                        <span className="text-sm font-bold bg-indigo-700/80 border border-indigo-500/50 px-3 py-1 rounded-lg font-mono">
+                            {selectedInquiryIds.length} card{selectedInquiryIds.length > 1 ? 's' : ''} selected
+                        </span>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                if (selectedInquiryIds.length === displayInquiries.length) {
+                                    setSelectedInquiryIds([]);
+                                } else {
+                                    setSelectedInquiryIds(displayInquiries.map(i => i.id));
+                                }
+                            }}
+                            className="text-xs text-indigo-200 hover:text-white font-semibold underline underline-offset-2 transition cursor-pointer"
+                        >
+                            {selectedInquiryIds.length === displayInquiries.length ? 'Deselect All' : `Select All Visible (${displayInquiries.length})`}
+                        </button>
+                        {selectedInquiryIds.length > 0 && selectedInquiryIds.length !== displayInquiries.length && (
+                            <button
+                                type="button"
+                                onClick={() => setSelectedInquiryIds([])}
+                                className="text-xs text-indigo-300 hover:text-white transition cursor-pointer"
+                            >
+                                Clear selection
+                            </button>
+                        )}
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                        {/* Status Selector & Apply */}
+                        <div className="flex items-center gap-1.5 bg-indigo-950/60 p-1 rounded-lg border border-indigo-700">
+                            <span className="text-xs font-semibold text-indigo-200 pl-2">Set Status:</span>
+                            <select
+                                value={targetBulkStatus}
+                                onChange={(e) => setTargetBulkStatus(e.target.value as Inquiry['status'])}
+                                className="bg-indigo-900 border border-indigo-600 text-white text-xs font-bold rounded px-2 py-1 outline-none focus:ring-2 focus:ring-indigo-400 cursor-pointer"
+                            >
+                                <option value="">-- Choose Status --</option>
+                                <option value="Inbox">Inbox</option>
+                                <option value="New Requests">New Requests</option>
+                                <option value="Our Action">Our Action</option>
+                                <option value="Waiting on Customer">Waiting on Customer</option>
+                                <option value="Online Approved">Online Approved</option>
+                                <option value="Scheduled">Scheduled</option>
+                                <option value="Closed">Closed</option>
+                            </select>
+                            <button
+                                type="button"
+                                disabled={!targetBulkStatus}
+                                onClick={() => handleBulkUpdateStatus(targetBulkStatus as Inquiry['status'])}
+                                className="px-3 py-1 bg-indigo-500 hover:bg-indigo-400 disabled:opacity-40 text-white font-bold text-xs rounded transition shadow-sm cursor-pointer"
+                            >
+                                Apply Status
+                            </button>
+                        </div>
+
+                        {/* Quick Action Shortcuts */}
+                        <button
+                            type="button"
+                            onClick={() => handleBulkUpdateStatus('Waiting on Customer')}
+                            className="px-3 py-1 bg-indigo-700 hover:bg-indigo-600 text-white font-bold text-xs rounded-lg border border-indigo-600 transition cursor-pointer"
+                        >
+                            To Waiting on Customer
+                        </button>
+                        
+                        <button
+                            type="button"
+                            onClick={() => handleBulkUpdateStatus('Closed')}
+                            className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-lg transition shadow-sm cursor-pointer"
+                        >
+                            Close Selected
+                        </button>
+
+                        {selectedInquiryIds.length >= 2 && (
+                            <button
+                                type="button"
+                                onClick={() => setShowMergeModal(true)}
+                                className="px-3 py-1 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs rounded-lg transition flex items-center gap-1 shadow-sm cursor-pointer"
+                            >
+                                <Copy size={13} />
+                                Merge Selected
+                            </button>
+                        )}
+
+                        <button
+                            type="button"
+                            onClick={handleBulkDelete}
+                            className="px-3 py-1 bg-red-600 hover:bg-red-500 text-white font-bold text-xs rounded-lg transition shadow-sm cursor-pointer"
+                        >
+                            Delete Selected
+                        </button>
+                    </div>
+                </div>
+            )}
+
             {viewLayout === 'list' ? (
                 <div className="flex-grow flex flex-col min-h-0">
-                    {selectedInquiryIds.length > 0 && (
-                        <div className="bg-indigo-50 border border-indigo-200 px-4 py-2.5 flex items-center justify-between shadow-sm rounded-lg mb-3 flex-shrink-0">
-                            <div className="flex items-center gap-2">
-                                <span className="text-sm font-bold text-indigo-800 font-sans">
-                                    {selectedInquiryIds.length} item{selectedInquiryIds.length > 1 ? 's' : ''} selected
-                                </span>
-                                <button
-                                    type="button"
-                                    onClick={() => setSelectedInquiryIds([])}
-                                    className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold"
-                                >
-                                    Deselect all
-                                </button>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <button
-                                    type="button"
-                                    onClick={() => handleBulkUpdateStatus('Waiting on Customer')}
-                                    className="px-3 py-1 bg-white border border-indigo-200 hover:bg-indigo-50 text-indigo-700 font-bold text-xs rounded-lg transition"
-                                >
-                                    Move to Waiting on Customer
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => handleBulkUpdateStatus('Closed')}
-                                    className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white font-bold text-xs rounded-lg transition"
-                                >
-                                    Bulk Close
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={handleBulkDelete}
-                                    className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-lg transition"
-                                >
-                                    Bulk Delete
-                                </button>
-                            </div>
-                        </div>
-                    )}
                     <main className="flex-grow overflow-y-auto bg-white rounded-xl border shadow-sm">
                         <div className="overflow-x-auto">
                             <table className="min-w-full text-sm divide-y divide-gray-200">
@@ -2160,6 +2293,14 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                                         <InquiryCard 
                                             key={i.id} 
                                             inquiry={i} 
+                                            isSelected={selectedInquiryIds.includes(i.id)}
+                                            onToggleSelect={(id, e) => {
+                                                if (selectedInquiryIds.includes(id)) {
+                                                    setSelectedInquiryIds(prev => prev.filter(x => x !== id));
+                                                } else {
+                                                    setSelectedInquiryIds(prev => [...prev, id]);
+                                                }
+                                            }}
                                             onOpenInquiryModal={(inq) => {
                                                 setHoveredInquiryId(null);
                                                 props.onOpenInquiryModal(inq);
@@ -2190,6 +2331,14 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                             <InquiryCard 
                                 key={i.id} 
                                 inquiry={i} 
+                                isSelected={selectedInquiryIds.includes(i.id)}
+                                onToggleSelect={(id, e) => {
+                                    if (selectedInquiryIds.includes(id)) {
+                                        setSelectedInquiryIds(prev => prev.filter(x => x !== id));
+                                    } else {
+                                        setSelectedInquiryIds(prev => [...prev, id]);
+                                    }
+                                }}
                                 onOpenInquiryModal={(inq) => {
                                     setHoveredInquiryId(null);
                                     props.onOpenInquiryModal(inq);
@@ -2229,6 +2378,23 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                     return s !== 'closed' && s !== 'archived' && isEntityMatch;
                 })}
                 onViewInquiry={props.onOpenInquiryModal}
+            />
+
+            <InquiryMergeModal
+                isOpen={showMergeModal}
+                onClose={() => setShowMergeModal(false)}
+                inquiries={(inquiries || []).filter(i => {
+                    const s = (i.status || '').toLowerCase();
+                    const isEntityMatch = selectedEntityId === 'all' || i.entityId === selectedEntityId || i.assignedToEntityId === selectedEntityId;
+                    return s !== 'closed' && s !== 'archived' && isEntityMatch;
+                })}
+                customers={customers || []}
+                vehicles={vehicles || []}
+                preselectedInquiryIds={selectedInquiryIds}
+                onRefresh={async () => {
+                    await forceRefresh('brooks_inquiries' as any);
+                    setSelectedInquiryIds([]);
+                }}
             />
 
             <ConfirmationModal

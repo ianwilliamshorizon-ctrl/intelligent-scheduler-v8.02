@@ -282,7 +282,7 @@ export const DEFAULT_INVOICE_BLOCKS: DocumentBlockConfig[] = [
         title: 'Company Letterhead',
         visible: true,
         order: 1,
-        settings: { logoPosition: 'right', logoHeight: 70, style: 'clean' }
+        settings: { logoPosition: 'right', logoHeight: 70, style: 'minimal' }
     },
     {
         id: 'inv_doc_meta',
@@ -290,7 +290,7 @@ export const DEFAULT_INVOICE_BLOCKS: DocumentBlockConfig[] = [
         title: 'Invoice Details',
         visible: true,
         order: 2,
-        settings: { style: 'filled', containerColor: '#4338ca', textColor: '#ffffff' }
+        settings: { style: 'banner', containerColor: 'indigo', textColor: 'white' }
     },
     {
         id: 'inv_customer',

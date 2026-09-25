@@ -31,3 +31,5 @@ backups/
 .gemini/
 .agents/
 .firebase/
+*.apk
+public/downloads/

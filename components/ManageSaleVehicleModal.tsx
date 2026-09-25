@@ -204,7 +204,7 @@ const ManageSaleVehicleModal: React.FC<ManageSaleVehicleModalProps> = ({ isOpen,
         setIsMarkingSold(false);
         
         const activeVersion = initialFormData.versions.find(v => v.versionId === initialFormData.activeVersionId);
-        setSoldData({ finalSalePrice: String(activeVersion?.listPrice || ''), buyerCustomerId: '' });
+        setSoldData({ finalSalePrice: String(activeVersion?.listPrice || ''), buyerCustomerId: '', isPaid: true, paymentMethod: 'Bank Transfer' });
 
         setIsCharging(false);
         setSelectedChargerId('');

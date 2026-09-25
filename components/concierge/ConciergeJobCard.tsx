@@ -196,7 +196,7 @@ export const ConciergeJobCard: React.FC<ConciergeJobCardProps> = (props) => {
             {/* Segments for Today */}
             {segmentsToday.length > 0 && (
                 <div className="mt-1.5 sm:mt-2 pt-1.5 sm:pt-2 border-t border-gray-100/50 text-[10px] sm:text-xs space-y-1 sm:space-y-1.5">
-                    {segmentsToday.map(seg => {
+                    {segmentsToday.map((seg, index) => {
                         let timeString = `${seg.duration} hrs`;
                         if (seg.scheduledStartSegment !== null) {
                             const startTime = TIME_SEGMENTS[seg.scheduledStartSegment];

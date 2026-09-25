@@ -111,6 +111,7 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
         if (!editableJob?.id) return [];
         return data.inquiries.filter(inq => inq.linkedJobId === editableJob.id || (editableJob.estimateId && inq.linkedEstimateId === editableJob.estimateId)).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     }, [data.inquiries, editableJob?.id, editableJob?.estimateId]);
+    const linkedInquiry = relatedInquiries[0] || null;
     const [printBlankSheet, setPrintBlankSheet] = useState(false);
     const [voices, setVoices] = useState<any[]>([]);
 
@@ -1684,7 +1685,32 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
                                                                         title="Click to reschedule"
                                                                     />
                                                                     <span>•</span>
-                                                                    <span>{seg.duration} hrs booked</span>
+                                                                    <div className="inline-flex items-center gap-1 bg-gray-50 hover:bg-white px-1.5 py-0.5 rounded border border-gray-200 focus-within:border-indigo-500 focus-within:ring-1 focus-within:ring-indigo-500 transition-all">
+                                                                        <input 
+                                                                            type="number"
+                                                                            step="0.25"
+                                                                            min="0.25"
+                                                                            max="24"
+                                                                            value={seg.duration ?? 0}
+                                                                            onChange={(e) => {
+                                                                                const val = parseFloat(e.target.value);
+                                                                                const newDur = isNaN(val) ? 0.25 : Math.max(0.25, val);
+                                                                                setEditableJob(prev => {
+                                                                                    if (!prev) return prev;
+                                                                                    const newSegments = (prev.segments || []).map(s => 
+                                                                                        (s.segmentId === targetSegId || s.id === targetSegId) 
+                                                                                            ? { ...s, duration: newDur, allocatedHours: newDur } 
+                                                                                            : s
+                                                                                    );
+                                                                                    const newTotalEst = newSegments.reduce((sum, s) => sum + (s.duration || 0), 0);
+                                                                                    return { ...prev, segments: newSegments, estimatedHours: newTotalEst };
+                                                                                });
+                                                                            }}
+                                                                            className="w-12 bg-transparent text-center font-extrabold text-xs text-indigo-700 outline-none p-0 cursor-text"
+                                                                            title="Adjust booked duration in hours"
+                                                                        />
+                                                                        <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">hrs booked</span>
+                                                                    </div>
                                                                 </div>
                                                             </div>
                                                         </div>

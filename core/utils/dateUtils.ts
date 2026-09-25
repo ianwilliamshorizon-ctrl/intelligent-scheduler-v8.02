@@ -50,6 +50,22 @@ export const getFutureDateISOString = (daysToAdd: number): string => {
     return `${year}-${month}-${day}`;
 };
 
+/** Adds days to a YYYY-MM-DD date string and returns a new YYYY-MM-DD string (UTC-safe) */
+export const addDaysToDateStr = (dateStr: string, daysToAdd: number): string => {
+    if (!dateStr) return getRelativeDate(daysToAdd);
+    try {
+        const parts = dateStr.split('T')[0].split('-');
+        const year = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10) - 1;
+        const day = parseInt(parts[2], 10);
+        const d = new Date(Date.UTC(year, month, day));
+        d.setUTCDate(d.getUTCDate() + daysToAdd);
+        return formatDate(d);
+    } catch {
+        return getRelativeDate(daysToAdd);
+    }
+};
+
 /**
  * Returns the following working day (skipping Saturday and Sunday) as YYYY-MM-DD.
  * e.g. Monday -> Tuesday, Friday -> Monday, Saturday -> Monday, Sunday -> Monday
