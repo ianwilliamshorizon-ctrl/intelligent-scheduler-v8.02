@@ -8,7 +8,8 @@ import {
     PlayCircle, PauseCircle, CheckCircle2, Phone, Wifi, WifiOff, 
     RefreshCw, Monitor, Search, Car, User as UserIcon, Clock, 
     TrendingUp, Building2, ChevronRight, X, Camera, AlertTriangle,
-    ShieldAlert, Sparkles, Check, Play, ArrowRight, Layers, Users
+    ShieldAlert, Sparkles, Check, Play, ArrowRight, Layers, Users,
+    FileText, Key
 } from 'lucide-react';
 import { formatReadableDate, formatScheduledArrivalDate, getEffectiveJobScheduledDate } from '../../core/utils/dateUtils';
 import { TIME_SEGMENTS } from '../../constants';
@@ -71,6 +72,8 @@ export const MobileAppShell: React.FC<MobileAppShellProps> = ({
 
     const [selectedDate, setSelectedDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
     const [searchFilter, setSearchFilter] = useState('');
+    const [cockpitFilter, setCockpitFilter] = useState<'on-ramps' | 'all-onsite' | 'checked-in' | 'in-workshop' | 'awaiting-parts' | 'complete' | 'ready-invoice' | 'invoiced'>('on-ramps');
+    const [cockpitSearch, setCockpitSearch] = useState('');
     const [activeFindingJob, setActiveFindingJob] = useState<Job | null>(null);
     const [activeInspectionJob, setActiveInspectionJob] = useState<Job | null>(null);
 
@@ -119,13 +122,85 @@ export const MobileAppShell: React.FC<MobileAppShellProps> = ({
         return days;
     }, [jobs, currentUser.id, currentUser.engineerId, isDirectorOrAdmin, selectedEngineerFilter, selectedEntityId]);
 
-    // All active in-progress jobs across the workshop
-    const activeWorkshopJobs = useMemo(() => {
+    // Jobs scoped to selected business entity
+    const entityJobs = useMemo(() => {
         return jobs.filter(j => {
             if (selectedEntityId && selectedEntityId !== 'all' && j.entityId !== selectedEntityId) return false;
-            return j.status === 'In Progress';
+            return true;
         });
     }, [jobs, selectedEntityId]);
+
+    // Live Cockpit Vehicle Collections by Stage for the Active Business Entity
+    const cockpitVehicles = useMemo(() => {
+        const onRamps = entityJobs.filter(j => j.status === 'In Progress');
+        const allOnSite = entityJobs.filter(j => 
+            j.vehicleStatus === 'On Site' || 
+            j.status === 'In Progress' || 
+            j.status === 'Booked In' || 
+            (j.status === 'Complete' && j.vehicleStatus !== 'Collected' && j.vehicleStatus !== 'Awaiting Arrival')
+        );
+        const checkedIn = entityJobs.filter(j => 
+            (j.vehicleStatus === 'On Site' || j.status === 'Booked In') && 
+            (j.status === 'Booked In' || j.status === 'Allocated' || j.status === 'Unallocated')
+        );
+        const inWorkshop = entityJobs.filter(j => j.status === 'In Progress');
+        const awaitingParts = entityJobs.filter(j => 
+            j.status === 'Awaiting Parts' || 
+            j.status === 'Paused' || 
+            j.partsStatus === 'Awaiting Order' || 
+            j.partsStatus === 'Ordered'
+        );
+        const complete = entityJobs.filter(j => j.status === 'Complete' || j.status === 'Pending QC');
+        const readyInvoice = entityJobs.filter(j => 
+            (j.status === 'Complete' || j.status === 'Pending QC') && 
+            !j.invoiceId && 
+            j.status !== 'Invoiced'
+        );
+        const invoiced = entityJobs.filter(j => j.status === 'Invoiced' || Boolean(j.invoiceId));
+
+        return {
+            onRamps,
+            allOnSite,
+            checkedIn,
+            inWorkshop,
+            awaitingParts,
+            complete,
+            readyInvoice,
+            invoiced
+        };
+    }, [entityJobs]);
+
+    // Filtered Cockpit jobs according to selected filter and search term
+    const displayedCockpitJobs = useMemo(() => {
+        let list: Job[] = [];
+        switch (cockpitFilter) {
+            case 'on-ramps': list = cockpitVehicles.onRamps; break;
+            case 'all-onsite': list = cockpitVehicles.allOnSite; break;
+            case 'checked-in': list = cockpitVehicles.checkedIn; break;
+            case 'in-workshop': list = cockpitVehicles.inWorkshop; break;
+            case 'awaiting-parts': list = cockpitVehicles.awaitingParts; break;
+            case 'complete': list = cockpitVehicles.complete; break;
+            case 'ready-invoice': list = cockpitVehicles.readyInvoice; break;
+            case 'invoiced': list = cockpitVehicles.invoiced; break;
+            default: list = cockpitVehicles.onRamps;
+        }
+
+        if (cockpitSearch.trim()) {
+            const q = cockpitSearch.toLowerCase().trim();
+            list = list.filter(j => {
+                const veh = vehicles.find(v => v.id === j.vehicleId);
+                const cust = customers.find(c => c.id === j.customerId);
+                const reg = (veh?.registration || j.vehicleRegistration || '').toLowerCase();
+                const make = (veh?.make || '').toLowerCase();
+                const model = (veh?.model || '').toLowerCase();
+                const desc = (j.description || '').toLowerCase();
+                const custName = `${cust?.forename || ''} ${cust?.surname || ''}`.toLowerCase();
+                return reg.includes(q) || make.includes(q) || model.includes(q) || desc.includes(q) || custName.includes(q) || j.id.toLowerCase().includes(q);
+            });
+        }
+
+        return list;
+    }, [cockpitFilter, cockpitVehicles, cockpitSearch, vehicles, customers]);
 
     // Active in-progress job for engineer cockpit
     const inProgressJob = useMemo(() => {
@@ -757,202 +832,350 @@ export const MobileAppShell: React.FC<MobileAppShellProps> = ({
 
             {/* TAB 2: ACTIVE COCKPIT MODE */}
             {activeTab === 'cockpit' && (
-                <main className="flex-1 p-4 max-w-2xl w-full mx-auto space-y-4">
-                    {isDirectorOrAdmin ? (
-                        <div className="space-y-4">
+                <main className="flex-1 p-3.5 max-w-2xl w-full mx-auto space-y-3.5">
+                    {/* Cockpit Header with Active Entity & Overall Counts */}
+                    <div className="flex items-center justify-between gap-2">
+                        <div>
+                            <h2 className="text-sm font-black uppercase tracking-wider text-white flex items-center gap-2">
+                                <Wrench size={16} className="text-indigo-400" />
+                                <span>Fleet Cockpit: Live Workshop</span>
+                            </h2>
+                            <p className="text-[11px] text-slate-400 mt-0.5">
+                                Real-time status for <strong className="text-indigo-300 font-bold">{selectedEntityId && selectedEntityId !== 'all' ? (businessEntities.find(e => e.id === selectedEntityId)?.name || 'Selected Entity') : 'All Business Entities'}</strong>
+                            </p>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                                {cockpitVehicles.onRamps.length} on Lifts
+                            </span>
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                                {cockpitVehicles.allOnSite.length} on Site
+                            </span>
+                        </div>
+                    </div>
+
+                    {/* Engineer Personal Active Clock-In Card (if clocked into a job) */}
+                    {!isDirectorOrAdmin && inProgressJob && (
+                        <div className="bg-gradient-to-r from-indigo-950 via-slate-900 to-indigo-950 border border-indigo-500/60 rounded-2xl p-3.5 shadow-lg shadow-indigo-950/50 space-y-2.5">
                             <div className="flex items-center justify-between">
-                                <h2 className="text-sm font-black uppercase tracking-wider text-white flex items-center gap-2">
-                                    <Wrench size={16} className="text-indigo-400" />
-                                    Workshop Live Fleet ({activeWorkshopJobs.length} On Lifts)
-                                </h2>
-                                <span className="text-[10px] text-slate-400">
-                                    Real-Time Bay Status
+                                <span className="text-[10px] font-black uppercase tracking-wider text-indigo-400 flex items-center gap-1.5">
+                                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                                    Your Active Bay Clock-In
                                 </span>
+                                {inProgressJob.segments?.[0]?.allocatedLift && (
+                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                                        Lift {inProgressJob.segments[0].allocatedLift}
+                                    </span>
+                                )}
                             </div>
 
-                            {activeWorkshopJobs.length === 0 ? (
-                                <div className="text-center py-16 px-4 bg-slate-900/40 rounded-3xl border border-slate-800/80">
-                                    <CheckCircle2 size={36} className="mx-auto text-emerald-400 mb-2" />
-                                    <h3 className="text-sm font-bold text-slate-200">All Bays Ready</h3>
-                                    <p className="text-xs text-slate-400 mt-1 max-w-xs mx-auto">
-                                        No active jobs are currently clocked in on workshop lifts.
-                                    </p>
+                            <div className="flex items-center justify-between gap-2">
+                                <div className="truncate">
+                                    <div className="flex items-center gap-2">
+                                        {renderUKPlate(vehicles.find(v => v.id === inProgressJob.vehicleId)?.registration || inProgressJob.vehicleRegistration || '')}
+                                        <span className="text-xs font-bold text-white truncate">
+                                            {vehicles.find(v => v.id === inProgressJob.vehicleId)?.make} {vehicles.find(v => v.id === inProgressJob.vehicleId)?.model}
+                                        </span>
+                                    </div>
+                                    <p className="text-xs text-slate-300 truncate mt-1">{inProgressJob.description}</p>
                                 </div>
-                            ) : (
-                                activeWorkshopJobs.map(job => {
-                                    const veh = vehicles.find(v => v.id === job.vehicleId);
-                                    const cust = customers.find(c => c.id === job.customerId);
-                                    const engNames = (job.segments || []).map(s => engineers.find(e => e.id === s.engineerId)?.name).filter(Boolean);
-                                    const lift = job.segments?.[0]?.allocatedLift;
+                            </div>
 
-                                    return (
-                                        <div key={job.id} className="bg-gradient-to-br from-indigo-950/60 via-slate-900 to-slate-900 border border-indigo-500/50 rounded-2xl p-4 shadow-xl space-y-3">
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center gap-2 flex-wrap">
-                                                    {renderUKPlate(veh?.registration || job.vehicleRegistration || '')}
-                                                    <span className="text-xs font-bold text-white">
-                                                        {veh?.make} {veh?.model}
+                            <div className="grid grid-cols-2 gap-2 pt-1">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        const reason = window.prompt('Reason for pausing:');
+                                        handleUpdateJobStatus(inProgressJob, 'Paused', reason || undefined);
+                                    }}
+                                    className="py-2 rounded-xl bg-slate-800 hover:bg-slate-750 text-amber-300 border border-amber-500/30 text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1 active:scale-95 transition cursor-pointer"
+                                >
+                                    <PauseCircle size={14} /> Pause
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => handleUpdateJobStatus(inProgressJob, 'Complete')}
+                                    className="py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 text-white text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1 shadow-md shadow-emerald-900/40 active:scale-95 transition cursor-pointer"
+                                >
+                                    <CheckCircle2 size={14} /> Complete
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Stage Filter Pills Bar */}
+                    <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-2 shadow-xs">
+                        <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide py-0.5">
+                            {[
+                                { key: 'on-ramps', label: 'On Ramps', count: cockpitVehicles.onRamps.length, icon: Layers },
+                                { key: 'all-onsite', label: 'All On Site', count: cockpitVehicles.allOnSite.length, icon: Car },
+                                { key: 'checked-in', label: 'Checked In', count: cockpitVehicles.checkedIn.length, icon: CheckCircle2 },
+                                { key: 'in-workshop', label: 'In Workshop', count: cockpitVehicles.inWorkshop.length, icon: PlayCircle },
+                                { key: 'awaiting-parts', label: 'Awaiting Parts', count: cockpitVehicles.awaitingParts.length, icon: AlertTriangle },
+                                { key: 'complete', label: 'Job Complete', count: cockpitVehicles.complete.length, icon: Check },
+                                { key: 'ready-invoice', label: 'Ready to Invoice', count: cockpitVehicles.readyInvoice.length, icon: FileText },
+                                { key: 'invoiced', label: 'Invoiced', count: cockpitVehicles.invoiced.length, icon: CheckCircle2 }
+                            ].map(filterItem => {
+                                const isSelected = cockpitFilter === filterItem.key;
+                                const IconComponent = filterItem.icon;
+                                return (
+                                    <button
+                                        key={filterItem.key}
+                                        type="button"
+                                        onClick={() => setCockpitFilter(filterItem.key as any)}
+                                        className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition border flex items-center gap-1.5 cursor-pointer shrink-0 active:scale-95 ${
+                                            isSelected
+                                                ? 'bg-indigo-600 text-white border-indigo-400 shadow-md shadow-indigo-600/30'
+                                                : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200'
+                                        }`}
+                                    >
+                                        <IconComponent size={13} className={isSelected ? 'text-white' : 'text-slate-400'} />
+                                        <span>{filterItem.label}</span>
+                                        <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+                                            isSelected ? 'bg-white/20 text-white' : 'bg-slate-800 text-slate-300'
+                                        }`}>
+                                            {filterItem.count}
+                                        </span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    {/* Cockpit Search Filter */}
+                    <div className="relative">
+                        <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
+                        <input
+                            type="text"
+                            value={cockpitSearch}
+                            onChange={e => setCockpitSearch(e.target.value)}
+                            placeholder="Search vehicles on site by VRM, make, or customer..."
+                            className="w-full bg-slate-900/80 border border-slate-800 rounded-xl pl-9 pr-8 py-2 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                        />
+                        {cockpitSearch && (
+                            <button 
+                                onClick={() => setCockpitSearch('')}
+                                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 cursor-pointer"
+                            >
+                                <X size={14} />
+                            </button>
+                        )}
+                    </div>
+
+                    {/* Vehicles Cards List */}
+                    {displayedCockpitJobs.length === 0 ? (
+                        <div className="text-center py-14 px-4 bg-slate-900/40 rounded-2xl border border-slate-800/60">
+                            <Car size={36} className="mx-auto text-slate-600 mb-2" />
+                            <h3 className="text-sm font-bold text-slate-300">No Vehicles Found</h3>
+                            <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto">
+                                No vehicles in this business entity match the "{cockpitFilter.replace('-', ' ')}" filter.
+                            </p>
+                            <button
+                                type="button"
+                                onClick={() => { setCockpitFilter('all-onsite'); setCockpitSearch(''); }}
+                                className="mt-3 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-indigo-300 border border-slate-700 text-xs font-semibold cursor-pointer active:scale-95 transition"
+                            >
+                                View All On Site ({cockpitVehicles.allOnSite.length})
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="space-y-3">
+                            {displayedCockpitJobs.map(job => {
+                                const veh = vehicles.find(v => v.id === job.vehicleId);
+                                const cust = customers.find(c => c.id === job.customerId);
+                                const engNames = (job.segments || []).map(s => engineers.find(e => e.id === s.engineerId)?.name).filter(Boolean);
+                                const lift = job.segments?.[0]?.allocatedLift;
+                                const isInProgress = job.status === 'In Progress';
+                                const isCompleted = job.status === 'Complete' || job.status === 'Pending QC';
+                                const isPaused = job.status === 'Paused' || job.status === 'Awaiting Parts';
+                                const isReadyToInvoice = isCompleted && !job.invoiceId && job.status !== 'Invoiced';
+                                const isInvoiced = job.status === 'Invoiced' || Boolean(job.invoiceId);
+                                const isCheckedIn = (job.vehicleStatus === 'On Site' || job.status === 'Booked In') && !isInProgress && !isCompleted;
+
+                                // Location badge details
+                                const locationLabel = job.vehicleStatus || (isInProgress ? 'On Site' : 'Awaiting Arrival');
+                                const isLocationOnSite = locationLabel === 'On Site' || isInProgress;
+
+                                return (
+                                    <div 
+                                        key={job.id} 
+                                        className={`rounded-2xl p-3.5 border transition-all shadow-md space-y-2.5 relative overflow-hidden ${
+                                            isInProgress
+                                                ? 'bg-gradient-to-br from-indigo-950/60 via-slate-900 to-slate-900 border-indigo-500/70 shadow-indigo-950/50'
+                                                : isReadyToInvoice
+                                                ? 'bg-gradient-to-br from-purple-950/40 via-slate-900 to-slate-900 border-purple-500/40'
+                                                : isCompleted
+                                                ? 'bg-slate-900/80 border-emerald-800/40'
+                                                : isPaused
+                                                ? 'bg-slate-900/80 border-amber-800/40'
+                                                : 'bg-slate-900/70 border-slate-800/90'
+                                        }`}
+                                    >
+                                        {/* Row 1: VRM, Model, Ramp Lift & Stage Badges */}
+                                        <div className="flex items-start justify-between gap-2">
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                {renderUKPlate(veh?.registration || job.vehicleRegistration || '')}
+                                                <span className="text-xs font-bold text-white">
+                                                    {veh?.make || ''} {veh?.model || ''}
+                                                </span>
+                                                {lift && (
+                                                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-800 text-indigo-300 border border-slate-700 flex items-center gap-1">
+                                                        <Layers size={10} /> Lift {lift}
                                                     </span>
-                                                    {lift && (
-                                                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-800 text-indigo-300 border border-slate-700">
-                                                            Lift {lift}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
-                                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-                                                    On Lift
+                                                )}
+                                                {job.keyNumber && (
+                                                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1">
+                                                        <Key size={9} /> Key #{job.keyNumber}
+                                                    </span>
+                                                )}
+                                            </div>
+
+                                            <div className="flex items-center gap-1 shrink-0">
+                                                {/* Physical Location Badge */}
+                                                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border ${
+                                                    isLocationOnSite
+                                                        ? 'bg-emerald-950/70 text-emerald-300 border-emerald-800/60'
+                                                        : locationLabel === 'Awaiting Arrival'
+                                                        ? 'bg-sky-950/70 text-sky-300 border-sky-800/60'
+                                                        : locationLabel === 'Awaiting Collection'
+                                                        ? 'bg-purple-950/70 text-purple-300 border-purple-800/60'
+                                                        : 'bg-slate-800 text-slate-400 border-slate-700'
+                                                }`}>
+                                                    {isLocationOnSite ? '📍 On Site' : locationLabel}
+                                                </span>
+
+                                                {/* Workflow Stage Badge */}
+                                                <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border flex items-center gap-1 ${
+                                                    isInProgress
+                                                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 animate-pulse'
+                                                        : isInvoiced
+                                                        ? 'bg-sky-500/20 text-sky-300 border-sky-500/40'
+                                                        : isReadyToInvoice
+                                                        ? 'bg-purple-500/20 text-purple-300 border-purple-500/40'
+                                                        : isCompleted
+                                                        ? 'bg-teal-500/20 text-teal-300 border-teal-500/40'
+                                                        : isPaused
+                                                        ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                                                        : isCheckedIn
+                                                        ? 'bg-blue-500/20 text-blue-300 border-blue-500/40'
+                                                        : 'bg-slate-800 text-slate-300 border-slate-700'
+                                                }`}>
+                                                    {isInProgress && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />}
+                                                    <span>{isInProgress ? 'On Ramp' : isReadyToInvoice ? 'Ready to Invoice' : isInvoiced ? 'Invoiced' : isCheckedIn ? 'Checked In' : isCompleted ? 'Complete' : isPaused ? 'Awaiting Parts' : job.status}</span>
                                                 </span>
                                             </div>
+                                        </div>
 
-                                            <div>
-                                                <h3 className="text-sm font-bold text-slate-100">{job.description}</h3>
-                                                {renderScheduledArrivalBadge(job)}
-                                                <div className="flex items-center justify-between text-xs text-slate-400 mt-2 pt-2 border-t border-slate-800/80">
-                                                    <span className="text-indigo-300 font-semibold flex items-center gap-1">
-                                                        <UserIcon size={11} /> Tech: {engNames.length > 0 ? engNames.join(', ') : 'Unassigned'}
-                                                    </span>
-                                                    <span>{cust ? `${cust.forename} ${cust.surname}` : ''}</span>
-                                                </div>
+                                        {/* Description */}
+                                        <h3 className="text-sm font-bold text-slate-100 leading-snug">
+                                            {job.description}
+                                        </h3>
+
+                                        {/* Scheduled Arrival Date & Vehicle Status Badge */}
+                                        {renderScheduledArrivalBadge(job)}
+
+                                        {/* Details Row: Customer, Tech, Parts */}
+                                        <div className="flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-800/80">
+                                            <div className="flex items-center gap-1.5 truncate">
+                                                <UserIcon size={11} className="text-indigo-400 shrink-0" />
+                                                <span className="text-indigo-300 font-semibold truncate">
+                                                    Tech: {engNames.length > 0 ? engNames.join(', ') : 'Unassigned'}
+                                                </span>
                                             </div>
+                                            <div className="flex items-center gap-1.5 shrink-0">
+                                                {cust && (
+                                                    <span className="truncate max-w-[120px] text-right">
+                                                        {cust.forename} {cust.surname}
+                                                    </span>
+                                                )}
+                                                {cust?.phone && (
+                                                    <a 
+                                                        href={`tel:${cust.phone}`}
+                                                        className="p-1 rounded-md bg-slate-800 hover:bg-slate-750 text-indigo-400 inline-flex items-center"
+                                                        title="Call Client"
+                                                    >
+                                                        <Phone size={10} />
+                                                    </a>
+                                                )}
+                                            </div>
+                                        </div>
 
-                                            <div className="flex items-center gap-2 pt-1">
+                                        {/* Action Buttons Row */}
+                                        <div className="pt-2 border-t border-slate-800/80 space-y-2">
+                                            {/* Primary Workflow State Button */}
+                                            {!isInProgress && !isCompleted && !isInvoiced && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleUpdateJobStatus(job, 'In Progress')}
+                                                    className="w-full py-2 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-md shadow-indigo-600/30 active:scale-[0.98] transition cursor-pointer"
+                                                >
+                                                    <Play size={13} /> Clock In / Start on Ramp
+                                                </button>
+                                            )}
+
+                                            {isInProgress && (
+                                                <div className="flex items-center gap-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            const reason = window.prompt('Reason for pausing (e.g. Parts, Customer Approval):');
+                                                            handleUpdateJobStatus(job, 'Paused', reason || undefined);
+                                                        }}
+                                                        className="flex-1 py-2 bg-slate-800 hover:bg-slate-750 text-amber-300 border border-amber-500/30 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 active:scale-[0.98] transition cursor-pointer"
+                                                    >
+                                                        <PauseCircle size={14} /> Pause
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleUpdateJobStatus(job, 'Complete')}
+                                                        className="flex-1 py-2 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-md shadow-emerald-900/30 active:scale-[0.98] transition cursor-pointer"
+                                                    >
+                                                        <CheckCircle2 size={14} /> Complete Job
+                                                    </button>
+                                                </div>
+                                            )}
+
+                                            {isPaused && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleUpdateJobStatus(job, 'In Progress')}
+                                                    className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 active:scale-[0.98] transition cursor-pointer"
+                                                >
+                                                    <PlayCircle size={14} /> Resume Work
+                                                </button>
+                                            )}
+
+                                            {isReadyToInvoice && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleUpdateJobStatus(job, 'Invoiced')}
+                                                    className="w-full py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-md shadow-purple-900/30 active:scale-[0.98] transition cursor-pointer"
+                                                >
+                                                    <FileText size={13} /> Ready to Invoice / Sign Off
+                                                </button>
+                                            )}
+
+                                            {/* Secondary Tool Chips: Ramp Finding & Inspection */}
+                                            <div className="flex items-center gap-2">
                                                 <button
                                                     type="button"
                                                     onClick={() => setActiveFindingJob(job)}
-                                                    className="flex-1 py-2 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 text-xs font-bold flex items-center justify-center gap-1.5 active:scale-95 transition cursor-pointer"
+                                                    className="flex-1 py-1.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 text-xs font-bold flex items-center justify-center gap-1.5 active:scale-95 transition cursor-pointer"
                                                 >
-                                                    <AlertOctagon size={14} className="text-rose-400" /> Ramp Finding
+                                                    <AlertOctagon size={13} className="text-rose-400" /> Ramp Finding
                                                 </button>
                                                 <button
                                                     type="button"
                                                     onClick={() => setActiveInspectionJob(job)}
-                                                    className="flex-1 py-2 rounded-xl bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 border border-indigo-500/30 text-xs font-bold flex items-center justify-center gap-1.5 active:scale-95 transition cursor-pointer"
+                                                    className="flex-1 py-1.5 rounded-xl bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 border border-indigo-500/30 text-xs font-bold flex items-center justify-center gap-1.5 active:scale-95 transition cursor-pointer"
                                                 >
-                                                    <ClipboardCheck size={14} className="text-indigo-400" /> Inspection
+                                                    <ClipboardCheck size={13} className="text-indigo-400" /> Inspection
                                                 </button>
                                             </div>
                                         </div>
-                                    );
-                                })
-                            )}
-                        </div>
-                    ) : inProgressJob ? (
-                        <div className="space-y-4">
-                            {/* Live Cockpit Card */}
-                            <div className="bg-gradient-to-br from-indigo-950 via-slate-900 to-slate-900 border border-indigo-500/60 rounded-3xl p-5 shadow-2xl relative overflow-hidden">
-                                <div className="flex items-center justify-between mb-3">
-                                    <span className="text-[11px] font-black uppercase tracking-wider text-indigo-400 flex items-center gap-1.5">
-                                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                                        In Progress on Lift
-                                    </span>
-                                    {inProgressJob.segments?.[0]?.allocatedLift && (
-                                        <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                                            Lift {inProgressJob.segments[0].allocatedLift}
-                                        </span>
-                                    )}
-                                </div>
-
-                                <div className="my-2">
-                                    {renderUKPlate(vehicles.find(v => v.id === inProgressJob.vehicleId)?.registration || inProgressJob.vehicleRegistration || '')}
-                                    <h2 className="text-lg font-black text-white mt-2">
-                                        {vehicles.find(v => v.id === inProgressJob.vehicleId)?.make} {vehicles.find(v => v.id === inProgressJob.vehicleId)?.model}
-                                    </h2>
-                                    <p className="text-xs text-slate-300 mt-0.5">
-                                        {inProgressJob.description}
-                                    </p>
-                                    {renderScheduledArrivalBadge(inProgressJob)}
-                                </div>
-
-                                <div className="mt-4 pt-3 border-t border-slate-800/80 grid grid-cols-2 gap-2 text-xs">
-                                    <div>
-                                        <span className="text-[10px] font-bold text-slate-400 uppercase">Customer</span>
-                                        <p className="font-semibold text-slate-200">
-                                            {customers.find(c => c.id === inProgressJob.customerId)?.forename} {customers.find(c => c.id === inProgressJob.customerId)?.surname}
-                                        </p>
                                     </div>
-                                    <div>
-                                        <span className="text-[10px] font-bold text-slate-400 uppercase">Parts Status</span>
-                                        <p className="font-semibold text-slate-200">
-                                            {inProgressJob.partsStatus || 'No Parts'}
-                                        </p>
-                                    </div>
-                                </div>
-
-                                {/* Cockpit Direct Actions */}
-                                <div className="grid grid-cols-2 gap-2.5 mt-5">
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            const reason = window.prompt('Reason for pausing:');
-                                            handleUpdateJobStatus(inProgressJob, 'Paused', reason || undefined);
-                                        }}
-                                        className="py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 active:scale-95 transition cursor-pointer"
-                                    >
-                                        <PauseCircle size={16} /> Pause Job
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => handleUpdateJobStatus(inProgressJob, 'Complete')}
-                                        className="py-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-900/40 active:scale-95 transition cursor-pointer"
-                                    >
-                                        <CheckCircle2 size={16} /> Sign Off
-                                    </button>
-                                </div>
-                            </div>
-
-                            {/* Cockpit Toolset: Findings & Inspection */}
-                            <div className="grid grid-cols-2 gap-3">
-                                <button
-                                    type="button"
-                                    onClick={() => setActiveFindingJob(inProgressJob)}
-                                    className="p-4 rounded-2xl bg-gradient-to-br from-rose-950/60 to-slate-900 border border-rose-700/50 flex flex-col items-center justify-center text-center gap-2 active:scale-95 transition cursor-pointer"
-                                >
-                                    <div className="w-10 h-10 rounded-xl bg-rose-600/30 text-rose-400 flex items-center justify-center border border-rose-500/40">
-                                        <AlertOctagon size={22} />
-                                    </div>
-                                    <div>
-                                        <span className="text-xs font-black text-white uppercase tracking-wider block">
-                                            Ramp Finding
-                                        </span>
-                                        <span className="text-[10px] text-rose-300">
-                                            Snap defect photo
-                                        </span>
-                                    </div>
-                                </button>
-
-                                <button
-                                    type="button"
-                                    onClick={() => setActiveInspectionJob(inProgressJob)}
-                                    className="p-4 rounded-2xl bg-slate-900 border border-slate-800 flex flex-col items-center justify-center text-center gap-2 active:scale-95 transition cursor-pointer"
-                                >
-                                    <div className="w-10 h-10 rounded-xl bg-indigo-600/30 text-indigo-400 flex items-center justify-center border border-indigo-500/40">
-                                        <ClipboardCheck size={22} />
-                                    </div>
-                                    <div>
-                                        <span className="text-xs font-black text-white uppercase tracking-wider block">
-                                            Inspection
-                                        </span>
-                                        <span className="text-[10px] text-slate-400">
-                                            Checklist & Tyres
-                                        </span>
-                                    </div>
-                                </button>
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="text-center py-20 px-4 bg-slate-900/40 rounded-3xl border border-slate-800/80">
-                            <Clock size={42} className="mx-auto text-slate-600 mb-3" />
-                            <h3 className="text-base font-bold text-slate-200">No Job Clocked In</h3>
-                            <p className="text-xs text-slate-400 mt-1 max-w-xs mx-auto">
-                                You are not currently clocked in to an active job. Select a job from your schedule to start work.
-                            </p>
-                            <button
-                                onClick={() => setActiveTab('schedule')}
-                                className="mt-4 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold uppercase tracking-wider active:scale-95 transition cursor-pointer"
-                            >
-                                Open Bay Schedule
-                            </button>
+                                );
+                            })}
                         </div>
                     )}
                 </main>
