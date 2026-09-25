@@ -202,6 +202,8 @@ export const MobileAppShell: React.FC<MobileAppShellProps> = ({
         return list;
     }, [cockpitFilter, cockpitVehicles, cockpitSearch, vehicles, customers]);
 
+    const activeWorkshopJobs = cockpitVehicles.onRamps;
+
     // Active in-progress job for engineer cockpit
     const inProgressJob = useMemo(() => {
         if (isDirectorOrAdmin) {
