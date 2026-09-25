@@ -9,7 +9,7 @@ import {
     RefreshCw, Monitor, Search, Car, User as UserIcon, Clock, 
     TrendingUp, Building2, ChevronRight, X, Camera, AlertTriangle,
     ShieldAlert, Sparkles, Check, Play, ArrowRight, Layers, Users,
-    FileText, Key
+    FileText, Key, Mail, Gauge
 } from 'lucide-react';
 import { formatReadableDate, formatScheduledArrivalDate, getEffectiveJobScheduledDate } from '../../core/utils/dateUtils';
 import { TIME_SEGMENTS } from '../../constants';
@@ -76,6 +76,12 @@ export const MobileAppShell: React.FC<MobileAppShellProps> = ({
     const [cockpitSearch, setCockpitSearch] = useState('');
     const [activeFindingJob, setActiveFindingJob] = useState<Job | null>(null);
     const [activeInspectionJob, setActiveInspectionJob] = useState<Job | null>(null);
+    const [selectedAssessmentJob, setSelectedAssessmentJob] = useState<Job | null>(null);
+    const [allotTechId, setAllotTechId] = useState<string>('');
+    const [allotRamp, setAllotRamp] = useState<string>('');
+    const [allotDate, setAllotDate] = useState<string>('');
+    const [allotHours, setAllotHours] = useState<number>(1);
+    const [isSavingAllocation, setIsSavingAllocation] = useState<boolean>(false);
 
     // Pre-cache 7-day vault (caches all workshop jobs if director/admin)
     useEffect(() => {
@@ -274,6 +280,77 @@ export const MobileAppShell: React.FC<MobileAppShellProps> = ({
             });
             await onSaveJob(updatedJob);
             toast.info(`⚡ Offline: Job #${job.id} updated locally and queued.`);
+        }
+    };
+
+    // Open Job Assessment Sheet without starting it on a ramp
+    const openJobAssessment = (job: Job) => {
+        setSelectedAssessmentJob(job);
+        const firstSeg = job.segments?.[0];
+        setAllotTechId(firstSeg?.engineerId || '');
+        setAllotRamp(firstSeg?.allocatedLift || '');
+        const defaultDate = job.scheduledDate 
+            ? job.scheduledDate.split('T')[0] 
+            : (firstSeg?.date || new Date().toISOString().split('T')[0]);
+        setAllotDate(defaultDate);
+        setAllotHours(job.estimatedHours || firstSeg?.allocatedHours || 1);
+    };
+
+    // Handle Saving Resource Allocation (Tech, Ramp, Date, Hours)
+    const handleSaveAllocation = async () => {
+        if (!selectedAssessmentJob) return;
+        setIsSavingAllocation(true);
+        try {
+            const existingSegs = selectedAssessmentJob.segments && selectedAssessmentJob.segments.length > 0 
+                ? [...selectedAssessmentJob.segments] 
+                : [{
+                    id: `seg_${Date.now()}`,
+                    status: (allotTechId || allotRamp.trim() ? 'Allocated' : 'Unallocated') as any,
+                    segmentIndex: 0
+                }];
+            
+            existingSegs[0] = {
+                ...existingSegs[0],
+                engineerId: allotTechId || undefined,
+                allocatedLift: allotRamp.trim() || undefined,
+                date: allotDate || existingSegs[0].date,
+                allocatedHours: Number(allotHours) || 1,
+                status: existingSegs[0].status === 'In Progress' ? 'In Progress' : (allotTechId || allotRamp.trim() ? 'Allocated' : 'Unallocated')
+            };
+
+            const newStatus = selectedAssessmentJob.status === 'In Progress' || selectedAssessmentJob.status === 'Complete'
+                ? selectedAssessmentJob.status
+                : (allotTechId || allotRamp.trim() ? 'Allocated' : selectedAssessmentJob.status);
+
+            const updatedJob: Job = {
+                ...selectedAssessmentJob,
+                scheduledDate: allotDate ? `${allotDate}T08:00:00` : selectedAssessmentJob.scheduledDate,
+                estimatedHours: Number(allotHours),
+                status: newStatus,
+                segments: existingSegs
+            };
+
+            if (isOnline) {
+                await onSaveJob(updatedJob);
+            } else {
+                await enqueueOfflineAction({
+                    actionType: 'UPDATE_JOB_STATUS',
+                    collectionKey: 'jobs',
+                    entityId: updatedJob.id,
+                    payload: updatedJob,
+                    description: `Allot resources for Job #${updatedJob.id}`
+                });
+                await onSaveJob(updatedJob);
+            }
+
+            setSelectedAssessmentJob(updatedJob);
+            const assignedTech = engineers.find(e => e.id === allotTechId)?.name || 'Technician';
+            toast.success(`Resources allotted: ${allotRamp.trim() ? allotRamp.trim() : 'General Bay'} & ${assignedTech}`);
+        } catch (err) {
+            console.error('Failed to save allocation:', err);
+            toast.error('Failed to save resource allocation');
+        } finally {
+            setIsSavingAllocation(false);
         }
     };
 
@@ -667,7 +744,8 @@ export const MobileAppShell: React.FC<MobileAppShellProps> = ({
                                 return (
                                     <div 
                                         key={job.id}
-                                        className={`rounded-2xl p-3.5 transition-all shadow-md relative overflow-hidden border ${
+                                        onClick={() => openJobAssessment(job)}
+                                        className={`rounded-2xl p-3.5 transition-all shadow-md relative overflow-hidden border cursor-pointer hover:border-indigo-400/80 active:scale-[0.99] group ${
                                             isInProgress
                                                 ? 'bg-slate-900/90 border-indigo-500/70 shadow-indigo-950/50 ring-1 ring-indigo-500/30'
                                                 : isCompleted
@@ -706,17 +784,22 @@ export const MobileAppShell: React.FC<MobileAppShellProps> = ({
                                                 )}
                                             </div>
 
-                                            <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border shrink-0 ${
-                                                isInProgress
-                                                    ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40 animate-pulse'
-                                                    : isCompleted
-                                                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                                                    : isPaused
-                                                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                                                    : 'bg-slate-800 text-slate-300 border-slate-700'
-                                            }`}>
-                                                {job.status}
-                                            </span>
+                                            <div className="flex items-center gap-1.5 shrink-0">
+                                                <span className="text-[10px] text-indigo-400 font-semibold group-hover:text-indigo-300 flex items-center gap-0.5">
+                                                    Assess &rarr;
+                                                </span>
+                                                <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border shrink-0 ${
+                                                    isInProgress
+                                                        ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40 animate-pulse'
+                                                        : isCompleted
+                                                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                                                        : isPaused
+                                                        ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                                                        : 'bg-slate-800 text-slate-300 border-slate-700'
+                                                }`}>
+                                                    {job.status}
+                                                </span>
+                                            </div>
                                         </div>
 
                                         {/* Description */}
@@ -735,7 +818,8 @@ export const MobileAppShell: React.FC<MobileAppShellProps> = ({
                                                 {customer?.phone && (
                                                     <a 
                                                         href={`tel:${customer.phone}`}
-                                                        className="p-1 rounded-md bg-slate-800 hover:bg-slate-700 text-indigo-400 ml-1 inline-flex items-center"
+                                                        onClick={(e) => e.stopPropagation()}
+                                                        className="p-1 rounded-md bg-slate-800 hover:bg-slate-750 text-indigo-400 ml-1 inline-flex items-center"
                                                         title="Call Customer"
                                                     >
                                                         <Phone size={10} />
@@ -759,7 +843,10 @@ export const MobileAppShell: React.FC<MobileAppShellProps> = ({
                                             {!isInProgress && !isCompleted && (
                                                 <button
                                                     type="button"
-                                                    onClick={() => handleUpdateJobStatus(job, 'In Progress')}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleUpdateJobStatus(job, 'In Progress');
+                                                    }}
                                                     className="w-full py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-md shadow-indigo-600/30 active:scale-[0.98] transition cursor-pointer"
                                                 >
                                                     <Play size={14} /> Clock In / Start Work
@@ -770,7 +857,8 @@ export const MobileAppShell: React.FC<MobileAppShellProps> = ({
                                                 <div className="flex items-center gap-2">
                                                     <button
                                                         type="button"
-                                                        onClick={() => {
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
                                                             const reason = window.prompt('Reason for pausing (e.g. Parts, Customer Approval):');
                                                             handleUpdateJobStatus(job, 'Paused', reason || undefined);
                                                         }}
@@ -780,7 +868,10 @@ export const MobileAppShell: React.FC<MobileAppShellProps> = ({
                                                     </button>
                                                     <button
                                                         type="button"
-                                                        onClick={() => handleUpdateJobStatus(job, 'Complete')}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleUpdateJobStatus(job, 'Complete');
+                                                        }}
                                                         className="flex-1 py-2.5 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-md shadow-emerald-900/30 active:scale-[0.98] transition cursor-pointer"
                                                     >
                                                         <CheckCircle2 size={14} /> Complete Job
@@ -791,7 +882,10 @@ export const MobileAppShell: React.FC<MobileAppShellProps> = ({
                                             {isPaused && (
                                                 <button
                                                     type="button"
-                                                    onClick={() => handleUpdateJobStatus(job, 'In Progress')}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleUpdateJobStatus(job, 'In Progress');
+                                                    }}
                                                     className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 active:scale-[0.98] transition cursor-pointer"
                                                 >
                                                     <PlayCircle size={14} /> Resume Work
@@ -809,7 +903,10 @@ export const MobileAppShell: React.FC<MobileAppShellProps> = ({
                                         <div className="flex items-center gap-2 mt-2 pt-2 border-t border-slate-800/60">
                                             <button
                                                 type="button"
-                                                onClick={() => setActiveFindingJob(job)}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setActiveFindingJob(job);
+                                                }}
                                                 className="flex-1 py-1.5 px-2.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/20 text-[11px] font-bold flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer"
                                             >
                                                 <AlertOctagon size={13} className="text-rose-400 shrink-0" />
@@ -817,7 +914,10 @@ export const MobileAppShell: React.FC<MobileAppShellProps> = ({
                                             </button>
                                             <button
                                                 type="button"
-                                                onClick={() => setActiveInspectionJob(job)}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setActiveInspectionJob(job);
+                                                }}
                                                 className="flex-1 py-1.5 px-2.5 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/20 text-[11px] font-bold flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer"
                                             >
                                                 <ClipboardCheck size={13} className="text-indigo-400 shrink-0" />
@@ -1001,7 +1101,8 @@ export const MobileAppShell: React.FC<MobileAppShellProps> = ({
                                 return (
                                     <div 
                                         key={job.id} 
-                                        className={`rounded-2xl p-3.5 border transition-all shadow-md space-y-2.5 relative overflow-hidden ${
+                                        onClick={() => openJobAssessment(job)}
+                                        className={`rounded-2xl p-3.5 border transition-all shadow-md space-y-2.5 relative overflow-hidden cursor-pointer hover:border-indigo-400/80 active:scale-[0.99] group ${
                                             isInProgress
                                                 ? 'bg-gradient-to-br from-indigo-950/60 via-slate-900 to-slate-900 border-indigo-500/70 shadow-indigo-950/50'
                                                 : isReadyToInvoice
@@ -1033,6 +1134,9 @@ export const MobileAppShell: React.FC<MobileAppShellProps> = ({
                                             </div>
 
                                             <div className="flex items-center gap-1 shrink-0">
+                                                <span className="text-[10px] text-indigo-400 font-semibold group-hover:text-indigo-300 mr-1 flex items-center gap-0.5">
+                                                    Assess &rarr;
+                                                </span>
                                                 {/* Physical Location Badge */}
                                                 <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border ${
                                                     isLocationOnSite
@@ -1093,6 +1197,7 @@ export const MobileAppShell: React.FC<MobileAppShellProps> = ({
                                                 {cust?.phone && (
                                                     <a 
                                                         href={`tel:${cust.phone}`}
+                                                        onClick={(e) => e.stopPropagation()}
                                                         className="p-1 rounded-md bg-slate-800 hover:bg-slate-750 text-indigo-400 inline-flex items-center"
                                                         title="Call Client"
                                                     >
@@ -1108,7 +1213,10 @@ export const MobileAppShell: React.FC<MobileAppShellProps> = ({
                                             {!isInProgress && !isCompleted && !isInvoiced && (
                                                 <button
                                                     type="button"
-                                                    onClick={() => handleUpdateJobStatus(job, 'In Progress')}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleUpdateJobStatus(job, 'In Progress');
+                                                    }}
                                                     className="w-full py-2 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-md shadow-indigo-600/30 active:scale-[0.98] transition cursor-pointer"
                                                 >
                                                     <Play size={13} /> Clock In / Start on Ramp
@@ -1119,7 +1227,8 @@ export const MobileAppShell: React.FC<MobileAppShellProps> = ({
                                                 <div className="flex items-center gap-2">
                                                     <button
                                                         type="button"
-                                                        onClick={() => {
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
                                                             const reason = window.prompt('Reason for pausing (e.g. Parts, Customer Approval):');
                                                             handleUpdateJobStatus(job, 'Paused', reason || undefined);
                                                         }}
@@ -1129,7 +1238,10 @@ export const MobileAppShell: React.FC<MobileAppShellProps> = ({
                                                     </button>
                                                     <button
                                                         type="button"
-                                                        onClick={() => handleUpdateJobStatus(job, 'Complete')}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleUpdateJobStatus(job, 'Complete');
+                                                        }}
                                                         className="flex-1 py-2 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-md shadow-emerald-900/30 active:scale-[0.98] transition cursor-pointer"
                                                     >
                                                         <CheckCircle2 size={14} /> Complete Job
@@ -1140,7 +1252,10 @@ export const MobileAppShell: React.FC<MobileAppShellProps> = ({
                                             {isPaused && (
                                                 <button
                                                     type="button"
-                                                    onClick={() => handleUpdateJobStatus(job, 'In Progress')}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleUpdateJobStatus(job, 'In Progress');
+                                                    }}
                                                     className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 active:scale-[0.98] transition cursor-pointer"
                                                 >
                                                     <PlayCircle size={14} /> Resume Work
@@ -1150,7 +1265,10 @@ export const MobileAppShell: React.FC<MobileAppShellProps> = ({
                                             {isReadyToInvoice && (
                                                 <button
                                                     type="button"
-                                                    onClick={() => handleUpdateJobStatus(job, 'Invoiced')}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleUpdateJobStatus(job, 'Invoiced');
+                                                    }}
                                                     className="w-full py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-md shadow-purple-900/30 active:scale-[0.98] transition cursor-pointer"
                                                 >
                                                     <FileText size={13} /> Ready to Invoice / Sign Off
@@ -1161,14 +1279,20 @@ export const MobileAppShell: React.FC<MobileAppShellProps> = ({
                                             <div className="flex items-center gap-2">
                                                 <button
                                                     type="button"
-                                                    onClick={() => setActiveFindingJob(job)}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setActiveFindingJob(job);
+                                                    }}
                                                     className="flex-1 py-1.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 text-xs font-bold flex items-center justify-center gap-1.5 active:scale-95 transition cursor-pointer"
                                                 >
                                                     <AlertOctagon size={13} className="text-rose-400" /> Ramp Finding
                                                 </button>
                                                 <button
                                                     type="button"
-                                                    onClick={() => setActiveInspectionJob(job)}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setActiveInspectionJob(job);
+                                                    }}
                                                     className="flex-1 py-1.5 rounded-xl bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 border border-indigo-500/30 text-xs font-bold flex items-center justify-center gap-1.5 active:scale-95 transition cursor-pointer"
                                                 >
                                                     <ClipboardCheck size={13} className="text-indigo-400" /> Inspection
@@ -1580,6 +1704,327 @@ export const MobileAppShell: React.FC<MobileAppShellProps> = ({
                     </div>
                 </div>
             )}
+
+            {/* FULL JOB ASSESSMENT & RESOURCE ALLOTMENT MODAL */}
+            {selectedAssessmentJob && (() => {
+                const job = selectedAssessmentJob;
+                const veh = vehicles.find(v => v.id === job.vehicleId);
+                const cust = customers.find(c => c.id === job.customerId);
+                const isInProgress = job.status === 'In Progress';
+                const isCompleted = job.status === 'Complete' || job.status === 'Pending QC';
+                const isPaused = job.status === 'Paused' || job.status === 'Awaiting Parts';
+                const locationLabel = job.vehicleStatus || (isInProgress ? 'On Site' : 'Awaiting Arrival');
+                const isLocationOnSite = locationLabel === 'On Site' || isInProgress;
+                const quickRamps = ['Ramp 1', 'Ramp 2', 'Ramp 3', 'Ramp 4', 'Bay 1', 'Bay 2', 'MOT Bay'];
+
+                return (
+                    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/85 backdrop-blur-sm p-0 sm:p-4 overflow-y-auto">
+                        <div className="bg-slate-900 text-white w-full max-w-xl rounded-t-3xl sm:rounded-2xl shadow-2xl border border-slate-700/80 overflow-hidden max-h-[94vh] flex flex-col">
+                            {/* Modal Header */}
+                            <div className="bg-slate-950 px-4 py-3.5 border-b border-slate-800 flex items-center justify-between shrink-0">
+                                <div className="flex items-center gap-2.5">
+                                    {renderUKPlate(veh?.registration || job.vehicleRegistration || '')}
+                                    <div>
+                                        <div className="flex items-center gap-2">
+                                            <h3 className="text-sm font-black text-white">
+                                                {veh?.make || 'Vehicle'} {veh?.model || ''}
+                                            </h3>
+                                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                                                isLocationOnSite 
+                                                    ? 'bg-emerald-950/70 text-emerald-300 border-emerald-800/60'
+                                                    : 'bg-slate-800 text-slate-400 border-slate-700'
+                                            }`}>
+                                                {isLocationOnSite ? '📍 On Site' : locationLabel}
+                                            </span>
+                                        </div>
+                                        <p className="text-[11px] text-slate-400">
+                                            Job #{job.jobNumber || job.id.slice(-6)} • Status: <span className="text-indigo-300 font-semibold">{job.status}</span>
+                                        </p>
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setSelectedAssessmentJob(null)}
+                                    className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-750 text-slate-400 hover:text-white transition cursor-pointer"
+                                >
+                                    <X size={18} />
+                                </button>
+                            </div>
+
+                            {/* Modal Scrollable Body */}
+                            <div className="p-4 overflow-y-auto space-y-4 flex-1 overscroll-contain">
+                                {/* Work Scope & Customer Notes */}
+                                <div className="bg-slate-950/70 border border-slate-800 rounded-2xl p-3.5 space-y-2">
+                                    <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                                        <span className="flex items-center gap-1.5 text-indigo-400">
+                                            <FileText size={13} /> Work Requested
+                                        </span>
+                                        {job.estimatedHours && (
+                                            <span className="text-amber-300 font-bold">
+                                                Est. {job.estimatedHours}h labour
+                                            </span>
+                                        )}
+                                    </div>
+                                    <p className="text-sm font-semibold text-slate-100 leading-snug">
+                                        {job.description}
+                                    </p>
+                                    {job.notes && (
+                                        <div className="pt-2 border-t border-slate-800/80 text-xs text-slate-400 bg-slate-900/60 p-2.5 rounded-xl">
+                                            <span className="text-slate-500 font-bold block text-[10px] uppercase">Notes:</span>
+                                            {job.notes}
+                                        </div>
+                                    )}
+                                    {renderScheduledArrivalBadge(job)}
+                                </div>
+
+                                {/* Customer & Vehicle Intel Cards */}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                    {/* Customer Info */}
+                                    <div className="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-3 space-y-1.5">
+                                        <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
+                                            <UserIcon size={11} className="text-indigo-400" /> Customer Details
+                                        </div>
+                                        <div className="text-xs font-bold text-white">
+                                            {cust ? `${cust.forename} ${cust.surname}` : 'Walk-In / Unknown'}
+                                        </div>
+                                        {cust?.phone && (
+                                            <a 
+                                                href={`tel:${cust.phone}`}
+                                                className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1.5 font-medium"
+                                            >
+                                                <Phone size={12} /> {cust.phone}
+                                            </a>
+                                        )}
+                                        {cust?.email && (
+                                            <a 
+                                                href={`mailto:${cust.email}`}
+                                                className="text-xs text-slate-400 hover:text-slate-200 flex items-center gap-1.5 truncate"
+                                            >
+                                                <Mail size={12} /> {cust.email}
+                                            </a>
+                                        )}
+                                    </div>
+
+                                    {/* Vehicle & Key Details */}
+                                    <div className="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-3 space-y-1.5">
+                                        <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
+                                            <Car size={11} className="text-indigo-400" /> Vehicle Status
+                                        </div>
+                                        <div className="text-xs text-slate-300 flex items-center justify-between">
+                                            <span>Key Location:</span>
+                                            <span className="font-bold text-amber-300">{job.keyNumber ? `Key #${job.keyNumber}` : 'Not Tagged'}</span>
+                                        </div>
+                                        {veh?.vin && (
+                                            <div className="text-xs text-slate-300 flex items-center justify-between">
+                                                <span>VIN:</span>
+                                                <span className="font-mono text-[11px] text-slate-400">{veh.vin.slice(-8)}</span>
+                                            </div>
+                                        )}
+                                        <div className="text-xs text-slate-300 flex items-center justify-between">
+                                            <span>Parts Status:</span>
+                                            <span className="font-bold text-indigo-300">{job.partsStatus || 'No Parts Pending'}</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* INTERACTIVE RESOURCE ALLOTMENT SECTION */}
+                                <div className="bg-gradient-to-br from-indigo-950/40 via-slate-950 to-slate-950 border border-indigo-900/40 rounded-2xl p-4 space-y-3 shadow-inner">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-7 h-7 rounded-lg bg-indigo-600/30 border border-indigo-500/40 text-indigo-400 flex items-center justify-center">
+                                                <Layers size={14} />
+                                            </div>
+                                            <div>
+                                                <h4 className="text-xs font-black uppercase tracking-wider text-indigo-200">
+                                                    Allot Workshop Resources
+                                                </h4>
+                                                <p className="text-[10px] text-slate-400">
+                                                    Assign ramp, technician, and duration before starting
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* 1. Ramp / Lift Selection */}
+                                    <div className="space-y-1.5">
+                                        <label className="text-[10px] font-bold uppercase tracking-wider text-slate-300 flex items-center justify-between">
+                                            <span>Target Ramp / Bay:</span>
+                                            {allotRamp && <span className="text-indigo-400 font-bold text-[11px]">{allotRamp}</span>}
+                                        </label>
+                                        {/* Quick Select Chips */}
+                                        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+                                            {quickRamps.map(rampName => (
+                                                <button
+                                                    key={rampName}
+                                                    type="button"
+                                                    onClick={() => setAllotRamp(rampName)}
+                                                    className={`px-2.5 py-1 rounded-lg text-xs font-bold whitespace-nowrap transition cursor-pointer border ${
+                                                        allotRamp === rampName
+                                                            ? 'bg-indigo-600 text-white border-indigo-400 shadow-sm'
+                                                            : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200'
+                                                    }`}
+                                                >
+                                                    {rampName}
+                                                </button>
+                                            ))}
+                                        </div>
+                                        <input
+                                            type="text"
+                                            value={allotRamp}
+                                            onChange={e => setAllotRamp(e.target.value)}
+                                            placeholder="Or enter custom bay/ramp name..."
+                                            className="w-full bg-slate-900/90 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                        />
+                                    </div>
+
+                                    {/* 2. Technician Assignment */}
+                                    <div className="space-y-1.5">
+                                        <label className="text-[10px] font-bold uppercase tracking-wider text-slate-300">
+                                            Allocated Technician:
+                                        </label>
+                                        <select
+                                            value={allotTechId}
+                                            onChange={e => setAllotTechId(e.target.value)}
+                                            className="w-full bg-slate-900/90 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                        >
+                                            <option value="">-- Unassigned (Pool) --</option>
+                                            {engineers.map(eng => (
+                                                <option key={eng.id} value={eng.id}>
+                                                    {eng.name} {eng.skillLevel ? `(${eng.skillLevel})` : ''}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    {/* 3. Scheduled Date & Estimated Hours */}
+                                    <div className="grid grid-cols-2 gap-2.5">
+                                        <div className="space-y-1.5">
+                                            <label className="text-[10px] font-bold uppercase tracking-wider text-slate-300">
+                                                Scheduled Date:
+                                            </label>
+                                            <input
+                                                type="date"
+                                                value={allotDate}
+                                                onChange={e => setAllotDate(e.target.value)}
+                                                className="w-full bg-slate-900/90 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                            />
+                                        </div>
+
+                                        <div className="space-y-1.5">
+                                            <label className="text-[10px] font-bold uppercase tracking-wider text-slate-300">
+                                                Allotted Hours:
+                                            </label>
+                                            <input
+                                                type="number"
+                                                step="0.5"
+                                                min="0.5"
+                                                max="40"
+                                                value={allotHours}
+                                                onChange={e => setAllotHours(parseFloat(e.target.value) || 1)}
+                                                className="w-full bg-slate-900/90 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Save Allocation Button */}
+                                    <button
+                                        type="button"
+                                        onClick={handleSaveAllocation}
+                                        disabled={isSavingAllocation}
+                                        className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-md shadow-indigo-600/30 transition cursor-pointer disabled:opacity-50"
+                                    >
+                                        <Check size={14} />
+                                        <span>{isSavingAllocation ? 'Saving Allocation...' : 'Save Resource Allotment'}</span>
+                                    </button>
+                                </div>
+
+                                {/* WORKSHOP EXECUTION ACTIONS */}
+                                <div className="space-y-2 pt-2 border-t border-slate-800">
+                                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                        Workshop Execution:
+                                    </div>
+
+                                    {!isInProgress && !isCompleted && (
+                                        <button
+                                            type="button"
+                                            onClick={async () => {
+                                                await handleUpdateJobStatus(job, 'In Progress');
+                                                setSelectedAssessmentJob(null);
+                                            }}
+                                            className="w-full py-2.5 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-md shadow-emerald-950/40 active:scale-[0.98] transition cursor-pointer"
+                                        >
+                                            <Play size={14} /> Clock In / Start On Ramp Now
+                                        </button>
+                                    )}
+
+                                    {isInProgress && (
+                                        <div className="flex items-center gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={async () => {
+                                                    const reason = window.prompt('Reason for pausing (e.g. Parts, Customer Approval):');
+                                                    await handleUpdateJobStatus(job, 'Paused', reason || undefined);
+                                                    setSelectedAssessmentJob(null);
+                                                }}
+                                                className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-750 text-amber-300 border border-amber-500/30 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 active:scale-[0.98] transition cursor-pointer"
+                                            >
+                                                <PauseCircle size={14} /> Pause Job
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={async () => {
+                                                    await handleUpdateJobStatus(job, 'Complete');
+                                                    setSelectedAssessmentJob(null);
+                                                }}
+                                                className="flex-1 py-2.5 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-md shadow-emerald-900/30 active:scale-[0.98] transition cursor-pointer"
+                                            >
+                                                <CheckCircle2 size={14} /> Complete Job
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    {isPaused && (
+                                        <button
+                                            type="button"
+                                            onClick={async () => {
+                                                await handleUpdateJobStatus(job, 'In Progress');
+                                                setSelectedAssessmentJob(null);
+                                            }}
+                                            className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 active:scale-[0.98] transition cursor-pointer"
+                                        >
+                                            <PlayCircle size={14} /> Resume Work on Ramp
+                                        </button>
+                                    )}
+
+                                    {/* Inspection & Findings Shortcuts */}
+                                    <div className="flex items-center gap-2 pt-1">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setSelectedAssessmentJob(null);
+                                                setActiveFindingJob(job);
+                                            }}
+                                            className="flex-1 py-2 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 text-xs font-bold flex items-center justify-center gap-1.5 active:scale-95 transition cursor-pointer"
+                                        >
+                                            <AlertOctagon size={13} className="text-rose-400" /> Ramp Finding
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setSelectedAssessmentJob(null);
+                                                setActiveInspectionJob(job);
+                                            }}
+                                            className="flex-1 py-2 rounded-xl bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 border border-indigo-500/30 text-xs font-bold flex items-center justify-center gap-1.5 active:scale-95 transition cursor-pointer"
+                                        >
+                                            <ClipboardCheck size={13} className="text-indigo-400" /> Inspection
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                );
+            })()}
         </div>
     );
 };
