@@ -37,6 +37,15 @@ jobs:
         uses: google-github-actions/auth@v2
         with:
           credentials_json: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEV }}'
+          create_credentials_file: true
+
+      - name: Ensure Hosting Site Exists
+        continue-on-error: true
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
+        run: npx -y firebase-tools@15.11.0 hosting:sites:create intelligent-scheduling-dev --project dev --non-interactive || true
 
       - name: Deploy to Firebase (Hosting & Functions)
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
         run: npx -y firebase-tools@15.11.0 deploy --project dev --only hosting,functions --force
