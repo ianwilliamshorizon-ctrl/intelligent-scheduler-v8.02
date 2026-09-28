@@ -916,6 +916,7 @@ export interface Inquiry {
     media?: any[];
     logs?: InquiryLog[];
     followUpDate?: string;
+    expectedScheduledDate?: string;
     inquiryNumber?: string;
     hasNewReply?: boolean;
     isUrgent?: boolean;

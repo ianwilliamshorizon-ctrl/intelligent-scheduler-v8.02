@@ -21,6 +21,7 @@ import { lookupAddressByPostcode, AddressDetails } from '../services/postcodeLoo
 import { extractInquiryDetailsFromText, parseEmailThread } from '../core/utils/inquiryUtils';
 import { getWheelbaseAlertInfo } from '../core/utils/vehicleUtils';
 import { getImage, saveImage } from '../utils/imageStore';
+import { getEffectiveJobScheduledDate, formatReadableDate } from '../core/utils/dateUtils';
 
 interface InquiryFormModalProps {
     isOpen: boolean;
@@ -64,7 +65,7 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
     onViewVehicle
 }) => {
     const { currentUser, selectedEntityId, businessEntities: entities } = useApp();
-    const { purchaseOrders, inquiries, saveRecord } = useData();
+    const { purchaseOrders, inquiries, saveRecord, jobs } = useData();
     const [formData, setFormData] = useState<Partial<Inquiry>>({});
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [aiError, setAiError] = useState('');
@@ -401,8 +402,14 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                 const linkedCustomer = inquiry.linkedCustomerId ? customers.find(c => c.id === inquiry.linkedCustomerId) : null;
                 const linkedVehicle = inquiry.linkedVehicleId ? vehicles.find(v => v.id === inquiry.linkedVehicleId) : null;
                 const extracted = extractInquiryDetailsFromText(inquiry.subject, inquiry.message);
+                const linkedJob = inquiry.linkedJobId ? (jobs || []).find(j => j.id === inquiry.linkedJobId) : null;
+                const initialExpectedDate = inquiry.expectedScheduledDate 
+                    || (linkedJob ? getEffectiveJobScheduledDate(linkedJob) : undefined)
+                    || ((inquiry.status === 'Scheduled' && inquiry.followUpDate) ? inquiry.followUpDate : '');
+
                 return { 
                     ...inquiry,
+                    expectedScheduledDate: initialExpectedDate || '',
                     fromName: inquiry.fromName || extracted.fromName || (linkedCustomer ? getCustomerDisplayName(linkedCustomer) : ''),
                     fromEmail: inquiry.fromEmail || linkedCustomer?.email || '',
                     fromPhone: inquiry.fromPhone || linkedCustomer?.mobile || linkedCustomer?.phone || '',
@@ -433,6 +440,7 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                     message: inquiry?.message || '',
                     status: inquiry?.status || 'Inbox',
                     isUrgent: inquiry?.isUrgent || false,
+                    expectedScheduledDate: inquiry?.expectedScheduledDate || '',
                     actionNotes: inquiry?.actionNotes || '',
                     takenByUserId: currentUser.id,
                     assignedToUserId: '',
@@ -1036,6 +1044,24 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                                 <span>{new Date(formData.createdAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</span>
                                             </div>
                                         )}
+
+                                        {formData.expectedScheduledDate && (
+                                            <div className="flex items-center gap-1.5 bg-indigo-50 text-indigo-900 border border-indigo-200 px-2 py-0.5 rounded text-xs font-bold shadow-2xs">
+                                                <CalendarCheck size={13} className="text-indigo-600 shrink-0" />
+                                                <span>Expected Scheduled: <strong className="font-mono text-indigo-950">{formatReadableDate(formData.expectedScheduledDate)}</strong></span>
+                                            </div>
+                                        )}
+
+                                        {formData.linkedJobId && (() => {
+                                            const linkedJob = (jobs || []).find(j => j.id === formData.linkedJobId);
+                                            const jobDate = getEffectiveJobScheduledDate(linkedJob);
+                                            return (
+                                                <div className="flex items-center gap-1.5 bg-emerald-50 text-emerald-900 border border-emerald-200 px-2 py-0.5 rounded text-xs font-bold shadow-2xs">
+                                                    <CalendarCheck size={13} className="text-emerald-600 shrink-0" />
+                                                    <span>Job #{formData.linkedJobId}{jobDate ? ` Scheduled: ${formatReadableDate(jobDate)}` : ''}</span>
+                                                </div>
+                                            );
+                                        })()}
                                     </div>
 
                                     {formData.subject && (
@@ -2134,10 +2160,47 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                             </select>
                                         </div>
 
-                                        <div>
-                                            <label className="block text-[11px] font-bold text-gray-700 mb-1">Follow Up Date</label>
-                                            <input type="date" name="followUpDate" value={formData.followUpDate || ''} onChange={handleChange} className="w-full p-2 border border-gray-300 rounded-lg text-xs bg-gray-50 font-medium" />
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                            <div>
+                                                <label className="block text-[11px] font-bold text-gray-700 mb-1 flex items-center gap-1">
+                                                    <Clock size={12} className="text-gray-500" />
+                                                    Follow Up Date
+                                                </label>
+                                                <input 
+                                                    type="date" 
+                                                    name="followUpDate" 
+                                                    value={formData.followUpDate || ''} 
+                                                    onChange={handleChange} 
+                                                    className="w-full p-2 border border-gray-300 rounded-lg text-xs bg-gray-50 font-medium focus:bg-white focus:ring-1 focus:ring-indigo-500" 
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-[11px] font-bold text-indigo-900 mb-1 flex items-center gap-1">
+                                                    <CalendarCheck size={12} className="text-indigo-600" />
+                                                    Expected Scheduled Date
+                                                </label>
+                                                <input 
+                                                    type="date" 
+                                                    name="expectedScheduledDate" 
+                                                    value={formData.expectedScheduledDate || ''} 
+                                                    onChange={handleChange} 
+                                                    className="w-full p-2 border border-indigo-300 bg-indigo-50/70 rounded-lg text-xs font-bold text-indigo-950 focus:bg-white focus:ring-2 focus:ring-indigo-500 transition" 
+                                                    placeholder="YYYY-MM-DD"
+                                                />
+                                            </div>
                                         </div>
+
+                                        {formData.expectedScheduledDate && (
+                                            <div className="p-2 bg-indigo-50 border border-indigo-200 rounded-lg flex items-center justify-between text-xs animate-fade-in">
+                                                <span className="text-[11px] text-indigo-700 font-bold flex items-center gap-1">
+                                                    <CalendarCheck size={13} className="text-indigo-600" />
+                                                    Expected Date:
+                                                </span>
+                                                <span className="font-black text-indigo-950 font-mono">
+                                                    {formatReadableDate(formData.expectedScheduledDate)}
+                                                </span>
+                                            </div>
+                                        )}
 
                                         <div>
                                             <label className="block text-[11px] font-bold text-gray-700 mb-1">Taken By</label>

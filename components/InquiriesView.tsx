@@ -345,6 +345,15 @@ const InquiryCard: React.FC<{
                                     </span>
                                 );
                             }
+                            if (effectiveDate) {
+                                const formatted = new Date(effectiveDate.includes('T') ? effectiveDate : `${effectiveDate}T00:00:00`).toLocaleDateString('en-GB');
+                                return (
+                                    <span className="mt-0.5 text-amber-800 font-bold inline-flex items-center gap-0.5 bg-amber-100 px-1 py-0.2 rounded border border-amber-300 shrink-0" title={`Expected Scheduled Date: ${effectiveDate}`}>
+                                        <CalendarCheck size={9} className="shrink-0 text-amber-600" />
+                                        <span>Exp: {formatted}</span>
+                                    </span>
+                                );
+                            }
                             if (inquiry.followUpDate) {
                                 return (
                                     <span className={`mt-0.5 ${(isOverdue || isToday) ? 'text-red-500 font-bold' : 'text-blue-500'} ${!(isOverdue || isToday) && !isExpanded ? 'hidden' : 'inline'}`}>
@@ -461,6 +470,21 @@ const InquiryCard: React.FC<{
                                     {effectiveJobDate && (
                                         <span className="text-emerald-900 font-mono ml-0.5">({new Date(effectiveJobDate.includes('T') ? effectiveJobDate : `${effectiveJobDate}T00:00:00`).toLocaleDateString('en-GB')})</span>
                                     )}
+                                </span>
+                            );
+                        })()}
+                        {!job && (() => {
+                            const effectiveInquiryDate = getEffectiveInquiryScheduledDate(inquiry, job);
+                            if (!effectiveInquiryDate) return null;
+                            const formatted = new Date(effectiveInquiryDate.includes('T') ? effectiveInquiryDate : `${effectiveInquiryDate}T00:00:00`).toLocaleDateString('en-GB');
+                            const isFirm = isScheduledJob || inquiry.status === 'Scheduled';
+                            return (
+                                <span
+                                    className={`flex items-center gap-0.5 ${isFirm ? 'bg-purple-50 text-purple-800 border-purple-200' : 'bg-indigo-50 text-indigo-800 border-indigo-200'} px-1 rounded text-[9px] font-bold border text-left transition`}
+                                    title={`${isFirm ? 'Scheduled Date' : 'Expected Scheduled Date'}: ${effectiveInquiryDate}`}
+                                >
+                                    <CalendarCheck size={9} className={`shrink-0 ${isFirm ? 'text-purple-600' : 'text-indigo-600'}`}/>
+                                    <span>{isFirm ? 'Sched:' : 'Exp:'} {formatted}</span>
                                 </span>
                             );
                         })()}
@@ -614,10 +638,26 @@ const InquiryCard: React.FC<{
                                 </span>
                             );
                         }
+                        if (effectiveDate) {
+                            const formatted = new Date(effectiveDate.includes('T') ? effectiveDate : `${effectiveDate}T00:00:00`).toLocaleDateString('en-GB');
+                            return (
+                                <span className="mt-1 text-amber-900 font-bold text-xs inline-flex items-center gap-1 bg-amber-100 px-2 py-0.5 rounded border border-amber-300 shadow-2xs" title={`Expected Scheduled Date: ${effectiveDate}`}>
+                                    <CalendarCheck size={12} className="shrink-0 text-amber-700" />
+                                    <span>Expected: {formatted}</span>
+                                </span>
+                            );
+                        }
                         return null;
                     })()}
                 </div>
             </div>
+
+            {inquiry.expectedScheduledDate && (
+                <div className="mt-2 flex items-center gap-1.5 text-xs text-purple-900 bg-purple-50/80 border border-purple-200/80 px-2 py-1 rounded font-medium shadow-2xs">
+                    <CalendarCheck size={13} className="text-purple-600 shrink-0" />
+                    <span>Expected Scheduled Date: <strong className="font-bold text-purple-950 font-mono">{new Date(inquiry.expectedScheduledDate.includes('T') ? inquiry.expectedScheduledDate : `${inquiry.expectedScheduledDate}T00:00:00`).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</strong></span>
+                </div>
+            )}
 
             {inquiry.followUpDate && (
                 <div className={`mt-2 flex items-center gap-1 text-xs ${(isOverdue || isToday) ? 'text-red-600 font-bold' : 'text-blue-600'}`}>

@@ -7,7 +7,7 @@ import { TechnicianTransferModal } from './TechnicianTransferModal';
 import { AdjustSuggestedAllocationModal } from './AdjustSuggestedAllocationModal';
 import { PrintableFCSScheduleModal } from './PrintableFCSScheduleModal';
 import { Sparkles, Wrench, Layers, AlertTriangle, CheckCircle, Clock, Calendar, Users, RefreshCw, Plus, ChevronLeft, ChevronRight, Activity, ArrowRight, Zap, Info, Edit3, ArrowRightLeft, Printer, Move, ExternalLink, GripVertical } from 'lucide-react';
-import { getRelativeDate, addDays, formatDate, getWorkingDaySpan, getTodayISOString, addDaysToDateStr } from '../../../core/utils/dateUtils';
+import { getRelativeDate, addDays, formatDate, getWorkingDaySpan, getTodayISOString, addDaysToDateStr, getEffectiveJobScheduledDate } from '../../../core/utils/dateUtils';
 import { isJobAllocated, isJobUnallocated } from '../../../core/utils/jobUtils';
 
 export interface EngineerTheme {
@@ -151,6 +151,8 @@ export interface ResourceGanttViewProps {
     estimates?: Estimate[];
     businessEntities?: BusinessEntity[];
     unallocatedJobs?: Job[];
+    currentDate?: string;
+    onDateChange?: (date: string) => void;
     onEditJob: (jobId: string, initialTab?: any) => void;
     onSaveJob?: (job: Job) => Promise<void> | void;
     onSaveEstimate?: (est: Partial<Estimate>) => Promise<void> | void;
@@ -173,6 +175,8 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
     estimates = [],
     businessEntities = [],
     unallocatedJobs: passedUnallocatedJobs,
+    currentDate,
+    onDateChange,
     onEditJob,
     onSaveJob,
     onSaveEstimate,
@@ -185,13 +189,36 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
     const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
     const [windowDays, setWindowDays] = useState<number>(7);
     const [simulateExtraEngineers, setSimulateExtraEngineers] = useState<number>(0);
-    const [showScheduledUnallocated, setShowScheduledUnallocated] = useState<boolean>(false);
+    const [showScheduledUnallocated, setShowScheduledUnallocated] = useState<boolean>(true);
     const [isAssigningAllTrimming, setIsAssigningAllTrimming] = useState<boolean>(false);
     const [isBufferModalOpen, setIsBufferModalOpen] = useState<boolean>(false);
     const [isOptimizerOpen, setIsOptimizerOpen] = useState<boolean>(false);
     const [isTransferModalOpen, setIsTransferModalOpen] = useState<boolean>(false);
     const [isPrintModalOpen, setIsPrintModalOpen] = useState<boolean>(false);
-    const [startDateOffset, setStartDateOffset] = useState<number>(0);
+    const [startDateOffset, setStartDateOffset] = useState<number>(() => {
+        if (!currentDate) return 0;
+        try {
+            const todayStr = getTodayISOString();
+            const [ty, tm, td] = todayStr.split('-').map(Number);
+            const [cy, cm, cd] = currentDate.split('T')[0].split('-').map(Number);
+            return Math.round((Date.UTC(cy, cm - 1, cd) - Date.UTC(ty, tm - 1, td)) / (1000 * 60 * 60 * 24));
+        } catch {
+            return 0;
+        }
+    });
+
+    // Synchronize startDateOffset when currentDate prop updates from parent DispatchView
+    useEffect(() => {
+        if (!currentDate) return;
+        try {
+            const todayStr = getTodayISOString();
+            const [ty, tm, td] = todayStr.split('-').map(Number);
+            const [cy, cm, cd] = currentDate.split('T')[0].split('-').map(Number);
+            const diffDays = Math.round((Date.UTC(cy, cm - 1, cd) - Date.UTC(ty, tm - 1, td)) / (1000 * 60 * 60 * 24));
+            setStartDateOffset(diffDays);
+        } catch {}
+    }, [currentDate]);
+
     const [editingEngineerId, setEditingEngineerId] = useState<string | null>(null);
     const [editingEngineerName, setEditingEngineerName] = useState<string>('');
     const [isSavingEngineerName, setIsSavingEngineerName] = useState<boolean>(false);
@@ -215,6 +242,30 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
     const startDateStr = useMemo(() => {
         return addDaysToDateStr(getTodayISOString(), startDateOffset);
     }, [startDateOffset]);
+
+    // Detect scheduled jobs that lie outside the currently visible Gantt window so user can 1-click jump to them
+    const windowEndStr = useMemo(() => addDaysToDateStr(startDateStr, windowDays), [startDateStr, windowDays]);
+
+    const scheduledJobsOutsideWindow = useMemo(() => {
+        const dateCounts = new Map<string, number>();
+
+        jobs.forEach(job => {
+            if (['Cancelled', 'Complete', 'Invoiced', 'Closed', 'Archived'].includes(job.status)) return;
+            const effectiveDate = getEffectiveJobScheduledDate(job);
+            if (!effectiveDate) return;
+            const d = effectiveDate.split('T')[0];
+            if (d < startDateStr || d >= windowEndStr) {
+                dateCounts.set(d, (dateCounts.get(d) || 0) + 1);
+            }
+        });
+
+        const outList: { date: string; count: number }[] = [];
+        dateCounts.forEach((count, date) => {
+            outList.push({ date, count });
+        });
+
+        return outList.sort((a, b) => a.date.localeCompare(b.date));
+    }, [jobs, startDateStr, windowEndStr]);
 
     // Handle toggling or generating suggested work allocations on the Gantt
     const handleToggleSuggestedPreview = () => {
@@ -900,15 +951,22 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                     {/* Window Shift & Direct Date Picker */}
                     <div className="flex items-center bg-slate-100 rounded-xl border border-slate-200 p-0.5">
                         <button 
-                            onClick={() => setStartDateOffset(prev => prev - windowDays)}
-                            className="p-1 hover:bg-white rounded-lg text-slate-600 hover:text-slate-900 transition-colors shadow-xs hover:shadow-xs"
+                            onClick={() => {
+                                const newOffset = startDateOffset - windowDays;
+                                setStartDateOffset(newOffset);
+                                onDateChange?.(addDaysToDateStr(getTodayISOString(), newOffset));
+                            }}
+                            className="p-1 hover:bg-white rounded-lg text-slate-600 hover:text-slate-900 transition-colors shadow-xs hover:shadow-xs cursor-pointer"
                             title="Previous window"
                         >
                             <ChevronLeft size={16} />
                         </button>
                         <button
-                            onClick={() => setStartDateOffset(0)}
-                            className="px-2.5 py-0.5 text-xs font-bold text-slate-700 hover:text-slate-900"
+                            onClick={() => {
+                                setStartDateOffset(0);
+                                onDateChange?.(getTodayISOString());
+                            }}
+                            className="px-2.5 py-0.5 text-xs font-bold text-slate-700 hover:text-slate-900 cursor-pointer"
                         >
                             Today
                         </button>
@@ -918,22 +976,55 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                             onChange={(e) => {
                                 if (!e.target.value) return;
                                 const todayStr = getTodayISOString();
-                                const todayDate = new Date(`${todayStr}T00:00:00`);
-                                const chosenDate = new Date(`${e.target.value}T00:00:00`);
-                                const diffDays = Math.round((chosenDate.getTime() - todayDate.getTime()) / (1000 * 60 * 60 * 24));
+                                const [ty, tm, td] = todayStr.split('-').map(Number);
+                                const [cy, cm, cd] = e.target.value.split('-').map(Number);
+                                const diffDays = Math.round((Date.UTC(cy, cm - 1, cd) - Date.UTC(ty, tm - 1, td)) / (1000 * 60 * 60 * 24));
                                 setStartDateOffset(diffDays);
+                                onDateChange?.(e.target.value);
                             }}
                             className="text-xs bg-transparent border-0 px-1 py-0.5 text-slate-700 font-semibold focus:outline-none cursor-pointer hover:bg-white rounded"
                             title="Jump to specific start date"
                         />
                         <button 
-                            onClick={() => setStartDateOffset(prev => prev + windowDays)}
-                            className="p-1 hover:bg-white rounded-lg text-slate-600 hover:text-slate-900 transition-colors shadow-xs hover:shadow-xs"
+                            onClick={() => {
+                                const newOffset = startDateOffset + windowDays;
+                                setStartDateOffset(newOffset);
+                                onDateChange?.(addDaysToDateStr(getTodayISOString(), newOffset));
+                            }}
+                            className="p-1 hover:bg-white rounded-lg text-slate-600 hover:text-slate-900 transition-colors shadow-xs hover:shadow-xs cursor-pointer"
                             title="Next window"
                         >
                             <ChevronRight size={16} />
                         </button>
                     </div>
+
+                    {/* Quick Jump to Scheduled Jobs outside visible window */}
+                    {scheduledJobsOutsideWindow.length > 0 && (
+                        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar max-w-xs">
+                            {scheduledJobsOutsideWindow.slice(0, 3).map(item => {
+                                const formatted = new Date(`${item.date}T00:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+                                return (
+                                    <button
+                                        key={item.date}
+                                        type="button"
+                                        onClick={() => {
+                                            const todayStr = getTodayISOString();
+                                            const [ty, tm, td] = todayStr.split('-').map(Number);
+                                            const [iy, im, id] = item.date.split('-').map(Number);
+                                            const diffDays = Math.round((Date.UTC(iy, im - 1, id) - Date.UTC(ty, tm - 1, td)) / (1000 * 60 * 60 * 24));
+                                            setStartDateOffset(diffDays);
+                                            onDateChange?.(item.date);
+                                        }}
+                                        className="px-2 py-1 bg-amber-50 hover:bg-amber-100 border border-amber-300 hover:border-amber-400 text-amber-900 rounded-lg text-[11px] font-black flex items-center gap-1 shadow-2xs transition cursor-pointer whitespace-nowrap"
+                                        title={`Jump planner to scheduled work on ${item.date}`}
+                                    >
+                                        <Calendar size={12} className="text-amber-600 shrink-0" />
+                                        <span>Jump to {formatted} ({item.count}) &rarr;</span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    )}
 
                     {/* Window Days Select */}
                     <div className="flex items-center bg-slate-100 rounded-xl border border-slate-200 p-0.5 text-xs font-bold">

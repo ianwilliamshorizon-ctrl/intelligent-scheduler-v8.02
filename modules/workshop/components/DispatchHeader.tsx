@@ -68,14 +68,14 @@ export const DispatchHeader: React.FC<DispatchHeaderProps> = ({
                 </div>
 
                 <div className="flex items-center gap-1 sm:gap-2 w-full sm:w-auto justify-between sm:justify-start">
-                    {viewMode === 'timeline' && (
+                    {(viewMode === 'timeline' || viewMode === 'fcs-gantt') && (
                          <>
-                            <button onClick={handlePrevDay} className="no-print p-2 rounded-full hover:bg-gray-100 flex-shrink-0"><ChevronLeft size={18}/></button>
-                            <button onClick={() => setIsDatePickerOpen(true)} className="flex items-center gap-2 px-3 py-1.5 sm:px-4 sm:py-2 bg-gray-100 hover:bg-gray-200 rounded-lg font-semibold text-gray-700 text-xs sm:text-sm flex-grow sm:flex-grow-0 justify-center no-print">
+                            <button onClick={handlePrevDay} className="no-print p-2 rounded-full hover:bg-gray-100 flex-shrink-0 cursor-pointer" title="Previous Day"><ChevronLeft size={18}/></button>
+                            <button onClick={() => setIsDatePickerOpen(true)} className="flex items-center gap-2 px-3 py-1.5 sm:px-4 sm:py-2 bg-gray-100 hover:bg-gray-200 rounded-lg font-semibold text-gray-700 text-xs sm:text-sm flex-grow sm:flex-grow-0 justify-center no-print cursor-pointer">
                                 <Clock size={16} />
                                 <span>{formatReadableDate(currentDate)}</span>
                             </button>
-                            <button onClick={handleNextDay} className="no-print p-2 rounded-full hover:bg-gray-100 flex-shrink-0"><ChevronRight size={18}/></button>
+                            <button onClick={handleNextDay} className="no-print p-2 rounded-full hover:bg-gray-100 flex-shrink-0 cursor-pointer" title="Next Day"><ChevronRight size={18}/></button>
                          </>
                     )}
                      {viewMode === 'week' && (

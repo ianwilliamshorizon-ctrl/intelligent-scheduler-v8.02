@@ -174,10 +174,16 @@ export const getEffectiveJobScheduledDate = (job?: Job | null): string | null =>
  * live schedule (and segments) over stale dates from when the inquiry card was originally created.
  */
 export const getEffectiveInquiryScheduledDate = (inquiry: Inquiry, job?: Job | null): string | null => {
+    // 1. Live scheduled date from linked job if present
     const jobDate = getEffectiveJobScheduledDate(job);
     if (jobDate) return jobDate;
 
-    if (inquiry.followUpDate) return inquiry.followUpDate;
+    // 2. Explicit expected scheduled date on inquiry
+    if (inquiry.expectedScheduledDate) return inquiry.expectedScheduledDate;
+    if ((inquiry as any).scheduledDate) return (inquiry as any).scheduledDate;
+
+    // 3. Fallback to follow-up date if inquiry is marked Scheduled
+    if (inquiry.status === 'Scheduled' && inquiry.followUpDate) return inquiry.followUpDate;
 
     return null;
 };

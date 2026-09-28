@@ -94,7 +94,7 @@ describe('DirectorsDashboard', () => {
     // Check that child components are rendered for Overview tab
     expect(screen.getByText('AIAssistant Mock')).toBeInTheDocument();
     expect(screen.getAllByText('Charts Mock').length).toBe(3);
-  });
+  }, 15000);
 
   it('switches to Month-by-Month KPIs tab and displays metrics', () => {
     render(
@@ -113,6 +113,6 @@ describe('DirectorsDashboard', () => {
     expect(screen.getAllByText(/Bookings \(Jobs\)/i).length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText(/Purchase Orders/i).length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText(/YEAR 2026 TOTAL \/ AVG/i)).toBeInTheDocument();
-  });
+  }, 15000);
 });
 

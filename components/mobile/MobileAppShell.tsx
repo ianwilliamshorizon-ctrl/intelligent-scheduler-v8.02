@@ -1424,35 +1424,6 @@ export const MobileAppShell: React.FC<MobileAppShellProps> = ({
             {/* TAB 5: DIRECTOR POCKET */}
             {activeTab === 'director' && (
                 <main className="flex-1 p-4 max-w-2xl w-full mx-auto space-y-4">
-                    {/* Entity Switcher */}
-                    {businessEntities.length > 1 && (
-                        <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide py-1">
-                            <button
-                                onClick={() => onSelectEntity('all')}
-                                className={`px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap transition border ${
-                                    selectedEntityId === 'all'
-                                        ? 'bg-indigo-600 text-white border-indigo-400'
-                                        : 'bg-slate-800 text-slate-400 border-slate-700'
-                                }`}
-                            >
-                                All Entities
-                            </button>
-                            {businessEntities.map(e => (
-                                <button
-                                    key={e.id}
-                                    onClick={() => onSelectEntity(e.id)}
-                                    className={`px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap transition border ${
-                                        selectedEntityId === e.id
-                                            ? 'bg-indigo-600 text-white border-indigo-400'
-                                            : 'bg-slate-800 text-slate-400 border-slate-700'
-                                    }`}
-                                >
-                                    {e.name}
-                                </button>
-                            ))}
-                        </div>
-                    )}
-
                     {/* MTD Revenue Hero Card */}
                     <div className="bg-gradient-to-br from-indigo-950 via-slate-900 to-slate-900 border border-indigo-900/60 rounded-2xl p-4 shadow-xl relative overflow-hidden">
                         <div className="flex items-center justify-between text-xs text-indigo-300 font-semibold mb-1">

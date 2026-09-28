@@ -303,6 +303,8 @@ const DispatchView: React.FC<DispatchViewProps> = ({
                     currentUser={currentUser}
                     estimates={estimates || []}
                     unallocatedJobs={unallocatedJobs || []}
+                    currentDate={currentDate}
+                    onDateChange={(d) => setCurrentDate(d)}
                     onEditJob={handleEditJob}
                     onSaveJob={async (jobData) => {
                         const savedJob = {

@@ -1221,6 +1221,7 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                                         ...inquiry, 
                                         status: 'Scheduled' as const,
                                         linkedJobId: jobToSave.id,
+                                        expectedScheduledDate: jobToSave.scheduledDate || inquiry.expectedScheduledDate,
                                         linkedCustomerId: finalCustId || inquiry.linkedCustomerId,
                                         linkedVehicleId: finalVehId || inquiry.linkedVehicleId,
                                         logs: [...(inquiry.logs || []), {

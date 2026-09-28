@@ -1,6 +1,6 @@
 import { Job, JobSegment, Lift, Engineer, PurchaseOrder, Vehicle, FCSState, MaterialsStatus, FCSGanttBlock, FCSDependencyLink, FCSSimulationMetrics } from '../../types';
 import { TIME_SEGMENTS } from '../../constants';
-import { addDays, formatDate, getRelativeDate } from '../utils/dateUtils';
+import { addDays, formatDate, getRelativeDate, getEffectiveJobScheduledDate } from '../utils/dateUtils';
 import { isJobAllocated, isJobUnallocated } from '../utils/jobUtils';
 
 export interface FCSJobPlan {
@@ -178,7 +178,8 @@ export function calculateFCSMatrix({
             : null;
 
         // Factor in expected delivery date for purchases if undelivered
-        let effectiveStartDate = job.scheduledDate || startDateStr;
+        const effectiveJobDate = getEffectiveJobScheduledDate(job) || job.scheduledDate || startDateStr;
+        let effectiveStartDate = effectiveJobDate;
         if (job.expectedDeliveryDate && materialsStatus !== 'Delivered') {
             if (job.expectedDeliveryDate > effectiveStartDate) {
                 effectiveStartDate = job.expectedDeliveryDate;
@@ -745,9 +746,13 @@ function addDaysToDateStr(dateStr: string, daysToAdd: number): string {
 
 function calculatePercentOffset(targetDateStr: string, baseDateStr: string, windowDays: number): number {
     try {
-        const target = new Date(targetDateStr.includes('T') ? targetDateStr : `${targetDateStr}T00:00:00`).getTime();
-        const base = new Date(baseDateStr.includes('T') ? baseDateStr : `${baseDateStr}T00:00:00`).getTime();
-        const diffDays = (target - base) / (1000 * 60 * 60 * 24);
+        const targetClean = (targetDateStr || '').split('T')[0];
+        const baseClean = (baseDateStr || '').split('T')[0];
+        const [ty, tm, td] = targetClean.split('-').map(Number);
+        const [by, bm, bd] = baseClean.split('-').map(Number);
+        const target = Date.UTC(ty, (tm || 1) - 1, td || 1);
+        const base = Date.UTC(by, (bm || 1) - 1, bd || 1);
+        const diffDays = Math.round((target - base) / (1000 * 60 * 60 * 24));
         const percent = (diffDays / Math.max(1, windowDays)) * 100;
         return Math.max(0, Math.min(100, percent));
     } catch {
