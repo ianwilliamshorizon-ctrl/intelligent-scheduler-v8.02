@@ -246,7 +246,7 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
     // Detect scheduled jobs that lie outside the currently visible Gantt window so user can 1-click jump to them
     const windowEndStr = useMemo(() => addDaysToDateStr(startDateStr, windowDays), [startDateStr, windowDays]);
 
-    const scheduledJobsOutsideWindow = useMemo(() => {
+    const upcomingScheduledJobs = useMemo(() => {
         const dateCounts = new Map<string, number>();
 
         jobs.forEach(job => {
@@ -254,7 +254,7 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
             const effectiveDate = getEffectiveJobScheduledDate(job);
             if (!effectiveDate) return;
             const d = effectiveDate.split('T')[0];
-            if (d < startDateStr || d >= windowEndStr) {
+            if (d >= windowEndStr) {
                 dateCounts.set(d, (dateCounts.get(d) || 0) + 1);
             }
         });
@@ -264,8 +264,31 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
             outList.push({ date, count });
         });
 
+        // Earliest upcoming dates first (e.g. 15 Oct)
         return outList.sort((a, b) => a.date.localeCompare(b.date));
-    }, [jobs, startDateStr, windowEndStr]);
+    }, [jobs, windowEndStr]);
+
+    const pastScheduledJobs = useMemo(() => {
+        const dateCounts = new Map<string, number>();
+
+        jobs.forEach(job => {
+            if (['Cancelled', 'Complete', 'Invoiced', 'Closed', 'Archived'].includes(job.status)) return;
+            const effectiveDate = getEffectiveJobScheduledDate(job);
+            if (!effectiveDate) return;
+            const d = effectiveDate.split('T')[0];
+            if (d < startDateStr) {
+                dateCounts.set(d, (dateCounts.get(d) || 0) + 1);
+            }
+        });
+
+        const outList: { date: string; count: number }[] = [];
+        dateCounts.forEach((count, date) => {
+            outList.push({ date, count });
+        });
+
+        // Most recent past dates first
+        return outList.sort((a, b) => b.date.localeCompare(a.date));
+    }, [jobs, startDateStr]);
 
     // Handle toggling or generating suggested work allocations on the Gantt
     const handleToggleSuggestedPreview = () => {
@@ -998,10 +1021,10 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                         </button>
                     </div>
 
-                    {/* Quick Jump to Scheduled Jobs outside visible window */}
-                    {scheduledJobsOutsideWindow.length > 0 && (
+                    {/* Quick Jump to Upcoming Scheduled Jobs (Future beyond window) */}
+                    {upcomingScheduledJobs.length > 0 && (
                         <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar max-w-xs">
-                            {scheduledJobsOutsideWindow.slice(0, 3).map(item => {
+                            {upcomingScheduledJobs.slice(0, 3).map(item => {
                                 const formatted = new Date(`${item.date}T00:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
                                 return (
                                     <button
@@ -1016,10 +1039,38 @@ export const ResourceGanttView: React.FC<ResourceGanttViewProps> = ({
                                             onDateChange?.(item.date);
                                         }}
                                         className="px-2 py-1 bg-amber-50 hover:bg-amber-100 border border-amber-300 hover:border-amber-400 text-amber-900 rounded-lg text-[11px] font-black flex items-center gap-1 shadow-2xs transition cursor-pointer whitespace-nowrap"
-                                        title={`Jump planner to scheduled work on ${item.date}`}
+                                        title={`Jump planner forward to upcoming scheduled work on ${item.date}`}
                                     >
                                         <Calendar size={12} className="text-amber-600 shrink-0" />
                                         <span>Jump to {formatted} ({item.count}) &rarr;</span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    )}
+
+                    {/* Past Scheduled Incomplete Jobs indicator */}
+                    {pastScheduledJobs.length > 0 && (
+                        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar max-w-xs">
+                            {pastScheduledJobs.slice(0, 2).map(item => {
+                                const formatted = new Date(`${item.date}T00:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+                                return (
+                                    <button
+                                        key={item.date}
+                                        type="button"
+                                        onClick={() => {
+                                            const todayStr = getTodayISOString();
+                                            const [ty, tm, td] = todayStr.split('-').map(Number);
+                                            const [iy, im, id] = item.date.split('-').map(Number);
+                                            const diffDays = Math.round((Date.UTC(iy, im - 1, id) - Date.UTC(ty, tm - 1, td)) / (1000 * 60 * 60 * 24));
+                                            setStartDateOffset(diffDays);
+                                            onDateChange?.(item.date);
+                                        }}
+                                        className="px-2 py-1 bg-rose-50 hover:bg-rose-100 border border-rose-300 hover:border-rose-400 text-rose-800 rounded-lg text-[11px] font-bold flex items-center gap-1 shadow-2xs transition cursor-pointer whitespace-nowrap"
+                                        title={`Incomplete job scheduled in the past on ${item.date}. Click to review.`}
+                                    >
+                                        <AlertTriangle size={12} className="text-rose-600 shrink-0" />
+                                        <span>Past: {formatted} ({item.count})</span>
                                     </button>
                                 );
                             })}
