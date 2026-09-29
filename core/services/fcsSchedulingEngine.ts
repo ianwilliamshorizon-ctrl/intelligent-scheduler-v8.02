@@ -177,14 +177,21 @@ export function calculateFCSMatrix({
             ? (effectiveEngineers.find(e => e.id === firstSegment.engineerId || (e.name && e.name.toLowerCase() === firstSegment.engineerId?.toLowerCase()))?.id || firstSegment.engineerId)
             : null;
 
-        // Factor in expected delivery date for purchases if undelivered
-        const effectiveJobDate = getEffectiveJobScheduledDate(job) || job.scheduledDate || startDateStr;
-        let effectiveStartDate = effectiveJobDate;
-        if (job.expectedDeliveryDate && materialsStatus !== 'Delivered') {
-            if (job.expectedDeliveryDate > effectiveStartDate) {
-                effectiveStartDate = job.expectedDeliveryDate;
-            }
+        // Once scheduled, a job must remain in place on its scheduled date.
+        // It should NOT roll forward if incomplete or waiting for parts.
+        const confirmedScheduledDate = getEffectiveJobScheduledDate(job) || job.scheduledDate;
+        let effectiveStartDate: string;
+        if (confirmedScheduledDate) {
+            effectiveStartDate = confirmedScheduledDate;
+        } else {
+            // Unscheduled draft/pipeline work defaults to parts delivery date or window start
+            effectiveStartDate = (job.expectedDeliveryDate && materialsStatus !== 'Delivered' && job.expectedDeliveryDate > startDateStr)
+                ? job.expectedDeliveryDate
+                : startDateStr;
         }
+
+        const spanDays = Math.max(1, Math.ceil(remainingHours / 8));
+        const effectiveEndDate = addDaysToDateStr(effectiveStartDate, spanDays - 1);
 
         return {
             job,
@@ -198,7 +205,7 @@ export function calculateFCSMatrix({
             assignedRampId: assignedRamp?.id || (isJobAllocated(job) ? effectiveRamps[0]?.id : null),
             assignedEngineerId,
             scheduledStartDate: effectiveStartDate,
-            scheduledEndDate: effectiveStartDate || addDaysToDateStr(startDateStr, Math.ceil(remainingHours / 8))
+            scheduledEndDate: effectiveEndDate
         };
     });
 
@@ -239,12 +246,12 @@ export function calculateFCSMatrix({
     };
 
     const windowEndStr = addDaysToDateStr(startDateStr, windowDays);
-    const isPlanInWindow = (startStr: string, endStr: string, isCurrentWork: boolean) => {
-        if (isCurrentWork) return true;
+    const isPlanInWindow = (startStr: string, endStr: string) => {
         const s = (startStr || '').split('T')[0];
         const e = (endStr || s).split('T')[0];
-        if (!s) return true;
-        return s <= windowEndStr && e >= startDateStr;
+        if (!s) return false;
+        // Job is in window if its active scheduled range overlaps with [startDateStr, windowEndStr]
+        return s < windowEndStr && e >= startDateStr;
     };
 
     let stalledDeadWeightHours = 0;
@@ -254,9 +261,18 @@ export function calculateFCSMatrix({
     stalledPlans.forEach((sp, idx) => {
         const rampId = sp.assignedRampId || effectiveRamps[idx % effectiveRamps.length]?.id;
         if (!rampId) return;
+        if (!isPlanInWindow(sp.scheduledStartDate, sp.scheduledEndDate)) return;
 
         const blockId = `ramp_block_stalled_${sp.job.id}`;
         stalledDeadWeightHours += sp.remainingHours;
+
+        const { startPercent, durationPercent } = calculateBlockPercentages(
+            sp.scheduledStartDate,
+            sp.scheduledEndDate,
+            startDateStr,
+            windowDays,
+            sp.remainingHours
+        );
 
         const rampBlock: FCSGanttBlock = {
             id: blockId,
@@ -269,10 +285,10 @@ export function calculateFCSMatrix({
             fcsState: 'STALLED',
             startDate: sp.scheduledStartDate,
             startTime: '08:30',
-            endDate: addDaysToDateStr(sp.scheduledStartDate, Math.max(1, Math.ceil(sp.remainingHours / 8))),
+            endDate: sp.scheduledEndDate,
             endTime: '17:30',
-            startPercent: calculatePercentOffset(sp.scheduledStartDate, startDateStr, windowDays),
-            durationPercent: calculatePercentDuration(sp.remainingHours, windowDays),
+            startPercent,
+            durationPercent,
             hours: sp.remainingHours,
             isDeadWeight: true
         };
@@ -289,8 +305,8 @@ export function calculateFCSMatrix({
 
         if (!rampId || !engineerId) return;
 
-        const isCurrentWork = ap.job.status === 'In Progress' || ap.job.status === 'Paused' || ap.job.vehicleStatus === 'On Site';
-        if (!isPlanInWindow(ap.scheduledStartDate, ap.scheduledEndDate, isCurrentWork)) return;
+        // Keep scheduled work in place: only display inside the window if its scheduled date span overlaps this window
+        if (!isPlanInWindow(ap.scheduledStartDate, ap.scheduledEndDate)) return;
 
         const isSim = engineerId.startsWith('sim_');
         activeWrenchHours += ap.remainingHours;
@@ -298,8 +314,13 @@ export function calculateFCSMatrix({
         const rampBlockId = `ramp_block_active_${ap.job.id}`;
         const engBlockId = `eng_block_active_${ap.job.id}`;
 
-        const startPct = calculatePercentOffset(ap.scheduledStartDate, startDateStr, windowDays);
-        const durationPct = calculatePercentDuration(ap.remainingHours, windowDays);
+        const { startPercent: startPct, durationPercent: durationPct } = calculateBlockPercentages(
+            ap.scheduledStartDate,
+            ap.scheduledEndDate,
+            startDateStr,
+            windowDays,
+            ap.remainingHours
+        );
 
         const engName = effectiveEngineers.find(e => e.id === engineerId || (e.name && engineerId && e.name.toLowerCase() === engineerId.toLowerCase()))?.name || 'Engineer';
 
@@ -316,7 +337,7 @@ export function calculateFCSMatrix({
             fcsState: 'ACTIVE',
             startDate: ap.scheduledStartDate,
             startTime: '08:30',
-            endDate: addDaysToDateStr(ap.scheduledStartDate, Math.max(1, Math.ceil(ap.remainingHours / 8))),
+            endDate: ap.scheduledEndDate,
             endTime: '17:30',
             startPercent: startPct,
             durationPercent: durationPct,
@@ -339,7 +360,7 @@ export function calculateFCSMatrix({
             fcsState: 'ACTIVE',
             startDate: ap.scheduledStartDate,
             startTime: '08:30',
-            endDate: addDaysToDateStr(ap.scheduledStartDate, Math.max(1, Math.ceil(ap.remainingHours / 8))),
+            endDate: ap.scheduledEndDate,
             endTime: '17:30',
             startPercent: startPct,
             durationPercent: durationPct,
@@ -381,15 +402,20 @@ export function calculateFCSMatrix({
             const engineerId = sup.assignedEngineerId || effectiveEngineers[idx % effectiveEngineers.length]?.id;
 
             if (!rampId || !engineerId) return;
-            if (!isPlanInWindow(sup.scheduledStartDate, sup.scheduledEndDate, false)) return;
+            if (!isPlanInWindow(sup.scheduledStartDate, sup.scheduledEndDate)) return;
 
             activeWrenchHours += sup.remainingHours;
 
             const rampBlockId = `ramp_block_scheduled_${sup.job.id}`;
             const engBlockId = `eng_block_scheduled_${sup.job.id}`;
 
-            const startPct = calculatePercentOffset(sup.scheduledStartDate, startDateStr, windowDays);
-            const durationPct = calculatePercentDuration(sup.remainingHours, windowDays);
+            const { startPercent: startPct, durationPercent: durationPct } = calculateBlockPercentages(
+                sup.scheduledStartDate,
+                sup.scheduledEndDate,
+                startDateStr,
+                windowDays,
+                sup.remainingHours
+            );
 
             const engName = effectiveEngineers.find(e => e.id === engineerId || (e.name && engineerId && e.name.toLowerCase() === engineerId.toLowerCase()))?.name || 'Engineer';
 
@@ -406,7 +432,7 @@ export function calculateFCSMatrix({
                 fcsState: 'ACTIVE',
                 startDate: sup.scheduledStartDate,
                 startTime: '08:30',
-                endDate: addDaysToDateStr(sup.scheduledStartDate, Math.max(1, Math.ceil(sup.remainingHours / 8))),
+                endDate: sup.scheduledEndDate,
                 endTime: '17:30',
                 startPercent: startPct,
                 durationPercent: durationPct,
@@ -429,7 +455,7 @@ export function calculateFCSMatrix({
                 fcsState: 'ACTIVE',
                 startDate: sup.scheduledStartDate,
                 startTime: '08:30',
-                endDate: addDaysToDateStr(sup.scheduledStartDate, Math.max(1, Math.ceil(sup.remainingHours / 8))),
+                endDate: sup.scheduledEndDate,
                 endTime: '17:30',
                 startPercent: startPct,
                 durationPercent: durationPct,
@@ -476,8 +502,8 @@ export function calculateFCSMatrix({
             const hours = suggested?.hours || qp.remainingHours;
             if (!rampId || !engineerId) return;
 
-            const projectedEndDate = addDaysToDateStr(scheduledDate, Math.max(1, Math.ceil(hours / 8)));
-            if (!isPlanInWindow(scheduledDate, projectedEndDate, false)) return;
+            const projectedEndDate = addDaysToDateStr(scheduledDate, Math.max(1, Math.ceil(hours / 8)) - 1);
+            if (!isPlanInWindow(scheduledDate, projectedEndDate)) return;
 
             const isSim = engineerId.startsWith('sim_');
             const isEstSim = Boolean((qp.job as any).isEstimateSimulation || qp.job.id.startsWith('sim_est_'));
@@ -488,8 +514,13 @@ export function calculateFCSMatrix({
             const rampBlockId = `ramp_block_suggested_${qp.job.id}`;
             const engBlockId = `eng_block_suggested_${qp.job.id}`;
 
-            const startPct = calculatePercentOffset(scheduledDate, startDateStr, windowDays);
-            const durationPct = calculatePercentDuration(hours, windowDays);
+            const { startPercent: startPct, durationPercent: durationPct } = calculateBlockPercentages(
+                scheduledDate,
+                projectedEndDate,
+                startDateStr,
+                windowDays,
+                hours
+            );
 
             const rampBlock: FCSGanttBlock = {
                 id: rampBlockId,
@@ -765,3 +796,42 @@ function calculatePercentDuration(hours: number, windowDays: number): number {
     const percent = (hours / Math.max(1, totalWindowHours)) * 100;
     return Math.max(2, Math.min(100, percent));
 }
+
+export function calculateBlockPercentages(
+    targetStartStr: string,
+    targetEndStr: string,
+    baseDateStr: string,
+    windowDays: number,
+    hours: number
+): { startPercent: number; durationPercent: number } {
+    try {
+        const startClean = (targetStartStr || '').split('T')[0];
+        const endClean = (targetEndStr || startClean).split('T')[0];
+        const baseClean = (baseDateStr || '').split('T')[0];
+
+        const [sy, sm, sd] = startClean.split('-').map(Number);
+        const [ey, em, ed] = endClean.split('-').map(Number);
+        const [by, bm, bd] = baseClean.split('-').map(Number);
+
+        const startUtc = Date.UTC(sy, (sm || 1) - 1, sd || 1);
+        const endUtc = Date.UTC(ey, (em || 1) - 1, ed || 1);
+        const baseUtc = Date.UTC(by, (bm || 1) - 1, bd || 1);
+
+        const startDiffDays = Math.round((startUtc - baseUtc) / (1000 * 60 * 60 * 24));
+        const endDiffDays = Math.round((endUtc - baseUtc) / (1000 * 60 * 60 * 24)) + 1; // inclusive of end day
+
+        const visibleStartDay = Math.max(0, startDiffDays);
+        const visibleEndDay = Math.min(windowDays, Math.max(visibleStartDay + 1, endDiffDays));
+        const visibleDays = Math.max(1, visibleEndDay - visibleStartDay);
+
+        const startPercent = Math.max(0, Math.min(100, (visibleStartDay / Math.max(1, windowDays)) * 100));
+        const durationPercent = Math.max(2, Math.min(100, (visibleDays / Math.max(1, windowDays)) * 100));
+
+        return { startPercent, durationPercent };
+    } catch {
+        const startPercent = calculatePercentOffset(targetStartStr, baseDateStr, windowDays);
+        const durationPercent = calculatePercentDuration(hours, windowDays);
+        return { startPercent, durationPercent };
+    }
+}
+

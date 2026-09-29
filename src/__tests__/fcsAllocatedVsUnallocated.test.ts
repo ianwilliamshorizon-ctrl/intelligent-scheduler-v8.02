@@ -192,5 +192,93 @@ describe('FCS Allocated vs Unallocated Jobs Architecture', () => {
             expect(matrixAfterAgreement.unallocatedJobPlans.length).toBe(0);
             expect(matrixAfterAgreement.activeJobPlans.length).toBe(2);
         });
+
+        it('keeps scheduled incomplete jobs strictly in their scheduled calendar position and does not roll them forward to today', () => {
+            // Job scheduled for 2026-09-15 that is incomplete (In Progress / On Site)
+            const pastIncompleteJob: Job = {
+                id: 'job_past_incomplete',
+                jobNumber: 'JOB-PAST-01',
+                customerId: 'cust_1',
+                vehicleId: 'veh_1',
+                description: 'Gearbox Overhaul',
+                status: 'In Progress',
+                vehicleStatus: 'On Site',
+                scheduledDate: '2026-09-15',
+                estimatedHours: 4,
+                segments: [{
+                    id: 'seg_past_1',
+                    jobId: 'job_past_incomplete',
+                    segmentIndex: 0,
+                    status: 'In Progress',
+                    allocatedLift: 'ramp_1',
+                    engineerId: 'eng_1',
+                    date: '2026-09-15',
+                    durationHours: 4
+                } as any]
+            };
+
+            // Job scheduled for 2026-09-20 with parts expected on 2026-09-25
+            const partsDelayedJob: Job = {
+                id: 'job_parts_delayed',
+                jobNumber: 'JOB-DELAYED-01',
+                customerId: 'cust_2',
+                vehicleId: 'veh_2',
+                description: 'Suspension Refresh',
+                status: 'Allocated',
+                scheduledDate: '2026-09-20',
+                expectedDeliveryDate: '2026-09-25',
+                partsStatus: 'Ordered',
+                estimatedHours: 4,
+                segments: [{
+                    id: 'seg_delayed_1',
+                    jobId: 'job_parts_delayed',
+                    segmentIndex: 0,
+                    status: 'Allocated',
+                    allocatedLift: 'ramp_2',
+                    engineerId: 'eng_2',
+                    date: '2026-09-20',
+                    durationHours: 4
+                } as any]
+            };
+
+            // 1. Matrix for window 2026-09-18 to 2026-09-25:
+            // Past job from 2026-09-15 must NOT roll forward into 2026-09-18 window
+            const matrixToday = calculateFCSMatrix({
+                jobs: [pastIncompleteJob, partsDelayedJob],
+                ramps: mockLifts,
+                engineers: mockEngineers,
+                purchaseOrders: [],
+                startDateStr: '2026-09-18',
+                windowDays: 7
+            });
+
+            const allRamp1Blocks = matrixToday.rampRows.find(r => r.ramp.id === 'ramp_1')?.blocks || [];
+            // Past incomplete job must NOT be clamped to 2026-09-18
+            expect(allRamp1Blocks.some(b => b.jobId === 'job_past_incomplete')).toBe(false);
+
+            // 2. Parts delayed job scheduled for 2026-09-20 must stay on 2026-09-20 (day 2 = ~28.5%), NOT rolled to 2026-09-25
+            const ramp2Blocks = matrixToday.rampRows.find(r => r.ramp.id === 'ramp_2')?.blocks || [];
+            const delayedBlock = ramp2Blocks.find(b => b.jobId === 'job_parts_delayed');
+            expect(delayedBlock).toBeDefined();
+            expect(delayedBlock!.startDate).toBe('2026-09-20');
+            // Day 2 in 7-day window: (2/7)*100 = 28.57%
+            expect(Math.round(delayedBlock!.startPercent)).toBe(29);
+
+            // 3. When viewing the window of 2026-09-15, the past job is displayed on its scheduled day (2026-09-15)
+            const matrixPast = calculateFCSMatrix({
+                jobs: [pastIncompleteJob],
+                ramps: mockLifts,
+                engineers: mockEngineers,
+                purchaseOrders: [],
+                startDateStr: '2026-09-15',
+                windowDays: 7
+            });
+
+            const pastBlocks = matrixPast.rampRows.find(r => r.ramp.id === 'ramp_1')?.blocks || [];
+            expect(pastBlocks.length).toBe(1);
+            expect(pastBlocks[0].jobId).toBe('job_past_incomplete');
+            expect(pastBlocks[0].startDate).toBe('2026-09-15');
+            expect(pastBlocks[0].startPercent).toBe(0);
+        });
     });
 });
