@@ -1,6 +1,7 @@
 import React from 'react';
 import { Job, Vehicle, Customer } from '../types';
 import { formatCurrency } from '../utils/formatUtils';
+import { getEffectiveJobScheduledDate, formatScheduledArrivalDate } from '../core/utils/dateUtils';
 
 interface PrintableJobListProps {
     jobs: Job[];
@@ -61,6 +62,7 @@ const PrintableJobList: React.FC<PrintableJobListProps> = ({ jobs, vehicles, cus
                         <thead className="bg-gray-100">
                             <tr>
                                 <th className="p-2 border">Job ID</th>
+                                <th className="p-2 border">Scheduled</th>
                                 <th className="p-2 border">Created</th>
                                 <th className="p-2 border">Vehicle</th>
                                 <th className="p-2 border">Customer</th>
@@ -72,10 +74,12 @@ const PrintableJobList: React.FC<PrintableJobListProps> = ({ jobs, vehicles, cus
                             {jobs.map(job => {
                                 const vehicle = vehicles.get(job.vehicleId);
                                 const customer = customers.get(job.customerId);
+                                const schedDate = getEffectiveJobScheduledDate(job) || job.scheduledDate;
                                 return (
                                     <tr key={job.id}>
                                         <td className="p-2 border font-mono">{job.id}</td>
-                                        <td className="p-2 border">{job.createdAt}</td>
+                                        <td className="p-2 border font-medium">{schedDate ? formatScheduledArrivalDate(schedDate) : 'Unscheduled'}</td>
+                                        <td className="p-2 border">{job.createdAt ? job.createdAt.substring(0, 10) : 'N/A'}</td>
                                         <td className="p-2 border">{vehicle?.registration}</td>
                                         <td className="p-2 border">{customer?.forename} {customer?.surname}</td>
                                         <td className="p-2 border">{job.description}</td>

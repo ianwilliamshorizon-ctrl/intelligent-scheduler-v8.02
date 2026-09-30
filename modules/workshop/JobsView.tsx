@@ -3,9 +3,9 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useApp } from '../../core/state/AppContext';
 import { useData } from '../../core/state/DataContext';
 import { Job, Vehicle, Customer, ServicePackage, Estimate, PurchaseOrder } from '../../types';
-import { Eye, Search, PlusCircle, Printer, Briefcase, Wand2, Loader2, CalendarDays, Camera, LayoutList, LayoutGrid, MessageSquare, FileText } from 'lucide-react';
+import { Eye, Search, PlusCircle, Printer, Briefcase, Wand2, Loader2, CalendarDays, Camera, LayoutList, LayoutGrid, MessageSquare, FileText, ArrowUpDown, ArrowUp, ArrowDown, Calendar } from 'lucide-react';
 import { getCustomerDisplayName } from '../../core/utils/customerUtils';
-import { getRelativeDate, formatDate, dateStringToDate, addDays, formatReadableDate, isWithinDateRange } from '../../core/utils/dateUtils';
+import { getRelativeDate, formatDate, dateStringToDate, addDays, formatReadableDate, isWithinDateRange, getEffectiveJobScheduledDate, formatScheduledArrivalDate } from '../../core/utils/dateUtils';
 import PrintableJobList from '../../components/PrintableJobList';
 import { usePrint } from '../../core/hooks/usePrint';
 import { generateServicePackageName } from '../../core/services/geminiService';
@@ -60,6 +60,19 @@ const JobsView: React.FC<JobsViewProps> = ({ onEditJob, onCheckIn, onOpenPurchas
     const [viewMode, setViewMode] = useState<'list' | 'board'>('list');
     const { setCurrentView } = useApp();
 
+    type SortField = 'scheduledDate' | 'createdAt' | 'id' | 'customer' | 'vehicle' | 'status';
+    const [sortField, setSortField] = useState<SortField>('scheduledDate');
+    const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+
+    const handleSort = (field: SortField) => {
+        if (sortField === field) {
+            setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
+        } else {
+            setSortField(field);
+            setSortOrder(field === 'scheduledDate' ? 'asc' : 'desc');
+        }
+    };
+
     React.useEffect(() => {
         if (dateFilter === 'today') {
             setStartDate(getRelativeDate(0));
@@ -93,14 +106,7 @@ const JobsView: React.FC<JobsViewProps> = ({ onEditJob, onCheckIn, onOpenPurchas
                 return false;
             }
             
-            let dateToUse = job.scheduledDate || job.createdAt;
-            if (job.segments && job.segments.length > 0) {
-                const dates = job.segments.filter(s => s.date).map(s => s.date!);
-                if (dates.length > 0) {
-                    dates.sort();
-                    dateToUse = dates[0];
-                }
-            }
+            let dateToUse = getEffectiveJobScheduledDate(job) || job.scheduledDate || job.createdAt;
             
             if (!isWithinDateRange(dateToUse, startDate, endDate)) {
                 return false;
@@ -156,7 +162,54 @@ const JobsView: React.FC<JobsViewProps> = ({ onEditJob, onCheckIn, onOpenPurchas
             });
         }
 
-        const finalJobs = [...initialFilter, ...supplementaryJobsToAdd].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '') || (b.id || '').localeCompare(a.id || ''));
+        const finalJobs = [...initialFilter, ...supplementaryJobsToAdd].sort((a, b) => {
+            if (sortField === 'scheduledDate') {
+                const dateA = getEffectiveJobScheduledDate(a) || a.scheduledDate || null;
+                const dateB = getEffectiveJobScheduledDate(b) || b.scheduledDate || null;
+
+                if (dateA && dateB) {
+                    const cleanA = dateA.split('T')[0];
+                    const cleanB = dateB.split('T')[0];
+                    if (cleanA !== cleanB) {
+                        return sortOrder === 'asc' ? cleanA.localeCompare(cleanB) : cleanB.localeCompare(cleanA);
+                    }
+                } else if (dateA && !dateB) {
+                    // Scheduled jobs appear first
+                    return -1;
+                } else if (!dateA && dateB) {
+                    return 1;
+                }
+                return (b.createdAt || '').localeCompare(a.createdAt || '') || (b.id || '').localeCompare(a.id || '');
+            }
+
+            if (sortField === 'createdAt') {
+                const timeA = a.createdAt || '';
+                const timeB = b.createdAt || '';
+                return sortOrder === 'asc' ? timeA.localeCompare(timeB) : timeB.localeCompare(timeA);
+            }
+
+            if (sortField === 'id') {
+                return sortOrder === 'asc' ? (a.id || '').localeCompare(b.id || '') : (b.id || '').localeCompare(a.id || '');
+            }
+
+            if (sortField === 'customer') {
+                const custA = (customerMap.get(a.customerId) ? getCustomerDisplayName(customerMap.get(a.customerId)!) : '').toLowerCase();
+                const custB = (customerMap.get(b.customerId) ? getCustomerDisplayName(customerMap.get(b.customerId)!) : '').toLowerCase();
+                return sortOrder === 'asc' ? custA.localeCompare(custB) : custB.localeCompare(custA);
+            }
+
+            if (sortField === 'vehicle') {
+                const vehA = (vehicleMap.get(a.vehicleId)?.registration || '').toLowerCase();
+                const vehB = (vehicleMap.get(b.vehicleId)?.registration || '').toLowerCase();
+                return sortOrder === 'asc' ? vehA.localeCompare(vehB) : vehB.localeCompare(vehA);
+            }
+
+            if (sortField === 'status') {
+                return sortOrder === 'asc' ? (a.status || '').localeCompare(b.status || '') : (b.status || '').localeCompare(a.status || '');
+            }
+
+            return (b.createdAt || '').localeCompare(a.createdAt || '') || (b.id || '').localeCompare(a.id || '');
+        });
 
         const uniqueJobs = finalJobs.filter((job, index, self) =>
             index === self.findIndex((j) => j.id === job.id)
@@ -164,12 +217,12 @@ const JobsView: React.FC<JobsViewProps> = ({ onEditJob, onCheckIn, onOpenPurchas
 
         return uniqueJobs;
 
-    }, [safeJobs, filter, statusFilter, showOnSiteOnly, startDate, endDate, customerMap, vehicleMap, selectedEntityId, safeBusinessEntities]);
+    }, [safeJobs, filter, statusFilter, showOnSiteOnly, startDate, endDate, customerMap, vehicleMap, selectedEntityId, safeBusinessEntities, sortField, sortOrder]);
 
 
     useEffect(() => {
         setDisplayLimit(50);
-    }, [filter, statusFilter, showOnSiteOnly, selectedEntityId, startDate, endDate]);
+    }, [filter, statusFilter, showOnSiteOnly, selectedEntityId, startDate, endDate, sortField, sortOrder]);
 
     const displayedJobs = filteredJobs.slice(0, displayLimit);
 
@@ -330,6 +383,36 @@ const JobsView: React.FC<JobsViewProps> = ({ onEditJob, onCheckIn, onOpenPurchas
                         <input type="checkbox" checked={showOnSiteOnly} onChange={e => setShowOnSiteOnly(e.target.checked)} className="rounded text-indigo-600 focus:ring-indigo-500" />
                         Checked In (On-Site)
                     </label>
+                    <div className="h-4 w-px bg-gray-300 mx-2"></div>
+                    <div className="flex items-center gap-1.5 bg-gray-200/80 p-1 rounded-lg">
+                        <span className="text-xs font-semibold text-gray-600 px-1 flex items-center gap-1">
+                            <ArrowUpDown size={13} /> Sort:
+                        </span>
+                        <button
+                            onClick={() => handleSort('scheduledDate')}
+                            className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-all flex items-center gap-1 cursor-pointer ${
+                                sortField === 'scheduledDate' ? 'bg-white text-indigo-700 shadow font-bold' : 'text-gray-600 hover:bg-gray-300'
+                            }`}
+                            title="Sort by Scheduled Date"
+                        >
+                            <span>Scheduled Date</span>
+                            {sortField === 'scheduledDate' && (
+                                sortOrder === 'asc' ? <ArrowUp size={12} className="text-indigo-600" /> : <ArrowDown size={12} className="text-indigo-600" />
+                            )}
+                        </button>
+                        <button
+                            onClick={() => handleSort('createdAt')}
+                            className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-all flex items-center gap-1 cursor-pointer ${
+                                sortField === 'createdAt' ? 'bg-white text-indigo-700 shadow font-bold' : 'text-gray-600 hover:bg-gray-300'
+                            }`}
+                            title="Sort by Created Date"
+                        >
+                            <span>Created</span>
+                            {sortField === 'createdAt' && (
+                                sortOrder === 'asc' ? <ArrowUp size={12} className="text-indigo-600" /> : <ArrowDown size={12} className="text-indigo-600" />
+                            )}
+                        </button>
+                    </div>
                 </div>
             </div>
             
@@ -337,14 +420,93 @@ const JobsView: React.FC<JobsViewProps> = ({ onEditJob, onCheckIn, onOpenPurchas
                 {viewMode === 'list' ? (
                     <div className="border rounded-lg overflow-hidden bg-white shadow">
                     <table className="min-w-full text-sm">
-                        <thead className="bg-gray-100">
+                        <thead className="bg-gray-100 border-b border-gray-200">
                             <tr>
-                                <th className="p-3 text-left font-semibold text-gray-600">Job ID</th>
-                                <th className="p-3 text-left font-semibold text-gray-600">Date</th>
-                                <th className="p-3 text-left font-semibold text-gray-600">Customer</th>
-                                <th className="p-3 text-left font-semibold text-gray-600">Vehicle</th>
+                                <th 
+                                    onClick={() => handleSort('id')} 
+                                    className="p-3 text-left font-semibold text-gray-600 cursor-pointer hover:bg-gray-200 transition-colors select-none"
+                                    title="Sort by Job ID"
+                                >
+                                    <div className="flex items-center gap-1.5">
+                                        <span>Job ID</span>
+                                        {sortField === 'id' ? (
+                                            sortOrder === 'asc' ? <ArrowUp size={13} className="text-indigo-600 font-bold" /> : <ArrowDown size={13} className="text-indigo-600 font-bold" />
+                                        ) : (
+                                            <ArrowUpDown size={13} className="text-gray-400 opacity-60" />
+                                        )}
+                                    </div>
+                                </th>
+                                <th 
+                                    onClick={() => handleSort('scheduledDate')} 
+                                    className="p-3 text-left font-semibold text-gray-600 cursor-pointer hover:bg-gray-200 transition-colors select-none bg-indigo-50/50"
+                                    title="Sort by Scheduled Date"
+                                >
+                                    <div className="flex items-center gap-1.5">
+                                        <span className={sortField === 'scheduledDate' ? 'text-indigo-700 font-bold' : ''}>Scheduled Date</span>
+                                        {sortField === 'scheduledDate' ? (
+                                            sortOrder === 'asc' ? <ArrowUp size={13} className="text-indigo-600 font-bold" /> : <ArrowDown size={13} className="text-indigo-600 font-bold" />
+                                        ) : (
+                                            <ArrowUpDown size={13} className="text-gray-400 opacity-60" />
+                                        )}
+                                    </div>
+                                </th>
+                                <th 
+                                    onClick={() => handleSort('createdAt')} 
+                                    className="p-3 text-left font-semibold text-gray-600 cursor-pointer hover:bg-gray-200 transition-colors select-none"
+                                    title="Sort by Created Date"
+                                >
+                                    <div className="flex items-center gap-1.5">
+                                        <span className={sortField === 'createdAt' ? 'text-indigo-700 font-bold' : ''}>Created</span>
+                                        {sortField === 'createdAt' ? (
+                                            sortOrder === 'asc' ? <ArrowUp size={13} className="text-indigo-600 font-bold" /> : <ArrowDown size={13} className="text-indigo-600 font-bold" />
+                                        ) : (
+                                            <ArrowUpDown size={13} className="text-gray-400 opacity-60" />
+                                        )}
+                                    </div>
+                                </th>
+                                <th 
+                                    onClick={() => handleSort('customer')} 
+                                    className="p-3 text-left font-semibold text-gray-600 cursor-pointer hover:bg-gray-200 transition-colors select-none"
+                                    title="Sort by Customer"
+                                >
+                                    <div className="flex items-center gap-1.5">
+                                        <span>Customer</span>
+                                        {sortField === 'customer' ? (
+                                            sortOrder === 'asc' ? <ArrowUp size={13} className="text-indigo-600 font-bold" /> : <ArrowDown size={13} className="text-indigo-600 font-bold" />
+                                        ) : (
+                                            <ArrowUpDown size={13} className="text-gray-400 opacity-60" />
+                                        )}
+                                    </div>
+                                </th>
+                                <th 
+                                    onClick={() => handleSort('vehicle')} 
+                                    className="p-3 text-left font-semibold text-gray-600 cursor-pointer hover:bg-gray-200 transition-colors select-none"
+                                    title="Sort by Vehicle"
+                                >
+                                    <div className="flex items-center gap-1.5">
+                                        <span>Vehicle</span>
+                                        {sortField === 'vehicle' ? (
+                                            sortOrder === 'asc' ? <ArrowUp size={13} className="text-indigo-600 font-bold" /> : <ArrowDown size={13} className="text-indigo-600 font-bold" />
+                                        ) : (
+                                            <ArrowUpDown size={13} className="text-gray-400 opacity-60" />
+                                        )}
+                                    </div>
+                                </th>
                                 <th className="p-3 text-left font-semibold text-gray-600">Description</th>
-                                <th className="p-3 text-left font-semibold text-gray-600">Status</th>
+                                <th 
+                                    onClick={() => handleSort('status')} 
+                                    className="p-3 text-left font-semibold text-gray-600 cursor-pointer hover:bg-gray-200 transition-colors select-none"
+                                    title="Sort by Status"
+                                >
+                                    <div className="flex items-center gap-1.5">
+                                        <span>Status</span>
+                                        {sortField === 'status' ? (
+                                            sortOrder === 'asc' ? <ArrowUp size={13} className="text-indigo-600 font-bold" /> : <ArrowDown size={13} className="text-indigo-600 font-bold" />
+                                        ) : (
+                                            <ArrowUpDown size={13} className="text-gray-400 opacity-60" />
+                                        )}
+                                    </div>
+                                </th>
                                 <th className="p-3"></th>
                             </tr>
                         </thead>
@@ -355,6 +517,7 @@ const JobsView: React.FC<JobsViewProps> = ({ onEditJob, onCheckIn, onOpenPurchas
                                  const linkedInquiry = (inquiries || []).find(i => i.linkedJobId === job.id);
                                  const displayCustomerName = getCustomerDisplayName(customer) || linkedInquiry?.fromName || null;
                                  const custAddress = [customer?.addressLine1 || linkedInquiry?.addressLine1, customer?.city || linkedInquiry?.city, customer?.postcode || linkedInquiry?.postcode].filter(Boolean).join(', ');
+                                 const schedDate = getEffectiveJobScheduledDate(job) || job.scheduledDate;
                                  return (
                                  <tr key={job.id} className="hover:bg-indigo-50">
                                      <td className="p-3 font-mono flex items-center gap-2">
@@ -369,7 +532,19 @@ const JobsView: React.FC<JobsViewProps> = ({ onEditJob, onCheckIn, onOpenPurchas
                                              </button>
                                          )}
                                      </td>
-                                     <td className="p-3">{job.createdAt ? formatReadableDate(job.createdAt) : 'N/A'}</td>
+                                     <td className="p-3 whitespace-nowrap">
+                                         {schedDate ? (
+                                             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100">
+                                                 <Calendar size={13} className="text-indigo-500 shrink-0" />
+                                                 {formatScheduledArrivalDate(schedDate)}
+                                             </span>
+                                         ) : (
+                                             <span className="text-gray-400 italic text-xs">Unscheduled</span>
+                                         )}
+                                     </td>
+                                     <td className="p-3 text-xs text-gray-600 whitespace-nowrap">
+                                         {job.createdAt ? formatReadableDate(job.createdAt.substring(0, 10)) : 'N/A'}
+                                     </td>
                                      <td className="p-3">
                                          {(customer || linkedInquiry) ? (
                                              <HoverInfo
