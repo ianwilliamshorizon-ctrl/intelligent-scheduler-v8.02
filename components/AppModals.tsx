@@ -1417,9 +1417,13 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                     <CheckOutModal 
                         isOpen={!!modals.checkOutJob}
                         onClose={() => setters.setCheckOutJob(null)}
-                        onSave={(updatedJob) => handleSaveItem(data.setJobs, updatedJob, 'brooks_jobs')}
+                        onSave={(updatedJob) => {
+                            if (!updatedJob.id.startsWith('INV-') && !updatedJob.id.startsWith('temp_job_')) {
+                                handleSaveItem(data.setJobs, updatedJob, 'brooks_jobs');
+                            }
+                        }}
                         job={modals.checkOutJob}
-                        invoice={data.invoices.find(i => i.jobId === modals.checkOutJob!.id) || null}
+                        invoice={(modals.checkOutJob?.invoiceId ? data.invoices.find(i => i.id === modals.checkOutJob!.invoiceId) : null) || data.invoices.find(i => i.jobId === modals.checkOutJob!.id || i.id === modals.checkOutJob!.id) || null}
                         vehicle={data.vehicles.find(v => v.id === modals.checkOutJob!.vehicleId) || null}
                         customer={data.customers.find(c => c.id === modals.checkOutJob!.customerId) || null}
                         onUpdateInvoice={(inv) => handleSaveItem(data.setInvoices, inv, 'brooks_invoices')}

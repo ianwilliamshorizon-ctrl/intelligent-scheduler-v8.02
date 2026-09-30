@@ -388,6 +388,19 @@ const AuthenticatedApp = () => {
                     onOpenExportModal={(type, items) => setters.setExportModal({isOpen: true, type: type as any, items})} 
                     onCreateAdhocInvoice={() => setters.setInvoiceFormModal({isOpen: true, job: null, invoice: null })} 
                     onViewAgedDebtors={() => setCurrentView('aged-debtors')} 
+                    onCheckOut={(inv) => {
+                        const linkedJob = (jobs || []).find(j => j.id === inv.jobId || j.invoiceId === inv.id);
+                        const targetJob: T.Job = linkedJob ? { ...linkedJob, invoiceId: inv.id } : {
+                            id: inv.jobId || `INV-${inv.id}`,
+                            invoiceId: inv.id,
+                            vehicleId: inv.vehicleId,
+                            customerId: inv.customerId,
+                            description: `Invoice #${inv.id}`,
+                            status: 'Invoiced',
+                            entityId: inv.entityId
+                        };
+                        setters.setCheckOutJob(targetJob);
+                    }}
                 />;
             case 'purchaseOrders':
                 return <PurchaseOrdersView onOpenPurchaseOrderModal={(po) => setters.setPoModal({isOpen: true, po})} onViewPurchaseOrder={(po) => setters.setViewPoModal({isOpen: true, po})} onExport={(data, type) => setters.setExportModal({isOpen: true, type: type as any, items: data})} onOpenBatchAddModal={() => setters.setBatchPoModalOpen(true)} onOpenBatchUpdateRefModal={() => setters.setBatchUpdatePoRefModalOpen(true)} />;

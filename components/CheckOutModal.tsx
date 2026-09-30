@@ -115,13 +115,15 @@ const CheckOutModal: React.FC<CheckOutModalProps> = ({ isOpen, onClose, onSave, 
         <div className="fixed inset-0 bg-gray-900/80 backdrop-blur-sm z-[70] flex justify-center items-end sm:items-center p-0 sm:p-4">
             <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-2xl w-full max-w-lg h-[95vh] sm:h-auto sm:max-h-[90vh] flex flex-col animate-in slide-in-from-bottom sm:zoom-in-95 duration-300">
                 <header className="flex-shrink-0 flex justify-between items-center p-4 border-b bg-gray-50/50 rounded-t-2xl sm:rounded-t-xl">
-                    <h2 className="text-lg sm:text-xl font-bold text-indigo-700 truncate pr-4">Check-Out: {job.id}</h2>
+                    <h2 className="text-lg sm:text-xl font-bold text-indigo-700 truncate pr-4">
+                        Check-Out: {job.id.startsWith('INV-') ? `Invoice #${invoice?.id || job.id.replace('INV-', '')}` : job.id}
+                    </h2>
                     <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><X size={20} /></button>
                 </header>
                 <main className="flex-grow overflow-y-auto p-4 sm:p-6 space-y-5 custom-scrollbar">
                     <div className="p-3 bg-gray-50 rounded-xl border border-gray-200 text-xs sm:text-sm space-y-2">
-                        <p className="flex items-center gap-2 font-semibold text-gray-700"><Car size={14} className="text-gray-400"/> {vehicle?.registration} • {vehicle?.make} {vehicle?.model}</p>
-                        <p className="flex items-center gap-2 font-semibold text-gray-700"><User size={14} className="text-gray-400"/> {customer?.forename} {customer?.surname}</p>
+                        <p className="flex items-center gap-2 font-semibold text-gray-700"><Car size={14} className="text-gray-400"/> {vehicle?.registration || 'No Vehicle'} {vehicle?.make ? `• ${vehicle.make} ${vehicle.model || ''}` : ''}</p>
+                        <p className="flex items-center gap-2 font-semibold text-gray-700"><User size={14} className="text-gray-400"/> {customer ? `${customer.forename || ''} ${customer.surname || ''}`.trim() || customer.companyName || 'Customer' : 'No Customer'}</p>
                         {job.keyNumber && (
                             <div className="pt-2 mt-2 border-t flex items-center justify-between">
                                 <span className="flex items-center gap-1.5 font-bold text-gray-800">
@@ -199,7 +201,7 @@ const CheckOutModal: React.FC<CheckOutModalProps> = ({ isOpen, onClose, onSave, 
                     </div>
                 </main>
                 <footer className="flex-shrink-0 flex justify-between gap-3 p-4 border-t bg-gray-50/50">
-                    <button onClick={onClose} className="flex-1 py-3 px-4 bg-white border border-gray-300 text-gray-700 rounded-xl font-bold text-sm hover:bg-gray-50 transition-colors">Cancel</button>
+                    <button onClick={onClose} className="flex-1 py-3 px-4 bg-white border border-gray-300 text-gray-700 rounded-xl font-bold text-sm hover:bg-gray-50 transition-colors">Close</button>
                     <button onClick={handleSave} className="flex-[2] flex items-center justify-center gap-2 py-3 px-4 bg-emerald-600 text-white font-bold rounded-xl text-sm shadow-lg hover:bg-emerald-700 transition-all active:scale-[0.98]">
                         <LogOut size={18} /> Confirm Collection
                     </button>

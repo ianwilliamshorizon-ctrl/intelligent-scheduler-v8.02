@@ -3,7 +3,7 @@ import React, { useState, useMemo } from 'react';
 import { useData } from '../../core/state/DataContext';
 import { useApp } from '../../core/state/AppContext';
 import { Invoice, Customer, Vehicle, EstimateLineItem } from '../../types';
-import { Eye, Search, Download, PlusCircle, Edit, CalendarDays, BarChart3 } from 'lucide-react';
+import { Eye, Search, Download, PlusCircle, Edit, CalendarDays, BarChart3, Wallet } from 'lucide-react';
 import { formatCurrency } from '../../core/utils/formatUtils';
 import { formatDate, getRelativeDate, isWithinDateRange } from '../../core/utils/dateUtils';
 import { getCustomerDisplayName } from '../../core/utils/customerUtils';
@@ -18,6 +18,7 @@ interface InvoicesViewProps {
     onOpenExportModal: (type: 'invoices', items: any[]) => void;
     onCreateAdhocInvoice: () => void;
     onViewAgedDebtors: () => void;
+    onCheckOut?: (invoice: Invoice) => void;
 }
 
 const dateFilterOptions = {
@@ -35,7 +36,8 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({
     onEditInvoice, 
     onOpenExportModal, 
     onCreateAdhocInvoice,
-    onViewAgedDebtors
+    onViewAgedDebtors,
+    onCheckOut
 }) => {
     const { invoices, customers, vehicles, jobs, businessEntities, taxRates, saleVehicles } = useData();
     const { selectedEntityId } = useApp();
@@ -295,6 +297,19 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({
                                                             }`}>{invoice.status}</span>
                                                         )}
                                                     </div>
+                                                    {!paymentStatus.isPaid && onCheckOut && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                onCheckOut(invoice);
+                                                            }}
+                                                            className="mt-1 px-2.5 py-1 text-[11px] font-bold rounded-lg bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white shadow-xs flex items-center gap-1.5 transition-all cursor-pointer select-none active:scale-95"
+                                                            title="Open Check-Out Modal to Mark as Paid"
+                                                        >
+                                                            <Wallet size={12} /> Mark as Paid
+                                                        </button>
+                                                    )}
                                                     {invoice.saleVehicleId && (
                                                         <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded">
                                                             Vehicle Sale
@@ -308,7 +323,20 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({
                                         {formatCurrency(calculateGrossTotal(invoice))}
                                     </td>
                                     <td className="p-3">
-                                        <div className="flex gap-1">
+                                        <div className="flex items-center gap-1">
+                                            {onCheckOut && (
+                                                <button 
+                                                    onClick={() => onCheckOut(invoice)} 
+                                                    className={`p-1.5 rounded-full transition-colors cursor-pointer ${
+                                                        invoice.status === 'Paid' 
+                                                            ? 'text-gray-400 hover:text-emerald-600 hover:bg-emerald-50' 
+                                                            : 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100 font-bold border border-emerald-200 shadow-xs'
+                                                    }`}
+                                                    title={invoice.status === 'Paid' ? "View Check-Out / Payment Details" : "Check Out & Mark as Paid"}
+                                                >
+                                                    <Wallet size={16} />
+                                                </button>
+                                            )}
                                             <button onClick={() => onViewInvoice(invoice)} className="p-1.5 text-gray-600 hover:bg-gray-100 rounded-full" title="View"><Eye size={16} /></button>
                                             <button onClick={() => onEditInvoice(invoice)} className="p-1.5 text-indigo-600 hover:bg-indigo-100 rounded-full" title="Edit"><Edit size={16} /></button>
                                         </div>
