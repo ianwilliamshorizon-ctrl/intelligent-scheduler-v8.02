@@ -19,7 +19,8 @@ import {
   Clock,
   ShieldCheck,
   TrendingUp,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Compass
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -29,7 +30,7 @@ interface HelpCentreProps {
   onClose: () => void;
 }
 
-type HelpTab = 'fcs' | 'estimates' | 'workflow' | 'inventory' | 'invoicing' | 'directors' | 'mobile';
+type HelpTab = 'first-time-user' | 'fcs' | 'estimates' | 'workflow' | 'inventory' | 'invoicing' | 'directors' | 'mobile';
 type ViewMode = 'visual' | 'sop';
 
 interface HelpSection {
@@ -45,6 +46,40 @@ interface HelpSection {
 }
 
 const HELP_SECTIONS: HelpSection[] = [
+  {
+    id: 'first-time-user',
+    title: 'First-Time User Orientation & Core Operating Picture',
+    subtitle: 'System Navigation, Customer-Vehicle Core, Remote Help, Gantt Planning & Extended Commercial Suites',
+    badge: 'FIRST-TIME USER ONBOARDING',
+    badgeColor: 'bg-sky-500/20 text-sky-300 border-sky-500/40',
+    icon: Compass,
+    description:
+      'Welcome to Intelligent Scheduler! Learn how to navigate the platform upon first login, understand the fundamental Customer & Vehicle data hierarchy, access live Remote Help co-browsing, leverage the multi-bay Gantt planner, convert inbound inquiries into fast quotes with Service Packages, and operate across extended commercial suites (Car Sales, Rentals, and Storage).',
+    steps: [
+      {
+        title: '1. First Login, Header & Remote Co-Browsing Help',
+        desc: 'Log in, select your workshop branch via the Entity selector, and use the persistent bottom-right "Request Remote Help" button for instant live two-way mouse pointer assistance and screen sharing with a manager.'
+      },
+      {
+        title: '2. Customer vs. Vehicle Relational Architecture',
+        desc: 'Master the 1-to-many relationship: Customers own vehicles. Estimates, jobs, and invoices attach to the physical Vehicle (VRM, VIN, MOT history), preserving complete lifetime service records even when ownership transfers.'
+      },
+      {
+        title: '3. Multi-Bay Gantt Resource Planning & FCS Engine',
+        desc: 'Open Dispatch to visualize active workshop bays, drag repair segments across timelines, and use the FCS Auto-Scheduler for automated technician skill matching, capacity leveling, and holiday calendar awareness.'
+      },
+      {
+        title: '4. Inbound Inquiries, Fast Quotes & Service Packages',
+        desc: 'Capture customer leads, convert them in seconds into estimates using pre-bundled Service Packages (standardized labor + OE parts + fluid costs), and transmit digital quotes via SMS/email for instant customer sign-off.'
+      },
+      {
+        title: '5. Extended Commercial Suites: Sales, Rentals & Storage',
+        desc: 'Scale beyond workshop bays into Car Sales (showroom stock, prep costing, SOR margins, prospects), Vehicle Rentals (fleet calendar, hire agreements), and Vehicle Storage (secure bays, battery trickle charging, recurring billing).'
+      }
+    ],
+    proTip:
+      'Tip: Use Ctrl+K or the global top search bar to instantly find any customer, vehicle registration (VRM), or part number. If you get stuck anywhere, tap "Request Remote Help" in the bottom-right for instant interactive guidance!'
+  },
   {
     id: 'fcs',
     title: 'FCS Dynamic Dispatch & Scheduling Matrix',
@@ -258,6 +293,7 @@ const HELP_SECTIONS: HelpSection[] = [
 ];
 
 const SOP_FILES = [
+  '00-first-time-user-guide.md',
   '01-user-and-role-management.md',
   '02-customer-and-vehicle-management.md',
   '03-creating-and-managing-estimates.md',
@@ -269,7 +305,7 @@ const SOP_FILES = [
 
 export default function HelpCentre({ open, onClose }: HelpCentreProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('visual');
-  const [activeTab, setActiveTab] = useState<HelpTab>('fcs');
+  const [activeTab, setActiveTab] = useState<HelpTab>('first-time-user');
   const [searchQuery, setSearchQuery] = useState('');
   const [sops, setSops] = useState<{ title: string; file: string; content: string }[]>([]);
   const [selectedSop, setSelectedSop] = useState<{ title: string; file: string; content: string } | null>(null);
@@ -489,6 +525,87 @@ export default function HelpCentre({ open, onClose }: HelpCentreProps) {
                   </div>
 
                   <div className="bg-slate-950 border-2 border-slate-800 rounded-3xl p-6 md:p-8 shadow-inner overflow-x-auto">
+                    {/* SVG PICTURE 0: FIRST-TIME USER ORIENTATION & CORE OPERATING PICTURE */}
+                    {currentSection.id === 'first-time-user' && (
+                      <svg
+                        viewBox="0 0 920 280"
+                        className="w-full max-w-4xl mx-auto h-auto rounded-xl drop-shadow-lg"
+                      >
+                        <rect width="920" height="280" rx="16" fill="#0f172a" stroke="#1e293b" strokeWidth="2" />
+
+                        {/* BOX 1: LOGIN, NAVIGATION & REMOTE HELP */}
+                        <rect x="25" y="30" width="255" height="220" rx="12" fill="#1e293b" stroke="#0ea5e9" strokeWidth="2" />
+                        <text x="152" y="56" fill="#38bdf8" fontSize="12" fontWeight="bold" textAnchor="middle">1. NAVIGATION &amp; REMOTE HELP</text>
+                        
+                        {/* Entity Selector Pill */}
+                        <rect x="40" y="68" width="225" height="26" rx="6" fill="#0c4a6e" stroke="#0284c7" />
+                        <text x="152" y="85" fill="#e0f2fe" fontSize="10" fontWeight="bold" textAnchor="middle">🏢 Workshop Branch: Brookspeed HQ</text>
+                        
+                        {/* Nav modules preview */}
+                        <rect x="40" y="100" width="225" height="30" rx="6" fill="#0f172a" />
+                        <text x="152" y="119" fill="#94a3b8" fontSize="10" textAnchor="middle">Dispatch • Kanban • Inquiries • Comms</text>
+                        
+                        {/* Remote Help Banner */}
+                        <rect x="40" y="137" width="225" height="50" rx="8" fill="#312e81" stroke="#6366f1" strokeWidth="1.5" />
+                        <text x="152" y="157" fill="#ffffff" fontSize="11" fontWeight="bold" textAnchor="middle">🟣 "Request Remote Help" Widget</text>
+                        <text x="152" y="174" fill="#a5b4fc" fontSize="9" textAnchor="middle">Live Two-Way Ghost Cursor &amp; Co-Browse</text>
+                        
+                        <text x="152" y="210" fill="#38bdf8" fontSize="10" fontWeight="bold" textAnchor="middle">Instant Manager Screen Assistance</text>
+                        <text x="152" y="228" fill="#64748b" fontSize="9" textAnchor="middle">Admin Control &amp; Chat Privacy Toggle</text>
+
+                        {/* CONNECTOR 1 */}
+                        <path d="M 285 140 L 325 140" stroke="#10b981" strokeWidth="3" strokeDasharray="6,4" />
+                        <polygon points="325,140 318,135 318,145" fill="#10b981" />
+
+                        {/* BOX 2: CUSTOMER & VEHICLE CORE + FAST QUOTE */}
+                        <rect x="330" y="30" width="265" height="220" rx="12" fill="#1e293b" stroke="#10b981" strokeWidth="2" />
+                        <text x="462" y="56" fill="#34d399" fontSize="12" fontWeight="bold" textAnchor="middle">2. CUSTOMER / VEHICLE &amp; FAST QUOTE</text>
+                        
+                        {/* Customer to Vehicle link */}
+                        <rect x="345" y="68" width="235" height="30" rx="6" fill="#064e3b" stroke="#10b981" />
+                        <text x="462" y="87" fill="#ffffff" fontSize="10" fontWeight="bold" textAnchor="middle">👤 Customer Record ➔ 🚗 Vehicles (1:N)</text>
+                        
+                        {/* Vehicle details */}
+                        <rect x="345" y="104" width="235" height="28" rx="6" fill="#0f172a" />
+                        <text x="462" y="122" fill="#6ee7b7" fontSize="10" fontFamily="monospace" textAnchor="middle">VR19 XYZ • VIN • Live MOT &amp; Tax Sync</text>
+                        
+                        {/* Fast Inquiry & Service Packages */}
+                        <rect x="345" y="138" width="235" height="48" rx="6" fill="#1e293b" stroke="#34d399" strokeDasharray="3,3" />
+                        <text x="462" y="156" fill="#fde047" fontSize="10" fontWeight="bold" textAnchor="middle">⚡ Inquiries ➔ 1-Click Fast Estimate</text>
+                        <text x="462" y="173" fill="#a7f3d0" fontSize="9" textAnchor="middle">📦 Service Packages (Bundled Parts + Labor)</text>
+                        
+                        <text x="462" y="210" fill="#a7f3d0" fontSize="10" fontWeight="bold" textAnchor="middle">Digital Customer SMS/Email Approval</text>
+                        <text x="462" y="228" fill="#6ee7b7" fontSize="9" textAnchor="middle">Automatic Stock Reservation on Conversion</text>
+
+                        {/* CONNECTOR 2 */}
+                        <path d="M 600 140 L 640 140" stroke="#a855f7" strokeWidth="3" strokeDasharray="6,4" />
+                        <polygon points="640,140 633,135 633,145" fill="#a855f7" />
+
+                        {/* BOX 3: GANTT PLANNING & COMMERCIAL SUITES */}
+                        <rect x="645" y="30" width="250" height="220" rx="12" fill="#1e293b" stroke="#a855f7" strokeWidth="2" />
+                        <text x="770" y="56" fill="#c084fc" fontSize="12" fontWeight="bold" textAnchor="middle">3. GANTT &amp; COMMERCIAL SUITES</text>
+                        
+                        {/* Gantt Matrix */}
+                        <rect x="658" y="68" width="224" height="34" rx="6" fill="#3b0764" stroke="#c084fc" />
+                        <text x="770" y="85" fill="#ffffff" fontSize="10" fontWeight="bold" textAnchor="middle">MULTI-BAY GANTT PLANNER</text>
+                        <text x="770" y="97" fill="#e9d5ff" fontSize="8" textAnchor="middle">Tech Skills • Bay Leveling • Absence Sync</text>
+                        
+                        {/* Commercial modules list */}
+                        <g transform="translate(658, 110)">
+                          <rect x="0" y="0" width="224" height="26" rx="5" fill="#0f172a" stroke="#818cf8" />
+                          <text x="112" y="17" fill="#c7d2fe" fontSize="9.5" fontWeight="bold" textAnchor="middle">🏎️ CAR SALES: Stock, SOR &amp; Prospects</text>
+                          
+                          <rect x="0" y="32" width="224" height="26" rx="5" fill="#0f172a" stroke="#38bdf8" />
+                          <text x="112" y="49" fill="#bae6fd" fontSize="9.5" fontWeight="bold" textAnchor="middle">🚙 RENTALS: Fleet Hires &amp; Calendar</text>
+                          
+                          <rect x="0" y="64" width="224" height="26" rx="5" fill="#0f172a" stroke="#f43f5e" />
+                          <text x="112" y="81" fill="#fecdd3" fontSize="9.5" fontWeight="bold" textAnchor="middle">🔒 STORAGE: Bays, Chargers &amp; Billing</text>
+                        </g>
+
+                        <text x="770" y="222" fill="#c084fc" fontSize="10" fontWeight="bold" textAnchor="middle">Complete Dealership &amp; Workshop Ecosystem</text>
+                      </svg>
+                    )}
+
                     {/* SVG PICTURE 1: FCS DYNAMIC DISPATCH & SCHEDULING MATRIX */}
                     {currentSection.id === 'fcs' && (
                       <svg
