@@ -1,6 +1,21 @@
 # Standard Operating Procedure: First-Time User Orientation & System Guide
 
-**Objective:** To provide new staff members with a clear, end-to-end orientation of the Intelligent Scheduler platform upon their first login. This SOP details system navigation, core data models (Customer and Vehicle), the real-time Remote Help feature, multi-bay Gantt resource planning, inquiry handling, fast quotes, service packages, and extended commercial modules (Car Sales, Rentals, and Storage).
+**Objective:** To provide new staff members with a clear, end-to-end orientation of the Intelligent Scheduler platform upon their first login. This SOP details system navigation, core data models (Customer and Vehicle), the real-time Remote Help feature, multi-bay Gantt resource planning, inquiry handling, fast quotes, service packages, and extended commercial modules (Car Sales, Rentals, and Storage). Every major task is hyperlinked directly to practical examples and visual illustrations below.
+
+---
+
+## Quick Navigation & Illustration Index
+
+* [1. First-Time Login & System Orientation](#1-first-time-login--system-orientation) ➔ [🔗 View Illustration 1: Header, Navigation & Remote Co-Browse](#illustration-1-login-screen-navigation-and-remote-co-browsing)
+* [2. Navigating the System](#2-navigating-the-system) ➔ [🔗 View Module Navigation Table](#2-navigating-the-system)
+* [3. Remote Help Feature (Live Co-Browsing)](#3-remote-help-feature-live-co-browsing) ➔ [🔗 View Illustration 1: Remote Help Ghost Cursor & Chat](#illustration-1-login-screen-navigation-and-remote-co-browsing)
+* [4. Fundamental Concepts: Customer vs. Vehicle](#4-fundamental-concepts-customer-vs-vehicle) ➔ [🔗 View Illustration 2: 1-to-Many Customer-Vehicle Diagram](#illustration-2-customer-and-vehicle-relational-architecture)
+* [5. Gantt Resource Planning & Multi-Bay Scheduling](#5-gantt-resource-planning--multi-bay-scheduling) ➔ [🔗 View Illustration 3: Multi-Bay Gantt Matrix Schematic](#illustration-3-multi-bay-gantt-resource-planning-and-fcs-matrix)
+* [6. Inquiry Management & Fast Quoting](#6-inquiry-management--fast-quoting) ➔ [🔗 View Illustration 4: Inquiry-to-Estimate Pipeline](#illustration-4-inbound-inquiries-fast-quotes-and-service-packages)
+* [7. Service Package Concepts](#7-service-package-concepts) ➔ [🔗 View Illustration 4: Bundled Service Package Breakdown](#illustration-4-inbound-inquiries-fast-quotes-and-service-packages)
+* [8. Extended Commercial Modules: Sales, Rentals & Storage](#8-extended-commercial-modules-sales-rentals--storage) ➔ [🔗 View Illustration 5: Commercial 3-Hub Matrix](#illustration-5-extended-commercial-suites-car-sales-rentals-and-storage)
+* [9. First-Day Checklist for New Users](#9-first-day-checklist-for-new-users)
+* [10. Task-by-Task Illustrated Examples & Visual Schematics Library](#10-task-by-task-illustrated-examples--visual-schematics-library)
 
 ---
 
@@ -27,6 +42,8 @@ Upon logging in, the desktop interface is divided into three primary zones:
   * **Visual Help Centre (Question Mark Icon):** Opens the interactive Visual Help Studio and SOP Library.
   * **User Profile & Role Badge:** Displays the logged-in user name and role privileges (e.g., Admin, Dispatcher, Engineer, Sales, Concierge).
 * **Main Working Canvas:** Displays the active module view (e.g., live multi-bay Gantt board, Kanban lane cards, or estimate generator).
+
+> 💡 **Task Example & Illustration**: [Click here to inspect Illustration 1: Header, Navigation & Remote Co-Browsing ➔](#illustration-1-login-screen-navigation-and-remote-co-browsing)
 
 ---
 
@@ -69,6 +86,8 @@ Intelligent Scheduler features a **Live Remote Assistance & Co-Browsing Engine**
 * **Integrated Live Chat:** Click the **Chat** button on the session banner to open the floating, draggable live chat panel. Exchange text messages with the assisting administrator in real time.
 * **Ending the Session:** Click **"End Session"** (Red Power icon) at any time to instantly terminate the remote connection.
 
+> 💡 **Task Example & Illustration**: [Click here to inspect Illustration 1: Remote Help Ghost Pointer & Co-Browse Workflow ➔](#illustration-1-login-screen-navigation-and-remote-co-browsing)
+
 ---
 
 ## 4. Fundamental Concepts: Customer vs. Vehicle
@@ -76,12 +95,13 @@ Intelligent Scheduler features a **Live Remote Assistance & Co-Browsing Engine**
 A common pitfall for first-time users is confusing customer records with vehicle records. Intelligent Scheduler operates on a **Relational Hierarchy**:
 
 ```
-[CUSTOMER / ACCOUNT] 
+[CUSTOMER / ACCOUNT] (Legal Owner or Company)
        │
-       ├── (1-to-Many Ownership)
+       ├── (1-to-Many Ownership Link)
        │
        ├──► [VEHICLE 1: VR19 XYZ (Porsche 911)] ──► [Estimates, Jobs, Invoices, MOTs]
-       └──► [VEHICLE 2: LD21 ABC (BMW M3)]      ──► [Estimates, Jobs, Invoices, MOTs]
+       ├──► [VEHICLE 2: OU21 HJK (BMW M3)]      ──► [Estimates, Jobs, Invoices, MOTs]
+       └──► [VEHICLE 3: WX68 BBN (Transit Van)] ──► [Estimates, Jobs, Invoices, MOTs]
 ```
 
 ### 4.1 The Customer Record
@@ -103,6 +123,8 @@ A common pitfall for first-time users is confusing customer records with vehicle
 * You do not need to create a customer or vehicle in isolation before starting work.
 * When creating an **Inquiry**, **Estimate**, or **Job Card**, simply type the vehicle registration plate. If the vehicle is already known, the system auto-fills the customer details. If it is new, click **"Add New Vehicle"** or **"Add New Customer"** right inside the modal without losing your workflow context.
 
+> 💡 **Task Example & Illustration**: [Click here to inspect Illustration 2: Customer vs Vehicle 1-to-Many Architecture ➔](#illustration-2-customer-and-vehicle-relational-architecture)
+
 ---
 
 ## 5. Gantt Resource Planning & Multi-Bay Scheduling
@@ -123,6 +145,8 @@ The **Dispatch Matrix** is the operational heartbeat of the workshop. It coordin
 3. **Absence & Bank Holiday Awareness:** The Gantt board automatically cross-checks the **Absence Calendar** and UK Statutory Bank Holidays, blocking out slots when an engineer is on annual leave or training.
 4. **Conflict Detection:** If an overlapping slot or unfeasible duration is scheduled, the system flags a visual red highlight warning.
 
+> 💡 **Task Example & Illustration**: [Click here to inspect Illustration 3: Multi-Bay Gantt Matrix Schematic & Skill Allocation ➔](#illustration-3-multi-bay-gantt-resource-planning-and-fcs-matrix)
+
 ---
 
 ## 6. Inquiry Management & Fast Quoting
@@ -136,6 +160,8 @@ Customer leads arrive constantly via website forms, telephone calls, and walk-in
 3. **Fast Quote Conversion:** Click **"Convert to Estimate"** directly from an inquiry card. The system pulls the vehicle VRM, customer contact data, and inquiry notes into a fresh estimate draft within two seconds.
 4. **Digital Quote Transmission:** Transmit the itemized estimate to the client via SMS or email with an integrated digital approval button.
 5. **Instant Scheduling:** Once the client approves online, the inquiry card moves to **"Online Approved"**, ready for 1-click scheduling into the Gantt Dispatch matrix.
+
+> 💡 **Task Example & Illustration**: [Click here to inspect Illustration 4: Inquiry-to-Estimate 35-Second Pipeline ➔](#illustration-4-inbound-inquiries-fast-quotes-and-service-packages)
 
 ---
 
@@ -153,6 +179,8 @@ A Service Package is a pre-configured bundle combining:
 * **Sub-Minute Quotes:** Instead of manually searching for individual part numbers and typing hourly rates, select the package (e.g., *"Brookspeed 12-Month Major Service"*). All associated labor lines and parts auto-populate into the estimate instantly.
 * **Consistent Margins:** Guarantees that parts markup and standard labor margins are maintained across all service advisors.
 * **Automatic Stock Sync:** Attaching a service package immediately checks stock levels for the bundled oil and filters, alerting you if reorders are needed.
+
+> 💡 **Task Example & Illustration**: [Click here to inspect Illustration 4: Bundled Service Package Breakdown ➔](#illustration-4-inbound-inquiries-fast-quotes-and-service-packages)
 
 ---
 
@@ -177,6 +205,8 @@ Beyond standard workshop servicing and MOTs, Intelligent Scheduler includes thre
 * **Routine Maintenance Cycles:** Schedule recurring periodic inspections (e.g., monthly tyre rotation, engine run-up to temperature, fluid checks).
 * **Automated Recurring Billing:** Generate monthly or quarterly storage fee invoices with automated nominal ledger allocation.
 
+> 💡 **Task Example & Illustration**: [Click here to inspect Illustration 5: Commercial 3-Hub Matrix ➔](#illustration-5-extended-commercial-suites-car-sales-rentals-and-storage)
+
 ---
 
 ## 9. First-Day Checklist for New Users
@@ -188,3 +218,177 @@ Beyond standard workshop servicing and MOTs, Intelligent Scheduler includes thre
 5. [ ] Open the **Dispatch** tab to view the multi-bay Gantt planner.
 6. [ ] Click the **Help Centre (`?`)** in the header to view interactive visual diagrams.
 7. [ ] When finished, log out to maintain workshop data security.
+
+---
+
+## 10. Task-by-Task Illustrated Examples & Visual Schematics Library
+
+This section provides visual schematics and realistic operational scenarios for every primary workflow task.
+
+---
+
+### Illustration 1: Login Screen, Navigation and Remote Co-Browsing
+
+```
++---------------------------------------------------------------------------------------------------------+
+| [=] BROOKSPEED v8.02 | [Entity: Brookspeed Southampton HQ v] | [Search: Ctrl+K.....] | [AI*] [Mobile] [?] [User] |
++---------------------------------------------------------------------------------------------------------+
+| [NAV MENU]  |                                                                                           |
+|  Dashboard  |  ACTIVE WORKSHOP WORKING CANVAS                                                          |
+|  Summary    |                                                                                           |
+|* Dispatch   |                                                                                           |
+|  Workflow   |                                                GHOST CURSOR GUIDANCE:                     |
+|  Jobs       |                                                  /|                                       |
+|  Estimates  |                                                 / |  [Dave M. (Workshop Manager)]        |
+|  Invoices   |                                                +--+  "Click here to open Bay 1"           |
+|  Sales      |                                                                                           |
+|  Rentals    |                                                                                           |
+|  Storage    |                                                               +-------------------------+ |
+|  Inquiries  |                                                               | LIVE CO-BROWSE CHAT     | |
+|             |                                                               | Dave: I will guide you. | |
+|             |                                                               | Sarah: Thank you!       | |
+|             |                                                               | [ Type message...   [>] | |
+|             |                                                               +-------------------------+ |
+|             |                                                [ ( ? ) Request Remote Help ] <--- WIDGET  |
++-------------+-------------------------------------------------------------------------------------------+
+```
+
+#### Realistic Scenario Data Sheet: Remote Co-Browsing
+| Field / Component | Concrete Example Setting | Operational Meaning |
+| :--- | :--- | :--- |
+| **User Staff** | Sarah C. (Reception / Service Advisor) | First-time user logging in at reception desk. |
+| **Branch Entity** | Brookspeed Southampton HQ | Selected workshop location for all active bookings. |
+| **Remote Trigger** | Floating Purple Button `( ? )` | Positioned at bottom-right of viewport at all times. |
+| **Assisting Admin** | Dave M. (Master Tech / Workshop Manager) | Receives instant desktop notification and clicks "Accept". |
+| **Ghost Pointer** | Real-time synchronized SVG cursor | Shows Dave's cursor on Sarah's screen with name tag. |
+| **Admin Control Switch** | Toggle: `Active` (Default) | Allows Dave to demonstrate clicks or switches to View-Only. |
+| **Live Chat Drawer** | Draggable floating chat panel | Instant communication without leaving the active screen. |
+
+---
+
+### Illustration 2: Customer and Vehicle Relational Architecture
+
+```
+                    +----------------------------------------------+
+                    |           CUSTOMER MASTER RECORD             |
+                    |  ID: #CUST-1049                              |
+                    |  Name: Mr. Arthur Pendelton                  |
+                    |  Company: Horizon Logistics UK               |
+                    |  Phone: 07700 900123 • Email: arthur@hz.co.uk|
+                    |  Billing: 14 Southampton Way, SO15 1XX       |
+                    +----------------------------------------------+
+                                          │
+                     ┌────────────────────┼────────────────────┐
+                     ▼                    ▼                    ▼
+        +─────────────────────+ +─────────────────────+ +─────────────────────+
+        | VEHICLE 1: PRIVATE  | | VEHICLE 2: WEEKEND  | | VEHICLE 3: FLEET    |
+        | Reg: VR19 XYZ       | | Reg: OU21 HJK       | | Reg: WX68 BBN       |
+        | Porsche 911 GT3     | | BMW M3 Competition  | | Ford Transit Custom |
+        | VIN: WP0ZZZ99ZKS... | | VIN: WBA8M920...    | | VIN: WF0YXXTTG...   |
+        | Mileage: 42,150 mi  | | Mileage: 18,300 mi  | | Mileage: 94,800 mi  |
+        | MOT: 14/11/2026     | | MOT: 02/08/2027     | | MOT: 19/01/2027     |
+        +─────────────────────+ +─────────────────────+ +─────────────────────+
+                     │                    │                    │
+                     ▼                    ▼                    ▼
+             [Service History]    [Warranty Audit]      [Quarterly Inspec]
+             [#JOB-8842, #8890]   [#JOB-8120]           [#JOB-7940, #8012]
+```
+
+#### Key Rules to Remember:
+1. **Never create a duplicate customer:** Always check the top search bar (`Ctrl+K`) for existing mobile numbers or surnames.
+2. **Vehicles hold the history:** If Arthur sells `VR19 XYZ` to another client, reassign the vehicle owner; the complete MOT history, lift inspection photos, and repair receipts remain permanently linked to the vehicle registration.
+
+---
+
+### Illustration 3: Multi-Bay Gantt Resource Planning and FCS Matrix
+
+```
+TIME GRID:   [08:00]      [09:00]      [10:00]      [11:00]      [12:00]      [13:00]      [14:00]      [15:00]      [16:00]
+══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+BAY 1 (2-POST):
+Dave M. (Master) ───► [ JOB #8842: Audi RS6 Brake & Hub ] ──────────► [ LUNCH ] ──► [ JOB #8851: Porsche Minor Service ]
+                      (VR19 XYZ • Allocated 3.5h)                                    (WX20 ABC • Allocated 2.0h)
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+BAY 2 (4-POST ALIGN):
+Chris T. (Senior) ──► [ JOB #8845: BMW M3 4-Wheel Geometry Alignment ] ──► [ LUNCH ] ──► [ JOB #8853: Suspension Overhaul ]
+                      (OU21 HJK • Allocated 2.5h)                                        (LD22 FGH • Allocated 3.0h)
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+BAY 3 (FAST SERVICE):
+Mark P. (Technician) ► [ JOB #8847: MOT & Interim Service ] ────────► [ LUNCH ] ──► [ JOB #8855: Brake Disc Replacement ]
+                      (GF19 KLP • Allocated 2.0h)                                    (HN18 YZA • Allocated 1.5h)
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+BAY 4 (MOT LANE):
+Tester Certified ───► [ MOT-101 ] ──► [ MOT-102 ] ──► [ MOT-103 ] ──► [ LUNCH ] ──► [ MOT-104 ] ──► [ MOT-105 ] ──► [ MOT-106 ]
+                      (08:30)         (09:30)         (10:30)                        (13:30)         (14:30)         (15:30)
+```
+
+#### Operational Workflow:
+* **Drag-and-Drop:** Pick up unallocated repair cards from the bottom queue and drop them into an open time window.
+* **Auto-Scheduler (FCS):** Click **"Auto-Schedule with FCS"**; the engine checks technician skill badges (e.g., Master Tech certification for complex engine faults) and ensures no job is placed on an absent technician or UK bank holiday.
+
+---
+
+### Illustration 4: Inbound Inquiries, Fast Quotes and Service Packages
+
+```
+   [STEP 1: INBOUND LEAD]           [STEP 2: 1-CLICK QUOTE]             [STEP 3: BUNDLED PACKAGE]
+   Customer calls or submits        Click "Convert to Estimate"         Select Service Package:
+   web form for VR19 XYZ            on Inquiry #INQ-4921                "PKG-MAJ01: 24-Mo Major Service"
+             │                                 │                                    │
+             ▼                                 ▼                                    ▼
+   +───────────────────────+        +───────────────────────+        +────────────────────────────+
+   | INQUIRY #INQ-4921     |        | ESTIMATE #EST-3312    |        | PACKAGE AUTO-POPULATION:   |
+   | From: Sarah Jenkins   |  ───►  | Customer: S. Jenkins  |  ───►  | • 2.5h Labor @ £85 = £212.50|
+   | Vehicle: Ford Puma    |        | Vehicle: Ford Puma    |        | • OE Oil Filter    = £18.50|
+   | Work: Major Service   |        | Status: Draft Quoted  |        | • 5W-30 Synt Oil   = £64.00|
+   +───────────────────────+        +───────────────────────+        | • Spark Plugs (x4) = £48.00|
+                                                                     | • Pollen Filter    = £24.00|
+                                                                     | NET TOTAL:          £367.00|
+                                                                     | VAT (20%):          £73.40 |
+                                                                     | GROSS TOTAL:        £440.40|
+                                                                     +────────────────────────────+
+                                                                                    │
+                                                                                    ▼
+                                                                     [STEP 4: CUSTOMER SIGN-OFF]
+                                                                     Transmitted via SMS link.
+                                                                     Customer clicks "Approve".
+                                                                     Estimate ➔ Active Job Card #JOB-8843!
+```
+
+---
+
+### Illustration 5: Extended Commercial Suites (Car Sales, Rentals and Storage)
+
+```
++─────────────────────────────────────────────────────────────────────────────────────────────────────────+
+|                                    COMMERCIAL ENTERPRISE EXPANSION                                       |
++─────────────────────────────────────────────────────────────────────────────────────────────────────────+
+|                                                   |                                                     |
+|  🏎️ 1. CAR SALES & SHOWROOM                        |  🚙 2. VEHICLE RENTALS & COURTESY FLEET             |
+|  ───────────────────────────                      |  ─────────────────────────────────────              |
+|  • Stock Record: #CS-401 (Porsche 991 GT3 RS)     |  • Fleet Unit: #RENT-04 (VW Golf 2.0 TDI)           |
+|  • Acquisition Type: Sale or Return (SOR)         |  • Booking Ref: #RB-2026-88                         |
+|  • Purchase/Agreed Return: £112,000.00            |  • Hire Duration: 2 Days (Workshop Courtesy)        |
+|  • Workshop Prep Costs: £850.00 (Lift QC pass)    |  • Departure Checks: Fuel 8/8, 31,450 mi            |
+|  • Retail List Price: £124,950.00                 |  • Damage Log: Zero walkaround defects noted        |
+|  • Gross Profit Margin: £12,100.00                |  • Agreement: Digital touchscreen signature         |
+|  • Active Prospects: 4 Buyers Qualified           |  • Return Status: Check-In verified, deposit cleared|
+|                                                   |                                                     |
+|───────────────────────────────────────────────────┴─────────────────────────────────────────────────────|
+|                                                                                                         |
+|  🔒 3. VEHICLE STORAGE & BATTERY CONDITIONING                                                           |
+|  ────────────────────────────────────────────                                                           |
+|  • Storage Facility: Brookspeed Secure Warehouse North (Dehumidified)                                   |
+|  • Assigned Bay: Storage Bay #ST-12 (Prestige Enclosure)                                                |
+|  • Stored Asset: 1968 Ferrari 246 Dino (Chassis #00214)                                                 |
+|  • Battery Conditioner: CTEK Smart Multi-Charger #04 (Connected • 13.6V Floating Float Cycle)           |
+|  • Maintenance Cycle: 30-Day Engine Warm-Up & Tyre Rotation (Scheduled 25th of month)                  |
+|  • Billing Plan: £75.00 + VAT weekly recurring charge (Linked to Automated Monthly Invoices)           |
+|                                                                                                         |
++─────────────────────────────────────────────────────────────────────────────────────────────────────────+
+```
+
+#### How the Modules Cross-Connect:
+* **Car Sales prep work** directly generates internal workshop job cards with real technician labor hours.
+* **Rentals courtesy bookings** link directly to active workshop repair cards when customers leave their vehicle for service.
+* **Vehicle Storage billing** feeds directly into the master VAT Invoice ledger and aged debtors reporting.

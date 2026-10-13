@@ -20,7 +20,11 @@ import {
   ShieldCheck,
   TrendingUp,
   FileSpreadsheet,
-  Compass
+  Compass,
+  Eye,
+  ExternalLink,
+  ChevronRight,
+  ArrowRight
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -33,6 +37,21 @@ interface HelpCentreProps {
 type HelpTab = 'first-time-user' | 'fcs' | 'estimates' | 'workflow' | 'inventory' | 'invoicing' | 'directors' | 'mobile';
 type ViewMode = 'visual' | 'sop';
 
+export interface StepExample {
+  title: string;
+  badge: string;
+  scenario: string;
+  dataPoints: { key: string; val: string }[];
+}
+
+export interface StepItem {
+  title: string;
+  desc: string;
+  example?: StepExample;
+  illustrationId?: string;
+  illustrationTitle?: string;
+}
+
 interface HelpSection {
   id: HelpTab;
   title: string;
@@ -41,7 +60,7 @@ interface HelpSection {
   badgeColor: string;
   icon: React.ElementType;
   description: string;
-  steps: { title: string; desc: string }[];
+  steps: StepItem[];
   proTip: string;
 }
 
@@ -58,23 +77,88 @@ const HELP_SECTIONS: HelpSection[] = [
     steps: [
       {
         title: '1. First Login, Header & Remote Co-Browsing Help',
-        desc: 'Log in, select your workshop branch via the Entity selector, and use the persistent bottom-right "Request Remote Help" button for instant live two-way mouse pointer assistance and screen sharing with a manager.'
+        desc: 'Log in, select your workshop branch via the Entity selector, and use the persistent bottom-right "Request Remote Help" button for instant live two-way mouse pointer assistance and screen sharing with a manager.',
+        illustrationId: 'illus-login',
+        illustrationTitle: 'Top Bar, Branch Switcher & Remote Co-Browse Cursor',
+        example: {
+          title: 'Live Assistance at Reception Desk',
+          badge: 'SCENARIO 1: RECEPTION ONBOARDING',
+          scenario: 'Receptionist Sarah C. logs in for her first morning shift. She chooses "Brookspeed Southampton HQ" from the top Entity dropdown and clicks "Request Remote Help" (purple button at bottom-right). Workshop Manager Dave M. accepts instantly, displaying his ghost cursor on Sarah\'s screen to guide her through checking in a customer.',
+          dataPoints: [
+            { key: 'Selected Branch', val: 'Brookspeed Southampton HQ' },
+            { key: 'Assisted Staff', val: 'Sarah C. (Reception Desk)' },
+            { key: 'Assisting Manager', val: 'Dave M. (Workshop Manager)' },
+            { key: 'Control Mode', val: 'Interactive Two-Way Pointer Active' }
+          ]
+        }
       },
       {
         title: '2. Customer vs. Vehicle Relational Architecture',
-        desc: 'Master the 1-to-many relationship: Customers own vehicles. Estimates, jobs, and invoices attach to the physical Vehicle (VRM, VIN, MOT history), preserving complete lifetime service records even when ownership transfers.'
+        desc: 'Master the 1-to-many relationship: Customers own vehicles. Estimates, jobs, and invoices attach to the physical Vehicle (VRM, VIN, MOT history), preserving complete lifetime service records even when ownership transfers.',
+        illustrationId: 'illus-cust-veh',
+        illustrationTitle: '1-to-Many Customer to Vehicle Ownership Node Diagram',
+        example: {
+          title: 'Fleet & Multi-Car Household Management',
+          badge: 'SCENARIO 2: RELATIONAL DATA HIERARCHY',
+          scenario: 'Customer Arthur Pendelton brings in his Porsche 911 (VR19 XYZ). The system automatically links the booking to his master customer profile, which also manages his BMW M3 (OU21 HJK) and business delivery van (WX68 BBN). If he sells the Porsche, reassigning the vehicle keeps its entire repair history intact.',
+          dataPoints: [
+            { key: 'Master Account', val: 'Mr. Arthur Pendelton (#CUST-1049)' },
+            { key: 'Primary Vehicle', val: 'VR19 XYZ (Porsche 911 GT3 • 42.1k mi)' },
+            { key: 'Linked Fleet', val: '3 Vehicles under single billing account' },
+            { key: 'Statutory Data', val: 'DVLA MOT Expiry: 14/11/2026 Sync' }
+          ]
+        }
       },
       {
         title: '3. Multi-Bay Gantt Resource Planning & FCS Engine',
-        desc: 'Open Dispatch to visualize active workshop bays, drag repair segments across timelines, and use the FCS Auto-Scheduler for automated technician skill matching, capacity leveling, and holiday calendar awareness.'
+        desc: 'Open Dispatch to visualize active workshop bays, drag repair segments across timelines, and use the FCS Auto-Scheduler for automated technician skill matching, capacity leveling, and holiday calendar awareness.',
+        illustrationId: 'illus-gantt',
+        illustrationTitle: 'Multi-Bay Gantt Planner & FCS Skill Matrix Leveling',
+        example: {
+          title: 'Automated Bay Leveling & Leave Clash Check',
+          badge: 'SCENARIO 3: FCS DISPATCH MATRIX',
+          scenario: 'A 3.5-hour diagnostic overhaul arrives for VR19 XYZ. Dragging the job card to Bay 1 automatically checks Master Technician Dave M.\'s qualifications, reserves the 2-post lift, and blocks out his lunch break. If Dave was on holiday, FCS would automatically suggest Chris T. in Bay 2.',
+          dataPoints: [
+            { key: 'Assigned Bay', val: 'Bay 1 (Master Tech Lift)' },
+            { key: 'Allocated Tech', val: 'Dave M. (Master Certified)' },
+            { key: 'Allocated Time', val: '09:00 - 12:30 (3.5 Billed Hours)' },
+            { key: 'Absence Guard', val: 'Bank Holiday & Leave Checked (Zero Conflict)' }
+          ]
+        }
       },
       {
         title: '4. Inbound Inquiries, Fast Quotes & Service Packages',
-        desc: 'Capture customer leads, convert them in seconds into estimates using pre-bundled Service Packages (standardized labor + OE parts + fluid costs), and transmit digital quotes via SMS/email for instant customer sign-off.'
+        desc: 'Capture customer leads, convert them in seconds into estimates using pre-bundled Service Packages (standardized labor + OE parts + fluid costs), and transmit digital quotes via SMS/email for instant customer sign-off.',
+        illustrationId: 'illus-quote',
+        illustrationTitle: '35-Second Inquiry to Estimate Pipeline & Package Bundle',
+        example: {
+          title: 'Web Lead to Approved Job in Under 45 Seconds',
+          badge: 'SCENARIO 4: FAST QUOTING PIPELINE',
+          scenario: 'A web inquiry arrives from Sarah Jenkins asking for a Major Service quote. Clicking "Convert to Estimate" pre-populates her Ford Puma. Selecting the "Brookspeed 24-Month Major Service" package bundles OE filter, 5W-30 synthetic oil, spark plugs, and 2.5 hours labor, generating a £465.00 + VAT quote sent via SMS in 35 seconds.',
+          dataPoints: [
+            { key: 'Inquiry Lead', val: '#INQ-4921 (Sarah Jenkins • Ford Puma)' },
+            { key: 'Service Package', val: 'PKG-MAJ01 (24-Month Major Service)' },
+            { key: 'Bundled Price', val: '£465.00 + VAT (£558.00 Gross)' },
+            { key: 'Transmission', val: 'SMS Quote with 1-Click Digital Approval Link' }
+          ]
+        }
       },
       {
         title: '5. Extended Commercial Suites: Sales, Rentals & Storage',
-        desc: 'Scale beyond workshop bays into Car Sales (showroom stock, prep costing, SOR margins, prospects), Vehicle Rentals (fleet calendar, hire agreements), and Vehicle Storage (secure bays, battery trickle charging, recurring billing).'
+        desc: 'Scale beyond workshop bays into Car Sales (showroom stock, prep costing, SOR margins, prospects), Vehicle Rentals (fleet calendar, hire agreements), and Vehicle Storage (secure bays, battery trickle charging, recurring billing).',
+        illustrationId: 'illus-commercial',
+        illustrationTitle: 'Commercial Dealership 3-Hub Matrix: Sales, Rentals & Storage',
+        example: {
+          title: 'Integrated Multi-Stream Dealership Operations',
+          badge: 'SCENARIO 5: COMMERCIAL ENTERPRISE HUB',
+          scenario: 'A Porsche 991 GT3 RS is managed under Car Sales on Sale or Return (SOR). The workshop conducts an £850 prep inspection. Meanwhile, Rentals logs a courtesy VW Golf for a servicing client, and Vehicle Storage monitors a 1968 Ferrari Dino on a CTEK trickle charger in Bay ST-12 with automated £75/wk recurring billing.',
+          dataPoints: [
+            { key: 'Car Sales', val: 'Stock #CS-401 (991 GT3 RS) • Margin: £12.1k' },
+            { key: 'Rentals', val: 'Unit #RENT-04 (VW Golf Courtesy) • 2-day hire' },
+            { key: 'Storage', val: 'Bay #ST-12 • CTEK Conditioner Connected' },
+            { key: 'Shared Engine', val: 'Directly linked to Master VAT Invoices & Jobs' }
+          ]
+        }
       }
     ],
     proTip:
@@ -310,6 +394,22 @@ export default function HelpCentre({ open, onClose }: HelpCentreProps) {
   const [sops, setSops] = useState<{ title: string; file: string; content: string }[]>([]);
   const [selectedSop, setSelectedSop] = useState<{ title: string; file: string; content: string } | null>(null);
   const [zoomedImage, setZoomedImage] = useState<string | null>(null);
+  const [expandedStepExamples, setExpandedStepExamples] = useState<{ [key: string]: boolean }>({});
+  const [activeIllustrationModal, setActiveIllustrationModal] = useState<{
+    id: string;
+    title: string;
+    subtitle: string;
+    stepNumber: number;
+    desc: string;
+    example?: StepExample;
+  } | null>(null);
+
+  const toggleStepExample = (key: string) => {
+    setExpandedStepExamples((prev) => ({
+      ...prev,
+      [key]: !prev[key]
+    }));
+  };
 
   // Load SOP markdown files on mount
   useEffect(() => {
@@ -350,6 +450,240 @@ export default function HelpCentre({ open, onClose }: HelpCentreProps) {
       sop.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       sop.content.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const renderTaskIllustrationSvg = (illusId: string) => {
+    switch (illusId) {
+      case 'illus-login':
+        return (
+          <svg viewBox="0 0 880 240" className="w-full h-auto rounded-xl drop-shadow">
+            <rect width="880" height="240" rx="12" fill="#0f172a" stroke="#1e293b" strokeWidth="2" />
+            <rect x="20" y="20" width="840" height="42" rx="8" fill="#1e293b" stroke="#0284c7" />
+            <circle cx="45" cy="41" r="10" fill="#0284c7" />
+            <text x="45" y="45" fill="#ffffff" fontSize="10" fontWeight="bold" textAnchor="middle">🏢</text>
+            <text x="65" y="45" fill="#e0f2fe" fontSize="12" fontWeight="bold">Brookspeed Southampton HQ [Entity Selector v]</text>
+            <rect x="360" y="28" width="220" height="26" rx="13" fill="#0f172a" stroke="#334155" />
+            <text x="470" y="45" fill="#94a3b8" fontSize="11" textAnchor="middle">🔍 Global Search (Ctrl+K)...</text>
+            <rect x="710" y="28" width="85" height="26" rx="6" fill="#10b981" />
+            <text x="752" y="45" fill="#ffffff" fontSize="10" fontWeight="bold" textAnchor="middle">v8.02 Online</text>
+
+            <g transform="translate(560, 95)">
+              <rect x="0" y="0" width="280" height="115" rx="12" fill="#1e293b" stroke="#6366f1" strokeWidth="2" />
+              <text x="140" y="26" fill="#a5b4fc" fontSize="12" fontWeight="bold" textAnchor="middle">REMOTE CO-BROWSE ENGINE</text>
+              <rect x="25" y="38" width="230" height="34" rx="17" fill="#4f46e5" />
+              <text x="140" y="59" fill="#ffffff" fontSize="11" fontWeight="bold" textAnchor="middle">🟣 Request Remote Help (?)</text>
+              <text x="140" y="94" fill="#38bdf8" fontSize="10" textAnchor="middle">Instant Manager Screen Connect &amp; Chat</text>
+            </g>
+
+            <g transform="translate(40, 95)">
+              <rect x="0" y="0" width="480" height="115" rx="12" fill="#1e293b" stroke="#3b82f6" />
+              <text x="240" y="26" fill="#60a5fa" fontSize="12" fontWeight="bold" textAnchor="middle">TWO-WAY GHOST POINTER GUIDANCE &amp; SCREEN SHARING</text>
+              <circle cx="50" cy="65" r="16" fill="#3b82f6" opacity="0.2" />
+              <polygon points="50,65 58,80 54,81 58,89 54,91 50,83 45,86" fill="#60a5fa" stroke="#ffffff" strokeWidth="1.5" />
+              <rect x="75" y="56" width="180" height="22" rx="4" fill="#4f46e5" />
+              <text x="165" y="71" fill="#ffffff" fontSize="9" fontWeight="bold" textAnchor="middle">Dave M. (Workshop Manager)</text>
+              <text x="240" y="98" fill="#cbd5e1" fontSize="10" textAnchor="middle">"Click here to create a new job card for VR19 XYZ"</text>
+            </g>
+          </svg>
+        );
+
+      case 'illus-cust-veh':
+        return (
+          <svg viewBox="0 0 880 240" className="w-full h-auto rounded-xl drop-shadow">
+            <rect width="880" height="240" rx="12" fill="#0f172a" stroke="#1e293b" strokeWidth="2" />
+
+            <rect x="30" y="30" width="250" height="180" rx="12" fill="#1e293b" stroke="#10b981" strokeWidth="2" />
+            <text x="155" y="56" fill="#34d399" fontSize="13" fontWeight="bold" textAnchor="middle">CUSTOMER MASTER PROFILE</text>
+            <rect x="45" y="70" width="220" height="34" rx="6" fill="#064e3b" />
+            <text x="155" y="91" fill="#ffffff" fontSize="12" fontWeight="bold" textAnchor="middle">Arthur Pendelton (#1049)</text>
+            <text x="155" y="125" fill="#cbd5e1" fontSize="11" textAnchor="middle">Company: Horizon Logistics</text>
+            <text x="155" y="145" fill="#94a3b8" fontSize="10" textAnchor="middle">07700 900123 • Southampton</text>
+            <rect x="45" y="165" width="220" height="28" rx="6" fill="#0f172a" stroke="#10b981" />
+            <text x="155" y="183" fill="#a7f3d0" fontSize="10" fontWeight="bold" textAnchor="middle">Billing &amp; GDPR Account Anchor</text>
+
+            <path d="M 280 85 L 340 55" stroke="#10b981" strokeWidth="2.5" />
+            <path d="M 280 120 L 340 120" stroke="#10b981" strokeWidth="2.5" />
+            <path d="M 280 155 L 340 185" stroke="#10b981" strokeWidth="2.5" />
+
+            <g transform="translate(345, 25)">
+              <rect x="0" y="0" width="500" height="55" rx="8" fill="#1e293b" stroke="#38bdf8" />
+              <rect x="15" y="12" width="105" height="30" rx="4" fill="#fbbf24" />
+              <text x="67" y="32" fill="#000000" fontSize="12" fontWeight="bold" textAnchor="middle">VR19 XYZ</text>
+              <text x="140" y="27" fill="#ffffff" fontSize="11" fontWeight="bold">Porsche 911 GT3 (42,150 mi)</text>
+              <text x="140" y="44" fill="#38bdf8" fontSize="10">DVLA MOT Expiry: 14/11/2026 • 2 Active Repair Cards</text>
+            </g>
+
+            <g transform="translate(345, 92)">
+              <rect x="0" y="0" width="500" height="55" rx="8" fill="#1e293b" stroke="#a855f7" />
+              <rect x="15" y="12" width="105" height="30" rx="4" fill="#fbbf24" />
+              <text x="67" y="32" fill="#000000" fontSize="12" fontWeight="bold" textAnchor="middle">OU21 HJK</text>
+              <text x="140" y="27" fill="#ffffff" fontSize="11" fontWeight="bold">BMW M3 Competition (18,300 mi)</text>
+              <text x="140" y="44" fill="#c084fc" fontSize="10">DVLA MOT Expiry: 02/08/2027 • Full Geometry Audit</text>
+            </g>
+
+            <g transform="translate(345, 160)">
+              <rect x="0" y="0" width="500" height="55" rx="8" fill="#1e293b" stroke="#64748b" />
+              <rect x="15" y="12" width="105" height="30" rx="4" fill="#fbbf24" />
+              <text x="67" y="32" fill="#000000" fontSize="12" fontWeight="bold" textAnchor="middle">WX68 BBN</text>
+              <text x="140" y="27" fill="#ffffff" fontSize="11" fontWeight="bold">Ford Transit Custom Fleet (#04)</text>
+              <text x="140" y="44" fill="#94a3b8" fontSize="10">Commercial Fleet Unit • Quarterly Inspection Active</text>
+            </g>
+          </svg>
+        );
+
+      case 'illus-gantt':
+        return (
+          <svg viewBox="0 0 880 240" className="w-full h-auto rounded-xl drop-shadow">
+            <rect width="880" height="240" rx="12" fill="#0f172a" stroke="#1e293b" strokeWidth="2" />
+            <rect x="30" y="20" width="820" height="26" rx="6" fill="#1e293b" />
+            <text x="90" y="37" fill="#94a3b8" fontSize="10" fontWeight="bold">08:00</text>
+            <text x="210" y="37" fill="#94a3b8" fontSize="10" fontWeight="bold">10:00</text>
+            <text x="330" y="37" fill="#94a3b8" fontSize="10" fontWeight="bold">12:00 (Lunch)</text>
+            <text x="450" y="37" fill="#94a3b8" fontSize="10" fontWeight="bold">14:00</text>
+            <text x="570" y="37" fill="#94a3b8" fontSize="10" fontWeight="bold">16:00</text>
+            <text x="730" y="37" fill="#34d399" fontSize="10" fontWeight="bold">FCS AUTO-SCHEDULED ✓</text>
+
+            <g transform="translate(30, 56)">
+              <rect x="0" y="0" width="170" height="38" rx="6" fill="#0f172a" stroke="#3b82f6" />
+              <text x="85" y="16" fill="#ffffff" fontSize="10" fontWeight="bold" textAnchor="middle">BAY 1 (Master 2-Post)</text>
+              <text x="85" y="30" fill="#60a5fa" fontSize="9" textAnchor="middle">Dave M. [Certified Master]</text>
+              
+              <rect x="180" y="0" width="310" height="38" rx="6" fill="#1d4ed8" />
+              <text x="335" y="17" fill="#ffffff" fontSize="10" fontWeight="bold" textAnchor="middle">JOB #8842: Audi RS6 Brake Discs &amp; Diagnostic (3.5h)</text>
+              <text x="335" y="30" fill="#bfdbfe" fontSize="9" textAnchor="middle">VR19 XYZ • Brembo Discs • Customer Approved</text>
+            </g>
+
+            <g transform="translate(30, 102)">
+              <rect x="0" y="0" width="170" height="38" rx="6" fill="#0f172a" stroke="#a855f7" />
+              <text x="85" y="16" fill="#ffffff" fontSize="10" fontWeight="bold" textAnchor="middle">BAY 2 (4-Post Geometry)</text>
+              <text x="85" y="30" fill="#c084fc" fontSize="9" textAnchor="middle">Chris T. [Senior Alignment]</text>
+              
+              <rect x="250" y="0" width="280" height="38" rx="6" fill="#6b21a8" />
+              <text x="390" y="17" fill="#ffffff" fontSize="10" fontWeight="bold" textAnchor="middle">JOB #8845: BMW M3 4-Wheel Alignment (2.5h)</text>
+              <text x="390" y="30" fill="#e9d5ff" fontSize="9" textAnchor="middle">OU21 HJK • Hunter HawkEye Elite Machine</text>
+            </g>
+
+            <g transform="translate(30, 148)">
+              <rect x="0" y="0" width="170" height="38" rx="6" fill="#0f172a" stroke="#10b981" />
+              <text x="85" y="16" fill="#ffffff" fontSize="10" fontWeight="bold" textAnchor="middle">BAY 3 (Routine Service)</text>
+              <text x="85" y="30" fill="#34d399" fontSize="9" textAnchor="middle">Mark P. [Technician]</text>
+              
+              <rect x="180" y="0" width="220" height="38" rx="6" fill="#047857" />
+              <text x="290" y="17" fill="#ffffff" fontSize="10" fontWeight="bold" textAnchor="middle">JOB #8847: Major Service (2.0h)</text>
+              <text x="290" y="30" fill="#a7f3d0" fontSize="9" textAnchor="middle">PKG-MAJ01 • Ford Puma</text>
+
+              <rect x="420" y="0" width="190" height="38" rx="6" fill="#0f766e" />
+              <text x="515" y="17" fill="#ffffff" fontSize="10" fontWeight="bold" textAnchor="middle">JOB #8855: Brake Pads (1.5h)</text>
+              <text x="515" y="30" fill="#99f6e4" fontSize="9" textAnchor="middle">HN18 YZA • Rapid Fit</text>
+            </g>
+
+            <rect x="670" y="56" width="180" height="130" rx="8" fill="#1e293b" stroke="#f59e0b" strokeDasharray="4,4" />
+            <text x="760" y="85" fill="#fbbf24" fontSize="10" fontWeight="bold" textAnchor="middle">ABSENCE &amp; LEAVE GUARD</text>
+            <text x="760" y="110" fill="#cbd5e1" fontSize="9" textAnchor="middle">✓ Bank Holiday Protected</text>
+            <text x="760" y="130" fill="#cbd5e1" fontSize="9" textAnchor="middle">✓ Overtime Warnings</text>
+            <text x="760" y="155" fill="#34d399" fontSize="9" fontWeight="bold" textAnchor="middle">0 Overlapping Conflicts</text>
+          </svg>
+        );
+
+      case 'illus-quote':
+        return (
+          <svg viewBox="0 0 880 240" className="w-full h-auto rounded-xl drop-shadow">
+            <rect width="880" height="240" rx="12" fill="#0f172a" stroke="#1e293b" strokeWidth="2" />
+
+            <g transform="translate(25, 30)">
+              <rect x="0" y="0" width="190" height="180" rx="10" fill="#1e293b" stroke="#3b82f6" />
+              <text x="95" y="25" fill="#60a5fa" fontSize="11" fontWeight="bold" textAnchor="middle">1. INBOUND INQUIRY</text>
+              <rect x="15" y="38" width="160" height="32" rx="4" fill="#0f172a" />
+              <text x="95" y="58" fill="#ffffff" fontSize="10" textAnchor="middle">Ref: #INQ-4921 (Web Lead)</text>
+              <text x="95" y="95" fill="#cbd5e1" fontSize="10" textAnchor="middle">Sarah Jenkins • Ford Puma</text>
+              <text x="95" y="115" fill="#94a3b8" fontSize="9" textAnchor="middle">"Major Service &amp; Plugs"</text>
+              <rect x="15" y="135" width="160" height="30" rx="6" fill="#2563eb" />
+              <text x="95" y="154" fill="#ffffff" fontSize="10" fontWeight="bold" textAnchor="middle">1-Click Convert ➔</text>
+            </g>
+
+            <path d="M 225 120 L 255 120" stroke="#60a5fa" strokeWidth="2" />
+
+            <g transform="translate(260, 30)">
+              <rect x="0" y="0" width="220" height="180" rx="10" fill="#1e293b" stroke="#10b981" />
+              <text x="110" y="25" fill="#34d399" fontSize="11" fontWeight="bold" textAnchor="middle">2. SERVICE PACKAGE</text>
+              <rect x="15" y="38" width="190" height="32" rx="4" fill="#064e3b" />
+              <text x="110" y="58" fill="#ffffff" fontSize="10" fontWeight="bold" textAnchor="middle">PKG-MAJ01: Major Service</text>
+              <text x="110" y="92" fill="#a7f3d0" fontSize="10" textAnchor="middle">2.5h Labor: £212.50</text>
+              <text x="110" y="110" fill="#a7f3d0" fontSize="10" textAnchor="middle">OE Oil &amp; Plugs: £154.50</text>
+              <rect x="15" y="135" width="190" height="30" rx="6" fill="#059669" />
+              <text x="110" y="154" fill="#ffffff" fontSize="10" fontWeight="bold" textAnchor="middle">Net: £367.00 + VAT</text>
+            </g>
+
+            <path d="M 490 120 L 520 120" stroke="#10b981" strokeWidth="2" />
+
+            <g transform="translate(525, 30)">
+              <rect x="0" y="0" width="180" height="180" rx="10" fill="#1e293b" stroke="#a855f7" />
+              <text x="90" y="25" fill="#c084fc" fontSize="11" fontWeight="bold" textAnchor="middle">3. DIGITAL APPROVAL</text>
+              <rect x="15" y="38" width="150" height="32" rx="4" fill="#3b0764" />
+              <text x="90" y="58" fill="#ffffff" fontSize="10" textAnchor="middle">SMS Sent to 07700...</text>
+              <text x="90" y="95" fill="#e9d5ff" fontSize="10" textAnchor="middle">Quote: £440.40 Gross</text>
+              <rect x="15" y="118" width="150" height="46" rx="6" fill="#ffffff" />
+              <text x="90" y="138" fill="#047857" fontSize="11" fontWeight="bold" textAnchor="middle">Customer Clicked:</text>
+              <text x="90" y="153" fill="#047857" fontSize="10" fontStyle="italic" textAnchor="middle">"APPROVED ✓"</text>
+            </g>
+
+            <path d="M 715 120 L 740 120" stroke="#a855f7" strokeWidth="2" />
+
+            <g transform="translate(745, 30)">
+              <rect x="0" y="0" width="115" height="180" rx="10" fill="#065f46" stroke="#10b981" />
+              <text x="57" y="35" fill="#ffffff" fontSize="10" fontWeight="bold" textAnchor="middle">4. JOB CARD</text>
+              <circle cx="57" cy="85" r="28" fill="#047857" />
+              <text x="57" y="89" fill="#ffffff" fontSize="11" fontWeight="bold" textAnchor="middle">#8843</text>
+              <text x="57" y="140" fill="#a7f3d0" fontSize="9" textAnchor="middle">Parts Reserved</text>
+              <text x="57" y="160" fill="#ffffff" fontSize="9" fontWeight="bold" textAnchor="middle">Queue Active</text>
+            </g>
+          </svg>
+        );
+
+      case 'illus-commercial':
+      default:
+        return (
+          <svg viewBox="0 0 880 240" className="w-full h-auto rounded-xl drop-shadow">
+            <rect width="880" height="240" rx="12" fill="#0f172a" stroke="#1e293b" strokeWidth="2" />
+
+            <g transform="translate(25, 25)">
+              <rect x="0" y="0" width="260" height="190" rx="10" fill="#1e293b" stroke="#818cf8" strokeWidth="1.5" />
+              <text x="130" y="28" fill="#a5b4fc" fontSize="12" fontWeight="bold" textAnchor="middle">🏎️ 1. CAR SALES &amp; SHOWROOM</text>
+              <rect x="15" y="42" width="230" height="30" rx="4" fill="#0f172a" />
+              <text x="130" y="61" fill="#ffffff" fontSize="10" fontWeight="bold" textAnchor="middle">Stock #CS-401 (Porsche 991 GT3 RS)</text>
+              <text x="130" y="95" fill="#cbd5e1" fontSize="10" textAnchor="middle">Acquisition: Sale or Return (SOR)</text>
+              <text x="130" y="115" fill="#cbd5e1" fontSize="10" textAnchor="middle">Workshop Prep: £850.00 Logged</text>
+              <text x="130" y="135" fill="#34d399" fontSize="11" fontWeight="bold" textAnchor="middle">Gross Margin: £12,100.00</text>
+              <rect x="15" y="150" width="230" height="26" rx="4" fill="#312e81" />
+              <text x="130" y="167" fill="#e0e7ff" fontSize="10" textAnchor="middle">4 Qualified Prospects Tracking</text>
+            </g>
+
+            <g transform="translate(310, 25)">
+              <rect x="0" y="0" width="260" height="190" rx="10" fill="#1e293b" stroke="#38bdf8" strokeWidth="1.5" />
+              <text x="130" y="28" fill="#38bdf8" fontSize="12" fontWeight="bold" textAnchor="middle">🚙 2. VEHICLE RENTALS</text>
+              <rect x="15" y="42" width="230" height="30" rx="4" fill="#0f172a" />
+              <text x="130" y="61" fill="#ffffff" fontSize="10" fontWeight="bold" textAnchor="middle">Unit #RENT-04 (VW Golf 2.0 TDI)</text>
+              <text x="130" y="95" fill="#cbd5e1" fontSize="10" textAnchor="middle">Hire Agreement: #RB-2026-88</text>
+              <text x="130" y="115" fill="#cbd5e1" fontSize="10" textAnchor="middle">Duration: 2-Day Courtesy Hire</text>
+              <text x="130" y="135" fill="#38bdf8" fontSize="10" textAnchor="middle">Departure Checks: Fuel 8/8 Checked</text>
+              <rect x="15" y="150" width="230" height="26" rx="4" fill="#075985" />
+              <text x="130" y="167" fill="#e0e7ff" fontSize="10" textAnchor="middle">Digital Touch Sign-Off Stored</text>
+            </g>
+
+            <g transform="translate(595, 25)">
+              <rect x="0" y="0" width="260" height="190" rx="10" fill="#1e293b" stroke="#f43f5e" strokeWidth="1.5" />
+              <text x="130" y="28" fill="#fb7185" fontSize="12" fontWeight="bold" textAnchor="middle">🔒 3. VEHICLE STORAGE</text>
+              <rect x="15" y="42" width="230" height="30" rx="4" fill="#0f172a" />
+              <text x="130" y="61" fill="#ffffff" fontSize="10" fontWeight="bold" textAnchor="middle">Bay #ST-12 (1968 Ferrari Dino)</text>
+              <text x="130" y="95" fill="#cbd5e1" fontSize="10" textAnchor="middle">Trickle Charger #04: CONNECTED</text>
+              <text x="130" y="115" fill="#34d399" fontSize="10" fontWeight="bold" textAnchor="middle">⚡ 13.6V Floating Maintenance</text>
+              <text x="130" y="135" fill="#cbd5e1" fontSize="10" textAnchor="middle">Monthly Engine Warm-Up Active</text>
+              <rect x="15" y="150" width="230" height="26" rx="4" fill="#881337" />
+              <text x="130" y="167" fill="#fecdd3" fontSize="10" textAnchor="middle">£75/wk Recurring VAT Billing</text>
+            </g>
+          </svg>
+        );
+    }
+  };
 
   const currentSection = HELP_SECTIONS.find((sec) => sec.id === activeTab) || HELP_SECTIONS[0];
 
@@ -966,30 +1300,102 @@ export default function HelpCentre({ open, onClose }: HelpCentreProps) {
                   </div>
                 </div>
 
-                {/* 3. STEP-BY-STEP WORKFLOW GUIDE */}
+                {/* 3. STEP-BY-STEP WORKFLOW GUIDE WITH INTERACTIVE EXAMPLES & ILLUSTRATIONS */}
                 <div className="space-y-4">
-                  <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-amber-400 flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                    Step-by-Step Operating Instructions
-                  </h3>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-amber-400 flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                      Step-by-Step Operating Instructions &amp; Interactive Illustrations
+                    </h3>
+                    <span className="text-[11px] font-mono text-slate-400">
+                      Click <span className="text-amber-300 font-bold">"View Example"</span> or <span className="text-indigo-300 font-bold">"Visual Illustration"</span> on any task
+                    </span>
+                  </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {currentSection.steps.map((step, idx) => (
-                      <div
-                        key={idx}
-                        className="bg-slate-950/80 border border-slate-800 rounded-2xl p-5 space-y-2 hover:border-slate-700 transition"
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className="w-7 h-7 rounded-lg bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 flex items-center justify-center font-mono font-bold text-xs shrink-0">
-                            {idx + 1}
-                          </span>
-                          <h4 className="text-sm font-bold text-white">{step.title}</h4>
+                    {currentSection.steps.map((step, idx) => {
+                      const stepKey = `${currentSection.id}-${idx}`;
+                      const isExampleOpen = !!expandedStepExamples[stepKey];
+
+                      return (
+                        <div
+                          key={idx}
+                          className="bg-slate-950/80 border border-slate-800 rounded-2xl p-5 space-y-3 hover:border-slate-700 transition flex flex-col justify-between"
+                        >
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2">
+                              <span className="w-7 h-7 rounded-lg bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 flex items-center justify-center font-mono font-bold text-xs shrink-0">
+                                {idx + 1}
+                              </span>
+                              <h4 className="text-sm font-bold text-white">{step.title}</h4>
+                            </div>
+                            <p className="text-xs text-slate-300 leading-relaxed pl-9">
+                              {step.desc}
+                            </p>
+                          </div>
+
+                          {/* INLINE EXPANDED EXAMPLE BOX */}
+                          {step.example && isExampleOpen && (
+                            <div className="mt-3 ml-2 sm:ml-9 p-3.5 bg-slate-900 border border-amber-500/30 rounded-xl space-y-2.5 animate-fade-in shadow-inner">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded uppercase">
+                                  {step.example.badge}
+                                </span>
+                                <span className="text-[10px] font-mono text-slate-400 font-bold">
+                                  {step.example.title}
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-slate-300 leading-relaxed italic bg-slate-950/60 p-2 rounded-lg border border-slate-800">
+                                "{step.example.scenario}"
+                              </p>
+                              {step.example.dataPoints && step.example.dataPoints.length > 0 && (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-1">
+                                  {step.example.dataPoints.map((dp, dIdx) => (
+                                    <div key={dIdx} className="bg-slate-950/80 px-2 py-1 rounded border border-slate-800 flex items-center justify-between text-[10px] gap-2">
+                                      <span className="text-slate-400 font-mono font-medium truncate">{dp.key}:</span>
+                                      <span className="text-emerald-400 font-bold truncate">{dp.val}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* INTERACTIVE ACTION BUTTONS */}
+                          <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-800/80 pl-2 sm:pl-9">
+                            {step.example && (
+                              <button
+                                onClick={() => toggleStepExample(stepKey)}
+                                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition flex items-center gap-1.5 cursor-pointer font-mono ${
+                                  isExampleOpen
+                                    ? 'bg-amber-500/30 text-amber-200 border-amber-500/60 shadow'
+                                    : 'bg-amber-500/10 text-amber-300 border-amber-500/30 hover:bg-amber-500/20'
+                                }`}
+                              >
+                                <Eye className="w-3.5 h-3.5 text-amber-400" />
+                                <span>{isExampleOpen ? 'Hide Example' : 'View Example'}</span>
+                              </button>
+                            )}
+                            <button
+                              onClick={() =>
+                                setActiveIllustrationModal({
+                                  id: step.illustrationId || currentSection.id,
+                                  title: step.illustrationTitle || step.title,
+                                  subtitle: currentSection.title,
+                                  stepNumber: idx + 1,
+                                  desc: step.desc,
+                                  example: step.example
+                                })
+                              }
+                              className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-500/25 transition flex items-center gap-1.5 cursor-pointer font-mono"
+                            >
+                              <Layers className="w-3.5 h-3.5 text-indigo-400" />
+                              <span>Visual Illustration</span>
+                            </button>
+                          </div>
                         </div>
-                        <p className="text-xs text-slate-300 leading-relaxed pl-9">
-                          {step.desc}
-                        </p>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -1088,15 +1494,40 @@ export default function HelpCentre({ open, onClose }: HelpCentreProps) {
                       <ReactMarkdown
                         remarkPlugins={[remarkGfm]}
                         components={{
-                          h1: ({ ...props }) => (
-                            <h1 className="text-2xl font-black text-white pb-2 border-b border-slate-800 mb-4 mt-2" {...props} />
-                          ),
-                          h2: ({ ...props }) => (
-                            <h2 className="text-xl font-bold text-amber-400 pb-1 border-b border-slate-800/60 mb-3 mt-6" {...props} />
-                          ),
-                          h3: ({ ...props }) => (
-                            <h3 className="text-base font-bold text-indigo-300 mb-2 mt-4" {...props} />
-                          ),
+                          a: ({ href, children, ...props }) => {
+                            const isAnchor = href?.startsWith('#');
+                            return (
+                              <a
+                                href={href}
+                                onClick={(e) => {
+                                  if (isAnchor) {
+                                    e.preventDefault();
+                                    const targetId = (href || '').replace(/^#/, '');
+                                    const element = document.getElementById(targetId);
+                                    if (element) {
+                                      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                                    }
+                                  }
+                                }}
+                                className="text-amber-400 hover:text-amber-300 underline font-bold transition cursor-pointer inline-flex items-center gap-1 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20 my-0.5"
+                                {...props}
+                              >
+                                {children}
+                              </a>
+                            );
+                          },
+                          h1: ({ children, ...props }) => {
+                            const id = String(children || '').toLowerCase().replace(/[^\w\s-]/g, '').replace(/\s+/g, '-');
+                            return <h1 id={id} className="text-2xl font-black text-white pb-2 border-b border-slate-800 mb-4 mt-2 scroll-mt-6" {...props}>{children}</h1>;
+                          },
+                          h2: ({ children, ...props }) => {
+                            const id = String(children || '').toLowerCase().replace(/[^\w\s-]/g, '').replace(/\s+/g, '-');
+                            return <h2 id={id} className="text-xl font-bold text-amber-400 pb-1 border-b border-slate-800/60 mb-3 mt-6 scroll-mt-6" {...props}>{children}</h2>;
+                          },
+                          h3: ({ children, ...props }) => {
+                            const id = String(children || '').toLowerCase().replace(/[^\w\s-]/g, '').replace(/\s+/g, '-');
+                            return <h3 id={id} className="text-base font-bold text-indigo-300 mb-2 mt-4 scroll-mt-6" {...props}>{children}</h3>;
+                          },
                           p: ({ ...props }) => <p className="mb-3 text-sm text-slate-300 leading-relaxed" {...props} />,
                           ul: ({ ...props }) => <ul className="list-disc pl-5 mb-3 space-y-1 text-sm text-slate-300" {...props} />,
                           ol: ({ ...props }) => <ol className="list-decimal pl-5 mb-3 space-y-1 text-sm text-slate-300" {...props} />,
@@ -1163,6 +1594,106 @@ export default function HelpCentre({ open, onClose }: HelpCentreProps) {
           )}
         </div>
       </div>
+
+      {/* TASK ILLUSTRATION & EXAMPLE LIGHTBOX MODAL */}
+      {activeIllustrationModal && (
+        <div
+          className="fixed inset-0 z-[10000] bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-y-auto animate-fade-in font-sans"
+          onClick={() => setActiveIllustrationModal(null)}
+        >
+          <div
+            className="bg-slate-900 border border-slate-700 rounded-3xl max-w-5xl w-full max-h-[92vh] flex flex-col overflow-hidden shadow-2xl text-white"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="px-6 py-4 bg-gradient-to-r from-slate-950 via-indigo-950 to-slate-950 border-b border-slate-800 flex items-center justify-between gap-4 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-500/20 border border-indigo-400/40 flex items-center justify-center text-indigo-300 font-mono font-bold text-sm shrink-0">
+                  #{activeIllustrationModal.stepNumber}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-mono bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 px-2 py-0.5 rounded font-bold uppercase tracking-wider">
+                      Interactive Task Illustration
+                    </span>
+                    <span className="text-[10px] font-mono text-slate-400">
+                      {activeIllustrationModal.subtitle}
+                    </span>
+                  </div>
+                  <h3 className="text-base font-bold text-white mt-0.5">
+                    {activeIllustrationModal.title}
+                  </h3>
+                </div>
+              </div>
+              <button
+                onClick={() => setActiveIllustrationModal(null)}
+                className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 overflow-y-auto space-y-6 flex-1 bg-slate-950/70">
+              <p className="text-xs text-slate-300 leading-relaxed bg-slate-900/80 p-3.5 rounded-xl border border-slate-800">
+                {activeIllustrationModal.desc}
+              </p>
+
+              {/* Task Schematic Diagram */}
+              <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 shadow-inner overflow-x-auto">
+                {renderTaskIllustrationSvg(activeIllustrationModal.id)}
+              </div>
+
+              {/* Scenario Data Sheet */}
+              {activeIllustrationModal.example && (
+                <div className="bg-slate-900/90 border border-amber-500/30 rounded-2xl p-5 space-y-3 shadow-lg">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded uppercase">
+                      {activeIllustrationModal.example.badge}
+                    </span>
+                    <span className="text-xs font-bold text-amber-300 font-mono">
+                      {activeIllustrationModal.example.title}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-200 leading-relaxed italic bg-slate-950/70 p-3 rounded-xl border border-slate-800/80">
+                    "{activeIllustrationModal.example.scenario}"
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                    {activeIllustrationModal.example.dataPoints.map((dp, idx) => (
+                      <div key={idx} className="bg-slate-950 px-3 py-2 rounded-lg border border-slate-800 flex items-center justify-between text-xs">
+                        <span className="text-slate-400 font-mono font-medium">{dp.key}:</span>
+                        <span className="text-emerald-400 font-bold font-mono">{dp.val}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-3.5 bg-slate-950 border-t border-slate-800 flex items-center justify-between gap-3">
+              <button
+                onClick={() => {
+                  setActiveIllustrationModal(null);
+                  setViewMode('sop');
+                  const firstTimeSop = sops.find((s) => s.file === '00-first-time-user-guide.md');
+                  if (firstTimeSop) setSelectedSop(firstTimeSop);
+                }}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl transition flex items-center gap-2 cursor-pointer font-mono"
+              >
+                <BookOpen className="w-4 h-4 text-indigo-400" />
+                Read Full SOP Guide
+              </button>
+              <button
+                onClick={() => setActiveIllustrationModal(null)}
+                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs transition cursor-pointer font-mono shadow-md"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* IMAGE ZOOM OVERLAY */}
       {zoomedImage && (
