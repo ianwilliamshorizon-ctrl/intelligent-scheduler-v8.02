@@ -11,7 +11,7 @@
     "deploy:dev": "firebase deploy --project dev --only hosting",
     "release:dev": "npm run build:dev && npm run deploy:dev",
     "build:brookspeed": "vite build --mode brookspeed",
-    "deploy:brookspeed": "firebase deploy --project default",
+    "deploy:brookspeed": "firebase deploy --project default --only hosting",
     "release:prod": "npm run build:brookspeed && npm run deploy:brookspeed",
     "build:company1": "vite build --mode company1",
     "deploy:company1": "firebase deploy --project company1",
