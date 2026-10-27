@@ -144,9 +144,13 @@ export const useDispatchFilters = ({
         return lifts
             .filter(l => selectedEntityId === 'all' || l.entityId === selectedEntityId)
             .sort((a, b) => {
+                const isMotA = (a.name || '').toLowerCase().includes('mot') || (a.type || '').toLowerCase().includes('mot') || (a.name || '').toLowerCase().includes('lift 7') || (a.name || '').toLowerCase().includes('bay 7');
+                const isMotB = (b.name || '').toLowerCase().includes('mot') || (b.type || '').toLowerCase().includes('mot') || (b.name || '').toLowerCase().includes('lift 7') || (b.name || '').toLowerCase().includes('bay 7');
+                if (isMotA && !isMotB) return 1;
+                if (!isMotA && isMotB) return -1;
                 const valA = parseInt((a.name || '').replace(/\D/g, '')) || 0;
                 const valB = parseInt((b.name || '').replace(/\D/g, '')) || 0;
-                return valA - valB;
+                return valA !== valB ? valA - valB : (a.name || '').localeCompare(b.name || '');
             });
     }, [lifts, selectedEntityId]);
 

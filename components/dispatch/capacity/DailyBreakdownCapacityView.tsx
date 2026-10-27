@@ -88,8 +88,23 @@ export const DailyBreakdownCapacityView: React.FC<DailyBreakdownCapacityViewProp
         });
     }, [currentDateObj, jobs, lifts, engineers, absences, businessEntities, selectedEntityId, bankHolidays]);
 
+    const isMotOrLift7 = (l: Lift) => {
+        const name = (l.name || '').toLowerCase();
+        const type = (l.type || '').toLowerCase();
+        return name.includes('mot') || type.includes('mot') || name.includes('lift 7') || name.includes('bay 7');
+    };
+
     const entityLifts = useMemo(() => {
-        return lifts.filter(l => selectedEntityId === 'all' || l.entityId === selectedEntityId);
+        const filtered = lifts.filter(l => selectedEntityId === 'all' || l.entityId === selectedEntityId);
+        return [...filtered].sort((a, b) => {
+            const isMotA = isMotOrLift7(a);
+            const isMotB = isMotOrLift7(b);
+            if (isMotA && !isMotB) return 1;
+            if (!isMotA && isMotB) return -1;
+            const valA = parseInt((a.name || '').replace(/\D/g, '')) || 0;
+            const valB = parseInt((b.name || '').replace(/\D/g, '')) || 0;
+            return valA !== valB ? valA - valB : (a.name || '').localeCompare(b.name || '');
+        });
     }, [lifts, selectedEntityId]);
 
     const entityEngineers = useMemo(() => {
@@ -98,6 +113,7 @@ export const DailyBreakdownCapacityView: React.FC<DailyBreakdownCapacityViewProp
 
     const vehiclesById = useMemo(() => new Map(vehicles.map(v => [v.id, v])), [vehicles]);
     const customersById = useMemo(() => new Map(customers.map(c => [c.id, c])), [customers]);
+    const engineersById = useMemo(() => new Map(engineers.map(e => [e.id, e])), [engineers]);
 
     // Engineers on sick-leave or absence today
     const absentEngineerMap = useMemo(() => {
@@ -202,13 +218,12 @@ export const DailyBreakdownCapacityView: React.FC<DailyBreakdownCapacityViewProp
 
             return {
                 lift,
-                assignedTech,
                 allocatedSegments,
                 bookedLiftHours,
                 isBayEmpty
             };
         });
-    }, [entityLifts, entityEngineers, jobs, currentDate, absentEngineerMap]);
+    }, [entityLifts, jobs, currentDate, absentEngineerMap]);
 
     const totalSegmentsCount = TIME_SEGMENTS.length;
     const slotRowHeightPx = 42; // Height per 30-min segment in vertical timeline
@@ -381,6 +396,13 @@ export const DailyBreakdownCapacityView: React.FC<DailyBreakdownCapacityViewProp
                                         <p className="text-[11px] text-slate-400 truncate mt-0.5">
                                             {customer ? getCustomerDisplayName(customer) : 'Customer'}
                                         </p>
+
+                                        {segment?.engineerId && (
+                                            <div className="flex items-center gap-1 text-[10px] text-indigo-700 font-bold mt-1 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded w-fit">
+                                                <UserIcon size={10} className="flex-shrink-0" />
+                                                <span>{engineersById.get(segment.engineerId)?.name || 'Assigned Tech'}</span>
+                                            </div>
+                                        )}
                                     </div>
                                 );
                             })
@@ -410,7 +432,7 @@ export const DailyBreakdownCapacityView: React.FC<DailyBreakdownCapacityViewProp
 
                     {/* Vertical Ramp Columns (Arranged side-by-side) */}
                     <div className="flex-grow flex min-w-[700px]">
-                        {liftSchedules.map(({ lift, assignedTech, allocatedSegments, bookedLiftHours, isBayEmpty }) => {
+                        {liftSchedules.map(({ lift, allocatedSegments, bookedLiftHours, isBayEmpty }) => {
                             return (
                                 <div 
                                     key={lift.id} 
@@ -418,20 +440,26 @@ export const DailyBreakdownCapacityView: React.FC<DailyBreakdownCapacityViewProp
                                 >
                                     {/* Vertical Ramp Header */}
                                     <div className="sticky top-0 z-10 bg-slate-50/95 backdrop-blur-xs border-b border-slate-200 p-2.5 h-16 flex flex-col justify-center">
-                                        <div className="flex items-center gap-1.5">
-                                            <span 
-                                                className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                                                style={{ backgroundColor: lift.color || '#4f46e5' }}
-                                            />
-                                            <span className="font-black text-slate-900 text-xs truncate" title={lift.name}>
-                                                {lift.name}
-                                            </span>
+                                        <div className="flex items-center justify-between gap-1">
+                                            <div className="flex items-center gap-1.5 min-w-0">
+                                                <span 
+                                                    className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                                                    style={{ backgroundColor: lift.color || '#4f46e5' }}
+                                                />
+                                                <span className="font-black text-slate-900 text-xs truncate" title={lift.name}>
+                                                    {lift.name}
+                                                </span>
+                                            </div>
+                                            {isMotOrLift7(lift) && (
+                                                <span className="text-[9px] font-black uppercase bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded border border-purple-200 flex-shrink-0">
+                                                    MOT
+                                                </span>
+                                            )}
                                         </div>
 
                                         <div className="flex items-center justify-between text-[10px] text-slate-500 font-medium mt-1">
-                                            <span className="flex items-center gap-1 truncate max-w-[100px]">
-                                                <UserIcon size={10} className="text-slate-400" />
-                                                <span>{assignedTech?.name || 'Tech Pool'}</span>
+                                            <span className="text-[10px] font-semibold text-slate-500 truncate max-w-[100px]">
+                                                {lift.type || (isMotOrLift7(lift) ? 'MOT Bay' : 'Workshop Bay')}
                                             </span>
                                             <span className={`px-1.5 py-0.2 rounded font-bold ${
                                                 isBayEmpty 
@@ -466,6 +494,7 @@ export const DailyBreakdownCapacityView: React.FC<DailyBreakdownCapacityViewProp
                                         {allocatedSegments.map(({ segment, parentJob, startSlot, slotSpan, statusLabel, colorClass }) => {
                                             const vehicle = vehiclesById.get(parentJob.vehicleId);
                                             const customer = customersById.get(parentJob.customerId);
+                                            const engineer = segment.engineerId ? engineersById.get(segment.engineerId) : undefined;
 
                                             const topPercent = (startSlot / totalSegmentsCount) * 100;
                                             const heightPercent = (slotSpan / totalSegmentsCount) * 100;
@@ -480,7 +509,7 @@ export const DailyBreakdownCapacityView: React.FC<DailyBreakdownCapacityViewProp
                                                     style={{
                                                         top: `${topPercent}%`,
                                                         height: `${heightPercent}%`,
-                                                        minHeight: '38px'
+                                                        minHeight: '44px'
                                                     }}
                                                     className={`absolute left-1 right-1 p-2 rounded-xl shadow-sm border cursor-grab active:cursor-grabbing hover:shadow-md hover:scale-[1.01] transition-all flex flex-col justify-between overflow-hidden z-10 ${colorClass}`}
                                                 >
@@ -499,6 +528,14 @@ export const DailyBreakdownCapacityView: React.FC<DailyBreakdownCapacityViewProp
                                                     <p className="text-[10px] opacity-90 truncate leading-none mt-0.5">
                                                         {customer ? getCustomerDisplayName(customer) : 'Customer'}
                                                     </p>
+
+                                                    {/* Allocated Engineer on this Job */}
+                                                    <div className="flex items-center gap-1 text-[10px] opacity-95 truncate mt-1 bg-black/25 px-1.5 py-0.5 rounded w-fit">
+                                                        <UserIcon size={10} className="flex-shrink-0" />
+                                                        <span className="font-bold truncate">
+                                                            {engineer ? engineer.name : 'Unassigned Tech'}
+                                                        </span>
+                                                    </div>
                                                 </div>
                                             );
                                         })}
