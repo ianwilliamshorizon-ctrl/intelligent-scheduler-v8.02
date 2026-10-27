@@ -259,6 +259,7 @@ export const findSpareCapacitySlots = (params: {
     businessEntities: BusinessEntity[];
     selectedEntityId: string;
     bankHolidays?: Map<string, string[]>;
+    onlyMot?: boolean;
 }): FreeCapacitySlot[] => {
     const {
         startDate,
@@ -270,14 +271,23 @@ export const findSpareCapacitySlots = (params: {
         absences,
         businessEntities,
         selectedEntityId,
-        bankHolidays
-    } = params;
+        bankHolidays,
+        onlyMot
+    } = params as typeof params & { onlyMot?: boolean };
 
     const slots: FreeCapacitySlot[] = [];
     const totalDaysToScan = horizonWeeks * 7;
     const minSegmentsRequired = Math.ceil(minDurationHours * (60 / SEGMENT_DURATION_MINUTES));
 
-    const entityLifts = lifts.filter(l => selectedEntityId === 'all' || l.entityId === selectedEntityId);
+    const isMotOrLift7 = (l: Lift) => {
+        const name = (l.name || '').toLowerCase();
+        const type = (l.type || '').toLowerCase();
+        return name.includes('mot') || type.includes('mot') || name.includes('lift 7') || name.includes('bay 7');
+    };
+
+    const entityLifts = lifts
+        .filter(l => selectedEntityId === 'all' || l.entityId === selectedEntityId)
+        .filter(l => !onlyMot || isMotOrLift7(l));
     const entityEngineers = engineers.filter(e => selectedEntityId === 'all' || e.entityId === selectedEntityId);
 
     for (let dayOffset = 0; dayOffset < totalDaysToScan; dayOffset++) {

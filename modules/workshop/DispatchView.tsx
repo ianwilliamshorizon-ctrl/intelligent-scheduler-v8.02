@@ -98,6 +98,7 @@ const DispatchView: React.FC<DispatchViewProps> = ({
     const [assignModalData, setAssignModalData] = useState<{ job: Job, segment: JobSegment, lift: Lift, startSegmentIndex: number, currentEngineerId?: string | null } | null>(null);
     const [reassignModalData, setReassignModalData] = useState<{ jobId: string; segmentId: string; liftName: string; startSegmentIndex: number; currentEngineerId?: string | null; } | null>(null);
     const [isLaborTallyModalOpen, setIsLaborTallyModalOpen] = useState(false);
+    const [slotFinderJobId, setSlotFinderJobId] = useState<string | null>(null);
 
     // -- Bank Holidays State --
     const [bankHolidays, setBankHolidays] = useState<Map<string, string[]>>(new Map());
@@ -306,6 +307,10 @@ const DispatchView: React.FC<DispatchViewProps> = ({
                     onSendOffsite={onSendOffsite}
                     onPassToSales={onPassToSales}
                     onOpenAssistant={(id) => { setSelectedJobId(id); onOpenAssistant(id); }}
+                    onFindSpareSlot={(jobId) => {
+                        setSlotFinderJobId(jobId);
+                        setViewMode('spare-search');
+                    }}
                     onCreateInvoice={onCreateInvoice}
                     onEngineerComplete={onEngineerComplete}
                     purchaseOrders={purchaseOrders}
@@ -313,7 +318,7 @@ const DispatchView: React.FC<DispatchViewProps> = ({
                 />
             )}
 
-            {/* Screen 3: Spare-Capacity Search View */}
+            {/* Screen 3: Spare-Capacity Search View (Intelligent Job-Aware Slot Matching) */}
             {viewMode === 'spare-search' && (
                 <SpareCapacitySearchView
                     startDate={dateStringToDate(currentDate)}
@@ -324,9 +329,29 @@ const DispatchView: React.FC<DispatchViewProps> = ({
                     businessEntities={businessEntities}
                     selectedEntityId={selectedEntityId}
                     bankHolidays={bankHolidays}
+                    vehicles={vehicles}
+                    customers={customers}
+                    unallocatedJobs={unallocatedJobs}
+                    initialJobId={slotFinderJobId}
+                    onSelectJob={(jobId) => setSlotFinderJobId(jobId)}
                     onSelectSlotDate={(date) => {
                         setCurrentDate(date);
                         setViewMode('daily-breakdown');
+                    }}
+                    onScheduleJobIntoSlot={(job, slot) => {
+                        setCurrentDate(slot.date);
+                        const firstUnallocatedSeg = (job.segments || []).find(s => s.status === 'Unallocated') || (job.segments && job.segments[0]);
+                        const lift = lifts.find(l => l.id === slot.liftId);
+                        if (firstUnallocatedSeg && lift) {
+                            setAssignModalData({
+                                job,
+                                segment: firstUnallocatedSeg,
+                                lift,
+                                startSegmentIndex: slot.startSegmentIndex,
+                                currentEngineerId: slot.engineerId || firstUnallocatedSeg.engineerId
+                            });
+                            setViewMode('daily-breakdown');
+                        }
                     }}
                     onBackToWeekly={() => setViewMode('capacity-weekly')}
                 />

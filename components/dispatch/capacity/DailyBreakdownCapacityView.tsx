@@ -71,6 +71,7 @@ interface DailyBreakdownCapacityViewProps {
     onSendOffsite?: (jobId: string, segmentId: string) => void;
     onPassToSales?: (jobId: string) => void;
     onOpenAssistant?: (jobId: string) => void;
+    onFindSpareSlot?: (jobId: string) => void;
     onCreateInvoice?: (job: Job) => void;
     onEngineerComplete?: (job: Job, segmentId: string) => void;
     purchaseOrders?: PurchaseOrder[];
@@ -113,6 +114,7 @@ export const DailyBreakdownCapacityView: React.FC<DailyBreakdownCapacityViewProp
         onSendOffsite,
         onPassToSales,
         onOpenAssistant,
+        onFindSpareSlot,
         onCreateInvoice,
         onEngineerComplete,
         purchaseOrders = [],
@@ -451,25 +453,49 @@ export const DailyBreakdownCapacityView: React.FC<DailyBreakdownCapacityViewProp
                                 const canDrag = baseRole === 'Admin' || baseRole === 'Dispatcher';
 
                                 return (
-                                    <div 
-                                        key={job.id}
-                                        draggable={canDrag}
-                                        onDragStart={(e) => canDrag && onDragStart(e, job.id, segmentToDrag.segmentId)}
-                                        onDragEnd={onDragEnd}
-                                        className={`${canDrag ? 'cursor-grab' : 'cursor-default'} draggable-job transition-transform hover:scale-[1.02] active:scale-95`}
-                                    >
-                                        <SummaryJobCard {...commonProps} />
+                                    <div key={job.id} className="relative group">
+                                        <div 
+                                            draggable={canDrag}
+                                            onDragStart={(e) => canDrag && onDragStart(e, job.id, segmentToDrag.segmentId)}
+                                            onDragEnd={onDragEnd}
+                                            className={`${canDrag ? 'cursor-grab' : 'cursor-default'} draggable-job transition-transform hover:scale-[1.01] active:scale-95`}
+                                        >
+                                            <SummaryJobCard {...commonProps} />
+                                        </div>
+                                        {onFindSpareSlot && (
+                                            <button
+                                                type="button"
+                                                onClick={() => onFindSpareSlot(job.id)}
+                                                className="w-full mt-1.5 py-1 px-2.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-[10px] font-black flex items-center justify-center gap-1.5 transition-colors shadow-2xs cursor-pointer"
+                                                title="Find matching spare capacity slots for this job"
+                                            >
+                                                <Sparkles size={11} className="text-amber-600" />
+                                                <span>Find Spare Slot for #{job.id}</span>
+                                            </button>
+                                        )}
                                     </div>
                                 );
                             }
 
                             return (
-                                <DraggableJobCard
-                                    key={job.id}
-                                    {...commonProps}
-                                    onDragStart={onDragStart}
-                                    onDragEnd={onDragEnd}
-                                />
+                                <div key={job.id} className="relative group">
+                                    <DraggableJobCard
+                                        {...commonProps}
+                                        onDragStart={onDragStart}
+                                        onDragEnd={onDragEnd}
+                                    />
+                                    {onFindSpareSlot && (
+                                        <button
+                                            type="button"
+                                            onClick={() => onFindSpareSlot(job.id)}
+                                            className="w-full mt-1.5 py-1 px-2.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-[10px] font-black flex items-center justify-center gap-1.5 transition-colors shadow-2xs cursor-pointer"
+                                            title="Find matching spare capacity slots for this job"
+                                        >
+                                            <Sparkles size={11} className="text-amber-600" />
+                                            <span>Find Spare Slot for #{job.id}</span>
+                                        </button>
+                                    )}
+                                </div>
                             );
                         })}
                     </div>

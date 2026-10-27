@@ -8,8 +8,7 @@ import {
     LayoutDashboard, 
     Layers, 
     Sparkles, 
-    AlertOctagon, 
-    MoreHorizontal 
+    AlertOctagon 
 } from 'lucide-react';
 import { formatReadableDate, formatDate, addDays } from '../../../core/utils/dateUtils';
 import { CapacityViewTab } from '../../../components/dispatch/capacity/capacityTypes';
@@ -51,8 +50,6 @@ export const DispatchHeader: React.FC<DispatchHeaderProps> = ({
     onOpenLaborTally,
     warningsCount = 0
 }) => {
-    const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
-
     const handlePrevDay = () => setCurrentDate(formatDate(addDays(new Date(currentDate), -1)));
     const handleNextDay = () => setCurrentDate(formatDate(addDays(new Date(currentDate), 1)));
 
@@ -67,8 +64,6 @@ export const DispatchHeader: React.FC<DispatchHeaderProps> = ({
             document.head.removeChild(style);
         }, 500);
     };
-
-    const isLegacyOrGantt = viewMode === 'timeline' || viewMode === 'week' || viewMode === 'calendar' || viewMode === 'fcs-gantt';
 
     return (
         <header className="calendar-header bg-white border-b border-slate-200 p-3 sm:p-4 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 shadow-xs z-30">
@@ -132,51 +127,6 @@ export const DispatchHeader: React.FC<DispatchHeaderProps> = ({
                         )}
                     </button>
 
-                    {/* Secondary menu for legacy/Gantt modes */}
-                    <div className="relative">
-                        <button
-                            onClick={() => setIsMoreMenuOpen(!isMoreMenuOpen)}
-                            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold transition ${
-                                isLegacyOrGantt 
-                                    ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' 
-                                    : 'text-slate-500 hover:text-slate-800'
-                            }`}
-                            title="Legacy Timelines & Gantt"
-                        >
-                            <MoreHorizontal size={15} />
-                            <span className="hidden sm:inline">Advanced Views</span>
-                        </button>
-
-                        {isMoreMenuOpen && (
-                            <div className="absolute left-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-50">
-                                <button
-                                    onClick={() => { setViewMode('timeline'); setIsMoreMenuOpen(false); }}
-                                    className={`w-full text-left px-3.5 py-2 text-xs font-bold hover:bg-slate-50 transition ${viewMode === 'timeline' ? 'text-indigo-600 font-black' : 'text-slate-700'}`}
-                                >
-                                    Legacy Day Timeline
-                                </button>
-                                <button
-                                    onClick={() => { setViewMode('week'); setIsMoreMenuOpen(false); }}
-                                    className={`w-full text-left px-3.5 py-2 text-xs font-bold hover:bg-slate-50 transition ${viewMode === 'week' ? 'text-indigo-600 font-black' : 'text-slate-700'}`}
-                                >
-                                    Legacy Week Grid
-                                </button>
-                                <button
-                                    onClick={() => { setViewMode('calendar'); setIsMoreMenuOpen(false); }}
-                                    className={`w-full text-left px-3.5 py-2 text-xs font-bold hover:bg-slate-50 transition ${viewMode === 'calendar' ? 'text-indigo-600 font-black' : 'text-slate-700'}`}
-                                >
-                                    Month Calendar
-                                </button>
-                                <button
-                                    onClick={() => { setViewMode('fcs-gantt'); setIsMoreMenuOpen(false); }}
-                                    className={`w-full text-left px-3.5 py-2 text-xs font-bold hover:bg-indigo-50 transition flex items-center justify-between ${viewMode === 'fcs-gantt' ? 'text-indigo-900 font-black' : 'text-slate-700'}`}
-                                >
-                                    <span>Resource Gantt (FCS)</span>
-                                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                                </button>
-                            </div>
-                        )}
-                    </div>
                 </div>
 
                 {/* Date Navigation for day/week modes */}
