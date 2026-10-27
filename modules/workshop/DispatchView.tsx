@@ -23,6 +23,7 @@ import MonthlyLaborTallyModal from '../../components/jobs/MonthlyLaborTallyModal
 
 // Visual-First Capacity Planning Components
 import { WeeklyCapacityOverview } from '../../components/dispatch/capacity/WeeklyCapacityOverview';
+import { MonthlyCapacityOverview } from '../../components/dispatch/capacity/MonthlyCapacityOverview';
 import { DailyBreakdownCapacityView } from '../../components/dispatch/capacity/DailyBreakdownCapacityView';
 import { SpareCapacitySearchView } from '../../components/dispatch/capacity/SpareCapacitySearchView';
 import { CapacityWarningsPanel } from '../../components/dispatch/capacity/CapacityWarningsPanel';
@@ -218,13 +219,14 @@ const DispatchView: React.FC<DispatchViewProps> = ({
             daysToCheck: 28,
             jobs,
             lifts,
-            engineers,
+            engineers: entityEngineers,
             absences: absenceRequests,
             businessEntities,
             selectedEntityId,
-            bankHolidays
+            bankHolidays,
+            users
         });
-    }, [currentDate, jobs, lifts, engineers, absenceRequests, businessEntities, selectedEntityId, bankHolidays]);
+    }, [currentDate, jobs, lifts, entityEngineers, absenceRequests, businessEntities, selectedEntityId, bankHolidays, users]);
 
     const handleBookJobForDate = (dateStr?: string) => {
         const targetDate = dateStr ? dateStringToDate(dateStr) : dateStringToDate(currentDate);
@@ -260,11 +262,36 @@ const DispatchView: React.FC<DispatchViewProps> = ({
                     setWeekStart={setWeekStart}
                     jobs={jobs}
                     lifts={lifts}
-                    engineers={engineers}
+                    engineers={entityEngineers}
                     absences={absenceRequests}
                     businessEntities={businessEntities}
                     selectedEntityId={selectedEntityId}
                     bankHolidays={bankHolidays}
+                    users={users}
+                    onSelectDate={(date) => {
+                        setCurrentDate(date);
+                        setViewMode('daily-breakdown');
+                    }}
+                    onBookJobForDate={handleBookJobForDate}
+                    onGoToSpareSearch={() => setViewMode('spare-search')}
+                    onGoToWarnings={() => setViewMode('warnings')}
+                    warningsCount={activeWarnings.length}
+                />
+            )}
+
+            {/* Screen 1b: Monthly Overview Dashboard (Engineer-Availability & Holiday Driven) */}
+            {viewMode === 'capacity-monthly' && (
+                <MonthlyCapacityOverview
+                    monthDate={currentMonthDate}
+                    onMonthChange={handleMonthChange}
+                    jobs={jobs}
+                    lifts={lifts}
+                    engineers={entityEngineers}
+                    absences={absenceRequests}
+                    businessEntities={businessEntities}
+                    selectedEntityId={selectedEntityId}
+                    bankHolidays={bankHolidays}
+                    users={users}
                     onSelectDate={(date) => {
                         setCurrentDate(date);
                         setViewMode('daily-breakdown');
@@ -285,7 +312,7 @@ const DispatchView: React.FC<DispatchViewProps> = ({
                     onBookJobForDate={handleBookJobForDate}
                     jobs={jobs}
                     lifts={lifts}
-                    engineers={engineers}
+                    engineers={entityEngineers}
                     absences={absenceRequests}
                     businessEntities={businessEntities}
                     selectedEntityId={selectedEntityId}
@@ -333,7 +360,7 @@ const DispatchView: React.FC<DispatchViewProps> = ({
                     startDate={dateStringToDate(currentDate)}
                     jobs={jobs}
                     lifts={lifts}
-                    engineers={engineers}
+                    engineers={entityEngineers}
                     absences={absenceRequests}
                     businessEntities={businessEntities}
                     selectedEntityId={selectedEntityId}
@@ -373,11 +400,12 @@ const DispatchView: React.FC<DispatchViewProps> = ({
                     startDate={dateStringToDate(currentDate)}
                     jobs={jobs}
                     lifts={lifts}
-                    engineers={engineers}
+                    engineers={entityEngineers}
                     absences={absenceRequests}
                     businessEntities={businessEntities}
                     selectedEntityId={selectedEntityId}
                     bankHolidays={bankHolidays}
+                    users={users}
                     onBackToWeekly={() => setViewMode('capacity-weekly')}
                     onJumpToDay={(date) => {
                         setCurrentDate(date);

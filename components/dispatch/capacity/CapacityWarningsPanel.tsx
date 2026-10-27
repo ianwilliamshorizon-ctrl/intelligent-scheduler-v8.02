@@ -24,6 +24,7 @@ interface CapacityWarningsPanelProps {
     businessEntities: BusinessEntity[];
     selectedEntityId: string;
     bankHolidays?: Map<string, string[]>;
+    users?: any[];
     onBackToWeekly: () => void;
     onJumpToDay: (dateStr: string) => void;
     onEditJob?: (jobId: string) => void;
@@ -38,6 +39,7 @@ export const CapacityWarningsPanel: React.FC<CapacityWarningsPanelProps> = ({
     businessEntities,
     selectedEntityId,
     bankHolidays,
+    users,
     onBackToWeekly,
     onJumpToDay,
     onEditJob
@@ -56,9 +58,10 @@ export const CapacityWarningsPanel: React.FC<CapacityWarningsPanelProps> = ({
             absences,
             businessEntities,
             selectedEntityId,
-            bankHolidays
+            bankHolidays,
+            users
         });
-    }, [startDate, jobs, lifts, engineers, absences, businessEntities, selectedEntityId, bankHolidays]);
+    }, [startDate, jobs, lifts, engineers, absences, businessEntities, selectedEntityId, bankHolidays, users]);
 
     // Filter warnings
     const filteredWarnings = useMemo(() => {

@@ -71,7 +71,7 @@ export const DispatchHeader: React.FC<DispatchHeaderProps> = ({
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 w-full lg:w-auto">
                 {/* Visual Capacity Planning Navigation */}
                 <div className="flex items-center bg-slate-100 rounded-xl p-1 w-full sm:w-auto overflow-x-auto no-scrollbar no-print border border-slate-200">
-                    {/* Screen 1: Weekly Overview (Default Landing) */}
+                    {/* Screen 1: Weekly Overview */}
                     <button 
                         onClick={() => setViewMode('capacity-weekly')} 
                         className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg font-bold text-xs sm:text-sm transition whitespace-nowrap ${
@@ -84,7 +84,20 @@ export const DispatchHeader: React.FC<DispatchHeaderProps> = ({
                         <span>Weekly Capacity</span>
                     </button>
 
-                    {/* Screen 2: Daily Breakdown */}
+                    {/* Screen 2: Monthly Overview */}
+                    <button 
+                        onClick={() => setViewMode('capacity-monthly')} 
+                        className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg font-bold text-xs sm:text-sm transition whitespace-nowrap ${
+                            viewMode === 'capacity-monthly' 
+                                ? 'bg-white shadow-sm text-indigo-700' 
+                                : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                    >
+                        <Calendar size={14} />
+                        <span>Monthly Capacity</span>
+                    </button>
+
+                    {/* Screen 3: Daily Breakdown */}
                     <button 
                         onClick={() => setViewMode('daily-breakdown')} 
                         className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg font-bold text-xs sm:text-sm transition whitespace-nowrap ${
@@ -159,23 +172,23 @@ export const DispatchHeader: React.FC<DispatchHeaderProps> = ({
                             </button>
                         </>
                     )}
-                    {viewMode === 'calendar' && (
+                    {(viewMode === 'capacity-monthly' || viewMode === 'calendar') && (
                         <>
-                            <button onClick={() => handleMonthChange(-1)} className="no-print p-2 rounded-full hover:bg-slate-100 flex-shrink-0">
+                            <button onClick={() => handleMonthChange(-1)} className="no-print p-2 rounded-full hover:bg-slate-100 flex-shrink-0 cursor-pointer" title="Previous Month">
                                 <ChevronLeft size={18}/>
                             </button>
                             <span className="font-semibold px-2 text-xs sm:text-sm text-center flex-grow sm:flex-grow-0">
                                 {currentMonthDate.toLocaleString('default', { month: 'long', year: 'numeric', timeZone: 'UTC' })}
                             </span>
-                            <button onClick={() => handleMonthChange(1)} className="no-print p-2 rounded-full hover:bg-slate-100 flex-shrink-0">
+                            <button onClick={() => handleMonthChange(1)} className="no-print p-2 rounded-full hover:bg-slate-100 flex-shrink-0 cursor-pointer" title="Next Month">
                                 <ChevronRight size={18}/>
                             </button>
                         </>
                     )}
-                    <button onClick={handleToday} className="no-print text-xs sm:text-sm font-semibold text-indigo-600 hover:bg-indigo-50 px-2 sm:px-3 py-1.5 rounded flex-shrink-0">
+                    <button onClick={handleToday} className="no-print text-xs sm:text-sm font-semibold text-indigo-600 hover:bg-indigo-50 px-2 sm:px-3 py-1.5 rounded flex-shrink-0 cursor-pointer">
                         Today
                     </button>
-                    {(viewMode === 'week' || viewMode === 'calendar') && (
+                    {(viewMode === 'week' || viewMode === 'calendar' || viewMode === 'capacity-monthly') && (
                         <button 
                             onClick={handlePrint} 
                             className="no-print p-2 rounded-full hover:bg-slate-100 flex-shrink-0 text-slate-600 hover:text-slate-800" 

@@ -36,6 +36,7 @@ interface WeeklyCapacityOverviewProps {
     businessEntities: BusinessEntity[];
     selectedEntityId: string;
     bankHolidays?: Map<string, string[]>;
+    users?: any[];
     onSelectDate: (dateStr: string) => void;
     onBookJobForDate?: (dateStr: string) => void;
     onGoToSpareSearch: () => void;
@@ -53,6 +54,7 @@ export const WeeklyCapacityOverview: React.FC<WeeklyCapacityOverviewProps> = ({
     businessEntities,
     selectedEntityId,
     bankHolidays,
+    users = [],
     onSelectDate,
     onBookJobForDate,
     onGoToSpareSearch,
@@ -69,9 +71,10 @@ export const WeeklyCapacityOverview: React.FC<WeeklyCapacityOverviewProps> = ({
             absences,
             businessEntities,
             selectedEntityId,
-            bankHolidays
+            bankHolidays,
+            users
         });
-    }, [weekStart, jobs, lifts, engineers, absences, businessEntities, selectedEntityId, bankHolidays]);
+    }, [weekStart, jobs, lifts, engineers, absences, businessEntities, selectedEntityId, bankHolidays, users]);
 
     const handlePrevWeek = () => setWeekStart(prev => addDays(prev, -7));
     const handleNextWeek = () => setWeekStart(prev => addDays(prev, 7));

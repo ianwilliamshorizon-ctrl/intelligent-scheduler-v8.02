@@ -17,10 +17,28 @@ export interface DailyCapacitySummary {
     activeEngineersCount: number;
     totalEngineersCount: number;
     absentEngineersCount: number;
+    holidayEngineersCount?: number;
+    trainingEngineersCount?: number;
+    sicknessEngineersCount?: number;
+    absentEngineersDetails?: { engineerName: string; type: string }[];
     isWeekend: boolean;
     isHoliday: boolean;
     holidayName?: string;
     jobsCount: number;
+}
+
+export interface MonthlyCapacityTotals {
+    monthDate: string; // YYYY-MM
+    monthName: string; // October 2026
+    totalAvailableHours: number;
+    totalBookedHours: number;
+    totalSpareHours: number;
+    averageUtilizationPercent: number;
+    totalHolidayDays: number;
+    totalTrainingDays: number;
+    totalSicknessDays: number;
+    activeTechsCount: number;
+    days: DailyCapacitySummary[];
 }
 
 export interface WeeklyCapacityTotals {
@@ -75,6 +93,7 @@ export interface CapacityWarning {
     suggestedAction?: string;
 }
 
-export type CapacityViewTab = 'capacity-weekly' | 'daily-breakdown' | 'spare-search' | 'warnings' | 'timeline' | 'week' | 'calendar' | 'fcs-gantt';
+export type CapacityViewTab = 'capacity-weekly' | 'capacity-monthly' | 'daily-breakdown' | 'spare-search' | 'warnings' | 'timeline' | 'week' | 'calendar' | 'fcs-gantt';
 
 export type SlotVisualStatus = 'Booked' | 'Reserved' | 'Available' | 'On-hold' | 'Sick-leave';
+

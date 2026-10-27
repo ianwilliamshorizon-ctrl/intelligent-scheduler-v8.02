@@ -4,6 +4,7 @@ import { TIME_SEGMENTS, SEGMENT_DURATION_MINUTES } from '../../../constants';
 import { 
     DailyCapacitySummary, 
     WeeklyCapacityTotals, 
+    MonthlyCapacityTotals,
     FreeCapacitySlot, 
     CapacityWarning, 
     CapacityTrafficLight 
@@ -21,6 +22,7 @@ export const calculateDailyCapacity = (params: {
     businessEntities: BusinessEntity[];
     selectedEntityId: string;
     bankHolidays?: Map<string, string[]>;
+    users?: any[];
 }): DailyCapacitySummary => {
     const {
         date,
@@ -30,7 +32,8 @@ export const calculateDailyCapacity = (params: {
         absences,
         businessEntities,
         selectedEntityId,
-        bankHolidays
+        bankHolidays,
+        users = []
     } = params;
 
     const dateStr = formatDate(date);
@@ -64,18 +67,66 @@ export const calculateDailyCapacity = (params: {
         return e.entityId === selectedEntityId;
     });
 
-    // Check which technicians have approved absences on this date
-    const absentEngineerIds = new Set<string>();
-    absences.forEach(req => {
-        if (req.status === 'Approved' && req.startDate <= dateStr && req.endDate >= dateStr) {
-            absentEngineerIds.add(req.userId);
+    // 1. Build lookup maps for staff users to bridge user-to-engineer identities
+    const userById = new Map<string, any>((users || []).map(u => [u.id, u]));
+
+    // 2. Determine which technicians have active absences on this date (Holiday, Training, Sickness, etc.)
+    const absentEngineerDetails: { engineerName: string; type: string }[] = [];
+    const engineerAvailabilityFactor = new Map<string, number>(); // 1.0 = full shift, 0.5 = half-day, 0.0 = absent
+    let holidayEngineersCount = 0;
+    let trainingEngineersCount = 0;
+    let sicknessEngineersCount = 0;
+
+    entityEngineers.forEach(eng => {
+        const engNameLower = eng.name?.toLowerCase().trim();
+        
+        // Find matching absence request on this date
+        const activeAbsence = (absences || []).find(req => {
+            if (req.startDate > dateStr || req.endDate < dateStr) return false;
+            // Count Approved requests (and Pending holidays/trainings recorded for staffing)
+            if (req.status !== 'Approved' && req.status !== 'Pending') return false;
+
+            // Direct ID match
+            if (req.userId === eng.id) return true;
+
+            // Match via User record (req.userId is user.id, check user.engineerId or user.name)
+            const reqUser = userById.get(req.userId);
+            if (reqUser) {
+                if (reqUser.engineerId && reqUser.engineerId === eng.id) return true;
+                if (engNameLower && reqUser.name?.toLowerCase().trim() === engNameLower) return true;
+            }
+
+            // Direct name match fallback
+            if (engNameLower && req.userId?.toLowerCase().trim() === engNameLower) return true;
+
+            return false;
+        });
+
+        if (activeAbsence) {
+            const isHalfDay = 
+                (activeAbsence.isHalfDayStart && activeAbsence.startDate === dateStr) || 
+                (activeAbsence.isHalfDayEnd && activeAbsence.endDate === dateStr);
+            const factor = isHalfDay ? 0.5 : 0.0;
+            engineerAvailabilityFactor.set(eng.id, factor);
+
+            const absType = activeAbsence.type || 'Holiday';
+            if (absType === 'Holiday') holidayEngineersCount++;
+            else if (absType === 'Training') trainingEngineersCount++;
+            else if (absType === 'Sickness') sicknessEngineersCount++;
+
+            absentEngineerDetails.push({
+                engineerName: eng.name,
+                type: `${absType}${isHalfDay ? ' (Half Day)' : ''}`
+            });
+        } else {
+            engineerAvailabilityFactor.set(eng.id, 1.0);
         }
     });
 
-    const activeEngineers = entityEngineers.filter(e => !absentEngineerIds.has(e.id));
-    const absentEngineersCount = entityEngineers.length - activeEngineers.length;
+    const activeEngineersCount = Array.from(engineerAvailabilityFactor.values()).filter(f => f > 0).length;
+    const absentEngineersCount = entityEngineers.length - activeEngineersCount;
 
-    // Calculate daily base hours per technician
+    // Calculate daily base productive hours per technician
     let hoursPerTech = 0;
     if (isHoliday) {
         hoursPerTech = 0;
@@ -90,23 +141,29 @@ export const calculateDailyCapacity = (params: {
             hoursPerTech = 0;
         }
     } else {
-        // Standard weekday
+        // Standard weekday: e.g. 8.5h to 17.5h with 1h lunch = 8.0 productive hours
         const start = workingHours.startHour || 8.5;
         const end = workingHours.endHour || 17.5;
-        hoursPerTech = Math.max(0, end - start);
+        const span = end - start;
+        hoursPerTech = span > 5 ? Math.max(0, span - 1.0) : Math.max(0, span);
+        if (hoursPerTech <= 0) hoursPerTech = 8.0;
     }
 
-    // Fallback if entity has flat dailyCapacityHours defined
+    // STRICT: Capacity is solely derived from available engineers, NOT from lifts/ramps!
     let availableHours = 0;
     if (hoursPerTech === 0) {
         availableHours = 0;
-    } else if (activeEngineers.length > 0) {
-        availableHours = activeEngineers.length * hoursPerTech;
+    } else if (entityEngineers.length > 0) {
+        // Sum productive hours of each technician based on their attendance factor
+        let totalTechHours = 0;
+        entityEngineers.forEach(eng => {
+            const factor = engineerAvailabilityFactor.get(eng.id) ?? 1.0;
+            totalTechHours += factor * hoursPerTech;
+        });
+        availableHours = totalTechHours;
     } else if (targetEntity?.dailyCapacityHours && !isSunday && !isHoliday) {
-        // Fallback to configured entity capacity if no engineers mapped yet
         availableHours = isSaturday ? targetEntity.dailyCapacityHours * 0.4 : targetEntity.dailyCapacityHours;
     } else {
-        // Standard workshop baseline (6 techs * 8 hrs = 48)
         availableHours = isSaturday ? 16 : 40;
     }
 
@@ -186,9 +243,13 @@ export const calculateDailyCapacity = (params: {
         status,
         emptyBaysCount,
         totalBaysCount: entityLifts.length,
-        activeEngineersCount: activeEngineers.length,
+        activeEngineersCount,
         totalEngineersCount: entityEngineers.length,
         absentEngineersCount,
+        holidayEngineersCount,
+        trainingEngineersCount,
+        sicknessEngineersCount,
+        absentEngineersDetails: absentEngineerDetails,
         isWeekend,
         isHoliday,
         holidayName,
@@ -208,6 +269,7 @@ export const calculateWeeklyCapacitySummary = (params: {
     businessEntities: BusinessEntity[];
     selectedEntityId: string;
     bankHolidays?: Map<string, string[]>;
+    users?: any[];
 }): WeeklyCapacityTotals => {
     const { weekStart } = params;
     const days: DailyCapacitySummary[] = [];
@@ -243,6 +305,127 @@ export const calculateWeeklyCapacitySummary = (params: {
         averageEmptyBaysPerDay,
         days
     };
+};
+
+/**
+ * Calculates complete monthly capacity overview across all days in the calendar month.
+ * Strictly limited by available technicians (minus holidays, training, sickness).
+ * It is NOT based on lifts.
+ */
+export const calculateMonthlyCapacitySummary = (params: {
+    monthDate: Date;
+    jobs: Job[];
+    lifts: Lift[];
+    engineers: Engineer[];
+    absences: AbsenceRequest[];
+    businessEntities: BusinessEntity[];
+    selectedEntityId: string;
+    bankHolidays?: Map<string, string[]>;
+    users?: any[];
+}): MonthlyCapacityTotals => {
+    const { monthDate } = params;
+    const year = monthDate.getUTCFullYear();
+    const month = monthDate.getUTCMonth();
+    
+    // Total days in this month
+    const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+    const days: DailyCapacitySummary[] = [];
+
+    for (let day = 1; day <= daysInMonth; day++) {
+        const dayDate = new Date(Date.UTC(year, month, day));
+        days.push(calculateDailyCapacity({
+            ...params,
+            date: dayDate
+        }));
+    }
+
+    const totalAvailableHours = Number(days.reduce((sum, d) => sum + d.availableHours, 0).toFixed(1));
+    const totalBookedHours = Number(days.reduce((sum, d) => sum + d.bookedHours, 0).toFixed(1));
+    const totalSpareHours = Number((totalAvailableHours - totalBookedHours).toFixed(1));
+    const averageUtilizationPercent = totalAvailableHours > 0 
+        ? Math.round((totalBookedHours / totalAvailableHours) * 100) 
+        : 0;
+
+    const totalHolidayDays = days.reduce((sum, d) => sum + (d.holidayEngineersCount || 0), 0);
+    const totalTrainingDays = days.reduce((sum, d) => sum + (d.trainingEngineersCount || 0), 0);
+    const totalSicknessDays = days.reduce((sum, d) => sum + (d.sicknessEngineersCount || 0), 0);
+
+    const monthName = monthDate.toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+    const monthDateStr = `${year}-${String(month + 1).padStart(2, '0')}`;
+
+    const activeTechsCount = days[0]?.totalEngineersCount || 0;
+
+    return {
+        monthDate: monthDateStr,
+        monthName,
+        totalAvailableHours,
+        totalBookedHours,
+        totalSpareHours,
+        averageUtilizationPercent,
+        totalHolidayDays,
+        totalTrainingDays,
+        totalSicknessDays,
+        activeTechsCount,
+        days
+    };
+};
+
+/**
+ * Exports complete monthly capacity report to CSV.
+ */
+export const exportMonthlyCapacityCSV = (monthlySummary: MonthlyCapacityTotals): void => {
+    const headers = [
+        'Date',
+        'Day',
+        'Available Labour (hrs)',
+        'Hours Booked (hrs)',
+        'Spare Hours Remaining',
+        'Utilization (%)',
+        'Capacity Status',
+        'Working Techs',
+        'Holidays',
+        'Training',
+        'Jobs Scheduled'
+    ];
+
+    const rows = monthlySummary.days.map(d => [
+        `"${d.date}"`,
+        `"${d.dayName}"`,
+        d.availableHours.toFixed(1),
+        d.bookedHours.toFixed(1),
+        d.spareHours.toFixed(1),
+        `${d.utilizationPercent}%`,
+        `"${d.status.toUpperCase()}"`,
+        `${d.activeEngineersCount}/${d.totalEngineersCount}`,
+        d.holidayEngineersCount || 0,
+        d.trainingEngineersCount || 0,
+        d.jobsCount
+    ]);
+
+    const summaryRow = [
+        `"MONTH TOTAL: ${monthlySummary.monthName}"`,
+        '-',
+        monthlySummary.totalAvailableHours.toFixed(1),
+        monthlySummary.totalBookedHours.toFixed(1),
+        monthlySummary.totalSpareHours.toFixed(1),
+        `${monthlySummary.averageUtilizationPercent}%`,
+        `"${monthlySummary.averageUtilizationPercent > 90 ? 'HIGH LOAD' : 'HEALTHY'}"`,
+        `${monthlySummary.activeTechsCount} Techs`,
+        monthlySummary.totalHolidayDays,
+        monthlySummary.totalTrainingDays,
+        '-'
+    ];
+
+    const csvContent = [headers.join(','), ...rows.map(r => r.join(',')), summaryRow.join(',')].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `workshop_capacity_${monthlySummary.monthDate}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
 };
 
 /**
@@ -421,6 +604,7 @@ export const findCapacityWarnings = (params: {
     businessEntities: BusinessEntity[];
     selectedEntityId: string;
     bankHolidays?: Map<string, string[]>;
+    users?: any[];
 }): CapacityWarning[] => {
     const {
         startDate,
@@ -431,7 +615,8 @@ export const findCapacityWarnings = (params: {
         absences,
         businessEntities,
         selectedEntityId,
-        bankHolidays
+        bankHolidays,
+        users
     } = params;
 
     const warnings: CapacityWarning[] = [];
@@ -449,7 +634,8 @@ export const findCapacityWarnings = (params: {
             absences,
             businessEntities,
             selectedEntityId,
-            bankHolidays
+            bankHolidays,
+            users
         });
 
         if (daySummary.availableHours > 0 && daySummary.bookedHours > daySummary.availableHours) {
