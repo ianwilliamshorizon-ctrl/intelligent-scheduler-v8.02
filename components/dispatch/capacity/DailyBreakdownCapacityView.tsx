@@ -221,7 +221,7 @@ export const DailyBreakdownCapacityView: React.FC<DailyBreakdownCapacityViewProp
                 (j.description && j.description.toLowerCase().includes(q)) ||
                 (vehicle?.registration && vehicle.registration.toLowerCase().includes(q)) ||
                 (vehicle?.model && vehicle.model.toLowerCase().includes(q)) ||
-                (j.keyNumber && j.keyNumber.toLowerCase().includes(q)) ||
+                (j.keyNumber != null && String(j.keyNumber).toLowerCase().includes(q)) ||
                 custName.includes(q)
             );
         });

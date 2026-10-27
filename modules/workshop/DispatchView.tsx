@@ -69,7 +69,7 @@ const DispatchView: React.FC<DispatchViewProps> = ({
     onCreateInvoice,
     onEngineerComplete
 }) => {
-    const { jobs, setJobs, lifts, engineers, setEngineers, customers, vehicles, purchaseOrders, setPurchaseOrders, absenceRequests, businessEntities, estimates, setEstimates, parts, forceRefresh, saveRecord } = useData();
+    const { jobs, setJobs, lifts, engineers, setEngineers, customers, vehicles, purchaseOrders, setPurchaseOrders, absenceRequests, businessEntities, estimates, setEstimates, parts, forceRefresh, saveRecord, storageLocations } = useData();
     
     // Auto-refresh data every 30 seconds to keep all users in sync
     useEffect(() => {
