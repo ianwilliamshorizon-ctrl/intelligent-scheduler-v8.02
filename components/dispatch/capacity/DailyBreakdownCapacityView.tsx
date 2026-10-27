@@ -7,7 +7,9 @@ import {
     Clock, 
     Sparkles, 
     GripVertical,
-    Search
+    Search,
+    Plus,
+    PhoneCall
 } from 'lucide-react';
 import { 
     Job, 
@@ -36,6 +38,7 @@ interface DailyBreakdownCapacityViewProps {
     currentDate: string;
     setCurrentDate: (date: string) => void;
     onBackToWeekly: () => void;
+    onBookJobForDate?: (dateStr: string) => void;
     jobs: Job[];
     lifts: Lift[];
     engineers: Engineer[];
@@ -83,6 +86,7 @@ export const DailyBreakdownCapacityView: React.FC<DailyBreakdownCapacityViewProp
         currentDate,
         setCurrentDate,
         onBackToWeekly,
+        onBookJobForDate,
         jobs,
         lifts,
         engineers,
@@ -323,6 +327,17 @@ export const DailyBreakdownCapacityView: React.FC<DailyBreakdownCapacityViewProp
                         <Warehouse size={14} />
                         <span>{daySummary.emptyBaysCount} / {daySummary.totalBaysCount} Bays Free</span>
                     </div>
+
+                    {onBookJobForDate && (
+                        <button
+                            onClick={() => onBookJobForDate(currentDate)}
+                            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white rounded-xl text-xs font-black shadow-xs transition-all cursor-pointer whitespace-nowrap"
+                            title={`Take phone call and book job directly for ${daySummary.dayName}`}
+                        >
+                            <PhoneCall size={13} className="text-indigo-200" />
+                            <span>+ Book for {daySummary.dayName}</span>
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -374,10 +389,22 @@ export const DailyBreakdownCapacityView: React.FC<DailyBreakdownCapacityViewProp
                                 <GripVertical size={16} className="text-slate-400" />
                                 <span>Unallocated Jobs</span>
                             </h3>
-                            <span className="flex items-center gap-1 text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full" title="Total hours">
-                                <Clock size={12} />
-                                {totalUnallocatedHours.toFixed(1)}h
-                            </span>
+                            <div className="flex items-center gap-1.5">
+                                <span className="flex items-center gap-1 text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full" title="Total hours">
+                                    <Clock size={12} />
+                                    {totalUnallocatedHours.toFixed(1)}h
+                                </span>
+                                {onBookJobForDate && (
+                                    <button
+                                        onClick={() => onBookJobForDate(currentDate)}
+                                        className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-lg text-[11px] font-black transition cursor-pointer"
+                                        title={`Quick book a new job for ${daySummary.dayName}`}
+                                    >
+                                        <Plus size={11} strokeWidth={3} />
+                                        <span>New</span>
+                                    </button>
+                                )}
+                            </div>
                         </div>
 
                         {/* Mode switcher: Standard / Summary */}

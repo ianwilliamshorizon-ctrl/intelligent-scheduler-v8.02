@@ -226,6 +226,13 @@ const DispatchView: React.FC<DispatchViewProps> = ({
         });
     }, [currentDate, jobs, lifts, engineers, absenceRequests, businessEntities, selectedEntityId, bankHolidays]);
 
+    const handleBookJobForDate = (dateStr?: string) => {
+        const targetDate = dateStr ? dateStringToDate(dateStr) : dateStringToDate(currentDate);
+        setDefaultDateForModal(targetDate);
+        setSmartCreateMode('job');
+        setIsSmartCreateOpen(true);
+    };
+
     return (
         <div className="w-full h-full flex flex-col">
             <DispatchHeader
@@ -262,6 +269,7 @@ const DispatchView: React.FC<DispatchViewProps> = ({
                         setCurrentDate(date);
                         setViewMode('daily-breakdown');
                     }}
+                    onBookJobForDate={handleBookJobForDate}
                     onGoToSpareSearch={() => setViewMode('spare-search')}
                     onGoToWarnings={() => setViewMode('warnings')}
                     warningsCount={activeWarnings.length}
@@ -274,6 +282,7 @@ const DispatchView: React.FC<DispatchViewProps> = ({
                     currentDate={currentDate}
                     setCurrentDate={setCurrentDate}
                     onBackToWeekly={() => setViewMode('capacity-weekly')}
+                    onBookJobForDate={handleBookJobForDate}
                     jobs={jobs}
                     lifts={lifts}
                     engineers={engineers}
@@ -338,6 +347,7 @@ const DispatchView: React.FC<DispatchViewProps> = ({
                         setCurrentDate(date);
                         setViewMode('daily-breakdown');
                     }}
+                    onBookJobForDate={handleBookJobForDate}
                     onScheduleJobIntoSlot={(job, slot) => {
                         setCurrentDate(slot.date);
                         const firstUnallocatedSeg = (job.segments || []).find(s => s.status === 'Unallocated') || (job.segments && job.segments[0]);

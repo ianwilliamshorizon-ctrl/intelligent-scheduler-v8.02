@@ -8,9 +8,10 @@ import {
     LayoutDashboard, 
     Layers, 
     Sparkles, 
-    AlertOctagon 
+    AlertOctagon,
+    PhoneCall
 } from 'lucide-react';
-import { formatReadableDate, formatDate, addDays } from '../../../core/utils/dateUtils';
+import { formatReadableDate, formatDate, addDays, dateStringToDate } from '../../../core/utils/dateUtils';
 import { CapacityViewTab } from '../../../components/dispatch/capacity/capacityTypes';
 
 export type DispatchViewMode = CapacityViewTab;
@@ -186,16 +187,33 @@ export const DispatchHeader: React.FC<DispatchHeaderProps> = ({
                 </div>
             </div>
             
-            {onOpenLaborTally && (
+            <div className="flex items-center gap-2.5 w-full lg:w-auto justify-end no-print">
+                {/* Immediate Phone Intake / Book Job CTA */}
                 <button
-                    onClick={onOpenLaborTally}
-                    className="no-print flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-slate-900 to-indigo-900 hover:from-slate-800 hover:to-indigo-800 text-white rounded-xl text-xs font-bold shadow-xs transition-all"
-                    title="View Monthly Engineer Hours Tally"
+                    onClick={() => {
+                        setDefaultDateForModal(dateStringToDate(currentDate));
+                        setSmartCreateMode('job');
+                        setIsSmartCreateOpen(true);
+                    }}
+                    className="flex items-center gap-2 px-3.5 sm:px-4 py-2 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white rounded-xl text-xs sm:text-sm font-black shadow-sm hover:shadow-md transition-all cursor-pointer whitespace-nowrap"
+                    title="Take call and immediately book a job into available capacity"
                 >
-                    <Clock size={15} className="text-indigo-300" />
-                    <span>Monthly Labor Tally</span>
+                    <PhoneCall size={15} className="text-indigo-200" />
+                    <span>+ Book New Job</span>
                 </button>
-            )}
+
+                {onOpenLaborTally && (
+                    <button
+                        onClick={onOpenLaborTally}
+                        className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-slate-900 to-indigo-900 hover:from-slate-800 hover:to-indigo-800 text-white rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer whitespace-nowrap"
+                        title="View Monthly Engineer Hours Tally"
+                    >
+                        <Clock size={15} className="text-indigo-300" />
+                        <span className="hidden sm:inline">Monthly Labor Tally</span>
+                        <span className="sm:hidden">Labor Tally</span>
+                    </button>
+                )}
+            </div>
         </header>
     );
 };

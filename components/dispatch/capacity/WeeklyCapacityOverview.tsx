@@ -13,7 +13,9 @@ import {
     Building2,
     Clock,
     Warehouse,
-    Sparkles
+    Sparkles,
+    Plus,
+    PhoneCall
 } from 'lucide-react';
 import { Job, Lift, Engineer, AbsenceRequest, BusinessEntity } from '../../../types';
 import { formatDate, addDays } from '../../../core/utils/dateUtils';
@@ -35,6 +37,7 @@ interface WeeklyCapacityOverviewProps {
     selectedEntityId: string;
     bankHolidays?: Map<string, string[]>;
     onSelectDate: (dateStr: string) => void;
+    onBookJobForDate?: (dateStr: string) => void;
     onGoToSpareSearch: () => void;
     onGoToWarnings: () => void;
     warningsCount: number;
@@ -51,6 +54,7 @@ export const WeeklyCapacityOverview: React.FC<WeeklyCapacityOverviewProps> = ({
     selectedEntityId,
     bankHolidays,
     onSelectDate,
+    onBookJobForDate,
     onGoToSpareSearch,
     onGoToWarnings,
     warningsCount
@@ -169,6 +173,17 @@ export const WeeklyCapacityOverview: React.FC<WeeklyCapacityOverviewProps> = ({
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2.5">
+                    {onBookJobForDate && (
+                        <button
+                            onClick={() => onBookJobForDate(formatDate(weekStart))}
+                            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-black text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-xs hover:shadow-md transition active:scale-[0.98] cursor-pointer"
+                            title="Take phone call and book new job"
+                        >
+                            <PhoneCall size={14} className="text-indigo-200" />
+                            <span>+ Book New Job</span>
+                        </button>
+                    )}
+
                     <button
                         onClick={onGoToSpareSearch}
                         className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl shadow-sm transition"
@@ -291,6 +306,7 @@ export const WeeklyCapacityOverview: React.FC<WeeklyCapacityOverviewProps> = ({
                                 <th className="py-3 px-4 text-center">Spare Hours Remaining</th>
                                 <th className="py-3 px-4 text-center">Capacity Status</th>
                                 <th className="py-3 px-4 text-center">Empty Bays Free</th>
+                                <th className="py-3 px-4 text-center">Action</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 text-sm">
@@ -385,6 +401,22 @@ export const WeeklyCapacityOverview: React.FC<WeeklyCapacityOverviewProps> = ({
                                                     {day.emptyBaysCount} / {day.totalBaysCount} Free
                                                 </span>
                                             </span>
+                                        </td>
+
+                                        {/* 8. Quick Book Action */}
+                                        <td className="py-3.5 px-4 text-center" onClick={(e) => e.stopPropagation()}>
+                                            {day.availableHours > 0 ? (
+                                                <button
+                                                    onClick={() => onBookJobForDate?.(day.date)}
+                                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.96] text-white rounded-xl text-xs font-black shadow-xs hover:shadow-sm transition-all cursor-pointer whitespace-nowrap"
+                                                    title={`Book job directly for ${day.dayName} (${day.formattedDate})`}
+                                                >
+                                                    <Plus size={13} strokeWidth={3} />
+                                                    <span>Book Day</span>
+                                                </button>
+                                            ) : (
+                                                <span className="text-[11px] text-slate-400 font-semibold">Closed</span>
+                                            )}
                                         </td>
                                     </tr>
                                 );

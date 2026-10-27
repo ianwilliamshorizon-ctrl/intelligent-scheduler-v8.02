@@ -131,7 +131,7 @@ const SmartCreateJobModal: React.FC<SmartCreateJobModalProps> = ({
         return () => {
             cloudSpeechSynthesis.cancel();
         };
-    }, [isOpen, initialPrompt]);
+    }, [isOpen, initialPrompt, defaultDate]);
 
     // Capacity Calculation
     const capacityStats = useMemo(() => {

@@ -15,7 +15,8 @@ import {
     Tag,
     X,
     CalendarCheck,
-    Wrench
+    Wrench,
+    PhoneCall
 } from 'lucide-react';
 import { Job, Lift, Engineer, AbsenceRequest, BusinessEntity, Vehicle, Customer } from '../../../types';
 import { findSpareCapacitySlots } from './capacityUtils';
@@ -38,6 +39,7 @@ interface SpareCapacitySearchViewProps {
     initialJobId?: string | null;
     onSelectJob?: (jobId: string | null) => void;
     onSelectSlotDate: (dateStr: string) => void;
+    onBookJobForDate?: (dateStr: string) => void;
     onScheduleJobIntoSlot?: (job: Job, slot: FreeCapacitySlot) => void;
     onBackToWeekly: () => void;
 }
@@ -57,6 +59,7 @@ export const SpareCapacitySearchView: React.FC<SpareCapacitySearchViewProps> = (
     initialJobId = null,
     onSelectJob,
     onSelectSlotDate,
+    onBookJobForDate,
     onScheduleJobIntoSlot,
     onBackToWeekly
 }) => {
@@ -248,6 +251,17 @@ export const SpareCapacitySearchView: React.FC<SpareCapacitySearchViewProps> = (
                             </button>
                         ))}
                     </div>
+
+                    {onBookJobForDate && (
+                        <button
+                            onClick={() => onBookJobForDate(formatDate(startDate))}
+                            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-black text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-xs transition active:scale-[0.98] cursor-pointer"
+                            title="Take phone call and book new job"
+                        >
+                            <PhoneCall size={14} className="text-indigo-200" />
+                            <span>+ Book New Job</span>
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -524,13 +538,25 @@ export const SpareCapacitySearchView: React.FC<SpareCapacitySearchViewProps> = (
                                                     <span>Schedule #{targetJob.id} Here</span>
                                                 </button>
                                             ) : (
-                                                <button
-                                                    onClick={() => onSelectSlotDate(slot.date)}
-                                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs transition cursor-pointer"
-                                                >
-                                                    <span>Open in Daily View</span>
-                                                    <ArrowRight size={13} />
-                                                </button>
+                                                <div className="flex items-center gap-1.5">
+                                                    {onBookJobForDate && (
+                                                        <button
+                                                            onClick={() => onBookJobForDate(slot.date)}
+                                                            className="inline-flex items-center gap-1 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.97] text-white rounded-xl font-black text-xs shadow-xs transition cursor-pointer"
+                                                            title={`Book a job directly for ${slot.dayName} (${slot.formattedDate})`}
+                                                        >
+                                                            <PhoneCall size={12} className="text-indigo-200" />
+                                                            <span>Book Job</span>
+                                                        </button>
+                                                    )}
+                                                    <button
+                                                        onClick={() => onSelectSlotDate(slot.date)}
+                                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs transition cursor-pointer"
+                                                    >
+                                                        <span>Open in Daily View</span>
+                                                        <ArrowRight size={13} />
+                                                    </button>
+                                                </div>
                                             )}
                                         </div>
                                     </div>
