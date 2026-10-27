@@ -18,8 +18,15 @@ import { useWorkshopActions } from '../../core/hooks/useWorkshopActions';
 // New Refactored Hooks & Components
 import { useDispatchFilters, isTechRole } from './hooks/useDispatchFilters';
 import { useDispatchDragDrop } from './hooks/useDispatchDragDrop';
-import { DispatchHeader } from './components/DispatchHeader';
+import { DispatchHeader, DispatchViewMode } from './components/DispatchHeader';
 import MonthlyLaborTallyModal from '../../components/jobs/MonthlyLaborTallyModal';
+
+// Visual-First Capacity Planning Components
+import { WeeklyCapacityOverview } from '../../components/dispatch/capacity/WeeklyCapacityOverview';
+import { DailyBreakdownCapacityView } from '../../components/dispatch/capacity/DailyBreakdownCapacityView';
+import { SpareCapacitySearchView } from '../../components/dispatch/capacity/SpareCapacitySearchView';
+import { CapacityWarningsPanel } from '../../components/dispatch/capacity/CapacityWarningsPanel';
+import { findCapacityWarnings } from '../../components/dispatch/capacity/capacityUtils';
 
 interface DispatchViewProps {
     setDefaultDateForModal: (date: Date | null) => void;
@@ -77,7 +84,7 @@ const DispatchView: React.FC<DispatchViewProps> = ({
     const { selectedEntityId, currentUser, users, setUsers } = useApp();
     
     // -- View State --
-    const [viewMode, setViewMode] = useState<'timeline' | 'week' | 'calendar' | 'fcs-gantt'>('timeline');
+    const [viewMode, setViewMode] = useState<DispatchViewMode>('capacity-weekly');
     const [currentDate, setCurrentDate] = useState(getRelativeDate(0));
     const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
     const [unallocatedDateFilter, setUnallocatedDateFilter] = useState<'all' | 'today' | '7days' | '14days'>('all');
@@ -204,6 +211,20 @@ const DispatchView: React.FC<DispatchViewProps> = ({
         setIsEditModalOpen(true);
     };
 
+    const activeWarnings = useMemo(() => {
+        return findCapacityWarnings({
+            startDate: dateStringToDate(currentDate),
+            daysToCheck: 28,
+            jobs,
+            lifts,
+            engineers,
+            absences: absenceRequests,
+            businessEntities,
+            selectedEntityId,
+            bankHolidays
+        });
+    }, [currentDate, jobs, lifts, engineers, absenceRequests, businessEntities, selectedEntityId, bankHolidays]);
+
     return (
         <div className="w-full h-full flex flex-col">
             <DispatchHeader
@@ -221,7 +242,93 @@ const DispatchView: React.FC<DispatchViewProps> = ({
                 setSmartCreateMode={setSmartCreateMode}
                 setDefaultDateForModal={setDefaultDateForModal}
                 onOpenLaborTally={() => setIsLaborTallyModalOpen(true)}
+                warningsCount={activeWarnings.length}
             />
+
+            {/* Screen 1: Weekly Overview Dashboard (Default Landing View) */}
+            {viewMode === 'capacity-weekly' && (
+                <WeeklyCapacityOverview
+                    weekStart={weekStart}
+                    setWeekStart={setWeekStart}
+                    jobs={jobs}
+                    lifts={lifts}
+                    engineers={engineers}
+                    absences={absenceRequests}
+                    businessEntities={businessEntities}
+                    selectedEntityId={selectedEntityId}
+                    bankHolidays={bankHolidays}
+                    onSelectDate={(date) => {
+                        setCurrentDate(date);
+                        setViewMode('daily-breakdown');
+                    }}
+                    onGoToSpareSearch={() => setViewMode('spare-search')}
+                    onGoToWarnings={() => setViewMode('warnings')}
+                    warningsCount={activeWarnings.length}
+                />
+            )}
+
+            {/* Screen 2: Daily Breakdown View (Click-Through Detail) */}
+            {viewMode === 'daily-breakdown' && (
+                <DailyBreakdownCapacityView
+                    currentDate={currentDate}
+                    setCurrentDate={setCurrentDate}
+                    onBackToWeekly={() => setViewMode('capacity-weekly')}
+                    jobs={jobs}
+                    lifts={lifts}
+                    engineers={engineers}
+                    absences={absenceRequests}
+                    businessEntities={businessEntities}
+                    selectedEntityId={selectedEntityId}
+                    vehicles={vehicles}
+                    customers={customers}
+                    unallocatedJobs={unallocatedJobs}
+                    bankHolidays={bankHolidays}
+                    onDragStart={handleDragStart}
+                    onDragEnd={handleDragEnd}
+                    onTimelineDragOver={handleTimelineDragOver}
+                    onTimelineDrop={handleTimelineDrop}
+                    onEditJob={handleEditJob}
+                />
+            )}
+
+            {/* Screen 3: Spare-Capacity Search View */}
+            {viewMode === 'spare-search' && (
+                <SpareCapacitySearchView
+                    startDate={dateStringToDate(currentDate)}
+                    jobs={jobs}
+                    lifts={lifts}
+                    engineers={engineers}
+                    absences={absenceRequests}
+                    businessEntities={businessEntities}
+                    selectedEntityId={selectedEntityId}
+                    bankHolidays={bankHolidays}
+                    onSelectSlotDate={(date) => {
+                        setCurrentDate(date);
+                        setViewMode('daily-breakdown');
+                    }}
+                    onBackToWeekly={() => setViewMode('capacity-weekly')}
+                />
+            )}
+
+            {/* Screen 4: Warnings & Exceptions Only Panel */}
+            {viewMode === 'warnings' && (
+                <CapacityWarningsPanel
+                    startDate={dateStringToDate(currentDate)}
+                    jobs={jobs}
+                    lifts={lifts}
+                    engineers={engineers}
+                    absences={absenceRequests}
+                    businessEntities={businessEntities}
+                    selectedEntityId={selectedEntityId}
+                    bankHolidays={bankHolidays}
+                    onBackToWeekly={() => setViewMode('capacity-weekly')}
+                    onJumpToDay={(date) => {
+                        setCurrentDate(date);
+                        setViewMode('daily-breakdown');
+                    }}
+                    onEditJob={handleEditJob}
+                />
+            )}
             
             {viewMode === 'timeline' && (
                 <TimelineView
