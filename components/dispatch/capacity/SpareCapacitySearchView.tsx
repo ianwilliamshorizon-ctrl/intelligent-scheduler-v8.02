@@ -251,17 +251,6 @@ export const SpareCapacitySearchView: React.FC<SpareCapacitySearchViewProps> = (
                             </button>
                         ))}
                     </div>
-
-                    {onBookJobForDate && (
-                        <button
-                            onClick={() => onBookJobForDate(formatDate(startDate))}
-                            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-black text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-xs transition active:scale-[0.98] cursor-pointer"
-                            title="Take phone call and book new job"
-                        >
-                            <PhoneCall size={14} className="text-indigo-200" />
-                            <span>+ Book New Job</span>
-                        </button>
-                    )}
                 </div>
             </div>
 

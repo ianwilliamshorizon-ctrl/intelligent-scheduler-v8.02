@@ -327,17 +327,6 @@ export const DailyBreakdownCapacityView: React.FC<DailyBreakdownCapacityViewProp
                         <Warehouse size={14} />
                         <span>{daySummary.emptyBaysCount} / {daySummary.totalBaysCount} Bays Free</span>
                     </div>
-
-                    {onBookJobForDate && (
-                        <button
-                            onClick={() => onBookJobForDate(currentDate)}
-                            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white rounded-xl text-xs font-black shadow-xs transition-all cursor-pointer whitespace-nowrap"
-                            title={`Take phone call and book job directly for ${daySummary.dayName}`}
-                        >
-                            <PhoneCall size={13} className="text-indigo-200" />
-                            <span>+ Book for {daySummary.dayName}</span>
-                        </button>
-                    )}
                 </div>
             </div>
 

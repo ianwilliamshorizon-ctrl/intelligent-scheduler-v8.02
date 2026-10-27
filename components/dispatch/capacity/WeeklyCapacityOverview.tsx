@@ -173,17 +173,6 @@ export const WeeklyCapacityOverview: React.FC<WeeklyCapacityOverviewProps> = ({
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2.5">
-                    {onBookJobForDate && (
-                        <button
-                            onClick={() => onBookJobForDate(formatDate(weekStart))}
-                            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-black text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-xs hover:shadow-md transition active:scale-[0.98] cursor-pointer"
-                            title="Take phone call and book new job"
-                        >
-                            <PhoneCall size={14} className="text-indigo-200" />
-                            <span>+ Book New Job</span>
-                        </button>
-                    )}
-
                     <button
                         onClick={onGoToSpareSearch}
                         className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl shadow-sm transition"
