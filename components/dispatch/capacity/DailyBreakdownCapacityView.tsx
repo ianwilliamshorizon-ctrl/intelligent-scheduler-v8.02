@@ -8,12 +8,9 @@ import {
     User as UserIcon, 
     Sparkles, 
     CheckCircle2, 
-    AlertCircle, 
-    AlertTriangle,
-    Layers,
+    Layers, 
     GripVertical,
-    ChevronDown,
-    ChevronUp
+    Search
 } from 'lucide-react';
 import { 
     Job, 
@@ -23,10 +20,9 @@ import {
     AbsenceRequest, 
     BusinessEntity, 
     Vehicle, 
-    Customer,
-    PurchaseOrder 
+    Customer 
 } from '../../../types';
-import { formatDate, addDays, dateStringToDate, formatReadableDate } from '../../../core/utils/dateUtils';
+import { formatDate, addDays, dateStringToDate } from '../../../core/utils/dateUtils';
 import { getCustomerDisplayName } from '../../../core/utils/customerUtils';
 import { TIME_SEGMENTS, SEGMENT_DURATION_MINUTES } from '../../../constants';
 import { calculateDailyCapacity } from './capacityUtils';
@@ -74,7 +70,7 @@ export const DailyBreakdownCapacityView: React.FC<DailyBreakdownCapacityViewProp
     onTimelineDrop,
     onEditJob
 }) => {
-    const [isUnallocatedOpen, setIsUnallocatedOpen] = useState(true);
+    const [unallocatedSearch, setUnallocatedSearch] = useState('');
 
     const currentDateObj = useMemo(() => dateStringToDate(currentDate), [currentDate]);
 
@@ -102,7 +98,6 @@ export const DailyBreakdownCapacityView: React.FC<DailyBreakdownCapacityViewProp
 
     const vehiclesById = useMemo(() => new Map(vehicles.map(v => [v.id, v])), [vehicles]);
     const customersById = useMemo(() => new Map(customers.map(c => [c.id, c])), [customers]);
-    const engineersById = useMemo(() => new Map(engineers.map(e => [e.id, e])), [engineers]);
 
     // Engineers on sick-leave or absence today
     const absentEngineerMap = useMemo(() => {
@@ -125,13 +120,37 @@ export const DailyBreakdownCapacityView: React.FC<DailyBreakdownCapacityViewProp
         setCurrentDate(formatDate(next));
     };
 
+    // Filter unallocated jobs
+    const filteredUnallocatedJobs = useMemo(() => {
+        if (!unallocatedSearch.trim()) return unallocatedJobs;
+        const q = unallocatedSearch.toLowerCase();
+        return unallocatedJobs.filter(j => {
+            const vehicle = vehiclesById.get(j.vehicleId);
+            const customer = customersById.get(j.customerId);
+            const custName = customer ? getCustomerDisplayName(customer).toLowerCase() : '';
+            return (
+                j.id.toLowerCase().includes(q) ||
+                (j.description && j.description.toLowerCase().includes(q)) ||
+                (vehicle?.registration && vehicle.registration.toLowerCase().includes(q)) ||
+                (vehicle?.model && vehicle.model.toLowerCase().includes(q)) ||
+                custName.includes(q)
+            );
+        });
+    }, [unallocatedJobs, unallocatedSearch, vehiclesById, customersById]);
+
+    const totalUnallocatedHours = useMemo(() => {
+        return Number(filteredUnallocatedJobs.reduce((sum, j) => sum + (j.estimatedHours || 1), 0).toFixed(1));
+    }, [filteredUnallocatedJobs]);
+
     // Build timeline blocks per lift for this date
     const liftSchedules = useMemo(() => {
-        const maxSlots = currentDateObj.getUTCDay() === 6 ? 8 : TIME_SEGMENTS.length;
+        const totalSegments = TIME_SEGMENTS.length;
 
         return entityLifts.map(lift => {
-            // Find default or assigned engineer for this lift if mapped
-            const assignedTech = entityEngineers.find(e => e.specialization?.toLowerCase().includes(lift.type?.toLowerCase() || '')) || entityEngineers[0];
+            // Find primary tech or specialization
+            const assignedTech = entityEngineers.find(e => 
+                e.specialization?.toLowerCase().includes(lift.type?.toLowerCase() || '')
+            ) || entityEngineers[0];
 
             // Segments allocated to this lift on this day
             const allocatedSegments: {
@@ -147,9 +166,9 @@ export const DailyBreakdownCapacityView: React.FC<DailyBreakdownCapacityViewProp
                 if (job.status === 'Cancelled') return;
                 (job.segments || []).forEach(seg => {
                     if (seg.date === currentDate && seg.allocatedLift === lift.id && seg.status !== 'Cancelled') {
-                        const start = seg.scheduledStartSegment ?? 0;
+                        const start = Math.max(0, Math.min(totalSegments - 1, seg.scheduledStartSegment ?? 0));
                         const duration = Number(seg.duration) || 1;
-                        const span = Math.max(1, Math.ceil(duration * (60 / SEGMENT_DURATION_MINUTES)));
+                        const span = Math.max(1, Math.min(totalSegments - start, Math.ceil(duration * (60 / SEGMENT_DURATION_MINUTES))));
 
                         // Determine Visual Status Label
                         let statusLabel: SlotVisualStatus = 'Booked';
@@ -178,19 +197,26 @@ export const DailyBreakdownCapacityView: React.FC<DailyBreakdownCapacityViewProp
                 });
             });
 
+            const bookedLiftHours = allocatedSegments.reduce((sum, s) => sum + (Number(s.segment.duration) || 1), 0);
+            const isBayEmpty = allocatedSegments.length === 0;
+
             return {
                 lift,
                 assignedTech,
                 allocatedSegments,
-                maxSlots
+                bookedLiftHours,
+                isBayEmpty
             };
         });
-    }, [entityLifts, entityEngineers, jobs, currentDate, currentDateObj, absentEngineerMap]);
+    }, [entityLifts, entityEngineers, jobs, currentDate, absentEngineerMap]);
+
+    const totalSegmentsCount = TIME_SEGMENTS.length;
+    const slotRowHeightPx = 42; // Height per 30-min segment in vertical timeline
 
     return (
-        <div className="flex-grow flex flex-col p-4 sm:p-6 bg-slate-50 min-h-0 overflow-y-auto">
+        <div className="flex-grow flex flex-col p-3 sm:p-5 bg-slate-50 min-h-0 overflow-y-auto">
             {/* Top Bar: Navigation & Day Summary */}
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-4 rounded-2xl shadow-sm border border-slate-200/80 mb-5">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-4 rounded-2xl shadow-sm border border-slate-200/80 mb-4">
                 <div className="flex flex-wrap items-center gap-3">
                     <button
                         onClick={onBackToWeekly}
@@ -238,7 +264,7 @@ export const DailyBreakdownCapacityView: React.FC<DailyBreakdownCapacityViewProp
                         <span>Booked: <b>{daySummary.bookedHours}h</b></span>
                     </div>
 
-                    {/* Single Spare Hours Focal Tag */}
+                    {/* Single Spare Hours Focal Metric */}
                     <div className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-black border ${
                         daySummary.spareHours < 0 
                             ? 'bg-red-50 text-red-700 border-red-200' 
@@ -260,225 +286,226 @@ export const DailyBreakdownCapacityView: React.FC<DailyBreakdownCapacityViewProp
             </div>
 
             {/* Status Legend */}
-            <div className="bg-white p-3 rounded-xl border border-slate-200/80 mb-4 flex flex-wrap items-center gap-4 text-xs font-semibold">
-                <span className="text-slate-400 font-bold uppercase text-[10px] tracking-wider">Slot Indicators:</span>
-                <span className="inline-flex items-center gap-1.5">
-                    <span className="w-3.5 h-3.5 rounded bg-blue-600"></span>
-                    <span className="text-slate-700">Booked</span>
-                </span>
-                <span className="inline-flex items-center gap-1.5">
-                    <span className="w-3.5 h-3.5 rounded bg-purple-600"></span>
-                    <span className="text-slate-700">Reserved (MOT)</span>
-                </span>
-                <span className="inline-flex items-center gap-1.5">
-                    <span className="w-3.5 h-3.5 rounded bg-emerald-500"></span>
-                    <span className="text-slate-700">Available Slot</span>
-                </span>
-                <span className="inline-flex items-center gap-1.5">
-                    <span className="w-3.5 h-3.5 rounded bg-amber-500"></span>
-                    <span className="text-slate-700">On-hold / Paused</span>
-                </span>
-                <span className="inline-flex items-center gap-1.5">
-                    <span className="w-3.5 h-3.5 rounded bg-rose-600"></span>
-                    <span className="text-slate-700">Sick-leave / Absence</span>
+            <div className="bg-white p-3 rounded-xl border border-slate-200/80 mb-4 flex flex-wrap items-center justify-between gap-3 text-xs font-semibold">
+                <div className="flex flex-wrap items-center gap-4">
+                    <span className="text-slate-400 font-bold uppercase text-[10px] tracking-wider">Slot Indicators:</span>
+                    <span className="inline-flex items-center gap-1.5">
+                        <span className="w-3.5 h-3.5 rounded bg-blue-600"></span>
+                        <span className="text-slate-700">Booked</span>
+                    </span>
+                    <span className="inline-flex items-center gap-1.5">
+                        <span className="w-3.5 h-3.5 rounded bg-purple-600"></span>
+                        <span className="text-slate-700">Reserved (MOT)</span>
+                    </span>
+                    <span className="inline-flex items-center gap-1.5">
+                        <span className="w-3.5 h-3.5 rounded bg-emerald-500"></span>
+                        <span className="text-slate-700">Available Slot</span>
+                    </span>
+                    <span className="inline-flex items-center gap-1.5">
+                        <span className="w-3.5 h-3.5 rounded bg-amber-500"></span>
+                        <span className="text-slate-700">On-hold / Paused</span>
+                    </span>
+                    <span className="inline-flex items-center gap-1.5">
+                        <span className="w-3.5 h-3.5 rounded bg-rose-600"></span>
+                        <span className="text-slate-700">Sick-leave / Absence</span>
+                    </span>
+                </div>
+                <span className="text-[11px] text-slate-400 italic">
+                    Drag unallocated jobs from left into any vertical bay slot
                 </span>
             </div>
 
-            {/* Main Daily Grid & Optional Unallocated Drawer */}
-            <div className="flex flex-col lg:flex-row gap-5 flex-grow min-h-0">
-                {/* Visual Bay Matrix */}
-                <div className="flex-grow bg-white rounded-2xl shadow-sm border border-slate-200/90 overflow-hidden flex flex-col">
-                    <div className="p-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
-                        <h3 className="text-xs font-black text-slate-700 uppercase tracking-wider flex items-center gap-2">
-                            <Layers size={14} className="text-indigo-600" />
-                            <span>Workshop Bay &amp; Technician Matrix</span>
-                        </h3>
-                        <span className="text-[11px] text-slate-400">
-                            Drop unallocated jobs onto empty slots (Auto-checks collisions)
-                        </span>
+            {/* Main Layout: UNALLOCATED ON THE LEFT + VERTICAL RAMPS ON THE RIGHT */}
+            <div className="flex flex-col lg:flex-row gap-4 flex-grow min-h-0">
+                {/* 1. UNALLOCATED QUEUE COLUMN (ON THE LEFT) */}
+                <div className="w-full lg:w-80 flex-shrink-0 flex flex-col bg-white rounded-2xl shadow-sm border border-slate-200/90 overflow-hidden min-h-[320px] lg:min-h-0">
+                    <div className="p-3.5 border-b border-slate-100 bg-slate-50/80">
+                        <div className="flex items-center justify-between mb-2">
+                            <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                                <GripVertical size={16} className="text-slate-400" />
+                                <span>Unallocated Queue</span>
+                            </h3>
+                            <span className="text-[11px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full">
+                                {totalUnallocatedHours}h Total
+                            </span>
+                        </div>
+
+                        {/* Quick Search */}
+                        <div className="relative mt-2">
+                            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                            <input
+                                type="text"
+                                placeholder="Search unallocated..."
+                                value={unallocatedSearch}
+                                onChange={(e) => setUnallocatedSearch(e.target.value)}
+                                className="w-full pl-8 pr-3 py-1.5 text-xs bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
+                            />
+                        </div>
                     </div>
 
-                    <div className="flex-grow overflow-x-auto overflow-y-auto">
-                        <div className="min-w-[900px] divide-y divide-slate-100">
-                            {/* Time Header */}
-                            <div className="grid grid-cols-12 bg-slate-100/70 border-b border-slate-200 text-[10px] font-black text-slate-500 uppercase py-2">
-                                <div className="col-span-3 px-4">Bay &amp; Primary Technician</div>
-                                <div className="col-span-9 grid grid-cols-6 text-center">
-                                    <span>08:30 - 10:00</span>
-                                    <span>10:00 - 11:30</span>
-                                    <span>11:30 - 13:00</span>
-                                    <span>13:00 - 14:30</span>
-                                    <span>14:30 - 16:00</span>
-                                    <span>16:00 - 17:30</span>
-                                </div>
+                    {/* Unallocated Cards List */}
+                    <div className="flex-grow p-3 space-y-2.5 overflow-y-auto max-h-[680px]">
+                        {filteredUnallocatedJobs.length === 0 ? (
+                            <div className="text-center py-12 text-xs text-slate-400">
+                                <CheckCircle2 size={28} className="mx-auto mb-2 text-emerald-500" />
+                                <span className="font-semibold">No unallocated jobs</span>
                             </div>
-
-                            {/* Lift Rows */}
-                            {liftSchedules.map(({ lift, assignedTech, allocatedSegments, maxSlots }) => {
-                                const totalLiftHours = allocatedSegments.reduce((sum, s) => sum + (Number(s.segment.duration) || 1), 0);
-                                const isBayEmpty = allocatedSegments.length === 0;
+                        ) : (
+                            filteredUnallocatedJobs.map(job => {
+                                const vehicle = vehiclesById.get(job.vehicleId);
+                                const customer = customersById.get(job.customerId);
+                                const segment = (job.segments || []).find(s => s.status === 'Unallocated') || job.segments?.[0];
 
                                 return (
                                     <div
-                                        key={lift.id}
-                                        onDragOver={(e) => onTimelineDragOver(e, lift.id)}
-                                        onDrop={(e) => onTimelineDrop(e, lift.id)}
-                                        className={`grid grid-cols-12 py-3 px-2 transition-colors hover:bg-slate-50/70 ${
-                                            isBayEmpty ? 'bg-emerald-50/20' : ''
-                                        }`}
+                                        key={job.id}
+                                        draggable
+                                        onDragStart={(e) => onDragStart(e, job.id, segment?.segmentId || '')}
+                                        onDragEnd={onDragEnd}
+                                        onClick={() => onEditJob(job.id)}
+                                        className="p-3 rounded-xl bg-slate-50 hover:bg-indigo-50/70 border border-slate-200 hover:border-indigo-300 shadow-xs cursor-grab active:cursor-grabbing transition group"
                                     >
-                                        {/* Bay + Tech Metadata Column */}
-                                        <div className="col-span-3 px-3 flex flex-col justify-center border-r border-slate-100">
-                                            <div className="flex items-center gap-2">
-                                                <span 
-                                                    className="w-3 h-3 rounded-full flex-shrink-0"
-                                                    style={{ backgroundColor: lift.color || '#4f46e5' }}
-                                                />
-                                                <span className="font-bold text-slate-900 text-sm">{lift.name}</span>
-                                            </div>
-
-                                            <span className="text-[11px] text-slate-500 font-medium mt-0.5">
-                                                {lift.type || 'Standard Lift'}
+                                        <div className="flex items-center justify-between text-xs font-bold text-slate-900">
+                                            <span className="group-hover:text-indigo-600 transition-colors">
+                                                {vehicle?.registration || `#${job.id.slice(-4)}`}
                                             </span>
-
-                                            <div className="flex items-center gap-1.5 mt-1 text-[11px] text-slate-600">
-                                                <UserIcon size={12} className="text-slate-400" />
-                                                <span>{assignedTech?.name || 'Open Tech Pool'}</span>
-                                            </div>
-
-                                            <div className="mt-1 flex items-center gap-2">
-                                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
-                                                    isBayEmpty 
-                                                        ? 'bg-emerald-100 text-emerald-800' 
-                                                        : 'bg-slate-100 text-slate-600'
-                                                }`}>
-                                                    {isBayEmpty ? 'Available All Day' : `${totalLiftHours.toFixed(1)}h booked`}
-                                                </span>
-                                            </div>
+                                            <span className="text-[10px] bg-slate-200 px-1.5 py-0.5 rounded text-slate-700 font-bold">
+                                                {job.estimatedHours || 1} hrs
+                                            </span>
                                         </div>
 
-                                        {/* Timeline Slot Grid for this Bay */}
-                                        <div className="col-span-9 relative flex items-center px-2 py-1 min-h-[70px]">
-                                            {/* Background slot grid */}
-                                            <div className="absolute inset-0 grid grid-cols-6 divide-x divide-slate-100 pointer-events-none opacity-40">
-                                                {Array.from({ length: 6 }).map((_, i) => (
-                                                    <div key={i} className="h-full bg-slate-50/40" />
-                                                ))}
-                                            </div>
+                                        <p className="text-xs text-slate-700 font-medium truncate mt-1">
+                                            {vehicle?.model || vehicle?.make || job.description || 'Job'}
+                                        </p>
 
-                                            {/* Allocated Job Blocks */}
-                                            {allocatedSegments.length === 0 ? (
-                                                <div className="w-full h-full flex items-center justify-center border-2 border-dashed border-emerald-200 rounded-xl bg-emerald-50/30 text-emerald-700 text-xs font-bold">
-                                                    <Sparkles size={14} className="mr-1.5 text-emerald-600" />
-                                                    <span>Available Free Capacity (Drag job here)</span>
-                                                </div>
-                                            ) : (
-                                                <div className="w-full flex flex-wrap gap-2 z-10">
-                                                    {allocatedSegments.map(({ segment, parentJob, statusLabel, colorClass }) => {
-                                                        const vehicle = vehiclesById.get(parentJob.vehicleId);
-                                                        const customer = customersById.get(parentJob.customerId);
-
-                                                        return (
-                                                            <div
-                                                                key={segment.segmentId || segment.id}
-                                                                draggable
-                                                                onDragStart={(e) => onDragStart(e, parentJob.id, segment.segmentId || '')}
-                                                                onDragEnd={onDragEnd}
-                                                                onClick={() => onEditJob(parentJob.id)}
-                                                                className={`px-3 py-2 rounded-xl shadow-sm border cursor-pointer hover:shadow-md transition-all flex flex-col justify-between max-w-[260px] min-w-[150px] ${colorClass}`}
-                                                            >
-                                                                <div className="flex items-center justify-between gap-1 text-[10px] font-black uppercase tracking-wider mb-1">
-                                                                    <span className="bg-black/20 px-1.5 py-0.5 rounded">
-                                                                        {statusLabel}
-                                                                    </span>
-                                                                    <span>{segment.duration || 1} hrs</span>
-                                                                </div>
-
-                                                                <p className="font-black text-xs truncate">
-                                                                    {vehicle?.model || vehicle?.make || parentJob.description || 'Workshop Job'}
-                                                                </p>
-
-                                                                <div className="text-[10px] opacity-90 truncate mt-0.5">
-                                                                    {vehicle?.registration && <b className="mr-1">{vehicle.registration}</b>}
-                                                                    {customer ? getCustomerDisplayName(customer) : ''}
-                                                                </div>
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
-                                            )}
-                                        </div>
+                                        <p className="text-[11px] text-slate-400 truncate mt-0.5">
+                                            {customer ? getCustomerDisplayName(customer) : 'Customer'}
+                                        </p>
                                     </div>
                                 );
-                            })}
-                        </div>
+                            })
+                        )}
                     </div>
                 </div>
 
-                {/* Collapsible Unallocated Jobs Drawer */}
-                <div className={`flex-shrink-0 transition-all ${
-                    isUnallocatedOpen ? 'w-full lg:w-80' : 'w-full lg:w-12'
-                }`}>
-                    <div className="bg-white rounded-2xl shadow-sm border border-slate-200/90 h-full flex flex-col">
-                        <div 
-                            onClick={() => setIsUnallocatedOpen(!isUnallocatedOpen)}
-                            className="p-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between cursor-pointer hover:bg-slate-100 transition rounded-t-2xl"
-                        >
-                            <div className="flex items-center gap-2">
-                                <GripVertical size={16} className="text-slate-400" />
-                                {isUnallocatedOpen && (
-                                    <span className="text-xs font-black text-slate-800 uppercase tracking-wider">
-                                        Unallocated Queue ({unallocatedJobs.length})
-                                    </span>
-                                )}
-                            </div>
-                            <button className="text-slate-500">
-                                {isUnallocatedOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                            </button>
+                {/* 2. TIMELINE SECTION (ON THE RIGHT: VERTICAL RAMPS WITH VERTICAL TIMELINE) */}
+                <div className="flex-grow flex bg-white rounded-2xl shadow-sm border border-slate-200/90 overflow-auto min-w-0 min-h-[450px]">
+                    {/* Sticky Vertical Time Column */}
+                    <div className="flex-shrink-0 border-r border-slate-200 flex flex-col bg-white sticky left-0 z-20">
+                        <div className="p-2.5 border-b border-slate-200 sticky top-0 bg-slate-50/95 backdrop-blur-xs z-30 h-16 flex items-center justify-center font-black text-[11px] text-slate-400 uppercase tracking-wider">
+                            Time
                         </div>
+                        <div className="flex-grow flex flex-col">
+                            {TIME_SEGMENTS.map(time => (
+                                <div 
+                                    key={time} 
+                                    style={{ height: `${slotRowHeightPx}px` }}
+                                    className="text-[11px] text-right pr-2.5 text-slate-400 border-b border-slate-100 flex items-center justify-end font-semibold whitespace-nowrap"
+                                >
+                                    {time}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
 
-                        {isUnallocatedOpen && (
-                            <div className="p-3 space-y-2.5 flex-grow overflow-y-auto max-h-[600px]">
-                                {unallocatedJobs.length === 0 ? (
-                                    <div className="text-center py-8 text-xs text-slate-400">
-                                        <CheckCircle2 size={24} className="mx-auto mb-2 text-emerald-500" />
-                                        <span>No unallocated jobs waiting</span>
+                    {/* Vertical Ramp Columns (Arranged side-by-side) */}
+                    <div className="flex-grow flex min-w-[700px]">
+                        {liftSchedules.map(({ lift, assignedTech, allocatedSegments, bookedLiftHours, isBayEmpty }) => {
+                            return (
+                                <div 
+                                    key={lift.id} 
+                                    className="min-w-[190px] flex-1 border-r border-slate-200 flex flex-col bg-white last:border-r-0"
+                                >
+                                    {/* Vertical Ramp Header */}
+                                    <div className="sticky top-0 z-10 bg-slate-50/95 backdrop-blur-xs border-b border-slate-200 p-2.5 h-16 flex flex-col justify-center">
+                                        <div className="flex items-center gap-1.5">
+                                            <span 
+                                                className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                                                style={{ backgroundColor: lift.color || '#4f46e5' }}
+                                            />
+                                            <span className="font-black text-slate-900 text-xs truncate" title={lift.name}>
+                                                {lift.name}
+                                            </span>
+                                        </div>
+
+                                        <div className="flex items-center justify-between text-[10px] text-slate-500 font-medium mt-1">
+                                            <span className="flex items-center gap-1 truncate max-w-[100px]">
+                                                <UserIcon size={10} className="text-slate-400" />
+                                                <span>{assignedTech?.name || 'Tech Pool'}</span>
+                                            </span>
+                                            <span className={`px-1.5 py-0.2 rounded font-bold ${
+                                                isBayEmpty 
+                                                    ? 'bg-emerald-100 text-emerald-800' 
+                                                    : 'bg-slate-200 text-slate-700'
+                                            }`}>
+                                                {isBayEmpty ? 'Free' : `${bookedLiftHours.toFixed(1)}h`}
+                                            </span>
+                                        </div>
                                     </div>
-                                ) : (
-                                    unallocatedJobs.map(job => {
-                                        const vehicle = vehiclesById.get(job.vehicleId);
-                                        const customer = customersById.get(job.customerId);
-                                        const segment = job.segments?.[0];
 
-                                        return (
-                                            <div
-                                                key={job.id}
-                                                draggable
-                                                onDragStart={(e) => onDragStart(e, job.id, segment?.segmentId || '')}
-                                                onDragEnd={onDragEnd}
-                                                onClick={() => onEditJob(job.id)}
-                                                className="p-3 rounded-xl bg-slate-50 hover:bg-indigo-50/60 border border-slate-200 hover:border-indigo-300 shadow-sm cursor-grab active:cursor-grabbing transition"
-                                            >
-                                                <div className="flex items-center justify-between text-xs font-bold text-slate-900">
-                                                    <span>{vehicle?.registration || `#${job.id.slice(-4)}`}</span>
-                                                    <span className="text-[10px] bg-slate-200 px-1.5 py-0.5 rounded text-slate-700">
-                                                        {job.estimatedHours || 1} hrs
-                                                    </span>
+                                    {/* Vertical Slots Drop Zone */}
+                                    <div 
+                                        className="flex-grow relative flex flex-col"
+                                        style={{ height: `${totalSegmentsCount * slotRowHeightPx}px` }}
+                                        onDragOver={(e) => {
+                                            e.preventDefault();
+                                            onTimelineDragOver(e, lift.id);
+                                        }}
+                                        onDrop={(e) => onTimelineDrop(e, lift.id)}
+                                    >
+                                        {/* Background Slot Grid Lines */}
+                                        {TIME_SEGMENTS.map((_, index) => (
+                                            <div 
+                                                key={index} 
+                                                style={{ height: `${slotRowHeightPx}px` }}
+                                                className="border-b border-slate-100 hover:bg-emerald-50/30 transition-colors" 
+                                            />
+                                        ))}
+
+                                        {/* Allocated Job Blocks Positioned Vertically */}
+                                        {allocatedSegments.map(({ segment, parentJob, startSlot, slotSpan, statusLabel, colorClass }) => {
+                                            const vehicle = vehiclesById.get(parentJob.vehicleId);
+                                            const customer = customersById.get(parentJob.customerId);
+
+                                            const topPercent = (startSlot / totalSegmentsCount) * 100;
+                                            const heightPercent = (slotSpan / totalSegmentsCount) * 100;
+
+                                            return (
+                                                <div
+                                                    key={segment.segmentId || segment.id}
+                                                    draggable
+                                                    onDragStart={(e) => onDragStart(e, parentJob.id, segment.segmentId || '')}
+                                                    onDragEnd={onDragEnd}
+                                                    onClick={() => onEditJob(parentJob.id)}
+                                                    style={{
+                                                        top: `${topPercent}%`,
+                                                        height: `${heightPercent}%`,
+                                                        minHeight: '38px'
+                                                    }}
+                                                    className={`absolute left-1 right-1 p-2 rounded-xl shadow-sm border cursor-grab active:cursor-grabbing hover:shadow-md hover:scale-[1.01] transition-all flex flex-col justify-between overflow-hidden z-10 ${colorClass}`}
+                                                >
+                                                    <div className="flex items-center justify-between gap-1 text-[9px] font-black uppercase tracking-wider mb-0.5">
+                                                        <span className="bg-black/25 px-1.5 py-0.5 rounded leading-none">
+                                                            {statusLabel}
+                                                        </span>
+                                                        <span className="leading-none">{segment.duration || 1}h</span>
+                                                    </div>
+
+                                                    <p className="font-black text-xs truncate leading-tight">
+                                                        {vehicle?.registration ? `${vehicle.registration} • ` : ''}
+                                                        {vehicle?.model || parentJob.description || 'Workshop Job'}
+                                                    </p>
+
+                                                    <p className="text-[10px] opacity-90 truncate leading-none mt-0.5">
+                                                        {customer ? getCustomerDisplayName(customer) : 'Customer'}
+                                                    </p>
                                                 </div>
-
-                                                <p className="text-xs text-slate-600 font-medium truncate mt-1">
-                                                    {vehicle?.model || vehicle?.make || job.description || 'Job'}
-                                                </p>
-
-                                                <p className="text-[10px] text-slate-400 truncate">
-                                                    {customer ? getCustomerDisplayName(customer) : ''}
-                                                </p>
-                                            </div>
-                                        );
-                                    })
-                                )}
-                            </div>
-                        )}
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            );
+                        })}
                     </div>
                 </div>
             </div>
