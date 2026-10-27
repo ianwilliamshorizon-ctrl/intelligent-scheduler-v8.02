@@ -5,10 +5,7 @@ import {
     ArrowLeft, 
     Warehouse, 
     Clock, 
-    User as UserIcon, 
     Sparkles, 
-    CheckCircle2, 
-    Layers, 
     GripVertical,
     Search
 } from 'lucide-react';
@@ -20,13 +17,20 @@ import {
     AbsenceRequest, 
     BusinessEntity, 
     Vehicle, 
-    Customer 
+    Customer,
+    PurchaseOrder,
+    StorageLocation
 } from '../../../types';
 import { formatDate, addDays, dateStringToDate } from '../../../core/utils/dateUtils';
 import { getCustomerDisplayName } from '../../../core/utils/customerUtils';
-import { TIME_SEGMENTS, SEGMENT_DURATION_MINUTES } from '../../../constants';
+import { TIME_SEGMENTS } from '../../../constants';
 import { calculateDailyCapacity } from './capacityUtils';
-import { SlotVisualStatus } from './capacityTypes';
+import { DraggableJobCard } from '../DraggableJobCard';
+import { AllocatedJobCard } from '../AllocatedJobCard';
+import { SummaryJobCard } from '../../shared/SummaryJobCard';
+import LiveAssistant from '../../LiveAssistant';
+import { useApp } from '../../../core/state/AppContext';
+import { useData } from '../../../core/state/DataContext';
 
 interface DailyBreakdownCapacityViewProps {
     currentDate: string;
@@ -41,36 +45,105 @@ interface DailyBreakdownCapacityViewProps {
     vehicles: Vehicle[];
     customers: Customer[];
     unallocatedJobs: Job[];
+    allocatedSegmentsByLift?: Map<string, (JobSegment & { parentJobId: string; })[]>;
     bankHolidays?: Map<string, string[]>;
     // Drag & Drop Handlers from existing Dispatch matching engine
     onDragStart: (e: React.DragEvent, parentJobId: string, segmentId: string) => void;
     onDragEnd: (e: React.DragEvent) => void;
     onTimelineDragOver: (e: React.DragEvent<HTMLDivElement>, liftId: string) => void;
     onTimelineDrop: (e: React.DragEvent<HTMLDivElement>, liftId: string) => void;
+    onDragOverUnallocated?: (e: React.DragEvent) => void;
+    onDropOnUnallocated?: (e: React.DragEvent) => void;
+    onDragLeaveUnallocated?: (e: React.DragEvent) => void;
+    unallocatedDateFilter?: 'all' | 'today' | '7days' | '14days';
+    setUnallocatedDateFilter?: React.Dispatch<React.SetStateAction<'all' | 'today' | '7days' | '14days'>>;
+    showOnSiteOnly?: boolean;
+    setShowOnSiteOnly?: React.Dispatch<React.SetStateAction<boolean>>;
+    // Job Action Handlers
     onEditJob: (jobId: string, initialTab?: string) => void;
+    onCheckIn?: (jobId: string) => void;
+    onOpenPurchaseOrder?: (po: PurchaseOrder) => void;
+    onStartWork?: (jobId: string, segmentId: string) => void;
+    onPause?: (jobId: string, segmentId: string) => void;
+    onRestart?: (jobId: string, segmentId: string) => void;
+    onReassign?: (jobId: string, segmentId: string) => void;
+    onUnscheduleSegment?: (jobId: string, segmentId: string) => void;
+    onSendOffsite?: (jobId: string, segmentId: string) => void;
+    onPassToSales?: (jobId: string) => void;
+    onOpenAssistant?: (jobId: string) => void;
+    onCreateInvoice?: (job: Job) => void;
+    onEngineerComplete?: (job: Job, segmentId: string) => void;
+    purchaseOrders?: PurchaseOrder[];
+    storageLocations?: StorageLocation[];
 }
 
-export const DailyBreakdownCapacityView: React.FC<DailyBreakdownCapacityViewProps> = ({
-    currentDate,
-    setCurrentDate,
-    onBackToWeekly,
-    jobs,
-    lifts,
-    engineers,
-    absences,
-    businessEntities,
-    selectedEntityId,
-    vehicles,
-    customers,
-    unallocatedJobs,
-    bankHolidays,
-    onDragStart,
-    onDragEnd,
-    onTimelineDragOver,
-    onTimelineDrop,
-    onEditJob
-}) => {
+export const DailyBreakdownCapacityView: React.FC<DailyBreakdownCapacityViewProps> = (props) => {
+    const {
+        currentDate,
+        setCurrentDate,
+        onBackToWeekly,
+        jobs,
+        lifts,
+        engineers,
+        absences,
+        businessEntities,
+        selectedEntityId,
+        vehicles,
+        customers,
+        unallocatedJobs,
+        allocatedSegmentsByLift,
+        bankHolidays,
+        onDragStart,
+        onDragEnd,
+        onTimelineDragOver,
+        onTimelineDrop,
+        onDragOverUnallocated,
+        onDropOnUnallocated,
+        onDragLeaveUnallocated,
+        showOnSiteOnly,
+        setShowOnSiteOnly,
+        onEditJob,
+        onCheckIn,
+        onOpenPurchaseOrder,
+        onStartWork,
+        onPause,
+        onRestart,
+        onReassign,
+        onUnscheduleSegment,
+        onSendOffsite,
+        onPassToSales,
+        onOpenAssistant,
+        onCreateInvoice,
+        onEngineerComplete,
+        purchaseOrders = [],
+        storageLocations = []
+    } = props;
+
     const [unallocatedSearch, setUnallocatedSearch] = useState('');
+    const [viewMode, setViewMode] = useState<'standard' | 'summary'>('summary');
+    const [assistantJobId, setAssistantJobId] = useState<string | null>(null);
+
+    const { currentUser, users, roles } = useApp();
+    const { saveRecord } = useData();
+
+    const handleOpenAssistant = (jobId: string) => {
+        if (onOpenAssistant) {
+            onOpenAssistant(jobId);
+        } else {
+            setAssistantJobId(jobId);
+        }
+    };
+
+    const handleCloseAssistant = () => setAssistantJobId(null);
+
+    const handleAddNoteFromAssistant = (note: string) => {
+        if (!assistantJobId) return;
+        const job = jobs.find(j => j.id === assistantJobId);
+        if (job) {
+            const newNotes = `${job.notes || ''}\n\n--- Assistant Note ---\n${note}`;
+            saveRecord('jobs', { ...job, notes: newNotes });
+        }
+    };
 
     const currentDateObj = useMemo(() => dateStringToDate(currentDate), [currentDate]);
 
@@ -88,6 +161,7 @@ export const DailyBreakdownCapacityView: React.FC<DailyBreakdownCapacityViewProp
         });
     }, [currentDateObj, jobs, lifts, engineers, absences, businessEntities, selectedEntityId, bankHolidays]);
 
+    // Sort lifts: Lift 7 and MOT bays always on the far right
     const isMotOrLift7 = (l: Lift) => {
         const name = (l.name || '').toLowerCase();
         const type = (l.type || '').toLowerCase();
@@ -107,24 +181,22 @@ export const DailyBreakdownCapacityView: React.FC<DailyBreakdownCapacityViewProp
         });
     }, [lifts, selectedEntityId]);
 
-    const entityEngineers = useMemo(() => {
-        return engineers.filter(e => selectedEntityId === 'all' || e.entityId === selectedEntityId);
-    }, [engineers, selectedEntityId]);
-
     const vehiclesById = useMemo(() => new Map(vehicles.map(v => [v.id, v])), [vehicles]);
     const customersById = useMemo(() => new Map(customers.map(c => [c.id, c])), [customers]);
-    const engineersById = useMemo(() => new Map(engineers.map(e => [e.id, e])), [engineers]);
-
-    // Engineers on sick-leave or absence today
-    const absentEngineerMap = useMemo(() => {
-        const map = new Map<string, AbsenceRequest>();
-        absences.forEach(req => {
-            if (req.status === 'Approved' && req.startDate <= currentDate && req.endDate >= currentDate) {
-                map.set(req.userId, req);
+    
+    const engineersById = useMemo(() => {
+        const map = new Map<string, any>(engineers.map(e => [e.id, e]));
+        users.filter(u => u.role === 'Dispatcher').forEach(u => {
+            if (!map.has(u.id)) {
+                map.set(u.id, { 
+                    id: u.id, 
+                    name: u.name || u.email || 'Dispatcher',
+                    specialization: 'Dispatcher'
+                });
             }
         });
         return map;
-    }, [absences, currentDate]);
+    }, [engineers, users]);
 
     const handlePrevDay = () => {
         const prev = addDays(currentDateObj, -1);
@@ -149,6 +221,7 @@ export const DailyBreakdownCapacityView: React.FC<DailyBreakdownCapacityViewProp
                 (j.description && j.description.toLowerCase().includes(q)) ||
                 (vehicle?.registration && vehicle.registration.toLowerCase().includes(q)) ||
                 (vehicle?.model && vehicle.model.toLowerCase().includes(q)) ||
+                (j.keyNumber && j.keyNumber.toLowerCase().includes(q)) ||
                 custName.includes(q)
             );
         });
@@ -158,75 +231,25 @@ export const DailyBreakdownCapacityView: React.FC<DailyBreakdownCapacityViewProp
         return Number(filteredUnallocatedJobs.reduce((sum, j) => sum + (j.estimatedHours || 1), 0).toFixed(1));
     }, [filteredUnallocatedJobs]);
 
-    // Build timeline blocks per lift for this date
-    const liftSchedules = useMemo(() => {
-        const totalSegments = TIME_SEGMENTS.length;
-
-        return entityLifts.map(lift => {
-            // Find primary tech or specialization
-            const assignedTech = entityEngineers.find(e => 
-                e.specialization?.toLowerCase().includes(lift.type?.toLowerCase() || '')
-            ) || entityEngineers[0];
-
-            // Segments allocated to this lift on this day
-            const allocatedSegments: {
-                segment: JobSegment;
-                parentJob: Job;
-                startSlot: number;
-                slotSpan: number;
-                statusLabel: SlotVisualStatus;
-                colorClass: string;
-            }[] = [];
-
-            jobs.forEach(job => {
-                if (job.status === 'Cancelled') return;
-                (job.segments || []).forEach(seg => {
-                    if (seg.date === currentDate && seg.allocatedLift === lift.id && seg.status !== 'Cancelled') {
-                        const start = Math.max(0, Math.min(totalSegments - 1, seg.scheduledStartSegment ?? 0));
-                        const duration = Number(seg.duration) || 1;
-                        const span = Math.max(1, Math.min(totalSegments - start, Math.ceil(duration * (60 / SEGMENT_DURATION_MINUTES))));
-
-                        // Determine Visual Status Label
-                        let statusLabel: SlotVisualStatus = 'Booked';
-                        let colorClass = 'bg-blue-600 border-blue-700 text-white';
-
-                        if (seg.status === 'Paused') {
-                            statusLabel = 'On-hold';
-                            colorClass = 'bg-amber-500 border-amber-600 text-white';
-                        } else if (job.jobType === 'MOT' || seg.description?.toLowerCase().includes('mot') || job.notes?.toLowerCase().includes('reserved')) {
-                            statusLabel = 'Reserved';
-                            colorClass = 'bg-purple-600 border-purple-700 text-white';
-                        } else if (seg.engineerId && absentEngineerMap.has(seg.engineerId)) {
-                            statusLabel = 'Sick-leave';
-                            colorClass = 'bg-rose-600 border-rose-700 text-white';
-                        }
-
-                        allocatedSegments.push({
-                            segment: seg,
-                            parentJob: job,
-                            startSlot: start,
-                            slotSpan: span,
-                            statusLabel,
-                            colorClass
-                        });
-                    }
-                });
+    // Fallback allocated segments if allocatedSegmentsByLift map is not passed
+    const getSegmentsForLift = (liftId: string) => {
+        if (allocatedSegmentsByLift) {
+            return allocatedSegmentsByLift.get(liftId) || [];
+        }
+        const segs: (JobSegment & { parentJobId: string })[] = [];
+        jobs.forEach(job => {
+            if (job.status === 'Cancelled' || job.status === 'Invoiced' || job.status === 'Closed') return;
+            (job.segments || []).forEach(segment => {
+                if (segment.date === currentDate && segment.allocatedLift === liftId && segment.status !== 'Unallocated') {
+                    segs.push({ ...segment, parentJobId: job.id });
+                }
             });
-
-            const bookedLiftHours = allocatedSegments.reduce((sum, s) => sum + (Number(s.segment.duration) || 1), 0);
-            const isBayEmpty = allocatedSegments.length === 0;
-
-            return {
-                lift,
-                allocatedSegments,
-                bookedLiftHours,
-                isBayEmpty
-            };
         });
-    }, [entityLifts, jobs, currentDate, absentEngineerMap]);
+        return segs;
+    };
 
     const totalSegmentsCount = TIME_SEGMENTS.length;
-    const slotRowHeightPx = 42; // Height per 30-min segment in vertical timeline
+    const slotRowHeightPx = 44; // Height per 30-min segment
 
     return (
         <div className="flex-grow flex flex-col p-3 sm:p-5 bg-slate-50 min-h-0 overflow-y-auto">
@@ -241,7 +264,8 @@ export const DailyBreakdownCapacityView: React.FC<DailyBreakdownCapacityViewProp
                         <span>Back to Weekly</span>
                     </button>
 
-                    <div className="flex items-center bg-slate-100 rounded-xl p-1 border border-slate-200">
+                    {/* Day Navigator */}
+                    <div className="flex items-center bg-slate-100 rounded-xl p-1 border border-slate-200/80">
                         <button
                             onClick={handlePrevDay}
                             className="p-1.5 hover:bg-white rounded-lg text-slate-700 transition"
@@ -326,87 +350,128 @@ export const DailyBreakdownCapacityView: React.FC<DailyBreakdownCapacityViewProp
                     </span>
                 </div>
                 <span className="text-[11px] text-slate-400 italic">
-                    Drag unallocated jobs from left into any vertical bay slot
+                    Drag unallocated jobs into any vertical bay slot
                 </span>
             </div>
 
             {/* Main Layout: UNALLOCATED ON THE LEFT + VERTICAL RAMPS ON THE RIGHT */}
             <div className="flex flex-col lg:flex-row gap-4 flex-grow min-h-0">
                 {/* 1. UNALLOCATED QUEUE COLUMN (ON THE LEFT) */}
-                <div className="w-full lg:w-80 flex-shrink-0 flex flex-col bg-white rounded-2xl shadow-sm border border-slate-200/90 overflow-hidden min-h-[320px] lg:min-h-0">
-                    <div className="p-3.5 border-b border-slate-100 bg-slate-50/80">
-                        <div className="flex items-center justify-between mb-2">
-                            <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                <div 
+                    className="w-full lg:w-80 flex-shrink-0 flex flex-col bg-gray-100 rounded-2xl shadow-inner unallocated-drop-zone min-h-[320px] lg:min-h-0 overflow-hidden"
+                    onDragOver={(e) => {
+                        e.preventDefault();
+                        onDragOverUnallocated?.(e);
+                    }}
+                    onDrop={onDropOnUnallocated}
+                    onDragLeave={onDragLeaveUnallocated}
+                >
+                    <div className="p-3 border-b bg-white/70">
+                        <div className="flex justify-between items-center mb-2">
+                            <h3 className="font-black text-slate-800 text-xs uppercase tracking-wider flex items-center gap-1.5">
                                 <GripVertical size={16} className="text-slate-400" />
-                                <span>Unallocated Queue</span>
+                                <span>Unallocated Jobs</span>
                             </h3>
-                            <span className="text-[11px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full">
-                                {totalUnallocatedHours}h Total
+                            <span className="flex items-center gap-1 text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full" title="Total hours">
+                                <Clock size={12} />
+                                {totalUnallocatedHours.toFixed(1)}h
                             </span>
                         </div>
 
+                        {/* Mode switcher: Standard / Summary */}
+                        <div className="flex bg-slate-200/80 rounded-lg p-0.5 mb-2">
+                            {(['standard', 'summary'] as const).map(mode => (
+                                <button
+                                    key={mode}
+                                    onClick={() => setViewMode(mode)}
+                                    className={`w-full py-1 rounded-md font-black uppercase text-[9px] tracking-widest transition-all ${viewMode === mode ? 'bg-indigo-600 shadow text-white' : 'text-slate-500 hover:text-slate-800'}`}
+                                >
+                                    {mode}
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* On-site only checkbox */}
+                        {setShowOnSiteOnly && (
+                            <div className="flex items-center gap-2 mb-2">
+                                <input
+                                    type="checkbox"
+                                    id="show-on-site-capacity"
+                                    checked={showOnSiteOnly}
+                                    onChange={(e) => setShowOnSiteOnly(e.target.checked)}
+                                    className="h-3.5 w-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                                />
+                                <label htmlFor="show-on-site-capacity" className="text-xs text-slate-600 font-medium cursor-pointer">
+                                    Show 'On Site' vehicles only
+                                </label>
+                            </div>
+                        )}
+
                         {/* Quick Search */}
-                        <div className="relative mt-2">
-                            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <div className="relative">
+                            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
                             <input
                                 type="text"
                                 placeholder="Search unallocated..."
                                 value={unallocatedSearch}
                                 onChange={(e) => setUnallocatedSearch(e.target.value)}
-                                className="w-full pl-8 pr-3 py-1.5 text-xs bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
+                                className="w-full pl-8 pr-2.5 py-1 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
                             />
                         </div>
                     </div>
 
-                    {/* Unallocated Cards List */}
-                    <div className="flex-grow p-3 space-y-2.5 overflow-y-auto max-h-[680px]">
-                        {filteredUnallocatedJobs.length === 0 ? (
-                            <div className="text-center py-12 text-xs text-slate-400">
-                                <CheckCircle2 size={28} className="mx-auto mb-2 text-emerald-500" />
-                                <span className="font-semibold">No unallocated jobs</span>
-                            </div>
-                        ) : (
-                            filteredUnallocatedJobs.map(job => {
-                                const vehicle = vehiclesById.get(job.vehicleId);
-                                const customer = customersById.get(job.customerId);
-                                const segment = (job.segments || []).find(s => s.status === 'Unallocated') || job.segments?.[0];
+                    <div className="flex-grow p-3 space-y-3 overflow-y-auto lg:max-h-full max-h-[420px]">
+                        {filteredUnallocatedJobs.map(job => {
+                            const commonProps = {
+                                job,
+                                vehicle: vehiclesById.get(job.vehicleId),
+                                customer: customersById.get(job.customerId),
+                                purchaseOrders: purchaseOrders || [],
+                                engineers: engineers,
+                                storageLocations: storageLocations || [],
+                                currentUser,
+                                onEdit: onEditJob,
+                                onOpenAssistant: handleOpenAssistant,
+                                onOpenPurchaseOrder: onOpenPurchaseOrder || (() => {}),
+                                onStartWork: onStartWork || (() => {}),
+                                onPause: onPause || (() => {}),
+                                onRestart: onRestart || (() => {}),
+                                onCheckIn: onCheckIn || (() => {}),
+                                onPassToSales: onPassToSales || (() => {}),
+                                onQcApprove: () => {},
+                                onCreateInvoice,
+                            };
+
+                            if (viewMode === 'summary') {
+                                const unallocatedSegments = (job.segments || []).filter(s => s.status === 'Unallocated');
+                                if (unallocatedSegments.length === 0) return null;
+                                const segmentToDrag = unallocatedSegments[0];
+                                const userRoleObj = roles.find(r => r.name === currentUser.role);
+                                const baseRole = userRoleObj ? userRoleObj.baseRole : currentUser.role;
+                                const canDrag = baseRole === 'Admin' || baseRole === 'Dispatcher';
 
                                 return (
-                                    <div
+                                    <div 
                                         key={job.id}
-                                        draggable
-                                        onDragStart={(e) => onDragStart(e, job.id, segment?.segmentId || '')}
+                                        draggable={canDrag}
+                                        onDragStart={(e) => canDrag && onDragStart(e, job.id, segmentToDrag.segmentId)}
                                         onDragEnd={onDragEnd}
-                                        onClick={() => onEditJob(job.id)}
-                                        className="p-3 rounded-xl bg-slate-50 hover:bg-indigo-50/70 border border-slate-200 hover:border-indigo-300 shadow-xs cursor-grab active:cursor-grabbing transition group"
+                                        className={`${canDrag ? 'cursor-grab' : 'cursor-default'} draggable-job transition-transform hover:scale-[1.02] active:scale-95`}
                                     >
-                                        <div className="flex items-center justify-between text-xs font-bold text-slate-900">
-                                            <span className="group-hover:text-indigo-600 transition-colors">
-                                                {vehicle?.registration || `#${job.id.slice(-4)}`}
-                                            </span>
-                                            <span className="text-[10px] bg-slate-200 px-1.5 py-0.5 rounded text-slate-700 font-bold">
-                                                {job.estimatedHours || 1} hrs
-                                            </span>
-                                        </div>
-
-                                        <p className="text-xs text-slate-700 font-medium truncate mt-1">
-                                            {vehicle?.model || vehicle?.make || job.description || 'Job'}
-                                        </p>
-
-                                        <p className="text-[11px] text-slate-400 truncate mt-0.5">
-                                            {customer ? getCustomerDisplayName(customer) : 'Customer'}
-                                        </p>
-
-                                        {segment?.engineerId && (
-                                            <div className="flex items-center gap-1 text-[10px] text-indigo-700 font-bold mt-1 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded w-fit">
-                                                <UserIcon size={10} className="flex-shrink-0" />
-                                                <span>{engineersById.get(segment.engineerId)?.name || 'Assigned Tech'}</span>
-                                            </div>
-                                        )}
+                                        <SummaryJobCard {...commonProps} />
                                     </div>
                                 );
-                            })
-                        )}
+                            }
+
+                            return (
+                                <DraggableJobCard
+                                    key={job.id}
+                                    {...commonProps}
+                                    onDragStart={onDragStart}
+                                    onDragEnd={onDragEnd}
+                                />
+                            );
+                        })}
                     </div>
                 </div>
 
@@ -430,15 +495,19 @@ export const DailyBreakdownCapacityView: React.FC<DailyBreakdownCapacityViewProp
                         </div>
                     </div>
 
-                    {/* Vertical Ramp Columns (Arranged side-by-side) */}
+                    {/* Vertical Ramp Columns (Arranged side-by-side, MOT Bay & Lift 7 sorted to far right) */}
                     <div className="flex-grow flex min-w-[700px]">
-                        {liftSchedules.map(({ lift, allocatedSegments, bookedLiftHours, isBayEmpty }) => {
+                        {entityLifts.map(lift => {
+                            const allocatedSegments = getSegmentsForLift(lift.id);
+                            const bookedHours = allocatedSegments.reduce((sum, seg) => sum + (Number(seg.duration) || 1), 0);
+                            const isBayEmpty = allocatedSegments.length === 0;
+
                             return (
                                 <div 
                                     key={lift.id} 
                                     className="min-w-[190px] flex-1 border-r border-slate-200 flex flex-col bg-white last:border-r-0"
                                 >
-                                    {/* Vertical Ramp Header */}
+                                    {/* Vertical Ramp Header (Engineers are allocated to jobs, not ramps) */}
                                     <div className="sticky top-0 z-10 bg-slate-50/95 backdrop-blur-xs border-b border-slate-200 p-2.5 h-16 flex flex-col justify-center">
                                         <div className="flex items-center justify-between gap-1">
                                             <div className="flex items-center gap-1.5 min-w-0">
@@ -466,7 +535,7 @@ export const DailyBreakdownCapacityView: React.FC<DailyBreakdownCapacityViewProp
                                                     ? 'bg-emerald-100 text-emerald-800' 
                                                     : 'bg-slate-200 text-slate-700'
                                             }`}>
-                                                {isBayEmpty ? 'Free' : `${bookedLiftHours.toFixed(1)}h`}
+                                                {isBayEmpty ? 'Free' : `${bookedHours.toFixed(1)}h`}
                                             </span>
                                         </div>
                                     </div>
@@ -490,53 +559,35 @@ export const DailyBreakdownCapacityView: React.FC<DailyBreakdownCapacityViewProp
                                             />
                                         ))}
 
-                                        {/* Allocated Job Blocks Positioned Vertically */}
-                                        {allocatedSegments.map(({ segment, parentJob, startSlot, slotSpan, statusLabel, colorClass }) => {
-                                            const vehicle = vehiclesById.get(parentJob.vehicleId);
-                                            const customer = customersById.get(parentJob.customerId);
-                                            const engineer = segment.engineerId ? engineersById.get(segment.engineerId) : undefined;
-
-                                            const topPercent = (startSlot / totalSegmentsCount) * 100;
-                                            const heightPercent = (slotSpan / totalSegmentsCount) * 100;
-
+                                        {/* Allocated Job Cards with full features intact (Reassign, Check-in number, POs, etc.) */}
+                                        {allocatedSegments.map((segment, index) => {
+                                            const job = jobs.find(j => j.id === segment.parentJobId);
+                                            if (!job) return null;
                                             return (
-                                                <div
-                                                    key={segment.segmentId || segment.id}
-                                                    draggable
-                                                    onDragStart={(e) => onDragStart(e, parentJob.id, segment.segmentId || '')}
+                                                <AllocatedJobCard 
+                                                    key={segment.segmentId || segment.id || index}
+                                                    job={job}
+                                                    segment={segment}
+                                                    vehicle={vehiclesById.get(job.vehicleId)}
+                                                    customer={customersById.get(job.customerId)}
+                                                    engineer={segment.engineerId ? engineersById.get(segment.engineerId) : undefined}
+                                                    purchaseOrders={purchaseOrders}
+                                                    onDragStart={onDragStart}
                                                     onDragEnd={onDragEnd}
-                                                    onClick={() => onEditJob(parentJob.id)}
-                                                    style={{
-                                                        top: `${topPercent}%`,
-                                                        height: `${heightPercent}%`,
-                                                        minHeight: '44px'
-                                                    }}
-                                                    className={`absolute left-1 right-1 p-2 rounded-xl shadow-sm border cursor-grab active:cursor-grabbing hover:shadow-md hover:scale-[1.01] transition-all flex flex-col justify-between overflow-hidden z-10 ${colorClass}`}
-                                                >
-                                                    <div className="flex items-center justify-between gap-1 text-[9px] font-black uppercase tracking-wider mb-0.5">
-                                                        <span className="bg-black/25 px-1.5 py-0.5 rounded leading-none">
-                                                            {statusLabel}
-                                                        </span>
-                                                        <span className="leading-none">{segment.duration || 1}h</span>
-                                                    </div>
-
-                                                    <p className="font-black text-xs truncate leading-tight">
-                                                        {vehicle?.registration ? `${vehicle.registration} • ` : ''}
-                                                        {vehicle?.model || parentJob.description || 'Workshop Job'}
-                                                    </p>
-
-                                                    <p className="text-[10px] opacity-90 truncate leading-none mt-0.5">
-                                                        {customer ? getCustomerDisplayName(customer) : 'Customer'}
-                                                    </p>
-
-                                                    {/* Allocated Engineer on this Job */}
-                                                    <div className="flex items-center gap-1 text-[10px] opacity-95 truncate mt-1 bg-black/25 px-1.5 py-0.5 rounded w-fit">
-                                                        <UserIcon size={10} className="flex-shrink-0" />
-                                                        <span className="font-bold truncate">
-                                                            {engineer ? engineer.name : 'Unassigned Tech'}
-                                                        </span>
-                                                    </div>
-                                                </div>
+                                                    onEdit={onEditJob}
+                                                    onStartWork={onStartWork}
+                                                    onPause={onPause || (() => {})}
+                                                    onRestart={onRestart || (() => {})}
+                                                    onReassign={onReassign || (() => {})}
+                                                    onOpenPurchaseOrder={onOpenPurchaseOrder || (() => {})}
+                                                    onUnscheduleSegment={onUnscheduleSegment || (() => {})}
+                                                    onSendOffsite={onSendOffsite || (() => {})}
+                                                    onPassToSales={onPassToSales || (() => {})}
+                                                    currentUser={currentUser}
+                                                    onOpenAssistant={handleOpenAssistant}
+                                                    onCreateInvoice={onCreateInvoice}
+                                                    onEngineerComplete={onEngineerComplete}
+                                                />
                                             );
                                         })}
                                     </div>
@@ -546,6 +597,14 @@ export const DailyBreakdownCapacityView: React.FC<DailyBreakdownCapacityViewProp
                     </div>
                 </div>
             </div>
+
+            {/* Live Assistant Modal */}
+            <LiveAssistant 
+                isOpen={!!assistantJobId} 
+                onClose={handleCloseAssistant} 
+                jobId={assistantJobId} 
+                onAddNote={handleAddNoteFromAssistant} 
+            />
         </div>
     );
 };

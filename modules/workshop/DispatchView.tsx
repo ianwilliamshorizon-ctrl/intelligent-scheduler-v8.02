@@ -282,12 +282,34 @@ const DispatchView: React.FC<DispatchViewProps> = ({
                     vehicles={vehicles}
                     customers={customers}
                     unallocatedJobs={unallocatedJobs}
+                    allocatedSegmentsByLift={allocatedSegmentsByLift}
                     bankHolidays={bankHolidays}
                     onDragStart={handleDragStart}
                     onDragEnd={handleDragEnd}
                     onTimelineDragOver={handleTimelineDragOver}
                     onTimelineDrop={handleTimelineDrop}
+                    onDragOverUnallocated={handleUnallocatedDragOver}
+                    onDropOnUnallocated={handleUnallocatedDrop}
+                    onDragLeaveUnallocated={handleUnallocatedDragLeave}
+                    unallocatedDateFilter={unallocatedDateFilter}
+                    setUnallocatedDateFilter={setUnallocatedDateFilter}
+                    showOnSiteOnly={showOnSiteOnly}
+                    setShowOnSiteOnly={setShowOnSiteOnly}
                     onEditJob={handleEditJob}
+                    onCheckIn={(id) => { setSelectedJobId(id); onCheckIn(id); }}
+                    onOpenPurchaseOrder={onOpenPurchaseOrder}
+                    onStartWork={onStartWork}
+                    onPause={onPause}
+                    onRestart={onRestart}
+                    onReassign={handleReassignClick}
+                    onUnscheduleSegment={onUnscheduleSegment}
+                    onSendOffsite={onSendOffsite}
+                    onPassToSales={onPassToSales}
+                    onOpenAssistant={(id) => { setSelectedJobId(id); onOpenAssistant(id); }}
+                    onCreateInvoice={onCreateInvoice}
+                    onEngineerComplete={onEngineerComplete}
+                    purchaseOrders={purchaseOrders}
+                    storageLocations={storageLocations}
                 />
             )}
 
