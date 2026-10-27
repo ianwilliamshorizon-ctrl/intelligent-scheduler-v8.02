@@ -25,6 +25,7 @@ import {
     Vehicle, 
     Customer,
     PurchaseOrder 
+} from '../../../types';
 import { formatDate, addDays, dateStringToDate, formatReadableDate } from '../../../core/utils/dateUtils';
 import { getCustomerDisplayName } from '../../../core/utils/customerUtils';
 import { TIME_SEGMENTS, SEGMENT_DURATION_MINUTES } from '../../../constants';
