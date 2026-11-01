@@ -236,6 +236,7 @@ export const TimelineView: React.FC<TimelineViewProps> = (props) => {
                                                 onDragStart={onDragStart}
                                                 onDragEnd={onDragEnd}
                                                 onEdit={onEditJob}
+                                                onCheckIn={onCheckIn}
                                                 onStartWork={onStartWork}
                                                 onPause={onPause}
                                                 onRestart={onRestart}

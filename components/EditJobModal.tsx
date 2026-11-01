@@ -4,7 +4,7 @@ import { useData } from '../core/state/DataContext';
 import { findBestVoice, prepareTextForSpeech } from '../core/utils/speechUtils';
 import { useApp } from '../core/state/AppContext';
 import * as T from '../types';
-import { X, Save, Car, User, FileText, Wrench, Package, DollarSign, Edit, Plus, Trash2, KeyRound, MessageSquare, ChevronUp, ChevronDown, ListChecks, PlusCircle, ClipboardCheck, CarFront, Image as ImageIcon, Ban, Expand, Loader2, Printer, CalendarDays, PlayCircle, PauseCircle, CheckCircle, RotateCcw, UserCheck, UserPlus, MoreHorizontal, Camera, Info, Volume2, History, Clock, ToggleLeft, ToggleRight, ShieldAlert, SlidersHorizontal, UserMinus } from 'lucide-react';
+import { X, Save, Car, User, FileText, Wrench, Package, DollarSign, Edit, Plus, Trash2, KeyRound, MessageSquare, ChevronUp, ChevronDown, ListChecks, PlusCircle, ClipboardCheck, CarFront, Image as ImageIcon, Ban, Expand, Loader2, Printer, CalendarDays, PlayCircle, PauseCircle, CheckCircle, RotateCcw, UserCheck, UserPlus, MoreHorizontal, Camera, Info, Volume2, History, Clock, ToggleLeft, ToggleRight, ShieldAlert, SlidersHorizontal, UserMinus, LogIn } from 'lucide-react';
 import { formatCurrency } from '../utils/formatUtils';
 import { formatDate, addDays } from '../core/utils/dateUtils';
 import { generateEstimateNumber } from '../core/utils/numberGenerators';
@@ -1097,7 +1097,21 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
                             )}
                         </div>
                     </div>
-                    <button type="button" onClick={onClose}><X size={24} /></button>
+                    <div className="flex items-center gap-3">
+                        {onCheckIn && editableJob && editableJob.vehicleStatus !== 'On Site' && editableJob.vehicleStatus !== 'On-Site' && editableJob.vehicleStatus !== 'Off-Site (Partner)' && editableJob.vehicleStatus !== 'Collected' && editableJob.vehicleStatus !== 'Awaiting Collection' && (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    onCheckIn(editableJob);
+                                }}
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold uppercase tracking-wider transition-all shadow-sm active:scale-95"
+                                title="Check In Vehicle"
+                            >
+                                <LogIn size={15} /> Check In Vehicle
+                            </button>
+                        )}
+                        <button type="button" onClick={onClose}><X size={24} /></button>
+                    </div>
                 </header>
 
                 <main className="flex-grow overflow-y-auto p-6 grid grid-cols-1 lg:grid-cols-6 gap-6">

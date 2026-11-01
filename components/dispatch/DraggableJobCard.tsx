@@ -113,10 +113,12 @@ export const DraggableJobCard: React.FC<{
         return merged;
     }, [job.id, job.purchaseOrderIds, purchaseOrders]);
 
-    const isReadyForWorkshop = job.vehicleStatus === 'On Site' && (job.partsStatus === 'Fully Received' || job.partsStatus === 'Not Required');
+    const isVehicleOnSite = job.vehicleStatus === 'On Site' || job.vehicleStatus === 'On-Site';
+    const needsCheckIn = !isVehicleOnSite && job.vehicleStatus !== 'Off-Site (Partner)' && job.vehicleStatus !== 'Collected' && job.vehicleStatus !== 'Awaiting Collection';
+    const isReadyForWorkshop = isVehicleOnSite && (job.partsStatus === 'Fully Received' || job.partsStatus === 'Not Required');
 
     const actions = useMemo(() => {
-        const list = [
+        const list: any[] = [
             { id: 'assistant', label: 'Technical Assistant', icon: Wand2, onClick: () => onOpenAssistant(job.id), group: 'primary' as const },
             { id: 'edit', label: 'Edit Job', icon: Edit, onClick: () => onEdit(job.id), group: 'secondary' as const },
             { id: 'pass-to-sales', label: job.saleVehicleId ? 'Linked to Sales' : 'Pass to Sales', icon: PackageIcon, onClick: () => onPassToSales(job.id), group: 'secondary' as const }
@@ -126,12 +128,12 @@ export const DraggableJobCard: React.FC<{
             list.push({ id: 'create-invoice', label: 'Convert to Invoice', icon: FileText, onClick: () => onCreateInvoice(job), group: 'primary' as const });
         }
 
-        if (job.vehicleStatus === 'Awaiting Arrival') {
-            list.unshift({ id: 'checkin', label: 'Check Vehicle In', icon: LogIn, onClick: () => onCheckIn(job.id), group: 'primary' as const });
+        if (needsCheckIn && onCheckIn) {
+            list.unshift({ id: 'checkin', label: 'Check Vehicle In', icon: LogIn, onClick: () => onCheckIn(job.id), group: 'primary' as const, color: 'text-blue-600' });
         }
 
         return list;
-    }, [job.id, job.vehicleStatus, onOpenAssistant, onEdit, onCheckIn, onCreateInvoice]);
+    }, [job.id, job.vehicleStatus, onOpenAssistant, onEdit, onCheckIn, onCreateInvoice, needsCheckIn]);
 
     return (
             <div
@@ -249,7 +251,17 @@ export const DraggableJobCard: React.FC<{
                             <currentVehicleStatus.icon size={12}/> {currentVehicleStatus.text}
                         </span>
                     </div>
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1.5">
+                        {needsCheckIn && onCheckIn && (
+                            <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); onCheckIn(job.id); }}
+                                className="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white px-2 py-0.5 rounded font-black text-[9px] uppercase tracking-wider transition-all shadow-xs active:scale-95 animate-pulse hover:animate-none"
+                                title="Vehicle has not arrived - Click to Check In"
+                            >
+                                <LogIn size={11} /> Check In
+                            </button>
+                        )}
                         <JobActionsMenu actions={actions} size="sm" colorScheme="light" title={`Job #${job.id} Actions`} onOpenChange={setIsActionsMenuOpen} />
                     </div>
                 </div>

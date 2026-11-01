@@ -301,7 +301,7 @@ export const JobCard: React.FC<JobCardProps> = ({
 
                 {/* Actions */}
                 <div className="flex gap-1.5">
-                    {onCheckIn && job.vehicleStatus !== 'On-Site' && (
+                    {onCheckIn && job.vehicleStatus !== 'On Site' && job.vehicleStatus !== 'On-Site' && job.vehicleStatus !== 'Off-Site (Partner)' && job.vehicleStatus !== 'Collected' && job.vehicleStatus !== 'Awaiting Collection' && (
                         <button
                             onClick={(e) => { e.stopPropagation(); onCheckIn(job.id); }}
                             className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 bg-blue-100 text-blue-700 rounded-md text-xs font-bold uppercase tracking-wider hover:bg-blue-200 transition-all shadow-sm active:scale-95"

@@ -617,6 +617,7 @@ export const DailyBreakdownCapacityView: React.FC<DailyBreakdownCapacityViewProp
                                                     onDragStart={onDragStart}
                                                     onDragEnd={onDragEnd}
                                                     onEdit={onEditJob}
+                                                    onCheckIn={onCheckIn}
                                                     onStartWork={onStartWork}
                                                     onPause={onPause || (() => {})}
                                                     onRestart={onRestart || (() => {})}

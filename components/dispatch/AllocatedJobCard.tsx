@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Job, JobSegment, Vehicle, Customer, Engineer, PurchaseOrder, User } from '../../types';
-import { Package as PackageIcon, KeyRound, PauseCircle, PlayCircle, UserCog, Trash2, Wand2, Edit, User as UserIcon, UserPlus, CheckCircle, Camera, FileText } from 'lucide-react';
+import { Package as PackageIcon, KeyRound, PauseCircle, PlayCircle, UserCog, Trash2, Wand2, Edit, User as UserIcon, UserPlus, CheckCircle, Camera, FileText, LogIn } from 'lucide-react';
 import { getCustomerDisplayName } from '../../core/utils/customerUtils';
 import { getPoStatusColor } from '../../core/utils/statusUtils';
 import { useApp } from '../../core/state/AppContext';
@@ -20,6 +20,7 @@ export const AllocatedJobCard: React.FC<{
     onDragStart: (e: React.DragEvent, parentJobId: string, segmentId: string) => void;
     onDragEnd: (e: React.DragEvent) => void;
     onEdit: (jobId: string, initialTab?: string) => void;
+    onCheckIn?: (jobId: string) => void;
     onStartWork?: (jobId: string, segmentId: string) => void;
     onPause: (jobId: string, segmentId: string) => void;
     onRestart: (jobId: string, segmentId: string) => void;
@@ -34,7 +35,7 @@ export const AllocatedJobCard: React.FC<{
     onQcApprove?: (jobId: string) => void;
     onEngineerComplete?: (job: Job, segmentId: string) => void;
     onCreateInvoice?: (job: Job) => void;
-}> = ({ job, segment, vehicle, customer, engineer, purchaseOrders, onDragStart, onDragEnd, onEdit, onStartWork, onPause, onRestart, onReassign, onOpenPurchaseOrder, onUnscheduleSegment, onSendOffsite, onPassToSales, currentUser, onOpenAssistant, engineers = [], onQcApprove = () => {}, onEngineerComplete = () => {}, onCreateInvoice = () => {} }) => {
+}> = ({ job, segment, vehicle, customer, engineer, purchaseOrders, onDragStart, onDragEnd, onEdit, onCheckIn, onStartWork, onPause, onRestart, onReassign, onOpenPurchaseOrder, onUnscheduleSegment, onSendOffsite, onPassToSales, currentUser, onOpenAssistant, engineers = [], onQcApprove = () => {}, onEngineerComplete = () => {}, onCreateInvoice = () => {} }) => {
     
     const segments = segment.duration * (60 / SEGMENT_DURATION_MINUTES);
     const maxSegmentsAvailable = TIME_SEGMENTS.length - (segment.scheduledStartSegment || 0);
@@ -98,9 +99,24 @@ export const AllocatedJobCard: React.FC<{
     };
 
     const isSmallCard = segment.duration <= 1;
+    const isVehicleOnSite = job.vehicleStatus === 'On Site' || job.vehicleStatus === 'On-Site';
+    const needsCheckIn = !isVehicleOnSite && job.vehicleStatus !== 'Off-Site (Partner)' && job.vehicleStatus !== 'Collected' && job.vehicleStatus !== 'Awaiting Collection';
+
     const actions = useMemo(() => {
         const list: any[] = [];
         
+        // Context-aware check-in action for scheduled jobs where vehicle has not yet arrived
+        if (needsCheckIn && onCheckIn) {
+            list.push({ 
+                id: 'checkin', 
+                label: 'Check Vehicle In', 
+                icon: LogIn, 
+                onClick: () => onCheckIn(job.id), 
+                group: 'primary' as const, 
+                color: 'text-blue-600' 
+            });
+        }
+
         // For small cards, add identifying info to the menu to keep card clear
         if (isSmallCard) {
             list.push({ 
@@ -149,7 +165,7 @@ export const AllocatedJobCard: React.FC<{
         }
 
         return list;
-    }, [segment.status, job.id, segId, canStartOrPause, canPerformActions, canUnschedule, onStartWork, onPause, onRestart, onEngineerComplete, onOpenAssistant, onEdit, onReassign, onUnscheduleSegment, onSendOffsite, onPassToSales, isSmallCard, customer, engineer, onCreateInvoice]);
+    }, [segment.status, job.id, segId, canStartOrPause, canPerformActions, canUnschedule, onStartWork, onPause, onRestart, onEngineerComplete, onOpenAssistant, onEdit, onReassign, onUnscheduleSegment, onSendOffsite, onPassToSales, isSmallCard, customer, engineer, onCreateInvoice, needsCheckIn, onCheckIn]);
     return (
             <div
                 draggable={canDrag}
@@ -183,6 +199,11 @@ export const AllocatedJobCard: React.FC<{
                         </HoverInfo>
                             <div className="flex items-center gap-1.5 leading-tight">
                                 <span className="font-mono text-[11px] font-black text-gray-900">#{job.id}</span>
+                                {needsCheckIn && (
+                                    <span className="bg-amber-100 text-amber-900 text-[8px] px-1 rounded-sm font-black uppercase tracking-tighter border border-amber-300" title="Vehicle has not arrived on site">
+                                        Not Arrived
+                                    </span>
+                                )}
                                 {job.jobType === 'MOT' && (
                                     <span className="bg-emerald-500/20 text-emerald-800 text-[8px] px-1 rounded-sm font-bold uppercase tracking-tighter">MOT</span>
                                 )}
@@ -192,6 +213,17 @@ export const AllocatedJobCard: React.FC<{
                             </div>
                     </div>
                     <div className="flex items-center gap-1 flex-shrink-0 pt-0.5">
+                        {needsCheckIn && onCheckIn && (
+                            <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); onCheckIn(job.id); }}
+                                className="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white px-1.5 py-0.5 rounded font-black text-[9px] uppercase tracking-wider transition-all shadow-xs active:scale-95 animate-pulse hover:animate-none"
+                                title="Vehicle has not arrived - Click to Check In"
+                            >
+                                <LogIn size={11} />
+                                {!isSmallCard && <span>Check In</span>}
+                            </button>
+                        )}
                         {job.checkInPhotos && job.checkInPhotos.length > 0 && (
                             <button 
                                 onClick={(e) => { e.stopPropagation(); onEdit(job.id, 'media'); }}

@@ -213,7 +213,7 @@ export const SummaryJobCard: React.FC<SummaryJobCardProps> = (props) => {
                         );
                     })}
 
-                    {props.highlightAction === 'checkIn' && (
+                    {(props.highlightAction === 'checkIn' || (props.onCheckIn && job.vehicleStatus !== 'On Site' && job.vehicleStatus !== 'On-Site' && job.vehicleStatus !== 'Off-Site (Partner)' && job.vehicleStatus !== 'Collected' && job.vehicleStatus !== 'Awaiting Collection')) && (
                         <button
                             onClick={(e) => { e.stopPropagation(); props.onCheckIn(job.id); }}
                             className="mt-2 w-full py-1.5 bg-blue-600 text-white text-[10px] font-black uppercase tracking-widest rounded-lg shadow-md flex items-center justify-center gap-1.5 hover:bg-blue-700 transition-all active:scale-95"
