@@ -1,9 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import { useData } from '../../../core/state/DataContext';
 import { ServicePackage, BusinessEntity } from '../../../types';
-import { PlusCircle, Copy, Trash2, ArrowUpDown, Filter, X } from 'lucide-react';
+import { PlusCircle, Copy, Trash2, ArrowUpDown, Filter, X, UploadCloud } from 'lucide-react';
 import { formatCurrency } from '../../../utils/formatUtils';
 import ServicePackageFormModal from '../../ServicePackageFormModal';
+import { ImportServicePackagesModal } from '../ImportServicePackagesModal';
 import { useManagementTable } from '../hooks/useManagementTable';
 import { useApp } from '../../../core/state/AppContext';
 import { AlertCircle, Zap, Percent, PoundSterling, Check } from 'lucide-react';
@@ -27,6 +28,7 @@ export const ManagementPackagesTab: React.FC<ManagementPackagesTabProps> = ({ se
 
     const [selectedPackage, setSelectedPackage] = useState<ServicePackage | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isImportModalOpen, setIsImportModalOpen] = useState(false);
     
     // Sort and Filter States
     const [sortField, setSortField] = useState<SortField>('name');
@@ -207,16 +209,23 @@ export const ManagementPackagesTab: React.FC<ManagementPackagesTabProps> = ({ se
 
                 <div className="flex items-center gap-2">
                     <button 
-                        onClick={() => setIsBulkPanelOpen(!isBulkPanelOpen)}
-                        className={`px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition-all ${isBulkPanelOpen ? 'bg-amber-100 text-amber-700 border border-amber-200' : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200'}`}
+                        onClick={() => setIsImportModalOpen(true)}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-lg shadow-sm flex items-center gap-2 transition-all font-semibold text-sm active:scale-95"
+                        title="Import service packages from CSV or Excel file"
                     >
-                        <Zap size={18}/> Bulk Price Adjust
+                        <UploadCloud size={17}/> Import Packages
+                    </button>
+                    <button 
+                        onClick={() => setIsBulkPanelOpen(!isBulkPanelOpen)}
+                        className={`px-3.5 py-2 rounded-lg font-semibold flex items-center gap-2 transition-all text-sm ${isBulkPanelOpen ? 'bg-amber-100 text-amber-700 border border-amber-200' : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200'}`}
+                    >
+                        <Zap size={17}/> Bulk Price Adjust
                     </button>
                     <button 
                         onClick={() => { setSelectedPackage(null); setIsModalOpen(true); }} 
-                        className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 shadow-md flex items-center gap-2 transition-all font-semibold active:transform active:scale-95"
+                        className="bg-indigo-600 text-white px-3.5 py-2 rounded-lg hover:bg-indigo-700 shadow-md flex items-center gap-2 transition-all font-semibold text-sm active:transform active:scale-95"
                     >
-                        <PlusCircle size={18}/> Add Service Package
+                        <PlusCircle size={17}/> Add Service Package
                     </button>
                 </div>
             </div>
@@ -358,6 +367,26 @@ export const ManagementPackagesTab: React.FC<ManagementPackagesTabProps> = ({ se
                     entityId={selectedEntityId} 
                     businessEntities={businessEntities} 
                     parts={parts} 
+                />
+            )}
+
+            {isImportModalOpen && (
+                <ImportServicePackagesModal
+                    isOpen={isImportModalOpen}
+                    onClose={() => setIsImportModalOpen(false)}
+                    businessEntities={businessEntities}
+                    taxRates={taxRates}
+                    parts={parts}
+                    existingPackages={servicePackages}
+                    defaultEntityId={selectedEntityId || (businessEntities[0]?.id || '')}
+                    onImportSuccess={(newOrUpdatedPackages) => {
+                        setServicePackages(prev => {
+                            const map = new Map((prev || []).map(p => [p.id, p]));
+                            newOrUpdatedPackages.forEach(p => map.set(p.id, p));
+                            return Array.from(map.values());
+                        });
+                    }}
+                    onShowStatus={onShowStatus}
                 />
             )}
         </div>
