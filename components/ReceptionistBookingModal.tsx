@@ -295,6 +295,9 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
         setIsVrmLoading(true);
         setVrmLookupError('');
         setVrmMatchMessage(null);
+        // Reset previous package selection so new vehicle gets accurate matching
+        setSelectedPackageId(null);
+        setIsCustomManualPackage(false);
 
         try {
             // 1. CHECK IF VEHICLE ALREADY EXISTS IN SYSTEM
@@ -497,8 +500,15 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
         return (servicePackages || []).find(p => p.id === selectedPackageId) || null;
     }, [servicePackages, selectedPackageId]);
 
-    // Auto-select first matching database package when vehicle is loaded and no package is selected
+    // Auto-select first matching database package only once a vehicle is actually identified
     useEffect(() => {
+        const hasVehicle = !!(activeVehicle?.registration || selectedVehicleId || vrmInput.trim());
+        // Do not auto-select if no vehicle is identified yet on Step 1
+        if (!hasVehicle && currentStep === 1) {
+            if (selectedPackageId) setSelectedPackageId(null);
+            return;
+        }
+
         if (!selectedPackageId && !isCustomManualPackage) {
             if (makeMatchedPackages.length > 0) {
                 setSelectedPackageId(makeMatchedPackages[0].id);
@@ -507,7 +517,14 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                 setSelectedPackageId(preferred.id);
             }
         }
-    }, [makeMatchedPackages, universalPackages, selectedPackageId, isCustomManualPackage]);
+    }, [activeVehicle?.registration, selectedVehicleId, vrmInput, currentStep, makeMatchedPackages, universalPackages, selectedPackageId, isCustomManualPackage]);
+
+    // When vehicle changes and selected package is no longer compatible, clear it so fresh match is selected
+    useEffect(() => {
+        if (selectedPackage && !isPackageCompatible(selectedPackage)) {
+            setSelectedPackageId(null);
+        }
+    }, [activeVehicle, selectedPackage, isPackageCompatible]);
 
     const extractLaborHours = (pkg?: ServicePackage | null, fallback: number = 1.5) => {
         if (!pkg?.costItems || pkg.costItems.length === 0) return fallback;
@@ -2752,7 +2769,7 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                     </main>
 
                     {/* PERSISTENT ACTION & ORDER SUMMARY SIDEBAR - ELIMINATES SCROLLING */}
-                    <aside className="w-full lg:w-84 xl:w-96 bg-white border-t lg:border-t-0 lg:border-l border-slate-200 flex flex-col justify-between p-5 lg:p-6 shadow-md flex-shrink-0 overflow-y-auto">
+                    <aside className="w-full lg:w-72 xl:w-80 bg-slate-50/80 border-t lg:border-t-0 lg:border-l border-slate-200 flex flex-col justify-between p-5 lg:p-6 shadow-sm flex-shrink-0 overflow-y-auto">
                         <div className="space-y-4">
                             {/* Step Progress Pills */}
                             <div>
@@ -2786,131 +2803,55 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                                 </div>
                             </div>
 
-                            {/* Booking Overview Card */}
-                            <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 space-y-3 text-xs">
-                                <h4 className="font-black text-slate-900 text-xs uppercase tracking-wider flex items-center justify-between">
-                                    <span>Active Booking</span>
-                                    <span className="font-mono text-[10px] text-slate-400 font-semibold">{selectedEntity.name}</span>
-                                </h4>
-
-                                {/* Vehicle */}
-                                <div className="flex items-start gap-2.5 pt-1 border-t border-slate-200">
-                                    <Car size={16} className="text-amber-500 mt-0.5 flex-shrink-0" />
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-1.5">
-                                            <span className="font-mono font-black text-slate-900 bg-yellow-300 text-slate-950 px-1.5 py-0.5 rounded text-[11px] border border-yellow-400">
-                                                {activeVehicle.registration || vrmInput || 'REG REQUIRED'}
-                                            </span>
-                                            {isV8 && <span className="text-[9px] font-black uppercase px-1 rounded bg-rose-100 text-rose-800 border border-rose-300">V8</span>}
-                                        </div>
-                                        <span className="text-slate-600 block truncate font-medium mt-1">
-                                            {activeVehicle.make ? `${activeVehicle.make} ${activeVehicle.model || ''}` : 'Vehicle pending lookup'}
-                                        </span>
-                                        <span className="text-slate-400 text-[11px] font-mono">
-                                            {currentMileage.toLocaleString()} miles
-                                        </span>
-                                    </div>
-                                </div>
-
-                                {/* Customer */}
-                                <div className="flex items-start gap-2.5 pt-2 border-t border-slate-200">
-                                    <User size={16} className="text-indigo-600 mt-0.5 flex-shrink-0" />
-                                    <div className="flex-1 min-w-0">
-                                        <span className="font-bold text-slate-900 block truncate">
-                                            {selectedCustomer 
-                                                ? getCustomerDisplayName(selectedCustomer) 
-                                                : `${newTitle} ${newForename} ${newSurname}`.trim() || 'Client pending'}
-                                        </span>
-                                        <span className="text-slate-500 block text-[11px]">
-                                            {selectedCustomer?.mobile || selectedCustomer?.phone || newMobile || newPhone || 'Phone required'}
-                                        </span>
-                                    </div>
-                                </div>
-
-                                {/* Selected Service Package */}
-                                <div className="flex items-start gap-2.5 pt-2 border-t border-slate-200">
-                                    <Wrench size={16} className="text-emerald-600 mt-0.5 flex-shrink-0" />
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex items-center justify-between gap-1">
-                                            <span className="font-bold text-slate-900 truncate block">
-                                                {currentTierData.name}
-                                            </span>
-                                        </div>
-                                        <div className="flex items-center justify-between mt-0.5">
-                                            <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded border ${currentTierData.tagColor}`}>
-                                                {currentTierData.tag}
-                                            </span>
-                                            <span className="font-mono font-black text-slate-900">
-                                                {currentTierData.priceGross > 0 ? formatCurrency(currentTierData.priceGross) : '£0.00'}
-                                            </span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Addons */}
-                                {activeAddons.length > 0 && (
-                                    <div className="pt-2 border-t border-slate-200 space-y-1">
-                                        <span className="text-[10px] font-black uppercase text-slate-400 block">
-                                            Bundled Addons ({activeAddons.length})
-                                        </span>
-                                        {activeAddons.map(a => (
-                                            <div key={a.id} className="flex items-center justify-between text-[11px] text-slate-700">
-                                                <span className="truncate pr-1">• {a.name}</span>
-                                                <span className="font-mono font-bold text-indigo-900 flex-shrink-0">{formatCurrency(a.bundledPrice)}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-
-                                {/* Workshop Date (Step 4) */}
-                                {currentStep === 4 && (
-                                    <div className="flex items-start gap-2.5 pt-2 border-t border-slate-200">
-                                        <CalendarCheck size={16} className="text-indigo-600 mt-0.5 flex-shrink-0" />
-                                        <div className="flex-1 min-w-0">
-                                            <span className="font-bold text-slate-900 block font-mono">
-                                                {formatReadableDate(bookingDate)}
-                                            </span>
-                                            <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded-md inline-block mt-0.5 border ${selectedDateCapacity.badgeColor}`}>
-                                                {selectedDateCapacity.status} ({Math.round(selectedDateCapacity.loadRatio * 100)}%)
-                                            </span>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-
                             {/* Running Financial Total */}
-                            <div className="bg-indigo-950 text-white rounded-2xl p-4 shadow-sm space-y-2">
-                                <div className="flex justify-between items-center text-xs text-indigo-200">
-                                    <span>Base Package</span>
-                                    <span className="font-mono">{formatCurrency(pricingSummary.tierGross)}</span>
-                                </div>
-                                {pricingSummary.addonsGross > 0 && (
+                            {(selectedPackageId || isCustomManualPackage) && pricingSummary.tierGross > 0 ? (
+                                <div className="bg-indigo-950 text-white rounded-2xl p-4 shadow-sm space-y-2">
                                     <div className="flex justify-between items-center text-xs text-indigo-200">
-                                        <span>Done Together Addons</span>
-                                        <span className="font-mono">+{formatCurrency(pricingSummary.addonsGross)}</span>
+                                        <span className="truncate pr-2 font-medium">{currentTierData.name}</span>
+                                        <span className="font-mono flex-shrink-0">{formatCurrency(pricingSummary.tierGross)}</span>
                                     </div>
-                                )}
-                                {pricingSummary.totalSavings > 0 && (
-                                    <div className="flex justify-between items-center text-xs text-emerald-400 font-bold">
-                                        <span>Customer Bundle Savings</span>
-                                        <span className="font-mono">-{formatCurrency(pricingSummary.totalSavings)}</span>
+                                    {pricingSummary.addonsGross > 0 && (
+                                        <div className="flex justify-between items-center text-xs text-indigo-200">
+                                            <span>Done Together Addons</span>
+                                            <span className="font-mono">+{formatCurrency(pricingSummary.addonsGross)}</span>
+                                        </div>
+                                    )}
+                                    {pricingSummary.totalSavings > 0 && (
+                                        <div className="flex justify-between items-center text-xs text-emerald-400 font-bold">
+                                            <span>Customer Bundle Savings</span>
+                                            <span className="font-mono">-{formatCurrency(pricingSummary.totalSavings)}</span>
+                                        </div>
+                                    )}
+                                    <div className="pt-2 border-t border-indigo-800/80 flex justify-between items-baseline">
+                                        <span className="font-bold text-xs uppercase tracking-wider text-indigo-300">Total Payable</span>
+                                        <div className="text-right">
+                                            <span className="text-2xl font-black font-mono text-white block">
+                                                {formatCurrency(pricingSummary.totalGross)}
+                                            </span>
+                                            <span className="text-[10px] text-indigo-300 font-normal">inc VAT</span>
+                                        </div>
                                     </div>
-                                )}
-                                <div className="pt-2 border-t border-indigo-800/80 flex justify-between items-baseline">
-                                    <span className="font-bold text-xs uppercase tracking-wider text-indigo-300">Total Payable</span>
-                                    <div className="text-right">
-                                        <span className="text-2xl font-black font-mono text-white block">
-                                            {formatCurrency(pricingSummary.totalGross)}
-                                        </span>
-                                        <span className="text-[10px] text-indigo-300 font-normal">inc VAT</span>
+                                    <div className="text-[10px] text-indigo-300 flex justify-between pt-1 border-t border-indigo-900/60 font-mono">
+                                        <span>Net: {formatCurrency(pricingSummary.totalNet)}</span>
+                                        <span>VAT: {formatCurrency(pricingSummary.totalVat)}</span>
+                                        <span>{pricingSummary.totalHours.toFixed(1)}h</span>
                                     </div>
                                 </div>
-                                <div className="text-[10px] text-indigo-300 flex justify-between pt-1 border-t border-indigo-900/60 font-mono">
-                                    <span>Net: {formatCurrency(pricingSummary.totalNet)}</span>
-                                    <span>VAT: {formatCurrency(pricingSummary.totalVat)}</span>
-                                    <span>{pricingSummary.totalHours.toFixed(1)}h</span>
+                            ) : (
+                                <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-xs text-center space-y-1.5">
+                                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">
+                                        Estimated Price
+                                    </span>
+                                    <span className="text-xl font-black font-mono text-slate-400 block">
+                                        £0.00
+                                    </span>
+                                    <p className="text-[11px] text-slate-500 leading-tight">
+                                        {activeVehicle?.make 
+                                            ? `Matched for ${activeVehicle.make} ${activeVehicle.model || ''}. Select package in Step 2.` 
+                                            : 'Pricing will calculate once vehicle & service are chosen.'}
+                                    </p>
                                 </div>
-                            </div>
+                            )}
                         </div>
 
                         {/* PERSISTENT ACTIONS: NEXT STEP / BACK / CANCEL */}
