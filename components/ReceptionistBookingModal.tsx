@@ -502,7 +502,7 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
 
     // Auto-select first matching database package only once a vehicle is actually identified
     useEffect(() => {
-        const hasVehicle = !!(activeVehicle?.registration || selectedVehicleId || vrmInput.trim());
+        const hasVehicle = !!(activeVehicle?.registration || selectedVehicle?.id || vrmInput.trim());
         // Do not auto-select if no vehicle is identified yet on Step 1
         if (!hasVehicle && currentStep === 1) {
             if (selectedPackageId) setSelectedPackageId(null);
@@ -517,7 +517,7 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                 setSelectedPackageId(preferred.id);
             }
         }
-    }, [activeVehicle?.registration, selectedVehicleId, vrmInput, currentStep, makeMatchedPackages, universalPackages, selectedPackageId, isCustomManualPackage]);
+    }, [activeVehicle?.registration, selectedVehicle?.id, vrmInput, currentStep, makeMatchedPackages, universalPackages, selectedPackageId, isCustomManualPackage]);
 
     // When vehicle changes and selected package is no longer compatible, clear it so fresh match is selected
     useEffect(() => {
