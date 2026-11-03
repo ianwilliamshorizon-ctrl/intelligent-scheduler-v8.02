@@ -32,6 +32,7 @@ const ProspectFormModal = lazy(() => import('./ProspectFormModal'));
 const PrintableProspectsReport = lazy(() => import('./PrintableProspectsReport'));
 const InquiryFormModal = lazy(() => import('./InquiryFormModal'));
 const LiveAssistant = lazy(() => import('./LiveAssistant'));
+const ReceptionistBookingModal = lazy(() => import('./ReceptionistBookingModal'));
 const ScheduleJobFromEstimateModal = lazy(() => import('./ScheduleJobFromEstimateModal'));
 const ScheduleConfirmationEmailModal = lazy(() => import('./ScheduleConfirmationEmailModal'));
 const NominalCodeExportModal = lazy(() => import('./NominalCodeExportModal'));
@@ -1516,6 +1517,44 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                         onAddNote={handleAddJobNote}
                         onAddCustomerNote={handleAddCustomerNote}
                         customers={data.customers}
+                    />
+                </ModalSuspense>
+            )}
+
+            {modals.isBookingAssistantOpen && (
+                <ModalSuspense>
+                    <ReceptionistBookingModal
+                        isOpen={modals.isBookingAssistantOpen}
+                        onClose={() => setters.setIsBookingAssistantOpen(false)}
+                        initialMode={modals.bookingAssistantInitialMode || 'receptionist'}
+                        onJobCreate={async (jobData, estimateData) => {
+                            await handleSaveItem(data.setJobs, { ...jobData, createdByUserId: currentUser.id }, 'brooks_jobs');
+                            if (estimateData) {
+                                await handleSaveItem(data.setEstimates, estimateData, 'brooks_estimates');
+                                await workshopActions.syncPurchaseOrdersFromEstimate(estimateData, { forceNew: true });
+                            }
+                            setters.setIsBookingAssistantOpen(false);
+                        }}
+                        onVehicleAndJobCreate={async (c, v, j, estimateData) => {
+                            await handleSaveItem(actions.setCustomers, c, 'brooks_customers');
+                            await handleSaveItem(actions.setVehicles, v, 'brooks_vehicles');
+                            await handleSaveItem(data.setJobs, { ...j, createdByUserId: currentUser.id }, 'brooks_jobs');
+                            if (estimateData) {
+                                await handleSaveItem(data.setEstimates, estimateData, 'brooks_estimates');
+                                await workshopActions.syncPurchaseOrdersFromEstimate(estimateData, { forceNew: true });
+                            }
+                            setters.setIsBookingAssistantOpen(false);
+                        }}
+                        onEstimateCreate={async (estData) => {
+                            await handleSaveItem(data.setEstimates, estData, 'brooks_estimates');
+                            setters.setIsBookingAssistantOpen(false);
+                        }}
+                        onVehicleAndEstimateCreate={async (c, v, e) => {
+                            await handleSaveItem(actions.setCustomers, c, 'brooks_customers');
+                            await handleSaveItem(actions.setVehicles, v, 'brooks_vehicles');
+                            await handleSaveItem(data.setEstimates, e, 'brooks_estimates');
+                            setters.setIsBookingAssistantOpen(false);
+                        }}
                     />
                 </ModalSuspense>
             )}

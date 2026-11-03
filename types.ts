@@ -305,6 +305,7 @@ export interface Vehicle {
     cc?: number;
     engineCapacityCc?: number;
     transmissionType?: 'Manual' | 'Automatic' | 'Other';
+    mileage?: number;
     nextMotDate?: string; 
     motExpiryDate?: string; 
     taxDueDate?: string;

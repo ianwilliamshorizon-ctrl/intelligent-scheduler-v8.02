@@ -45,6 +45,8 @@ export interface ModalState {
     vehicleModal: { isOpen: boolean; vehicleId: string | null; initialCustomerId?: string | null };
     vehicleHistoryReportModal: { isOpen: boolean; vehicleId: string | null };
     linkEstimateModal: { isOpen: boolean; inquiry: T.Inquiry | null };
+    isBookingAssistantOpen: boolean;
+    bookingAssistantInitialMode: 'receptionist' | 'online';
 }
 
 export interface ModalSetters {
@@ -91,6 +93,8 @@ export interface ModalSetters {
     setVehicleModal: React.Dispatch<React.SetStateAction<{ isOpen: boolean; vehicleId: string | null; initialCustomerId?: string | null }>>;
     setVehicleHistoryReportModal: React.Dispatch<React.SetStateAction<{ isOpen: boolean; vehicleId: string | null }>>;
     setLinkEstimateModal: React.Dispatch<React.SetStateAction<{ isOpen: boolean; inquiry: T.Inquiry | null }>>;
+    setIsBookingAssistantOpen: React.Dispatch<React.SetStateAction<boolean>>;
+    setBookingAssistantInitialMode: React.Dispatch<React.SetStateAction<'receptionist' | 'online'>>;
 }
 
 const useModalState = (): [ModalState, ModalSetters] => {
@@ -137,6 +141,8 @@ const useModalState = (): [ModalState, ModalSetters] => {
     const [vehicleModal, setVehicleModal] = useState<{ isOpen: boolean; vehicleId: string | null; initialCustomerId?: string | null }>({ isOpen: false, vehicleId: null });
     const [vehicleHistoryReportModal, setVehicleHistoryReportModal] = useState<{ isOpen: boolean; vehicleId: string | null }>({ isOpen: false, vehicleId: null });
     const [linkEstimateModal, setLinkEstimateModal] = useState<{ isOpen: boolean; inquiry: T.Inquiry | null }>({ isOpen: false, inquiry: null });
+    const [isBookingAssistantOpen, setIsBookingAssistantOpen] = useState(false);
+    const [bookingAssistantInitialMode, setBookingAssistantInitialMode] = useState<'receptionist' | 'online'>('receptionist');
 
     const state = { 
         isEditJobModalOpen, selectedJobId, editJobInitialTab, partModal, isSmartCreateOpen, smartCreateMode, smartCreateDefaultDate, smartCreateInitialPrompt, smartCreateInquiryId,
@@ -145,7 +151,8 @@ const useModalState = (): [ModalState, ModalSetters] => {
         sorContractModal, ownerStatementModal, internalStatementModal, vehicleOrderFormModal, salesReportModal, prospectsReportModal, addSaleVehicleModalOpen,
         manageSaleVehicleModal, prospectModal, estimateFormModal, estimateViewModal, scheduleJobFromEstimateModal,
         scheduleEmailModal, inquiryModal, isAssistantOpen, assistantContextJobId, checkInJob, checkOutJob,
-        exportModal, customerModal, vehicleModal, vehicleHistoryReportModal, linkEstimateModal
+        exportModal, customerModal, vehicleModal, vehicleHistoryReportModal, linkEstimateModal,
+        isBookingAssistantOpen, bookingAssistantInitialMode
     };
 
     const setters = { 
@@ -156,7 +163,8 @@ const useModalState = (): [ModalState, ModalSetters] => {
         setSalesReportModal, setProspectsReportModal, setAddSaleVehicleModalOpen, setManageSaleVehicleModal, setProspectModal,
         setEstimateFormModal, setEstimateViewModal, setScheduleJobFromEstimateModal, setScheduleEmailModal,
         setInquiryModal, setIsAssistantOpen, setAssistantContextJobId, setCheckInJob, setCheckOutJob, 
-        setExportModal, setCustomerModal, setVehicleModal, setVehicleHistoryReportModal, setLinkEstimateModal
+        setExportModal, setCustomerModal, setVehicleModal, setVehicleHistoryReportModal, setLinkEstimateModal,
+        setIsBookingAssistantOpen, setBookingAssistantInitialMode
     };
 
     return [state, setters];

@@ -4,7 +4,7 @@ import { useData } from '../core/state/DataContext';
 import { 
     Menu, LogOut, Settings, Building2, UserCheck, LayoutDashboard, 
     Calendar, Wrench, Briefcase, FileText, ShoppingCart, Car, 
-    Archive, Truck, MessageSquare, Phone, CalendarDays, GitPullRequest, Search, X, HelpCircle, Building, AlertCircle, BarChart3, Sparkles, Smartphone, MoveVertical
+    Archive, Truck, MessageSquare, Phone, CalendarDays, GitPullRequest, Search, X, HelpCircle, Building, AlertCircle, BarChart3, Sparkles, Smartphone, MoveVertical, Headphones
 } from 'lucide-react';
 import * as T from '../types';
 import { useAppSpacing } from '../core/hooks/useAppSpacing';
@@ -15,8 +15,9 @@ const MainLayout: React.FC<{
     onOpenHelpCentre: () => void, 
     onSearchResult: (type: string, id: string) => void,
     onOpenAssistant?: () => void,
+    onOpenBookingAssistant?: () => void,
     onToggleMobileMode?: () => void
-}> = ({ children, onOpenManagement, onOpenHelpCentre, onSearchResult, onOpenAssistant, onToggleMobileMode }) => {
+}> = ({ children, onOpenManagement, onOpenHelpCentre, onSearchResult, onOpenAssistant, onOpenBookingAssistant, onToggleMobileMode }) => {
     const { 
         currentView, setCurrentView, 
         currentUser, selectedEntityId, setSelectedEntityId, 
@@ -239,6 +240,17 @@ const MainLayout: React.FC<{
                             >
                                 <Sparkles size={20} className="animate-pulse text-purple-600" />
                                 <span className="hidden xl:inline">AI Tech Assistant</span>
+                            </button>
+                        )}
+
+                        {onOpenBookingAssistant && (
+                            <button 
+                                onClick={onOpenBookingAssistant} 
+                                title="Open Intelligent Booking Assistant (Receptionist and Customer Modes)"
+                                className="p-2 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 rounded-full transition-colors flex items-center gap-1.5 font-bold text-xs"
+                            >
+                                <Headphones size={20} className="text-indigo-600" />
+                                <span className="hidden xl:inline">Booking Assistant</span>
                             </button>
                         )}
 

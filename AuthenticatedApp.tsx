@@ -568,6 +568,7 @@ const AuthenticatedApp = () => {
                 onOpenHelpCentre={() => setIsHelpCentreOpen(true)} 
                 onSearchResult={handleSearchResult}
                 onOpenAssistant={() => { setters.setAssistantContextJobId(null); setters.setIsAssistantOpen(true); }}
+                onOpenBookingAssistant={() => setters.setIsBookingAssistantOpen(true)}
                 onToggleMobileMode={() => handleToggleMobileMode(true)}
             >
                 <Suspense fallback={
