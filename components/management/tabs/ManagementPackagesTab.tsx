@@ -1,13 +1,14 @@
 import React, { useState, useMemo } from 'react';
 import { useData } from '../../../core/state/DataContext';
 import { ServicePackage, BusinessEntity } from '../../../types';
-import { PlusCircle, Copy, Trash2, ArrowUpDown, Filter, X, UploadCloud } from 'lucide-react';
+import { PlusCircle, Copy, Trash2, ArrowUpDown, Filter, X, UploadCloud, Sparkles } from 'lucide-react';
 import { formatCurrency } from '../../../utils/formatUtils';
 import ServicePackageFormModal from '../../ServicePackageFormModal';
 import { ImportServicePackagesModal } from '../ImportServicePackagesModal';
 import { useManagementTable } from '../hooks/useManagementTable';
 import { useApp } from '../../../core/state/AppContext';
 import { AlertCircle, Zap, Percent, PoundSterling, Check } from 'lucide-react';
+import { STANDARD_GENERIC_SERVICE_PACKAGES } from '../../../core/data/initialData';
 
 interface ManagementPackagesTabProps {
     searchTerm: string;
@@ -152,6 +153,35 @@ export const ManagementPackagesTab: React.FC<ManagementPackagesTabProps> = ({ se
         });
     };
 
+    const handleSeedStandardPackages = () => {
+        const existingIds = new Set((servicePackages || []).map(p => p.id));
+        const missing = STANDARD_GENERIC_SERVICE_PACKAGES.filter(p => !existingIds.has(p.id));
+
+        if (missing.length === 0) {
+            onShowStatus('All standard universal service packages already exist in your catalogue.', 'info');
+            return;
+        }
+
+        setConfirmation({
+            isOpen: true,
+            title: 'Seed Standard Universal Packages',
+            message: `This will add ${missing.length} standard universal service packages (Universal Minor, Interim, Major, Timing Belt, Coolant Flush, Brake Fluid, AC Regas, and Brake Discs/Pads) to your database. Continue?`,
+            type: 'info',
+            onConfirm: async () => {
+                try {
+                    for (const pkg of missing) {
+                        await updateItem(pkg);
+                    }
+                    onShowStatus(`Successfully added ${missing.length} standard universal packages to your catalogue.`, 'success');
+                } catch (err) {
+                    onShowStatus('Failed to seed some packages. Check console for details.', 'error');
+                } finally {
+                    setConfirmation({ isOpen: false, title: '', message: '' });
+                }
+            }
+        });
+    };
+
     const toggleSort = (field: SortField) => {
         if (sortField === field) {
             setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
@@ -208,6 +238,13 @@ export const ManagementPackagesTab: React.FC<ManagementPackagesTabProps> = ({ se
                 </div>
 
                 <div className="flex items-center gap-2">
+                    <button 
+                        onClick={handleSeedStandardPackages}
+                        className="bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-2 rounded-lg shadow-sm flex items-center gap-2 transition-all font-semibold text-sm active:scale-95"
+                        title="Seed or restore standard universal service packages (Minor, Major, Belts, Coolant Flush, etc.)"
+                    >
+                        <Sparkles size={17}/> Standard Packages
+                    </button>
                     <button 
                         onClick={() => setIsImportModalOpen(true)}
                         className="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-lg shadow-sm flex items-center gap-2 transition-all font-semibold text-sm active:scale-95"

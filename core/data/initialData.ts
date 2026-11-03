@@ -227,7 +227,175 @@ export const getInitialSuppliers = (): Supplier[] => ([
     { id: 'sup_4', name: 'Audi Southampton', contactName: 'Parts Dept', addressLine1: 'Audi Way', city: 'Southampton', postcode: 'SO14 1AU' },
 ]);
 
+// --- Standard Generic Universal Service Packages (Compatible with any vehicle make) ---
+export const STANDARD_GENERIC_SERVICE_PACKAGES: ServicePackage[] = [
+    { 
+        id: 'pkg_2', 
+        entityId: 'ent_porsche', 
+        name: 'MOT Test (Class 4)', 
+        description: 'Statutory Annual Class 4 Vehicle Safety, Roadworthiness and Emissions Test.',
+        totalPrice: 54.85, 
+        totalPriceNet: 54.85,
+        totalPriceVat: 0.00,
+        totalCost: 20.00,
+        taxCodeId: 'tax_1', 
+        // No make/model implies universal compatibility across all vehicles
+        costItems: [{ id: 'li_mot_1', description: 'MOT Test Labor', isLabor: true, quantity: 1, unitPrice: 54.85, unitCost: 20, taxCodeId: 'tax_1' }]
+    },
+    {
+        id: 'pkg_gen_minor',
+        entityId: 'ent_porsche',
+        name: 'Universal Minor Service',
+        description: 'Comprehensive engine oil and OEM filter renewal, 35-point safety health check, and all vital under-bonnet fluid level top-ups.',
+        totalPrice: 195.00,
+        totalPriceNet: 162.50,
+        totalPriceVat: 32.50,
+        totalCost: 128.00,
+        taxCodeId: 'tax_2',
+        costItems: [
+            { id: 'li_gen_min_1', description: 'Minor Service Labor & Safety Inspection', isLabor: true, quantity: 1.5, unitPrice: 0, unitCost: 45.00, taxCodeId: 'tax_2' },
+            { id: 'li_gen_min_2', description: 'OEM Specification Oil Filter', isLabor: false, quantity: 1, unitPrice: 0, unitCost: 18.50, taxCodeId: 'tax_2' },
+            { id: 'li_gen_min_3', description: 'Fully Synthetic Engine Oil (up to 5L)', isLabor: false, quantity: 5, unitPrice: 0, unitCost: 7.50, taxCodeId: 'tax_2' },
+            { id: 'li_gen_min_4', description: 'Screenwash & Under-Bonnet Fluid Top-Up Pack', isLabor: false, quantity: 1, unitPrice: 0, unitCost: 4.50, taxCodeId: 'tax_2' },
+        ]
+    },
+    {
+        id: 'pkg_gen_interim',
+        entityId: 'ent_porsche',
+        name: 'Universal Interim Service',
+        description: 'Mid-interval service: Engine oil and filter renewal, cabin pollen microfilter replacement, wheels-on brake wear inspection, steering, suspension, and battery test.',
+        totalPrice: 295.00,
+        totalPriceNet: 245.83,
+        totalPriceVat: 49.17,
+        totalCost: 192.50,
+        taxCodeId: 'tax_2',
+        costItems: [
+            { id: 'li_gen_int_1', description: 'Interim Service Labor & Multi-Point Inspection', isLabor: true, quantity: 2.2, unitPrice: 0, unitCost: 45.00, taxCodeId: 'tax_2' },
+            { id: 'li_gen_int_2', description: 'OEM Specification Oil Filter', isLabor: false, quantity: 1, unitPrice: 0, unitCost: 18.50, taxCodeId: 'tax_2' },
+            { id: 'li_gen_int_3', description: 'Fully Synthetic Engine Oil (up to 6L)', isLabor: false, quantity: 6, unitPrice: 0, unitCost: 7.50, taxCodeId: 'tax_2' },
+            { id: 'li_gen_int_4', description: 'Cabin / Pollen Microfilter', isLabor: false, quantity: 1, unitPrice: 0, unitCost: 24.00, taxCodeId: 'tax_2' },
+            { id: 'li_gen_int_5', description: 'Workshop Consumables & Fluid Top-Up', isLabor: false, quantity: 1, unitPrice: 0, unitCost: 6.00, taxCodeId: 'tax_2' },
+        ]
+    },
+    {
+        id: 'pkg_gen_major',
+        entityId: 'ent_porsche',
+        name: 'Universal Major Service',
+        description: 'Comprehensive master workshop service: Engine oil & filter, engine air filter, cabin pollen microfilter, spark plugs / fuel filter inspection & renewal, auxiliary drive belts check, wheels-off full brake inspection, coolant & brake fluid boiling test, and full 60-point mechanical diagnostic.',
+        totalPrice: 495.00,
+        totalPriceNet: 412.50,
+        totalPriceVat: 82.50,
+        totalCost: 351.00,
+        taxCodeId: 'tax_2',
+        costItems: [
+            { id: 'li_gen_maj_1', description: 'Comprehensive Major Service Labor', isLabor: true, quantity: 3.5, unitPrice: 0, unitCost: 45.00, taxCodeId: 'tax_2' },
+            { id: 'li_gen_maj_2', description: 'OEM Specification Oil Filter', isLabor: false, quantity: 1, unitPrice: 0, unitCost: 19.50, taxCodeId: 'tax_2' },
+            { id: 'li_gen_maj_3', description: 'Fully Synthetic High Performance Oil (up to 7L)', isLabor: false, quantity: 7, unitPrice: 0, unitCost: 8.00, taxCodeId: 'tax_2' },
+            { id: 'li_gen_maj_4', description: 'Engine Air Filter Element', isLabor: false, quantity: 1, unitPrice: 0, unitCost: 32.00, taxCodeId: 'tax_2' },
+            { id: 'li_gen_maj_5', description: 'Cabin / Pollen Microfilter', isLabor: false, quantity: 1, unitPrice: 0, unitCost: 26.00, taxCodeId: 'tax_2' },
+            { id: 'li_gen_maj_6', description: 'Spark Plugs / Fuel Service Pack', isLabor: false, quantity: 1, unitPrice: 0, unitCost: 48.00, taxCodeId: 'tax_2' },
+            { id: 'li_gen_maj_7', description: 'Workshop Environmental & Disposal Consumables', isLabor: false, quantity: 1, unitPrice: 0, unitCost: 12.00, taxCodeId: 'tax_2' },
+        ]
+    },
+    {
+        id: 'pkg_gen_timing_belt',
+        entityId: 'ent_porsche',
+        name: 'Timing / Auxiliary Drive Belt Replacement',
+        description: 'Complete replacement of the engine timing belt or serpentine auxiliary drive belt assembly, including new tensioner, idler pulleys, and water pump drive check.',
+        totalPrice: 445.00,
+        totalPriceNet: 370.83,
+        totalPriceVat: 74.17,
+        totalCost: 274.00,
+        taxCodeId: 'tax_2',
+        costItems: [
+            { id: 'li_gen_tb_1', description: 'Drive Belt & Tensioner Assembly Replacement Labor', isLabor: true, quantity: 3.2, unitPrice: 0, unitCost: 45.00, taxCodeId: 'tax_2' },
+            { id: 'li_gen_tb_2', description: 'OEM Timing / Auxiliary Belt & Idler Tensioner Kit', isLabor: false, quantity: 1, unitPrice: 0, unitCost: 115.00, taxCodeId: 'tax_2' },
+            { id: 'li_gen_tb_3', description: 'Drive Hardware & Securing Fasteners', isLabor: false, quantity: 1, unitPrice: 0, unitCost: 15.00, taxCodeId: 'tax_2' },
+        ]
+    },
+    {
+        id: 'pkg_gen_coolant',
+        entityId: 'ent_porsche',
+        name: 'Cooling System Chemical Flush & Refill',
+        description: 'Complete cooling system chemical flush, vacuum refill and pressure leak testing, thermostat operation inspection, and refill with premium OAT long-life anti-freeze/coolant.',
+        totalPrice: 145.00,
+        totalPriceNet: 120.83,
+        totalPriceVat: 24.17,
+        totalCost: 90.50,
+        taxCodeId: 'tax_2',
+        costItems: [
+            { id: 'li_gen_cl_1', description: 'Coolant Flush, Pressure Leak Test & Vacuum Bleed Labor', isLabor: true, quantity: 1.2, unitPrice: 0, unitCost: 45.00, taxCodeId: 'tax_2' },
+            { id: 'li_gen_cl_2', description: 'Long-Life OAT Antifreeze / Coolant (5L)', isLabor: false, quantity: 1, unitPrice: 0, unitCost: 24.00, taxCodeId: 'tax_2' },
+            { id: 'li_gen_cl_3', description: 'Cooling System Chemical Flush & Descaling Treatment', isLabor: false, quantity: 1, unitPrice: 0, unitCost: 12.50, taxCodeId: 'tax_2' },
+        ]
+    },
+    {
+        id: 'pkg_gen_brake_fluid',
+        entityId: 'ent_porsche',
+        name: 'Brake Fluid Pressure Flush & Bleed',
+        description: 'High-temperature synthetic DOT 4 / DOT 5.1 hydraulic brake fluid pressure flush, moisture content analysis, master cylinder reservoir purge, and complete 4-corner caliper hydraulic bleed.',
+        totalPrice: 85.00,
+        totalPriceNet: 70.83,
+        totalPriceVat: 14.17,
+        totalCost: 57.00,
+        taxCodeId: 'tax_2',
+        costItems: [
+            { id: 'li_gen_bf_1', description: 'Brake Fluid Hydraulic Pressure Flush & 4-Corner Bleed Labor', isLabor: true, quantity: 1.0, unitPrice: 0, unitCost: 45.00, taxCodeId: 'tax_2' },
+            { id: 'li_gen_bf_2', description: 'High-Boiling Point Synthetic DOT 4 Brake Fluid (1L)', isLabor: false, quantity: 1, unitPrice: 0, unitCost: 12.00, taxCodeId: 'tax_2' },
+        ]
+    },
+    {
+        id: 'pkg_gen_aircon',
+        entityId: 'ent_porsche',
+        name: 'Air Conditioning Service & Anti-Bacterial Cleanse',
+        description: 'Complete A/C system vacuum decay test, moisture extraction, lubrication oil top-up, system refrigerant regas, and high-intensity anti-bacterial cabin evaporator mist cleanse.',
+        totalPrice: 125.00,
+        totalPriceNet: 104.17,
+        totalPriceVat: 20.83,
+        totalCost: 84.00,
+        taxCodeId: 'tax_2',
+        costItems: [
+            { id: 'li_gen_ac_1', description: 'A/C System Diagnostic Vacuum, Regas & Deep Sanitization Labor', isLabor: true, quantity: 1.0, unitPrice: 0, unitCost: 45.00, taxCodeId: 'tax_2' },
+            { id: 'li_gen_ac_2', description: 'A/C Refrigerant & Premium PAG Lubricant Charge', isLabor: false, quantity: 1, unitPrice: 0, unitCost: 28.00, taxCodeId: 'tax_2' },
+            { id: 'li_gen_ac_3', description: 'Anti-Bacterial Evaporator Mist Sanitizer Treatment', isLabor: false, quantity: 1, unitPrice: 0, unitCost: 11.00, taxCodeId: 'tax_2' },
+        ]
+    },
+    {
+        id: 'pkg_gen_front_brakes',
+        entityId: 'ent_porsche',
+        name: 'Front Brake Discs & Pads Replacement',
+        description: 'Supply and fit replacement front brake discs and pads, caliper sliders cleaned and lubricated, wear sensors replaced, and full hydraulic road test.',
+        totalPrice: 295.00,
+        totalPriceNet: 245.83,
+        totalPriceVat: 49.17,
+        totalCost: 210.50,
+        taxCodeId: 'tax_2',
+        costItems: [
+            { id: 'li_gen_fbrk_1', description: 'Front Brake Discs & Pads Replacement Labor', isLabor: true, quantity: 1.5, unitPrice: 0, unitCost: 45.00, taxCodeId: 'tax_2' },
+            { id: 'li_gen_fbrk_2', description: 'Premium Vented Front Brake Discs (Axle Pair)', isLabor: false, quantity: 1, unitPrice: 0, unitCost: 95.00, taxCodeId: 'tax_2' },
+            { id: 'li_gen_fbrk_3', description: 'Premium Front Brake Pads Set & Wear Sensor', isLabor: false, quantity: 1, unitPrice: 0, unitCost: 48.00, taxCodeId: 'tax_2' },
+        ]
+    },
+    {
+        id: 'pkg_gen_rear_brakes',
+        entityId: 'ent_porsche',
+        name: 'Rear Brake Discs & Pads Replacement',
+        description: 'Supply and fit replacement rear brake discs and pads, electronic parking brake calibration / caliper service, wear sensors replaced, and road tested.',
+        totalPrice: 275.00,
+        totalPriceNet: 229.17,
+        totalPriceVat: 45.83,
+        totalCost: 194.50,
+        taxCodeId: 'tax_2',
+        costItems: [
+            { id: 'li_gen_rbrk_1', description: 'Rear Brake Discs & Pads Replacement Labor', isLabor: true, quantity: 1.5, unitPrice: 0, unitCost: 45.00, taxCodeId: 'tax_2' },
+            { id: 'li_gen_rbrk_2', description: 'Premium Rear Brake Discs (Axle Pair)', isLabor: false, quantity: 1, unitPrice: 0, unitCost: 85.00, taxCodeId: 'tax_2' },
+            { id: 'li_gen_rbrk_3', description: 'Premium Rear Brake Pads Set & Sensor', isLabor: false, quantity: 1, unitPrice: 0, unitCost: 42.00, taxCodeId: 'tax_2' },
+        ]
+    }
+];
+
 export const getInitialServicePackages = (): ServicePackage[] => ([
+    ...STANDARD_GENERIC_SERVICE_PACKAGES,
     { 
         id: 'pkg_1', 
         entityId: 'ent_porsche', 
@@ -239,15 +407,6 @@ export const getInitialServicePackages = (): ServicePackage[] => ([
             { id: 'li_pkg1_1', description: 'Labor', isLabor: true, quantity: 4, unitPrice: 0, unitCost: 45, taxCodeId: 'tax_2' }, 
             { id: 'li_pkg1_2', description:'Oil Filter', isLabor: false, quantity: 1, unitPrice: 0, unitCost: 25, taxCodeId: 'tax_2'}
         ]
-    },
-    { 
-        id: 'pkg_2', 
-        entityId: 'ent_porsche', 
-        name: 'MOT Test (Class 4)', 
-        totalPrice: 54.85, 
-        taxCodeId: 'tax_1', 
-        // No make/model implies applicable to all
-        costItems: [{ id: 'li_mot_1', description: 'MOT Labor', isLabor: true, quantity: 1, unitPrice: 0, unitCost: 20, taxCodeId: 'tax_1' }]
     },
     { 
         id: 'pkg_3', 

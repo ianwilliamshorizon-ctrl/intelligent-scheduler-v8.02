@@ -499,10 +499,15 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
 
     // Auto-select first matching database package when vehicle is loaded and no package is selected
     useEffect(() => {
-        if (!selectedPackageId && !isCustomManualPackage && makeMatchedPackages.length > 0) {
-            setSelectedPackageId(makeMatchedPackages[0].id);
+        if (!selectedPackageId && !isCustomManualPackage) {
+            if (makeMatchedPackages.length > 0) {
+                setSelectedPackageId(makeMatchedPackages[0].id);
+            } else if (universalPackages.length > 0) {
+                const preferred = universalPackages.find(p => p.id === 'pkg_gen_minor') || universalPackages[0];
+                setSelectedPackageId(preferred.id);
+            }
         }
-    }, [makeMatchedPackages, selectedPackageId, isCustomManualPackage]);
+    }, [makeMatchedPackages, universalPackages, selectedPackageId, isCustomManualPackage]);
 
     const extractLaborHours = (pkg?: ServicePackage | null, fallback: number = 1.5) => {
         if (!pkg?.costItems || pkg.costItems.length === 0) return fallback;

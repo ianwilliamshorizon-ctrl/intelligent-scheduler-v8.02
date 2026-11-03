@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useMemo, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useMemo, useCallback, useRef, useEffect } from 'react';
 import { saveDocument } from '../db';
 import * as T from '../../types';
 import { usePersistentState, UsePersistentStateTuple } from './usePersistentState';
@@ -13,7 +13,8 @@ import {
     getInitialNominalCodes, getInitialNominalCodeRules, getInitialPurchases,
     getInitialAbsenceRequests, getInitialProspects, getInitialInquiries,
     getInitialReminders, getInitialAuditLog, getInitialRoles, getInitialInspectionDiagrams,
-    getInitialInspectionTemplates, getInitialDiscountCodes, getInitialFinancialBaselines
+    getInitialInspectionTemplates, getInitialDiscountCodes, getInitialFinancialBaselines,
+    STANDARD_GENERIC_SERVICE_PACKAGES
 } from '../data/initialData';
 
 // Defines the shape of the context, including all data collections and setters.
@@ -143,6 +144,38 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         return record;
     }, []);
+
+    // Auto-seed missing standard universal packages into database so all vehicles have generic packages ready
+    const [servicePackages, setServicePackages] = stateHooks.brooks_servicePackages;
+    const hasCheckedStandardPackagesRef = useRef(false);
+    useEffect(() => {
+        if (!isDataLoaded || skipLoad || hasCheckedStandardPackagesRef.current) return;
+        hasCheckedStandardPackagesRef.current = true;
+
+        if (!Array.isArray(servicePackages)) return;
+        const existingIds = new Set(servicePackages.map(p => p.id));
+        const missing = STANDARD_GENERIC_SERVICE_PACKAGES.filter(p => !existingIds.has(p.id));
+
+        if (missing.length > 0) {
+            console.log(`[AutoSeed] Seeding ${missing.length} missing standard generic service packages to database...`);
+            setServicePackages(prev => {
+                const updated = [...(prev || [])];
+                for (const pkg of missing) {
+                    if (!updated.some(u => u.id === pkg.id)) {
+                        updated.push(pkg);
+                    }
+                }
+                return updated;
+            });
+
+            // Asynchronously persist missing standard packages to Firestore
+            missing.forEach(pkg => {
+                saveDocument('brooks_servicePackages', pkg).catch(err => {
+                    console.warn(`[AutoSeed] Failed to persist package ${pkg.id}:`, err);
+                });
+            });
+        }
+    }, [isDataLoaded, skipLoad, servicePackages, setServicePackages]);
 
     const loadingFlags = Object.values(stateHooks).map(([, , , isLoading]) => isLoading);
     const isDataLoaded = useMemo(() => {
