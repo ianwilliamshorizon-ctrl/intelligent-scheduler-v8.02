@@ -124,7 +124,7 @@ export interface Customer {
     marketingConsent?: boolean;
     serviceReminderConsent?: boolean;
     declinedCommunication?: boolean;
-    communicationPreference?: 'Email' | 'SMS' | 'WhatsApp' | 'None';
+    communicationPreference?: 'Email' | 'SMS' | 'WhatsApp' | 'Phone' | 'None';
     autoSendReminders?: boolean;
     searchField?: string;
     createdDate?: string;

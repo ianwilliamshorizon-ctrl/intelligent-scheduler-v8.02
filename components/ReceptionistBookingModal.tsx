@@ -152,7 +152,7 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
     const [serviceReminderConsent, setServiceReminderConsent] = useState(true);
     const [marketingConsent, setMarketingConsent] = useState(false);
     const [declinedCommunication, setDeclinedCommunication] = useState(false);
-    const [communicationPreference, setCommunicationPreference] = useState<'Email' | 'SMS' | 'Phone' | 'None'>('Email');
+    const [communicationPreference, setCommunicationPreference] = useState<'Email' | 'SMS' | 'WhatsApp' | 'Phone' | 'None'>('Email');
 
     // Vehicle fields (New or Lookup)
     const [vrmInput, setVrmInput] = useState('');
@@ -1159,6 +1159,7 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                                             >
                                                 <option value="Email">Email</option>
                                                 <option value="SMS">SMS</option>
+                                                <option value="WhatsApp">WhatsApp</option>
                                                 <option value="Phone">Phone Call</option>
                                                 <option value="None">None</option>
                                             </select>
