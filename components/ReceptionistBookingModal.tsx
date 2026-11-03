@@ -172,12 +172,15 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
     const [vehicleDetails, setVehicleDetails] = useState<Partial<Vehicle>>({});
     const [currentMileage, setCurrentMileage] = useState<number>(36000);
 
-    // Step 2: Service Matching & DMS Catalogue State
-    const [serviceSourceTab, setServiceSourceTab] = useState<'tiered' | 'all-dms'>('tiered');
-    const [selectedTier, setSelectedTier] = useState<'bronze' | 'silver' | 'gold' | 'custom'>('bronze');
-    const [selectedCustomPackage, setSelectedCustomPackage] = useState<ServicePackage | null>(null);
+    // Step 2: Service Matching & Real DMS Database State
+    const [serviceSourceTab, setServiceSourceTab] = useState<'matched' | 'all-dms' | 'custom'>('matched');
+    const [selectedPackageId, setSelectedPackageId] = useState<string>('');
     const [packageSearchTerm, setPackageSearchTerm] = useState('');
     const [filterCompatibleOnly, setFilterCompatibleOnly] = useState<boolean>(true);
+    const [customManualName, setCustomManualName] = useState<string>('');
+    const [customManualPrice, setCustomManualPrice] = useState<number>(250);
+    const [customManualHours, setCustomManualHours] = useState<number>(2.0);
+    const [isCustomManualPackage, setIsCustomManualPackage] = useState<boolean>(false);
 
     // Step 3: Bundle & Upsell State
     const [selectedAddonIds, setSelectedAddonIds] = useState<string[]>([]);
@@ -212,7 +215,9 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
             setSelectedVehicle(null);
             setVrmInput('');
             setVehicleDetails({});
-            setSelectedTier('bronze');
+            setSelectedPackageId('');
+            setIsCustomManualPackage(false);
+            setCustomManualName('');
             setSelectedAddonIds([]);
             setVrmLookupError('');
             setVrmMatchMessage(null);
@@ -455,169 +460,114 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
         return getScoredServicePackages(servicePackages || [], activeVehicle);
     }, [servicePackages, activeVehicle]);
 
-    // Service Tiers Definition (Matching Live DMS Packages first, falling back to Intelligent Baseline)
-    const serviceTiers = useMemo(() => {
-        const make = activeVehicle?.make || '';
-        const cc = activeVehicle?.cc || 2000;
-
-        const isPremium = /porsche|ferrari|mclaren|lamborghini|aston|bentley|landrover|rangerover/i.test(make);
-        const engineFactor = isV8 ? 1.45 : cc > 3000 ? 1.35 : cc > 2000 ? 1.15 : 1.0;
-        const brandFactor = isPremium ? 1.35 : 1.0;
-
-        // Baseline formula defaults calibrated to vehicle size / engine
-        const bronzeDefaultGross = Math.round(189 * engineFactor * brandFactor);
-        const silverDefaultGross = Math.round(299 * engineFactor * brandFactor);
-        const goldDefaultGross = Math.round(469 * engineFactor * brandFactor);
-
+    // Categorize actual real packages from servicePackages in database
+    const { makeMatchedPackages, universalPackages, allCompatiblePackages } = useMemo(() => {
         const clean = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-        const vMake = clean(make);
+        const vMake = clean(activeVehicle?.make || '');
         const isLR = vMake.includes('landrover') || vMake.includes('rangerover');
 
-        // Compatible packages only (strictly excludes wrong car makes like Audi for Land Rover)
-        const compatiblePackages = (servicePackages || []).filter(isPackageCompatible);
+        const compatible = (servicePackages || []).filter(isPackageCompatible);
 
-        const findMatchingDmsPackage = (terms: string[]): ServicePackage | null => {
-            // 1. First priority: Exact / Make Match in DMS
-            const makeSpecific = compatiblePackages.filter(pkg => {
-                const pMake = clean(pkg.applicableMake || '');
-                const pName = clean(pkg.name || '');
-                const matchesLR = isLR && (pMake.includes('landrover') || pMake.includes('rangerover') || pName.includes('landrover') || pName.includes('rangerover'));
-                const matchesMake = (pMake && (vMake.includes(pMake) || pMake.includes(vMake))) || (vMake && pName.includes(vMake));
-                return matchesLR || matchesMake;
-            });
+        // 1. Vehicle Make / Model specific from actual database
+        const makeMatched = compatible.filter(pkg => {
+            const pMake = clean(pkg.applicableMake || '');
+            const pName = clean(pkg.name || '');
 
-            const specificMatch = makeSpecific.find(pkg => terms.some(t => clean(pkg.name || '').includes(clean(t))));
-            if (specificMatch) return specificMatch;
+            const lrMatch = isLR && (pMake.includes('landrover') || pMake.includes('rangerover') || pName.includes('landrover') || pName.includes('rangerover'));
+            const makeMatch = (pMake && (vMake.includes(pMake) || pMake.includes(vMake))) || (vMake && pName.includes(vMake));
+            return lrMatch || makeMatch;
+        });
 
-            // 2. Second priority: Truly Generic DMS Package (No make set, or set to 'all'/'generic', and no brand in name)
-            const genericPackages = compatiblePackages.filter(pkg => {
-                const pMake = clean(pkg.applicableMake || '');
-                return !pMake || pMake === 'all' || pMake === 'generic';
-            });
-
-            const genericMatch = genericPackages.find(pkg => terms.some(t => clean(pkg.name || '').includes(clean(t))));
-            if (genericMatch) return genericMatch;
-
-            // 3. DO NOT return a package for a different make under any circumstances
-            return null;
-        };
-
-        const dmsMinor = findMatchingDmsPackage(['minor', 'bronze', 'oil service', 'oil & filter', 'interim inspection']);
-        const dmsInterim = findMatchingDmsPackage(['interim', 'silver', 'intermediate', 'maintenance', 'scheduled service']);
-        const dmsMajor = findMatchingDmsPackage(['major', 'gold', 'full service', 'comprehensive', 'inspection ii']);
-
-        const extractLaborHours = (pkg?: ServicePackage, fallback: number = 2.0) => {
-            if (!pkg?.costItems || pkg.costItems.length === 0) return fallback;
-            const laborSum = pkg.costItems
-                .filter(item => item.isLabor || item.type === 'labor' || item.partNumber === 'LABOUR' || /labour|labor/i.test(item.description || ''))
-                .reduce((sum, item) => sum + (Number(item.quantity) || 1), 0);
-            return laborSum > 0 ? laborSum : fallback;
-        };
-
-        const extractHighlights = (pkg?: ServicePackage, fallback: string[] = []): string[] => {
-            if (!pkg?.costItems || pkg.costItems.length === 0) {
-                if (pkg?.description) return [pkg.description];
-                return fallback;
-            }
-            return pkg.costItems.slice(0, 6).map(item => {
-                const qtyStr = item.quantity && item.quantity > 1 ? `${item.quantity}x ` : '';
-                return `${qtyStr}${item.description || item.partNumber || 'Service Item'}`;
-            });
-        };
-
-        const vehicleTitle = `${activeVehicle?.make || 'Vehicle'}${isV8 ? ' V8' : ''}`;
+        // 2. Universal workshop packages (truly applicable to all vehicles, e.g. MOT, universal checks)
+        const universal = compatible.filter(pkg => {
+            const pMake = clean(pkg.applicableMake || '');
+            const isUniversalMake = !pMake || pMake === 'all' || pMake === 'generic';
+            return isUniversalMake && !makeMatched.some(m => m.id === pkg.id);
+        });
 
         return {
-            bronze: {
-                id: 'bronze',
-                name: dmsMinor?.name || `${vehicleTitle} Bronze (Minor Service)`,
-                subtitle: dmsMinor 
-                    ? `DMS Package #${dmsMinor.id} • Verified for ${activeVehicle.make || 'Vehicle'}` 
-                    : `Calibrated Baseline for ${vehicleTitle}`,
-                priceGross: dmsMinor?.totalPrice || bronzeDefaultGross,
-                hours: extractLaborHours(dmsMinor, isV8 ? 2.0 : 1.5),
-                tag: dmsMinor ? 'DMS Live Package' : `Calibrated ${isV8 ? 'V8 ' : ''}Baseline`,
-                tagColor: dmsMinor ? 'bg-emerald-100 text-emerald-950 border-emerald-400 font-bold' : 'bg-amber-100 text-amber-900 border-amber-300',
-                isDmsPackage: Boolean(dmsMinor),
-                dmsPackage: dmsMinor || undefined,
-                highlights: extractHighlights(dmsMinor, [
-                    isV8 ? 'High-capacity synthetic engine oil renewal (8.0L - 9.5L)' : 'Engine oil & premium OEM filter replacement',
-                    'Essential fluid level top-ups (brake, coolant, washer)',
-                    'Comprehensive 35-point safety inspection',
-                    'Tyre pressure & tread depth inspection',
-                    'Reset service interval indicator'
-                ])
-            },
-            silver: {
-                id: 'silver',
-                name: dmsInterim?.name || `${vehicleTitle} Silver (Interim Service)`,
-                subtitle: dmsInterim 
-                    ? `DMS Package #${dmsInterim.id} • Verified for ${activeVehicle.make || 'Vehicle'}` 
-                    : `Calibrated Baseline for ${vehicleTitle}`,
-                priceGross: dmsInterim?.totalPrice || silverDefaultGross,
-                hours: extractLaborHours(dmsInterim, isV8 ? 3.0 : 2.5),
-                tag: dmsInterim ? 'DMS Live Package' : `Calibrated ${isV8 ? 'V8 ' : ''}Baseline`,
-                tagColor: dmsInterim ? 'bg-emerald-100 text-emerald-950 border-emerald-400 font-bold' : 'bg-indigo-100 text-indigo-900 border-indigo-300',
-                isDmsPackage: Boolean(dmsInterim),
-                dmsPackage: dmsInterim || undefined,
-                highlights: extractHighlights(dmsInterim, [
-                    'All Bronze Minor Service items included',
-                    'Wheels-off brake pad, disc & caliper inspection',
-                    'Steering & suspension linkage condition check',
-                    'Cabin pollen/microfilter replacement',
-                    'Battery test & alternator charging rate check',
-                    'Exhaust system & underbody structural inspection'
-                ])
-            },
-            gold: {
-                id: 'gold',
-                name: dmsMajor?.name || `${vehicleTitle} Gold (Major Service)`,
-                subtitle: dmsMajor 
-                    ? `DMS Package #${dmsMajor.id} • Verified for ${activeVehicle.make || 'Vehicle'}` 
-                    : `Calibrated Baseline for ${vehicleTitle}`,
-                priceGross: dmsMajor?.totalPrice || goldDefaultGross,
-                hours: extractLaborHours(dmsMajor, isV8 ? 5.0 : 4.0),
-                tag: dmsMajor ? 'DMS Live Package' : `Calibrated ${isV8 ? 'V8 ' : ''}Baseline`,
-                tagColor: dmsMajor ? 'bg-emerald-100 text-emerald-950 border-emerald-400 font-bold' : 'bg-yellow-100 text-yellow-900 border-yellow-400',
-                isDmsPackage: Boolean(dmsMajor),
-                dmsPackage: dmsMajor || undefined,
-                highlights: extractHighlights(dmsMajor, [
-                    'All Bronze & Silver Service items included',
-                    'Engine air filter element replacement',
-                    isV8 ? '8x High-performance spark plugs or diesel filter renewal' : (activeVehicle?.fuelType?.toLowerCase().includes('diesel') ? 'Fuel filter renewal' : 'Spark plugs replacement'),
-                    'Brake fluid boiling point & moisture test',
-                    'Coolant hydrometer freeze-point inspection',
-                    'Auxiliary drive belt tension & wear check',
-                    'Diagnostic fault code memory scan & health report'
-                ])
-            }
+            makeMatchedPackages: makeMatched,
+            universalPackages: universal,
+            allCompatiblePackages: compatible
         };
-    }, [activeVehicle, servicePackages, isPackageCompatible, isV8]);
+    }, [servicePackages, isPackageCompatible, activeVehicle]);
+
+    // Active selected package from real database
+    const selectedPackage = useMemo(() => {
+        return (servicePackages || []).find(p => p.id === selectedPackageId) || null;
+    }, [servicePackages, selectedPackageId]);
+
+    // Auto-select first matching database package when vehicle is loaded and no package is selected
+    useEffect(() => {
+        if (!selectedPackageId && !isCustomManualPackage && makeMatchedPackages.length > 0) {
+            setSelectedPackageId(makeMatchedPackages[0].id);
+        }
+    }, [makeMatchedPackages, selectedPackageId, isCustomManualPackage]);
+
+    const extractLaborHours = (pkg?: ServicePackage | null, fallback: number = 1.5) => {
+        if (!pkg?.costItems || pkg.costItems.length === 0) return fallback;
+        const laborSum = pkg.costItems
+            .filter(item => item.isLabor || item.type === 'labor' || item.partNumber === 'LABOUR' || /labour|labor/i.test(item.description || ''))
+            .reduce((sum, item) => sum + (Number(item.quantity) || 1), 0);
+        return laborSum > 0 ? laborSum : fallback;
+    };
+
+    const extractHighlights = (pkg?: ServicePackage | null, fallback: string[] = []): string[] => {
+        if (!pkg?.costItems || pkg.costItems.length === 0) {
+            if (pkg?.description) return [pkg.description];
+            return fallback;
+        }
+        return pkg.costItems.slice(0, 6).map(item => {
+            const qtyStr = item.quantity && item.quantity > 1 ? `${item.quantity}x ` : '';
+            return `${qtyStr}${item.description || item.partNumber || 'Service Item'}`;
+        });
+    };
 
     // Active selected tier or custom DMS package
     const currentTierData = useMemo(() => {
-        if (selectedTier === 'custom' && selectedCustomPackage) {
-            const laborHours = (selectedCustomPackage.costItems || [])
-                .filter(item => item.isLabor || item.type === 'labor' || /labour|labor/i.test(item.description || ''))
-                .reduce((sum, item) => sum + (Number(item.quantity) || 1), 0) || 2.0;
-
-            const highlights = (selectedCustomPackage.costItems || []).map(i => `${i.quantity && i.quantity > 1 ? `${i.quantity}x ` : ''}${i.description}`);
-
+        if (isCustomManualPackage) {
             return {
-                id: 'custom',
-                name: selectedCustomPackage.name || 'Custom Package',
-                subtitle: selectedCustomPackage.description || `DMS Package #${selectedCustomPackage.id}`,
-                priceGross: selectedCustomPackage.totalPrice || 250,
-                hours: laborHours,
-                tag: 'DMS Catalogue Package',
-                tagColor: 'bg-emerald-100 text-emerald-950 border-emerald-400 font-bold',
-                isDmsPackage: true,
-                dmsPackage: selectedCustomPackage,
-                highlights: highlights.length > 0 ? highlights : [selectedCustomPackage.description || 'Full Workshop Service Package']
+                id: 'custom-manual',
+                name: customManualName.trim() || `${activeVehicle.make || 'Vehicle'} Custom Service`,
+                subtitle: 'Manual Quote',
+                priceGross: customManualPrice || 0,
+                hours: customManualHours || 1.5,
+                tag: 'Custom Service Quote',
+                tagColor: 'bg-purple-100 text-purple-950 border-purple-400 font-bold',
+                isDmsPackage: false,
+                dmsPackage: null,
+                highlights: ['Agreed bespoke workshop items with customer']
             };
         }
-        return serviceTiers[selectedTier as 'bronze' | 'silver' | 'gold'] || serviceTiers.bronze;
-    }, [selectedTier, selectedCustomPackage, serviceTiers]);
+
+        if (selectedPackage) {
+            return {
+                id: selectedPackage.id,
+                name: selectedPackage.name,
+                subtitle: selectedPackage.description || `Database Package #${selectedPackage.id}`,
+                priceGross: selectedPackage.totalPrice || 0,
+                hours: extractLaborHours(selectedPackage, 1.5),
+                tag: 'DMS Package',
+                tagColor: 'bg-emerald-100 text-emerald-950 border-emerald-400 font-bold',
+                isDmsPackage: true,
+                dmsPackage: selectedPackage,
+                highlights: extractHighlights(selectedPackage, [selectedPackage.description || 'Full Workshop Service Package'])
+            };
+        }
+
+        return {
+            id: 'none',
+            name: 'No Package Selected',
+            subtitle: 'Please select an available package from your workshop database',
+            priceGross: 0,
+            hours: 0,
+            tag: 'None Selected',
+            tagColor: 'bg-slate-100 text-slate-500',
+            isDmsPackage: false,
+            dmsPackage: null,
+            highlights: []
+        };
+    }, [isCustomManualPackage, customManualName, customManualPrice, customManualHours, selectedPackage, activeVehicle]);
 
     const activeAddons = useMemo(() => 
         (scriptConfig.bundles && scriptConfig.bundles.length > 0 ? scriptConfig.bundles : BUNDLE_ADDONS).filter(addon => selectedAddonIds.includes(addon.id)),
@@ -1183,10 +1133,13 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                         </div>
 
                         <button 
+                            type="button"
                             onClick={onClose}
-                            className="p-2.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors"
+                            className="px-3.5 py-2 rounded-xl border border-rose-400/40 bg-rose-500/10 hover:bg-rose-500/25 text-rose-300 hover:text-white font-bold text-xs transition-colors flex items-center gap-1.5 shadow-xs"
+                            title="Cancel booking and close"
                         >
-                            <X size={24} />
+                            <X size={16} />
+                            <span>Cancel</span>
                         </button>
                     </div>
                 </header>
@@ -1228,8 +1181,9 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                     )}
                 </div>
 
-                {/* MAIN CONTENT BODY */}
-                <div className="flex-1 overflow-y-auto p-6 sm:p-8 bg-slate-50/60">
+                {/* 2-COLUMN BODY: SCROLLABLE FORM (LEFT) + PERSISTENT ACTION SIDEBAR (RIGHT) */}
+                <div className="flex-1 flex flex-col lg:flex-row overflow-hidden min-h-0 bg-slate-50/60">
+                    <main className="flex-1 overflow-y-auto p-5 sm:p-6 lg:p-8 space-y-6">
 
                     {/* ======================================================== */}
                     {/* STEP 1: CLIENT IDENTIFICATION & VEHICLE VERIFICATION     */}
@@ -1714,32 +1668,7 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                                 </div>
                             )}
 
-                            {/* CALIBRATED BASELINE NOTICE IF NO DMS PACKAGE FOUND */}
-                            {!serviceTiers.bronze.isDmsPackage && !serviceTiers.silver.isDmsPackage && !serviceTiers.gold.isDmsPackage && (
-                                <div className="bg-sky-50 border border-sky-300 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-sky-950">
-                                    <div className="flex items-start gap-3">
-                                        <Info size={20} className="text-sky-600 mt-0.5 flex-shrink-0" />
-                                        <div>
-                                            <span className="font-bold text-sm block">
-                                                No Direct DMS Service Package for {activeVehicle.make || 'Vehicle'} {activeVehicle.model || ''}{isV8 ? ' (V8 Engine)' : ''}
-                                            </span>
-                                            <span className="text-xs text-sky-800">
-                                                We have loaded our calibrated {isV8 ? 'high-capacity V8 ' : ''}baseline packages below. You can select one of these or click to browse your complete workshop package catalogue.
-                                            </span>
-                                        </div>
-                                    </div>
-                                    <button
-                                        type="button"
-                                        onClick={() => setServiceSourceTab('all-dms')}
-                                        className="px-3.5 py-2 bg-sky-700 hover:bg-sky-800 text-white rounded-xl text-xs font-bold whitespace-nowrap transition flex items-center gap-1.5 shadow-sm"
-                                    >
-                                        <Search size={14} />
-                                        Browse DMS Catalogue
-                                    </button>
-                                </div>
-                            )}
-
-                            {/* SERVICE SOURCE SELECTION TABS: RECOMMENDED TIERS VS LIVE DMS CATALOGUE */}
+                            {/* SERVICE SOURCE SELECTION TABS */}
                             <div>
                                 <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
                                     <div className="flex items-center gap-3">
@@ -1747,9 +1676,9 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                                             <Layers size={22} />
                                         </div>
                                         <div>
-                                            <h3 className="font-black text-slate-900 text-xl">Service Packages Selection</h3>
+                                            <h3 className="font-black text-slate-900 text-xl">Service Packages from Database</h3>
                                             <span className="text-xs text-slate-500">
-                                                Matched for: <strong className="text-slate-800">{activeVehicle.make || 'Vehicle'} {activeVehicle.model || ''}</strong>
+                                                Active Vehicle: <strong className="text-slate-800">{activeVehicle.make || 'Vehicle'} {activeVehicle.model || ''}</strong>
                                             </span>
                                         </div>
                                     </div>
@@ -1757,15 +1686,15 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                                     <div className="flex bg-slate-200/80 p-1.5 rounded-2xl border border-slate-300 shadow-inner">
                                         <button
                                             type="button"
-                                            onClick={() => setServiceSourceTab('tiered')}
+                                            onClick={() => setServiceSourceTab('matched')}
                                             className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
-                                                serviceSourceTab === 'tiered'
+                                                serviceSourceTab === 'matched'
                                                     ? 'bg-white text-indigo-950 shadow-sm'
                                                     : 'text-slate-600 hover:text-slate-900'
                                             }`}
                                         >
                                             <Sparkles size={15} />
-                                            Recommended Tiers
+                                            Matched & Universal ({makeMatchedPackages.length + universalPackages.length})
                                         </button>
                                         <button
                                             type="button"
@@ -1777,216 +1706,205 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                                             }`}
                                         >
                                             <Wrench size={15} />
-                                            All Workshop Packages ({servicePackages.length})
+                                            All Database Packages ({servicePackages.length})
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setServiceSourceTab('custom')}
+                                            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+                                                serviceSourceTab === 'custom'
+                                                    ? 'bg-white text-indigo-950 shadow-sm'
+                                                    : 'text-slate-600 hover:text-slate-900'
+                                            }`}
+                                        >
+                                            <Plus size={15} />
+                                            Custom / Manual Quote
                                         </button>
                                     </div>
                                 </div>
 
-                                {serviceSourceTab === 'tiered' ? (
-                                    <div className="space-y-4">
-                                        {selectedTier === 'custom' && selectedCustomPackage && (
-                                            <div className="bg-indigo-50 border-2 border-indigo-500 rounded-3xl p-5 flex flex-wrap items-center justify-between gap-4 shadow-md">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="p-2.5 bg-indigo-600 text-white rounded-2xl">
-                                                        <CheckCircle2 size={24} />
-                                                    </div>
+                                {/* TAB 1: MATCHED & UNIVERSAL PACKAGES */}
+                                {serviceSourceTab === 'matched' && (
+                                    <div className="space-y-6">
+                                        {/* MAKE SPECIFIC PACKAGES */}
+                                        {makeMatchedPackages.length > 0 ? (
+                                            <div className="space-y-3">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-xs font-black uppercase tracking-wider text-emerald-800 bg-emerald-100 px-2.5 py-1 rounded-md border border-emerald-300">
+                                                        Matched to {activeVehicle.make}
+                                                    </span>
+                                                    <span className="text-xs text-slate-500 font-semibold">
+                                                        ({makeMatchedPackages.length} packages found in database)
+                                                    </span>
+                                                </div>
+
+                                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                                    {makeMatchedPackages.map(pkg => {
+                                                        const isSelected = selectedPackageId === pkg.id && !isCustomManualPackage;
+                                                        const laborHours = extractLaborHours(pkg, 1.5);
+                                                        const highlights = extractHighlights(pkg, [pkg.description || 'Full Workshop Service Package']);
+
+                                                        return (
+                                                            <div
+                                                                key={pkg.id}
+                                                                onClick={() => {
+                                                                    setSelectedPackageId(pkg.id);
+                                                                    setIsCustomManualPackage(false);
+                                                                }}
+                                                                className={`rounded-3xl p-5 border-2 cursor-pointer transition-all flex flex-col justify-between ${
+                                                                    isSelected
+                                                                        ? 'border-indigo-600 bg-indigo-50/70 shadow-lg ring-4 ring-indigo-500/20'
+                                                                        : 'border-slate-200 bg-white hover:border-slate-300'
+                                                                }`}
+                                                            >
+                                                                <div>
+                                                                    <div className="flex items-center justify-between mb-2">
+                                                                        <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 border border-emerald-300">
+                                                                            Verified {pkg.applicableMake || activeVehicle.make}
+                                                                        </span>
+                                                                        <span className="text-xs text-slate-500 font-bold">{laborHours} hrs</span>
+                                                                    </div>
+                                                                    <h4 className="font-black text-lg text-slate-900 mt-1">{pkg.name}</h4>
+                                                                    <p className="text-xs text-slate-500 mb-3">{pkg.description || `Package #${pkg.id}`}</p>
+
+                                                                    <div className="text-2xl font-black text-slate-900 mb-4 font-mono">
+                                                                        {formatCurrency(pkg.totalPrice || 0)}
+                                                                        <span className="text-xs font-normal text-slate-500 ml-1">inc VAT</span>
+                                                                    </div>
+
+                                                                    <div className="space-y-1.5 text-xs text-slate-700">
+                                                                        {highlights.map((h, i) => (
+                                                                            <div key={i} className="flex items-start gap-2">
+                                                                                <Check size={14} className="text-emerald-600 mt-0.5 flex-shrink-0" />
+                                                                                <span className="line-clamp-1">{h}</span>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+
+                                                                <button
+                                                                    type="button"
+                                                                    className={`mt-6 w-full py-2.5 rounded-xl text-xs font-black transition ${
+                                                                        isSelected
+                                                                            ? 'bg-indigo-600 text-white shadow-md'
+                                                                            : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                                                                    }`}
+                                                                >
+                                                                    {isSelected ? 'Selected Package' : 'Select Package'}
+                                                                </button>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="bg-amber-50 border border-amber-300 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-amber-950">
+                                                <div className="flex items-start gap-3">
+                                                    <AlertCircle size={20} className="text-amber-600 mt-0.5 flex-shrink-0" />
                                                     <div>
-                                                        <div className="flex items-center gap-2">
-                                                            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-indigo-600 text-white">
-                                                                Active Selection: DMS Package
-                                                            </span>
-                                                            <span className="text-xs text-slate-500 font-mono">#{selectedCustomPackage.id}</span>
-                                                        </div>
-                                                        <h4 className="font-black text-lg text-slate-900 mt-0.5">{selectedCustomPackage.name}</h4>
-                                                        <p className="text-xs text-slate-600">{selectedCustomPackage.description || 'Full Workshop Service Package'}</p>
-                                                    </div>
-                                                </div>
-                                                <div className="flex items-center gap-4">
-                                                    <div className="text-right">
-                                                        <span className="text-2xl font-black text-indigo-950 font-mono block">
-                                                            {formatCurrency(selectedCustomPackage.totalPrice || 0)}
+                                                        <span className="font-bold text-sm block">
+                                                            No make-specific service packages in database for {activeVehicle.make || 'this make'}
                                                         </span>
-                                                        <span className="text-xs text-slate-500">inc VAT</span>
+                                                        <span className="text-xs text-amber-800">
+                                                            Packages are not fabricated or made up. You can choose from your universal workshop packages below, browse all catalogue packages, or quote a custom service.
+                                                        </span>
                                                     </div>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setServiceSourceTab('all-dms')}
-                                                        className="px-4 py-2.5 bg-white border border-indigo-300 text-indigo-700 hover:bg-indigo-50 rounded-xl text-xs font-bold transition shadow-xs"
-                                                    >
-                                                        Change Package
-                                                    </button>
                                                 </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setServiceSourceTab('all-dms')}
+                                                    className="px-3.5 py-2 bg-amber-700 hover:bg-amber-800 text-white rounded-xl text-xs font-bold whitespace-nowrap transition flex items-center gap-1.5 shadow-sm"
+                                                >
+                                                    <Search size={14} />
+                                                    Browse All Packages
+                                                </button>
                                             </div>
                                         )}
 
-                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                                        {/* BRONZE */}
-                                        <div 
-                                            onClick={() => {
-                                                setSelectedTier('bronze');
-                                                setSelectedCustomPackage(null);
-                                            }}
-                                            className={`rounded-3xl p-6 border-2 cursor-pointer transition-all flex flex-col justify-between ${
-                                                selectedTier === 'bronze' 
-                                                    ? 'border-amber-500 bg-amber-50/50 shadow-xl ring-4 ring-amber-400/20' 
-                                                    : 'border-slate-200 bg-white hover:border-slate-300'
-                                            }`}
-                                        >
-                                            <div>
-                                                <div className="flex items-center justify-between mb-2">
-                                                    <span className={`text-[11px] font-black uppercase px-2.5 py-1 rounded-md border ${serviceTiers.bronze.tagColor}`}>
-                                                        {serviceTiers.bronze.tag}
+                                        {/* UNIVERSAL PACKAGES */}
+                                        {universalPackages.length > 0 && (
+                                            <div className="space-y-3 pt-2">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-xs font-black uppercase tracking-wider text-slate-700 bg-slate-200 px-2.5 py-1 rounded-md border border-slate-300">
+                                                        Universal Workshop Packages
                                                     </span>
-                                                    <span className="text-xs text-slate-500 font-bold">{serviceTiers.bronze.hours} hrs</span>
-                                                </div>
-                                                <h4 className="font-black text-xl text-slate-900 mt-2">{serviceTiers.bronze.name}</h4>
-                                                <p className="text-xs text-slate-500 mb-5">{serviceTiers.bronze.subtitle}</p>
-                                                
-                                                <div className="text-3xl font-black text-slate-900 mb-5 font-mono">
-                                                    {formatCurrency(serviceTiers.bronze.priceGross)}
-                                                    <span className="text-xs font-normal text-slate-500 ml-1.5">inc VAT</span>
+                                                    <span className="text-xs text-slate-500 font-semibold">
+                                                        (Applicable across all vehicle models)
+                                                    </span>
                                                 </div>
 
-                                                <div className="space-y-2.5 text-sm text-slate-700">
-                                                    {serviceTiers.bronze.highlights.map((h, i) => (
-                                                        <div key={i} className="flex items-start gap-2.5">
-                                                            <Check size={16} className="text-amber-600 mt-0.5 flex-shrink-0" />
-                                                            <span>{h}</span>
-                                                        </div>
-                                                    ))}
+                                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                                    {universalPackages.map(pkg => {
+                                                        const isSelected = selectedPackageId === pkg.id && !isCustomManualPackage;
+                                                        const laborHours = extractLaborHours(pkg, 1.0);
+                                                        const highlights = extractHighlights(pkg, [pkg.description || 'Universal Workshop Item']);
+
+                                                        return (
+                                                            <div
+                                                                key={pkg.id}
+                                                                onClick={() => {
+                                                                    setSelectedPackageId(pkg.id);
+                                                                    setIsCustomManualPackage(false);
+                                                                }}
+                                                                className={`rounded-3xl p-5 border-2 cursor-pointer transition-all flex flex-col justify-between ${
+                                                                    isSelected
+                                                                        ? 'border-indigo-600 bg-indigo-50/70 shadow-lg ring-4 ring-indigo-500/20'
+                                                                        : 'border-slate-200 bg-white hover:border-slate-300'
+                                                                }`}
+                                                            >
+                                                                <div>
+                                                                    <div className="flex items-center justify-between mb-2">
+                                                                        <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-300">
+                                                                            Universal
+                                                                        </span>
+                                                                        <span className="text-xs text-slate-500 font-bold">{laborHours} hrs</span>
+                                                                    </div>
+                                                                    <h4 className="font-black text-lg text-slate-900 mt-1">{pkg.name}</h4>
+                                                                    <p className="text-xs text-slate-500 mb-3">{pkg.description || `Package #${pkg.id}`}</p>
+
+                                                                    <div className="text-2xl font-black text-slate-900 mb-4 font-mono">
+                                                                        {formatCurrency(pkg.totalPrice || 0)}
+                                                                        <span className="text-xs font-normal text-slate-500 ml-1">inc VAT</span>
+                                                                    </div>
+
+                                                                    <div className="space-y-1.5 text-xs text-slate-700">
+                                                                        {highlights.map((h, i) => (
+                                                                            <div key={i} className="flex items-start gap-2">
+                                                                                <Check size={14} className="text-indigo-600 mt-0.5 flex-shrink-0" />
+                                                                                <span className="line-clamp-1">{h}</span>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+
+                                                                <button
+                                                                    type="button"
+                                                                    className={`mt-6 w-full py-2.5 rounded-xl text-xs font-black transition ${
+                                                                        isSelected
+                                                                            ? 'bg-indigo-600 text-white shadow-md'
+                                                                            : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                                                                    }`}
+                                                                >
+                                                                    {isSelected ? 'Selected Package' : 'Select Package'}
+                                                                </button>
+                                                            </div>
+                                                        );
+                                                    })}
                                                 </div>
                                             </div>
-
-                                            <button 
-                                                type="button"
-                                                className={`mt-8 w-full py-3 rounded-xl text-sm font-black transition ${
-                                                    selectedTier === 'bronze' 
-                                                        ? 'bg-amber-500 text-white shadow-md' 
-                                                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                                                }`}
-                                            >
-                                                {selectedTier === 'bronze' ? 'Selected Package' : 'Select Bronze'}
-                                            </button>
-                                        </div>
-
-                                        {/* SILVER */}
-                                        <div 
-                                            onClick={() => {
-                                                setSelectedTier('silver');
-                                                setSelectedCustomPackage(null);
-                                            }}
-                                            className={`rounded-3xl p-6 border-2 cursor-pointer transition-all flex flex-col justify-between relative ${
-                                                selectedTier === 'silver' 
-                                                    ? 'border-indigo-600 bg-indigo-50/50 shadow-xl ring-4 ring-indigo-500/20' 
-                                                    : 'border-slate-200 bg-white hover:border-slate-300'
-                                            }`}
-                                        >
-                                            {recommendedTier === 'silver' && (
-                                                <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-indigo-600 text-white text-xs font-black uppercase px-4 py-1 rounded-full shadow-md">
-                                                    Recommended for Mileage
-                                                </span>
-                                            )}
-                                            <div>
-                                                <div className="flex items-center justify-between mb-2">
-                                                    <span className={`text-[11px] font-black uppercase px-2.5 py-1 rounded-md border ${serviceTiers.silver.tagColor}`}>
-                                                        {serviceTiers.silver.tag}
-                                                    </span>
-                                                    <span className="text-xs text-slate-500 font-bold">{serviceTiers.silver.hours} hrs</span>
-                                                </div>
-                                                <h4 className="font-black text-xl text-slate-900 mt-2">{serviceTiers.silver.name}</h4>
-                                                <p className="text-xs text-slate-500 mb-5">{serviceTiers.silver.subtitle}</p>
-                                                
-                                                <div className="text-3xl font-black text-indigo-950 mb-5 font-mono">
-                                                    {formatCurrency(serviceTiers.silver.priceGross)}
-                                                    <span className="text-xs font-normal text-slate-500 ml-1.5">inc VAT</span>
-                                                </div>
-
-                                                <div className="space-y-2.5 text-sm text-slate-700">
-                                                    {serviceTiers.silver.highlights.map((h, i) => (
-                                                        <div key={i} className="flex items-start gap-2.5">
-                                                            <Check size={16} className="text-indigo-600 mt-0.5 flex-shrink-0" />
-                                                            <span>{h}</span>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-
-                                            <button 
-                                                type="button"
-                                                className={`mt-8 w-full py-3 rounded-xl text-sm font-black transition ${
-                                                    selectedTier === 'silver' 
-                                                        ? 'bg-indigo-600 text-white shadow-md' 
-                                                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                                                }`}
-                                            >
-                                                {selectedTier === 'silver' ? 'Selected Package' : 'Select Silver'}
-                                            </button>
-                                        </div>
-
-                                        {/* GOLD */}
-                                        <div 
-                                            onClick={() => {
-                                                setSelectedTier('gold');
-                                                setSelectedCustomPackage(null);
-                                            }}
-                                            className={`rounded-3xl p-6 border-2 cursor-pointer transition-all flex flex-col justify-between relative ${
-                                                selectedTier === 'gold' 
-                                                    ? 'border-yellow-500 bg-yellow-50/50 shadow-xl ring-4 ring-yellow-400/20' 
-                                                    : 'border-slate-200 bg-white hover:border-slate-300'
-                                            }`}
-                                        >
-                                            {recommendedTier === 'gold' && (
-                                                <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-amber-600 text-white text-xs font-black uppercase px-4 py-1 rounded-full shadow-md">
-                                                    Due by Age/Mileage
-                                                </span>
-                                            )}
-                                            <div>
-                                                <div className="flex items-center justify-between mb-2">
-                                                    <span className={`text-[11px] font-black uppercase px-2.5 py-1 rounded-md border ${serviceTiers.gold.tagColor}`}>
-                                                        {serviceTiers.gold.tag}
-                                                    </span>
-                                                    <span className="text-xs text-slate-500 font-bold">{serviceTiers.gold.hours} hrs</span>
-                                                </div>
-                                                <h4 className="font-black text-xl text-slate-900 mt-2">{serviceTiers.gold.name}</h4>
-                                                <p className="text-xs text-slate-500 mb-5">{serviceTiers.gold.subtitle}</p>
-                                                
-                                                <div className="text-3xl font-black text-slate-900 mb-5 font-mono">
-                                                    {formatCurrency(serviceTiers.gold.priceGross)}
-                                                    <span className="text-xs font-normal text-slate-500 ml-1.5">inc VAT</span>
-                                                </div>
-
-                                                <div className="space-y-2.5 text-sm text-slate-700">
-                                                    {serviceTiers.gold.highlights.map((h, i) => (
-                                                        <div key={i} className="flex items-start gap-2.5">
-                                                            <Check size={16} className="text-yellow-600 mt-0.5 flex-shrink-0" />
-                                                            <span>{h}</span>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-
-                                            <button 
-                                                type="button"
-                                                className={`mt-8 w-full py-3 rounded-xl text-sm font-black transition ${
-                                                    selectedTier === 'gold' 
-                                                        ? 'bg-amber-500 text-white shadow-md' 
-                                                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                                                }`}
-                                            >
-                                                {selectedTier === 'gold' ? 'Selected Package' : 'Select Gold'}
-                                            </button>
-                                        </div>
+                                        )}
                                     </div>
-                                </div>
-                                ) : (
-                                    /* BROWSE ALL DMS PACKAGES CATALOGUE */
+                                )}
+
+                                {/* TAB 2: ALL WORKSHOP PACKAGES CATALOGUE */}
+                                {serviceSourceTab === 'all-dms' && (
                                     <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-4">
                                         <div className="flex flex-wrap items-center justify-between gap-3">
                                             <div className="relative flex-1 min-w-[240px]">
                                                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                                                 <input 
                                                     type="text" 
-                                                    placeholder="Search workshop packages by name, make, model..."
+                                                    placeholder="Search database packages by name, make, model..."
                                                     value={packageSearchTerm}
                                                     onChange={e => setPackageSearchTerm(e.target.value)}
                                                     className="w-full pl-11 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500"
@@ -2012,13 +1930,13 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                                             {scoredPackages
                                                 .filter(sp => (!filterCompatibleOnly || isPackageCompatible(sp.pkg)) && (!packageSearchTerm || (sp.pkg.name || '').toLowerCase().includes(packageSearchTerm.toLowerCase())))
                                                 .map(({ pkg, score, matchType, color }) => {
-                                                    const isSelected = selectedTier === 'custom' && selectedCustomPackage?.id === pkg.id;
+                                                    const isSelected = selectedPackageId === pkg.id && !isCustomManualPackage;
                                                     return (
                                                         <div 
                                                             key={pkg.id}
                                                             onClick={() => {
-                                                                setSelectedCustomPackage(pkg);
-                                                                setSelectedTier('custom');
+                                                                setSelectedPackageId(pkg.id);
+                                                                setIsCustomManualPackage(false);
                                                             }}
                                                             className={`p-4 flex flex-wrap items-center justify-between gap-4 cursor-pointer hover:bg-indigo-50/60 transition ${
                                                                 isSelected ? 'bg-indigo-50/90 border-l-4 border-indigo-600' : ''
@@ -2033,7 +1951,7 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                                                                 </div>
                                                                 <p className="text-xs text-slate-500 line-clamp-1">{pkg.description || 'Full Workshop Service Package'}</p>
                                                                 <div className="text-[11px] text-slate-400 mt-1">
-                                                                    {pkg.costItems?.length ? `${pkg.costItems.length} cost items included` : 'Package flat rate'} • Bay: {pkg.applicableMake || 'All Makes'}
+                                                                    {pkg.costItems?.length ? `${pkg.costItems.length} items included` : 'Package flat rate'} • Bay: {pkg.applicableMake || 'All Makes'}
                                                                 </div>
                                                             </div>
 
@@ -2056,6 +1974,85 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                                                         </div>
                                                     );
                                                 })}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* TAB 3: CUSTOM / MANUAL QUOTE */}
+                                {serviceSourceTab === 'custom' && (
+                                    <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-4">
+                                        <div className="flex items-center gap-2.5 border-b border-slate-100 pb-3">
+                                            <Plus size={20} className="text-purple-600" />
+                                            <div>
+                                                <h4 className="font-bold text-slate-900 text-base">Custom Service Quote</h4>
+                                                <p className="text-xs text-slate-500">
+                                                    Enter a bespoke or uncatalogued service agreed with the customer.
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                            <div className="sm:col-span-2">
+                                                <label className="block text-xs font-bold text-slate-700 mb-1">
+                                                    Service Description
+                                                </label>
+                                                <input 
+                                                    type="text"
+                                                    value={customManualName}
+                                                    onChange={e => setCustomManualName(e.target.value)}
+                                                    placeholder={`e.g. ${activeVehicle.make || 'Vehicle'} Annual Service & Health Check`}
+                                                    className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-sm outline-none focus:ring-2 focus:ring-purple-500"
+                                                />
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-xs font-bold text-slate-700 mb-1">
+                                                    Gross Price (inc VAT)
+                                                </label>
+                                                <div className="relative">
+                                                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold">£</span>
+                                                    <input 
+                                                        type="number"
+                                                        value={customManualPrice || ''}
+                                                        onChange={e => setCustomManualPrice(Number(e.target.value))}
+                                                        placeholder="250"
+                                                        className="w-full pl-8 pr-3 py-2.5 border border-slate-300 rounded-xl text-sm font-mono font-bold outline-none focus:ring-2 focus:ring-purple-500"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-xs font-bold text-slate-700 mb-1">
+                                                    Estimated Workshop Labor Hours
+                                                </label>
+                                                <input 
+                                                    type="number"
+                                                    step="0.5"
+                                                    value={customManualHours || ''}
+                                                    onChange={e => setCustomManualHours(Number(e.target.value))}
+                                                    placeholder="2.0"
+                                                    className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-sm font-mono font-bold outline-none focus:ring-2 focus:ring-purple-500"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="pt-2 flex justify-end">
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setIsCustomManualPackage(true);
+                                                    setSelectedPackageId('');
+                                                    toast.success('Custom service quote set!');
+                                                }}
+                                                className={`px-5 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+                                                    isCustomManualPackage
+                                                        ? 'bg-purple-600 text-white shadow-md'
+                                                        : 'bg-purple-100 text-purple-900 hover:bg-purple-200'
+                                                }`}
+                                            >
+                                                <Check size={16} />
+                                                {isCustomManualPackage ? 'Custom Service Active' : 'Use This Custom Quote'}
+                                            </button>
                                         </div>
                                     </div>
                                 )}
@@ -2747,6 +2744,251 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                             </div>
                         </div>
                     )}
+                    </main>
+
+                    {/* PERSISTENT ACTION & ORDER SUMMARY SIDEBAR - ELIMINATES SCROLLING */}
+                    <aside className="w-full lg:w-84 xl:w-96 bg-white border-t lg:border-t-0 lg:border-l border-slate-200 flex flex-col justify-between p-5 lg:p-6 shadow-md flex-shrink-0 overflow-y-auto">
+                        <div className="space-y-4">
+                            {/* Step Progress Pills */}
+                            <div>
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className="text-[11px] font-black uppercase tracking-wider text-slate-400">
+                                        Step {currentStep} of 4
+                                    </span>
+                                    <span className="text-xs font-bold text-indigo-600">
+                                        {currentStep === 1 && 'Vehicle & Client'}
+                                        {currentStep === 2 && 'Service Package'}
+                                        {currentStep === 3 && 'Bundles & Upsells'}
+                                        {currentStep === 4 && 'Date & Confirmation'}
+                                    </span>
+                                </div>
+                                <div className="grid grid-cols-4 gap-1.5">
+                                    {[1, 2, 3, 4].map(stepNum => (
+                                        <button
+                                            key={stepNum}
+                                            type="button"
+                                            onClick={() => setCurrentStep(stepNum as any)}
+                                            className={`h-2 rounded-full transition-all ${
+                                                currentStep === stepNum
+                                                    ? 'bg-indigo-600 ring-2 ring-indigo-400/30'
+                                                    : currentStep > stepNum
+                                                        ? 'bg-emerald-500'
+                                                        : 'bg-slate-200'
+                                            }`}
+                                            title={`Go to Step ${stepNum}`}
+                                        />
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Booking Overview Card */}
+                            <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 space-y-3 text-xs">
+                                <h4 className="font-black text-slate-900 text-xs uppercase tracking-wider flex items-center justify-between">
+                                    <span>Active Booking</span>
+                                    <span className="font-mono text-[10px] text-slate-400 font-semibold">{selectedEntity.name}</span>
+                                </h4>
+
+                                {/* Vehicle */}
+                                <div className="flex items-start gap-2.5 pt-1 border-t border-slate-200">
+                                    <Car size={16} className="text-amber-500 mt-0.5 flex-shrink-0" />
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="font-mono font-black text-slate-900 bg-yellow-300 text-slate-950 px-1.5 py-0.5 rounded text-[11px] border border-yellow-400">
+                                                {activeVehicle.registration || vrmInput || 'REG REQUIRED'}
+                                            </span>
+                                            {isV8 && <span className="text-[9px] font-black uppercase px-1 rounded bg-rose-100 text-rose-800 border border-rose-300">V8</span>}
+                                        </div>
+                                        <span className="text-slate-600 block truncate font-medium mt-1">
+                                            {activeVehicle.make ? `${activeVehicle.make} ${activeVehicle.model || ''}` : 'Vehicle pending lookup'}
+                                        </span>
+                                        <span className="text-slate-400 text-[11px] font-mono">
+                                            {currentMileage.toLocaleString()} miles
+                                        </span>
+                                    </div>
+                                </div>
+
+                                {/* Customer */}
+                                <div className="flex items-start gap-2.5 pt-2 border-t border-slate-200">
+                                    <User size={16} className="text-indigo-600 mt-0.5 flex-shrink-0" />
+                                    <div className="flex-1 min-w-0">
+                                        <span className="font-bold text-slate-900 block truncate">
+                                            {selectedCustomer 
+                                                ? getCustomerDisplayName(selectedCustomer) 
+                                                : `${newTitle} ${newForename} ${newSurname}`.trim() || 'Client pending'}
+                                        </span>
+                                        <span className="text-slate-500 block text-[11px]">
+                                            {selectedCustomer?.mobile || selectedCustomer?.phone || newMobile || newPhone || 'Phone required'}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                {/* Selected Service Package */}
+                                <div className="flex items-start gap-2.5 pt-2 border-t border-slate-200">
+                                    <Wrench size={16} className="text-emerald-600 mt-0.5 flex-shrink-0" />
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center justify-between gap-1">
+                                            <span className="font-bold text-slate-900 truncate block">
+                                                {currentTierData.name}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center justify-between mt-0.5">
+                                            <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded border ${currentTierData.tagColor}`}>
+                                                {currentTierData.tag}
+                                            </span>
+                                            <span className="font-mono font-black text-slate-900">
+                                                {currentTierData.priceGross > 0 ? formatCurrency(currentTierData.priceGross) : '£0.00'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Addons */}
+                                {activeAddons.length > 0 && (
+                                    <div className="pt-2 border-t border-slate-200 space-y-1">
+                                        <span className="text-[10px] font-black uppercase text-slate-400 block">
+                                            Bundled Addons ({activeAddons.length})
+                                        </span>
+                                        {activeAddons.map(a => (
+                                            <div key={a.id} className="flex items-center justify-between text-[11px] text-slate-700">
+                                                <span className="truncate pr-1">• {a.name}</span>
+                                                <span className="font-mono font-bold text-indigo-900 flex-shrink-0">{formatCurrency(a.bundledPrice)}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {/* Workshop Date (Step 4) */}
+                                {currentStep === 4 && (
+                                    <div className="flex items-start gap-2.5 pt-2 border-t border-slate-200">
+                                        <CalendarCheck size={16} className="text-indigo-600 mt-0.5 flex-shrink-0" />
+                                        <div className="flex-1 min-w-0">
+                                            <span className="font-bold text-slate-900 block font-mono">
+                                                {formatReadableDate(bookingDate)}
+                                            </span>
+                                            <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded-md inline-block mt-0.5 border ${selectedDateCapacity.badgeColor}`}>
+                                                {selectedDateCapacity.status} ({Math.round(selectedDateCapacity.loadRatio * 100)}%)
+                                            </span>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Running Financial Total */}
+                            <div className="bg-indigo-950 text-white rounded-2xl p-4 shadow-sm space-y-2">
+                                <div className="flex justify-between items-center text-xs text-indigo-200">
+                                    <span>Base Package</span>
+                                    <span className="font-mono">{formatCurrency(pricingSummary.tierGross)}</span>
+                                </div>
+                                {pricingSummary.addonsGross > 0 && (
+                                    <div className="flex justify-between items-center text-xs text-indigo-200">
+                                        <span>Done Together Addons</span>
+                                        <span className="font-mono">+{formatCurrency(pricingSummary.addonsGross)}</span>
+                                    </div>
+                                )}
+                                {pricingSummary.totalSavings > 0 && (
+                                    <div className="flex justify-between items-center text-xs text-emerald-400 font-bold">
+                                        <span>Customer Bundle Savings</span>
+                                        <span className="font-mono">-{formatCurrency(pricingSummary.totalSavings)}</span>
+                                    </div>
+                                )}
+                                <div className="pt-2 border-t border-indigo-800/80 flex justify-between items-baseline">
+                                    <span className="font-bold text-xs uppercase tracking-wider text-indigo-300">Total Payable</span>
+                                    <div className="text-right">
+                                        <span className="text-2xl font-black font-mono text-white block">
+                                            {formatCurrency(pricingSummary.totalGross)}
+                                        </span>
+                                        <span className="text-[10px] text-indigo-300 font-normal">inc VAT</span>
+                                    </div>
+                                </div>
+                                <div className="text-[10px] text-indigo-300 flex justify-between pt-1 border-t border-indigo-900/60 font-mono">
+                                    <span>Net: {formatCurrency(pricingSummary.totalNet)}</span>
+                                    <span>VAT: {formatCurrency(pricingSummary.totalVat)}</span>
+                                    <span>{pricingSummary.totalHours.toFixed(1)}h</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* PERSISTENT ACTIONS: NEXT STEP / BACK / CANCEL */}
+                        <div className="pt-4 border-t border-slate-200 space-y-2 mt-4">
+                            {/* Primary Next Action */}
+                            {currentStep === 1 && (
+                                <button
+                                    type="button"
+                                    onClick={() => setCurrentStep(2)}
+                                    className="w-full py-3.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black text-sm shadow-md transition flex items-center justify-center gap-2"
+                                >
+                                    Proceed to Service Matching
+                                    <ArrowRight size={18} />
+                                </button>
+                            )}
+
+                            {currentStep === 2 && (
+                                <button
+                                    type="button"
+                                    onClick={() => setCurrentStep(3)}
+                                    className="w-full py-3.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black text-sm shadow-md transition flex items-center justify-center gap-2"
+                                >
+                                    Proceed to Upsells & Bundles
+                                    <ArrowRight size={18} />
+                                </button>
+                            )}
+
+                            {currentStep === 3 && (
+                                <button
+                                    type="button"
+                                    onClick={() => setCurrentStep(4)}
+                                    className="w-full py-3.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black text-sm shadow-md transition flex items-center justify-center gap-2"
+                                >
+                                    Proceed to Date & Capacity
+                                    <ArrowRight size={18} />
+                                </button>
+                            )}
+
+                            {currentStep === 4 && (
+                                <>
+                                    <button
+                                        type="button"
+                                        disabled={isSaving}
+                                        onClick={() => handleConfirmBooking('job')}
+                                        className="w-full py-3.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-black text-sm shadow-lg transition flex items-center justify-center gap-2 disabled:opacity-50"
+                                    >
+                                        <CheckCircle2 size={18} />
+                                        {isSaving ? 'Confirming...' : 'Confirm & Create Booking'}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        disabled={isSaving}
+                                        onClick={() => handleConfirmBooking('estimate')}
+                                        className="w-full py-2.5 px-4 border border-indigo-600 text-indigo-700 hover:bg-indigo-50 rounded-xl font-bold text-xs transition disabled:opacity-50"
+                                    >
+                                        Save as Formal Estimate
+                                    </button>
+                                </>
+                            )}
+
+                            {/* Back Navigation Button */}
+                            {currentStep > 1 && (
+                                <button
+                                    type="button"
+                                    onClick={() => setCurrentStep(prev => Math.max(1, prev - 1) as any)}
+                                    className="w-full py-2.5 px-4 border border-slate-300 text-slate-700 hover:bg-slate-100 rounded-xl font-bold text-xs transition flex items-center justify-center gap-1.5"
+                                >
+                                    <ChevronLeft size={16} />
+                                    Back to Step {currentStep - 1}
+                                </button>
+                            )}
+
+                            {/* PROMINENT CANCEL BUTTON */}
+                            <button
+                                type="button"
+                                onClick={onClose}
+                                className="w-full py-2 px-4 text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-xl font-bold text-xs transition flex items-center justify-center gap-1.5 border border-rose-200"
+                            >
+                                <X size={15} />
+                                Cancel Booking
+                            </button>
+                        </div>
+                    </aside>
                 </div>
             </div>
         </div>

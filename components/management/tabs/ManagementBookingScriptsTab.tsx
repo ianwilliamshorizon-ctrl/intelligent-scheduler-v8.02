@@ -451,3 +451,4 @@ export const ManagementBookingScriptsTab: React.FC<ManagementBookingScriptsTabPr
         </div>
     );
 };
+
