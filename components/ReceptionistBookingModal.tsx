@@ -4,18 +4,20 @@ import {
     Sparkles, ShieldCheck, ChevronRight, ChevronLeft, Plus, Copy, 
     CheckCircle2, AlertTriangle, ArrowRight, DollarSign, Wrench, 
     Volume2, CheckSquare, Square, Layers, Info, Headphones, UserPlus, Search,
-    CheckCircle, MessageSquare, Bell, FileText
+    CheckCircle, MessageSquare, Bell, FileText, Gauge, CalendarCheck, AlertCircle, RefreshCw
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { useData } from '../core/state/DataContext';
 import { useApp } from '../core/state/AppContext';
-import { Customer, Vehicle, ServicePackage, Job, Estimate, EstimateLineItem, TaxRate } from '../types';
-import { formatDate, getTodayISOString, getFutureDateISOString } from '../core/utils/dateUtils';
+import { Customer, Vehicle, ServicePackage, Job, Estimate, EstimateLineItem, TaxRate, JobSegment } from '../types';
+import { formatDate, getTodayISOString, getFutureDateISOString, dateStringToDate, addDays, splitJobIntoSegments, findNextAvailableDate, formatReadableDate } from '../core/utils/dateUtils';
 import { formatCurrency, formatTitleCase } from '../utils/formatUtils';
 import { generateEstimateNumber, generateJobId } from '../core/utils/numberGenerators';
 import { generateCustomerId, getCustomerDisplayName } from '../core/utils/customerUtils';
 import { lookupVehicleByVRM } from '../services/vehicleLookupService';
 import { lookupAddressByPostcode, AddressDetails } from '../services/postcodeLookupService';
+import { getScoredServicePackages } from '../utils/servicePackageScoring';
+import { CAPACITY_THRESHOLD_WARNING } from '../constants';
 
 export interface ReceptionistBookingModalProps {
     isOpen: boolean;
@@ -112,11 +114,11 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
     onEstimateCreate,
     onVehicleAndEstimateCreate
 }) => {
-    const { customers, vehicles, servicePackages, jobs, estimates, businessEntities, taxRates } = useData();
+    const { customers, vehicles, servicePackages, jobs, estimates, businessEntities, taxRates, absenceRequests } = useData();
     const { selectedEntityId, currentUser } = useApp();
 
     const selectedEntity = useMemo(() => 
-        businessEntities.find(e => e.id === selectedEntityId) || businessEntities[0] || { id: 'default', name: 'Brookspeed', shortCode: 'BRK', laborRate: 95 },
+        businessEntities.find(e => e.id === selectedEntityId) || businessEntities[0] || { id: 'default', name: 'Brookspeed', shortCode: 'BRK', laborRate: 95, dailyCapacityHours: 40 },
         [businessEntities, selectedEntityId]
     );
 
@@ -162,18 +164,23 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
     const [vehicleDetails, setVehicleDetails] = useState<Partial<Vehicle>>({});
     const [currentMileage, setCurrentMileage] = useState<number>(36000);
 
-    // Step 2: Service Matching State
-    const [selectedTier, setSelectedTier] = useState<'bronze' | 'silver' | 'gold'>('bronze');
+    // Step 2: Service Matching & DMS Catalogue State
+    const [serviceSourceTab, setServiceSourceTab] = useState<'tiered' | 'all-dms'>('tiered');
+    const [selectedTier, setSelectedTier] = useState<'bronze' | 'silver' | 'gold' | 'custom'>('bronze');
+    const [selectedCustomPackage, setSelectedCustomPackage] = useState<ServicePackage | null>(null);
+    const [packageSearchTerm, setPackageSearchTerm] = useState('');
 
     // Step 3: Bundle & Upsell State
     const [selectedAddonIds, setSelectedAddonIds] = useState<string[]>([]);
 
-    // Step 4: Booking Details State
+    // Step 4: Scheduler & Capacity State
     const [bookingDate, setBookingDate] = useState<string>(() => {
         const d = new Date();
         d.setDate(d.getDate() + 1);
         return formatDate(d);
     });
+    const [calendarDisplayMonth, setCalendarDisplayMonth] = useState<Date>(() => dateStringToDate(getTodayISOString()));
+    const [allowOverbooking, setAllowOverbooking] = useState(false);
     const [bookingNotes, setBookingNotes] = useState('');
     const [isSaving, setIsSaving] = useState(false);
     const [copiedScript, setCopiedScript] = useState<string | null>(null);
@@ -363,7 +370,14 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
         }
     };
 
-    // Service Tiers Definition with Baseline Matching
+    // =========================================================================
+    // 1. DMS SERVICE PACKAGE MATCHING ENGINE (Using Live DMS Database Packages)
+    // =========================================================================
+    const scoredPackages = useMemo(() => {
+        return getScoredServicePackages(servicePackages || [], activeVehicle);
+    }, [servicePackages, activeVehicle]);
+
+    // Service Tiers Definition (Matching Live DMS Packages first, falling back to Intelligent Baseline)
     const serviceTiers = useMemo(() => {
         const make = activeVehicle?.make || '';
         const cc = activeVehicle?.cc || 2000;
@@ -372,53 +386,97 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
         const engineFactor = cc > 3000 ? 1.35 : cc > 2000 ? 1.15 : 1.0;
         const brandFactor = isPremium ? 1.4 : 1.0;
 
-        const bronzeGross = Math.round(189 * engineFactor * brandFactor);
-        const silverGross = Math.round(299 * engineFactor * brandFactor);
-        const goldGross = Math.round(469 * engineFactor * brandFactor);
+        // Baseline formula defaults
+        const bronzeDefaultGross = Math.round(189 * engineFactor * brandFactor);
+        const silverDefaultGross = Math.round(299 * engineFactor * brandFactor);
+        const goldDefaultGross = Math.round(469 * engineFactor * brandFactor);
+
+        // Sort scored packages descending by vehicle score
+        const sorted = [...scoredPackages].sort((a, b) => b.score - a.score);
+        const clean = (s: string) => (s || '').toLowerCase();
+
+        const findMatchingDmsPackage = (terms: string[]) => {
+            // First try high vehicle match (score >= 2)
+            const scoredMatch = sorted.find(sp => sp.score >= 2 && terms.some(t => clean(sp.pkg.name || '').includes(t)));
+            if (scoredMatch) return scoredMatch.pkg;
+            // Next try any package matching terms
+            const genericMatch = sorted.find(sp => terms.some(t => clean(sp.pkg.name || '').includes(t)));
+            if (genericMatch) return genericMatch.pkg;
+            return (servicePackages || []).find(pkg => terms.some(t => clean(pkg.name || '').includes(t)));
+        };
+
+        const dmsMinor = findMatchingDmsPackage(['minor', 'bronze', 'oil service', 'oil & filter', 'interim inspection']);
+        const dmsInterim = findMatchingDmsPackage(['interim', 'silver', 'intermediate', 'maintenance', 'scheduled service']);
+        const dmsMajor = findMatchingDmsPackage(['major', 'gold', 'full service', 'comprehensive', 'inspection ii']);
+
+        const extractLaborHours = (pkg?: ServicePackage, fallback: number = 2.0) => {
+            if (!pkg?.costItems || pkg.costItems.length === 0) return fallback;
+            const laborSum = pkg.costItems
+                .filter(item => item.isLabor || item.type === 'labor' || item.partNumber === 'LABOUR' || /labour|labor/i.test(item.description || ''))
+                .reduce((sum, item) => sum + (Number(item.quantity) || 1), 0);
+            return laborSum > 0 ? laborSum : fallback;
+        };
+
+        const extractHighlights = (pkg?: ServicePackage, fallback: string[] = []): string[] => {
+            if (!pkg?.costItems || pkg.costItems.length === 0) {
+                if (pkg?.description) return [pkg.description];
+                return fallback;
+            }
+            return pkg.costItems.slice(0, 6).map(item => {
+                const qtyStr = item.quantity && item.quantity > 1 ? `${item.quantity}x ` : '';
+                return `${qtyStr}${item.description || item.partNumber || 'Service Item'}`;
+            });
+        };
 
         return {
             bronze: {
                 id: 'bronze',
-                name: 'Bronze (Minor Service)',
-                subtitle: 'Essential Care & Lubrication',
-                priceGross: bronzeGross,
-                hours: 1.5,
-                tag: 'Baseline Entry-Level',
-                tagColor: 'bg-amber-100 text-amber-900 border-amber-300',
-                highlights: [
+                name: dmsMinor?.name || 'Bronze (Minor Service)',
+                subtitle: dmsMinor ? `DMS Package #${dmsMinor.id} • Verified for ${activeVehicle.make || 'Vehicle'}` : 'Essential Care & Lubrication',
+                priceGross: dmsMinor?.totalPrice || bronzeDefaultGross,
+                hours: extractLaborHours(dmsMinor, 1.5),
+                tag: dmsMinor ? 'DMS Live Package' : 'Baseline Entry-Level',
+                tagColor: dmsMinor ? 'bg-emerald-100 text-emerald-950 border-emerald-400 font-bold' : 'bg-amber-100 text-amber-900 border-amber-300',
+                isDmsPackage: Boolean(dmsMinor),
+                dmsPackage: dmsMinor,
+                highlights: extractHighlights(dmsMinor, [
                     'Engine oil & premium OEM filter replacement',
                     'Essential fluid level top-ups (brake, coolant, washer)',
                     'Comprehensive 35-point safety inspection',
                     'Tyre pressure & tread depth inspection',
                     'Reset service interval indicator'
-                ]
+                ])
             },
             silver: {
                 id: 'silver',
-                name: 'Silver (Interim Service)',
-                subtitle: 'Bronze + Electrical, Brakes & Pollen Filter',
-                priceGross: silverGross,
-                hours: 2.5,
-                tag: 'Recommended (Most Popular)',
-                tagColor: 'bg-indigo-100 text-indigo-900 border-indigo-300',
-                highlights: [
+                name: dmsInterim?.name || 'Silver (Interim Service)',
+                subtitle: dmsInterim ? `DMS Package #${dmsInterim.id} • Verified for ${activeVehicle.make || 'Vehicle'}` : 'Bronze + Electrical, Brakes & Pollen Filter',
+                priceGross: dmsInterim?.totalPrice || silverDefaultGross,
+                hours: extractLaborHours(dmsInterim, 2.5),
+                tag: dmsInterim ? 'DMS Live Package' : 'Recommended (Most Popular)',
+                tagColor: dmsInterim ? 'bg-emerald-100 text-emerald-950 border-emerald-400 font-bold' : 'bg-indigo-100 text-indigo-900 border-indigo-300',
+                isDmsPackage: Boolean(dmsInterim),
+                dmsPackage: dmsInterim,
+                highlights: extractHighlights(dmsInterim, [
                     'All Bronze Minor Service items included',
                     'Wheels-off brake pad, disc & caliper inspection',
                     'Steering & suspension linkage condition check',
                     'Cabin pollen/microfilter replacement',
                     'Battery test & alternator charging rate check',
                     'Exhaust system & underbody structural inspection'
-                ]
+                ])
             },
             gold: {
                 id: 'gold',
-                name: 'Gold (Major Service)',
-                subtitle: 'Silver + Air Filter, Spark Plugs & Deep Inspection',
-                priceGross: goldGross,
-                hours: 4.0,
-                tag: 'Ultimate Protection',
-                tagColor: 'bg-yellow-100 text-yellow-900 border-yellow-400',
-                highlights: [
+                name: dmsMajor?.name || 'Gold (Major Service)',
+                subtitle: dmsMajor ? `DMS Package #${dmsMajor.id} • Verified for ${activeVehicle.make || 'Vehicle'}` : 'Silver + Air Filter, Spark Plugs & Deep Inspection',
+                priceGross: dmsMajor?.totalPrice || goldDefaultGross,
+                hours: extractLaborHours(dmsMajor, 4.0),
+                tag: dmsMajor ? 'DMS Live Package' : 'Ultimate Protection',
+                tagColor: dmsMajor ? 'bg-emerald-100 text-emerald-950 border-emerald-400 font-bold' : 'bg-yellow-100 text-yellow-900 border-yellow-400',
+                isDmsPackage: Boolean(dmsMajor),
+                dmsPackage: dmsMajor,
+                highlights: extractHighlights(dmsMajor, [
                     'All Bronze & Silver Service items included',
                     'Engine air filter element replacement',
                     activeVehicle?.fuelType?.toLowerCase().includes('diesel') 
@@ -428,12 +486,35 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                     'Coolant hydrometer freeze-point inspection',
                     'Auxiliary drive belt tension & wear check',
                     'Diagnostic fault code memory scan & health report'
-                ]
+                ])
             }
         };
-    }, [activeVehicle]);
+    }, [activeVehicle, scoredPackages, servicePackages]);
 
-    const currentTierData = serviceTiers[selectedTier];
+    // Active selected tier or custom DMS package
+    const currentTierData = useMemo(() => {
+        if (selectedTier === 'custom' && selectedCustomPackage) {
+            const laborHours = (selectedCustomPackage.costItems || [])
+                .filter(item => item.isLabor || item.type === 'labor' || /labour|labor/i.test(item.description || ''))
+                .reduce((sum, item) => sum + (Number(item.quantity) || 1), 0) || 2.0;
+
+            const highlights = (selectedCustomPackage.costItems || []).map(i => `${i.quantity && i.quantity > 1 ? `${i.quantity}x ` : ''}${i.description}`);
+
+            return {
+                id: 'custom',
+                name: selectedCustomPackage.name || 'Custom Package',
+                subtitle: selectedCustomPackage.description || `DMS Package #${selectedCustomPackage.id}`,
+                priceGross: selectedCustomPackage.totalPrice || 250,
+                hours: laborHours,
+                tag: 'DMS Catalogue Package',
+                tagColor: 'bg-emerald-100 text-emerald-950 border-emerald-400 font-bold',
+                isDmsPackage: true,
+                dmsPackage: selectedCustomPackage,
+                highlights: highlights.length > 0 ? highlights : [selectedCustomPackage.description || 'Full Workshop Service Package']
+            };
+        }
+        return serviceTiers[selectedTier as 'bronze' | 'silver' | 'gold'] || serviceTiers.bronze;
+    }, [selectedTier, selectedCustomPackage, serviceTiers]);
 
     const activeAddons = useMemo(() => 
         BUNDLE_ADDONS.filter(addon => selectedAddonIds.includes(addon.id)),
@@ -477,6 +558,94 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
             prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
         );
     };
+
+    // =========================================================================
+    // 2. WORKSHOP SCHEDULER & CAPACITY INTEGRATION
+    // =========================================================================
+    const absencesByDate = useMemo(() => {
+        const map = new Map<string, number>();
+        (absenceRequests || []).forEach(req => {
+            const reqAsAny = req as any;
+            if (reqAsAny.status === 'Approved' || reqAsAny.status === 'Pending') {
+                let currentDate = dateStringToDate(reqAsAny.startDate);
+                const endDate = dateStringToDate(reqAsAny.endDate);
+                while(currentDate <= endDate) {
+                    const dateStr = formatDate(currentDate);
+                    map.set(dateStr, (map.get(dateStr) || 0) + 8);
+                    currentDate = addDays(currentDate, 1);
+                }
+            }
+        });
+        return map;
+    }, [absenceRequests]);
+
+    const jobsForEntity = useMemo(() => {
+        return (jobs || []).filter(j => j.entityId === selectedEntity.id);
+    }, [jobs, selectedEntity]);
+
+    const maxDailyCapacity = useMemo(() => {
+        return (selectedEntity as any)?.dailyCapacityHours || 40;
+    }, [selectedEntity]);
+
+    // Capacity breakdown helper for any date
+    const getCapacityForDate = (dateStr: string, addedHours: number = 0) => {
+        const absenceHours = absencesByDate.get(dateStr) || 0;
+        const effectiveCapacity = Math.max(0, maxDailyCapacity - absenceHours);
+
+        const currentBookedHours = (jobsForEntity.flatMap(j => Array.isArray(j.segments) ? j.segments : []))
+            .filter(s => s.date === dateStr && s.status !== 'Cancelled')
+            .reduce((sum, s) => sum + (Number(s.duration) || 0), 0);
+
+        const targetDateObj = dateStringToDate(dateStr);
+        const dayOfWeek = targetDateObj.getUTCDay();
+        const isSunday = dayOfWeek === 0;
+        const isSaturday = dayOfWeek === 6;
+
+        const projectedHours = currentBookedHours + addedHours;
+        const remainingCapacity = Math.max(0, effectiveCapacity - projectedHours);
+        const loadRatio = effectiveCapacity > 0 ? (currentBookedHours + addedHours) / effectiveCapacity : (projectedHours > 0 ? 1.5 : 0);
+
+        let status: 'Normal' | 'High Load' | 'Overloaded' | 'Closed' = 'Normal';
+        let badgeColor = 'bg-emerald-100 text-emerald-800 border-emerald-300';
+
+        if (isSunday) {
+            status = 'Closed';
+            badgeColor = 'bg-slate-100 text-slate-500 border-slate-200';
+        } else if (loadRatio > 1.0) {
+            status = 'Overloaded';
+            badgeColor = 'bg-rose-100 text-rose-800 border-rose-300';
+        } else if (loadRatio >= CAPACITY_THRESHOLD_WARNING) {
+            status = 'High Load';
+            badgeColor = 'bg-amber-100 text-amber-800 border-amber-300';
+        }
+
+        return {
+            dateStr,
+            currentBookedHours,
+            projectedHours,
+            effectiveCapacity,
+            remainingCapacity,
+            absenceHours,
+            loadRatio,
+            status,
+            badgeColor,
+            isWeekend: isSunday || isSaturday,
+            isClosed: isSunday
+        };
+    };
+
+    // Selected Date Live Capacity Metrics
+    const selectedDateCapacity = useMemo(() => {
+        return getCapacityForDate(bookingDate, pricingSummary.totalHours);
+    }, [bookingDate, pricingSummary.totalHours, jobsForEntity, maxDailyCapacity, absencesByDate]);
+
+    // Next Available Date Suggestion if current date is full
+    const suggestedNextAvailableDate = useMemo(() => {
+        if (selectedDateCapacity.status === 'Overloaded' || selectedDateCapacity.isClosed) {
+            return findNextAvailableDate(bookingDate, pricingSummary.totalHours, jobsForEntity, maxDailyCapacity, absencesByDate);
+        }
+        return null;
+    }, [selectedDateCapacity, bookingDate, pricingSummary.totalHours, jobsForEntity, maxDailyCapacity, absencesByDate]);
 
     // Step 4: Submission Handlers
     const handleConfirmBooking = async (createMode: 'job' | 'estimate') => {
@@ -573,19 +742,43 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                 };
             }
 
+            // Capacity & Overbooking check
+            if (createMode === 'job') {
+                if (selectedDateCapacity.isClosed) {
+                    toast.error(`The workshop is closed on ${formatReadableDate(bookingDate)}. Please choose another working day.`);
+                    setIsSaving(false);
+                    return;
+                }
+                if (selectedDateCapacity.status === 'Overloaded' && !allowOverbooking) {
+                    toast.error(`Workshop is overloaded on ${formatReadableDate(bookingDate)} (+${(selectedDateCapacity.projectedHours - selectedDateCapacity.effectiveCapacity).toFixed(1)}h over limit). Please tick "Authorize Workshop Overtime" or pick an alternative date.`);
+                    setIsSaving(false);
+                    return;
+                }
+            }
+
             // Build Line Items
             const lineItems: EstimateLineItem[] = [];
 
-            // 1. Baseline Service Tier Line Item
-            lineItems.push({
-                id: crypto.randomUUID(),
-                description: `${currentTierData.name} - ${finalVehicle.make} ${finalVehicle.model}`,
-                quantity: currentTierData.hours,
-                unitPrice: Math.round((currentTierData.priceGross / (1 + (standardTaxRate / 100)) / currentTierData.hours) * 100) / 100,
-                isLabor: true,
-                isPackage: true,
-                servicePackageName: currentTierData.name
-            });
+            // 1. DMS Package Cost Items OR Baseline Service Tier Line Item
+            if (currentTierData.dmsPackage?.costItems && currentTierData.dmsPackage.costItems.length > 0) {
+                currentTierData.dmsPackage.costItems.forEach(item => {
+                    lineItems.push({
+                        ...item,
+                        id: crypto.randomUUID(),
+                        servicePackageName: currentTierData.name
+                    });
+                });
+            } else {
+                lineItems.push({
+                    id: crypto.randomUUID(),
+                    description: `${currentTierData.name} - ${finalVehicle.make} ${finalVehicle.model}`,
+                    quantity: currentTierData.hours,
+                    unitPrice: Math.round((currentTierData.priceGross / (1 + (standardTaxRate / 100)) / currentTierData.hours) * 100) / 100,
+                    isLabor: true,
+                    isPackage: true,
+                    servicePackageName: currentTierData.name
+                });
+            }
 
             // 2. Bundled Addons
             activeAddons.forEach(addon => {
@@ -618,9 +811,15 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                 createdByUserId: currentUser.id
             };
 
-            // If Job Mode, Create Job
+            // If Job Mode, Create Job with Real Scheduler Segments
             if (createMode === 'job') {
                 const newJobId = generateJobId(jobs, entityShortCode);
+                let finalNotes = bookingNotes;
+                if (selectedDateCapacity.status === 'Overloaded' && allowOverbooking) {
+                    const overbookTag = `[Overbooked - Workshop Overtime Authorized for ${formatReadableDate(bookingDate)}]`;
+                    finalNotes = finalNotes ? `${finalNotes}\n\n${overbookTag}` : overbookTag;
+                }
+
                 const newJob: Job = {
                     id: newJobId,
                     entityId: selectedEntity.id,
@@ -633,17 +832,24 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                     createdAt: getTodayISOString(),
                     createdByUserId: currentUser.id,
                     estimateId: newEstimate.id,
-                    notes: bookingNotes,
+                    notes: finalNotes,
                     mileage: currentMileage,
                     segments: []
                 };
+
+                // Split into segments so the job immediately populates onto the Booking Calendar and Dispatch views
+                newJob.segments = splitJobIntoSegments({
+                    description: newJob.description,
+                    estimatedHours: newJob.estimatedHours,
+                    scheduledDate: newJob.scheduledDate
+                });
 
                 if (isNewVehicle && onVehicleAndJobCreate) {
                     onVehicleAndJobCreate(finalCustomer, finalVehicle, newJob, newEstimate);
                 } else if (onJobCreate) {
                     onJobCreate(newJob, newEstimate);
                 }
-                toast.success(`Booking confirmed for ${bookingDate}! Job ${newJobId} created.`);
+                toast.success(`Booking confirmed for ${formatReadableDate(bookingDate)}! Job ${newJobId} created and scheduled.`);
             } else {
                 if (isNewVehicle && onVehicleAndEstimateCreate) {
                     onVehicleAndEstimateCreate(finalCustomer, finalVehicle, newEstimate);
@@ -660,6 +866,49 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
         } finally {
             setIsSaving(false);
         }
+    };
+
+    // Calendar Days Generator for Step 4 Interactive Capacity Calendar
+    const calendarMonthDays = useMemo(() => {
+        const start = new Date(Date.UTC(calendarDisplayMonth.getUTCFullYear(), calendarDisplayMonth.getUTCMonth(), 1));
+        const end = new Date(Date.UTC(calendarDisplayMonth.getUTCFullYear(), calendarDisplayMonth.getUTCMonth() + 1, 0));
+        const todayStr = formatDate(new Date());
+
+        const days: Array<{ key: string; isPlaceholder: boolean; day?: number; dateStr?: string; isToday?: boolean; isSelected?: boolean; capInfo?: any }> = [];
+
+        // Empty start padding
+        for (let i = 0; i < start.getUTCDay(); i++) {
+            days.push({ key: `empty-start-${i}`, isPlaceholder: true });
+        }
+
+        for (let day = 1; day <= end.getUTCDate(); day++) {
+            const d = new Date(Date.UTC(calendarDisplayMonth.getUTCFullYear(), calendarDisplayMonth.getUTCMonth(), day));
+            const dateStr = formatDate(d);
+            const capInfo = getCapacityForDate(dateStr, dateStr === bookingDate ? pricingSummary.totalHours : 0);
+            days.push({
+                key: dateStr,
+                isPlaceholder: false,
+                day,
+                dateStr,
+                isToday: dateStr === todayStr,
+                isSelected: dateStr === bookingDate,
+                capInfo
+            });
+        }
+
+        while (days.length % 7 !== 0) {
+            days.push({ key: `empty-end-${days.length}`, isPlaceholder: true });
+        }
+
+        return days;
+    }, [calendarDisplayMonth, bookingDate, pricingSummary.totalHours, jobsForEntity, maxDailyCapacity, absencesByDate]);
+
+    const handleMonthOffset = (offset: number) => {
+        setCalendarDisplayMonth(prev => {
+            const next = new Date(Date.UTC(prev.getUTCFullYear(), prev.getUTCMonth(), 1));
+            next.setUTCMonth(next.getUTCMonth() + offset);
+            return next;
+        });
     };
 
     if (!isOpen) return null;
@@ -1259,167 +1508,278 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                                 </div>
                             )}
 
-                            {/* TIER CARDS: BRONZE -> SILVER -> GOLD (LARGER CARD PADDING & FONTS) */}
+                            {/* SERVICE SOURCE SELECTION TABS: RECOMMENDED TIERS VS LIVE DMS CATALOGUE */}
                             <div>
-                                <div className="flex items-center justify-between mb-5">
-                                    <h3 className="font-black text-slate-900 text-xl flex items-center gap-3">
-                                        <Layers size={24} className="text-indigo-600" />
-                                        Vehicle-Specific Service Packages
-                                    </h3>
-                                    <span className="text-sm text-slate-500 font-medium">
-                                        Matched for: <strong>{activeVehicle.make || 'Vehicle'} {activeVehicle.model || ''}</strong>
-                                    </span>
+                                <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2.5 bg-indigo-100 text-indigo-700 rounded-xl">
+                                            <Layers size={22} />
+                                        </div>
+                                        <div>
+                                            <h3 className="font-black text-slate-900 text-xl">Service Packages Selection</h3>
+                                            <span className="text-xs text-slate-500">
+                                                Matched for: <strong className="text-slate-800">{activeVehicle.make || 'Vehicle'} {activeVehicle.model || ''}</strong>
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex bg-slate-200/80 p-1.5 rounded-2xl border border-slate-300 shadow-inner">
+                                        <button
+                                            type="button"
+                                            onClick={() => setServiceSourceTab('tiered')}
+                                            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+                                                serviceSourceTab === 'tiered'
+                                                    ? 'bg-white text-indigo-950 shadow-sm'
+                                                    : 'text-slate-600 hover:text-slate-900'
+                                            }`}
+                                        >
+                                            <Sparkles size={15} />
+                                            Recommended Tiers
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setServiceSourceTab('all-dms')}
+                                            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+                                                serviceSourceTab === 'all-dms'
+                                                    ? 'bg-white text-indigo-950 shadow-sm'
+                                                    : 'text-slate-600 hover:text-slate-900'
+                                            }`}
+                                        >
+                                            <Wrench size={15} />
+                                            All Workshop Packages ({servicePackages.length})
+                                        </button>
+                                    </div>
                                 </div>
 
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                                    {/* BRONZE */}
-                                    <div 
-                                        onClick={() => setSelectedTier('bronze')}
-                                        className={`rounded-3xl p-6 border-2 cursor-pointer transition-all flex flex-col justify-between ${
-                                            selectedTier === 'bronze' 
-                                                ? 'border-amber-500 bg-amber-50/50 shadow-xl ring-4 ring-amber-400/20' 
-                                                : 'border-slate-200 bg-white hover:border-slate-300'
-                                        }`}
-                                    >
-                                        <div>
-                                            <div className="flex items-center justify-between mb-2">
-                                                <span className={`text-xs font-black uppercase px-2.5 py-1 rounded-md border ${serviceTiers.bronze.tagColor}`}>
-                                                    {serviceTiers.bronze.tag}
-                                                </span>
-                                                <span className="text-xs text-slate-400 font-bold">{serviceTiers.bronze.hours} hrs</span>
-                                            </div>
-                                            <h4 className="font-black text-xl text-slate-900 mt-2">{serviceTiers.bronze.name}</h4>
-                                            <p className="text-xs text-slate-500 mb-5">{serviceTiers.bronze.subtitle}</p>
-                                            
-                                            <div className="text-3xl font-black text-slate-900 mb-5 font-mono">
-                                                {formatCurrency(serviceTiers.bronze.priceGross)}
-                                                <span className="text-xs font-normal text-slate-500 ml-1.5">inc VAT</span>
-                                            </div>
-
-                                            <div className="space-y-2.5 text-sm text-slate-700">
-                                                {serviceTiers.bronze.highlights.map((h, i) => (
-                                                    <div key={i} className="flex items-start gap-2.5">
-                                                        <Check size={16} className="text-amber-600 mt-0.5 flex-shrink-0" />
-                                                        <span>{h}</span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-
-                                        <button 
-                                            type="button"
-                                            className={`mt-8 w-full py-3 rounded-xl text-sm font-black transition ${
+                                {serviceSourceTab === 'tiered' ? (
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                                        {/* BRONZE */}
+                                        <div 
+                                            onClick={() => {
+                                                setSelectedTier('bronze');
+                                                setSelectedCustomPackage(null);
+                                            }}
+                                            className={`rounded-3xl p-6 border-2 cursor-pointer transition-all flex flex-col justify-between ${
                                                 selectedTier === 'bronze' 
-                                                    ? 'bg-amber-500 text-white shadow-md' 
-                                                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                                                    ? 'border-amber-500 bg-amber-50/50 shadow-xl ring-4 ring-amber-400/20' 
+                                                    : 'border-slate-200 bg-white hover:border-slate-300'
                                             }`}
                                         >
-                                            {selectedTier === 'bronze' ? 'Selected Package' : 'Select Bronze'}
-                                        </button>
-                                    </div>
+                                            <div>
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <span className={`text-[11px] font-black uppercase px-2.5 py-1 rounded-md border ${serviceTiers.bronze.tagColor}`}>
+                                                        {serviceTiers.bronze.tag}
+                                                    </span>
+                                                    <span className="text-xs text-slate-500 font-bold">{serviceTiers.bronze.hours} hrs</span>
+                                                </div>
+                                                <h4 className="font-black text-xl text-slate-900 mt-2">{serviceTiers.bronze.name}</h4>
+                                                <p className="text-xs text-slate-500 mb-5">{serviceTiers.bronze.subtitle}</p>
+                                                
+                                                <div className="text-3xl font-black text-slate-900 mb-5 font-mono">
+                                                    {formatCurrency(serviceTiers.bronze.priceGross)}
+                                                    <span className="text-xs font-normal text-slate-500 ml-1.5">inc VAT</span>
+                                                </div>
 
-                                    {/* SILVER */}
-                                    <div 
-                                        onClick={() => setSelectedTier('silver')}
-                                        className={`rounded-3xl p-6 border-2 cursor-pointer transition-all flex flex-col justify-between relative ${
-                                            selectedTier === 'silver' 
-                                                ? 'border-indigo-600 bg-indigo-50/50 shadow-xl ring-4 ring-indigo-500/20' 
-                                                : 'border-slate-200 bg-white hover:border-slate-300'
-                                        }`}
-                                    >
-                                        {recommendedTier === 'silver' && (
-                                            <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-indigo-600 text-white text-xs font-black uppercase px-4 py-1 rounded-full shadow-md">
-                                                Recommended for Mileage
-                                            </span>
-                                        )}
-                                        <div>
-                                            <div className="flex items-center justify-between mb-2">
-                                                <span className={`text-xs font-black uppercase px-2.5 py-1 rounded-md border ${serviceTiers.silver.tagColor}`}>
-                                                    {serviceTiers.silver.tag}
-                                                </span>
-                                                <span className="text-xs text-slate-400 font-bold">{serviceTiers.silver.hours} hrs</span>
-                                            </div>
-                                            <h4 className="font-black text-xl text-slate-900 mt-2">{serviceTiers.silver.name}</h4>
-                                            <p className="text-xs text-slate-500 mb-5">{serviceTiers.silver.subtitle}</p>
-                                            
-                                            <div className="text-3xl font-black text-indigo-950 mb-5 font-mono">
-                                                {formatCurrency(serviceTiers.silver.priceGross)}
-                                                <span className="text-xs font-normal text-slate-500 ml-1.5">inc VAT</span>
+                                                <div className="space-y-2.5 text-sm text-slate-700">
+                                                    {serviceTiers.bronze.highlights.map((h, i) => (
+                                                        <div key={i} className="flex items-start gap-2.5">
+                                                            <Check size={16} className="text-amber-600 mt-0.5 flex-shrink-0" />
+                                                            <span>{h}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
                                             </div>
 
-                                            <div className="space-y-2.5 text-sm text-slate-700">
-                                                {serviceTiers.silver.highlights.map((h, i) => (
-                                                    <div key={i} className="flex items-start gap-2.5">
-                                                        <Check size={16} className="text-indigo-600 mt-0.5 flex-shrink-0" />
-                                                        <span>{h}</span>
-                                                    </div>
-                                                ))}
-                                            </div>
+                                            <button 
+                                                type="button"
+                                                className={`mt-8 w-full py-3 rounded-xl text-sm font-black transition ${
+                                                    selectedTier === 'bronze' 
+                                                        ? 'bg-amber-500 text-white shadow-md' 
+                                                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                                                }`}
+                                            >
+                                                {selectedTier === 'bronze' ? 'Selected Package' : 'Select Bronze'}
+                                            </button>
                                         </div>
 
-                                        <button 
-                                            type="button"
-                                            className={`mt-8 w-full py-3 rounded-xl text-sm font-black transition ${
+                                        {/* SILVER */}
+                                        <div 
+                                            onClick={() => {
+                                                setSelectedTier('silver');
+                                                setSelectedCustomPackage(null);
+                                            }}
+                                            className={`rounded-3xl p-6 border-2 cursor-pointer transition-all flex flex-col justify-between relative ${
                                                 selectedTier === 'silver' 
-                                                    ? 'bg-indigo-600 text-white shadow-md' 
-                                                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                                                    ? 'border-indigo-600 bg-indigo-50/50 shadow-xl ring-4 ring-indigo-500/20' 
+                                                    : 'border-slate-200 bg-white hover:border-slate-300'
                                             }`}
                                         >
-                                            {selectedTier === 'silver' ? 'Selected Package' : 'Select Silver'}
-                                        </button>
-                                    </div>
-
-                                    {/* GOLD */}
-                                    <div 
-                                        onClick={() => setSelectedTier('gold')}
-                                        className={`rounded-3xl p-6 border-2 cursor-pointer transition-all flex flex-col justify-between relative ${
-                                            selectedTier === 'gold' 
-                                                ? 'border-yellow-500 bg-yellow-50/50 shadow-xl ring-4 ring-yellow-400/20' 
-                                                : 'border-slate-200 bg-white hover:border-slate-300'
-                                        }`}
-                                    >
-                                        {recommendedTier === 'gold' && (
-                                            <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-amber-600 text-white text-xs font-black uppercase px-4 py-1 rounded-full shadow-md">
-                                                Due by Age/Mileage
-                                            </span>
-                                        )}
-                                        <div>
-                                            <div className="flex items-center justify-between mb-2">
-                                                <span className={`text-xs font-black uppercase px-2.5 py-1 rounded-md border ${serviceTiers.gold.tagColor}`}>
-                                                    {serviceTiers.gold.tag}
+                                            {recommendedTier === 'silver' && (
+                                                <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-indigo-600 text-white text-xs font-black uppercase px-4 py-1 rounded-full shadow-md">
+                                                    Recommended for Mileage
                                                 </span>
-                                                <span className="text-xs text-slate-400 font-bold">{serviceTiers.gold.hours} hrs</span>
-                                            </div>
-                                            <h4 className="font-black text-xl text-slate-900 mt-2">{serviceTiers.gold.name}</h4>
-                                            <p className="text-xs text-slate-500 mb-5">{serviceTiers.gold.subtitle}</p>
-                                            
-                                            <div className="text-3xl font-black text-slate-900 mb-5 font-mono">
-                                                {formatCurrency(serviceTiers.gold.priceGross)}
-                                                <span className="text-xs font-normal text-slate-500 ml-1.5">inc VAT</span>
+                                            )}
+                                            <div>
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <span className={`text-[11px] font-black uppercase px-2.5 py-1 rounded-md border ${serviceTiers.silver.tagColor}`}>
+                                                        {serviceTiers.silver.tag}
+                                                    </span>
+                                                    <span className="text-xs text-slate-500 font-bold">{serviceTiers.silver.hours} hrs</span>
+                                                </div>
+                                                <h4 className="font-black text-xl text-slate-900 mt-2">{serviceTiers.silver.name}</h4>
+                                                <p className="text-xs text-slate-500 mb-5">{serviceTiers.silver.subtitle}</p>
+                                                
+                                                <div className="text-3xl font-black text-indigo-950 mb-5 font-mono">
+                                                    {formatCurrency(serviceTiers.silver.priceGross)}
+                                                    <span className="text-xs font-normal text-slate-500 ml-1.5">inc VAT</span>
+                                                </div>
+
+                                                <div className="space-y-2.5 text-sm text-slate-700">
+                                                    {serviceTiers.silver.highlights.map((h, i) => (
+                                                        <div key={i} className="flex items-start gap-2.5">
+                                                            <Check size={16} className="text-indigo-600 mt-0.5 flex-shrink-0" />
+                                                            <span>{h}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
                                             </div>
 
-                                            <div className="space-y-2.5 text-sm text-slate-700">
-                                                {serviceTiers.gold.highlights.map((h, i) => (
-                                                    <div key={i} className="flex items-start gap-2.5">
-                                                        <Check size={16} className="text-yellow-600 mt-0.5 flex-shrink-0" />
-                                                        <span>{h}</span>
-                                                    </div>
-                                                ))}
-                                            </div>
+                                            <button 
+                                                type="button"
+                                                className={`mt-8 w-full py-3 rounded-xl text-sm font-black transition ${
+                                                    selectedTier === 'silver' 
+                                                        ? 'bg-indigo-600 text-white shadow-md' 
+                                                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                                                }`}
+                                            >
+                                                {selectedTier === 'silver' ? 'Selected Package' : 'Select Silver'}
+                                            </button>
                                         </div>
 
-                                        <button 
-                                            type="button"
-                                            className={`mt-8 w-full py-3 rounded-xl text-sm font-black transition ${
+                                        {/* GOLD */}
+                                        <div 
+                                            onClick={() => {
+                                                setSelectedTier('gold');
+                                                setSelectedCustomPackage(null);
+                                            }}
+                                            className={`rounded-3xl p-6 border-2 cursor-pointer transition-all flex flex-col justify-between relative ${
                                                 selectedTier === 'gold' 
-                                                    ? 'bg-amber-500 text-white shadow-md' 
-                                                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                                                    ? 'border-yellow-500 bg-yellow-50/50 shadow-xl ring-4 ring-yellow-400/20' 
+                                                    : 'border-slate-200 bg-white hover:border-slate-300'
                                             }`}
                                         >
-                                            {selectedTier === 'gold' ? 'Selected Package' : 'Select Gold'}
-                                        </button>
+                                            {recommendedTier === 'gold' && (
+                                                <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-amber-600 text-white text-xs font-black uppercase px-4 py-1 rounded-full shadow-md">
+                                                    Due by Age/Mileage
+                                                </span>
+                                            )}
+                                            <div>
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <span className={`text-[11px] font-black uppercase px-2.5 py-1 rounded-md border ${serviceTiers.gold.tagColor}`}>
+                                                        {serviceTiers.gold.tag}
+                                                    </span>
+                                                    <span className="text-xs text-slate-500 font-bold">{serviceTiers.gold.hours} hrs</span>
+                                                </div>
+                                                <h4 className="font-black text-xl text-slate-900 mt-2">{serviceTiers.gold.name}</h4>
+                                                <p className="text-xs text-slate-500 mb-5">{serviceTiers.gold.subtitle}</p>
+                                                
+                                                <div className="text-3xl font-black text-slate-900 mb-5 font-mono">
+                                                    {formatCurrency(serviceTiers.gold.priceGross)}
+                                                    <span className="text-xs font-normal text-slate-500 ml-1.5">inc VAT</span>
+                                                </div>
+
+                                                <div className="space-y-2.5 text-sm text-slate-700">
+                                                    {serviceTiers.gold.highlights.map((h, i) => (
+                                                        <div key={i} className="flex items-start gap-2.5">
+                                                            <Check size={16} className="text-yellow-600 mt-0.5 flex-shrink-0" />
+                                                            <span>{h}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+
+                                            <button 
+                                                type="button"
+                                                className={`mt-8 w-full py-3 rounded-xl text-sm font-black transition ${
+                                                    selectedTier === 'gold' 
+                                                        ? 'bg-amber-500 text-white shadow-md' 
+                                                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                                                }`}
+                                            >
+                                                {selectedTier === 'gold' ? 'Selected Package' : 'Select Gold'}
+                                            </button>
+                                        </div>
                                     </div>
-                                </div>
+                                ) : (
+                                    /* BROWSE ALL DMS PACKAGES CATALOGUE */
+                                    <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-4">
+                                        <div className="flex items-center justify-between gap-4">
+                                            <div className="relative flex-1">
+                                                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                                                <input 
+                                                    type="text" 
+                                                    placeholder="Search all workshop packages by name, make, model..."
+                                                    value={packageSearchTerm}
+                                                    onChange={e => setPackageSearchTerm(e.target.value)}
+                                                    className="w-full pl-11 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                                                />
+                                            </div>
+                                            <span className="text-xs font-bold text-slate-500 whitespace-nowrap">
+                                                Showing {scoredPackages.filter(sp => !packageSearchTerm || (sp.pkg.name || '').toLowerCase().includes(packageSearchTerm.toLowerCase())).length} Packages
+                                            </span>
+                                        </div>
+
+                                        <div className="divide-y divide-slate-100 max-h-96 overflow-y-auto border border-slate-200 rounded-2xl">
+                                            {scoredPackages
+                                                .filter(sp => !packageSearchTerm || (sp.pkg.name || '').toLowerCase().includes(packageSearchTerm.toLowerCase()))
+                                                .map(({ pkg, score, matchType, color }) => {
+                                                    const isSelected = selectedTier === 'custom' && selectedCustomPackage?.id === pkg.id;
+                                                    return (
+                                                        <div 
+                                                            key={pkg.id}
+                                                            onClick={() => {
+                                                                setSelectedCustomPackage(pkg);
+                                                                setSelectedTier('custom');
+                                                            }}
+                                                            className={`p-4 flex flex-wrap items-center justify-between gap-4 cursor-pointer hover:bg-indigo-50/60 transition ${
+                                                                isSelected ? 'bg-indigo-50/90 border-l-4 border-indigo-600' : ''
+                                                            }`}
+                                                        >
+                                                            <div className="flex-1 min-w-[200px]">
+                                                                <div className="flex items-center gap-2 mb-1">
+                                                                    <h4 className="font-bold text-slate-900 text-sm">{pkg.name}</h4>
+                                                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${color}`}>
+                                                                        {matchType}
+                                                                    </span>
+                                                                </div>
+                                                                <p className="text-xs text-slate-500 line-clamp-1">{pkg.description || 'Full Workshop Service Package'}</p>
+                                                                <div className="text-[11px] text-slate-400 mt-1">
+                                                                    {pkg.costItems?.length ? `${pkg.costItems.length} cost items included` : 'Package flat rate'} • Bay: {pkg.applicableMake || 'All Makes'}
+                                                                </div>
+                                                            </div>
+
+                                                            <div className="flex items-center gap-4">
+                                                                <div className="text-right">
+                                                                    <span className="text-lg font-black text-slate-900 font-mono block">
+                                                                        {formatCurrency(pkg.totalPrice || 0)}
+                                                                    </span>
+                                                                    <span className="text-[10px] text-slate-400">inc VAT</span>
+                                                                </div>
+                                                                <button
+                                                                    type="button"
+                                                                    className={`px-4 py-2 rounded-xl text-xs font-bold transition ${
+                                                                        isSelected ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                                                                    }`}
+                                                                >
+                                                                    {isSelected ? 'Selected' : 'Select'}
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
                             {/* NAVIGATION BUTTONS */}
@@ -1727,21 +2087,263 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                                     </table>
                                 </div>
 
-                                {/* Booking Scheduling Date & Notes */}
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 pt-2">
-                                    <div>
-                                        <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-2">
-                                            <Calendar size={16} className="text-indigo-600" />
-                                            Scheduled Booking Date *
-                                        </label>
-                                        <input 
-                                            type="date"
-                                            value={bookingDate}
-                                            onChange={e => setBookingDate(e.target.value)}
-                                            className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-indigo-500 outline-none"
-                                        />
+                                {/* ======================================================== */}
+                                {/* WORKSHOP SCHEDULER & FINITE CAPACITY ENGINE INTEGRATION */}
+                                {/* ======================================================== */}
+                                <div className="mt-6 pt-5 border-t border-slate-200 space-y-5">
+                                    <div className="flex flex-wrap items-center justify-between gap-4">
+                                        <div className="flex items-center gap-2.5">
+                                            <div className="p-2 bg-indigo-100 text-indigo-700 rounded-xl">
+                                                <Gauge size={22} />
+                                            </div>
+                                            <div>
+                                                <h4 className="font-bold text-slate-900 text-base">Workshop Capacity & Schedule Planning</h4>
+                                                <p className="text-xs text-slate-500">
+                                                    Live booking against {selectedEntity.name} ({maxDailyCapacity}h standard daily capacity)
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs font-bold text-slate-500">Selected Date:</span>
+                                            <span className="px-3 py-1 bg-indigo-50 border border-indigo-200 rounded-xl font-bold text-xs text-indigo-950 font-mono">
+                                                {formatReadableDate(bookingDate)}
+                                            </span>
+                                        </div>
                                     </div>
-                                    <div>
+
+                                    {/* INTERACTIVE WORKSHOP CALENDAR & CAPACITY STATUS */}
+                                    <div className="bg-slate-50/80 rounded-3xl p-5 border border-slate-200">
+                                        <div className="flex items-center justify-between mb-4">
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleMonthOffset(-1)}
+                                                    className="p-1.5 rounded-lg bg-white border border-slate-300 text-slate-700 hover:bg-slate-100"
+                                                    title="Previous Month"
+                                                >
+                                                    <ChevronLeft size={16} />
+                                                </button>
+                                                <h5 className="font-black text-slate-800 text-sm tracking-wide">
+                                                    {calendarDisplayMonth.toLocaleString('default', { month: 'long', year: 'numeric', timeZone: 'UTC' })}
+                                                </h5>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleMonthOffset(1)}
+                                                    className="p-1.5 rounded-lg bg-white border border-slate-300 text-slate-700 hover:bg-slate-100"
+                                                    title="Next Month"
+                                                >
+                                                    <ChevronRight size={16} />
+                                                </button>
+                                            </div>
+
+                                            <div className="flex items-center gap-3 text-[11px] font-bold">
+                                                <span className="flex items-center gap-1 text-emerald-700">
+                                                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span> Available
+                                                </span>
+                                                <span className="flex items-center gap-1 text-amber-700">
+                                                    <span className="w-2 h-2 rounded-full bg-amber-500"></span> Busy (&gt;80%)
+                                                </span>
+                                                <span className="flex items-center gap-1 text-rose-700">
+                                                    <span className="w-2 h-2 rounded-full bg-rose-500"></span> Full
+                                                </span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const today = new Date();
+                                                        setCalendarDisplayMonth(new Date(Date.UTC(today.getFullYear(), today.getMonth(), 1)));
+                                                        setBookingDate(formatDate(today));
+                                                    }}
+                                                    className="ml-2 px-2.5 py-1 bg-white border border-slate-300 rounded-lg text-slate-600 hover:text-slate-900 font-semibold"
+                                                >
+                                                    Today
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {/* Day of Week Headers */}
+                                        <div className="grid grid-cols-7 gap-1 text-center text-[11px] font-bold text-slate-400 mb-2 border-b border-slate-200 pb-1.5">
+                                            <div>Sun</div>
+                                            <div>Mon</div>
+                                            <div>Tue</div>
+                                            <div>Wed</div>
+                                            <div>Thu</div>
+                                            <div>Fri</div>
+                                            <div>Sat</div>
+                                        </div>
+
+                                        {/* Calendar Month Grid */}
+                                        <div className="grid grid-cols-7 gap-1.5">
+                                            {calendarMonthDays.map((cell) => {
+                                                if (cell.isPlaceholder) {
+                                                    return <div key={cell.key} className="h-14"></div>;
+                                                }
+
+                                                const cap = cell.capInfo;
+                                                const isSelected = cell.isSelected;
+                                                const isToday = cell.isToday;
+
+                                                return (
+                                                    <button
+                                                        key={cell.key}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            if (cell.dateStr && !cap.isClosed) {
+                                                                setBookingDate(cell.dateStr);
+                                                            }
+                                                        }}
+                                                        disabled={cap.isClosed}
+                                                        className={`h-14 p-1.5 rounded-2xl flex flex-col justify-between text-left transition-all relative ${
+                                                            cap.isClosed
+                                                                ? 'bg-slate-100/60 text-slate-300 cursor-not-allowed border border-transparent'
+                                                                : isSelected
+                                                                    ? 'bg-indigo-600 text-white shadow-md ring-2 ring-indigo-500 ring-offset-2'
+                                                                    : 'bg-white hover:bg-indigo-50/50 border border-slate-200 text-slate-800'
+                                                        }`}
+                                                    >
+                                                        <div className="flex items-center justify-between w-full">
+                                                            <span className={`text-xs font-black ${
+                                                                isSelected ? 'text-white' : isToday ? 'text-indigo-600 font-black' : 'text-slate-800'
+                                                            }`}>
+                                                                {cell.day}
+                                                            </span>
+                                                            {isToday && (
+                                                                <span className={`text-[9px] font-bold px-1 rounded ${
+                                                                    isSelected ? 'bg-indigo-800 text-white' : 'bg-indigo-100 text-indigo-700'
+                                                                }`}>
+                                                                    TODAY
+                                                                </span>
+                                                            )}
+                                                        </div>
+
+                                                        {!cap.isClosed ? (
+                                                            <div className="flex items-center justify-between w-full mt-auto">
+                                                                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md ${
+                                                                    isSelected 
+                                                                        ? 'bg-white/20 text-white' 
+                                                                        : cap.badgeColor
+                                                                }`}>
+                                                                    {cap.status === 'Overloaded' ? 'Full' : cap.status === 'High Load' ? 'Busy' : 'Open'}
+                                                                </span>
+                                                                <span className={`text-[9px] font-mono font-semibold ${
+                                                                    isSelected ? 'text-indigo-200' : 'text-slate-400'
+                                                                }`}>
+                                                                    {cap.currentBookedHours.toFixed(0)}h/{cap.effectiveCapacity.toFixed(0)}h
+                                                                </span>
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-[9px] text-slate-400 font-medium">Closed</span>
+                                                        )}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+
+                                    {/* REAL-TIME WORKSHOP CAPACITY MONITOR & BAR */}
+                                    <div className={`p-5 rounded-2xl border transition-all ${
+                                        selectedDateCapacity.status === 'Overloaded'
+                                            ? 'bg-rose-50/80 border-rose-300'
+                                            : selectedDateCapacity.status === 'High Load'
+                                                ? 'bg-amber-50/80 border-amber-300'
+                                                : 'bg-emerald-50/80 border-emerald-300'
+                                    }`}>
+                                        <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+                                            <div className="flex items-center gap-2">
+                                                <Gauge size={20} className={
+                                                    selectedDateCapacity.status === 'Overloaded'
+                                                        ? 'text-rose-600'
+                                                        : selectedDateCapacity.status === 'High Load'
+                                                            ? 'text-amber-600'
+                                                            : 'text-emerald-600'
+                                                } />
+                                                <span className="font-black text-sm text-slate-900">
+                                                    Workshop Loading for {formatReadableDate(bookingDate)}:
+                                                </span>
+                                                <span className={`text-xs font-black uppercase px-2.5 py-0.5 rounded-full border ${selectedDateCapacity.badgeColor}`}>
+                                                    {selectedDateCapacity.status} ({Math.round(selectedDateCapacity.loadRatio * 100)}% Capacity)
+                                                </span>
+                                            </div>
+
+                                            <div className="text-xs font-mono font-bold text-slate-700">
+                                                {selectedDateCapacity.remainingCapacity.toFixed(1)}h remaining wrench time
+                                            </div>
+                                        </div>
+
+                                        {/* Capacity Progress Bar */}
+                                        <div className="w-full bg-slate-200 h-3.5 rounded-full overflow-hidden flex shadow-inner">
+                                            {/* Existing Booked Hours */}
+                                            <div 
+                                                className="bg-indigo-600 h-full transition-all duration-500" 
+                                                style={{ width: `${Math.min(100, (selectedDateCapacity.currentBookedHours / selectedDateCapacity.effectiveCapacity) * 100)}%` }}
+                                                title={`Existing Bookings: ${selectedDateCapacity.currentBookedHours.toFixed(1)}h`}
+                                            ></div>
+                                            {/* This Job Duration */}
+                                            <div 
+                                                className={`${
+                                                    selectedDateCapacity.status === 'Overloaded' ? 'bg-rose-500 animate-pulse' : 'bg-emerald-500'
+                                                } h-full transition-all duration-500`}
+                                                style={{ width: `${Math.min(100, (pricingSummary.totalHours / selectedDateCapacity.effectiveCapacity) * 100)}%` }}
+                                                title={`This Job: +${pricingSummary.totalHours.toFixed(1)}h`}
+                                            ></div>
+                                        </div>
+
+                                        <div className="flex flex-wrap items-center justify-between gap-2 mt-2 text-xs text-slate-600">
+                                            <span>
+                                                Current Booked: <strong>{selectedDateCapacity.currentBookedHours.toFixed(1)}h</strong>
+                                                {' • '}This Booking: <strong>+{pricingSummary.totalHours.toFixed(1)}h</strong>
+                                            </span>
+                                            <span>
+                                                Effective Capacity: <strong>{selectedDateCapacity.effectiveCapacity.toFixed(1)}h</strong>
+                                                {selectedDateCapacity.absenceHours > 0 && ` (${selectedDateCapacity.absenceHours}h technician absence)`}
+                                            </span>
+                                        </div>
+
+                                        {/* OVERLOADED WARNING & NEXT AVAILABLE DATE ASSISTANT */}
+                                        {selectedDateCapacity.status === 'Overloaded' && (
+                                            <div className="mt-4 pt-3 border-t border-rose-200 space-y-3">
+                                                <div className="flex items-start gap-2.5 text-rose-900 text-xs font-semibold">
+                                                    <AlertTriangle size={18} className="text-rose-600 flex-shrink-0 mt-0.5" />
+                                                    <div>
+                                                        <span>This date is fully booked (+{(selectedDateCapacity.projectedHours - selectedDateCapacity.effectiveCapacity).toFixed(1)}h over workshop capacity).</span>
+                                                        {suggestedNextAvailableDate && (
+                                                            <div className="mt-1 font-normal text-rose-950">
+                                                                Recommended slot with guaranteed capacity: <strong>{formatReadableDate(suggestedNextAvailableDate)}</strong>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+                                                    {suggestedNextAvailableDate && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setBookingDate(suggestedNextAvailableDate)}
+                                                            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
+                                                        >
+                                                            <CalendarCheck size={16} />
+                                                            Switch to {formatReadableDate(suggestedNextAvailableDate)}
+                                                        </button>
+                                                    )}
+
+                                                    <label className="flex items-center gap-2 cursor-pointer bg-white px-3 py-1.5 rounded-xl border border-rose-300 select-none">
+                                                        <input 
+                                                            type="checkbox"
+                                                            checked={allowOverbooking}
+                                                            onChange={e => setAllowOverbooking(e.target.checked)}
+                                                            className="w-4 h-4 text-rose-600 rounded"
+                                                        />
+                                                        <span className="text-xs font-bold text-rose-950">
+                                                            Authorize Workshop Overbooking / Overtime
+                                                        </span>
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Logistics & Customer Notes */}
+                                    <div className="pt-2">
                                         <label className="block text-xs font-bold text-slate-700 mb-1">
                                             Logistics & Customer Special Notes
                                         </label>
@@ -1749,8 +2351,8 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                                             type="text"
                                             value={bookingNotes}
                                             onChange={e => setBookingNotes(e.target.value)}
-                                            placeholder="e.g. Needs car by 4pm; customer waiting in lounge"
-                                            className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                                            placeholder="e.g. Needs car by 4pm; customer waiting in lounge; requires courtesy vehicle"
+                                            className="w-full px-4 py-3 border border-slate-300 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500"
                                         />
                                     </div>
                                 </div>
