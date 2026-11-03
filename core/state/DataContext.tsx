@@ -145,6 +145,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return record;
     }, []);
 
+    const loadingFlags = Object.values(stateHooks).map(([, , , isLoading]) => isLoading);
+    const isDataLoaded = useMemo(() => {
+        return loadingFlags.every(flag => !flag);
+    }, [loadingFlags]);
+
     // Auto-seed missing standard universal packages into database so all vehicles have generic packages ready
     const [servicePackages, setServicePackages] = stateHooks.brooks_servicePackages;
     const hasCheckedStandardPackagesRef = useRef(false);
@@ -176,11 +181,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             });
         }
     }, [isDataLoaded, skipLoad, servicePackages, setServicePackages]);
-
-    const loadingFlags = Object.values(stateHooks).map(([, , , isLoading]) => isLoading);
-    const isDataLoaded = useMemo(() => {
-        return loadingFlags.every(flag => !flag);
-    }, [loadingFlags]);
 
     const states = Object.values(stateHooks).map(([state]) => state);
     const value = useMemo(() => {
