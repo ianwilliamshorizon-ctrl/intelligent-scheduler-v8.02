@@ -1,7 +1,7 @@
 {
   "name": "brookspeed-intelligent-scheduling-system-v8.02",
   "private": true,
-  "version": "8.02.087",
+  "version": "8.02.088",
   "type": "module",
   "scripts": {
     "dev": "vite",

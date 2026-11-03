@@ -12,7 +12,7 @@ import {
     X, Settings, Database, User as UserIcon, Car, Wrench, Package, Briefcase, 
     ShieldCheck, Users, Truck, AlertTriangle, RefreshCw, CarFront, List, Info, CheckCircle, Server, Save,
     ArrowUpCircle, BatteryCharging, ClipboardCheck, Search, Banknote, Tag, Lock, Eye, BarChart2, Warehouse, Volume2, Mail,
-    Smartphone, QrCode
+    Smartphone, QrCode, Headphones
 } from 'lucide-react';
 
 // Extracted Tab Views
@@ -26,6 +26,7 @@ import {
     ManagementMobileAppTab
 } from './management/ManagementViews';
 import { ManagementBackupTab } from './management/tabs/ManagementBackupTab';
+import { ManagementBookingScriptsTab } from './management/tabs/ManagementBookingScriptsTab';
 
 // Utilities
 import { setItem } from '../core/db';
@@ -101,6 +102,7 @@ const ManagementModal: React.FC<ManagementModalProps> = ({
         { id: 'suppliers', label: 'Suppliers', icon: Truck, render: () => <ManagementSuppliersTab searchTerm={searchTerm} onShowStatus={showStatus} />, permission: 'canManageSuppliers' },
         { id: 'parts', label: 'Parts', icon: Settings, render: () => <ManagementPartsTab searchTerm={searchTerm} onShowStatus={showStatus} />, permission: 'canManageParts' },
         { id: 'packages', label: 'Service Packages', icon: Package, render: () => <ManagementPackagesTab searchTerm={searchTerm} onShowStatus={showStatus} />, permission: 'canManageServicePackages' },
+        { id: 'bookingScripts', label: 'Booking Scripts', icon: Headphones, render: () => <ManagementBookingScriptsTab onShowStatus={showStatus} />, permission: 'canManageServicePackages' },
         { id: 'nominalCodes', label: 'Nominal Codes', icon: List, render: () => <ManagementNominalCodesTab searchTerm={searchTerm} onShowStatus={showStatus} />, permission: 'canManageNominalCodes' },
         { id: 'taxCodes', label: 'Tax Codes', icon: Banknote, render: () => <ManagementTaxCodesTab searchTerm={searchTerm} onShowStatus={showStatus} />, permission: 'canManageTaxCodes' },
         { id: 'discountCodes', label: 'Discount Codes', icon: Tag, render: () => <ManagementDiscountCodesTab />, permission: 'canManageDiscountCodes' },

@@ -4,7 +4,7 @@ import {
     Sparkles, ShieldCheck, ChevronRight, ChevronLeft, Plus, Copy, 
     CheckCircle2, AlertTriangle, ArrowRight, DollarSign, Wrench, 
     Volume2, CheckSquare, Square, Layers, Info, Headphones, UserPlus, Search,
-    CheckCircle, MessageSquare, Bell, FileText, Gauge, CalendarCheck, AlertCircle, RefreshCw
+    CheckCircle, MessageSquare, Bell, FileText, Gauge, CalendarCheck, AlertCircle, RefreshCw, Eye, Send
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { useData } from '../core/state/DataContext';
@@ -18,6 +18,14 @@ import { lookupVehicleByVRM } from '../services/vehicleLookupService';
 import { lookupAddressByPostcode, AddressDetails } from '../services/postcodeLookupService';
 import { getScoredServicePackages } from '../utils/servicePackageScoring';
 import { CAPACITY_THRESHOLD_WARNING } from '../constants';
+import { sendOutboundEmail } from '../core/services/emailService';
+import { 
+    getBookingAssistantConfig, 
+    interpolateScript, 
+    BookingAssistantConfig, 
+    DEFAULT_BOOKING_ASSISTANT_CONFIG, 
+    BookingScriptAddon 
+} from '../core/services/bookingAssistantConfigService';
 
 export interface ReceptionistBookingModalProps {
     isOpen: boolean;
@@ -169,6 +177,7 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
     const [selectedTier, setSelectedTier] = useState<'bronze' | 'silver' | 'gold' | 'custom'>('bronze');
     const [selectedCustomPackage, setSelectedCustomPackage] = useState<ServicePackage | null>(null);
     const [packageSearchTerm, setPackageSearchTerm] = useState('');
+    const [filterCompatibleOnly, setFilterCompatibleOnly] = useState<boolean>(true);
 
     // Step 3: Bundle & Upsell State
     const [selectedAddonIds, setSelectedAddonIds] = useState<string[]>([]);
@@ -184,6 +193,13 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
     const [bookingNotes, setBookingNotes] = useState('');
     const [isSaving, setIsSaving] = useState(false);
     const [copiedScript, setCopiedScript] = useState<string | null>(null);
+
+    // Managed Data Configuration (Scripts, Bundles, Email Templates)
+    const [scriptConfig, setScriptConfig] = useState<BookingAssistantConfig>(DEFAULT_BOOKING_ASSISTANT_CONFIG);
+    const [sendEmailConfirmation, setSendEmailConfirmation] = useState<boolean>(true);
+    const [customerConfirmationEmail, setCustomerConfirmationEmail] = useState<string>('');
+    const [showEmailPreview, setShowEmailPreview] = useState<boolean>(false);
+    const [isSendingDirectEmail, setIsSendingDirectEmail] = useState<boolean>(false);
 
     // Reset when modal opens
     useEffect(() => {
@@ -204,8 +220,26 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
             setMarketingConsent(false);
             setDeclinedCommunication(false);
             setCommunicationPreference('Email');
+            setShowEmailPreview(false);
+
+            // Fetch live managed data configuration
+            getBookingAssistantConfig().then(cfg => {
+                setScriptConfig(cfg);
+                setSendEmailConfirmation(cfg.emailConfirmation?.autoSendDefault ?? true);
+            }).catch(err => {
+                console.error('Error fetching booking assistant config:', err);
+            });
         }
     }, [isOpen, initialMode]);
+
+    // Synchronize customer email for confirmation sending
+    useEffect(() => {
+        if (selectedCustomer?.email) {
+            setCustomerConfirmationEmail(selectedCustomer.email);
+        } else if (newEmail) {
+            setCustomerConfirmationEmail(newEmail);
+        }
+    }, [selectedCustomer, newEmail]);
 
     // Computed customer search matches
     const customerSearchResults = useMemo(() => {
@@ -371,7 +405,51 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
     };
 
     // =========================================================================
-    // 1. DMS SERVICE PACKAGE MATCHING ENGINE (Using Live DMS Database Packages)
+    // 1. DMS SERVICE PACKAGE MATCHING ENGINE (Strict Vehicle Compatibility)
+    // =========================================================================
+    const isV8 = useMemo(() => {
+        const str = `${activeVehicle?.make || ''} ${activeVehicle?.model || ''}`.toLowerCase();
+        const cc = activeVehicle?.cc ? Number(activeVehicle.cc) : 0;
+        return /v8|8\s*cyl|4\.4|5\.0/i.test(str) || cc >= 3800;
+    }, [activeVehicle]);
+
+    // Strict package compatibility helper: ensures an Audi package is NEVER matched to a Land Rover, Porsche, etc.
+    const isPackageCompatible = useMemo(() => {
+        const clean = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+        const vMake = clean(activeVehicle?.make || '');
+        const isLandRoverRangeRover = vMake.includes('landrover') || vMake.includes('rangerover');
+
+        const KNOWN_MAKES = [
+            'audi', 'porsche', 'bmw', 'mercedes', 'ferrari', 'lamborghini', 
+            'mclaren', 'bentley', 'aston', 'landrover', 'rangerover', 'jaguar', 
+            'volkswagen', 'vw', 'volvo', 'ford', 'toyota', 'honda', 'nissan', 'peugeot', 'renault'
+        ];
+
+        return (pkg: ServicePackage): boolean => {
+            if (!vMake) return true;
+            const pMake = clean(pkg.applicableMake || '');
+            const pName = (pkg.name || '').toLowerCase();
+
+            // 1. If package has applicableMake explicitly set
+            if (pMake && pMake !== 'all' && pMake !== 'generic') {
+                const makeMatches = vMake.includes(pMake) || pMake.includes(vMake);
+                const lrMatches = isLandRoverRangeRover && (pMake.includes('landrover') || pMake.includes('rangerover'));
+                if (!makeMatches && !lrMatches) {
+                    return false; // Explicitly different manufacturer
+                }
+            }
+
+            // 2. If package name explicitly mentions another manufacturer
+            for (const makeName of KNOWN_MAKES) {
+                const isCurrentMake = vMake.includes(makeName) || (isLandRoverRangeRover && (makeName === 'landrover' || makeName === 'rangerover'));
+                if (!isCurrentMake && pName.includes(makeName)) {
+                    return false; // Package explicitly mentions another car brand
+                }
+            }
+
+            return true;
+        };
+    }, [activeVehicle]);
     // =========================================================================
     const scoredPackages = useMemo(() => {
         return getScoredServicePackages(servicePackages || [], activeVehicle);
@@ -382,27 +460,46 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
         const make = activeVehicle?.make || '';
         const cc = activeVehicle?.cc || 2000;
 
-        const isPremium = /porsche|ferrari|mclaren|lamborghini|aston|bentley/i.test(make);
-        const engineFactor = cc > 3000 ? 1.35 : cc > 2000 ? 1.15 : 1.0;
-        const brandFactor = isPremium ? 1.4 : 1.0;
+        const isPremium = /porsche|ferrari|mclaren|lamborghini|aston|bentley|landrover|rangerover/i.test(make);
+        const engineFactor = isV8 ? 1.45 : cc > 3000 ? 1.35 : cc > 2000 ? 1.15 : 1.0;
+        const brandFactor = isPremium ? 1.35 : 1.0;
 
-        // Baseline formula defaults
+        // Baseline formula defaults calibrated to vehicle size / engine
         const bronzeDefaultGross = Math.round(189 * engineFactor * brandFactor);
         const silverDefaultGross = Math.round(299 * engineFactor * brandFactor);
         const goldDefaultGross = Math.round(469 * engineFactor * brandFactor);
 
-        // Sort scored packages descending by vehicle score
-        const sorted = [...scoredPackages].sort((a, b) => b.score - a.score);
-        const clean = (s: string) => (s || '').toLowerCase();
+        const clean = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+        const vMake = clean(make);
+        const isLR = vMake.includes('landrover') || vMake.includes('rangerover');
 
-        const findMatchingDmsPackage = (terms: string[]) => {
-            // First try high vehicle match (score >= 2)
-            const scoredMatch = sorted.find(sp => sp.score >= 2 && terms.some(t => clean(sp.pkg.name || '').includes(t)));
-            if (scoredMatch) return scoredMatch.pkg;
-            // Next try any package matching terms
-            const genericMatch = sorted.find(sp => terms.some(t => clean(sp.pkg.name || '').includes(t)));
-            if (genericMatch) return genericMatch.pkg;
-            return (servicePackages || []).find(pkg => terms.some(t => clean(pkg.name || '').includes(t)));
+        // Compatible packages only (strictly excludes wrong car makes like Audi for Land Rover)
+        const compatiblePackages = (servicePackages || []).filter(isPackageCompatible);
+
+        const findMatchingDmsPackage = (terms: string[]): ServicePackage | null => {
+            // 1. First priority: Exact / Make Match in DMS
+            const makeSpecific = compatiblePackages.filter(pkg => {
+                const pMake = clean(pkg.applicableMake || '');
+                const pName = clean(pkg.name || '');
+                const matchesLR = isLR && (pMake.includes('landrover') || pMake.includes('rangerover') || pName.includes('landrover') || pName.includes('rangerover'));
+                const matchesMake = (pMake && (vMake.includes(pMake) || pMake.includes(vMake))) || (vMake && pName.includes(vMake));
+                return matchesLR || matchesMake;
+            });
+
+            const specificMatch = makeSpecific.find(pkg => terms.some(t => clean(pkg.name || '').includes(clean(t))));
+            if (specificMatch) return specificMatch;
+
+            // 2. Second priority: Truly Generic DMS Package (No make set, or set to 'all'/'generic', and no brand in name)
+            const genericPackages = compatiblePackages.filter(pkg => {
+                const pMake = clean(pkg.applicableMake || '');
+                return !pMake || pMake === 'all' || pMake === 'generic';
+            });
+
+            const genericMatch = genericPackages.find(pkg => terms.some(t => clean(pkg.name || '').includes(clean(t))));
+            if (genericMatch) return genericMatch;
+
+            // 3. DO NOT return a package for a different make under any circumstances
+            return null;
         };
 
         const dmsMinor = findMatchingDmsPackage(['minor', 'bronze', 'oil service', 'oil & filter', 'interim inspection']);
@@ -428,19 +525,23 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
             });
         };
 
+        const vehicleTitle = `${activeVehicle?.make || 'Vehicle'}${isV8 ? ' V8' : ''}`;
+
         return {
             bronze: {
                 id: 'bronze',
-                name: dmsMinor?.name || 'Bronze (Minor Service)',
-                subtitle: dmsMinor ? `DMS Package #${dmsMinor.id} • Verified for ${activeVehicle.make || 'Vehicle'}` : 'Essential Care & Lubrication',
+                name: dmsMinor?.name || `${vehicleTitle} Bronze (Minor Service)`,
+                subtitle: dmsMinor 
+                    ? `DMS Package #${dmsMinor.id} • Verified for ${activeVehicle.make || 'Vehicle'}` 
+                    : `Calibrated Baseline for ${vehicleTitle}`,
                 priceGross: dmsMinor?.totalPrice || bronzeDefaultGross,
-                hours: extractLaborHours(dmsMinor, 1.5),
-                tag: dmsMinor ? 'DMS Live Package' : 'Baseline Entry-Level',
+                hours: extractLaborHours(dmsMinor, isV8 ? 2.0 : 1.5),
+                tag: dmsMinor ? 'DMS Live Package' : `Calibrated ${isV8 ? 'V8 ' : ''}Baseline`,
                 tagColor: dmsMinor ? 'bg-emerald-100 text-emerald-950 border-emerald-400 font-bold' : 'bg-amber-100 text-amber-900 border-amber-300',
                 isDmsPackage: Boolean(dmsMinor),
-                dmsPackage: dmsMinor,
+                dmsPackage: dmsMinor || undefined,
                 highlights: extractHighlights(dmsMinor, [
-                    'Engine oil & premium OEM filter replacement',
+                    isV8 ? 'High-capacity synthetic engine oil renewal (8.0L - 9.5L)' : 'Engine oil & premium OEM filter replacement',
                     'Essential fluid level top-ups (brake, coolant, washer)',
                     'Comprehensive 35-point safety inspection',
                     'Tyre pressure & tread depth inspection',
@@ -449,14 +550,16 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
             },
             silver: {
                 id: 'silver',
-                name: dmsInterim?.name || 'Silver (Interim Service)',
-                subtitle: dmsInterim ? `DMS Package #${dmsInterim.id} • Verified for ${activeVehicle.make || 'Vehicle'}` : 'Bronze + Electrical, Brakes & Pollen Filter',
+                name: dmsInterim?.name || `${vehicleTitle} Silver (Interim Service)`,
+                subtitle: dmsInterim 
+                    ? `DMS Package #${dmsInterim.id} • Verified for ${activeVehicle.make || 'Vehicle'}` 
+                    : `Calibrated Baseline for ${vehicleTitle}`,
                 priceGross: dmsInterim?.totalPrice || silverDefaultGross,
-                hours: extractLaborHours(dmsInterim, 2.5),
-                tag: dmsInterim ? 'DMS Live Package' : 'Recommended (Most Popular)',
+                hours: extractLaborHours(dmsInterim, isV8 ? 3.0 : 2.5),
+                tag: dmsInterim ? 'DMS Live Package' : `Calibrated ${isV8 ? 'V8 ' : ''}Baseline`,
                 tagColor: dmsInterim ? 'bg-emerald-100 text-emerald-950 border-emerald-400 font-bold' : 'bg-indigo-100 text-indigo-900 border-indigo-300',
                 isDmsPackage: Boolean(dmsInterim),
-                dmsPackage: dmsInterim,
+                dmsPackage: dmsInterim || undefined,
                 highlights: extractHighlights(dmsInterim, [
                     'All Bronze Minor Service items included',
                     'Wheels-off brake pad, disc & caliper inspection',
@@ -468,20 +571,20 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
             },
             gold: {
                 id: 'gold',
-                name: dmsMajor?.name || 'Gold (Major Service)',
-                subtitle: dmsMajor ? `DMS Package #${dmsMajor.id} • Verified for ${activeVehicle.make || 'Vehicle'}` : 'Silver + Air Filter, Spark Plugs & Deep Inspection',
+                name: dmsMajor?.name || `${vehicleTitle} Gold (Major Service)`,
+                subtitle: dmsMajor 
+                    ? `DMS Package #${dmsMajor.id} • Verified for ${activeVehicle.make || 'Vehicle'}` 
+                    : `Calibrated Baseline for ${vehicleTitle}`,
                 priceGross: dmsMajor?.totalPrice || goldDefaultGross,
-                hours: extractLaborHours(dmsMajor, 4.0),
-                tag: dmsMajor ? 'DMS Live Package' : 'Ultimate Protection',
+                hours: extractLaborHours(dmsMajor, isV8 ? 5.0 : 4.0),
+                tag: dmsMajor ? 'DMS Live Package' : `Calibrated ${isV8 ? 'V8 ' : ''}Baseline`,
                 tagColor: dmsMajor ? 'bg-emerald-100 text-emerald-950 border-emerald-400 font-bold' : 'bg-yellow-100 text-yellow-900 border-yellow-400',
                 isDmsPackage: Boolean(dmsMajor),
-                dmsPackage: dmsMajor,
+                dmsPackage: dmsMajor || undefined,
                 highlights: extractHighlights(dmsMajor, [
                     'All Bronze & Silver Service items included',
                     'Engine air filter element replacement',
-                    activeVehicle?.fuelType?.toLowerCase().includes('diesel') 
-                        ? 'Fuel filter renewal (diesel engines)'
-                        : 'High-performance spark plugs replacement',
+                    isV8 ? '8x High-performance spark plugs or diesel filter renewal' : (activeVehicle?.fuelType?.toLowerCase().includes('diesel') ? 'Fuel filter renewal' : 'Spark plugs replacement'),
                     'Brake fluid boiling point & moisture test',
                     'Coolant hydrometer freeze-point inspection',
                     'Auxiliary drive belt tension & wear check',
@@ -489,7 +592,7 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                 ])
             }
         };
-    }, [activeVehicle, scoredPackages, servicePackages]);
+    }, [activeVehicle, servicePackages, isPackageCompatible, isV8]);
 
     // Active selected tier or custom DMS package
     const currentTierData = useMemo(() => {
@@ -517,8 +620,8 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
     }, [selectedTier, selectedCustomPackage, serviceTiers]);
 
     const activeAddons = useMemo(() => 
-        BUNDLE_ADDONS.filter(addon => selectedAddonIds.includes(addon.id)),
-        [selectedAddonIds]
+        (scriptConfig.bundles && scriptConfig.bundles.length > 0 ? scriptConfig.bundles : BUNDLE_ADDONS).filter(addon => selectedAddonIds.includes(addon.id)),
+        [scriptConfig.bundles, selectedAddonIds]
     );
 
     // Pricing calculation
@@ -546,6 +649,78 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
             totalHours
         };
     }, [currentTierData, activeAddons, standardTaxRate]);
+
+    // Computed Dynamic Email Confirmation Content
+    const generatedEmailContent = useMemo(() => {
+        const custName = selectedCustomer 
+            ? getCustomerDisplayName(selectedCustomer) 
+            : `${newTitle} ${newForename} ${newSurname}`.trim() || 'Valued Customer';
+
+        const bundleSummary = activeAddons.length > 0 
+            ? `Done Together Addons:\n` + activeAddons.map(a => ` • ${a.name} (${formatCurrency(a.bundledPrice)} inc VAT)`).join('\n')
+            : 'Additional Addons: None';
+
+        const vars: Record<string, string> = {
+            customerName: custName,
+            companyName: selectedEntity.name,
+            companyPhone: (selectedEntity as any).phone || '02380 000000',
+            companyEmail: selectedEntity.email || 'info@brookspeed.com',
+            vehicleMake: activeVehicle.make || 'Vehicle',
+            vehicleModel: activeVehicle.model || '',
+            vehicleReg: activeVehicle.registration || vrmInput || 'REG',
+            bookingDate: formatReadableDate(bookingDate),
+            tierName: currentTierData.name,
+            bundleSummary,
+            totalGross: formatCurrency(pricingSummary.totalGross),
+            totalNet: formatCurrency(pricingSummary.totalNet),
+            workshopName: selectedEntity.name,
+            bookingNotes: bookingNotes ? `Customer Notes: "${bookingNotes}"\n` : ''
+        };
+
+        const subject = interpolateScript(scriptConfig.emailConfirmation?.subjectTemplate || "Booking Confirmation: {vehicleReg} - {companyName}", vars);
+        const body = interpolateScript(scriptConfig.emailConfirmation?.bodyTemplate || "Booking confirmed for {bookingDate}.", vars);
+
+        return { subject, body };
+    }, [selectedCustomer, newTitle, newForename, newSurname, activeVehicle, vrmInput, bookingDate, currentTierData, activeAddons, pricingSummary, selectedEntity, bookingNotes, scriptConfig]);
+
+    // Computed Spoken Call Scripts from Managed Data
+    const step1SpokenScript = useMemo(() => {
+        if (selectedCustomer) {
+            return interpolateScript(scriptConfig.scripts?.step1GreetingExisting || DEFAULT_BOOKING_ASSISTANT_CONFIG.scripts.step1GreetingExisting, {
+                companyName: selectedEntity.name,
+                staffName: currentUser.name || 'Reception',
+                customerName: getCustomerDisplayName(selectedCustomer),
+                vehicleMake: activeVehicle.make || '',
+                vehicleModel: activeVehicle.model || '',
+                customerAddress: selectedCustomer.address || selectedCustomer.postcode || ''
+            });
+        }
+        return interpolateScript(scriptConfig.scripts?.step1GreetingNew || DEFAULT_BOOKING_ASSISTANT_CONFIG.scripts.step1GreetingNew, {
+            companyName: selectedEntity.name,
+            staffName: currentUser.name || 'Reception'
+        });
+    }, [selectedCustomer, scriptConfig, selectedEntity, currentUser, activeVehicle]);
+
+    const step2SpokenScript = useMemo(() => {
+        return interpolateScript(scriptConfig.scripts?.step2Presentation || DEFAULT_BOOKING_ASSISTANT_CONFIG.scripts.step2Presentation, {
+            companyName: selectedEntity.name,
+            vehicleMake: activeVehicle.make || 'vehicle',
+            tierName: currentTierData.name,
+            tierPrice: formatCurrency(currentTierData.priceGross),
+            mileage: currentMileage.toLocaleString()
+        });
+    }, [scriptConfig, selectedEntity, activeVehicle, currentTierData, currentMileage]);
+
+    const step4SpokenScript = useMemo(() => {
+        return interpolateScript(scriptConfig.scripts?.step4Closing || DEFAULT_BOOKING_ASSISTANT_CONFIG.scripts.step4Closing, {
+            companyName: selectedEntity.name,
+            bookingDate: formatReadableDate(bookingDate),
+            vehicleMake: activeVehicle.make || 'vehicle',
+            tierName: currentTierData.name,
+            bundleList: activeAddons.length > 0 ? ` with the bundled ${activeAddons.map(a => a.name).join(', ')}` : '',
+            communicationPreference
+        });
+    }, [scriptConfig, selectedEntity, bookingDate, activeVehicle, currentTierData, activeAddons, communicationPreference]);
 
     const recommendedTier = useMemo(() => {
         if (vehicleAge >= 4 || currentMileage >= 40000) return 'gold';
@@ -859,12 +1034,52 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                 toast.success(`Formal Estimate ${newEstimate.id} created successfully.`);
             }
 
+            // Send Outbound Confirmation Email if Selected
+            if (sendEmailConfirmation && customerConfirmationEmail) {
+                try {
+                    await sendOutboundEmail({
+                        to: customerConfirmationEmail,
+                        fromName: selectedEntity.name,
+                        fromEmail: selectedEntity.email || 'info@brookspeed.com',
+                        subject: generatedEmailContent.subject,
+                        body: generatedEmailContent.body
+                    });
+                    toast.success(`Booking details and estimate sent to ${customerConfirmationEmail}!`);
+                } catch (mailErr: any) {
+                    console.warn('Failed to send confirmation email:', mailErr);
+                    toast.warn(`Booking created, but confirmation email could not be delivered: ${mailErr.message}`);
+                }
+            }
+
             onClose();
         } catch (err: any) {
             console.error('Failed to create booking/estimate:', err);
             toast.error('An error occurred while creating the record.');
         } finally {
             setIsSaving(false);
+        }
+    };
+
+    const handleSendDirectEmail = async () => {
+        if (!customerConfirmationEmail) {
+            toast.error('Please enter a customer email address.');
+            return;
+        }
+        setIsSendingDirectEmail(true);
+        try {
+            await sendOutboundEmail({
+                to: customerConfirmationEmail,
+                fromName: selectedEntity.name,
+                fromEmail: selectedEntity.email || 'info@brookspeed.com',
+                subject: generatedEmailContent.subject,
+                body: generatedEmailContent.body
+            });
+            toast.success(`Confirmation email successfully sent to ${customerConfirmationEmail}!`);
+        } catch (err: any) {
+            console.error('Email send failed:', err);
+            toast.error(`Failed to send email: ${err.message}`);
+        } finally {
+            setIsSendingDirectEmail(false);
         }
     };
 
@@ -1033,13 +1248,8 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                                                 [What to Say to Customer]
                                             </span>
                                             <button 
-                                                onClick={() => handleCopyScript(
-                                                    selectedCustomer 
-                                                        ? `"Thank you, I can see your ${activeVehicle.make || 'vehicle'} on file registered to ${getCustomerDisplayName(selectedCustomer)} at ${selectedCustomer.address || selectedCustomer.postcode}. Is that still all correct?"`
-                                                        : `"Good morning, thank you for calling ${selectedEntity.name}. My name is ${currentUser.name}. May I start with your vehicle registration plate, please?"`,
-                                                    'step1-script'
-                                                )}
-                                                className="text-amber-800 hover:text-amber-950 px-2 py-1 text-xs font-bold flex items-center gap-1 hover:bg-amber-200 rounded-lg transition"
+                                                onClick={() => handleCopyScript(step1SpokenScript, 'step1-script')}
+                                                className="text-amber-800 hover:text-amber-950 px-2.5 py-1 text-xs font-bold flex items-center gap-1.5 hover:bg-amber-200 rounded-lg transition"
                                                 title="Copy script"
                                             >
                                                 {copiedScript === 'step1-script' ? <Check size={16} className="text-emerald-700" /> : <Copy size={16} />}
@@ -1047,11 +1257,7 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                                             </button>
                                         </div>
                                         <p className="text-base sm:text-lg italic text-amber-950 leading-relaxed font-serif">
-                                            {selectedCustomer ? (
-                                                <>&ldquo;Thank you, I can see your <strong>{activeVehicle.make} {activeVehicle.model}</strong> on file registered to <strong>{getCustomerDisplayName(selectedCustomer)}</strong> at {selectedCustomer.address || selectedCustomer.postcode}. Is that still all correct?&rdquo;</>
-                                            ) : (
-                                                <>&ldquo;Good morning, thank you for calling {selectedEntity.name}. My name is {currentUser.name}. I&apos;d be delighted to help book your vehicle today. May I start with your vehicle registration number, please?&rdquo;</>
-                                            )}
+                                            &ldquo;{step1SpokenScript}&rdquo;
                                         </p>
                                     </div>
 
@@ -1495,16 +1701,41 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                                             [What to Say: Baseline Presentation Strategy]
                                         </span>
                                         <button 
-                                            onClick={() => handleCopyScript(`"To ensure your ${activeVehicle.make || 'vehicle'} receives the right care, our baseline service is our Bronze Minor Service from ${formatCurrency(serviceTiers.bronze.priceGross)}. Depending on its mileage of ${currentMileage.toLocaleString()} miles, we also offer our comprehensive Silver Interim and Gold Major services which include full suspension, brake teardowns, and spark plug renewals."`, 'step2-script')}
-                                            className="text-amber-800 hover:text-amber-950 px-2 py-1 text-xs font-bold flex items-center gap-1 hover:bg-amber-200 rounded-lg transition"
+                                            onClick={() => handleCopyScript(step2SpokenScript, 'step2-script')}
+                                            className="text-amber-800 hover:text-amber-950 px-2.5 py-1 text-xs font-bold flex items-center gap-1.5 hover:bg-amber-200 rounded-lg transition"
                                         >
                                             {copiedScript === 'step2-script' ? <Check size={16} className="text-emerald-700" /> : <Copy size={16} />}
                                             <span>Copy Script</span>
                                         </button>
                                     </div>
                                     <p className="text-base sm:text-lg italic text-amber-950 font-serif leading-relaxed">
-                                        &ldquo;To ensure your {activeVehicle.make || 'vehicle'} receives the right care, our baseline service is our <strong>Bronze Minor Service from {formatCurrency(serviceTiers.bronze.priceGross)}</strong>. Depending on its mileage of {currentMileage.toLocaleString()} miles, we also offer our comprehensive <strong>Silver Interim</strong> and <strong>Gold Major</strong> services which include full suspension, brake teardowns, and filter renewals.&rdquo;
+                                        &ldquo;{step2SpokenScript}&rdquo;
                                     </p>
+                                </div>
+                            )}
+
+                            {/* CALIBRATED BASELINE NOTICE IF NO DMS PACKAGE FOUND */}
+                            {!serviceTiers.bronze.isDmsPackage && !serviceTiers.silver.isDmsPackage && !serviceTiers.gold.isDmsPackage && (
+                                <div className="bg-sky-50 border border-sky-300 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-sky-950">
+                                    <div className="flex items-start gap-3">
+                                        <Info size={20} className="text-sky-600 mt-0.5 flex-shrink-0" />
+                                        <div>
+                                            <span className="font-bold text-sm block">
+                                                No Direct DMS Service Package for {activeVehicle.make || 'Vehicle'} {activeVehicle.model || ''}{isV8 ? ' (V8 Engine)' : ''}
+                                            </span>
+                                            <span className="text-xs text-sky-800">
+                                                We have loaded our calibrated {isV8 ? 'high-capacity V8 ' : ''}baseline packages below. You can select one of these or click to browse your complete workshop package catalogue.
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setServiceSourceTab('all-dms')}
+                                        className="px-3.5 py-2 bg-sky-700 hover:bg-sky-800 text-white rounded-xl text-xs font-bold whitespace-nowrap transition flex items-center gap-1.5 shadow-sm"
+                                    >
+                                        <Search size={14} />
+                                        Browse DMS Catalogue
+                                    </button>
                                 </div>
                             )}
 
@@ -1552,7 +1783,43 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                                 </div>
 
                                 {serviceSourceTab === 'tiered' ? (
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                                    <div className="space-y-4">
+                                        {selectedTier === 'custom' && selectedCustomPackage && (
+                                            <div className="bg-indigo-50 border-2 border-indigo-500 rounded-3xl p-5 flex flex-wrap items-center justify-between gap-4 shadow-md">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="p-2.5 bg-indigo-600 text-white rounded-2xl">
+                                                        <CheckCircle2 size={24} />
+                                                    </div>
+                                                    <div>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-indigo-600 text-white">
+                                                                Active Selection: DMS Package
+                                                            </span>
+                                                            <span className="text-xs text-slate-500 font-mono">#{selectedCustomPackage.id}</span>
+                                                        </div>
+                                                        <h4 className="font-black text-lg text-slate-900 mt-0.5">{selectedCustomPackage.name}</h4>
+                                                        <p className="text-xs text-slate-600">{selectedCustomPackage.description || 'Full Workshop Service Package'}</p>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-4">
+                                                    <div className="text-right">
+                                                        <span className="text-2xl font-black text-indigo-950 font-mono block">
+                                                            {formatCurrency(selectedCustomPackage.totalPrice || 0)}
+                                                        </span>
+                                                        <span className="text-xs text-slate-500">inc VAT</span>
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setServiceSourceTab('all-dms')}
+                                                        className="px-4 py-2.5 bg-white border border-indigo-300 text-indigo-700 hover:bg-indigo-50 rounded-xl text-xs font-bold transition shadow-xs"
+                                                    >
+                                                        Change Package
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                                         {/* BRONZE */}
                                         <div 
                                             onClick={() => {
@@ -1710,28 +1977,40 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                                             </button>
                                         </div>
                                     </div>
+                                </div>
                                 ) : (
                                     /* BROWSE ALL DMS PACKAGES CATALOGUE */
                                     <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-4">
-                                        <div className="flex items-center justify-between gap-4">
-                                            <div className="relative flex-1">
+                                        <div className="flex flex-wrap items-center justify-between gap-3">
+                                            <div className="relative flex-1 min-w-[240px]">
                                                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                                                 <input 
                                                     type="text" 
-                                                    placeholder="Search all workshop packages by name, make, model..."
+                                                    placeholder="Search workshop packages by name, make, model..."
                                                     value={packageSearchTerm}
                                                     onChange={e => setPackageSearchTerm(e.target.value)}
                                                     className="w-full pl-11 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500"
                                                 />
                                             </div>
+
+                                            <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-700 select-none bg-slate-100 hover:bg-slate-200 px-3.5 py-2.5 rounded-xl border border-slate-200 transition">
+                                                <input 
+                                                    type="checkbox"
+                                                    checked={filterCompatibleOnly}
+                                                    onChange={e => setFilterCompatibleOnly(e.target.checked)}
+                                                    className="w-4 h-4 text-indigo-600 rounded"
+                                                />
+                                                <span>Filter: {activeVehicle.make || 'Compatible'} Only</span>
+                                            </label>
+
                                             <span className="text-xs font-bold text-slate-500 whitespace-nowrap">
-                                                Showing {scoredPackages.filter(sp => !packageSearchTerm || (sp.pkg.name || '').toLowerCase().includes(packageSearchTerm.toLowerCase())).length} Packages
+                                                Showing {scoredPackages.filter(sp => (!filterCompatibleOnly || isPackageCompatible(sp.pkg)) && (!packageSearchTerm || (sp.pkg.name || '').toLowerCase().includes(packageSearchTerm.toLowerCase()))).length} Packages
                                             </span>
                                         </div>
 
                                         <div className="divide-y divide-slate-100 max-h-96 overflow-y-auto border border-slate-200 rounded-2xl">
                                             {scoredPackages
-                                                .filter(sp => !packageSearchTerm || (sp.pkg.name || '').toLowerCase().includes(packageSearchTerm.toLowerCase()))
+                                                .filter(sp => (!filterCompatibleOnly || isPackageCompatible(sp.pkg)) && (!packageSearchTerm || (sp.pkg.name || '').toLowerCase().includes(packageSearchTerm.toLowerCase())))
                                                 .map(({ pkg, score, matchType, color }) => {
                                                     const isSelected = selectedTier === 'custom' && selectedCustomPackage?.id === pkg.id;
                                                     return (
@@ -1894,7 +2173,7 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                                 </div>
 
                                 <div className="grid grid-cols-1 gap-3.5">
-                                    {BUNDLE_ADDONS.map(addon => {
+                                    {(scriptConfig.bundles && scriptConfig.bundles.length > 0 ? scriptConfig.bundles : BUNDLE_ADDONS).map(addon => {
                                         const isSelected = selectedAddonIds.includes(addon.id);
                                         const isRecommended = addon.recommendedIf ? addon.recommendedIf(vehicleAge, currentMileage, activeVehicle.fuelType) : false;
 
@@ -1989,15 +2268,15 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                                             [What to Say: Closing the Booking]
                                         </span>
                                         <button 
-                                            onClick={() => handleCopyScript(`"Thank you so much. I have reserved ${bookingDate} for your ${activeVehicle.make || 'vehicle'}'s ${currentTierData.name}${activeAddons.length > 0 ? ` with the bundled ${activeAddons.map(a => a.name).join(', ')}` : ''}. We'll send a full booking confirmation to your ${communicationPreference}. Can we arrange a courtesy vehicle or lift into town for you?"`, 'step4-script')}
-                                            className="text-amber-800 hover:text-amber-950 px-2 py-1 text-xs font-bold flex items-center gap-1 hover:bg-amber-200 rounded-lg transition"
+                                            onClick={() => handleCopyScript(step4SpokenScript, 'step4-script')}
+                                            className="text-amber-800 hover:text-amber-950 px-2.5 py-1 text-xs font-bold flex items-center gap-1.5 hover:bg-amber-200 rounded-lg transition"
                                         >
                                             {copiedScript === 'step4-script' ? <Check size={16} className="text-emerald-700" /> : <Copy size={16} />}
                                             <span>Copy Closing Script</span>
                                         </button>
                                     </div>
                                     <p className="text-base sm:text-lg italic text-amber-950 font-serif leading-relaxed">
-                                        &ldquo;Thank you so much. I have reserved <strong>{bookingDate}</strong> for your {activeVehicle.make || 'vehicle'}&apos;s <strong>{currentTierData.name}</strong>{activeAddons.length > 0 ? ` with the bundled ${activeAddons.map(a => a.name).join(', ')}` : ''}. We&apos;ll send a full booking confirmation to your {communicationPreference}. Can we arrange a courtesy vehicle or lift into town for you?&rdquo;
+                                        &ldquo;{step4SpokenScript}&rdquo;
                                     </p>
                                 </div>
                             )}
@@ -2356,6 +2635,82 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                                         />
                                     </div>
                                 </div>
+                            </div>
+
+                            {/* CUSTOMER CONFIRMATION & ESTIMATE EMAIL DISPATCH */}
+                            <div className="bg-indigo-50/70 border-2 border-indigo-200 rounded-3xl p-6 space-y-4">
+                                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-indigo-200/80 pb-3">
+                                    <div className="flex items-center gap-2.5">
+                                        <div className="p-2 bg-indigo-600 text-white rounded-xl">
+                                            <Mail size={18} />
+                                        </div>
+                                        <div>
+                                            <h4 className="font-bold text-slate-900 text-base">Email Estimate & Booking Confirmation to Customer</h4>
+                                            <p className="text-xs text-slate-500">
+                                                Instantly deliver booking date, time, and full itemised estimate breakdown to the customer.
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowEmailPreview(!showEmailPreview)}
+                                        className="text-xs font-bold text-indigo-700 hover:text-indigo-900 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-indigo-200 shadow-xs transition"
+                                    >
+                                        <Eye size={14} />
+                                        {showEmailPreview ? 'Hide Email Preview' : 'Preview Email'}
+                                    </button>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-center">
+                                    <div className="sm:col-span-2">
+                                        <label className="block text-xs font-bold text-slate-700 mb-1">
+                                            Recipient Customer Email Address
+                                        </label>
+                                        <input 
+                                            type="email"
+                                            value={customerConfirmationEmail}
+                                            onChange={e => setCustomerConfirmationEmail(e.target.value)}
+                                            placeholder="customer@example.com"
+                                            className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-sm font-semibold outline-none focus:ring-2 focus:ring-indigo-500"
+                                        />
+                                    </div>
+
+                                    <div className="flex flex-col gap-2 pt-5 sm:pt-0">
+                                        <label className="flex items-center gap-2 cursor-pointer select-none">
+                                            <input 
+                                                type="checkbox"
+                                                checked={sendEmailConfirmation}
+                                                onChange={e => setSendEmailConfirmation(e.target.checked)}
+                                                className="w-4 h-4 text-indigo-600 rounded"
+                                            />
+                                            <span className="text-xs font-bold text-slate-800">
+                                                Auto-send when confirming booking
+                                            </span>
+                                        </label>
+
+                                        <button
+                                            type="button"
+                                            onClick={handleSendDirectEmail}
+                                            disabled={isSendingDirectEmail || !customerConfirmationEmail}
+                                            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 disabled:opacity-50 shadow-xs"
+                                        >
+                                            <Send size={13} />
+                                            {isSendingDirectEmail ? 'Sending...' : 'Send Email Now'}
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {showEmailPreview && (
+                                    <div className="mt-3 p-4 bg-white rounded-2xl border border-indigo-200 text-xs space-y-2">
+                                        <div className="font-bold text-slate-800 border-b pb-1">
+                                            Subject: <span className="font-mono text-indigo-900">{generatedEmailContent.subject}</span>
+                                        </div>
+                                        <pre className="font-sans whitespace-pre-wrap text-slate-700 text-xs leading-relaxed max-h-56 overflow-y-auto bg-slate-50 p-3 rounded-xl border border-slate-200">
+                                            {generatedEmailContent.body}
+                                        </pre>
+                                    </div>
+                                )}
                             </div>
 
                             {/* ACTION BUTTONS */}

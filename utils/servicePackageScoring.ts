@@ -40,7 +40,9 @@ export const getScoredServicePackages = (
         let status: ScoredPackage['status'] = 'other';
         let color = 'bg-gray-50 text-gray-400';
 
-        const isMakeMatch = Boolean(pMake && vMake && (vMake.includes(pMake) || pMake.includes(vMake)));
+        const isLR_V = vMake.includes('landrover') || vMake.includes('rangerover');
+        const isLR_P = pMake.includes('landrover') || pMake.includes('rangerover');
+        const isMakeMatch = Boolean((pMake && vMake && (vMake.includes(pMake) || pMake.includes(vMake))) || (isLR_V && isLR_P));
         const isModelMatch = Boolean(pModel && vModel && (vModel.includes(pModel) || pModel.includes(vModel)));
         const isEngineSizeMatch = Boolean(pEngineSize && vEngineSize && pEngineSize === vEngineSize);
 
@@ -69,7 +71,7 @@ export const getScoredServicePackages = (
             matchType = 'Generic';
             status = 'generic';
             color = 'bg-slate-100 text-slate-700';
-        } else if (vMake && vModel && pName.includes(vMake) && pName.includes(vModel)) {
+        } else if ((vMake && pName.includes(vMake)) || (isLR_V && (pName.includes('landrover') || pName.includes('rangerover')))) {
             score = 2;
             matchType = 'Name Match';
             status = 'other';
