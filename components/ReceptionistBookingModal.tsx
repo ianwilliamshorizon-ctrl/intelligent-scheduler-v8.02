@@ -681,7 +681,7 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
         const vrm = (activeVehicle.registration || vrmInput || 'REG').toUpperCase().trim();
         const formattedDate = formatReadableDate(bookingDate);
         const origin = typeof window !== 'undefined' ? window.location.origin : 'https://intelligent-scheduling-v801.web.app';
-        const onlineViewLink = `${origin}/?estimateId=EST-${prospectiveEstimateNumber}&view=customer`;
+        const onlineViewLink = `${origin}/?estimateId=${prospectiveEstimateNumber}&view=customer`;
 
         const subject = interpolateScript(
             scriptConfig.emailConfirmation?.subjectTemplate || "Estimate & Booking Confirmation: {vehicleReg} - {companyName}",
@@ -987,24 +987,43 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
             // Build Line Items
             const lineItems: EstimateLineItem[] = [];
 
-            // 1. DMS Package Cost Items OR Baseline Service Tier Line Item
+            const packageId = currentTierData.dmsPackage?.id || `pkg_${Date.now()}`;
+            const packageName = currentTierData.dmsPackage?.name || currentTierData.name;
+            const packageNetPrice = Math.round((currentTierData.priceGross / (1 + (standardTaxRate / 100))) * 100) / 100;
+            const packageCost = (currentTierData.dmsPackage?.costItems || []).reduce(
+                (sum, ci) => sum + ((ci.unitCost || 0) * (ci.quantity || 1)),
+                0
+            ) || Math.round(currentTierData.hours * 45 * 100) / 100;
+
+            // 1. Primary Service Package Header (Top-level)
+            lineItems.push({
+                id: crypto.randomUUID(),
+                description: packageName,
+                quantity: 1,
+                unitPrice: packageNetPrice,
+                unitCost: packageCost,
+                isLabor: false,
+                taxCodeId: currentTierData.dmsPackage?.taxCodeId || standardTaxRateId,
+                servicePackageId: packageId,
+                servicePackageName: packageName,
+                isPackageComponent: false,
+                isOptional: false
+            });
+
+            // 2. Child Cost Items (Parts & Labor included in package rate)
             if (currentTierData.dmsPackage?.costItems && currentTierData.dmsPackage.costItems.length > 0) {
                 currentTierData.dmsPackage.costItems.forEach(item => {
                     lineItems.push({
                         ...item,
                         id: crypto.randomUUID(),
-                        servicePackageName: currentTierData.name
+                        unitPrice: 0,
+                        unitCost: item.unitCost || 0,
+                        taxCodeId: item.taxCodeId || currentTierData.dmsPackage?.taxCodeId || standardTaxRateId,
+                        servicePackageId: packageId,
+                        servicePackageName: packageName,
+                        isPackageComponent: true,
+                        isOptional: false
                     });
-                });
-            } else {
-                lineItems.push({
-                    id: crypto.randomUUID(),
-                    description: `${currentTierData.name} - ${finalVehicle.make} ${finalVehicle.model}`,
-                    quantity: currentTierData.hours,
-                    unitPrice: Math.round((currentTierData.priceGross / (1 + (standardTaxRate / 100)) / currentTierData.hours) * 100) / 100,
-                    isLabor: true,
-                    isPackage: true,
-                    servicePackageName: currentTierData.name
                 });
             }
 
@@ -1091,7 +1110,7 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
             if (sendEmailConfirmation && customerConfirmationEmail) {
                 try {
                     const origin = typeof window !== 'undefined' ? window.location.origin : 'https://intelligent-scheduling-v801.web.app';
-                    const onlineViewLink = `${origin}/?estimateId=${newEstimate.id}&view=customer`;
+                    const onlineViewLink = `${origin}/?estimateId=${newEstimate.estimateNumber}&view=customer`;
                     const formattedDate = formatReadableDate(bookingDate);
                     const emailHtml = generateEstimateBookingEmailHtml({
                         estimateNumber: newEstimate.estimateNumber,

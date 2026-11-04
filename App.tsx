@@ -4,7 +4,7 @@ import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import * as T from './types';
 import { useApp } from './core/state/AppContext';
-import { getDocument, saveDocument } from './core/db';
+import { getDocument, saveDocument, getAll } from './core/db';
 import { getCustomerDisplayName } from './core/utils/customerUtils';
 import { formatDate } from './core/utils/dateUtils';
 import { DataProvider } from './core/state/DataContext';
@@ -129,10 +129,90 @@ const App = () => {
                 }
 
                 if (isCustomerView && urlEstimateId) {
-                    const estimateDoc = await getDocument<T.Estimate>('brooks_estimates', urlEstimateId);
+                    let estimateDoc = await getDocument<T.Estimate>('brooks_estimates', urlEstimateId);
+                    if (!estimateDoc && !urlEstimateId.startsWith('EST-')) {
+                        estimateDoc = await getDocument<T.Estimate>('brooks_estimates', `EST-${urlEstimateId}`);
+                    }
+                    if (!estimateDoc && urlEstimateId.startsWith('EST-')) {
+                        estimateDoc = await getDocument<T.Estimate>('brooks_estimates', urlEstimateId.replace(/^EST-/, ''));
+                    }
+                    if (!estimateDoc) {
+                        const cleanTarget = urlEstimateId.replace(/^EST-/, '').trim().toUpperCase();
+                        const allEstimates = await getAll<T.Estimate>('brooks_estimates');
+                        estimateDoc = allEstimates.find(e => 
+                            e.id?.toUpperCase() === urlEstimateId.toUpperCase() ||
+                            (e.estimateNumber && e.estimateNumber.toUpperCase() === cleanTarget) ||
+                            e.id?.toUpperCase() === `EST-${cleanTarget}`
+                        ) || null;
+                    }
+                    if (!estimateDoc) {
+                        const partsModule = await import('./core/data/initialData');
+                        const initialEstimates = partsModule.getInitialEstimates();
+                        const cleanTarget = urlEstimateId.replace(/^EST-/, '').trim().toUpperCase();
+                        estimateDoc = initialEstimates.find(e => 
+                            e.id?.toUpperCase() === urlEstimateId.toUpperCase() ||
+                            (e.estimateNumber && e.estimateNumber.toUpperCase() === cleanTarget) ||
+                            e.id?.toUpperCase() === `EST-${cleanTarget}`
+                        ) || null;
+                    }
+
                     if (!estimateDoc) {
                         setCustomerViewData(prev => ({ ...prev, loading: false, error: 'Estimate not found' }));
                         return;
+                    }
+
+                    const partsModule = await import('./core/data/initialData');
+                    const [taxRatesData, dbServicePackages, partsData] = await Promise.all([
+                        partsModule.getInitialTaxRates(),
+                        getAll<T.ServicePackage>('brooks_servicePackages'),
+                        partsModule.getInitialParts()
+                    ]);
+
+                    const spData = (dbServicePackages && dbServicePackages.length > 0) 
+                        ? dbServicePackages 
+                        : partsModule.getInitialServicePackages();
+
+                    // Auto-heal legacy estimates that had package components without a header row
+                    if (estimateDoc && estimateDoc.lineItems && estimateDoc.lineItems.length > 0) {
+                        const hasHeader = estimateDoc.lineItems.some(i => !i.isPackageComponent && i.servicePackageId);
+                        if (!hasHeader) {
+                            const pkgItemNames = Array.from(new Set(estimateDoc.lineItems.map(i => i.servicePackageName).filter(Boolean)));
+                            if (pkgItemNames.length > 0) {
+                                const healedHeaders: T.EstimateLineItem[] = [];
+                                pkgItemNames.forEach(pkgName => {
+                                    const matchingPkg = spData.find(p => p.name?.toLowerCase() === pkgName!.toLowerCase());
+                                    const matchingItems = estimateDoc!.lineItems.filter(i => i.servicePackageName === pkgName);
+                                    const allZero = matchingItems.every(i => !i.unitPrice || i.unitPrice === 0);
+                                    if (allZero && matchingPkg) {
+                                        const pkgId = matchingPkg.id;
+                                        const pkgNet = matchingPkg.totalPriceNet !== undefined ? matchingPkg.totalPriceNet : (matchingPkg.totalPrice / 1.2);
+                                        healedHeaders.push({
+                                            id: `heal_hdr_${pkgId}`,
+                                            description: matchingPkg.name,
+                                            quantity: 1,
+                                            unitPrice: Math.round(pkgNet * 100) / 100,
+                                            unitCost: matchingPkg.totalCost || 0,
+                                            isLabor: false,
+                                            taxCodeId: matchingPkg.taxCodeId || 'tax_2',
+                                            servicePackageId: pkgId,
+                                            servicePackageName: matchingPkg.name,
+                                            isPackageComponent: false,
+                                            isOptional: false
+                                        });
+                                        matchingItems.forEach(i => {
+                                            i.isPackageComponent = true;
+                                            i.servicePackageId = pkgId;
+                                        });
+                                    }
+                                });
+                                if (healedHeaders.length > 0) {
+                                    estimateDoc = {
+                                        ...estimateDoc,
+                                        lineItems: [...healedHeaders, ...estimateDoc.lineItems]
+                                    };
+                                }
+                            }
+                        }
                     }
 
                     const [customerDoc, vehicleDoc] = await Promise.all([
@@ -144,13 +224,6 @@ const App = () => {
                     if (!entityDoc && estimateDoc.entityId) {
                         entityDoc = await getDocument<T.BusinessEntity>('brooks_business_entities', estimateDoc.entityId);
                     }
-                    
-                    const partsModule = await import('./core/data/initialData');
-                    const [taxRatesData, spData, partsData] = await Promise.all([
-                        partsModule.getInitialTaxRates(),
-                        partsModule.getInitialServicePackages(),
-                        partsModule.getInitialParts()
-                    ]);
 
                     setCustomerViewData(prev => ({
                         ...prev,

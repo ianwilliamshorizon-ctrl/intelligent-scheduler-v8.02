@@ -1532,6 +1532,9 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                             await handleSaveItem(data.setJobs, { ...jobData, createdByUserId: currentUser.id }, 'brooks_jobs');
                             if (estimateData) {
                                 await handleSaveItem(data.setEstimates, estimateData, 'brooks_estimates');
+                                if (estimateData.estimateNumber && estimateData.id !== estimateData.estimateNumber) {
+                                    await saveDocument('brooks_estimates', { ...estimateData, id: estimateData.estimateNumber });
+                                }
                                 await workshopActions.syncPurchaseOrdersFromEstimate(estimateData, { forceNew: true });
                             }
                             setters.setIsBookingAssistantOpen(false);
@@ -1542,6 +1545,9 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                             await handleSaveItem(data.setJobs, { ...j, createdByUserId: currentUser.id }, 'brooks_jobs');
                             if (estimateData) {
                                 await handleSaveItem(data.setEstimates, estimateData, 'brooks_estimates');
+                                if (estimateData.estimateNumber && estimateData.id !== estimateData.estimateNumber) {
+                                    await saveDocument('brooks_estimates', { ...estimateData, id: estimateData.estimateNumber });
+                                }
                                 await workshopActions.syncPurchaseOrdersFromEstimate(estimateData, { forceNew: true });
                             }
                             setters.setIsBookingAssistantOpen(false);
