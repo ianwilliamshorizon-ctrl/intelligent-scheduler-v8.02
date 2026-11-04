@@ -131,6 +131,14 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
         [businessEntities, selectedEntityId]
     );
 
+    const resolvedEntityLogoUrl = useMemo(() => {
+        const origin = typeof window !== 'undefined' ? window.location.origin : 'https://intelligent-scheduling-v801.web.app';
+        const raw = (selectedEntity as any).logoUrl || '/logo.png';
+        if (raw.startsWith('http')) return raw;
+        if (raw.startsWith('/')) return `${origin}${raw}`;
+        return `${origin}/${raw}`;
+    }, [selectedEntity]);
+
     const standardTaxRateObj = useMemo(() => 
         taxRates.find(t => t.code === 'T1') || taxRates.find(t => t.id === 'tax_2') || taxRates[0],
         [taxRates]
@@ -710,7 +718,7 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                 phone: (selectedEntity as any).phone || '02380 000000',
                 email: selectedEntity.email || 'info@brookspeed.com',
                 vatNumber: (selectedEntity as any).vatNumber || (selectedEntity as any).vatRegistrationNumber,
-                logoUrl: (selectedEntity as any).logoUrl
+                logoUrl: resolvedEntityLogoUrl
             },
             customer: {
                 name: custName,
@@ -1128,7 +1136,7 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                             phone: (selectedEntity as any).phone || '02380 000000',
                             email: selectedEntity.email || 'info@brookspeed.com',
                             vatNumber: (selectedEntity as any).vatNumber || (selectedEntity as any).vatRegistrationNumber,
-                            logoUrl: (selectedEntity as any).logoUrl
+                            logoUrl: resolvedEntityLogoUrl
                         },
                         customer: {
                             name: getCustomerDisplayName(finalCustomer),

@@ -152,6 +152,15 @@ export const generateEstimateBookingEmailHtml = (data: EstimateBookingEmailData)
         }).join('');
     }
 
+    const origin = typeof window !== 'undefined' && window.location.origin && !window.location.origin.includes('localhost')
+        ? window.location.origin
+        : 'https://intelligent-scheduling-v801.web.app';
+
+    let resolvedLogoUrl = entity.logoUrl || `${origin}/logo.png`;
+    if (resolvedLogoUrl.startsWith('/')) {
+        resolvedLogoUrl = `${origin}${resolvedLogoUrl}`;
+    }
+
     const companyAddress = [entity.addressLine1, entity.addressLine2, entity.city, entity.postcode].filter(Boolean).join(', ');
     const customerAddress = customer.address || 'Address on file';
 
@@ -168,23 +177,21 @@ export const generateEstimateBookingEmailHtml = (data: EstimateBookingEmailData)
             <td align="center">
                 <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width: 680px; background-color: #ffffff; border-radius: 8px; border: 1px solid #cbd5e1; overflow: hidden;">
                     
-                    <!-- Top Brand Header -->
+                    <!-- Top Brand Header with Company Logo -->
                     <tr>
-                        <td style="background-color: #0f172a; padding: 16px 20px; border-bottom: 3px solid #4f46e5;">
+                        <td style="background-color: #ffffff; padding: 16px 20px; border-bottom: 2px solid #e2e8f0;">
                             <table width="100%" cellpadding="0" cellspacing="0" border="0">
                                 <tr>
-                                    <td valign="middle">
-                                        <div style="font-size: 20px; font-weight: 900; color: #ffffff; letter-spacing: 0.04em; text-transform: uppercase;">
-                                            ${entity.name || 'BROOKSPEED AUTOMOTIVE'}
-                                        </div>
-                                        <div style="font-size: 10px; color: #94a3b8; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; margin-top: 2px;">
-                                            Porsche & Performance Vehicle Specialists
-                                        </div>
+                                    <td valign="middle" style="width: 50%;">
+                                        <img src="${resolvedLogoUrl}" alt="${entity.name || 'Brookspeed'}" style="max-height: 52px; max-width: 220px; width: auto; height: auto; display: block; border: 0; outline: none;" />
                                     </td>
-                                    <td align="right" valign="middle">
-                                        <div style="background-color: #1e293b; border: 1px solid #334155; padding: 6px 12px; border-radius: 6px; text-align: right; display: inline-block;">
+                                    <td align="right" valign="middle" style="width: 50%;">
+                                        <div style="background-color: #0f172a; border-radius: 6px; padding: 6px 12px; display: inline-block; text-align: right;">
                                             <span style="font-size: 9px; color: #94a3b8; text-transform: uppercase; font-weight: 800; display: block; letter-spacing: 0.05em;">ESTIMATE REF</span>
                                             <span style="font-size: 14px; font-family: monospace, sans-serif; font-weight: 900; color: #38bdf8;">#${estimateNumber}</span>
+                                        </div>
+                                        <div style="font-size: 11px; color: #64748b; margin-top: 3px; font-weight: 600;">
+                                            ${entity.phone ? `Tel: ${entity.phone}` : ''}
                                         </div>
                                     </td>
                                 </tr>
