@@ -421,7 +421,7 @@ async function sendEmailInternal({ to, fromName, fromEmail, subject, body, attac
           subject: subject,
           body: {
             contentType: "HTML",
-            content: body.replace(/\n/g, "<br>")
+            content: /<\/?[a-z][\s\S]*>/i.test(body) ? body : body.replace(/\n/g, "<br>")
           },
           toRecipients: toRecipients,
           replyTo: [
@@ -497,8 +497,8 @@ async function sendEmailInternal({ to, fromName, fromEmail, subject, body, attac
     to: to,
     replyTo: resolvedFromEmail,
     subject: subject,
-    text: body,
-    html: body.replace(/\n/g, "<br>")
+    text: /<\/?[a-z][\s\S]*>/i.test(body) ? body.replace(/<[^>]*>/g, "") : body,
+    html: /<\/?[a-z][\s\S]*>/i.test(body) ? body : body.replace(/\n/g, "<br>")
   };
 
   if (allAttachments.length > 0) {
@@ -2281,4 +2281,4 @@ exports.rethreadMisroutedInquiries = onRequest({
     logger.error("Error in rethreadMisroutedInquiries:", error);
     return res.status(500).json({ success: false, error: error.message });
   }
-});
+});
