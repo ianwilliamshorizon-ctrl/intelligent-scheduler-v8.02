@@ -1067,7 +1067,7 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                             logoUrl: (selectedEntity as any).logoUrl
                         },
                         customer: {
-                            name: finalCustomer.displayName || getCustomerDisplayName(finalCustomer),
+                            name: getCustomerDisplayName(finalCustomer),
                             companyName: finalCustomer.companyName,
                             address: finalCustomer.address,
                             phone: finalCustomer.phone,
