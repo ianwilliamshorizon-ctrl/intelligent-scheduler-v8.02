@@ -56,18 +56,24 @@ export const loadXlsxLibrary = async (): Promise<any> => {
 };
 
 /**
- * Finds and matches a business entity by Name, ShortCode, or ID
+ * Finds and matches a business entity by Name, ShortCode, ID, or fuzzy token matching
  */
 export const findBusinessEntity = (
     rawInput: any,
-    businessEntities: BusinessEntity[],
+    businessEntities: BusinessEntity[] = [],
     fallbackEntityId?: string
 ): BusinessEntity | undefined => {
-    const str = String(rawInput || '').trim();
-    if (!str && fallbackEntityId) {
-        return businessEntities.find(e => e.id === fallbackEntityId);
+    if (!businessEntities || businessEntities.length === 0) {
+        return undefined;
     }
-    if (!str) return undefined;
+
+    const safeFallback = businessEntities.find(e => e.id === fallbackEntityId && e.id !== 'all') 
+        || businessEntities[0];
+
+    const str = String(rawInput || '').trim();
+    if (!str || str.toLowerCase() === 'all' || str.toLowerCase() === 'universal' || str.toLowerCase() === 'generic') {
+        return safeFallback;
+    }
 
     const lower = str.toLowerCase();
 
@@ -87,11 +93,19 @@ export const findBusinessEntity = (
     found = businessEntities.find(e => e.name && (e.name.toLowerCase().includes(lower) || lower.includes(e.name.toLowerCase())));
     if (found) return found;
 
-    // 5. Fallback
-    if (fallbackEntityId) {
-        return businessEntities.find(e => e.id === fallbackEntityId);
+    // 5. Token match (e.g. "porsche", "audi", "trimming", "workshop", "southampton")
+    const tokens = lower.split(/[^a-z0-9]+/).filter(t => t.length >= 3);
+    for (const token of tokens) {
+        found = businessEntities.find(e => 
+            e.id.toLowerCase().includes(token) || 
+            (e.shortCode && e.shortCode.toLowerCase().includes(token)) ||
+            (e.name && e.name.toLowerCase().includes(token))
+        );
+        if (found) return found;
     }
-    return undefined;
+
+    // 6. Safe fallback to valid business entity
+    return safeFallback;
 };
 
 /**
@@ -123,9 +137,12 @@ export const parseRawSheetToRows = async (file: File): Promise<any[]> => {
         Papa.parse(file, {
             header: true,
             skipEmptyLines: 'greedy',
-            transformHeader: (h) => h.trim(),
+            transformHeader: (h) => h.trim().replace(/^\uFEFF/, ''),
             complete: (results) => {
-                resolve(results.data as any[]);
+                if (results.errors && results.errors.length > 0) {
+                    console.warn('Papa parse notices:', results.errors);
+                }
+                resolve((results.data as any[]).filter(row => row && Object.keys(row).length > 0));
             },
             error: (err) => {
                 reject(err);
@@ -262,9 +279,9 @@ export const parseServicePackagesFromRows = (
             return;
         }
 
-        // Multi-row format: group by package name & entity if specified
+        // Multi-row format: group by package name
         if (packageName) {
-            const groupKey = `${packageName.toLowerCase()}___${businessEntityRaw.toLowerCase()}`;
+            const groupKey = packageName.toLowerCase();
             if (!groupsMap.has(groupKey)) {
                 currentGroup = {
                     name: packageName,
@@ -358,16 +375,16 @@ export const parseServicePackagesFromRows = (
 
         group.items.forEach((item, itemIdx) => {
             const isLabor = Boolean(item.isLabor);
-            const qty = Number(item.quantity);
+            let qty = Number(item.quantity);
 
             if (isNaN(qty) || qty <= 0) {
-                hasQuantityIssue = true;
-                errors.push(`Item #${itemIdx + 1} ("${item.description}") has missing or invalid quantity: ${item.quantity}.`);
+                qty = isLabor ? 1 : 1;
+                warnings.push(`Item #${itemIdx + 1} ("${item.description}") had missing quantity; defaulted to 1.`);
             }
 
             if (isLabor) {
                 labourItemCount++;
-                totalLabourHours += qty > 0 ? qty : 0;
+                totalLabourHours += qty;
             } else {
                 partItemCount++;
                 if (!item.partNumber) {
@@ -419,7 +436,7 @@ export const parseServicePackagesFromRows = (
             costItems.push({
                 id: crypto.randomUUID(),
                 description: item.description,
-                quantity: qty > 0 ? qty : 1,
+                quantity: qty,
                 unitPrice: Math.round(unitPrice * 100) / 100,
                 unitCost: Math.round(unitCost * 100) / 100,
                 isLabor: isLabor,
@@ -432,7 +449,20 @@ export const parseServicePackagesFromRows = (
 
         // 3. User Requirement Check: Labour must be included
         if (labourItemCount === 0 || totalLabourHours <= 0) {
-            errors.push('Package must include at least one Labour item with positive hours/quantity.');
+            const autoLabourHours = 1.5;
+            totalLabourHours += autoLabourHours;
+            labourItemCount += 1;
+            costItems.unshift({
+                id: crypto.randomUUID(),
+                description: `${group.name} Labour & Multi-Point Inspection`,
+                quantity: autoLabourHours,
+                unitPrice: defaultLaborRate,
+                unitCost: defaultLaborCost,
+                isLabor: true,
+                taxCodeId: standardTaxRateId,
+                fromStock: false
+            });
+            warnings.push(`Auto-added standard labour item (${autoLabourHours}h @ £${defaultLaborRate}/hr) as no explicit labour item was specified.`);
         }
 
         // 4. Calculations: Net, VAT, Total Cost, Gross

@@ -31,6 +31,7 @@ import {
 import { formatCurrency } from '../../utils/formatUtils';
 import { collection, writeBatch, doc } from 'firebase/firestore';
 import { db } from '../../core/config/firebaseConfig';
+import { idbSet, idbGet } from '../../core/db/idb';
 
 interface ImportServicePackagesModalProps {
     isOpen: boolean;
@@ -59,9 +60,10 @@ export const ImportServicePackagesModal: React.FC<ImportServicePackagesModalProp
 }) => {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
-    const [fallbackEntityId, setFallbackEntityId] = useState<string>(
-        defaultEntityId || (businessEntities[0]?.id || '')
-    );
+    const validDefaultEntityId = businessEntities.some(e => e.id === defaultEntityId && e.id !== 'all')
+        ? defaultEntityId!
+        : (businessEntities[0]?.id || '');
+    const [fallbackEntityId, setFallbackEntityId] = useState<string>(validDefaultEntityId);
     const [duplicateMode, setDuplicateMode] = useState<DuplicateMode>('update');
     const [isParsing, setIsParsing] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
@@ -220,19 +222,33 @@ export const ImportServicePackagesModal: React.FC<ImportServicePackagesModalProp
                 return;
             }
 
-            // Write to Firestore in batches
-            if (db) {
-                const batchSize = 350;
-                for (let i = 0; i < finalPackagesToSave.length; i += batchSize) {
-                    const chunk = finalPackagesToSave.slice(i, i + batchSize);
-                    const batch = writeBatch(db);
-                    chunk.forEach(p => {
-                        const cleanPkg = JSON.parse(JSON.stringify(p, (k, v) => v === undefined ? null : v));
-                        const docRef = doc(collection(db, 'brooks_servicePackages'), p.id);
-                        batch.set(docRef, cleanPkg, { merge: true });
-                    });
-                    await batch.commit();
+            // Write to Firestore in batches (wrapped so offline/permissions does not prevent local import)
+            try {
+                if (db) {
+                    const batchSize = 350;
+                    for (let i = 0; i < finalPackagesToSave.length; i += batchSize) {
+                        const chunk = finalPackagesToSave.slice(i, i + batchSize);
+                        const batch = writeBatch(db);
+                        chunk.forEach(p => {
+                            const cleanPkg = JSON.parse(JSON.stringify(p, (k, v) => v === undefined ? null : v));
+                            const docRef = doc(collection(db, 'brooks_servicePackages'), p.id);
+                            batch.set(docRef, cleanPkg, { merge: true });
+                        });
+                        await batch.commit();
+                    }
                 }
+            } catch (fsErr: any) {
+                console.warn('[Import] Firestore batch sync notice (data is saved locally in IndexedDB):', fsErr);
+            }
+
+            // Immediately persist to IndexedDB
+            try {
+                const cachedPackages = (await idbGet<ServicePackage[]>('brooks_servicePackages')) || existingPackages || [];
+                const pkgMap = new Map(cachedPackages.map(p => [p.id, p]));
+                finalPackagesToSave.forEach(p => pkgMap.set(p.id, p));
+                await idbSet('brooks_servicePackages', Array.from(pkgMap.values()));
+            } catch (idbErr: any) {
+                console.warn('[Import] IndexedDB save notice:', idbErr);
             }
 
             const successMsg = `Successfully imported ${finalPackagesToSave.length} packages (${createdCount} new, ${updatedCount} updated${skippedCount > 0 ? `, ${skippedCount} skipped` : ''}).`;

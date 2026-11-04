@@ -415,7 +415,7 @@ export const ManagementPackagesTab: React.FC<ManagementPackagesTabProps> = ({ se
                     taxRates={taxRates}
                     parts={parts}
                     existingPackages={servicePackages}
-                    defaultEntityId={selectedEntityId || (businessEntities[0]?.id || '')}
+                    defaultEntityId={selectedEntityId && selectedEntityId !== 'all' ? selectedEntityId : (businessEntities[0]?.id || '')}
                     onImportSuccess={(newOrUpdatedPackages) => {
                         setServicePackages(prev => {
                             const map = new Map((prev || []).map(p => [p.id, p]));

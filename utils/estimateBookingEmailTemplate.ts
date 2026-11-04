@@ -368,3 +368,4 @@ export const generateEstimateBookingEmailHtml = (data: EstimateBookingEmailData)
 </body>
 </html>`;
 };
+

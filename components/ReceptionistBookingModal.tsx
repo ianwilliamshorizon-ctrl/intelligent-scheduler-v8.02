@@ -194,6 +194,7 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
     });
     const [calendarDisplayMonth, setCalendarDisplayMonth] = useState<Date>(() => dateStringToDate(getTodayISOString()));
     const [allowOverbooking, setAllowOverbooking] = useState(false);
+    const [clientRequirement, setClientRequirement] = useState('');
     const [bookingNotes, setBookingNotes] = useState('');
     const [isSaving, setIsSaving] = useState(false);
     const [copiedScript, setCopiedScript] = useState<string | null>(null);
@@ -216,6 +217,7 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
             setSelectedVehicle(null);
             setVrmInput('');
             setVehicleDetails({});
+            setClientRequirement('');
             setSelectedPackageId('');
             setIsCustomManualPackage(false);
             setCustomManualName('');
@@ -461,8 +463,15 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
     }, [activeVehicle]);
     // =========================================================================
     const scoredPackages = useMemo(() => {
-        return getScoredServicePackages(servicePackages || [], activeVehicle);
-    }, [servicePackages, activeVehicle]);
+        return getScoredServicePackages(servicePackages || [], activeVehicle, clientRequirement);
+    }, [servicePackages, activeVehicle, clientRequirement]);
+
+    // Map package ID to its calculated relevance score
+    const scoreMap = useMemo(() => {
+        const map = new Map<string, number>();
+        scoredPackages.forEach(sp => map.set(sp.pkg.id, sp.score));
+        return map;
+    }, [scoredPackages]);
 
     // Categorize actual real packages from servicePackages in database
     const { makeMatchedPackages, universalPackages, allCompatiblePackages } = useMemo(() => {
@@ -489,19 +498,24 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
             return isUniversalMake && !makeMatched.some(m => m.id === pkg.id);
         });
 
+        // Sort all tiers descending by intelligent score (relevance to vehicle & client requirement)
+        makeMatched.sort((a, b) => (scoreMap.get(b.id) || 0) - (scoreMap.get(a.id) || 0));
+        universal.sort((a, b) => (scoreMap.get(b.id) || 0) - (scoreMap.get(a.id) || 0));
+        compatible.sort((a, b) => (scoreMap.get(b.id) || 0) - (scoreMap.get(a.id) || 0));
+
         return {
             makeMatchedPackages: makeMatched,
             universalPackages: universal,
             allCompatiblePackages: compatible
         };
-    }, [servicePackages, isPackageCompatible, activeVehicle]);
+    }, [servicePackages, isPackageCompatible, activeVehicle, scoreMap]);
 
     // Active selected package from real database
     const selectedPackage = useMemo(() => {
         return (servicePackages || []).find(p => p.id === selectedPackageId) || null;
     }, [servicePackages, selectedPackageId]);
 
-    // Auto-select first matching database package only once a vehicle is actually identified
+    // Auto-select top matching database package based on vehicle & client requirement narrative
     useEffect(() => {
         const hasVehicle = !!(activeVehicle?.registration || selectedVehicle?.id || vrmInput.trim());
         // Do not auto-select if no vehicle is identified yet on Step 1
@@ -510,15 +524,16 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
             return;
         }
 
-        if (!selectedPackageId && !isCustomManualPackage) {
-            if (makeMatchedPackages.length > 0) {
-                setSelectedPackageId(makeMatchedPackages[0].id);
-            } else if (universalPackages.length > 0) {
-                const preferred = universalPackages.find(p => p.id === 'pkg_gen_minor') || universalPackages[0];
-                setSelectedPackageId(preferred.id);
+        if (!isCustomManualPackage) {
+            const topMatch = allCompatiblePackages[0];
+            if (!selectedPackageId && topMatch) {
+                setSelectedPackageId(topMatch.id);
+            } else if (selectedPackageId && topMatch && (scoreMap.get(topMatch.id) || 0) >= 10 && (scoreMap.get(selectedPackageId) || 0) < 5) {
+                // If user entered a specific requirement (like "minor service"), switch to highest match
+                setSelectedPackageId(topMatch.id);
             }
         }
-    }, [activeVehicle?.registration, selectedVehicle?.id, vrmInput, currentStep, makeMatchedPackages, universalPackages, selectedPackageId, isCustomManualPackage]);
+    }, [activeVehicle?.registration, selectedVehicle?.id, vrmInput, currentStep, allCompatiblePackages, selectedPackageId, isCustomManualPackage, scoreMap]);
 
     // When vehicle changes and selected package is no longer compatible, clear it so fresh match is selected
     useEffect(() => {
@@ -1727,11 +1742,106 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                                 </div>
                             </div>
 
+                            {/* CLIENT REQUIREMENT & REQUEST NARRATIVE (TRIAGE & INTENT SEARCH) */}
+                            <div className="bg-white p-6 rounded-2xl border-2 border-indigo-200/90 shadow-sm space-y-4">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <div className="flex items-center gap-2.5">
+                                        <div className="p-2.5 bg-indigo-100 text-indigo-700 rounded-xl">
+                                            <FileText size={20} />
+                                        </div>
+                                        <div>
+                                            <h3 className="font-black text-slate-900 text-base">
+                                                Customer Requirement & Work Requested
+                                            </h3>
+                                            <p className="text-xs text-slate-500">
+                                                Type what the customer is asking for (e.g. Minor Service, MOT, brake fluid, belts). This automatically prioritises and matches the most appropriate service packages.
+                                            </p>
+                                        </div>
+                                    </div>
+                                    {mode === 'receptionist' && (
+                                        <span className="text-xs text-indigo-700 font-serif italic hidden md:inline">
+                                            Script: &ldquo;What service or repairs can we take care of for your vehicle today?&rdquo;
+                                        </span>
+                                    )}
+                                </div>
+
+                                <div className="relative">
+                                    <textarea
+                                        value={clientRequirement}
+                                        onChange={e => setClientRequirement(e.target.value)}
+                                        placeholder="e.g. Customer is looking for a minor service and MOT test, check brake pads..."
+                                        rows={2}
+                                        className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm font-medium focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none leading-relaxed"
+                                    />
+                                    {clientRequirement && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setClientRequirement('')}
+                                            className="absolute right-3 top-3 text-[11px] font-bold text-slate-500 hover:text-slate-800 bg-slate-200 hover:bg-slate-300 px-2 py-0.5 rounded-lg transition"
+                                        >
+                                            Clear
+                                        </button>
+                                    )}
+                                </div>
+
+                                {/* Preset Requirement Quick Chips */}
+                                <div>
+                                    <div className="flex items-center justify-between mb-2">
+                                        <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                                            Quick Select Common Requirements:
+                                        </span>
+                                        <span className="text-[11px] text-slate-400">Click to toggle or combine</span>
+                                    </div>
+                                    <div className="flex flex-wrap gap-2">
+                                        {[
+                                            { label: 'Minor Service (Bronze)', tag: 'Minor Service' },
+                                            { label: 'Interim Service (Silver)', tag: 'Interim Service' },
+                                            { label: 'Major Service (Gold)', tag: 'Major Service' },
+                                            { label: 'MOT Test', tag: 'MOT Test' },
+                                            { label: 'Brake Fluid Flush', tag: 'Brake Fluid' },
+                                            { label: 'Coolant Flush', tag: 'Coolant Flush' },
+                                            { label: 'Timing / Drive Belt', tag: 'Timing Belt' },
+                                            { label: 'Diagnostic / Fault Check', tag: 'Diagnostics' },
+                                        ].map(chip => {
+                                            const isActive = clientRequirement.toLowerCase().includes(chip.tag.toLowerCase());
+                                            return (
+                                                <button
+                                                    key={chip.tag}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        if (isActive) {
+                                                            const regex = new RegExp(`(,\\s*)?${chip.tag}|${chip.tag}(,\\s*)?`, 'gi');
+                                                            const updated = clientRequirement.replace(regex, '').trim().replace(/^,\s*|,\s*$/g, '');
+                                                            setClientRequirement(updated);
+                                                        } else {
+                                                            setClientRequirement(prev => prev.trim() ? `${prev.trim()}, ${chip.tag}` : chip.tag);
+                                                        }
+                                                    }}
+                                                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border ${
+                                                        isActive
+                                                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs ring-2 ring-indigo-500/20'
+                                                            : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
+                                                    }`}
+                                                >
+                                                    {isActive && <Check size={13} />}
+                                                    <span>{chip.label}</span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            </div>
+
                             {/* NEXT STEP BUTTON */}
                             <div className="flex justify-end pt-2">
                                 <button
                                     type="button"
-                                    onClick={() => setCurrentStep(2)}
+                                    onClick={() => {
+                                        if (!bookingNotes && clientRequirement) {
+                                            setBookingNotes(clientRequirement);
+                                        }
+                                        setCurrentStep(2);
+                                    }}
                                     className="px-8 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black text-base shadow-lg transition flex items-center gap-3"
                                 >
                                     Proceed to Service Matching
@@ -1825,6 +1935,26 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                                     </div>
                                 </div>
 
+                                {clientRequirement.trim() && (
+                                    <div className="mb-4 p-3.5 bg-indigo-50/90 border border-indigo-200 rounded-2xl flex items-center justify-between gap-3 text-xs shadow-xs">
+                                        <div className="flex items-center gap-2.5">
+                                            <div className="p-1.5 bg-indigo-600 text-white rounded-lg">
+                                                <Sparkles size={14} />
+                                            </div>
+                                            <span className="text-slate-700">
+                                                Packages prioritised for customer requirement: <strong className="text-indigo-950 font-bold">&ldquo;{clientRequirement}&rdquo;</strong>
+                                            </span>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => setClientRequirement('')}
+                                            className="text-xs text-indigo-700 hover:text-indigo-950 font-bold underline px-2 py-1"
+                                        >
+                                            Show All Packages
+                                        </button>
+                                    </div>
+                                )}
+
                                 {/* TAB 1: MATCHED & UNIVERSAL PACKAGES */}
                                 {serviceSourceTab === 'matched' && (
                                     <div className="space-y-6">
@@ -1845,6 +1975,8 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                                                         const isSelected = selectedPackageId === pkg.id && !isCustomManualPackage;
                                                         const laborHours = extractLaborHours(pkg, 1.5);
                                                         const highlights = extractHighlights(pkg, [pkg.description || 'Full Workshop Service Package']);
+                                                        const spMatch = scoredPackages.find(s => s.pkg.id === pkg.id);
+                                                        const isNarrativeMatch = spMatch?.narrativeMatched;
 
                                                         return (
                                                             <div
@@ -1856,14 +1988,23 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                                                                 className={`rounded-3xl p-5 border-2 cursor-pointer transition-all flex flex-col justify-between ${
                                                                     isSelected
                                                                         ? 'border-indigo-600 bg-indigo-50/70 shadow-lg ring-4 ring-indigo-500/20'
-                                                                        : 'border-slate-200 bg-white hover:border-slate-300'
+                                                                        : isNarrativeMatch
+                                                                            ? 'border-emerald-400 bg-emerald-50/30 hover:border-emerald-500'
+                                                                            : 'border-slate-200 bg-white hover:border-slate-300'
                                                                 }`}
                                                             >
                                                                 <div>
-                                                                    <div className="flex items-center justify-between mb-2">
-                                                                        <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 border border-emerald-300">
-                                                                            Verified {pkg.applicableMake || activeVehicle.make}
-                                                                        </span>
+                                                                    <div className="flex flex-wrap items-center justify-between gap-1 mb-2">
+                                                                        <div className="flex items-center gap-1.5">
+                                                                            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 border border-emerald-300">
+                                                                                Verified {pkg.applicableMake || activeVehicle.make}
+                                                                            </span>
+                                                                            {isNarrativeMatch && (
+                                                                                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-indigo-600 text-white shadow-2xs">
+                                                                                    ★ Matched Need
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
                                                                         <span className="text-xs text-slate-500 font-bold">{laborHours} hrs</span>
                                                                     </div>
                                                                     <h4 className="font-black text-lg text-slate-900 mt-1">{pkg.name}</h4>
@@ -1940,6 +2081,8 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                                                         const isSelected = selectedPackageId === pkg.id && !isCustomManualPackage;
                                                         const laborHours = extractLaborHours(pkg, 1.0);
                                                         const highlights = extractHighlights(pkg, [pkg.description || 'Universal Workshop Item']);
+                                                        const spMatch = scoredPackages.find(s => s.pkg.id === pkg.id);
+                                                        const isNarrativeMatch = spMatch?.narrativeMatched;
 
                                                         return (
                                                             <div
@@ -1951,14 +2094,23 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                                                                 className={`rounded-3xl p-5 border-2 cursor-pointer transition-all flex flex-col justify-between ${
                                                                     isSelected
                                                                         ? 'border-indigo-600 bg-indigo-50/70 shadow-lg ring-4 ring-indigo-500/20'
-                                                                        : 'border-slate-200 bg-white hover:border-slate-300'
+                                                                        : isNarrativeMatch
+                                                                            ? 'border-indigo-400 bg-indigo-50/30 hover:border-indigo-500'
+                                                                            : 'border-slate-200 bg-white hover:border-slate-300'
                                                                 }`}
                                                             >
                                                                 <div>
-                                                                    <div className="flex items-center justify-between mb-2">
-                                                                        <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-300">
-                                                                            Universal
-                                                                        </span>
+                                                                    <div className="flex flex-wrap items-center justify-between gap-1 mb-2">
+                                                                        <div className="flex items-center gap-1.5">
+                                                                            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-300">
+                                                                                Universal
+                                                                            </span>
+                                                                            {isNarrativeMatch && (
+                                                                                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-indigo-600 text-white shadow-2xs">
+                                                                                    ★ Matched Need
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
                                                                         <span className="text-xs text-slate-500 font-bold">{laborHours} hrs</span>
                                                                     </div>
                                                                     <h4 className="font-black text-lg text-slate-900 mt-1">{pkg.name}</h4>
