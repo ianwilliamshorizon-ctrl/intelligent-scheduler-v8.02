@@ -610,6 +610,7 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                         vehicles={data.vehicles}
                         customers={data.customers}
                         servicePackages={data.servicePackages}
+                        setServicePackages={data.setServicePackages}
                         defaultDate={formatDate(modals.smartCreateDefaultDate)}
                         initialPrompt={modals.smartCreateInitialPrompt}
                         inquiryId={modals.smartCreateInquiryId}

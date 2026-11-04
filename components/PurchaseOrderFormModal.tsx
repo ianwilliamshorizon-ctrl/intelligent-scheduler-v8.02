@@ -3,7 +3,10 @@ import ReactDOM from 'react-dom/client';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { PurchaseOrder, PurchaseOrderLineItem, Supplier, BusinessEntity, TaxRate, Part, Vehicle, Customer, Job, Estimate, EstimateLineItem, ServicePackage } from '../types';
-import { Save, PlusCircle, Trash2, X, CheckSquare, ArrowDownCircle, AlertTriangle, Info, Printer, Mail, Phone, Plus } from 'lucide-react';
+import { Save, PlusCircle, Trash2, X, CheckSquare, ArrowDownCircle, AlertTriangle, Info, Printer, Mail, Phone, Plus, RefreshCw } from 'lucide-react';
+import { useData } from '../core/state/DataContext';
+import { findServicePackageMatchesForPO, ServicePackageSyncPreview } from '../utils/servicePackagePriceSync';
+import UpdateServicePackagePricingModal from './UpdateServicePackagePricingModal';
 import { formatDate } from '../core/utils/dateUtils';
 import { formatCurrency } from '../utils/formatUtils';
 import useToaster from '../hooks/useToaster';
@@ -202,16 +205,21 @@ interface PurchaseOrderFormModalProps {
     customers: Customer[];
     setJobs: React.Dispatch<React.SetStateAction<Job[]>>;
     servicePackages: ServicePackage[];
+    setServicePackages?: React.Dispatch<React.SetStateAction<ServicePackage[]>>;
     generatePurchaseOrderId: (allPurchaseOrders: PurchaseOrder[], entityShortCode: string) => string;
     forceRefresh: (collectionKey: string) => Promise<void>;
 }
 
 const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({ 
     isOpen, onClose, onSave, onSavePart, purchaseOrder, suppliers, taxRates, businessEntities, allPurchaseOrders, selectedEntityId, parts, setParts, estimates, 
-    onViewPurchaseOrder, jobId, jobs, vehicles, customers, setJobs, servicePackages, generatePurchaseOrderId, forceRefresh 
+    onViewPurchaseOrder, jobId, jobs, vehicles, customers, setJobs, servicePackages, setServicePackages: propSetServicePackages, generatePurchaseOrderId, forceRefresh 
 }) => {
     const { setConfirmation } = useApp();
     const { handleDeletePurchaseOrder } = useWorkshopActions();
+    const dataContext = useData();
+    const effectiveSetServicePackages = propSetServicePackages || dataContext.setServicePackages;
+    const [priceSyncModalOpen, setPriceSyncModalOpen] = useState(false);
+    const [priceSyncPreview, setPriceSyncPreview] = useState<ServicePackageSyncPreview | null>(null);
     const [formData, setFormData] = useState<Partial<PurchaseOrder>>({ 
         lineItems: [],
         supplierId: '',
@@ -594,7 +602,26 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({
         saveAndLinkPo(updatedPO as PurchaseOrder, updatedParts, updatedEstimate);
         await forceRefresh('brooks_purchaseOrders');
         await forceRefresh('brooks_jobs');
+
+        // Check if any received parts match components in service packages with price or part number changes
+        const syncPreview = findServicePackageMatchesForPO(updatedPO as PurchaseOrder, servicePackages);
+        if (syncPreview.matches.length > 0) {
+            setPriceSyncPreview(syncPreview);
+            setPriceSyncModalOpen(true);
+            return;
+        }
+
         onClose();
+    };
+
+    const handleOpenManualPackagePriceSync = () => {
+        const preview = findServicePackageMatchesForPO(formData, servicePackages);
+        if (preview.matches.length === 0) {
+            showSuccess('No cost or part number differences detected between this PO and your service packages.');
+            return;
+        }
+        setPriceSyncPreview(preview);
+        setPriceSyncModalOpen(true);
     };
 
     const updateRecordsFromPO = (finalizedPO: PurchaseOrder) => {
@@ -984,6 +1011,14 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({
                                 )}
                             </div>
                         )}
+                        <button 
+                            type="button" 
+                            onClick={handleOpenManualPackagePriceSync} 
+                            className="px-3 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg flex items-center gap-1.5 font-bold shadow-sm text-xs"
+                            title="Update matching service packages with latest PO buy prices & part numbers"
+                        >
+                            <RefreshCw size={14} /> Update Package Prices
+                        </button>
                         {!isReceivingDisabled && formData.type !== 'Credit' && (
                             <button onClick={handleFinalizeReceipt} className="px-4 py-2 bg-green-600 text-white rounded-lg flex items-center gap-2 hover:bg-green-700 font-bold shadow-sm">
                                 <CheckSquare size={16}/> Save & Finalize Receipt
@@ -1000,6 +1035,26 @@ const PurchaseOrderFormModal: React.FC<PurchaseOrderFormModalProps> = ({
                     </div>
                 </footer>
             </div>
+
+            {priceSyncModalOpen && priceSyncPreview && (
+                <UpdateServicePackagePricingModal
+                    isOpen={priceSyncModalOpen}
+                    onClose={() => {
+                        setPriceSyncModalOpen(false);
+                        if (isOriginalStatusReceived || formData.status === 'Received') {
+                            onClose();
+                        }
+                    }}
+                    purchaseOrder={formData as PurchaseOrder}
+                    matches={priceSyncPreview.matches}
+                    allServicePackages={servicePackages}
+                    setServicePackages={effectiveSetServicePackages}
+                    onSuccess={() => {
+                        setPriceSyncModalOpen(false);
+                        onClose();
+                    }}
+                />
+            )}
 
             {isAddingPart && (
                 <PartFormModal

@@ -1,6 +1,9 @@
 import React, { useState, useMemo, useRef, useEffect, Dispatch, SetStateAction } from 'react';
 import * as T from '../types';
-import { X, Printer, Package, Send, Phone, Plus, Save, Mail } from 'lucide-react';
+import { X, Printer, Package, Send, Phone, Plus, Save, Mail, RefreshCw } from 'lucide-react';
+import { findServicePackageMatchesForPO, ServicePackageSyncPreview } from '../utils/servicePackagePriceSync';
+import UpdateServicePackagePricingModal from './UpdateServicePackagePricingModal';
+import useToaster from '../hooks/useToaster';
 import { useReactToPrint } from 'react-to-print';
 import { PurchaseOrderPrint } from './PurchaseOrderPrint';
 import { formatCurrency } from '../core/utils/formatUtils';
@@ -35,7 +38,20 @@ const PurchaseOrderViewModal: React.FC<PurchaseOrderViewModalProps> = ({
     onEditPart,
     handleSaveItem
 }) => {
-    const { taxRates, suppliers, businessEntities } = useData();
+    const { taxRates, suppliers, businessEntities, servicePackages, setServicePackages } = useData();
+    const { showSuccess } = useToaster();
+    const [priceSyncModalOpen, setPriceSyncModalOpen] = useState(false);
+    const [priceSyncPreview, setPriceSyncPreview] = useState<ServicePackageSyncPreview | null>(null);
+
+    const handleOpenPackagePricingSync = () => {
+        const preview = findServicePackageMatchesForPO({ ...purchaseOrder, lineItems }, servicePackages);
+        if (preview.matches.length === 0) {
+            showSuccess('No cost or part number differences detected between this PO and your service packages.');
+            return;
+        }
+        setPriceSyncPreview(preview);
+        setPriceSyncModalOpen(true);
+    };
     const componentToPrintRef = useRef<HTMLDivElement>(null);
     const [lineItems, setLineItems] = useState<T.PurchaseOrderLineItem[]>([]);
     const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
@@ -210,6 +226,9 @@ const PurchaseOrderViewModal: React.FC<PurchaseOrderViewModalProps> = ({
                         <button type="button" onClick={triggerPrint} className="flex items-center gap-2 py-2 px-4 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 text-sm font-semibold">
                             <Printer size={14}/> Print
                         </button>
+                        <button type="button" onClick={handleOpenPackagePricingSync} className="flex items-center gap-1.5 py-2 px-3.5 bg-amber-600 text-white font-semibold rounded-lg hover:bg-amber-700 shadow-sm text-sm" title="Review & sync latest PO buy prices and part numbers to service packages">
+                            <RefreshCw size={14}/> Update Package Prices
+                        </button>
                         <button type="button" onClick={() => setIsEmailModalOpen(true)} className="flex items-center gap-2 py-2 px-4 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 shadow-sm">
                             <Mail size={16}/> Email Supplier
                         </button>
@@ -226,6 +245,18 @@ const PurchaseOrderViewModal: React.FC<PurchaseOrderViewModalProps> = ({
                         )}
                     </div>
                 </footer>
+
+                {priceSyncModalOpen && priceSyncPreview && (
+                    <UpdateServicePackagePricingModal
+                        isOpen={priceSyncModalOpen}
+                        onClose={() => setPriceSyncModalOpen(false)}
+                        purchaseOrder={{ ...purchaseOrder, lineItems }}
+                        matches={priceSyncPreview.matches}
+                        allServicePackages={servicePackages}
+                        setServicePackages={setServicePackages}
+                        onSuccess={() => setPriceSyncModalOpen(false)}
+                    />
+                )}
 
                 {isEmailModalOpen && (
                     <EmailPurchaseOrderModal
