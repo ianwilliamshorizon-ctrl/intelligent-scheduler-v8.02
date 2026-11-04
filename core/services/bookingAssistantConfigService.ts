@@ -100,7 +100,7 @@ export const DEFAULT_BOOKING_ASSISTANT_CONFIG: BookingAssistantConfig = {
         }
     ],
     emailConfirmation: {
-        subjectTemplate: "Booking Confirmation: {vehicleReg} on {bookingDate} - {companyName}",
+        subjectTemplate: "Estimate & Booking Confirmation: {vehicleReg} on {bookingDate} - {companyName}",
         bodyTemplate: 
 `Dear {customerName},
 

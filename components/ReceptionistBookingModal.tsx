@@ -19,6 +19,7 @@ import { lookupAddressByPostcode, AddressDetails } from '../services/postcodeLoo
 import { getScoredServicePackages } from '../utils/servicePackageScoring';
 import { CAPACITY_THRESHOLD_WARNING } from '../constants';
 import { sendOutboundEmail } from '../core/services/emailService';
+import { generateEstimateBookingEmailHtml } from '../utils/estimateBookingEmailTemplate';
 import { 
     getBookingAssistantConfig, 
     interpolateScript, 
@@ -622,38 +623,75 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
         };
     }, [currentTierData, activeAddons, standardTaxRate]);
 
-    // Computed Dynamic Email Confirmation Content
+    // Prospective Estimate Number for real-time preview before commit
+    const prospectiveEstimateNumber = useMemo(() => {
+        const entityShortCode = selectedEntity?.shortCode || 'BRK';
+        return generateEstimateNumber(estimates, entityShortCode);
+    }, [estimates, selectedEntity]);
+
+    // Computed Estimate & Booking Confirmation Email Content (Formatted like Online & PDF Estimates)
     const generatedEmailContent = useMemo(() => {
         const custName = selectedCustomer 
             ? getCustomerDisplayName(selectedCustomer) 
             : `${newTitle} ${newForename} ${newSurname}`.trim() || 'Valued Customer';
 
-        const bundleSummary = activeAddons.length > 0 
-            ? `Done Together Addons:\n` + activeAddons.map(a => ` • ${a.name} (${formatCurrency(a.bundledPrice)} inc VAT)`).join('\n')
-            : 'Additional Addons: None';
+        const vrm = (activeVehicle.registration || vrmInput || 'REG').toUpperCase().trim();
+        const formattedDate = formatReadableDate(bookingDate);
+        const origin = typeof window !== 'undefined' ? window.location.origin : 'https://intelligent-scheduling-v801.web.app';
+        const onlineViewLink = `${origin}/?estimateId=EST-${prospectiveEstimateNumber}&view=customer`;
 
-        const vars: Record<string, string> = {
-            customerName: custName,
-            companyName: selectedEntity.name,
-            companyPhone: (selectedEntity as any).phone || '02380 000000',
-            companyEmail: selectedEntity.email || 'info@brookspeed.com',
-            vehicleMake: activeVehicle.make || 'Vehicle',
-            vehicleModel: activeVehicle.model || '',
-            vehicleReg: activeVehicle.registration || vrmInput || 'REG',
-            bookingDate: formatReadableDate(bookingDate),
-            tierName: currentTierData.name,
-            bundleSummary,
-            totalGross: formatCurrency(pricingSummary.totalGross),
-            totalNet: formatCurrency(pricingSummary.totalNet),
-            workshopName: selectedEntity.name,
-            bookingNotes: bookingNotes ? `Customer Notes: "${bookingNotes}"\n` : ''
-        };
+        const subject = interpolateScript(
+            scriptConfig.emailConfirmation?.subjectTemplate || "Estimate & Booking Confirmation: {vehicleReg} - {companyName}",
+            {
+                customerName: custName,
+                companyName: selectedEntity.name,
+                vehicleReg: vrm,
+                bookingDate: formattedDate,
+                estimateNumber: prospectiveEstimateNumber
+            }
+        );
 
-        const subject = interpolateScript(scriptConfig.emailConfirmation?.subjectTemplate || "Booking Confirmation: {vehicleReg} - {companyName}", vars);
-        const body = interpolateScript(scriptConfig.emailConfirmation?.bodyTemplate || "Booking confirmed for {bookingDate}.", vars);
+        const htmlBody = generateEstimateBookingEmailHtml({
+            estimateNumber: prospectiveEstimateNumber,
+            estimateId: `EST-${prospectiveEstimateNumber}`,
+            bookingDate: formattedDate,
+            bookingNotes,
+            entity: {
+                name: selectedEntity.name,
+                addressLine1: (selectedEntity as any).addressLine1 || (selectedEntity as any).addressline1,
+                addressLine2: (selectedEntity as any).addressLine2,
+                city: (selectedEntity as any).city,
+                postcode: (selectedEntity as any).postcode,
+                phone: (selectedEntity as any).phone || '02380 000000',
+                email: selectedEntity.email || 'info@brookspeed.com',
+                vatNumber: (selectedEntity as any).vatNumber || (selectedEntity as any).vatRegistrationNumber,
+                logoUrl: (selectedEntity as any).logoUrl
+            },
+            customer: {
+                name: custName,
+                companyName: selectedCustomer?.companyName,
+                address: selectedCustomer?.address || (newAddressLine1 ? `${newAddressLine1}, ${newCity} ${newPostcode}`.trim() : undefined),
+                phone: selectedCustomer?.phone || newPhone,
+                mobile: selectedCustomer?.mobile || newMobile,
+                email: customerConfirmationEmail || selectedCustomer?.email || newEmail
+            },
+            vehicle: {
+                registration: vrm,
+                make: activeVehicle.make,
+                model: activeVehicle.model,
+                year: activeVehicle.year,
+                mileage: currentMileage || activeVehicle.mileage,
+                fuelType: activeVehicle.fuelType
+            },
+            tierData: currentTierData,
+            activeAddons,
+            pricingSummary,
+            standardTaxRate,
+            onlineViewLink
+        });
 
-        return { subject, body };
-    }, [selectedCustomer, newTitle, newForename, newSurname, activeVehicle, vrmInput, bookingDate, currentTierData, activeAddons, pricingSummary, selectedEntity, bookingNotes, scriptConfig]);
+        return { subject, body: htmlBody };
+    }, [selectedCustomer, newTitle, newForename, newSurname, activeVehicle, vrmInput, bookingDate, currentTierData, activeAddons, pricingSummary, selectedEntity, bookingNotes, scriptConfig, prospectiveEstimateNumber, customerConfirmationEmail, newAddressLine1, newCity, newPostcode, newPhone, newMobile, newEmail, currentMileage, standardTaxRate]);
 
     // Computed Spoken Call Scripts from Managed Data
     const step1SpokenScript = useMemo(() => {
@@ -1009,12 +1047,54 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
             // Send Outbound Confirmation Email if Selected
             if (sendEmailConfirmation && customerConfirmationEmail) {
                 try {
+                    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://intelligent-scheduling-v801.web.app';
+                    const onlineViewLink = `${origin}/?estimateId=${newEstimate.id}&view=customer`;
+                    const formattedDate = formatReadableDate(bookingDate);
+                    const emailHtml = generateEstimateBookingEmailHtml({
+                        estimateNumber: newEstimate.estimateNumber,
+                        estimateId: newEstimate.id,
+                        bookingDate: formattedDate,
+                        bookingNotes,
+                        entity: {
+                            name: selectedEntity.name,
+                            addressLine1: (selectedEntity as any).addressLine1 || (selectedEntity as any).addressline1,
+                            addressLine2: (selectedEntity as any).addressLine2,
+                            city: (selectedEntity as any).city,
+                            postcode: (selectedEntity as any).postcode,
+                            phone: (selectedEntity as any).phone || '02380 000000',
+                            email: selectedEntity.email || 'info@brookspeed.com',
+                            vatNumber: (selectedEntity as any).vatNumber || (selectedEntity as any).vatRegistrationNumber,
+                            logoUrl: (selectedEntity as any).logoUrl
+                        },
+                        customer: {
+                            name: finalCustomer.displayName || getCustomerDisplayName(finalCustomer),
+                            companyName: finalCustomer.companyName,
+                            address: finalCustomer.address,
+                            phone: finalCustomer.phone,
+                            mobile: finalCustomer.mobile,
+                            email: customerConfirmationEmail || finalCustomer.email
+                        },
+                        vehicle: {
+                            registration: finalVehicle.registration,
+                            make: finalVehicle.make,
+                            model: finalVehicle.model,
+                            year: finalVehicle.year,
+                            mileage: currentMileage || finalVehicle.mileage,
+                            fuelType: finalVehicle.fuelType
+                        },
+                        tierData: currentTierData,
+                        activeAddons,
+                        pricingSummary,
+                        standardTaxRate,
+                        onlineViewLink
+                    });
+
                     await sendOutboundEmail({
                         to: customerConfirmationEmail,
                         fromName: selectedEntity.name,
                         fromEmail: selectedEntity.email || 'info@brookspeed.com',
                         subject: generatedEmailContent.subject,
-                        body: generatedEmailContent.body
+                        body: emailHtml
                     });
                     toast.success(`Booking details and estimate sent to ${customerConfirmationEmail}!`);
                 } catch (mailErr: any) {
@@ -2721,13 +2801,18 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                                 </div>
 
                                 {showEmailPreview && (
-                                    <div className="mt-3 p-4 bg-white rounded-2xl border border-indigo-200 text-xs space-y-2">
-                                        <div className="font-bold text-slate-800 border-b pb-1">
-                                            Subject: <span className="font-mono text-indigo-900">{generatedEmailContent.subject}</span>
+                                    <div className="mt-3 p-4 bg-white rounded-2xl border border-indigo-200 text-xs space-y-3">
+                                        <div className="font-bold text-slate-800 border-b pb-2 flex items-center justify-between">
+                                            <span>Subject: <span className="font-mono text-indigo-900 font-semibold">{generatedEmailContent.subject}</span></span>
+                                            <span className="text-[10px] uppercase font-bold tracking-wider text-indigo-700 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded">PDF/Invoice Format Preview</span>
                                         </div>
-                                        <pre className="font-sans whitespace-pre-wrap text-slate-700 text-xs leading-relaxed max-h-56 overflow-y-auto bg-slate-50 p-3 rounded-xl border border-slate-200">
-                                            {generatedEmailContent.body}
-                                        </pre>
+                                        <div className="border border-slate-200 rounded-xl overflow-hidden bg-slate-100 shadow-inner">
+                                            <iframe
+                                                srcDoc={generatedEmailContent.body}
+                                                className="w-full h-96 border-0 bg-white"
+                                                title="Customer Estimate Email Preview"
+                                            />
+                                        </div>
                                     </div>
                                 )}
                             </div>
