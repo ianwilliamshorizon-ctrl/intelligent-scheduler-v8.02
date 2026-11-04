@@ -22,24 +22,25 @@ interface IntentCluster {
     pkgKeywords: string[];
 }
 
-const INTENT_CLUSTERS: IntentCluster[] = [
+// Scope clusters: What level of service is requested (Minor vs Interim vs Major vs MOT, etc.)
+const SCOPE_CLUSTERS: IntentCluster[] = [
     {
         id: 'minor',
-        synonyms: ['minor', 'bronze', 'small', 'oilservice', 'oilchange', 'basicservice', 'basic', 'interim'],
-        antonyms: ['major', 'gold'],
-        pkgKeywords: ['minor', 'bronze', 'oilservice', 'interim']
+        synonyms: ['minor', 'oilservice', 'oilchange', 'basicservice', 'basic', 'baseline'],
+        antonyms: ['major'],
+        pkgKeywords: ['minor', 'oilservice']
     },
     {
         id: 'interim',
-        synonyms: ['interim', 'silver', 'medium', 'standardservice', 'midsvc'],
+        synonyms: ['interim', 'medium', 'standardservice', 'midsvc'],
         antonyms: [],
-        pkgKeywords: ['interim', 'silver']
+        pkgKeywords: ['interim']
     },
     {
         id: 'major',
-        synonyms: ['major', 'gold', 'fullservice', 'masterservice', 'comprehensive', 'inspection2', 'inspectionii'],
-        antonyms: ['minor', 'bronze'],
-        pkgKeywords: ['major', 'gold', 'fullservice', 'masterservice']
+        synonyms: ['major', 'fullservice', 'masterservice', 'comprehensive', 'inspection2', 'inspectionii'],
+        antonyms: ['minor'],
+        pkgKeywords: ['major', 'fullservice', 'masterservice']
     },
     {
         id: 'mot',
@@ -85,6 +86,34 @@ const INTENT_CLUSTERS: IntentCluster[] = [
     }
 ];
 
+// Tier clusters: Quality / package tier (Bronze vs Silver vs Gold)
+const TIER_CLUSTERS: IntentCluster[] = [
+    {
+        id: 'bronze',
+        synonyms: ['bronze'],
+        antonyms: ['silver', 'gold'],
+        pkgKeywords: ['bronze']
+    },
+    {
+        id: 'silver',
+        synonyms: ['silver'],
+        antonyms: ['bronze', 'gold'],
+        pkgKeywords: ['silver']
+    },
+    {
+        id: 'gold',
+        synonyms: ['gold'],
+        antonyms: ['bronze', 'silver'],
+        pkgKeywords: ['gold']
+    }
+];
+
+// Distinct model families to prevent cross-model package pollution within the same manufacturer
+const MODEL_FAMILIES = [
+    'macan', 'cayenne', 'panamera', 'boxster', 'cayman', '911', '996', '997', '991', '992', 
+    '930', '964', '993', '718', '981', 'gt3', 'evoque', 'velar', 'sport', 'discovery', 'defender'
+];
+
 export const getScoredServicePackages = (
     servicePackages: ServicePackage[], 
     vehicle?: Partial<Vehicle> | null,
@@ -95,26 +124,36 @@ export const getScoredServicePackages = (
 
     const cleanNarrative = clean(clientNarrative || '');
     const vMake = vehicle?.make ? clean(vehicle.make) : '';
-    const vModel = vehicle?.model ? clean(vehicle.model) : '';
+    const vModelRaw = String(vehicle?.model || '').toLowerCase();
+    const vVariantRaw = String((vehicle as any)?.variant || (vehicle as any)?.subModel || '').toLowerCase();
+    const vFullModelStr = `${vModelRaw} ${vVariantRaw}`.toLowerCase();
+    const vModelTokens = vFullModelStr.split(/[^a-z0-9]+/).filter(t => t.length >= 2);
     const vEngineSize = vehicle?.cc ? Number(vehicle.cc) : undefined;
     const isLR_V = vMake.includes('landrover') || vMake.includes('rangerover');
 
-    // Identify which intent clusters match client requirement narrative
-    const matchedClusters: IntentCluster[] = [];
+    // Identify which intent scope and tier clusters match client requirement narrative
+    const matchedScopes: IntentCluster[] = [];
+    const matchedTiers: IntentCluster[] = [];
+
     if (cleanNarrative) {
-        for (const cluster of INTENT_CLUSTERS) {
-            const hasMatch = cluster.synonyms.some(syn => cleanNarrative.includes(syn));
-            if (hasMatch) {
-                matchedClusters.push(cluster);
+        for (const sc of SCOPE_CLUSTERS) {
+            if (sc.synonyms.some(syn => cleanNarrative.includes(syn))) {
+                matchedScopes.push(sc);
+            }
+        }
+        for (const tc of TIER_CLUSTERS) {
+            if (tc.synonyms.some(syn => cleanNarrative.includes(syn))) {
+                matchedTiers.push(tc);
             }
         }
     }
 
     const scored: ScoredPackage[] = (servicePackages || []).map(pkg => {
-        const pName = clean(pkg.name);
-        const pDesc = clean(pkg.description);
+        const pName = (pkg.name || '').toLowerCase();
+        const pDesc = (pkg.description || '').toLowerCase();
         const pMake = clean(pkg.applicableMake);
         const pModel = clean(pkg.applicableModel);
+        const pVariant = clean(pkg.applicableVariant);
         const pEngineSize = pkg.applicableEngineSize ? Number(pkg.applicableEngineSize) : undefined;
         
         let score = 0; 
@@ -133,44 +172,78 @@ export const getScoredServicePackages = (
             });
 
             if (conflictingMake) {
-                // Incompatible brand package: Keep score 0 / deprioritised
                 return { pkg, score: 0, matchType: 'Brand Conflict', status: 'other', color: 'bg-gray-50 text-gray-400' };
             }
         }
 
         const isLR_P = pMake.includes('landrover') || pMake.includes('rangerover');
         const isMakeMatch = Boolean((pMake && vMake && (vMake.includes(pMake) || pMake.includes(vMake))) || (isLR_V && isLR_P));
-        const isModelMatch = Boolean(pModel && vModel && (vModel.includes(pModel) || pModel.includes(vModel)));
-        const isEngineSizeMatch = Boolean(pEngineSize && vEngineSize && pEngineSize === vEngineSize);
+
+        // Refined Model & Variant token matching
+        let modelMatchScore = 0;
+        let isModelExact = false;
+        let isVariantExact = false;
+
+        if (vModelTokens.length > 0) {
+            const pkgFullText = `${pName} ${pModel} ${pVariant}`.toLowerCase();
+            const matchedTokens = vModelTokens.filter(tok => pkgFullText.includes(tok));
+
+            // Check for cross-model family conflicts (e.g. vehicle is Macan, package is 911 / Cayman)
+            const vehicleFamily = MODEL_FAMILIES.find(fam => vFullModelStr.includes(fam));
+            const pkgFamily = MODEL_FAMILIES.find(fam => pkgFullText.includes(fam));
+
+            if (vehicleFamily && pkgFamily && vehicleFamily !== pkgFamily) {
+                // Cross model penalty
+                modelMatchScore -= 18;
+            } else if (matchedTokens.length > 0) {
+                modelMatchScore += matchedTokens.length * 6;
+                isModelExact = true;
+
+                // High-value trim / submodel tokens (e.g. GTS, Turbo, Carrera, S, GT3, RS, 4S)
+                const variantKeywords = ['gts', 'turbo', 'carrera', 'gt3', 'rs', 'c4s', 'diesel', 'hybrid', 'amg', 'svr', 'mport'];
+                const hasVariantMatch = variantKeywords.some(vk => vFullModelStr.includes(vk) && pkgFullText.includes(vk));
+                if (hasVariantMatch) {
+                    modelMatchScore += 10;
+                    isVariantExact = true;
+                }
+            }
+        }
+
+        // Engine size match
+        let engineScore = 0;
+        if (pEngineSize && vEngineSize) {
+            const diff = Math.abs(pEngineSize - vEngineSize);
+            if (diff <= 100) engineScore += 5;
+            else if (diff <= 500) engineScore += 2;
+        }
 
         // Baseline Vehicle Match Scoring
-        if (isMakeMatch && isModelMatch && isEngineSizeMatch) {
-            score = 5;
-            matchType = 'Exact Match';
-            status = 'exact';
-            color = 'bg-emerald-100 text-emerald-900 border-emerald-400';
-        } else if (isMakeMatch && isModelMatch) {
-            score = 4;
-            matchType = 'Model Match';
-            status = 'model';
-            color = 'bg-green-100 text-green-900 border-green-400';
-        } else if (isMakeMatch && pEngineSize && vEngineSize && pEngineSize >= vEngineSize) {
-            score = 3.5; 
-            matchType = 'Engine Match';
-            status = 'engine';
-            color = 'bg-sky-100 text-sky-900 border-sky-400';
-        } else if (isMakeMatch) {
-            score = 3;
-            matchType = 'Make Match';
-            status = 'make';
-            color = 'bg-amber-100 text-amber-800 border-amber-300';
+        if (isMakeMatch) {
+            score = 6 + modelMatchScore + engineScore;
+            if (isModelExact && isVariantExact) {
+                matchType = 'Model & Variant Match';
+                status = 'exact';
+                color = 'bg-emerald-100 text-emerald-900 border-emerald-500 font-bold';
+            } else if (isModelExact) {
+                matchType = 'Model Match';
+                status = 'model';
+                color = 'bg-emerald-50 text-emerald-800 border-emerald-400';
+            } else if (modelMatchScore < 0) {
+                matchType = 'Other Model';
+                status = 'other';
+                color = 'bg-gray-100 text-gray-500';
+            } else {
+                matchType = 'Make Match';
+                status = 'make';
+                color = 'bg-amber-100 text-amber-800 border-amber-300';
+            }
         } else if (!pMake && !pModel && !pEngineSize) {
-            score = 1;
-            matchType = 'Generic';
+            score = 2;
+            matchType = 'Generic / Universal';
             status = 'generic';
             color = 'bg-slate-100 text-slate-700';
         } else if ((vMake && pName.includes(vMake)) || (isLR_V && (pName.includes('landrover') || pName.includes('rangerover')))) {
-            score = 2;
+            score = 3;
             matchType = 'Name Match';
             status = 'other';
             color = 'bg-indigo-100 text-indigo-900';
@@ -178,43 +251,54 @@ export const getScoredServicePackages = (
 
         // Narrative / Client Requirement Boost & Penalty
         let narrativeBoost = 0;
-        if (matchedClusters.length > 0) {
-            for (const cluster of matchedClusters) {
-                const pkgMatchesKeyword = cluster.pkgKeywords.some(kw => pName.includes(kw) || pDesc.includes(kw));
-                const pkgNameDirect = cluster.pkgKeywords.some(kw => pName.includes(kw));
+        const cleanPkgText = `${clean(pName)} ${clean(pDesc)}`;
 
-                if (pkgNameDirect) {
-                    narrativeBoost += 12;
-                    narrativeMatched = true;
-                } else if (pkgMatchesKeyword) {
-                    narrativeBoost += 9;
-                    narrativeMatched = true;
-                }
-
-                // Apply penalty if package directly contradicts user requirement (e.g. client asked for Minor, package is Major)
-                const isContradiction = cluster.antonyms.some(ant => pName.includes(ant));
-                if (isContradiction) {
-                    narrativeBoost -= 6;
-                }
+        // 1. Service Scope Matching (Minor vs Interim vs Major vs MOT)
+        for (const sc of matchedScopes) {
+            const matchesKw = sc.pkgKeywords.some(kw => cleanPkgText.includes(kw));
+            if (matchesKw) {
+                narrativeBoost += 14;
+                narrativeMatched = true;
             }
-        } else if (cleanNarrative.length >= 3) {
-            // Freeform keyword check when not matching pre-set clusters
-            if (pName.includes(cleanNarrative)) {
-                narrativeBoost += 8;
+            if (sc.antonyms.some(ant => cleanPkgText.includes(ant))) {
+                narrativeBoost -= 10;
+            }
+        }
+
+        // 2. Tier Matching (Bronze vs Silver vs Gold)
+        for (const tc of matchedTiers) {
+            const matchesKw = tc.pkgKeywords.some(kw => cleanPkgText.includes(kw));
+            if (matchesKw) {
+                narrativeBoost += 16;
+                narrativeMatched = true;
+            }
+            if (tc.antonyms.some(ant => cleanPkgText.includes(ant))) {
+                narrativeBoost -= 8;
+            }
+        }
+
+        // 3. Freeform keywords
+        if (cleanNarrative.length >= 3 && matchedScopes.length === 0 && matchedTiers.length === 0) {
+            if (cleanPkgText.includes(cleanNarrative)) {
+                narrativeBoost += 10;
                 narrativeMatched = true;
             } else if (pDesc.includes(cleanNarrative)) {
-                narrativeBoost += 4;
+                narrativeBoost += 5;
                 narrativeMatched = true;
             }
         }
 
-        const finalScore = score + narrativeBoost;
+        const finalScore = Math.max(0, score + narrativeBoost);
 
         if (narrativeMatched) {
-            if (isMakeMatch) {
-                matchType = 'Make & Requirement Match';
+            if (isMakeMatch && (isModelExact || isVariantExact)) {
+                matchType = 'Model & Requirement Match';
                 status = 'exact';
                 color = 'bg-emerald-100 text-emerald-950 border-emerald-500 font-bold';
+            } else if (isMakeMatch) {
+                matchType = 'Make & Requirement Match';
+                status = 'exact';
+                color = 'bg-teal-100 text-teal-950 border-teal-500 font-bold';
             } else {
                 matchType = 'Requirement Match';
                 status = 'narrative';

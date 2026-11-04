@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
     X, Check, Car, User, Phone, Mail, MapPin, Calendar, Clock, 
-    Sparkles, ShieldCheck, ChevronRight, ChevronLeft, Plus, Copy, 
+    Sparkles, ShieldCheck, ChevronRight, ChevronLeft, ChevronDown, Plus, Copy, 
     CheckCircle2, AlertTriangle, ArrowRight, DollarSign, Wrench, 
     Volume2, CheckSquare, Square, Layers, Info, Headphones, UserPlus, Search,
     CheckCircle, MessageSquare, Bell, FileText, Gauge, CalendarCheck, AlertCircle, RefreshCw, Eye, Send
@@ -177,6 +177,8 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
     const [serviceSourceTab, setServiceSourceTab] = useState<'matched' | 'all-dms' | 'custom'>('matched');
     const [selectedPackageId, setSelectedPackageId] = useState<string>('');
     const [packageSearchTerm, setPackageSearchTerm] = useState('');
+    const [tierFilter, setTierFilter] = useState<'all' | 'bronze' | 'silver' | 'gold' | 'minor' | 'major'>('all');
+    const [showOtherMakePackages, setShowOtherMakePackages] = useState(false);
     const [filterCompatibleOnly, setFilterCompatibleOnly] = useState<boolean>(true);
     const [customManualName, setCustomManualName] = useState<string>('');
     const [customManualPrice, setCustomManualPrice] = useState<number>(250);
@@ -474,9 +476,13 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
     }, [scoredPackages]);
 
     // Categorize actual real packages from servicePackages in database
-    const { makeMatchedPackages, universalPackages, allCompatiblePackages } = useMemo(() => {
+    const { modelMatchedPackages, otherMakePackages, makeMatchedPackages, universalPackages, allCompatiblePackages } = useMemo(() => {
         const clean = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
         const vMake = clean(activeVehicle?.make || '');
+        const vModelRaw = String(activeVehicle?.model || '').toLowerCase();
+        const vVariantRaw = String((activeVehicle as any)?.variant || (activeVehicle as any)?.subModel || '').toLowerCase();
+        const vFullModel = `${vModelRaw} ${vVariantRaw}`.toLowerCase();
+        const vModelTokens = vFullModel.split(/[^a-z0-9]+/).filter(t => t.length >= 2);
         const isLR = vMake.includes('landrover') || vMake.includes('rangerover');
 
         const compatible = (servicePackages || []).filter(isPackageCompatible);
@@ -491,7 +497,25 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
             return lrMatch || makeMatch;
         });
 
-        // 2. Universal workshop packages (truly applicable to all vehicles, e.g. MOT, universal checks)
+        // 2. Separate exact Model / Variant matches from general Make packages
+        const modelMatched: ServicePackage[] = [];
+        const otherMake: ServicePackage[] = [];
+
+        if (vModelTokens.length > 0) {
+            makeMatched.forEach(pkg => {
+                const pkgFullText = `${pkg.name || ''} ${pkg.applicableModel || ''} ${pkg.applicableVariant || ''}`.toLowerCase();
+                const matchesModel = vModelTokens.some(tok => pkgFullText.includes(tok));
+                if (matchesModel) {
+                    modelMatched.push(pkg);
+                } else {
+                    otherMake.push(pkg);
+                }
+            });
+        } else {
+            modelMatched.push(...makeMatched);
+        }
+
+        // 3. Universal workshop packages (truly applicable to all vehicles, e.g. MOT, universal checks)
         const universal = compatible.filter(pkg => {
             const pMake = clean(pkg.applicableMake || '');
             const isUniversalMake = !pMake || pMake === 'all' || pMake === 'generic';
@@ -499,11 +523,15 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
         });
 
         // Sort all tiers descending by intelligent score (relevance to vehicle & client requirement)
+        modelMatched.sort((a, b) => (scoreMap.get(b.id) || 0) - (scoreMap.get(a.id) || 0));
+        otherMake.sort((a, b) => (scoreMap.get(b.id) || 0) - (scoreMap.get(a.id) || 0));
         makeMatched.sort((a, b) => (scoreMap.get(b.id) || 0) - (scoreMap.get(a.id) || 0));
         universal.sort((a, b) => (scoreMap.get(b.id) || 0) - (scoreMap.get(a.id) || 0));
         compatible.sort((a, b) => (scoreMap.get(b.id) || 0) - (scoreMap.get(a.id) || 0));
 
         return {
+            modelMatchedPackages: modelMatched,
+            otherMakePackages: otherMake,
             makeMatchedPackages: makeMatched,
             universalPackages: universal,
             allCompatiblePackages: compatible
@@ -1307,6 +1335,98 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                     {/* ======================================================== */}
                     {currentStep === 1 && (
                         <div className="space-y-6 max-w-5xl mx-auto">
+
+                            {/* 1. TOP CARD: CUSTOMER REQUIREMENT & WORK REQUESTED (NO SCROLLING REQUIRED) */}
+                            <div className="bg-white p-6 rounded-2xl border-2 border-indigo-200/90 shadow-sm space-y-4">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <div className="flex items-center gap-2.5">
+                                        <div className="p-2.5 bg-indigo-100 text-indigo-700 rounded-xl">
+                                            <FileText size={20} />
+                                        </div>
+                                        <div>
+                                            <h3 className="font-black text-slate-900 text-base">
+                                                Customer Requirement & Work Requested
+                                            </h3>
+                                            <p className="text-xs text-slate-500">
+                                                Type what the customer is asking for (e.g. Minor Service, Major Service - Bronze, MOT, brake fluid). This automatically prioritises and matches the most appropriate service packages.
+                                            </p>
+                                        </div>
+                                    </div>
+                                    {mode === 'receptionist' && (
+                                        <span className="text-xs text-indigo-700 font-serif italic hidden md:inline">
+                                            Script: &ldquo;What service or repairs can we take care of for your vehicle today?&rdquo;
+                                        </span>
+                                    )}
+                                </div>
+
+                                <div className="relative">
+                                    <textarea
+                                        value={clientRequirement}
+                                        onChange={e => setClientRequirement(e.target.value)}
+                                        placeholder="e.g. Customer is looking for a minor service (Bronze), MOT test, check brake pads..."
+                                        rows={2}
+                                        className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm font-medium focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none leading-relaxed"
+                                    />
+                                    {clientRequirement && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setClientRequirement('')}
+                                            className="absolute right-3 top-3 text-[11px] font-bold text-slate-500 hover:text-slate-800 bg-slate-200 hover:bg-slate-300 px-2 py-0.5 rounded-lg transition"
+                                        >
+                                            Clear
+                                        </button>
+                                    )}
+                                </div>
+
+                                {/* Preset Requirement Quick Chips */}
+                                <div>
+                                    <div className="flex items-center justify-between mb-2">
+                                        <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                                            Quick Select Common Requirements:
+                                        </span>
+                                        <span className="text-[11px] text-slate-400">Click to toggle or combine</span>
+                                    </div>
+                                    <div className="flex flex-wrap gap-2">
+                                        {[
+                                            { label: '🥉 Minor Service (Bronze)', tag: 'Minor Service - Bronze' },
+                                            { label: '🥈 Minor Service (Silver)', tag: 'Minor Service - Silver' },
+                                            { label: '🥇 Minor Service (Gold)', tag: 'Minor Service - Gold' },
+                                            { label: '🥉 Major Service (Bronze)', tag: 'Major Service - Bronze' },
+                                            { label: '🥈 Major Service (Silver)', tag: 'Major Service - Silver' },
+                                            { label: '🥇 Major Service (Gold)', tag: 'Major Service - Gold' },
+                                            { label: 'MOT Test', tag: 'MOT Test' },
+                                            { label: 'Brake Fluid Flush', tag: 'Brake Fluid' },
+                                            { label: 'Transmission Service', tag: 'Transmission Service' },
+                                            { label: 'Diagnostic / Fault Check', tag: 'Diagnostics' },
+                                        ].map(chip => {
+                                            const isActive = clientRequirement.toLowerCase().includes(chip.tag.toLowerCase());
+                                            return (
+                                                <button
+                                                    key={chip.tag}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        if (isActive) {
+                                                            const regex = new RegExp(`(,\\s*)?${chip.tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}|${chip.tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(,\\s*)?`, 'gi');
+                                                            const updated = clientRequirement.replace(regex, '').trim().replace(/^,\s*|,\s*$/g, '');
+                                                            setClientRequirement(updated);
+                                                        } else {
+                                                            setClientRequirement(prev => prev.trim() ? `${prev.trim()}, ${chip.tag}` : chip.tag);
+                                                        }
+                                                    }}
+                                                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border ${
+                                                        isActive
+                                                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs ring-2 ring-indigo-500/20'
+                                                            : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
+                                                    }`}
+                                                >
+                                                    {isActive && <Check size={13} />}
+                                                    <span>{chip.label}</span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            </div>
                             
                             {/* RECEPTIONIST SCRIPT / GUIDANCE HEADER (LARGER TYPE) */}
                             {mode === 'receptionist' && (
@@ -1742,95 +1862,7 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                                 </div>
                             </div>
 
-                            {/* CLIENT REQUIREMENT & REQUEST NARRATIVE (TRIAGE & INTENT SEARCH) */}
-                            <div className="bg-white p-6 rounded-2xl border-2 border-indigo-200/90 shadow-sm space-y-4">
-                                <div className="flex flex-wrap items-center justify-between gap-2">
-                                    <div className="flex items-center gap-2.5">
-                                        <div className="p-2.5 bg-indigo-100 text-indigo-700 rounded-xl">
-                                            <FileText size={20} />
-                                        </div>
-                                        <div>
-                                            <h3 className="font-black text-slate-900 text-base">
-                                                Customer Requirement & Work Requested
-                                            </h3>
-                                            <p className="text-xs text-slate-500">
-                                                Type what the customer is asking for (e.g. Minor Service, MOT, brake fluid, belts). This automatically prioritises and matches the most appropriate service packages.
-                                            </p>
-                                        </div>
-                                    </div>
-                                    {mode === 'receptionist' && (
-                                        <span className="text-xs text-indigo-700 font-serif italic hidden md:inline">
-                                            Script: &ldquo;What service or repairs can we take care of for your vehicle today?&rdquo;
-                                        </span>
-                                    )}
-                                </div>
 
-                                <div className="relative">
-                                    <textarea
-                                        value={clientRequirement}
-                                        onChange={e => setClientRequirement(e.target.value)}
-                                        placeholder="e.g. Customer is looking for a minor service and MOT test, check brake pads..."
-                                        rows={2}
-                                        className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm font-medium focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none leading-relaxed"
-                                    />
-                                    {clientRequirement && (
-                                        <button
-                                            type="button"
-                                            onClick={() => setClientRequirement('')}
-                                            className="absolute right-3 top-3 text-[11px] font-bold text-slate-500 hover:text-slate-800 bg-slate-200 hover:bg-slate-300 px-2 py-0.5 rounded-lg transition"
-                                        >
-                                            Clear
-                                        </button>
-                                    )}
-                                </div>
-
-                                {/* Preset Requirement Quick Chips */}
-                                <div>
-                                    <div className="flex items-center justify-between mb-2">
-                                        <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                                            Quick Select Common Requirements:
-                                        </span>
-                                        <span className="text-[11px] text-slate-400">Click to toggle or combine</span>
-                                    </div>
-                                    <div className="flex flex-wrap gap-2">
-                                        {[
-                                            { label: 'Minor Service (Bronze)', tag: 'Minor Service' },
-                                            { label: 'Interim Service (Silver)', tag: 'Interim Service' },
-                                            { label: 'Major Service (Gold)', tag: 'Major Service' },
-                                            { label: 'MOT Test', tag: 'MOT Test' },
-                                            { label: 'Brake Fluid Flush', tag: 'Brake Fluid' },
-                                            { label: 'Coolant Flush', tag: 'Coolant Flush' },
-                                            { label: 'Timing / Drive Belt', tag: 'Timing Belt' },
-                                            { label: 'Diagnostic / Fault Check', tag: 'Diagnostics' },
-                                        ].map(chip => {
-                                            const isActive = clientRequirement.toLowerCase().includes(chip.tag.toLowerCase());
-                                            return (
-                                                <button
-                                                    key={chip.tag}
-                                                    type="button"
-                                                    onClick={() => {
-                                                        if (isActive) {
-                                                            const regex = new RegExp(`(,\\s*)?${chip.tag}|${chip.tag}(,\\s*)?`, 'gi');
-                                                            const updated = clientRequirement.replace(regex, '').trim().replace(/^,\s*|,\s*$/g, '');
-                                                            setClientRequirement(updated);
-                                                        } else {
-                                                            setClientRequirement(prev => prev.trim() ? `${prev.trim()}, ${chip.tag}` : chip.tag);
-                                                        }
-                                                    }}
-                                                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border ${
-                                                        isActive
-                                                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs ring-2 ring-indigo-500/20'
-                                                            : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
-                                                    }`}
-                                                >
-                                                    {isActive && <Check size={13} />}
-                                                    <span>{chip.label}</span>
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-                            </div>
 
                             {/* NEXT STEP BUTTON */}
                             <div className="flex justify-end pt-2">
@@ -1956,199 +1988,254 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                                 )}
 
                                 {/* TAB 1: MATCHED & UNIVERSAL PACKAGES */}
-                                {serviceSourceTab === 'matched' && (
-                                    <div className="space-y-6">
-                                        {/* MAKE SPECIFIC PACKAGES */}
-                                        {makeMatchedPackages.length > 0 ? (
-                                            <div className="space-y-3">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-xs font-black uppercase tracking-wider text-emerald-800 bg-emerald-100 px-2.5 py-1 rounded-md border border-emerald-300">
-                                                        Matched to {activeVehicle.make}
-                                                    </span>
-                                                    <span className="text-xs text-slate-500 font-semibold">
-                                                        ({makeMatchedPackages.length} packages found in database)
-                                                    </span>
-                                                </div>
+                                {serviceSourceTab === 'matched' && (() => {
+                                    const filterPackageBySearchAndTier = (pkg: ServicePackage) => {
+                                        if (packageSearchTerm.trim()) {
+                                            const term = packageSearchTerm.toLowerCase();
+                                            const text = `${pkg.name || ''} ${pkg.description || ''} ${pkg.applicableModel || ''} ${pkg.applicableVariant || ''}`.toLowerCase();
+                                            if (!text.includes(term)) return false;
+                                        }
+                                        if (tierFilter !== 'all') {
+                                            const text = `${pkg.name || ''} ${pkg.description || ''}`.toLowerCase();
+                                            if (!text.includes(tierFilter)) return false;
+                                        }
+                                        return true;
+                                    };
 
-                                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                                    {makeMatchedPackages.map(pkg => {
-                                                        const isSelected = selectedPackageId === pkg.id && !isCustomManualPackage;
-                                                        const laborHours = extractLaborHours(pkg, 1.5);
-                                                        const highlights = extractHighlights(pkg, [pkg.description || 'Full Workshop Service Package']);
-                                                        const spMatch = scoredPackages.find(s => s.pkg.id === pkg.id);
-                                                        const isNarrativeMatch = spMatch?.narrativeMatched;
+                                    const renderPackageCard = (pkg: ServicePackage) => {
+                                        const isSelected = selectedPackageId === pkg.id && !isCustomManualPackage;
+                                        const laborHours = extractLaborHours(pkg, 1.5);
+                                        const highlights = extractHighlights(pkg, [pkg.description || 'Full Workshop Service Package']);
+                                        const spMatch = scoredPackages.find(s => s.pkg.id === pkg.id);
+                                        const isNarrativeMatch = spMatch?.narrativeMatched;
 
-                                                        return (
-                                                            <div
-                                                                key={pkg.id}
-                                                                onClick={() => {
-                                                                    setSelectedPackageId(pkg.id);
-                                                                    setIsCustomManualPackage(false);
-                                                                }}
-                                                                className={`rounded-3xl p-5 border-2 cursor-pointer transition-all flex flex-col justify-between ${
-                                                                    isSelected
-                                                                        ? 'border-indigo-600 bg-indigo-50/70 shadow-lg ring-4 ring-indigo-500/20'
-                                                                        : isNarrativeMatch
-                                                                            ? 'border-emerald-400 bg-emerald-50/30 hover:border-emerald-500'
-                                                                            : 'border-slate-200 bg-white hover:border-slate-300'
-                                                                }`}
-                                                            >
-                                                                <div>
-                                                                    <div className="flex flex-wrap items-center justify-between gap-1 mb-2">
-                                                                        <div className="flex items-center gap-1.5">
-                                                                            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 border border-emerald-300">
-                                                                                Verified {pkg.applicableMake || activeVehicle.make}
-                                                                            </span>
-                                                                            {isNarrativeMatch && (
-                                                                                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-indigo-600 text-white shadow-2xs">
-                                                                                    ★ Matched Need
-                                                                                </span>
-                                                                            )}
-                                                                        </div>
-                                                                        <span className="text-xs text-slate-500 font-bold">{laborHours} hrs</span>
-                                                                    </div>
-                                                                    <h4 className="font-black text-lg text-slate-900 mt-1">{pkg.name}</h4>
-                                                                    <p className="text-xs text-slate-500 mb-3">{pkg.description || `Package #${pkg.id}`}</p>
+                                        return (
+                                            <div
+                                                key={pkg.id}
+                                                onClick={() => {
+                                                    setSelectedPackageId(pkg.id);
+                                                    setIsCustomManualPackage(false);
+                                                }}
+                                                className={`rounded-3xl p-5 border-2 cursor-pointer transition-all flex flex-col justify-between ${
+                                                    isSelected
+                                                        ? 'border-indigo-600 bg-indigo-50/70 shadow-lg ring-4 ring-indigo-500/20'
+                                                        : isNarrativeMatch
+                                                            ? 'border-emerald-400 bg-emerald-50/30 hover:border-emerald-500 ring-2 ring-emerald-400/20'
+                                                            : 'border-slate-200 bg-white hover:border-slate-300'
+                                                }`}
+                                            >
+                                                <div>
+                                                    <div className="flex flex-wrap items-center justify-between gap-1 mb-2">
+                                                        <div className="flex items-center gap-1.5">
+                                                            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 border border-emerald-300">
+                                                                Verified {pkg.applicableMake || activeVehicle.make}
+                                                            </span>
+                                                            {isNarrativeMatch && (
+                                                                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-indigo-600 text-white shadow-2xs">
+                                                                    ★ Matched Need
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <span className="text-xs text-slate-500 font-bold">{laborHours} hrs</span>
+                                                    </div>
+                                                    <h4 className="font-black text-lg text-slate-900 mt-1">{pkg.name}</h4>
+                                                    <p className="text-xs text-slate-500 mb-3">{pkg.description || `Package #${pkg.id}`}</p>
 
-                                                                    <div className="text-2xl font-black text-slate-900 mb-4 font-mono">
-                                                                        {formatCurrency(pkg.totalPrice || 0)}
-                                                                        <span className="text-xs font-normal text-slate-500 ml-1">inc VAT</span>
-                                                                    </div>
+                                                    <div className="text-2xl font-black text-slate-900 mb-4 font-mono">
+                                                        {formatCurrency(pkg.totalPrice || 0)}
+                                                        <span className="text-xs font-normal text-slate-500 ml-1">inc VAT</span>
+                                                    </div>
 
-                                                                    <div className="space-y-1.5 text-xs text-slate-700">
-                                                                        {highlights.map((h, i) => (
-                                                                            <div key={i} className="flex items-start gap-2">
-                                                                                <Check size={14} className="text-emerald-600 mt-0.5 flex-shrink-0" />
-                                                                                <span className="line-clamp-1">{h}</span>
-                                                                            </div>
-                                                                        ))}
-                                                                    </div>
-                                                                </div>
-
-                                                                <button
-                                                                    type="button"
-                                                                    className={`mt-6 w-full py-2.5 rounded-xl text-xs font-black transition ${
-                                                                        isSelected
-                                                                            ? 'bg-indigo-600 text-white shadow-md'
-                                                                            : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                                                                    }`}
-                                                                >
-                                                                    {isSelected ? 'Selected Package' : 'Select Package'}
-                                                                </button>
+                                                    <div className="space-y-1.5 text-xs text-slate-700">
+                                                        {highlights.map((h, i) => (
+                                                            <div key={i} className="flex items-start gap-2">
+                                                                <Check size={14} className="text-emerald-600 mt-0.5 flex-shrink-0" />
+                                                                <span className="line-clamp-1">{h}</span>
                                                             </div>
-                                                        );
-                                                    })}
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            <div className="bg-amber-50 border border-amber-300 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-amber-950">
-                                                <div className="flex items-start gap-3">
-                                                    <AlertCircle size={20} className="text-amber-600 mt-0.5 flex-shrink-0" />
-                                                    <div>
-                                                        <span className="font-bold text-sm block">
-                                                            No make-specific service packages in database for {activeVehicle.make || 'this make'}
-                                                        </span>
-                                                        <span className="text-xs text-amber-800">
-                                                            Packages are not fabricated or made up. You can choose from your universal workshop packages below, browse all catalogue packages, or quote a custom service.
-                                                        </span>
+                                                        ))}
                                                     </div>
                                                 </div>
+
                                                 <button
                                                     type="button"
-                                                    onClick={() => setServiceSourceTab('all-dms')}
-                                                    className="px-3.5 py-2 bg-amber-700 hover:bg-amber-800 text-white rounded-xl text-xs font-bold whitespace-nowrap transition flex items-center gap-1.5 shadow-sm"
+                                                    className={`mt-6 w-full py-2.5 rounded-xl text-xs font-black transition ${
+                                                        isSelected
+                                                            ? 'bg-indigo-600 text-white shadow-md'
+                                                            : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                                                    }`}
                                                 >
-                                                    <Search size={14} />
-                                                    Browse All Packages
+                                                    {isSelected ? 'Selected Package' : 'Select Package'}
                                                 </button>
                                             </div>
-                                        )}
+                                        );
+                                    };
 
-                                        {/* UNIVERSAL PACKAGES */}
-                                        {universalPackages.length > 0 && (
-                                            <div className="space-y-3 pt-2">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-xs font-black uppercase tracking-wider text-slate-700 bg-slate-200 px-2.5 py-1 rounded-md border border-slate-300">
-                                                        Universal Workshop Packages
-                                                    </span>
-                                                    <span className="text-xs text-slate-500 font-semibold">
-                                                        (Applicable across all vehicle models)
-                                                    </span>
+                                    const displayedModelPkgs = modelMatchedPackages.filter(filterPackageBySearchAndTier);
+                                    const displayedOtherPkgs = otherMakePackages.filter(filterPackageBySearchAndTier);
+                                    const displayedMakePkgs = makeMatchedPackages.filter(filterPackageBySearchAndTier);
+
+                                    return (
+                                        <div className="space-y-6">
+                                            {/* SEARCH AND TIER FILTER CONTROLS */}
+                                            <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-2xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                                                <div className="relative flex-1">
+                                                    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Search matching packages by name, tier, or keyword..."
+                                                        value={packageSearchTerm}
+                                                        onChange={e => setPackageSearchTerm(e.target.value)}
+                                                        className="w-full pl-10 pr-16 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs outline-none focus:bg-white focus:ring-2 focus:ring-indigo-500"
+                                                    />
+                                                    {packageSearchTerm && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setPackageSearchTerm('')}
+                                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-slate-400 hover:text-slate-600 font-bold"
+                                                        >
+                                                            Clear
+                                                        </button>
+                                                    )}
                                                 </div>
-
-                                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                                    {universalPackages.map(pkg => {
-                                                        const isSelected = selectedPackageId === pkg.id && !isCustomManualPackage;
-                                                        const laborHours = extractLaborHours(pkg, 1.0);
-                                                        const highlights = extractHighlights(pkg, [pkg.description || 'Universal Workshop Item']);
-                                                        const spMatch = scoredPackages.find(s => s.pkg.id === pkg.id);
-                                                        const isNarrativeMatch = spMatch?.narrativeMatched;
-
-                                                        return (
-                                                            <div
-                                                                key={pkg.id}
-                                                                onClick={() => {
-                                                                    setSelectedPackageId(pkg.id);
-                                                                    setIsCustomManualPackage(false);
-                                                                }}
-                                                                className={`rounded-3xl p-5 border-2 cursor-pointer transition-all flex flex-col justify-between ${
-                                                                    isSelected
-                                                                        ? 'border-indigo-600 bg-indigo-50/70 shadow-lg ring-4 ring-indigo-500/20'
-                                                                        : isNarrativeMatch
-                                                                            ? 'border-indigo-400 bg-indigo-50/30 hover:border-indigo-500'
-                                                                            : 'border-slate-200 bg-white hover:border-slate-300'
-                                                                }`}
-                                                            >
-                                                                <div>
-                                                                    <div className="flex flex-wrap items-center justify-between gap-1 mb-2">
-                                                                        <div className="flex items-center gap-1.5">
-                                                                            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-300">
-                                                                                Universal
-                                                                            </span>
-                                                                            {isNarrativeMatch && (
-                                                                                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-indigo-600 text-white shadow-2xs">
-                                                                                    ★ Matched Need
-                                                                                </span>
-                                                                            )}
-                                                                        </div>
-                                                                        <span className="text-xs text-slate-500 font-bold">{laborHours} hrs</span>
-                                                                    </div>
-                                                                    <h4 className="font-black text-lg text-slate-900 mt-1">{pkg.name}</h4>
-                                                                    <p className="text-xs text-slate-500 mb-3">{pkg.description || `Package #${pkg.id}`}</p>
-
-                                                                    <div className="text-2xl font-black text-slate-900 mb-4 font-mono">
-                                                                        {formatCurrency(pkg.totalPrice || 0)}
-                                                                        <span className="text-xs font-normal text-slate-500 ml-1">inc VAT</span>
-                                                                    </div>
-
-                                                                    <div className="space-y-1.5 text-xs text-slate-700">
-                                                                        {highlights.map((h, i) => (
-                                                                            <div key={i} className="flex items-start gap-2">
-                                                                                <Check size={14} className="text-indigo-600 mt-0.5 flex-shrink-0" />
-                                                                                <span className="line-clamp-1">{h}</span>
-                                                                            </div>
-                                                                        ))}
-                                                                    </div>
-                                                                </div>
-
-                                                                <button
-                                                                    type="button"
-                                                                    className={`mt-6 w-full py-2.5 rounded-xl text-xs font-black transition ${
-                                                                        isSelected
-                                                                            ? 'bg-indigo-600 text-white shadow-md'
-                                                                            : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                                                                    }`}
-                                                                >
-                                                                    {isSelected ? 'Selected Package' : 'Select Package'}
-                                                                </button>
-                                                            </div>
-                                                        );
-                                                    })}
+                                                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+                                                    {[
+                                                        { id: 'all', label: 'All Tiers' },
+                                                        { id: 'bronze', label: '🥉 Bronze' },
+                                                        { id: 'silver', label: '🥈 Silver' },
+                                                        { id: 'gold', label: '🥇 Gold' },
+                                                        { id: 'minor', label: 'Minor' },
+                                                        { id: 'major', label: 'Major' }
+                                                    ].map(t => (
+                                                        <button
+                                                            key={t.id}
+                                                            type="button"
+                                                            onClick={() => setTierFilter(t.id as any)}
+                                                            className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition ${
+                                                                tierFilter === t.id
+                                                                    ? 'bg-indigo-600 text-white shadow-2xs'
+                                                                    : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                                                            }`}
+                                                        >
+                                                            {t.label}
+                                                        </button>
+                                                    ))}
                                                 </div>
                                             </div>
-                                        )}
-                                    </div>
-                                )}
+
+                                            {/* PRIMARY MODEL-SPECIFIC PACKAGES (EXACT MATCH FOR VEHICLE) */}
+                                            {modelMatchedPackages.length > 0 ? (
+                                                <div className="space-y-4">
+                                                    <div className="flex items-center justify-between gap-2">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-xs font-black uppercase tracking-wider text-emerald-800 bg-emerald-100 px-2.5 py-1 rounded-md border border-emerald-300">
+                                                                Matched for {activeVehicle.make} {activeVehicle.model || ''}
+                                                            </span>
+                                                            <span className="text-xs text-slate-500 font-semibold">
+                                                                ({displayedModelPkgs.length} model-specific packages)
+                                                            </span>
+                                                        </div>
+                                                        {clientRequirement && (
+                                                            <span className="text-xs text-indigo-700 font-semibold hidden md:inline">
+                                                                Sorted by relevance to: &ldquo;{clientRequirement}&rdquo;
+                                                            </span>
+                                                        )}
+                                                    </div>
+
+                                                    {displayedModelPkgs.length > 0 ? (
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                                            {displayedModelPkgs.map(renderPackageCard)}
+                                                        </div>
+                                                    ) : (
+                                                        <div className="p-6 bg-slate-50 rounded-2xl border border-slate-200 text-center text-sm text-slate-500">
+                                                            No packages match current filter &ldquo;{packageSearchTerm || tierFilter}&rdquo; in model specific packages.
+                                                        </div>
+                                                    )}
+
+                                                    {/* OTHER MAKE PACKAGES (COLLAPSIBLE TO AVOID CLUTTERING VIEW) */}
+                                                    {otherMakePackages.length > 0 && (
+                                                        <div className="pt-3 border-t border-slate-200">
+                                                            <div className="flex items-center justify-between mb-3">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setShowOtherMakePackages(prev => !prev)}
+                                                                    className="flex items-center gap-2 text-xs font-bold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-3.5 py-2 rounded-xl transition"
+                                                                >
+                                                                    {showOtherMakePackages ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                                                                    <span>{showOtherMakePackages ? 'Hide' : 'Show'} Other {activeVehicle.make} Packages ({otherMakePackages.length})</span>
+                                                                </button>
+                                                                <span className="text-[11px] text-slate-400">
+                                                                    Other models in {activeVehicle.make} catalog
+                                                                </span>
+                                                            </div>
+
+                                                            {showOtherMakePackages && (
+                                                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                                                    {displayedOtherPkgs.map(renderPackageCard)}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ) : makeMatchedPackages.length > 0 ? (
+                                                /* FALLBACK MAKE PACKAGES (IF VEHICLE MODEL IS UNKNOWN/GENERIC) */
+                                                <div className="space-y-3">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-xs font-black uppercase tracking-wider text-emerald-800 bg-emerald-100 px-2.5 py-1 rounded-md border border-emerald-300">
+                                                            Matched to {activeVehicle.make}
+                                                        </span>
+                                                        <span className="text-xs text-slate-500 font-semibold">
+                                                            ({displayedMakePkgs.length} packages found in database)
+                                                        </span>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                                        {displayedMakePkgs.map(renderPackageCard)}
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="bg-amber-50 border border-amber-300 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-amber-950">
+                                                    <div className="flex items-start gap-3">
+                                                        <AlertCircle size={20} className="text-amber-600 mt-0.5 flex-shrink-0" />
+                                                        <div>
+                                                            <span className="font-bold text-sm block">
+                                                                No make-specific service packages in database for {activeVehicle.make || 'this make'}
+                                                            </span>
+                                                            <span className="text-xs text-amber-800">
+                                                                Packages are not fabricated or made up. You can choose from your universal workshop packages below, browse all catalogue packages, or quote a custom service.
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setServiceSourceTab('all-dms')}
+                                                        className="px-3.5 py-2 bg-amber-700 hover:bg-amber-800 text-white rounded-xl text-xs font-bold whitespace-nowrap transition flex items-center gap-1.5 shadow-sm"
+                                                    >
+                                                        <Search size={14} />
+                                                        Browse All Packages
+                                                    </button>
+                                                </div>
+                                            )}
+
+                                            {/* UNIVERSAL PACKAGES */}
+                                            {universalPackages.length > 0 && (
+                                                <div className="space-y-3 pt-2">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-xs font-black uppercase tracking-wider text-slate-700 bg-slate-200 px-2.5 py-1 rounded-md">
+                                                            Universal Workshop Packages
+                                                        </span>
+                                                        <span className="text-xs text-slate-500 font-semibold">
+                                                            (Applicable to all vehicles)
+                                                        </span>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                                        {universalPackages.filter(filterPackageBySearchAndTier).map(renderPackageCard)}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })()}
 
                                 {/* TAB 2: ALL WORKSHOP PACKAGES CATALOGUE */}
                                 {serviceSourceTab === 'all-dms' && (
