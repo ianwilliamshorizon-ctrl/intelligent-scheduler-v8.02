@@ -67,7 +67,7 @@ export const findBusinessEntity = (
         return undefined;
     }
 
-    const safeFallback = businessEntities.find(e => e.id === fallbackEntityId && e.id !== 'all') 
+    const safeFallback = businessEntities.find(e => e.id === fallbackEntityId && e.id !== 'all')
         || businessEntities[0];
 
     const str = String(rawInput || '').trim();
@@ -96,8 +96,8 @@ export const findBusinessEntity = (
     // 5. Token match (e.g. "porsche", "audi", "trimming", "workshop", "southampton")
     const tokens = lower.split(/[^a-z0-9]+/).filter(t => t.length >= 3);
     for (const token of tokens) {
-        found = businessEntities.find(e => 
-            e.id.toLowerCase().includes(token) || 
+        found = businessEntities.find(e =>
+            e.id.toLowerCase().includes(token) ||
             (e.shortCode && e.shortCode.toLowerCase().includes(token)) ||
             (e.name && e.name.toLowerCase().includes(token))
         );
@@ -116,6 +116,68 @@ const normalizeKey = (key: string): string => {
 };
 
 /**
+ * Safely parses any number, stripping currency symbols (£, $, €), commas, and spaces
+ */
+export const parseCleanNumber = (val: any): number | undefined => {
+    if (val === undefined || val === null) return undefined;
+    const str = String(val).trim();
+    if (!str) return undefined;
+    const cleaned = str.replace(/[^0-9.-]/g, '');
+    if (!cleaned || cleaned === '-' || cleaned === '.') return undefined;
+    const num = parseFloat(cleaned);
+    return isNaN(num) ? undefined : num;
+};
+
+/**
+ * Scans a 2D sheet matrix to locate the real column header row (skipping metadata/title headers)
+ */
+export const convertRawRowsWithSmartHeaderDetection = (rawMatrix: any[][]): any[] => {
+    if (!rawMatrix || rawMatrix.length === 0) return [];
+
+    let headerRowIndex = -1;
+    const headerKeywords = [
+        'packagename', 'servicename', 'package', 'businessentity', 'itemtype',
+        'itemdescription', 'vehiclemake', 'unitprice', 'partnumber'
+    ];
+
+    for (let r = 0; r < Math.min(rawMatrix.length, 15); r++) {
+        const row = rawMatrix[r];
+        if (!Array.isArray(row)) continue;
+        const normalizedCells = row.map(c => normalizeKey(String(c ?? '')));
+        const matches = headerKeywords.filter(kw => normalizedCells.some(cell => cell.includes(kw)));
+        if (matches.length >= 2) {
+            headerRowIndex = r;
+            break;
+        }
+    }
+
+    if (headerRowIndex === -1) {
+        headerRowIndex = 0;
+    }
+
+    const rawHeaders = rawMatrix[headerRowIndex] || [];
+    const headers = rawHeaders.map(h => String(h ?? '').trim().replace(/^\uFEFF/, ''));
+
+    const jsonRows: any[] = [];
+    for (let r = headerRowIndex + 1; r < rawMatrix.length; r++) {
+        const row = rawMatrix[r];
+        if (!row || !Array.isArray(row)) continue;
+        const hasData = row.some(cell => cell !== undefined && cell !== null && String(cell).trim() !== '');
+        if (!hasData) continue;
+
+        const rowObj: Record<string, any> = {};
+        headers.forEach((h, colIdx) => {
+            if (h) {
+                rowObj[h] = row[colIdx] !== undefined ? row[colIdx] : '';
+            }
+        });
+        jsonRows.push(rowObj);
+    }
+
+    return jsonRows;
+};
+
+/**
  * Parses raw text or sheet data into normalized row objects
  */
 export const parseRawSheetToRows = async (file: File): Promise<any[]> => {
@@ -128,21 +190,22 @@ export const parseRawSheetToRows = async (file: File): Promise<any[]> => {
         const workbook = XLSX.read(buffer, { type: 'array' });
         const firstSheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[firstSheetName];
-        const jsonRows = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
-        return jsonRows;
+        const rawMatrix: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+        return convertRawRowsWithSmartHeaderDetection(rawMatrix);
     }
 
     // Default to CSV
     return new Promise((resolve, reject) => {
         Papa.parse(file, {
-            header: true,
-            skipEmptyLines: 'greedy',
-            transformHeader: (h) => h.trim().replace(/^\uFEFF/, ''),
+            header: false,
+            skipEmptyLines: false,
             complete: (results) => {
                 if (results.errors && results.errors.length > 0) {
                     console.warn('Papa parse notices:', results.errors);
                 }
-                resolve((results.data as any[]).filter(row => row && Object.keys(row).length > 0));
+                const rawMatrix = (results.data || []) as any[][];
+                const normalizedRows = convertRawRowsWithSmartHeaderDetection(rawMatrix);
+                resolve(normalizedRows);
             },
             error: (err) => {
                 reject(err);
@@ -222,9 +285,9 @@ export const parseServicePackagesFromRows = (
         const model = String(getVal('vehiclemodel', 'model') || '').trim();
         const variant = String(getVal('vehiclevariant', 'variant', 'trim') || '').trim();
         const engineSizeStr = String(getVal('enginesize', 'enginesizecc', 'cc', 'engine') || '').trim();
-        const engineSize = engineSizeStr ? parseFloat(engineSizeStr) : undefined;
+        const engineSize = parseCleanNumber(engineSizeStr);
         const targetPriceStr = String(getVal('packagefixedpricegross', 'packageprice', 'totalprice', 'fixedprice', 'grossprice') || '').trim();
-        const targetFixedPrice = targetPriceStr ? parseFloat(targetPriceStr.replace(/[^0-9.-]/g, '')) : undefined;
+        const targetFixedPrice = parseCleanNumber(targetPriceStr);
         const taxCodeStr = String(getVal('taxcode', 'vatcode', 'tax') || '').trim();
 
         // Line item fields
@@ -258,18 +321,18 @@ export const parseServicePackagesFromRows = (
                     {
                         isLabor: true,
                         description: singleRowLabourDesc || `${packageName} Labour`,
-                        quantity: parseFloat(String(singleRowLabourHours)) || 1,
-                        unitPrice: singleRowLabourRate !== '' ? parseFloat(String(singleRowLabourRate)) : undefined,
-                        unitCost: singleRowLabourCost !== '' ? parseFloat(String(singleRowLabourCost)) : undefined,
+                        quantity: parseCleanNumber(singleRowLabourHours) || 1,
+                        unitPrice: parseCleanNumber(singleRowLabourRate),
+                        unitCost: parseCleanNumber(singleRowLabourCost),
                         taxCode: taxCodeStr,
                         partNumber: ''
                     },
                     ...(itemDescription ? [{
                         isLabor: false,
                         description: itemDescription,
-                        quantity: parseFloat(String(quantityRaw)) || 1,
-                        unitPrice: unitPriceRaw !== '' ? parseFloat(String(unitPriceRaw)) : undefined,
-                        unitCost: unitCostRaw !== '' ? parseFloat(String(unitCostRaw)) : undefined,
+                        quantity: parseCleanNumber(quantityRaw) || 1,
+                        unitPrice: parseCleanNumber(unitPriceRaw),
+                        unitCost: parseCleanNumber(unitCostRaw),
                         taxCode: taxCodeStr,
                         partNumber: partNumber
                     }] : [])
@@ -311,7 +374,8 @@ export const parseServicePackagesFromRows = (
         }
 
         // If we have an active package group, see if this row contains a line item
-        if (currentGroup) {
+        const activeGroup = currentGroup || (packageGroups.length > 0 ? packageGroups[packageGroups.length - 1] : null);
+        if (activeGroup) {
             // If itemDescription or quantity or itemType is present
             if (itemDescription || quantityRaw !== '' || itemTypeRaw || partNumber) {
                 // Determine if labour or part
@@ -328,13 +392,13 @@ export const parseServicePackagesFromRows = (
                     isLabor = false;
                 }
 
-                currentGroup.items.push({
+                activeGroup.items.push({
                     isLabor,
                     description: itemDescription || (isLabor ? 'Labour' : (partNumber ? `Part ${partNumber}` : 'Consumables / Parts')),
                     partNumber: partNumber || '',
-                    quantity: quantityRaw !== '' ? parseFloat(String(quantityRaw)) || 0 : (isLabor ? 1 : 1),
-                    unitPrice: unitPriceRaw !== '' ? parseFloat(String(unitPriceRaw)) : undefined,
-                    unitCost: unitCostRaw !== '' ? parseFloat(String(unitCostRaw)) : undefined,
+                    quantity: parseCleanNumber(quantityRaw) ?? (isLabor ? 1 : 1),
+                    unitPrice: parseCleanNumber(unitPriceRaw),
+                    unitCost: parseCleanNumber(unitCostRaw),
                     taxCode: taxCodeStr
                 });
             }
@@ -553,7 +617,7 @@ export const parseServicePackagesFromRows = (
  */
 export const generateServicePackagesCsvTemplate = (businessEntities: BusinessEntity[]): string => {
     const sampleEntity = businessEntities[0]?.name || 'Brookspeed Southampton';
-    
+
     const rows = [
         [
             'Package Name',
@@ -828,7 +892,7 @@ export const downloadServicePackageExcelTemplate = async (businessEntities: Busi
         const XLSX = await loadXlsxLibrary();
         const csvContent = generateServicePackagesCsvTemplate(businessEntities);
         const workbook = XLSX.read(csvContent, { type: 'string' });
-        
+
         // Auto-fit column widths
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
