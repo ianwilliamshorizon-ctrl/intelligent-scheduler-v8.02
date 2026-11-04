@@ -131,10 +131,12 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
         [businessEntities, selectedEntityId]
     );
 
-    const standardTaxRate = useMemo(() => 
-        taxRates.find(t => t.code === 'T1')?.rate ?? 20, 
+    const standardTaxRateObj = useMemo(() => 
+        taxRates.find(t => t.code === 'T1') || taxRates.find(t => t.id === 'tax_2') || taxRates[0],
         [taxRates]
     );
+    const standardTaxRateId = standardTaxRateObj?.id || 'tax_2';
+    const standardTaxRate = standardTaxRateObj?.rate ?? 20;
 
     // Navigation & Mode
     const [mode, setMode] = useState<'receptionist' | 'online'>((initialMode as 'receptionist' | 'online') || 'receptionist');
