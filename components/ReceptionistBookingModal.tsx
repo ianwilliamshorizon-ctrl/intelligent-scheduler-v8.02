@@ -510,54 +510,15 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
         return map;
     }, [scoredPackages]);
 
-    // Categorize actual real packages from servicePackages in database
-    const { modelMatchedPackages, otherMakePackages, makeMatchedPackages, universalPackages, allCompatiblePackages } = useMemo(() => {
-        const clean = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-        const vMake = clean(activeVehicle?.make || '');
-        const vModelRaw = String(activeVehicle?.model || '').toLowerCase();
-        const vVariantRaw = String((activeVehicle as any)?.variant || (activeVehicle as any)?.subModel || '').toLowerCase();
-        const vFullModel = `${vModelRaw} ${vVariantRaw}`.toLowerCase();
-        const vModelTokens = vFullModel.split(/[^a-z0-9]+/).filter(t => t.length >= 2);
-        const isLR = vMake.includes('landrover') || vMake.includes('rangerover');
-
-        const compatible = (servicePackages || []).filter(isPackageCompatible);
-
-        // 1. Vehicle Make / Model specific from actual database
-        const makeMatched = compatible.filter(pkg => {
-            const pMake = clean(pkg.applicableMake || '');
-            const pName = clean(pkg.name || '');
-
-            const lrMatch = isLR && (pMake.includes('landrover') || pMake.includes('rangerover') || pName.includes('landrover') || pName.includes('rangerover'));
-            const makeMatch = (pMake && (vMake.includes(pMake) || pMake.includes(vMake))) || (vMake && pName.includes(vMake));
-            return lrMatch || makeMatch;
-        });
-
-        // 2. Separate exact Model / Variant matches from general Make packages
-        const modelMatched: ServicePackage[] = [];
-        const otherMake: ServicePackage[] = [];
-
-        if (vModelTokens.length > 0) {
-            makeMatched.forEach(pkg => {
-                const pkgFullText = `${pkg.name || ''} ${pkg.applicableModel || ''} ${pkg.applicableVariant || ''}`.toLowerCase();
-                const matchesModel = vModelTokens.some(tok => pkgFullText.includes(tok));
-                if (matchesModel) {
-                    modelMatched.push(pkg);
-                } else {
-                    otherMake.push(pkg);
-                }
-            });
-        } else {
-            modelMatched.push(...makeMatched);
-        }
-
-        // 3. Universal workshop packages (truly applicable to all vehicles, e.g. MOT, universal checks)
-        const universal = compatible.filter(pkg => {
-            const pMake = clean(pkg.applicableMake || '');
-            const isUniversalMake = !pMake || pMake === 'all' || pMake === 'generic';
-            return isUniversalMake && !makeMatched.some(m => m.id === pkg.id);
-        });
-
-        // Graded package tiers: Exact -> Model -> Make -> Universal
+    // Categorize actual real packages from servicePackages in database using graded scoring
+    const { 
+        exactMatchedPackages, 
+        modelMatchedPackages, 
+        otherMakePackages, 
+        makeMatchedPackages, 
+        universalPackages, 
+        allCompatiblePackages 
+    } = useMemo(() => {
         const exact: ServicePackage[] = [];
         const model: ServicePackage[] = [];
         const otherMakeGraded: ServicePackage[] = [];

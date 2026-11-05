@@ -75,3 +75,4 @@ describe('DVLA Vehicle Lookup Service - Fuel Type Extraction & Normalization', (
         }
     });
 });
+
