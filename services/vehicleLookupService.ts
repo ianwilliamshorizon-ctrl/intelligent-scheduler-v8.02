@@ -42,15 +42,34 @@ export const formatToISODate = (val: any): string => {
   } catch { return ''; }
 };
 
-// Recursive value finder
-const findValue = (obj: any, key: string): any => {
+// Case-insensitive recursive value finder
+export const findValue = (obj: any, key: string): any => {
   if (!obj || typeof obj !== 'object') return null;
-  if (obj[key] !== undefined && obj[key] !== null) return obj[key];
-  for (const k in obj) {
-    const found = findValue(obj[k], key);
-    if (found) return found;
+  const targetLower = key.toLowerCase();
+  for (const k of Object.keys(obj)) {
+    if (k.toLowerCase() === targetLower && obj[k] !== undefined && obj[k] !== null && obj[k] !== '') {
+      return obj[k];
+    }
+  }
+  for (const k of Object.keys(obj)) {
+    if (typeof obj[k] === 'object' && obj[k] !== null) {
+      const found = findValue(obj[k], key);
+      if (found !== null && found !== undefined && found !== '') return found;
+    }
   }
   return null;
+};
+
+// Robust fuel type normalizer handling UK DVLA nomenclature (e.g. HEAVY OIL = Diesel)
+export const normalizeFuelType = (val: any): string => {
+  if (!val || typeof val !== 'string') return '';
+  const clean = val.trim().toUpperCase();
+  if (clean.includes('HEAVY OIL') || clean.includes('DIESEL')) return 'Diesel';
+  if (clean.includes('PETROL') || clean.includes('GASOLINE')) return 'Petrol';
+  if (clean.includes('HYBRID')) return 'Hybrid';
+  if (clean.includes('ELECTRIC') || clean.includes('ELECTRICITY') || clean === 'EV') return 'Electric';
+  if (clean.includes('LPG') || clean.includes('GAS')) return 'LPG';
+  return formatTitleCase(val);
 };
 
 // New function to fetch MOT history
@@ -157,7 +176,14 @@ export const lookupVehicleByVRM = async (vrm: string, includeMotHistory: boolean
     engineNumber: findValue(res, 'EngineNumber') || '',
     vin: findValue(res, 'Vin') === "Permission Required" ? "" : (findValue(res, 'Vin') || ''),
     colour: findValue(res, 'CurrentColour') || findValue(res, 'Colour') || '',
-    fuelType: findValue(res, 'DvlaFuelType') || findValue(res, 'FuelType') || '',
+    fuelType: normalizeFuelType(
+      findValue(res, 'DvlaFuelType') || 
+      findValue(res, 'FuelType') || 
+      findValue(res, 'DvlaFuel') || 
+      findValue(res, 'Fuel') || 
+      findValue(res, 'FuelDelivery') || 
+      ''
+    ),
     cc: parsedCc || undefined,
     engineCapacityCc: parsedCc || undefined,
     transmissionType: findValue(res, 'TransmissionType') || 'Other',
@@ -191,6 +217,15 @@ export const lookupVehicleByVRM = async (vrm: string, includeMotHistory: boolean
     const motRes = motJson?.Results?.MotHistoryDetails || {};
     if (motRes.MotDueDate) {
       mapped.nextMotDate = formatToISODate(motRes.MotDueDate);
+    }
+
+    if (!mapped.fuelType) {
+      const motFuel = findValue(motJson?.Results, 'FuelType') || 
+                      findValue(motJson?.Results, 'DvlaFuelType') || 
+                      findValue(motJson?.Results, 'Fuel');
+      if (motFuel) {
+        mapped.fuelType = normalizeFuelType(motFuel);
+      }
     }
 
     if (!mapped.taxDueDate) {

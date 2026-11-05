@@ -109,12 +109,13 @@ describe('Service Package Import Utility', () => {
         const summary = parseServicePackagesFromRows(rows, mockEntities, mockTaxRates, mockParts);
         expect(summary.results.length).toBe(1);
         const result = summary.results[0];
-        expect(result.validation.isValid).toBe(false);
-        expect(result.validation.hasLabour).toBe(false);
-        expect(result.validation.errors.some(e => e.includes('Labour'))).toBe(true);
+        // Auto-heals by adding standard labour item with warning
+        expect(result.validation.isValid).toBe(true);
+        expect(result.validation.hasLabour).toBe(true);
+        expect(result.validation.warnings.some(w => w.includes('Auto-added standard labour'))).toBe(true);
     });
 
-    it('fails validation when item has invalid or missing quantity', () => {
+    it('auto-heals with warning when item has invalid or missing quantity', () => {
         const rows = [
             {
                 'Package Name': 'Brake Check',
@@ -128,8 +129,9 @@ describe('Service Package Import Utility', () => {
         const summary = parseServicePackagesFromRows(rows, mockEntities, mockTaxRates, mockParts);
         expect(summary.results.length).toBe(1);
         const result = summary.results[0];
-        expect(result.validation.isValid).toBe(false);
-        expect(result.validation.errors.some(e => e.includes('quantity'))).toBe(true);
+        // Auto-heals by defaulting to 1 with warning
+        expect(result.validation.isValid).toBe(true);
+        expect(result.validation.warnings.some(w => w.includes('defaulted to 1'))).toBe(true);
     });
 
     it('generates a valid CSV template containing required columns and sample rows', () => {

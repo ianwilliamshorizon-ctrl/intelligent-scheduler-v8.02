@@ -1,18 +1,26 @@
 import { ServicePackage, Vehicle } from '../types';
 
+export type PackageGrade = 'exact' | 'model' | 'make' | 'generic' | 'other';
+
 export interface ScoredPackage {
     pkg: ServicePackage;
     score: number;
+    grade: PackageGrade;
+    gradeLabel: string;
     matchType: string;
     status: 'exact' | 'model' | 'make' | 'engine' | 'narrative' | 'generic' | 'other';
     color?: string;
+    badgeColor?: string;
     narrativeMatched?: boolean;
+    fuelConflict?: boolean;
+    fuelConflictNotice?: string;
 }
 
 const KNOWN_MAKES = [
     'porsche', 'audi', 'bmw', 'mercedes', 'volkswagen', 'vw', 
     'landrover', 'rangerover', 'jaguar', 'ford', 'ferrari', 
-    'mclaren', 'astonmartin', 'lamborghini', 'bentley', 'rollsroyce', 'maserati', 'lotus'
+    'mclaren', 'astonmartin', 'lamborghini', 'bentley', 'rollsroyce', 'maserati', 'lotus',
+    'toyota', 'honda', 'nissan', 'peugeot', 'renault', 'volvo'
 ];
 
 interface IntentCluster {
@@ -124,8 +132,9 @@ export const getScoredServicePackages = (
 
     const cleanNarrative = clean(clientNarrative || '');
     const vMake = vehicle?.make ? clean(vehicle.make) : '';
-    const vModelRaw = String(vehicle?.model || '').toLowerCase();
+    const vModelRaw = String(vehicle?.model ?? '').toLowerCase();
     const vVariantRaw = String((vehicle as any)?.variant || (vehicle as any)?.subModel || '').toLowerCase();
+    const vFuelRaw = String(vehicle?.fuelType || '').toLowerCase();
     const vFullModelStr = `${vModelRaw} ${vVariantRaw}`.toLowerCase();
     const vModelTokens = vFullModelStr.split(/[^a-z0-9]+/).filter(t => t.length >= 2);
     const vEngineSize = vehicle?.cc ? Number(vehicle.cc) : undefined;
@@ -155,14 +164,20 @@ export const getScoredServicePackages = (
         const pModel = clean(pkg.applicableModel);
         const pVariant = clean(pkg.applicableVariant);
         const pEngineSize = pkg.applicableEngineSize ? Number(pkg.applicableEngineSize) : undefined;
+        const pkgFullText = `${pName} ${pkg.applicableModel || ''} ${pkg.applicableVariant || ''} ${pDesc}`.toLowerCase();
         
         let score = 0; 
         let matchType = 'Other';
+        let grade: PackageGrade = 'other';
+        let gradeLabel = 'Other';
         let status: ScoredPackage['status'] = 'other';
         let color = 'bg-gray-50 text-gray-400';
+        let badgeColor = 'bg-gray-100 text-gray-600 border-gray-200';
         let narrativeMatched = false;
+        let fuelConflict = false;
+        let fuelConflictNotice = '';
 
-        // Check for conflicting makes: If vehicle is known make, reject other known makes
+        // 1. MAKE MATCH / REJECTION
         if (vMake) {
             const conflictingMake = KNOWN_MAKES.find(km => {
                 if (isLR_V && (km === 'landrover' || km === 'rangerover')) return false;
@@ -172,154 +187,211 @@ export const getScoredServicePackages = (
             });
 
             if (conflictingMake) {
-                return { pkg, score: 0, matchType: 'Brand Conflict', status: 'other', color: 'bg-gray-50 text-gray-400' };
+                return { 
+                    pkg, 
+                    score: 0, 
+                    grade: 'other',
+                    gradeLabel: 'Brand Conflict',
+                    matchType: 'Brand Conflict', 
+                    status: 'other', 
+                    color: 'bg-gray-50 text-gray-400',
+                    badgeColor: 'bg-red-50 text-red-600 border-red-200'
+                };
             }
         }
 
         const isLR_P = pMake.includes('landrover') || pMake.includes('rangerover');
-        const isMakeMatch = Boolean((pMake && vMake && (vMake.includes(pMake) || pMake.includes(vMake))) || (isLR_V && isLR_P));
+        const isMakeMatch = Boolean((pMake && vMake && (vMake.includes(pMake) || pMake.includes(vMake))) || (vMake && pName.includes(vMake)) || (isLR_V && isLR_P));
+        const isUniversal = !pMake && !pModel && !pEngineSize && !pkg.applicableVariant;
 
-        // Refined Model & Variant token matching
-        let modelMatchScore = 0;
+        // 2. MODEL MATCH & CROSS-MODEL PENALTY
         let isModelExact = false;
-        let isVariantExact = false;
+        let hasCrossModelConflict = false;
 
         if (vModelTokens.length > 0) {
-            const pkgFullText = `${pName} ${pModel} ${pVariant}`.toLowerCase();
-            const matchedTokens = vModelTokens.filter(tok => pkgFullText.includes(tok));
-
-            // Check for cross-model family conflicts (e.g. vehicle is Macan, package is 911 / Cayman)
             const vehicleFamily = MODEL_FAMILIES.find(fam => vFullModelStr.includes(fam));
             const pkgFamily = MODEL_FAMILIES.find(fam => pkgFullText.includes(fam));
 
             if (vehicleFamily && pkgFamily && vehicleFamily !== pkgFamily) {
-                // Cross model penalty
-                modelMatchScore -= 18;
-            } else if (matchedTokens.length > 0) {
-                modelMatchScore += matchedTokens.length * 6;
-                isModelExact = true;
-
-                // High-value trim / submodel tokens (e.g. GTS, Turbo, Carrera, S, GT3, RS, 4S)
-                const variantKeywords = ['gts', 'turbo', 'carrera', 'gt3', 'rs', 'c4s', 'diesel', 'hybrid', 'amg', 'svr', 'mport'];
-                const hasVariantMatch = variantKeywords.some(vk => vFullModelStr.includes(vk) && pkgFullText.includes(vk));
-                if (hasVariantMatch) {
-                    modelMatchScore += 10;
-                    isVariantExact = true;
+                hasCrossModelConflict = true;
+            } else {
+                const matchedTokens = vModelTokens.filter(tok => pkgFullText.includes(tok));
+                if (matchedTokens.length > 0 || (pModel && vModelRaw && (pModel.includes(vModelRaw) || vModelRaw.includes(pModel)))) {
+                    isModelExact = true;
                 }
             }
+        } else if (isMakeMatch && (!pModel || pModel === 'all')) {
+            isModelExact = true;
         }
 
-        // Engine size match
-        let engineScore = 0;
-        if (pEngineSize && vEngineSize) {
-            const diff = Math.abs(pEngineSize - vEngineSize);
-            if (diff <= 100) engineScore += 5;
-            else if (diff <= 500) engineScore += 2;
+        // 3. VARIANT & FUEL COMPATIBILITY
+        let isVariantExact = false;
+        const variantKeywords = ['gts', 'turbo', 'carrera', 'gt3', 'gt4', 'rs', 'c4s', 'diesel', 'hybrid', 'amg', 'svr', 'mport', '3.0', 'v6', 'v8'];
+        const matchedVariantKeywords = variantKeywords.filter(vk => vFullModelStr.includes(vk) && pkgFullText.includes(vk));
+
+        if (matchedVariantKeywords.length > 0) {
+            isVariantExact = true;
+        } else if (!pVariant || pVariant === 'all' || pVariant === 'general') {
+            // Package is for all variants of that model
+            isVariantExact = true;
         }
 
-        // Baseline Vehicle Match Scoring
-        if (isMakeMatch) {
-            score = 6 + modelMatchScore + engineScore;
-            if (isModelExact && isVariantExact) {
-                matchType = 'Model & Variant Match';
-                status = 'exact';
-                color = 'bg-emerald-100 text-emerald-900 border-emerald-500 font-bold';
-            } else if (isModelExact) {
-                matchType = 'Model Match';
-                status = 'model';
-                color = 'bg-emerald-50 text-emerald-800 border-emerald-400';
-            } else if (modelMatchScore < 0) {
-                matchType = 'Other Model';
-                status = 'other';
-                color = 'bg-gray-100 text-gray-500';
-            } else {
-                matchType = 'Make Match';
-                status = 'make';
-                color = 'bg-amber-100 text-amber-800 border-amber-300';
+        // Fuel check: Petrol vs Diesel conflict
+        const pkgMentionsDiesel = pkgFullText.includes('diesel');
+        const pkgMentionsPetrol = pkgFullText.includes('petrol') || pkgFullText.includes('v6 petrol') || pkgFullText.includes('gasoline');
+
+        if (vFuelRaw.includes('diesel')) {
+            if (pkgMentionsPetrol && !pkgMentionsDiesel) {
+                fuelConflict = true;
+                fuelConflictNotice = 'Vehicle is Diesel, but package specifies Petrol';
             }
-        } else if (!pMake && !pModel && !pEngineSize) {
-            score = 2;
-            matchType = 'Generic / Universal';
-            status = 'generic';
-            color = 'bg-slate-100 text-slate-700';
-        } else if ((vMake && pName.includes(vMake)) || (isLR_V && (pName.includes('landrover') || pName.includes('rangerover')))) {
-            score = 3;
-            matchType = 'Name Match';
-            status = 'other';
-            color = 'bg-indigo-100 text-indigo-900';
+        } else if (vFuelRaw.includes('petrol')) {
+            if (pkgMentionsDiesel && !pkgMentionsPetrol) {
+                fuelConflict = true;
+                fuelConflictNotice = 'Vehicle is Petrol, but package specifies Diesel';
+            }
         }
 
-        // Narrative / Client Requirement Boost & Penalty
+        // 4. HIERARCHICAL GRADING ASSIGNMENT
+        if (isMakeMatch) {
+            if (isModelExact && !hasCrossModelConflict) {
+                if (fuelConflict) {
+                    // Make & Model match, but Fuel conflicts
+                    grade = 'model';
+                    gradeLabel = 'Model Match (Fuel Differs)';
+                    matchType = 'Model Match (Fuel Conflict)';
+                    status = 'model';
+                    score = 500;
+                    color = 'bg-blue-50 text-blue-900 border-blue-300';
+                    badgeColor = 'bg-blue-100 text-blue-900 border-blue-400';
+                } else if (isVariantExact) {
+                    // Exact Make, Model, and Variant/Trim/Fuel match!
+                    grade = 'exact';
+                    gradeLabel = '★ Exact Match';
+                    matchType = matchedVariantKeywords.length > 0 ? 'Exact Model & Variant Match' : 'Model Match';
+                    status = 'exact';
+                    score = 1000;
+                    color = 'bg-emerald-100 text-emerald-950 border-emerald-500 font-bold';
+                    badgeColor = 'bg-emerald-100 text-emerald-900 border-emerald-500 font-black';
+                } else {
+                    // Make & Model match, general/other variant
+                    grade = 'model';
+                    gradeLabel = 'Model Match';
+                    matchType = 'Model Match';
+                    status = 'model';
+                    score = 650;
+                    color = 'bg-blue-50 text-blue-900 border-blue-300';
+                    badgeColor = 'bg-blue-100 text-blue-900 border-blue-400 font-bold';
+                }
+            } else {
+                // Make matches, but different model in the brand catalog
+                grade = 'make';
+                gradeLabel = 'Make Match (Partial)';
+                matchType = 'Make Match (Other Model)';
+                status = 'make';
+                score = 100;
+                color = 'bg-amber-50 text-amber-900 border-amber-300';
+                badgeColor = 'bg-amber-100 text-amber-900 border-amber-400 font-bold';
+            }
+        } else if (isUniversal) {
+            grade = 'generic';
+            gradeLabel = 'Universal';
+            matchType = 'Universal Workshop Service';
+            status = 'generic';
+            score = 20;
+            color = 'bg-slate-50 text-slate-700 border-slate-300';
+            badgeColor = 'bg-slate-100 text-slate-800 border-slate-300 font-semibold';
+        } else {
+            grade = 'other';
+            gradeLabel = 'Other';
+            matchType = 'Other';
+            status = 'other';
+            score = 0;
+            color = 'bg-gray-50 text-gray-400';
+            badgeColor = 'bg-gray-100 text-gray-500 border-gray-200';
+        }
+
+        // 5. NARRATIVE / SEARCH BOOSTING WITHIN GRADE
         let narrativeBoost = 0;
         const cleanPkgText = `${clean(pName)} ${clean(pDesc)}`;
 
-        // 1. Service Scope Matching (Minor vs Interim vs Major vs MOT)
+        // Scope match (Minor vs Interim vs Major vs MOT)
         for (const sc of matchedScopes) {
             const matchesKw = sc.pkgKeywords.some(kw => cleanPkgText.includes(kw));
             if (matchesKw) {
-                narrativeBoost += 14;
+                narrativeBoost += 50;
                 narrativeMatched = true;
             }
             if (sc.antonyms.some(ant => cleanPkgText.includes(ant))) {
-                narrativeBoost -= 10;
+                narrativeBoost -= 25;
             }
         }
 
-        // 2. Tier Matching (Bronze vs Silver vs Gold)
+        // Tier match (Bronze vs Silver vs Gold)
         for (const tc of matchedTiers) {
             const matchesKw = tc.pkgKeywords.some(kw => cleanPkgText.includes(kw));
             if (matchesKw) {
-                narrativeBoost += 16;
+                narrativeBoost += 50;
                 narrativeMatched = true;
-            }
-            if (tc.antonyms.some(ant => cleanPkgText.includes(ant))) {
-                narrativeBoost -= 8;
             }
         }
 
-        // 3. Freeform keywords
+        // Freeform keywords
         if (cleanNarrative.length >= 3 && matchedScopes.length === 0 && matchedTiers.length === 0) {
             if (cleanPkgText.includes(cleanNarrative)) {
-                narrativeBoost += 10;
+                narrativeBoost += 30;
                 narrativeMatched = true;
             } else if (pDesc.includes(cleanNarrative)) {
-                narrativeBoost += 5;
+                narrativeBoost += 15;
                 narrativeMatched = true;
             }
+        }
+
+        // Engine size tie-breaker bonus
+        if (pEngineSize && vEngineSize) {
+            const diff = Math.abs(pEngineSize - vEngineSize);
+            if (diff <= 100) narrativeBoost += 5;
+            else if (diff <= 500) narrativeBoost += 2;
+        }
+
+        // Tier order tie-breaker if no explicit narrative: Minor before Major, Bronze before Silver before Gold
+        if (!cleanNarrative) {
+            if (cleanPkgText.includes('minor')) narrativeBoost += 6;
+            if (cleanPkgText.includes('bronze')) narrativeBoost += 3;
+            else if (cleanPkgText.includes('silver')) narrativeBoost += 2;
+            else if (cleanPkgText.includes('gold')) narrativeBoost += 1;
         }
 
         const finalScore = Math.max(0, score + narrativeBoost);
 
-        if (narrativeMatched) {
-            if (isMakeMatch && (isModelExact || isVariantExact)) {
-                matchType = 'Model & Requirement Match';
-                status = 'exact';
-                color = 'bg-emerald-100 text-emerald-950 border-emerald-500 font-bold';
-            } else if (isMakeMatch) {
-                matchType = 'Make & Requirement Match';
-                status = 'exact';
-                color = 'bg-teal-100 text-teal-950 border-teal-500 font-bold';
-            } else {
-                matchType = 'Requirement Match';
-                status = 'narrative';
-                color = 'bg-indigo-100 text-indigo-950 border-indigo-400 font-bold';
-            }
-        }
-
-        return { pkg, score: finalScore, matchType, status, color, narrativeMatched };
+        return { 
+            pkg, 
+            score: finalScore, 
+            grade, 
+            gradeLabel, 
+            matchType, 
+            status, 
+            color, 
+            badgeColor,
+            narrativeMatched, 
+            fuelConflict, 
+            fuelConflictNotice 
+        };
     });
 
     const finalScores = [...scored].sort((a, b) => {
         if (b.score !== a.score) {
             return b.score - a.score;
         }
-        // If tied on narrative match, prefer make match over generic
-        if (a.status === 'exact' && b.status !== 'exact') return -1;
-        if (b.status === 'exact' && a.status !== 'exact') return 1;
-        if (a.status === 'engine' && b.status === 'engine') {
-            return (a.pkg.applicableEngineSize || 0) - (b.pkg.applicableEngineSize || 0);
-        }
-        return 0;
+        // Tie-breaker: prefer exact over model over make over generic
+        const gradeRank: Record<PackageGrade, number> = {
+            exact: 4,
+            model: 3,
+            make: 2,
+            generic: 1,
+            other: 0
+        };
+        return (gradeRank[b.grade] || 0) - (gradeRank[a.grade] || 0);
     });
 
     return finalScores;

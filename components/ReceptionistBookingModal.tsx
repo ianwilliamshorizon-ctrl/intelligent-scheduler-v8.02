@@ -299,8 +299,18 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
         return Math.max(0, currentYear - year);
     }, [activeVehicle]);
 
-    // REVERSE LOOKUP: REGISTRATION -> VEHICLE -> CLIENT DETAILS
-    const handleVrmLookup = async (vrmToLookup?: string) => {
+    // Quick fuel type switcher/override helper
+    const handleFuelTypeOverride = (newFuel: string) => {
+        if (!newFuel) return;
+        setVehicleDetails(prev => ({ ...prev, fuelType: newFuel }));
+        if (selectedVehicle) {
+            setSelectedVehicle(prev => prev ? ({ ...prev, fuelType: newFuel }) : null);
+        }
+        toast.success(`Vehicle fuel type set to: ${newFuel}`);
+    };
+
+    // REVERSE LOOKUP: REGISTRATION -> VEHICLE -> CLIENT DETAILS (Supports forceDvla for live refresh)
+    const handleVrmLookup = async (vrmToLookup?: string, forceDvla: boolean = false) => {
         const rawVrm = (vrmToLookup || vrmInput).trim().toUpperCase();
         const vrm = rawVrm.replace(/\s/g, '');
         if (!vrm) {
@@ -315,10 +325,10 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
         setIsCustomManualPackage(false);
 
         try {
-            // 1. CHECK IF VEHICLE ALREADY EXISTS IN SYSTEM
+            // 1. CHECK IF VEHICLE ALREADY EXISTS IN SYSTEM (Unless forceDvla is explicitly requested)
             const existingVeh = vehicles.find(v => v.registration?.toUpperCase().replace(/\s/g, '') === vrm);
 
-            if (existingVeh) {
+            if (existingVeh && !forceDvla) {
                 setSelectedVehicle(existingVeh);
                 setVehicleDetails(existingVeh);
                 setVrmInput(existingVeh.registration);
@@ -340,34 +350,49 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                     setVrmMatchMessage({
                         type: 'existing',
                         title: 'Existing Vehicle & Client Record Found',
-                        text: `Vehicle ${existingVeh.registration} (${existingVeh.make} ${existingVeh.model}) is registered to ${getCustomerDisplayName(linkedCustomer)}. Client details and contact records have been loaded below.`
+                        text: `Vehicle ${existingVeh.registration} (${existingVeh.make} ${existingVeh.model}${existingVeh.fuelType ? ` • ${existingVeh.fuelType}` : ''}) is registered to ${getCustomerDisplayName(linkedCustomer)}. Client details loaded below.`
                     });
                     toast.success(`Matched record: ${getCustomerDisplayName(linkedCustomer)} (${existingVeh.registration})`);
                     return;
                 } else {
                     setVrmMatchMessage({
                         type: 'existing',
-                        title: 'Existing Vehicle Found (Unlinked)',
-                        text: `Vehicle ${existingVeh.registration} (${existingVeh.make} ${existingVeh.model}) is in your system. Please confirm or select the customer.`
+                        title: 'Existing Vehicle Found in System',
+                        text: `Vehicle ${existingVeh.registration} (${existingVeh.make} ${existingVeh.model}${existingVeh.fuelType ? ` • ${existingVeh.fuelType}` : ''}) is currently in your system.`
                     });
                     return;
                 }
             }
 
-            // 2. VEHICLE NOT IN SYSTEM: PERFORM UK DVLA LOOKUP
-            const lookup = await lookupVehicleByVRM(vrm);
-            setVehicleDetails(lookup);
+            // 2. PERFORM UK DVLA LOOKUP (Live UKVD / DVLA verification)
+            const lookup = await lookupVehicleByVRM(vrm, true);
+            setVehicleDetails(prev => ({
+                ...prev,
+                ...lookup,
+                fuelType: lookup.fuelType || prev.fuelType || ''
+            }));
             setVrmInput(vrm);
-            setClientType('new');
-            setSelectedCustomer(null);
-            setSelectedVehicle(null);
 
-            setVrmMatchMessage({
-                type: 'dvla',
-                title: 'New Vehicle (DVLA Lookup Verified)',
-                text: `${lookup.make} ${lookup.model} (${lookup.year || 'N/A'}, ${lookup.cc ? `${(lookup.cc / 1000).toFixed(1)}L` : ''} ${lookup.fuelType || 'Petrol'}) is not currently in your system. Please add the client details & GDPR consent below.`
-            });
-            toast.success(`DVLA Match: ${lookup.make} ${lookup.model} (${lookup.year || 'N/A'})`);
+            if (existingVeh && forceDvla) {
+                // Updating existing vehicle record with live DVLA verified data
+                setSelectedVehicle(prev => prev ? ({ ...prev, ...lookup, fuelType: lookup.fuelType || prev.fuelType || '' }) : null);
+                setVrmMatchMessage({
+                    type: 'dvla',
+                    title: 'Live DVLA Verified Details Refreshed',
+                    text: `Official DVLA data refreshed for ${lookup.make} ${lookup.model} (${lookup.year || 'N/A'}${lookup.cc ? `, ${(lookup.cc / 1000).toFixed(1)}L` : ''}${lookup.fuelType ? ` • ${lookup.fuelType}` : ''}).`
+                });
+                toast.success(`DVLA Refresh: ${lookup.make} ${lookup.model} (${lookup.fuelType || 'Verified'})`);
+            } else {
+                setClientType('new');
+                setSelectedCustomer(null);
+                setSelectedVehicle(null);
+                setVrmMatchMessage({
+                    type: 'dvla',
+                    title: 'New Vehicle (DVLA Lookup Verified)',
+                    text: `${lookup.make} ${lookup.model} (${lookup.year || 'N/A'}${lookup.cc ? `, ${(lookup.cc / 1000).toFixed(1)}L` : ''}${lookup.fuelType ? ` • ${lookup.fuelType}` : ''}) verified via live DVLA lookup. Please enter customer details & GDPR consent below.`
+                });
+                toast.success(`DVLA Match: ${lookup.make} ${lookup.model} (${lookup.year || 'N/A'}${lookup.fuelType ? ` • ${lookup.fuelType}` : ''})`);
+            }
 
         } catch (err: any) {
             console.error('VRM Lookup failed:', err);
@@ -532,21 +557,42 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
             return isUniversalMake && !makeMatched.some(m => m.id === pkg.id);
         });
 
-        // Sort all tiers descending by intelligent score (relevance to vehicle & client requirement)
-        modelMatched.sort((a, b) => (scoreMap.get(b.id) || 0) - (scoreMap.get(a.id) || 0));
-        otherMake.sort((a, b) => (scoreMap.get(b.id) || 0) - (scoreMap.get(a.id) || 0));
-        makeMatched.sort((a, b) => (scoreMap.get(b.id) || 0) - (scoreMap.get(a.id) || 0));
-        universal.sort((a, b) => (scoreMap.get(b.id) || 0) - (scoreMap.get(a.id) || 0));
-        compatible.sort((a, b) => (scoreMap.get(b.id) || 0) - (scoreMap.get(a.id) || 0));
+        // Graded package tiers: Exact -> Model -> Make -> Universal
+        const exact: ServicePackage[] = [];
+        const model: ServicePackage[] = [];
+        const otherMakeGraded: ServicePackage[] = [];
+        const makeAll: ServicePackage[] = [];
+        const universalGraded: ServicePackage[] = [];
+        const compatibleAll: ServicePackage[] = [];
+
+        scoredPackages.forEach(sp => {
+            if (sp.grade === 'exact') {
+                exact.push(sp.pkg);
+                makeAll.push(sp.pkg);
+                compatibleAll.push(sp.pkg);
+            } else if (sp.grade === 'model') {
+                model.push(sp.pkg);
+                makeAll.push(sp.pkg);
+                compatibleAll.push(sp.pkg);
+            } else if (sp.grade === 'make') {
+                otherMakeGraded.push(sp.pkg);
+                makeAll.push(sp.pkg);
+                compatibleAll.push(sp.pkg);
+            } else if (sp.grade === 'generic') {
+                universalGraded.push(sp.pkg);
+                compatibleAll.push(sp.pkg);
+            }
+        });
 
         return {
-            modelMatchedPackages: modelMatched,
-            otherMakePackages: otherMake,
-            makeMatchedPackages: makeMatched,
-            universalPackages: universal,
-            allCompatiblePackages: compatible
+            exactMatchedPackages: exact,
+            modelMatchedPackages: model,
+            otherMakePackages: otherMakeGraded,
+            makeMatchedPackages: makeAll,
+            universalPackages: universalGraded,
+            allCompatiblePackages: compatibleAll
         };
-    }, [servicePackages, isPackageCompatible, activeVehicle, scoreMap]);
+    }, [scoredPackages]);
 
     // Active selected package from real database
     const selectedPackage = useMemo(() => {
@@ -959,6 +1005,7 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
             if (clientType === 'existing' && selectedVehicle) {
                 finalVehicle = {
                     ...selectedVehicle,
+                    fuelType: activeVehicle.fuelType || selectedVehicle.fuelType || '',
                     mileage: currentMileage || selectedVehicle.mileage
                 };
             } else {
@@ -971,8 +1018,8 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                     model: formatTitleCase(activeVehicle.model || 'Unknown Model'),
                     year: activeVehicle.year || new Date().getFullYear(),
                     cc: activeVehicle.cc,
-                    fuelType: activeVehicle.fuelType || 'Petrol',
-                    colour: activeVehicle.colour || 'Silver',
+                    fuelType: activeVehicle.fuelType || '',
+                    colour: activeVehicle.colour || '',
                     vin: activeVehicle.vin || '',
                     mileage: currentMileage,
                     nextMotDate: activeVehicle.nextMotDate || '',
@@ -1551,18 +1598,32 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
 
                                 {/* REVERSE LOOKUP BANNER */}
                                 {vrmMatchMessage && (
-                                    <div className={`p-4 rounded-xl border flex items-start gap-3 ${
+                                    <div className={`p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
                                         vrmMatchMessage.type === 'existing' 
                                             ? 'bg-emerald-50 border-emerald-300 text-emerald-950' 
                                             : 'bg-indigo-50 border-indigo-300 text-indigo-950'
                                     }`}>
-                                        <CheckCircle2 size={22} className={`flex-shrink-0 mt-0.5 ${
-                                            vrmMatchMessage.type === 'existing' ? 'text-emerald-600' : 'text-indigo-600'
-                                        }`} />
-                                        <div>
-                                            <h4 className="font-bold text-sm">{vrmMatchMessage.title}</h4>
-                                            <p className="text-sm leading-relaxed">{vrmMatchMessage.text}</p>
+                                        <div className="flex items-start gap-3">
+                                            <CheckCircle2 size={22} className={`flex-shrink-0 mt-0.5 ${
+                                                vrmMatchMessage.type === 'existing' ? 'text-emerald-600' : 'text-indigo-600'
+                                            }`} />
+                                            <div>
+                                                <h4 className="font-bold text-sm">{vrmMatchMessage.title}</h4>
+                                                <p className="text-sm leading-relaxed">{vrmMatchMessage.text}</p>
+                                            </div>
                                         </div>
+                                        {vrmMatchMessage.type === 'existing' && (
+                                            <button
+                                                type="button"
+                                                onClick={() => handleVrmLookup(vrmInput, true)}
+                                                disabled={isVrmLoading}
+                                                className="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 border border-emerald-400 text-emerald-900 rounded-lg text-xs font-bold transition shadow-xs whitespace-nowrap self-start sm:self-center"
+                                                title="Query live DVLA / UKVD database to verify fuel type, MOT, and engine size"
+                                            >
+                                                <RefreshCw size={13} className={isVrmLoading ? 'animate-spin' : ''} />
+                                                <span>Re-verify with Live DVLA</span>
+                                            </button>
+                                        )}
                                     </div>
                                 )}
 
@@ -1578,8 +1639,30 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                                             <span className="font-semibold text-slate-800">{activeVehicle.year || 'N/A'} • {activeVehicle.cc ? `${(activeVehicle.cc / 1000).toFixed(1)}L (${activeVehicle.cc}cc)` : 'N/A'}</span>
                                         </div>
                                         <div>
-                                            <span className="text-slate-400 block text-xs font-bold uppercase">Fuel Type</span>
-                                            <span className="font-semibold text-slate-800">{activeVehicle.fuelType || 'Petrol'}</span>
+                                            <span className="text-slate-400 block text-xs font-bold uppercase mb-1">Fuel Type</span>
+                                            <div className="flex items-center gap-1.5">
+                                                <span className={`font-bold text-xs px-2 py-0.5 rounded-md border ${
+                                                    activeVehicle.fuelType === 'Diesel' ? 'bg-amber-100 text-amber-950 border-amber-300' :
+                                                    activeVehicle.fuelType === 'Petrol' ? 'bg-blue-100 text-blue-950 border-blue-300' :
+                                                    activeVehicle.fuelType === 'Hybrid' ? 'bg-emerald-100 text-emerald-950 border-emerald-300' :
+                                                    activeVehicle.fuelType === 'Electric' ? 'bg-purple-100 text-purple-950 border-purple-300' :
+                                                    'bg-slate-100 text-slate-700 border-slate-300'
+                                                }`}>
+                                                    {activeVehicle.fuelType || 'Not Specified'}
+                                                </span>
+                                                <select
+                                                    value={activeVehicle.fuelType || ''}
+                                                    onChange={e => handleFuelTypeOverride(e.target.value)}
+                                                    className="text-[11px] bg-white border border-slate-300 rounded px-1.5 py-0.5 text-slate-700 font-semibold hover:border-slate-400 cursor-pointer outline-none"
+                                                    title="Override or confirm fuel type (Diesel / Petrol / Hybrid / Electric)"
+                                                >
+                                                    <option value="">Select...</option>
+                                                    <option value="Diesel">Diesel</option>
+                                                    <option value="Petrol">Petrol</option>
+                                                    <option value="Hybrid">Hybrid</option>
+                                                    <option value="Electric">Electric</option>
+                                                </select>
+                                            </div>
                                         </div>
                                         <div>
                                             <span className="text-slate-400 block text-xs font-bold uppercase">MOT Status</span>
@@ -2055,18 +2138,24 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                                             >
                                                 <div>
                                                     <div className="flex flex-wrap items-center justify-between gap-1 mb-2">
-                                                        <div className="flex items-center gap-1.5">
-                                                            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 border border-emerald-300">
-                                                                Verified {pkg.applicableMake || activeVehicle.make}
+                                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                                            <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded border ${spMatch?.badgeColor || 'bg-slate-100 text-slate-800 border-slate-300'}`}>
+                                                                {spMatch?.gradeLabel || (pkg.applicableMake ? `Verified ${pkg.applicableMake}` : 'Universal')}
                                                             </span>
                                                             {isNarrativeMatch && (
                                                                 <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-indigo-600 text-white shadow-2xs">
-                                                                    ★ Matched Need
+                                                                    ★ Matched Requirement
                                                                 </span>
                                                             )}
                                                         </div>
                                                         <span className="text-xs text-slate-500 font-bold">{laborHours} hrs</span>
                                                     </div>
+                                                    {spMatch?.fuelConflict && (
+                                                        <div className="mb-2 p-1.5 rounded-lg bg-amber-50 border border-amber-300 text-amber-900 text-[11px] font-bold flex items-center gap-1.5">
+                                                            <AlertTriangle size={13} className="text-amber-600 flex-shrink-0" />
+                                                            <span>{spMatch.fuelConflictNotice || 'Fuel type mismatch with vehicle'}</span>
+                                                        </div>
+                                                    )}
                                                     <h4 className="font-black text-lg text-slate-900 mt-1">{pkg.name}</h4>
                                                     <p className="text-xs text-slate-500 mb-3">{pkg.description || `Package #${pkg.id}`}</p>
 
@@ -2099,9 +2188,11 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                                         );
                                     };
 
+                                    const displayedExactPkgs = exactMatchedPackages.filter(filterPackageBySearchAndTier);
                                     const displayedModelPkgs = modelMatchedPackages.filter(filterPackageBySearchAndTier);
                                     const displayedOtherPkgs = otherMakePackages.filter(filterPackageBySearchAndTier);
                                     const displayedMakePkgs = makeMatchedPackages.filter(filterPackageBySearchAndTier);
+                                    const displayedUniversalPkgs = universalPackages.filter(filterPackageBySearchAndTier);
 
                                     return (
                                         <div className="space-y-6">
@@ -2151,77 +2242,96 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                                                 </div>
                                             </div>
 
-                                            {/* PRIMARY MODEL-SPECIFIC PACKAGES (EXACT MATCH FOR VEHICLE) */}
-                                            {modelMatchedPackages.length > 0 ? (
+                                            {/* GRADE 1: EXACT MODEL & VARIANT MATCHES (100% SPEC COMPATIBILITY) */}
+                                            {displayedExactPkgs.length > 0 && (
                                                 <div className="space-y-4">
-                                                    <div className="flex items-center justify-between gap-2">
+                                                    <div className="flex flex-wrap items-center justify-between gap-2">
                                                         <div className="flex items-center gap-2">
-                                                            <span className="text-xs font-black uppercase tracking-wider text-emerald-800 bg-emerald-100 px-2.5 py-1 rounded-md border border-emerald-300">
-                                                                Matched for {activeVehicle.make} {activeVehicle.model || ''}
+                                                            <span className="text-xs font-black uppercase tracking-wider text-emerald-950 bg-emerald-100 px-3 py-1 rounded-lg border border-emerald-400 shadow-2xs flex items-center gap-1.5">
+                                                                <Sparkles size={13} className="text-emerald-700" />
+                                                                ★ Exact Matches for {activeVehicle.make} {activeVehicle.model || ''} {activeVehicle.fuelType ? `(${activeVehicle.fuelType})` : ''}
                                                             </span>
-                                                            <span className="text-xs text-slate-500 font-semibold">
-                                                                ({displayedModelPkgs.length} model-specific packages)
+                                                            <span className="text-xs text-slate-500 font-bold">
+                                                                ({displayedExactPkgs.length} packages verified)
                                                             </span>
                                                         </div>
                                                         {clientRequirement && (
                                                             <span className="text-xs text-indigo-700 font-semibold hidden md:inline">
-                                                                Sorted by relevance to: &ldquo;{clientRequirement}&rdquo;
+                                                                Prioritised for: &ldquo;{clientRequirement}&rdquo;
                                                             </span>
                                                         )}
                                                     </div>
 
-                                                    {displayedModelPkgs.length > 0 ? (
-                                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                                            {displayedModelPkgs.map(renderPackageCard)}
-                                                        </div>
-                                                    ) : (
-                                                        <div className="p-6 bg-slate-50 rounded-2xl border border-slate-200 text-center text-sm text-slate-500">
-                                                            No packages match current filter &ldquo;{packageSearchTerm || tierFilter}&rdquo; in model specific packages.
-                                                        </div>
-                                                    )}
-
-                                                    {/* OTHER MAKE PACKAGES (COLLAPSIBLE TO AVOID CLUTTERING VIEW) */}
-                                                    {otherMakePackages.length > 0 && (
-                                                        <div className="pt-3 border-t border-slate-200">
-                                                            <div className="flex items-center justify-between mb-3">
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => setShowOtherMakePackages(prev => !prev)}
-                                                                    className="flex items-center gap-2 text-xs font-bold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-3.5 py-2 rounded-xl transition"
-                                                                >
-                                                                    {showOtherMakePackages ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                                                                    <span>{showOtherMakePackages ? 'Hide' : 'Show'} Other {activeVehicle.make} Packages ({otherMakePackages.length})</span>
-                                                                </button>
-                                                                <span className="text-[11px] text-slate-400">
-                                                                    Other models in {activeVehicle.make} catalog
-                                                                </span>
-                                                            </div>
-
-                                                            {showOtherMakePackages && (
-                                                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                                                    {displayedOtherPkgs.map(renderPackageCard)}
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    )}
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                                        {displayedExactPkgs.map(renderPackageCard)}
+                                                    </div>
                                                 </div>
-                                            ) : makeMatchedPackages.length > 0 ? (
-                                                /* FALLBACK MAKE PACKAGES (IF VEHICLE MODEL IS UNKNOWN/GENERIC) */
-                                                <div className="space-y-3">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-xs font-black uppercase tracking-wider text-emerald-800 bg-emerald-100 px-2.5 py-1 rounded-md border border-emerald-300">
-                                                            Matched to {activeVehicle.make}
-                                                        </span>
-                                                        <span className="text-xs text-slate-500 font-semibold">
-                                                            ({displayedMakePkgs.length} packages found in database)
-                                                        </span>
+                                            )}
+
+                                            {/* GRADE 2: CLOSE MODEL MATCHES (DIFFERENT TRIM / FUEL SPECIFICATION) */}
+                                            {displayedModelPkgs.length > 0 && (
+                                                <div className="space-y-4 pt-3 border-t border-slate-200">
+                                                    <div className="flex items-center justify-between gap-2">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-xs font-black uppercase tracking-wider text-blue-950 bg-blue-100 px-3 py-1 rounded-lg border border-blue-400 shadow-2xs">
+                                                                Model Matches ({activeVehicle.make} {activeVehicle.model || ''})
+                                                            </span>
+                                                            <span className="text-xs text-slate-500 font-semibold">
+                                                                ({displayedModelPkgs.length} alternative trim or fuel variants)
+                                                            </span>
+                                                        </div>
                                                     </div>
 
                                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                                        {displayedMakePkgs.map(renderPackageCard)}
+                                                        {displayedModelPkgs.map(renderPackageCard)}
                                                     </div>
                                                 </div>
-                                            ) : (
+                                            )}
+
+                                            {/* GRADE 3: OTHER MAKE PACKAGES (COLLAPSIBLE TO AVOID CLUTTERING VIEW) */}
+                                            {otherMakePackages.length > 0 && (
+                                                <div className="pt-3 border-t border-slate-200">
+                                                    <div className="flex items-center justify-between mb-3">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setShowOtherMakePackages(prev => !prev)}
+                                                            className="flex items-center gap-2 text-xs font-bold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-3.5 py-2 rounded-xl transition"
+                                                        >
+                                                            {showOtherMakePackages ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                                                            <span>{showOtherMakePackages ? 'Hide' : 'Show'} Other {activeVehicle.make} Models ({displayedOtherPkgs.length})</span>
+                                                        </button>
+                                                        <span className="text-[11px] text-slate-400">
+                                                            Other models in {activeVehicle.make} catalog
+                                                        </span>
+                                                    </div>
+
+                                                    {showOtherMakePackages && (
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                                            {displayedOtherPkgs.map(renderPackageCard)}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+
+                                            {/* FALLBACK IF NO EXACT OR MODEL MATCHES FOUND */}
+                                            {displayedExactPkgs.length === 0 && displayedModelPkgs.length === 0 && (
+                                                displayedMakePkgs.length > 0 ? (
+                                                    /* FALLBACK MAKE PACKAGES (IF VEHICLE MODEL IS UNKNOWN/GENERIC) */
+                                                    <div className="space-y-3">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-xs font-black uppercase tracking-wider text-emerald-800 bg-emerald-100 px-2.5 py-1 rounded-md border border-emerald-300">
+                                                                Matched to {activeVehicle.make}
+                                                            </span>
+                                                            <span className="text-xs text-slate-500 font-semibold">
+                                                                ({displayedMakePkgs.length} packages found in database)
+                                                            </span>
+                                                        </div>
+
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                                            {displayedMakePkgs.map(renderPackageCard)}
+                                                        </div>
+                                                    </div>
+                                                ) : (
                                                 <div className="bg-amber-50 border border-amber-300 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-amber-950">
                                                     <div className="flex items-start gap-3">
                                                         <AlertCircle size={20} className="text-amber-600 mt-0.5 flex-shrink-0" />
@@ -2243,6 +2353,7 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                                                         Browse All Packages
                                                     </button>
                                                 </div>
+                                                )
                                             )}
 
                                             {/* UNIVERSAL PACKAGES */}
