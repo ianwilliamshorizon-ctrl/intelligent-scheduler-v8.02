@@ -11,6 +11,7 @@ interface JobInspectionTabProps {
     checklistData: ChecklistSection[];
     tyreData: TyreCheckData;
     damagePoints: VehicleDamagePoint[];
+    vehicleRegistration?: string;
     vehicleModel?: string;
     vehicleColor?: string;
     diagramImageId?: string | null;
@@ -26,6 +27,7 @@ export const JobInspectionTab: React.FC<JobInspectionTabProps> = ({
     checklistData,
     tyreData,
     damagePoints,
+    vehicleRegistration,
     vehicleModel,
     vehicleColor,
     diagramImageId,
@@ -70,7 +72,7 @@ export const JobInspectionTab: React.FC<JobInspectionTabProps> = ({
                         </div>
                         <div>
                             <span className="text-sm font-black text-white block">Guided Vehicle Inspection</span>
-                            <span className="text-xs text-slate-400">Step-by-step interactive host for workshop engineers</span>
+                            <span className="text-xs text-slate-400">Step-by-step hands-free voice host for workshop engineers</span>
                         </div>
                     </div>
                     <div className="flex items-center gap-2 flex-wrap">
@@ -104,6 +106,7 @@ export const JobInspectionTab: React.FC<JobInspectionTabProps> = ({
                     onClose={() => setIsGuidedModalOpen(false)}
                     checklistData={checklistData}
                     onChecklistUpdate={onChecklistUpdate}
+                    vehicleRegistration={vehicleRegistration}
                     vehicleModel={vehicleModel}
                 />
             )}
@@ -138,3 +141,5 @@ export const JobInspectionTab: React.FC<JobInspectionTabProps> = ({
         </div>
     );
 };
+
+export default JobInspectionTab;

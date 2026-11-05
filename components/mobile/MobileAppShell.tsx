@@ -1642,6 +1642,7 @@ export const MobileAppShell: React.FC<MobileAppShellProps> = ({
                                 checklistData={activeInspectionJob.inspectionChecklist || []}
                                 tyreData={activeInspectionJob.tyreCheck || {}}
                                 damagePoints={activeInspectionJob.damagePoints || []}
+                                vehicleRegistration={vehicles.find(v => v.id === activeInspectionJob.vehicleId)?.registration}
                                 vehicleModel={vehicles.find(v => v.id === activeInspectionJob.vehicleId)?.model}
                                 vehicleColor={vehicles.find(v => v.id === activeInspectionJob.vehicleId)?.colour}
                                 diagramImageId={null}
