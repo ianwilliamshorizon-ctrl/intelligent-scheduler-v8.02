@@ -1,10 +1,11 @@
-import React, { useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { ChecklistSection, TyreCheckData, VehicleDamagePoint } from '../../../types';
 import InspectionChecklist from '../../InspectionChecklist';
 import TyreCheck from '../../TyreCheck';
 import VehicleDamageReport from '../../VehicleDamageReport';
 import { useData } from '../../../core/state/DataContext';
-import { FileText } from 'lucide-react';
+import { FileText, Sparkles, Play } from 'lucide-react';
+import { GuidedInspectionModal } from '../../GuidedInspectionModal';
 
 interface JobInspectionTabProps {
     checklistData: ChecklistSection[];
@@ -36,6 +37,7 @@ export const JobInspectionTab: React.FC<JobInspectionTabProps> = ({
     selectedTemplateId
 }) => {
     const { inspectionTemplates } = useData();
+    const [isGuidedModalOpen, setIsGuidedModalOpen] = useState(false);
 
     const sortedTemplates = useMemo(() => {
         if (!inspectionTemplates) return [];
@@ -61,24 +63,49 @@ export const JobInspectionTab: React.FC<JobInspectionTabProps> = ({
     return (
         <div className="space-y-6 text-slate-900">
             {!isReadOnly && (
-                <div className="p-3 bg-slate-100 rounded-xl flex flex-wrap justify-between items-center gap-2 border border-slate-200 text-slate-900">
-                    <div className="flex items-center gap-2">
-                        <FileText size={18} className="text-indigo-600"/>
-                        <span className="text-sm font-bold text-slate-800">Checklist Template:</span>
+                <div className="p-3.5 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-2xl flex flex-wrap justify-between items-center gap-3 border border-slate-800 shadow-sm text-white">
+                    <div className="flex items-center gap-2.5">
+                        <div className="p-2 bg-indigo-500/20 text-indigo-400 rounded-xl border border-indigo-400/30">
+                            <Sparkles size={18} />
+                        </div>
+                        <div>
+                            <span className="text-sm font-black text-white block">Guided Vehicle Inspection</span>
+                            <span className="text-xs text-slate-400">Step-by-step interactive host for workshop engineers</span>
+                        </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                         <select 
-                            className="text-sm border border-slate-300 rounded-lg p-2 bg-white text-slate-900 max-w-md focus:ring-2 focus:ring-indigo-500 outline-none font-medium"
+                    <div className="flex items-center gap-2 flex-wrap">
+                        {hasChecklist && (
+                            <button
+                                type="button"
+                                onClick={() => setIsGuidedModalOpen(true)}
+                                className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white rounded-xl text-xs font-black transition shadow-md flex items-center gap-2 cursor-pointer"
+                            >
+                                <Play size={14} className="fill-white" />
+                                <span>Start Guided Inspection</span>
+                            </button>
+                        )}
+                        <select 
+                            className="text-xs border border-slate-700 rounded-xl p-2 bg-slate-800 text-white max-w-xs focus:ring-2 focus:ring-indigo-500 outline-none font-medium cursor-pointer"
                             value={selectedTemplateId || ''}
                             onChange={handleSelectChange}
                         >
-                            <option value="" disabled className="text-slate-500 bg-white">Load Template...</option>
+                            <option value="" disabled className="text-slate-400 bg-slate-800">Change Template...</option>
                             {sortedTemplates.map(t => (
-                                <option key={t.id} value={t.id} className="text-slate-900 bg-white">{t.name}</option>
+                                <option key={t.id} value={t.id} className="text-white bg-slate-800">{t.name}</option>
                             ))}
                         </select>
                     </div>
                 </div>
+            )}
+
+            {isGuidedModalOpen && hasChecklist && (
+                <GuidedInspectionModal
+                    isOpen={isGuidedModalOpen}
+                    onClose={() => setIsGuidedModalOpen(false)}
+                    checklistData={checklistData}
+                    onChecklistUpdate={onChecklistUpdate}
+                    vehicleModel={vehicleModel}
+                />
             )}
 
             {hasChecklist ? (
